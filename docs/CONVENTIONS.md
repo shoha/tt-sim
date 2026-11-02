@@ -277,10 +277,20 @@ The camera stands at +x, +z of what it looks at and looks along (-1, -1) in map 
 | WASD | Pan (isometric) | `cameraholder_node.translate()` with isometric direction mapping |
 | Edge of screen | Pan (during drag) | Reads `drag_and_drop_node.edge_pan_direction` |
 | Mouse near edge | Pan (idle) | `_handle_edge_panning()` with configurable margin |
+| Q / E, `[` / `]` | Turn the view a quarter (no brush out) | `CameraRig.event_turn`, `CameraController.turn_view` |
+| Alt+Q / Alt+E | Turn the view while an authoring brush is out (Q / E turn the brush, `[` `]` its size) | same |
+| Compass buttons (top right) | Turn the view, always | `CameraCompass` |
+| Home | Reset position, zoom and view (the turn first, then the glide) | `_reset_camera_to_home` |
+
+The hint bar chip (`Q E` or `Alt + Q E`, `CameraRig.turn_hint`) and the compass tooltip name the mapping that is live.
+
+### View yaw (turning the view)
+
+The view turns in 90 degree snaps: 45 (home), 135, 225, 315, as the camera's compass azimuth. `CameraController` eases the CameraHolder's yaw over about 0.35 s (`CameraYaw`, `CameraRig.TURN_SECONDS`) about the ground point under the screen centre, so the stage stays in frame, and applies it inside `_process` before it publishes `canopy_fade_view` (the foliage shaders' camera-pass test reads it; the 2 m `shadow_caster_push` now keys off the engine's `IN_SHADOW_PASS` instead, so no turn speed can sink the crowns). The holder carries the yaw, so its local pan axes follow it: W is always away from the viewer. W/S speed uses the live elevation (`CameraRig.vertical_pan_factor`), so it matches A/D on screen. The sun stays fixed in the world; the view is local to each player (not synced). A landed turn emits `view_turned`, which `MapViewFit` answers with a refit of the zoom limit and pan bounds for the new basis. The maths is in `utils/camera_rig.gd` (pure, tested in `tests/unit/test_camera_rig.gd`); a render-job probe (`tools/render_jobs/probes/camera_rig.gd`, jobs `camera_rig_*`) shoots stills and a fixed-rate clip of a snap.
 
 ### Isometric Direction Mapping
 
-Camera movement directions are rotated 45 degrees for isometric view:
+Camera movement directions at the home yaw (45) are rotated 45 degrees for isometric view; the holder's local axes turn with the yaw, so these are the directions in the holder's frame:
 
 ```
 Forward (W) = (-1, 0, -1)  (up-left on screen)

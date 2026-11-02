@@ -291,15 +291,16 @@ vec3 wind_sway_vertex_offset(vec3 vertex, vec4 color, mat4 model_matrix, float t
 
 
 // The model-space offset that pushes a vertex shadow_caster_push metres away from the light
-// in a shadow pass, zero in the camera's passes. A pass is the camera's when its view axis is
-// the camera's back axis (canopy_fade_view, published once a frame by CameraController), as
-// apply_canopy_fade tells them apart. The light's view looks down its -Z, so away from the
+// in a shadow pass, zero in the camera's passes. The pass comes from the engine's own
+// IN_SHADOW_PASS, passed in as `in_shadow_pass`: it used to be inferred from the camera's
+// back axis (canopy_fade_view), which sank every crown 2 m on any frame the camera turned more
+// than acos(0.999) = 2.56 degrees past the axis published a frame earlier (camera-3, 2026-11-02).
+// The light's view looks down its -Z, so away from the
 // light is -inv_view_matrix[2] in world space, taken into model space through the inverse of
 // the model (instance) basis. Bark (canopy_part 1) stays put: its solid limbs take the sun's
 // own bias, and a pushed trunk would lose the contact shadow at its foot.
-vec3 shadow_caster_offset(mat4 model_matrix, mat4 inv_view_matrix) {
-	if (shadow_caster_push <= 0.0 || canopy_part == 1
-			|| dot(inv_view_matrix[2].xyz, canopy_fade_view.xyz) >= 0.999) {
+vec3 shadow_caster_offset(mat4 model_matrix, mat4 inv_view_matrix, bool in_shadow_pass) {
+	if (!in_shadow_pass || shadow_caster_push <= 0.0 || canopy_part == 1) {
 		return vec3(0.0);
 	}
 	return inverse(mat3(model_matrix)) * (-inv_view_matrix[2].xyz * shadow_caster_push);

@@ -45,7 +45,7 @@ void vertex() {
 		zone_mass = vec2(anchored, anchored * clamp(side, -1.0, 1.0));
 		zone_mass_h = max(local_vertex_y, 0.0) * length(MODEL_MATRIX[1].xyz);
 	}
-	VERTEX += shadow_caster_offset(MODEL_MATRIX, INV_VIEW_MATRIX);
+	VERTEX += shadow_caster_offset(MODEL_MATRIX, INV_VIEW_MATRIX, IN_SHADOW_PASS);
 }
 
 

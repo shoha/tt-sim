@@ -35,9 +35,11 @@ const STOPS_PLAY_SCENES := [
 
 ## Scripts that make a CanvasLayer over the live table, each with the text that puts glass on
 ## what it adds to the layer. "" when the layer holds nothing themed of its own: the drag
-## ghost is one icon, and GameMap's perf overlay layer only stacks MapOverlayUtils panels.
+## ghost is one icon, GameMap's perf overlay layer only stacks MapOverlayUtils panels, and the
+## camera compass draws itself from ThemeColors' glass roles (no Control theme to wear).
 const IN_PLAY_SCRIPTS := {
 	"res://scenes/states/authoring/authoring_controller.gd": "ThemeColors.glass_theme()",
+	"res://scenes/states/playing/camera_compass.gd": "",
 	"res://scenes/states/playing/drag_place_controller.gd": "",
 	"res://scenes/states/playing/game_map.gd": "",
 	"res://scenes/states/playing/volume_overlay.gd": "MapOverlayUtils.create_label_panel",

@@ -42,8 +42,9 @@ const DRAWER_CLEARANCE := 12.0
 const SHIFT_DURATION := 0.25
 ## Controls along the bottom edge the bar keeps clear of.
 const OBSTACLES := &"hint_bar_obstacles"
-## Base hint keys that stay beside a tool's own: Help.
-const KEPT_WITH_A_TOOL: Array[String] = ["F1"]
+## Base hint keys that stay beside a tool's own: the camera's turn keys (the chip that says
+## which mapping is live, CameraRig.turn_hint) and Help.
+const KEPT_WITH_A_TOOL: Array[String] = ["Alt + Q E", "Q E", "F1"]
 
 ## The base hints (set_hints, add_hint, remove_hint).
 var _current_hints: Array[Dictionary] = []
@@ -210,6 +211,19 @@ func add_hint(key: String, action: String) -> void:
 			return
 	_current_hints.append({"key": key, "action": action})
 	_sync()
+
+
+## Swap the base hint on `old_key` for one on `new_key`, in the same place in the row (a chip
+## that names live keys, such as the camera's turn keys, changes caption without moving). When
+## `old_key` is not there the hint is added at the end.
+func replace_hint(old_key: String, new_key: String, action: String) -> void:
+	for hint in _current_hints:
+		if hint["key"] == old_key:
+			hint["key"] = new_key
+			hint["action"] = action
+			_sync()
+			return
+	add_hint(new_key, action)
 
 
 ## Remove a hint by key. A key that is not shown is a no-op.

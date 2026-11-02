@@ -50,6 +50,15 @@ var _fitted_ground: Vector2 = Vector2.ZERO
 func setup(game_map: GameMap, environment: LevelEnvironmentManager) -> void:
 	_game_map = game_map
 	_environment = environment
+	# The zoom-out limit and the pan range depend on the view's basis: fit again once a turn
+	# of the view has landed (CameraController.view_turned).
+	var camera_controller := game_map.get_camera_controller()
+	if camera_controller != null and not camera_controller.view_turned.is_connected(_on_turned):
+		camera_controller.view_turned.connect(_on_turned)
+
+
+func _on_turned(_yaw_deg: float) -> void:
+	refit()
 
 
 ## Fits the camera to `map_root`, already installed in the GameMap (MapSourceLoader.install).

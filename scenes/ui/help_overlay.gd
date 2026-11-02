@@ -123,7 +123,10 @@ func _get_shortcut_data() -> Array:
 			[
 				[InputProfile.label(&"wasd"), "Pan camera"],
 				[InputProfile.label(&"zoom"), "Zoom"],
-				[InputProfile.label(&"reset_camera"), "Reset camera"],
+				["Q / E", "Turn the view a quarter (also the compass buttons, top right)"],
+				["[ / ]", "Turn the view too, while no brush is out (a brush's size otherwise)"],
+				["Alt + Q / E", "Turn the view while a brush is out (Q / E turn the brush)"],
+				[InputProfile.label(&"reset_camera"), "Reset camera (position, zoom and view)"],
 			],
 		},
 		{

@@ -523,8 +523,11 @@ func test_every_shipped_wind_variant_pushes_its_shadow_casters() -> void:
 	for path: String in paths:
 		var shader := load(path) as Shader
 		var sources := GraphicsWarmup.shader_sources_for([path], FileAccess.get_file_as_string)
+		# The pass comes from the engine's IN_SHADOW_PASS, never from the camera's axis: a
+		# camera turning past acos(0.999) in one frame must not sink the crowns (camera-3).
 		assert_string_contains(
-			"\n".join(sources), "VERTEX += shadow_caster_offset(MODEL_MATRIX, INV_VIEW_MATRIX);"
+			"\n".join(sources),
+			"VERTEX += shadow_caster_offset(MODEL_MATRIX, INV_VIEW_MATRIX, IN_SHADOW_PASS);"
 		)
 		var names: Array[String] = []
 		for uniform: Dictionary in shader.get_shader_uniform_list():

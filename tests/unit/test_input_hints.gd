@@ -45,6 +45,27 @@ func test_bar_slides_in_without_leaving_the_bottom_edge() -> void:
 	assert_almost_eq(_bar().modulate.a, 1.0, 0.001)
 
 
+func test_replace_hint_swaps_a_chip_in_place_and_adds_when_absent() -> void:
+	_hints.set_hints(
+		[
+			{"key": "Scroll", "action": "Zoom"},
+			CameraRig.turn_hint(false),
+			{"key": "F1", "action": "Help"},
+		]
+	)
+	await wait_seconds(SETTLE_S)
+	var live := CameraRig.turn_hint(true)
+	_hints.replace_hint("Q E", live.key, live.action)
+	await wait_seconds(SETTLE_S)
+	assert_eq(_row_keys(), ["Scroll", "Alt + Q E", "F1"], "the chip keeps its place")
+	_hints.replace_hint("nothing", "Z", "Added")
+	await wait_seconds(SETTLE_S)
+	assert_eq(_row_keys().back(), "Z", "an absent key is added at the end")
+	_hints.set_tool_hints([{"key": "Tab", "action": "Shape"}])
+	await wait_seconds(SETTLE_S)
+	assert_has(_row_keys(), "Alt + Q E", "the live turn keys stay beside a tool's hints")
+
+
 func test_chips_use_the_key_chip_style() -> void:
 	await _show_grid_and_measure()
 	var chip: Control = _hints.chip_for("G")

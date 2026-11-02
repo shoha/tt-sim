@@ -338,6 +338,12 @@ func add_hint(key: String, action: String) -> void:
 		_input_hints.add_hint(key, action)
 
 
+## Swap the hint on `old_key` for one on `new_key` in place (InputHints.replace_hint)
+func replace_hint(old_key: String, new_key: String, action: String) -> void:
+	if _input_hints:
+		_input_hints.replace_hint(old_key, new_key, action)
+
+
 ## Remove an input hint
 func remove_hint(key: String) -> void:
 	if _input_hints:

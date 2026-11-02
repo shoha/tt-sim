@@ -702,6 +702,7 @@ func _set_default_hints() -> void:
 				{"key": InputProfile.label(&"pause"), "action": "Pause"},
 				{"key": InputProfile.label(&"wasd"), "action": "Pan"},
 				{"key": InputProfile.label(&"zoom"), "action": "Zoom"},
+				CameraRig.turn_hint(false),
 				{"key": InputProfile.label(&"reset_camera"), "action": "Reset camera"},
 				{"key": InputProfile.label(&"measure"), "action": "Measure"},
 				{"key": InputProfile.label(&"grid"), "action": "Grid"},

@@ -1,0 +1,27 @@
+{
+ "out_dir": "render_jobs/camera_rig_hud",
+ "timeout_s": 300,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_camera_fantasy", "load": "play"},
+  {"op": "wait_ready", "settle": 2.0, "phase": "build"},
+  {"op": "wait", "s": 6.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "zoom", "size": 34.0},
+  {"op": "settle"},
+  {"op": "wait", "s": 1.0},
+  {"op": "capture", "name": "hud_free", "desc": "play view with the hint bar: Q E turns the view; compass top right"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "keys", "brush": true},
+  {"op": "wait", "s": 1.0},
+  {"op": "capture", "name": "hud_brush", "desc": "the same with a brush out: the chip reads Alt + Q E"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "keys", "brush": false},
+  {"op": "eval", "expr": "UIManager.toggle_help()"},
+  {"op": "wait", "s": 1.0},
+  {"op": "capture", "name": "help", "desc": "F1 help: Navigation rows"},
+  {"op": "index", "title": "camera rig hud", "intro": "Camera rig card 1: the live key mapping"},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

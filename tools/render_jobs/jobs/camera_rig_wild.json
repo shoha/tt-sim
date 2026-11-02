@@ -1,0 +1,34 @@
+{
+ "out_dir": "render_jobs/camera_rig_wild",
+ "timeout_s": 900,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_camera_wild", "load": "play"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "new", "biome": "temperate_forest_summer_s1", "size": 150, "seed": 3, "landform": "valley", "phase": "build"},
+  {"op": "wait_ready", "settle": 1.5, "phase": "build"},
+  {"op": "no_autosave", "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "save", "folder": "_camera_wild", "replace": true, "phase": "build"},
+  {"op": "play", "folder": "_camera_wild", "phase": "build"},
+  {"op": "wait_ready", "settle": 2.0, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "zoom", "size": 26.0},
+  {"op": "settle"},
+  {"op": "expand", "values": ["45", "135", "225", "315"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "yaw", "deg": "{value}"},
+   {"op": "settle"},
+   {"op": "capture", "name": "wild_y{value}", "desc": "valley, temperate forest, camera azimuth {value}, sun fixed in the world, size 26, compass top right"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "yaw", "deg": 45},
+  {"op": "settle"},
+  {"op": "wind", "freeze": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "clip", "name": "wild_snap", "dir": "user://render_jobs/camera_rig_wild/wild_snap", "seconds": 3.0, "lead": 0.5, "turn": 1, "fps": 30, "width": 960},
+  {"op": "wait", "s": 3.5},
+  {"op": "index", "title": "camera rig wild", "intro": "Camera rig card 1: snap yaw, valley"},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

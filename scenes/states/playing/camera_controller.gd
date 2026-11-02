@@ -27,6 +27,15 @@ extends Node
 ## GameMap._ready() (it's created later by GameMap.setup_measure_tool()), so
 ## the reference used by rmb_can_start_pan() is wired in separately via
 ## set_measure_tool(), called at the end of setup_measure_tool().
+##
+## The view turns in 90 degree snaps (CameraRig, CameraYaw): the CameraHolder's yaw eases over
+## about 0.35 s about the ground point under the screen centre, and the holder carries it, so
+## its local pan axes (WASD, edge pan) keep W away from the viewer. Keys: CameraRig.key_turn;
+## the on-screen CameraCompass always. Local to each player (nothing synced); the sun stays put
+## in the world. The yaw is applied in _process, before CanopyFade publishes the camera's axis.
+
+## Emitted when a turn (or Home) has landed on its yaw; MapViewFit refits for the new basis.
+signal view_turned(yaw_deg: float)
 
 # RMB pan thresholds (short-click vs. drag detection)
 const RMB_PAN_CLICK_THRESHOLD_MS: int = 150  # Max ms for a short-click (not a drag)
@@ -72,7 +81,6 @@ var _brush_tool: BrushTool = null
 
 var _camera_move_dir: Vector3
 var _camera_velocity: Vector3 = Vector3.ZERO  # Smoothed camera movement velocity
-var _iso_vertical_comp: float = 1.0  # Foreshortening compensation for screen-vertical panning
 var _target_zoom: float = 0.0  # Target zoom level (smoothly interpolated toward)
 var _current_edge_pan: Vector2 = Vector2.ZERO  # Smoothed edge pan direction
 
@@ -104,6 +112,11 @@ var _fit_size: float = INF
 var _shake_tween: Tween = null
 var _shake_offset: Vector3 = Vector3.ZERO
 
+# View yaw: the yaw drawn now and the snap it eases to (CameraYaw; CameraRig has the maths)
+var _view_yaw := CameraYaw.new()
+var _glide_home_after_turn: bool = false  # Home: glide to the home position once the yaw is home
+var _compass: CameraCompass = null
+
 
 ## Wire this controller to its owning GameMap and perform initial camera setup:
 ## capture the scene-default offset/size, apply aspect correction for the
@@ -117,9 +130,6 @@ func setup(game_map: GameMap) -> void:
 	_base_camera_offset = camera_node.position
 	_base_camera_size = camera_node.size
 	_base_camera_near = maxf(camera_node.near, 0.001)
-	# Isometric foreshortening: the camera's elevation angle compresses vertical
-	# screen movement by sin(elevation).  Compensate by 1/sin = hypotenuse/opposite.
-	_iso_vertical_comp = _base_camera_offset.length() / _base_camera_offset.y
 	# Initialize target zoom from the camera's current size (reference 16:9 height)
 	_target_zoom = camera_node.size
 	# Apply aspect correction immediately using the actual window size.
@@ -133,6 +143,8 @@ func setup(game_map: GameMap) -> void:
 	_last_mouse_position = get_viewport().get_mouse_position()
 	# React to viewport resizes (e.g. window resize) so aspect correction stays current
 	game_map.world_viewport.size_changed.connect(_on_viewport_size_changed)
+	_compass = CameraCompass.attach(self)
+	_compass.turn_requested.connect(turn_view)
 
 
 ## Store the current camera position/zoom as "home" for the Home-key reset.
@@ -140,6 +152,85 @@ func setup(game_map: GameMap) -> void:
 func capture_home_position() -> void:
 	_home_position = _game_map.cameraholder_node.global_position
 	_home_zoom = _target_zoom
+
+
+## The view's yaw as drawn now (CameraRig: 45 is home, a snap is 90), unwrapped mid-turn.
+func current_yaw() -> float:
+	return _view_yaw.yaw
+
+
+## Whether an eased yaw turn is running.
+func is_turning() -> bool:
+	return _view_yaw.is_turning()
+
+
+## Whether an authoring brush is out, so Q / E are its footprint turn and the view turns on
+## Alt+Q / Alt+E (CameraRig.key_turn).
+func brush_owns_turn_keys() -> bool:
+	return _brush_tool != null and _brush_tool.is_active()
+
+
+## Turn the view one snap, +1 clockwise on the compass (E) and -1 the other way (Q). Presses
+## made while a turn runs add up: the next snap is taken from the one being eased to.
+func turn_view(direction: int) -> void:
+	set_yaw_target(CameraRig.snap_target(_view_yaw.target, direction))
+
+
+## Ease the view to the yaw `yaw_deg` about the ground point under the screen centre.
+func set_yaw_target(yaw_deg: float) -> void:
+	if _reset_tween and _reset_tween.is_valid():
+		_reset_tween.kill()
+	_glide_home_after_turn = false
+	_view_yaw.retarget(yaw_deg)
+
+
+## Put the view at the yaw `yaw_deg` at once, about the same ground point (render jobs, tests).
+func set_yaw_now(yaw_deg: float) -> void:
+	set_yaw_target(yaw_deg)
+	if _view_yaw.is_turning():
+		_rotate_view(yaw_deg - _view_yaw.yaw)
+		_view_yaw.yaw = yaw_deg
+		_finish_turn()
+
+
+## One frame of the eased turn: turn the holder about the ground point under the screen
+## centre by the yaw's step, so the stage stays in frame.
+func _advance_turn(delta: float) -> void:
+	if not _view_yaw.is_turning():
+		return
+	_rotate_view(_view_yaw.step(delta))
+	_compass.set_yaw(_view_yaw.yaw)
+	if not _view_yaw.is_turning():
+		_finish_turn()
+
+
+## Turn the holder by `delta_deg` about the vertical axis through the ground point under the
+## screen centre, found now, so panning or a zoom easing at the same time cannot pull it off.
+func _rotate_view(delta_deg: float) -> void:
+	var holder := _game_map.cameraholder_node
+	var offset := _get_view_center_ground_offset()
+	var pivot := Vector3(
+		holder.global_position.x + offset.x, 0.0, holder.global_position.z + offset.y
+	)
+	holder.global_position = CameraRig.rotate_about_pivot(
+		holder.global_position, pivot, delta_deg
+	)
+	holder.global_basis = Basis(Vector3.UP, deg_to_rad(delta_deg)) * holder.global_basis
+
+
+## The turn has landed: the holder takes the snap's exact basis (no drift from the steps), the
+## pan bounds are fit again for it, and Home's glide follows if it was waiting on the turn.
+func _finish_turn() -> void:
+	_view_yaw.land()
+	_game_map.cameraholder_node.global_basis = CameraRig.holder_basis(_view_yaw.yaw)
+	if _has_map_bounds:
+		_fit_size = _fit_size_for_bounds(_map_bounds)
+	_clamp_camera_to_bounds()
+	_compass.set_yaw(_view_yaw.yaw)
+	view_turned.emit(_view_yaw.yaw)
+	if _glide_home_after_turn:
+		_glide_home_after_turn = false
+		_glide_to_home()
 
 
 ## Wire the MeasureTool reference used by rmb_can_start_pan() to suppress RMB
@@ -169,9 +260,12 @@ func _process(delta: float) -> void:
 	if _game_map._is_level_loading():
 		return
 	PerformanceMonitor.start_timer(&"perf/camera_update_ms")
+	_advance_turn(delta)
+	_compass.sync_keys(brush_owns_turn_keys())
 	handle_movement(delta)
 	handle_zoom(delta)
 	_handle_edge_pan(delta)
+	# Last, once the pose is final: the shaders' camera-pass test reads this axis (camera-3).
 	CanopyFade.publish(
 		_game_map.camera_node, _base_camera_size, Vector2(_game_map.world_viewport.size), delta
 	)
@@ -187,9 +281,16 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if _game_map._is_text_input_focused():
 		return
 
-	# Camera reset (Home key) - tween back to initial position and zoom
+	# Camera reset (Home key) - tween back to initial position, zoom and yaw
 	if event.is_action_pressed("camera_reset"):
 		_reset_camera_to_home()
+		return
+
+	# Turn the view: Q / E, `[` / `]`, or Alt+Q / Alt+E under a brush (CameraRig.key_turn)
+	var turn := CameraRig.event_turn(event, brush_owns_turn_keys())
+	if turn != 0:
+		turn_view(turn)
+		get_viewport().set_input_as_handled()
 		return
 
 	var input_dir := _camera_move_dir
@@ -332,13 +433,19 @@ func _bottom_ray_origin_y(vp_size: Vector2) -> float:
 	return minf(bl.y, br.y)
 
 
+## Factor on screen-vertical panning so W/S match A/D on screen, from the live elevation.
+func _vertical_comp() -> float:
+	return CameraRig.vertical_pan_factor(_game_map.camera_node.global_basis.z.normalized().y)
+
+
 func handle_movement(delta: float) -> void:
 	# Compensate for isometric foreshortening: scale the screen-vertical
-	# component of the movement direction so W/S feels the same as A/D.
+	# component of the movement direction so W/S feels the same as A/D. The axes are the
+	# holder's local ones, so they turn with the view's yaw.
 	var screen_v_axis := Vector3(-1.0, 0.0, -1.0).normalized()
 	var v_component := _camera_move_dir.dot(screen_v_axis)
 	var compensated_dir := (
-		_camera_move_dir + screen_v_axis * v_component * (_iso_vertical_comp - 1.0)
+		_camera_move_dir + screen_v_axis * v_component * (_vertical_comp() - 1.0)
 	)
 
 	# Smoothly accelerate toward target velocity and decelerate when keys released
@@ -394,7 +501,9 @@ func handle_zoom(delta: float) -> void:
 ## mouse pan is moving it. Render jobs wait on it before a capture (the `settle` op).
 func is_at_rest() -> bool:
 	var camera_node := _game_map.camera_node
-	if absf(camera_node.size - _corrected_size(_target_zoom)) > 0.001:
+	if absf(camera_node.size - _corrected_size(_target_zoom)) > 0.001 or is_turning():
+		return false
+	if _glide_home_after_turn:
 		return false
 	for tween: Tween in [_reset_tween, _shake_tween]:
 		if tween != null and tween.is_valid() and tween.is_running():
@@ -608,6 +717,17 @@ func _reset_camera_to_home() -> void:
 	# Let handle_zoom() smoothly interpolate size toward home zoom.
 	# Don't tween camera size directly — that would fight with handle_zoom().
 	_target_zoom = _home_zoom
+	# A turned view first eases back to the home yaw (a glide would fight the turn), then glides.
+	var back := CameraRig.shortest_turn(_view_yaw.target, CameraRig.HOME_YAW)
+	if not is_zero_approx(back):
+		set_yaw_target(_view_yaw.target + back)
+		_glide_home_after_turn = true
+		return
+	_glide_to_home()
+
+
+## Tween the holder to the home position (the clamped one).
+func _glide_to_home() -> void:
 	var target_pos := _clamp_position_to_bounds(_home_position)
 	_reset_tween = create_tween()
 	_reset_tween.set_ease(Tween.EASE_OUT)
@@ -761,7 +881,7 @@ func _handle_edge_pan(delta: float) -> void:
 	# Convert screen-space pan direction to isometric camera movement.
 	# Same coordinate mapping as keyboard: up=(-1,-1), down=(+1,+1), left=(-1,+1), right=(+1,-1).
 	# Vertical component scaled by foreshortening compensation to match keyboard panning.
-	var vert := _current_edge_pan.y * _iso_vertical_comp
+	var vert := _current_edge_pan.y * _vertical_comp()
 	var cam_move = Vector3.ZERO
 	cam_move.x = _current_edge_pan.x + vert
 	cam_move.z = -_current_edge_pan.x + vert
