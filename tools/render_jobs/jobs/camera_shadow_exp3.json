@@ -1,0 +1,29 @@
+{
+ "out_dir": "render_jobs/camera_shadow_exp3",
+ "timeout_s": 600,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_camera_wild", "load": "play"},
+  {"op": "wait_ready", "settle": 1.5, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "zoom", "size": 26.0},
+  {"op": "settle"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "y_base", "dir": "user://render_jobs/camera_shadow_exp3/y_base", "pitches": [21.6, 22, 23, 24, 25, 27, 30], "tweak": {}},
+  {"op": "wait", "s": 5.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "y_m3", "dir": "user://render_jobs/camera_shadow_exp3/y_m3", "pitches": [21.6, 22, 23, 24, 25, 27, 30], "tweak": {"margin": 3}},
+  {"op": "wait", "s": 5.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "y_m10", "dir": "user://render_jobs/camera_shadow_exp3/y_m10", "pitches": [21.6, 22, 23, 24, 25, 27, 30], "tweak": {"margin": 10}},
+  {"op": "wait", "s": 5.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "y_m30", "dir": "user://render_jobs/camera_shadow_exp3/y_m30", "pitches": [21.6, 22, 23, 24, 25, 27, 30], "tweak": {"margin": 30}},
+  {"op": "wait", "s": 5.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "y_mAll", "dir": "user://render_jobs/camera_shadow_exp3/y_mAll", "pitches": [21.6, 22, 23, 24, 25, 27, 30], "tweak": {"margin": 16384}},
+  {"op": "wait", "s": 5.0},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

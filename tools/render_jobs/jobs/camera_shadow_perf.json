@@ -1,0 +1,25 @@
+{
+ "out_dir": "render_jobs/camera_shadow_perf",
+ "timeout_s": 300,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_camera_wild", "load": "play"},
+  {"op": "wait_ready", "settle": 1.5, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "zoom", "size": 26.0},
+  {"op": "settle"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "perf", "pitch": 21.6, "frames": 90, "rounds": 4},
+  {"op": "wait", "s": 14.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "perf", "pitch": 45, "frames": 90, "rounds": 4},
+  {"op": "wait", "s": 14.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "perf", "pitch": 90, "frames": 90, "rounds": 4},
+  {"op": "wait", "s": 14.0},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

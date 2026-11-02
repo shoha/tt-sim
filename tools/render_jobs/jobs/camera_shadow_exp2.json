@@ -1,0 +1,33 @@
+{
+ "out_dir": "render_jobs/camera_shadow_exp2",
+ "timeout_s": 600,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_camera_wild", "load": "play"},
+  {"op": "wait_ready", "settle": 1.5, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "zoom", "size": 26.0},
+  {"op": "settle"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "x_dist1", "dir": "user://render_jobs/camera_shadow_exp2/x_dist1", "pitches": [21.6, 23, 25, 30, 90], "tweak": {"maxdist": 1}},
+  {"op": "wait", "s": 4.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "x_pancake100", "dir": "user://render_jobs/camera_shadow_exp2/x_pancake100", "pitches": [21.6, 23, 25, 30, 90], "tweak": {"pancake": 100}},
+  {"op": "wait", "s": 4.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "x_splitsA", "dir": "user://render_jobs/camera_shadow_exp2/x_splitsA", "pitches": [21.6, 23, 25, 30, 90], "tweak": {"splits": [0.05, 0.1, 0.2]}},
+  {"op": "wait", "s": 4.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "x_splitsB", "dir": "user://render_jobs/camera_shadow_exp2/x_splitsB", "pitches": [21.6, 23, 25, 30, 90], "tweak": {"splits": [0.5, 0.65, 0.8]}},
+  {"op": "wait", "s": 4.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "x_blend_p2", "dir": "user://render_jobs/camera_shadow_exp2/x_blend_p2", "pitches": [21.6, 23, 25, 30, 90], "tweak": {"blend": true, "mode": "p2"}},
+  {"op": "wait", "s": 4.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "x_base", "dir": "user://render_jobs/camera_shadow_exp2/x_base", "pitches": [21.6, 23, 25, 30, 90], "tweak": {}},
+  {"op": "wait", "s": 4.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "x_nocull", "dir": "user://render_jobs/camera_shadow_exp2/x_nocull", "pitches": [21.6, 23, 25, 30, 90], "tweak": {"cull_off": true}},
+  {"op": "wait", "s": 4.0},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

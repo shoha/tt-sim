@@ -29,6 +29,13 @@ const SUN_SHADOW_MAX_DISTANCE: float = 100.0
 const SUN_SHADOW_FADE_START: float = 0.8
 ## Headroom beyond the farthest visible ground when the max distance follows the view.
 const SUN_SHADOW_VIEW_MARGIN: float = 5.0
+## DirectionalLight3D.directional_shadow_blend_splits. ON because the engine's default (off)
+## drops a large share of the far trees' shadows at a low camera pitch and brings them back as the
+## camera tilts, so tilting the view popped tree shadows in and out (camerarig-3, 2026-11-02:
+## on the wild valley the shadowed share of the frame went 5.2 % at pitch 21.6 to 9.3 % at 25,
+## with block changes 3 to 5 times a pan step's; with blending it is 9.3 to 9.8 % and smooth).
+## Costs about 0.1 ms of GPU at 1920x1080 (indicative, in-run A/B).
+const SUN_SHADOW_BLEND_SPLITS: bool = true
 
 ## Field of view Godot uses to draw the sky behind the map. The map camera is
 ## orthographic, and Godot draws any sky behind an orthographic camera as if the
@@ -425,6 +432,7 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		_sun_light.shadow_bias = 0.02
 		_sun_light.shadow_normal_bias = 0.1
 		_sun_light.directional_shadow_max_distance = SUN_SHADOW_MAX_DISTANCE
+		_sun_light.directional_shadow_blend_splits = SUN_SHADOW_BLEND_SPLITS
 		world_viewport.add_child(_sun_light)
 	_configure_sun_light(level_data.visual_settings.sun)
 	_sun_azimuth_deg = level_data.visual_settings.sun.azimuth_degrees

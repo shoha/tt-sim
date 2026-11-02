@@ -1,0 +1,33 @@
+{
+ "out_dir": "render_jobs/camera_shadow_exp",
+ "timeout_s": 600,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_camera_wild", "load": "play"},
+  {"op": "wait_ready", "settle": 1.5, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "zoom", "size": 26.0},
+  {"op": "settle"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "e_base", "dir": "user://render_jobs/camera_shadow_exp/e_base", "pitches": [21.6, 22, 23, 24, 25, 26, 27, 30, 40, 90], "tweak": {}},
+  {"op": "wait", "s": 6.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "e_dist400", "dir": "user://render_jobs/camera_shadow_exp/e_dist400", "pitches": [21.6, 22, 23, 24, 25, 26, 27, 30, 40, 90], "tweak": {"maxdist": 400}},
+  {"op": "wait", "s": 6.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "e_nofade", "dir": "user://render_jobs/camera_shadow_exp/e_nofade", "pitches": [21.6, 22, 23, 24, 25, 26, 27, 30, 40, 90], "tweak": {"nofade": true}},
+  {"op": "wait", "s": 6.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "e_ortho", "dir": "user://render_jobs/camera_shadow_exp/e_ortho", "pitches": [21.6, 22, 23, 24, 25, 26, 27, 30, 40, 90], "tweak": {"mode": "ortho"}},
+  {"op": "wait", "s": 6.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "e_p2", "dir": "user://render_jobs/camera_shadow_exp/e_p2", "pitches": [21.6, 22, 23, 24, 25, 26, 27, 30, 40, 90], "tweak": {"mode": "p2"}},
+  {"op": "wait", "s": 6.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "e_blend", "dir": "user://render_jobs/camera_shadow_exp/e_blend", "pitches": [21.6, 22, 23, 24, 25, 26, 27, 30, 40, 90], "tweak": {"blend": true}},
+  {"op": "wait", "s": 6.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "e_dist25", "dir": "user://render_jobs/camera_shadow_exp/e_dist25", "pitches": [21.6, 22, 23, 24, 25, 26, 27, 30, 40, 90], "tweak": {"maxdist": 25}},
+  {"op": "wait", "s": 6.0},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

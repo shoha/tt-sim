@@ -144,6 +144,15 @@ func test_apply_sun_settings_writes_the_shadow_properties_to_the_light() -> void
 	assert_almost_eq(light.shadow_opacity, 0.35, 0.001)
 
 
+func test_the_sun_blends_its_shadow_cascades() -> void:
+	# Off, the far trees' shadows drop out at a low pitch and pop back as the view tilts
+	# (camerarig-3); the constant's comment has the numbers.
+	var manager := _make_manager_with_loaded_level()
+	manager.apply_sun_settings(SunSettings.default())
+
+	assert_true(manager.get_sun_light().directional_shadow_blend_splits)
+
+
 func test_apply_sun_settings_can_disable_shadows() -> void:
 	var manager := _make_manager_with_loaded_level()
 	var settings := SunSettings.default()

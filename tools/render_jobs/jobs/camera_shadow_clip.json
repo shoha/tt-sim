@@ -1,0 +1,24 @@
+{
+ "out_dir": "render_jobs/camera_shadow_clip",
+ "timeout_s": 600,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_camera_wild", "load": "play"},
+  {"op": "wait_ready", "settle": 1.5, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "zoom", "size": 26.0},
+  {"op": "settle"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "blend", "on": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "clip", "name": "off", "dir": "user://render_jobs/camera_shadow_clip/off", "seconds": 3.0, "fps": 30, "width": 960, "events": [{"at": 10, "do": "toggle"}, {"at": 55, "do": "toggle"}]},
+  {"op": "wait", "s": 4.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "blend", "on": true},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "clip", "name": "on", "dir": "user://render_jobs/camera_shadow_clip/on", "seconds": 3.0, "fps": 30, "width": 960, "events": [{"at": 10, "do": "toggle"}, {"at": 55, "do": "toggle"}]},
+  {"op": "wait", "s": 4.0},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

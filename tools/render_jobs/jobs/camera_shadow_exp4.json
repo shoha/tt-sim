@@ -1,0 +1,27 @@
+{
+ "out_dir": "render_jobs/camera_shadow_exp4",
+ "timeout_s": 600,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_camera_wild", "load": "play"},
+  {"op": "wait_ready", "settle": 1.5, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "zoom", "size": 26.0},
+  {"op": "settle"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "z_base", "dir": "user://render_jobs/camera_shadow_exp4/z_base", "pitches": [21.6, 22, 22.5, 23, 23.5, 24, 24.5, 25, 25.5, 26, 27, 28, 29, 30, 40, 60, 90], "tweak": {}},
+  {"op": "wait", "s": 6.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "z_blend", "dir": "user://render_jobs/camera_shadow_exp4/z_blend", "pitches": [21.6, 22, 22.5, 23, 23.5, 24, 24.5, 25, 25.5, 26, 27, 28, 29, 30, 40, 60, 90], "tweak": {"blend": true}},
+  {"op": "wait", "s": 6.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "z_m30mm", "dir": "user://render_jobs/camera_shadow_exp4/z_m30mm", "pitches": [21.6, 22, 22.5, 23, 23.5, 24, 24.5, 25, 25.5, 26, 27, 28, 29, 30, 40, 60, 90], "tweak": {"margin": 30, "mm_only": true}},
+  {"op": "wait", "s": 6.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_shadow.gd", "action": "sweep", "name": "z_blend_m30mm", "dir": "user://render_jobs/camera_shadow_exp4/z_blend_m30mm", "pitches": [21.6, 22, 22.5, 23, 23.5, 24, 24.5, 25, 25.5, 26, 27, 28, 29, 30, 40, 60, 90], "tweak": {"blend": true, "margin": 30, "mm_only": true}},
+  {"op": "wait", "s": 6.0},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}
