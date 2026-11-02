@@ -88,7 +88,7 @@ const TILE_PROP_ZOOM_FACTORS: Dictionary = {
 	"yard_gate": 1.3,
 	"modern_lamp": 3.3,
 	"phone_box": 2.14,
-	"bus_shelter": 1.4,
+	"bus_shelter": 1.75,
 	"post_box": 1.6,
 	"litter_bin": 1.4,
 }
@@ -107,7 +107,7 @@ const TILE_PROP_LOOK_Z: Dictionary = {
 	"haystack": -0.3,
 	"modern_lamp": -3.2,
 	"phone_box": -1.3,
-	"bus_shelter": -1.0,
+	"bus_shelter": -0.8,
 	"post_box": -0.7,
 	"litter_bin": -0.45,
 }
