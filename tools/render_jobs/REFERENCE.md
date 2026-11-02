@@ -92,6 +92,7 @@ A skipped step logs `skip <op> (<reason>)`.
 |---|---|---|
 | `home` | none | Reset the camera to its home view. |
 | `zoom` | `size` (optional) | With `size`, set the target orthographic size (it eases there, so follow with a `settle`). Without it, zoom out 60 steps, which reaches full zoom-out. |
+| `view` | `yaw`, `pitch`, `zoom` (each optional), `mode` (default `orbit`) | Set the active view at once through the camera controller's public API (`set_yaw_now`, `set_pitch_now`, the orbit view's target size), and log `view <mode> yaw .. pitch .. fov ..` (the numbers the bridge's `game_state` camera block reports). `zoom` eases (follow with `settle`), as the `zoom` op does. `mode` must name the active view; only `orbit` exists, and any other value logs a line and changes nothing. No `walk` op yet. |
 | `look_at` | `at` ([x, z] world metres) | Pan so the screen centre looks at that ground point. |
 
 ### Authoring edits

@@ -243,7 +243,7 @@ func test_wasd_forward_pans_away_from_the_viewer_at_every_yaw() -> void:
 		cc.set("_camera_move_dir", W_LOCAL)
 		var before := holder.global_position
 		for i in 30:
-			cc.handle_movement(1.0 / 60.0)
+			(cc.view_mode() as OrbitView).handle_movement(1.0 / 60.0)
 		cc.set("_camera_move_dir", Vector3.ZERO)
 		var moved := holder.global_position - before
 		assert_almost_eq(moved.normalized().dot(CameraRig.screen_up(yaw)), 1.0, 0.001, "yaw %d" % yaw)
@@ -261,7 +261,7 @@ func test_w_covers_as_much_screen_as_a() -> void:
 		var start := holder.global_position
 		var s0 := cam.unproject_position(anchor)
 		for i in 30:
-			cc.handle_movement(1.0 / 60.0)
+			(cc.view_mode() as OrbitView).handle_movement(1.0 / 60.0)
 		speeds.append((cam.unproject_position(anchor) - s0).length())
 		cc.set("_camera_move_dir", Vector3.ZERO)
 		cc.set("_camera_velocity", Vector3.ZERO)

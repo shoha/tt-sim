@@ -252,3 +252,44 @@ static func turn_hint(brush_owns_keys: bool) -> Dictionary:
 		"key": "Alt + Q E" if brush_owns_keys else "Q E",
 		"action": "Turn view",
 	}
+
+
+## Metres across the view per screen pixel for an orthographic camera of `size` metres spanning
+## `extent_px` pixels (the viewport height for KEEP_HEIGHT, its width for KEEP_WIDTH). Pure.
+static func ortho_metres_per_pixel(size: float, extent_px: float) -> float:
+	if extent_px <= 0.0:
+		return 0.0
+	return size / extent_px
+
+
+## Metres across the view per screen pixel for a perspective camera of field of view `fov_deg`
+## (across `extent_px` pixels, as Camera3D.fov is) at `distance` metres from the eye. Pure.
+static func perspective_metres_per_pixel(
+	fov_deg: float, distance: float, extent_px: float
+) -> float:
+	if extent_px <= 0.0:
+		return 0.0
+	return 2.0 * maxf(distance, 0.0) * tan(deg_to_rad(fov_deg) * 0.5) / extent_px
+
+
+## Metres across the view (on a plane facing the camera) per screen pixel at the screen centre,
+## for either projection: the orthographic `size` (depth independent, `distance` is ignored) or a
+## perspective camera's fov at `distance` metres from the eye. `viewport_px` is the viewport the
+## camera renders to; Camera3D.keep_aspect picks whether size and fov span its height or width.
+## Ground metres per pixel along the screen's vertical divide this by the sine of the pitch.
+static func metres_per_pixel(
+	camera: Camera3D, viewport_px: Vector2, distance: float = 0.0
+) -> float:
+	var extent := viewport_px.x if camera.keep_aspect == Camera3D.KEEP_WIDTH else viewport_px.y
+	if camera.projection == Camera3D.PROJECTION_PERSPECTIVE:
+		return perspective_metres_per_pixel(camera.fov, distance, extent)
+	return ortho_metres_per_pixel(camera.size, extent)
+
+
+## Where `world_point` lands on the screen (viewport pixels), or null when it is behind the eye
+## (the camera's near plane), where Camera3D.unproject_position would return a mirrored position.
+## Overlays use this instead of unproject_position so nothing is drawn for a point it cannot see.
+static func screen_of(camera: Camera3D, world_point: Vector3) -> Variant:
+	if camera.is_position_behind(world_point):
+		return null
+	return camera.unproject_position(world_point)

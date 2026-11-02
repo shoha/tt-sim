@@ -105,6 +105,15 @@ same pixels from the same inputs. Three ops give that (REFERENCE.md "State and m
 - `wind` (`freeze`): plants hold still, so the shader clock no longer shows in the pixels.
 - `settle` in place of `wait` after a camera move, a placement or a toggle: it ends when the
   camera and the scatter are at rest, and snaps the zoom onto its target.
+- `view` (`yaw`, `pitch`, `zoom` in one step, through the camera controller's public API) to put
+  the view at a known pose; it logs the yaw, pitch and fov the bridge's camera block reports.
+  `streetseam_town` and `streetseam_wild` are the still-by-still regression pair for camera
+  changes (home, snap turn, tilt to 45, top-down, Home reset, close, far): run each once for a
+  baseline, again with `--out render_jobs/<other> --saved`, and compare the PNGs (a baseline taken
+  in the building run is not comparable: take it with `--saved` too; two runs of the same code
+  differ by up to about 75 levels on a few percent of the pixels). They save the levels
+  `_camera_ss_town` and `_camera_ss_wild` (the `_camera_` prefix is one `water.gd` accepts);
+  `streetseam_cleanup` removes every `_camera_*` level.
 
 A species round is then: `wait_title`, `library_dev` (a plantgen library folder as the developer override), `new_map`,
 `wait_ready` (`settle` 0.5), `no_autosave`, `place_seed`, `wind`, the probes' setup, and for

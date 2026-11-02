@@ -1,0 +1,20 @@
+{
+ "out_dir": "render_jobs/streetseam_view",
+ "timeout_s": 300,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_camera_ss_wild", "load": "play"},
+  {"op": "play", "folder": "_camera_ss_wild", "phase": "build"},
+  {"op": "wait_ready", "settle": 2.0, "phase": "build"},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "view", "yaw": 135, "pitch": 30, "zoom": 20.0},
+  {"op": "settle"},
+  {"op": "capture", "name": "view_135_30", "desc": "the view op: yaw 135, pitch 30, zoom 20"},
+  {"op": "view", "mode": "eye", "yaw": 45},
+  {"op": "view"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

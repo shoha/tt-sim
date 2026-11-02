@@ -332,10 +332,24 @@ func _get_camera_state() -> Dictionary:
 	if camera == null:
 		return {}
 	var pos: Vector3 = holder.global_position if holder else camera.global_position
-	return {
+	var state := {
 		"position": _vec3_to_dict(pos),
 		"zoom": camera.size,
+		"view_mode": "orbit",
+		"yaw": 0.0,
+		"pitch": 0.0,
+		"fov": 0.0,
 	}
+	# The active view mode, the yaw and pitch scalars and the lens (0 for an orthographic view);
+	# "zoom" stays the Camera3D's size, which is stale under a perspective view.
+	var controller: CameraController = game_map.call("get_camera_controller")
+	if controller != null:
+		var mode := controller.view_mode()
+		state["view_mode"] = String(mode.mode_name())
+		state["yaw"] = controller.current_yaw()
+		state["pitch"] = controller.current_pitch()
+		state["fov"] = mode.fov_deg()
+	return state
 
 
 func _get_scene_tree(node: Node, depth: int, max_depth: int) -> Dictionary:

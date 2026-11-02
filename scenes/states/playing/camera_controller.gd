@@ -1,11 +1,13 @@
 class_name CameraController
 extends Node
 
-## Handles camera movement, zoom, panning (middle-mouse and right-mouse drag),
-## edge-panning during token drags, camera shake feedback, soft-bounds
-## clamping to the map's geometry, aspect-ratio correction for
-## narrower-than-16:9 viewports, and the Home-key camera reset / focus-on-token
-## tweens.
+## Owns the camera rig and routes input to the active view mode. The single Camera3D and its
+## CameraHolder, the yaw and pitch state (CameraView), camera shake, the on-screen compass, the
+## tool wiring that decides whether RMB may pan, and the Home / turn / top-down keys live here;
+## everything that depends on how the picture is made (the projection, pan, zoom, the pan bounds,
+## the near plane, edge pan, WASD) is a ViewMode behind a small interface. OrbitView is the shipped
+## one (orthographic, today's behaviour unchanged); a second mode is swapped in with
+## set_view_mode() and needs no edit to the orbit file (card streetseam, 2026-11-02).
 ##
 ## Created as a child Node of GameMap in _ready() (mirrors the AssetManager
 ## facade/sub-component pattern). Reads node references (camera_node,
@@ -21,7 +23,7 @@ extends Node
 ## methods that GameMap._input() calls explicitly in place, because that
 ## method's dispatch order across drag-place/measure-tool/camera concerns is
 ## order-sensitive and must stay owned by GameMap (mirrors DragPlaceController's
-## handle_input() pattern).
+## handle_input() pattern); each forwards to the active view.
 ##
 ## MeasureTool doesn't exist yet when this controller is constructed in
 ## GameMap._ready() (it's created later by GameMap.setup_measure_tool()), so
@@ -35,6 +37,10 @@ extends Node
 ## in the world. The yaw is applied in _process, before CanopyFade publishes the camera's axis.
 ## The pitch (CameraPitch; 21.6 degrees home to straight down) tilts the camera child the same way,
 ## by Alt + left drag, O (top-down toggle) or the compass; CameraView owns both orientations.
+##
+## The underscore names near the end (_target_zoom, _update_camera_offset, ...) are the old private
+## surface that tests and render-job probes reach with call / get / set; they forward to the orbit
+## view and can go when those callers move to the view's own names.
 
 ## Emitted when a turn (or Home) has landed on its yaw; MapViewFit refits for the new basis.
 signal view_turned(yaw_deg: float)
@@ -45,34 +51,17 @@ signal view_tilted(pitch_deg: float)
 const RMB_PAN_CLICK_THRESHOLD_MS: int = 150  # Max ms for a short-click (not a drag)
 const RMB_PAN_MOVE_THRESHOLD_PX: float = 5.0  # Min movement to count as drag
 
-# Camera soft bounds / near-plane safety margin
-const MAP_BOUNDS_MARGIN_FACTOR := 0.15  # Extra margin as fraction of map size on each side
-## Keep bottom-corner ray origins at least this far above the highest ground (ground_top_y).
-const NEAR_PLANE_GROUND_MARGIN := 0.5
 ## The near plane is pulled back until the bottom corners' ray origins stand this far above
 ## the highest ground, over the tallest canopy (palette trees reach 16 m; margin for Blender
-## maps' taller ones): see _hold_near_plane_over_canopies.
+## maps' taller ones): see OrbitView.update_camera_offset.
 const CANOPY_CLEARANCE := 24.0
-## Zoomed out past this fraction of the size at which the whole map fits, the pan range
-## narrows toward the map centre, reaching it at that size (recentre_weight()), so a full
-## zoom-out frames the map instead of wherever zoom-toward-cursor left the view.
-const RECENTRE_START := 0.6
 
 # Camera shake
 const SHAKE_MAX_INTENSITY := 0.05  # Max shake offset in world units
 const SHAKE_DURATION := 0.15  # Duration of shake effect
 
-const EDGE_PAN_SMOOTH_SPEED: float = 8.0  # Smoothing rate for edge panning ramp-up/coast-out
 const TOKEN_COLLISION_LAYER: int = 2  # Physics layer for tokens (layer 1 = terrain)
 const REFERENCE_ASPECT := 16.0 / 9.0  # Reference window aspect ratio for frustum consistency
-
-@export var move_speed: float = 10.0
-@export var move_accel_speed: float = 15.0  # Smoothing rate for camera move accel/decel
-@export var zoom_step: float = 1.5  # How much each scroll tick changes the target zoom
-@export var zoom_smooth_speed: float = 12.0  # Smoothing rate for zoom interpolation
-@export var pan_gesture_zoom_factor: float = 0.05
-@export var min_zoom: float = 2.0
-@export var max_zoom: float = 20.0
 
 ## World height of the highest ground the near plane must stay above: 0 for Blender maps
 ## (unchanged behaviour), the terrain's top for an authored map (set_ground_top).
@@ -80,39 +69,29 @@ var ground_top_y: float = 0.0
 ## The on-screen compass and tilt handle, or null before setup().
 var compass: CameraCompass = null
 
+## The orbit view's zoom range (the 16:9 reference height of the camera's size).
+var min_zoom: float:
+	get:
+		return _orbit.min_zoom
+	set(value):
+		_orbit.min_zoom = value
+var max_zoom: float:
+	get:
+		return _orbit.max_zoom
+	set(value):
+		_orbit.max_zoom = value
+
 var _game_map: GameMap = null
 var _measure_tool: MeasureTool = null
 var _sun_gizmo: SunGizmoTool = null
 var _brush_tool: BrushTool = null
 
-var _camera_move_dir: Vector3
-var _camera_velocity: Vector3 = Vector3.ZERO  # Smoothed camera movement velocity
-var _target_zoom: float = 0.0  # Target zoom level (smoothly interpolated toward)
-var _current_edge_pan: Vector2 = Vector2.ZERO  # Smoothed edge pan direction
+var _orbit: OrbitView = OrbitView.new()
+var _active: ViewMode = null  # the view mode in charge: _orbit, or the one set_view_mode gave
 
-# Pan state (middle-mouse and RMB alternative)
-var _is_panning: bool = false
-var _pan_start_mouse: Vector2 = Vector2.ZERO
-var _last_mouse_position: Vector2 = Vector2.ZERO  # Tracked for zoom-toward-cursor
-var _rmb_pan_active: bool = false  # True when RMB is being used for panning
+# RMB press (short-click vs. drag detection); the pan itself is the active view's
 var _rmb_press_time: int = 0  # Timestamp (msec) of RMB press for short-click detection
 var _rmb_press_pos: Vector2 = Vector2.ZERO  # Screen position of RMB press
-
-# Camera home position (stored on level load for reset)
-var _home_position: Vector3 = Vector3.ZERO
-var _home_zoom: float = 0.0
-var _reset_tween: Tween = null
-
-# Camera offset scaling (prevents near-plane culling at large zoom/narrow aspect)
-var _base_camera_offset: Vector3  # Camera3D local position at base zoom (from scene)
-var _base_camera_size: float  # Camera3D orthographic size at base zoom (from scene)
-var _base_camera_near: float = 0.001  # Camera3D near from the scene (the placement's reference)
-
-# Camera soft bounds (computed from map geometry)
-var _map_bounds: AABB = AABB()
-var _has_map_bounds: bool = false
-# Reference (16:9) size at which _map_bounds fits the view; INF when unknown.
-var _fit_size: float = INF
 
 # Camera shake state
 var _shake_tween: Tween = null
@@ -121,45 +100,84 @@ var _shake_offset: Vector3 = Vector3.ZERO
 # The view's yaw, pitch and orbit (CameraView; CameraRig has the maths); made in setup()
 var _view: CameraView = null
 
+# Old private names forwarding to the orbit view (see the class header)
+var _target_zoom: float:
+	get:
+		return _orbit.target_zoom
+	set(value):
+		_orbit.target_zoom = value
+var _home_zoom: float:
+	get:
+		return _orbit.home_zoom
+var _camera_velocity: Vector3:
+	get:
+		return _orbit.camera_velocity
+	set(value):
+		_orbit.camera_velocity = value
+var _camera_move_dir: Vector3:
+	get:
+		return _orbit.camera_move_dir
+	set(value):
+		_orbit.camera_move_dir = value
+var _current_edge_pan: Vector2:
+	get:
+		return _orbit.current_edge_pan
+	set(value):
+		_orbit.current_edge_pan = value
+var _base_camera_offset: Vector3:
+	get:
+		return _orbit.base_camera_offset
+var _fit_size: float:
+	get:
+		return _orbit.fit_size
+	set(value):
+		_orbit.fit_size = value
+var _map_bounds: AABB:
+	get:
+		return _orbit.map_bounds
+var _last_mouse_position: Vector2:
+	set(value):
+		_orbit.last_mouse_position = value
 
-## Wire this controller to its owning GameMap and perform initial camera setup:
-## capture the scene-default offset/size, apply aspect correction for the
-## current window size, and start listening for viewport resizes.
+
+## Wire this controller to its owning GameMap and perform initial camera setup: the orbit view
+## captures the scene-default offset/size and applies aspect correction for the current window
+## size, and the controller starts listening for viewport resizes.
 func setup(game_map: GameMap) -> void:
 	_game_map = game_map
-	var camera_node := game_map.camera_node
-
-	# Capture the scene-default camera offset and size before any modification.
-	# These are the reference values for proportional offset scaling.
-	_base_camera_offset = camera_node.position
-	_base_camera_size = camera_node.size
-	_base_camera_near = maxf(camera_node.near, 0.001)
-	# Initialize target zoom from the camera's current size (reference 16:9 height)
-	_target_zoom = camera_node.size
-	# Apply aspect correction immediately using the actual window size.
-	# world_viewport.size may still hold the scene default at this point,
-	# so get_window().size gives the real pixel dimensions.
-	camera_node.size = compute_aspect_corrected_size(
-		_target_zoom, get_window().size, REFERENCE_ASPECT
-	)
-	_update_camera_offset()
-	# Seed mouse position so first scroll-to-zoom targets the cursor, not (0,0)
-	_last_mouse_position = get_viewport().get_mouse_position()
+	set_view_mode(_orbit)
 	# React to viewport resizes (e.g. window resize) so aspect correction stays current
 	game_map.world_viewport.size_changed.connect(_on_viewport_size_changed)
 	_view = CameraView.new(self, game_map)
-	TokenMarkers.attach(game_map.world_viewport, camera_node, game_map.is_mouse_over_gui)
+	TokenMarkers.attach(game_map.world_viewport, game_map.camera_node, game_map.is_mouse_over_gui)
 	compass = CameraCompass.attach(self)
 	compass.turn_requested.connect(turn_view)
 	compass.tilt_requested.connect(_view.tilt_by)
 	compass.top_down_requested.connect(_view.toggle_top_down)
 
 
+## The view mode in charge of the camera now (OrbitView unless set_view_mode gave another).
+func view_mode() -> ViewMode:
+	return _active
+
+
+## Make `mode` the active view mode: the current one is deactivated (an Alt + drag orbit ends, held
+## keys, pans and glides stop) and `mode` takes over the Camera3D. Null or the active mode: no-op.
+func set_view_mode(mode: ViewMode) -> void:
+	if mode == null or mode == _active:
+		return
+	if _view != null and _view.orbiting:
+		_view.end_orbit()
+	if _active != null:
+		_active.deactivate()
+	_active = mode
+	_active.activate(self, _game_map)
+
+
 ## Store the current camera position/zoom as "home" for the Home-key reset.
 ## Called by GameMap.setup() once the level play controller is wired up.
 func capture_home_position() -> void:
-	_home_position = _game_map.cameraholder_node.global_position
-	_home_zoom = _target_zoom
+	_active.capture_home()
 
 
 ## The view's yaw as drawn now (CameraRig: 45 is home, a snap is 90), unwrapped mid-turn.
@@ -224,18 +242,6 @@ func _another_drag_owns_mouse() -> bool:
 	return token_drag or brush_drag or (_sun_gizmo != null and _sun_gizmo.is_dragging())
 
 
-## Stop the Home / focus glide, if one runs (a turn, tilt or orbit takes over the view).
-func _cancel_home_tween() -> void:
-	if _reset_tween and _reset_tween.is_valid():
-		_reset_tween.kill()
-
-
-## Fit the pan bounds again for the camera's basis as it is now.
-func _refit_bounds() -> void:
-	if _has_map_bounds:
-		_fit_size = _fit_size_for_bounds(_map_bounds)
-
-
 ## Wire the MeasureTool reference used by rmb_can_start_pan() to suppress RMB
 ## pan while a measurement is active. MeasureTool doesn't exist yet when this
 ## controller is constructed, so GameMap calls this at the end of its
@@ -265,13 +271,7 @@ func _process(delta: float) -> void:
 	PerformanceMonitor.start_timer(&"perf/camera_update_ms")
 	_view.advance(delta)
 	compass.sync_keys(brush_owns_turn_keys())
-	handle_movement(delta)
-	handle_zoom(delta)
-	_handle_edge_pan(delta)
-	# Last, once the pose is final: the shaders' camera-pass test reads this axis (camera-3).
-	CanopyFade.publish(
-		_game_map.camera_node, _base_camera_size, Vector2(_game_map.world_viewport.size), delta
-	)
+	_active.process(delta)
 	PerformanceMonitor.stop_timer(&"perf/camera_update_ms")
 
 
@@ -306,36 +306,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
-	var input_dir := _camera_move_dir
-
-	if event.is_action_released("camera_move_forward"):
-		input_dir.x += 1
-		input_dir.z += 1
-	if event.is_action_released("camera_move_backward"):
-		input_dir.x -= 1
-		input_dir.z -= 1
-	if event.is_action_released("camera_move_left"):
-		input_dir.x += 1
-		input_dir.z -= 1
-	if event.is_action_released("camera_move_right"):
-		input_dir.x -= 1
-		input_dir.z += 1
-
-	if event.is_action_pressed("camera_move_forward"):
-		input_dir.x -= 1
-		input_dir.z -= 1
-	if event.is_action_pressed("camera_move_backward"):
-		input_dir.x += 1
-		input_dir.z += 1
-	if event.is_action_pressed("camera_move_left"):
-		input_dir.x -= 1
-		input_dir.z += 1
-	if event.is_action_pressed("camera_move_right"):
-		input_dir.x += 1
-		input_dir.z -= 1
-
-	input_dir.y = 0
-	_camera_move_dir = input_dir
+	# Everything else (WASD) is the active view's
+	if _active.handle_input(event):
+		get_viewport().set_input_as_handled()
 
 
 ## Return the camera size needed to show at least as much horizontal world space
@@ -349,282 +322,113 @@ func _unhandled_key_input(event: InputEvent) -> void:
 static func compute_aspect_corrected_size(
 	height: float, vp_size: Vector2i, reference_aspect: float
 ) -> float:
-	if vp_size.y == 0 or vp_size.x == 0:
-		return height
-	var actual_aspect := float(vp_size.x) / float(vp_size.y)
-	if actual_aspect >= reference_aspect:
-		return height
-	return height * reference_aspect / actual_aspect
-
-
-## Return the aspect-corrected camera size for the current viewport.
-func _corrected_size(height: float) -> float:
-	return compute_aspect_corrected_size(height, _game_map.world_viewport.size, REFERENCE_ASPECT)
+	return OrbitView.aspect_corrected_size(height, vp_size, reference_aspect)
 
 
 ## The highest ground on the map (world Y), so the near plane stays above raised terrain at
-## the bottom of the screen (see _update_camera_offset). Blender maps never call this and
+## the bottom of the screen (see OrbitView.update_camera_offset). Blender maps never call this and
 ## keep 0; an authored map passes its terrain's top, and authoring keeps it current while
-## the ground is sculpted. Re-applies the offset at once when it changed.
+## the ground is sculpted. Tells the active view at once when it changed.
 func set_ground_top(y: float) -> void:
 	if is_equal_approx(y, ground_top_y):
 		return
 	ground_top_y = y
 	if is_instance_valid(_game_map) and is_instance_valid(_game_map.camera_node):
-		_update_camera_offset()
-
-
-## Scale the Camera3D local position so that all screen-corner ray origins
-## stay above the highest ground (ground_top_y, 0 unless set). For an orthographic camera,
-## translating along the view direction has zero visual effect but keeps the near plane
-## ahead of all visible ground geometry, preventing culling at any zoom or aspect ratio:
-## every visible ground point lies on a downward ray from an origin above it.
-func _update_camera_offset() -> void:
-	var camera_node := _game_map.camera_node
-	# Ray origins lie on the near plane: measure the placement below with the scene's own
-	# near, then pull the near plane back over the canopies at the end.
-	camera_node.near = _base_camera_near
-	# Baseline: proportional scaling preserves the original camera geometry
-	var offset_scale := camera_node.size / _base_camera_size
-	camera_node.position = _base_camera_offset * offset_scale
-
-	# The bottom screen corners have the lowest ray-origin Y because the
-	# camera's right axis tilts downward.  On wide or zoomed-out viewports
-	# this can push the ray origin below Y=0, causing near-plane culling.
-	# Check the actual ray origins and add exactly enough extra offset.
-	var vp_size := _game_map.world_viewport.size
-	if vp_size.x > 0 and vp_size.y > 0:
-		var min_y := _bottom_ray_origin_y(Vector2(vp_size))
-		if min_y < NEAR_PLANE_GROUND_MARGIN:
-			var deficit := NEAR_PLANE_GROUND_MARGIN - min_y
-			offset_scale += deficit / _base_camera_offset.y
-			camera_node.position = _base_camera_offset * offset_scale
-		# Raised authored ground: back further along the camera's own view axis. The base
-		# offset is not exactly that axis, so scaling it for the terrain's height shifted the
-		# picture while sculpting (zooming hides the same drift with its cursor correction);
-		# along the view axis an orthographic camera shows exactly the same frame.
-		if ground_top_y > 0.0:
-			min_y = _bottom_ray_origin_y(Vector2(vp_size))
-			var floor_y := ground_top_y + NEAR_PLANE_GROUND_MARGIN
-			var back := camera_node.global_basis.z.normalized()
-			if min_y < floor_y and back.y > 0.001:
-				camera_node.global_position += back * ((floor_y - min_y) / back.y)
-		_hold_near_plane_over_canopies(camera_node, Vector2(vp_size))
-
-
-## Pull the near plane back behind the camera (a negative near; the camera itself stays
-## put) until the bottom corners' ray origins, which lie on it, stand CANOPY_CLEARANCE above
-## the highest ground. Every canopy on screen then lies in front of it at every zoom, so none
-## is sliced or culled: the scene-near plane used to cut the trees at the bottom of the frame
-## flat (at the home zoom a 15 m pine there vanished whole) and, closer in, slice canopies
-## open. Unlike backing the camera off, this leaves everything that measures from the camera
-## as it was: exponential fog, the sun's shadow distance and cascades, measured unchanged at
-## the home zoom (Polish, 2026-10-05). Below the home zoom the canopy fade (CanopyFade)
-## reveals the ground instead.
-func _hold_near_plane_over_canopies(camera_node: Camera3D, vp_size: Vector2) -> void:
-	var back := camera_node.global_basis.z.normalized()
-	var hold := near_plane_hold(
-		_bottom_ray_origin_y(vp_size), ground_top_y + CANOPY_CLEARANCE, back.y
-	)
-	camera_node.near = _base_camera_near - hold
+		_active.ground_top_changed()
 
 
 ## How far (metres along the view axis) to pull the near plane back so that a ray origin at
 ## height `bottom_origin_y` on it rises to `floor_y`, for a back axis rising `back_y` per
-## metre. 0 when it is already there. Pure.
+## metre. 0 when it is already there. Pure (OrbitView.near_plane_hold).
 static func near_plane_hold(bottom_origin_y: float, floor_y: float, back_y: float) -> float:
-	if back_y <= 0.001 or bottom_origin_y >= floor_y:
-		return 0.0
-	return (floor_y - bottom_origin_y) / back_y
+	return OrbitView.near_plane_hold(bottom_origin_y, floor_y, back_y)
 
 
-## The lower of the two bottom screen corners' ray origins (world Y).
-func _bottom_ray_origin_y(vp_size: Vector2) -> float:
-	var camera_node := _game_map.camera_node
-	var bl := camera_node.project_ray_origin(Vector2(0, vp_size.y))
-	var br := camera_node.project_ray_origin(vp_size)
-	return minf(bl.y, br.y)
-
-
-## Factor on screen-vertical panning so W/S match A/D on screen, from the live elevation.
-func _vertical_comp() -> float:
-	return CameraRig.vertical_pan_factor(_game_map.camera_node.global_basis.z.normalized().y)
-
-
-func handle_movement(delta: float) -> void:
-	# Compensate for isometric foreshortening: scale the screen-vertical
-	# component of the movement direction so W/S feels the same as A/D. The axes are the
-	# holder's local ones, so they turn with the view's yaw.
-	var screen_v_axis := Vector3(-1.0, 0.0, -1.0).normalized()
-	var v_component := _camera_move_dir.dot(screen_v_axis)
-	var compensated_dir := (
-		_camera_move_dir + screen_v_axis * v_component * (_vertical_comp() - 1.0)
-	)
-
-	# Smoothly accelerate toward target velocity and decelerate when keys released
-	var target_velocity = compensated_dir * move_speed
-	var smooth_factor = 1.0 - exp(-move_accel_speed * delta)
-	_camera_velocity = _camera_velocity.lerp(target_velocity, smooth_factor)
-
-	# Only translate if velocity is meaningful (avoid micro-drift)
-	if _camera_velocity.length_squared() > 0.001:
-		_game_map.cameraholder_node.translate(_camera_velocity * delta)
-		_clamp_camera_to_bounds()
-
-
-func handle_zoom(delta: float) -> void:
-	var camera_node := _game_map.camera_node
-	# Zoom toward cursor: capture world point under cursor before size change,
-	# interpolate size, then recapture and correct camera position.
-	# Compute aspect-corrected target: on narrower-than-16:9 viewports, camera.size is
-	# scaled up so the visible world width matches the reference 16:9 horizontal extent.
-	var corrected_target := _corrected_size(_target_zoom)
-	var zooming := absf(camera_node.size - corrected_target) > 0.001
-
-	# Skip zoom-toward-cursor when a reset/focus tween is animating the camera position,
-	# because the tween would overwrite our correction each frame causing wobble.
-	var tween_active := _reset_tween and _reset_tween.is_valid() and _reset_tween.is_running()
-
-	# Already at the target size with no reset/focus tween running: the size lerp,
-	# cursor-position correction, and offset update below are all no-ops. Skip them.
-	if not zooming and not tween_active:
-		return
-
-	var world_before: Vector3
-	if zooming and not tween_active:
-		world_before = camera_node.project_position(_last_mouse_position, 0)
-
-	# Smoothly interpolate camera size toward corrected target
-	var smooth_factor = 1.0 - exp(-zoom_smooth_speed * delta)
-	camera_node.size = lerpf(camera_node.size, corrected_target, smooth_factor)
-
-	# Correct camera position so the point under the cursor stays fixed
-	if zooming and not tween_active:
-		var world_after = camera_node.project_position(_last_mouse_position, 0)
-		_game_map.cameraholder_node.global_position += world_before - world_after
-		_clamp_camera_to_bounds()
-
-	# Scale camera offset to match current size — no visual effect for orthographic,
-	# but keeps the near plane ahead of all visible ground geometry.
-	_update_camera_offset()
-
-
-## Whether the camera has stopped moving on its own: the zoom has eased onto its target
-## (within handle_zoom's own 0.001), no home, focus or shake tween runs, and no key, edge or
-## mouse pan is moving it. Render jobs wait on it before a capture (the `settle` op).
+## Whether the camera has stopped moving on its own: no turn, tilt or Home wait, no shake tween,
+## and the active view's own motion (the orbit zoom eased onto its target within handle_zoom's own
+## 0.001, no home or focus tween, no key, edge or mouse pan). Render jobs wait on it before a
+## capture (the `settle` op).
 func is_at_rest() -> bool:
-	var camera_node := _game_map.camera_node
-	if absf(camera_node.size - _corrected_size(_target_zoom)) > 0.001 or is_turning():
+	if is_turning() or _view.is_waiting_to_glide():
 		return false
-	if _view.is_waiting_to_glide():
+	if _shake_tween != null and _shake_tween.is_valid() and _shake_tween.is_running():
 		return false
-	for tween: Tween in [_reset_tween, _shake_tween]:
-		if tween != null and tween.is_valid() and tween.is_running():
-			return false
-	return (
-		_camera_velocity.length_squared() <= 0.001
-		and _current_edge_pan == Vector2.ZERO
-		and not _is_panning
-	)
+	return _active.is_at_rest()
 
 
 ## Ends the zoom ease exactly on its target. The ease stops anywhere within 0.001 of it,
 ## depending on the frame times it ran at, so a view taken after it is only repeatable run
 ## to run once snapped (the render-job `settle` op calls this when the camera is at rest).
 func finish_zoom() -> void:
-	_game_map.camera_node.size = _corrected_size(_target_zoom)
-	_update_camera_offset()
+	_active.finish_zoom()
 
 
 ## Puts the ground point `at` (map X and Z in metres) at the middle of the screen with the
 ## orthographic zoom `zoom`, at once, the zoom ease ended on its target: the camera a
 ## biome thumbnail is taken from (ThumbnailShot), the same every run.
 func frame_ground(at: Vector2, zoom: float) -> void:
-	_target_zoom = zoom
-	finish_zoom()
-	var offset := _get_view_center_ground_offset()
-	var holder := _game_map.cameraholder_node
-	holder.global_position = Vector3(at.x - offset.x, holder.global_position.y, at.y - offset.y)
-	finish_zoom()
+	_active.frame_ground(at, zoom)
 
 
 ## Record the latest mouse position (tracked every frame, even during
 ## measurement) so zoom-toward-cursor always targets the current cursor.
 func record_mouse_position(screen_pos: Vector2) -> void:
-	_last_mouse_position = screen_pos
-
-
-## Whether panning is currently active (middle-mouse or RMB).
-func is_panning() -> bool:
-	return _is_panning
+	_active.record_mouse(screen_pos)
 
 
 ## Whether the active pan (if any) was started via RMB.
 func is_rmb_pan_active() -> bool:
-	return _rmb_pan_active
+	return _active.is_rmb_pan_active()
 
 
 ## Start a pan gesture (middle-mouse) from the given screen position.
 func start_pan(screen_pos: Vector2) -> void:
-	_is_panning = true
-	_pan_start_mouse = screen_pos
+	_active.pan_begin(screen_pos, false)
 
 
 ## Stop the current pan (middle-mouse release).
 func stop_pan() -> void:
-	_is_panning = false
+	_active.pan_end(false)
 
 
 ## Start an RMB pan, recording the press time/position for short-click detection.
 func start_rmb_pan(screen_pos: Vector2) -> void:
 	_rmb_press_time = Time.get_ticks_msec()
 	_rmb_press_pos = screen_pos
-	_rmb_pan_active = true
-	_is_panning = true
-	_pan_start_mouse = screen_pos
+	_active.pan_begin(screen_pos, true)
 
 
 ## Stop an RMB pan (release).
 func stop_rmb_pan() -> void:
-	_rmb_pan_active = false
-	_is_panning = false
+	_active.pan_end(true)
 
 
 ## Cancel any in-progress pan immediately (e.g. mouse moved over GUI).
 func cancel_pan() -> void:
-	_is_panning = false
-	_rmb_pan_active = false
+	_active.pan_cancel()
 
 
 ## Handle mouse motion while a pan may be active. Returns true if the
 ## viewport's input should be marked as handled (RMB-driven pan).
 func handle_pan_mouse_motion(event: InputEventMouseMotion) -> bool:
-	if not _is_panning:
-		return false
-	_handle_pan_motion(event)
-	return _rmb_pan_active
+	return _active.pan_motion(event)
 
 
-## Adjust the target zoom by a raw delta, clamped to [min_zoom, max_zoom].
+## Adjust the target zoom by a raw delta, clamped to the active view's zoom range.
 func adjust_zoom(delta: float) -> void:
-	_target_zoom = clampf(_target_zoom + delta, min_zoom, max_zoom)
+	_active.zoom_by(delta)
 
 
 ## Replace the zoom range and pull the current target into it. The exported 2..20 holds until
 ## a map is fit; MapViewFit (play and authoring alike) raises the upper limit so a whole map
 ## fits.
 func set_zoom_limits(low: float, high: float) -> void:
-	min_zoom = low
-	max_zoom = maxf(high, low)
-	_target_zoom = clampf(_target_zoom, min_zoom, max_zoom)
+	_active.set_zoom_limits(low, high)
 
 
-## The orthographic size (the 16:9 reference height, as _target_zoom) at which a map of
-## `extent_m` (X by Z metres, centred on the origin) whose content spans heights
-## `floor_m` (the lowest ground, 0 unless sculpted below it) to `height_m` fits a camera
-## with rotation `basis`: the larger of the view height the content spans and the view
-## width it spans divided by `aspect`. Pure. For a 200 ft map at this camera's 45 degree
-## yaw the width decides: the square's diagonal is sqrt(2) x 61 m.
+## The orthographic size at which a map fits a camera with rotation `basis` (OrbitView, pure):
+## the larger of the view height the content spans and the view width it spans divided by
+## `aspect`. See OrbitView.fit_size_for_extent.
 static func fit_size_for_extent(
 	basis: Basis,
 	extent_m: Vector2,
@@ -632,38 +436,22 @@ static func fit_size_for_extent(
 	aspect: float = REFERENCE_ASPECT,
 	floor_m: float = 0.0
 ) -> float:
-	var right := basis.x.normalized()
-	var up := basis.y.normalized()
-	var half := extent_m * 0.5
-	var low := Vector2(INF, INF)
-	var high := Vector2(-INF, -INF)
-	for x in [-half.x, half.x]:
-		for z in [-half.y, half.y]:
-			for y in [minf(floor_m, 0.0), height_m]:
-				var corner := Vector3(x, y, z)
-				var screen := Vector2(corner.dot(right), corner.dot(up))
-				low = low.min(screen)
-				high = high.max(screen)
-	var span := high - low
-	return maxf(span.y, span.x / aspect)
+	return OrbitView.fit_size_for_extent(basis, extent_m, height_m, aspect, floor_m)
 
 
-## Apply a trackpad pan-gesture zoom step (scaled by pan_gesture_zoom_factor).
+## Apply a trackpad pan-gesture zoom step (scaled by the view's gesture factor).
 func handle_pan_gesture_zoom(delta_y: float) -> void:
-	if delta_y < 0:
-		adjust_zoom(-zoom_step * pan_gesture_zoom_factor)
-	elif delta_y > 0:
-		adjust_zoom(zoom_step * pan_gesture_zoom_factor)
+	_active.zoom_gesture(delta_y)
 
 
 ## Zoom in one scroll-wheel step.
 func zoom_in_step() -> void:
-	adjust_zoom(-zoom_step)
+	_active.zoom_notch(-1)
 
 
 ## Zoom out one scroll-wheel step.
 func zoom_out_step() -> void:
-	adjust_zoom(zoom_step)
+	_active.zoom_notch(1)
 
 
 ## Apply a subtle camera shake effect. Intensity is clamped to SHAKE_MAX_INTENSITY.
@@ -705,61 +493,12 @@ func _apply_shake_offset(new_offset: Vector3) -> void:
 ## Smoothly center the camera on a world position.
 ## Used by double-click-to-focus on tokens. Camera position is purely local.
 func focus_camera_on(world_position: Vector3) -> void:
-	# Keep the Y component of the camera holder unchanged (only pan XZ)
-	var target_pos := Vector3(
-		world_position.x, _game_map.cameraholder_node.global_position.y, world_position.z
-	)
-	# Clamp target to map bounds so the tween doesn't overshoot
-	target_pos = _clamp_position_to_bounds(target_pos)
-	if _reset_tween and _reset_tween.is_valid():
-		_reset_tween.kill()
-	_reset_tween = create_tween()
-	(
-		_reset_tween
-		. tween_property(_game_map.cameraholder_node, "global_position", target_pos, 0.3)
-		. set_trans(Tween.TRANS_CUBIC)
-		. set_ease(Tween.EASE_OUT)
-	)
+	_active.focus_on(world_position)
 
 
-## Reset camera to the home position and zoom stored on level load.
-## Position is tweened; zoom is set on _target_zoom and interpolated by handle_zoom().
+## Reset camera to the home position and zoom stored on level load (the active view's Home).
 func _reset_camera_to_home() -> void:
-	if _reset_tween and _reset_tween.is_valid():
-		_reset_tween.kill()
-	# Let handle_zoom() smoothly interpolate size toward home zoom.
-	# Don't tween camera size directly — that would fight with handle_zoom().
-	_target_zoom = _home_zoom
-	# A turned or tilted view first eases back to the home yaw and pitch (a glide would fight the
-	# pivot-keeping shift of the ease), then glides.
-	if not _view.go_home():
-		_glide_to_home()
-
-
-## Tween the holder to the home position (the clamped one).
-func _glide_to_home() -> void:
-	var target_pos := _clamp_position_to_bounds(_home_position)
-	_reset_tween = create_tween()
-	_reset_tween.set_ease(Tween.EASE_OUT)
-	_reset_tween.set_trans(Tween.TRANS_CUBIC)
-	_reset_tween.tween_property(_game_map.cameraholder_node, "global_position", target_pos, 0.3)
-
-
-## Handle mouse motion during middle-mouse pan.
-## Uses project_position to convert screen delta to world-space camera movement.
-## Works correctly for orthographic cameras regardless of angle.
-func _handle_pan_motion(event: InputEventMouseMotion) -> void:
-	var camera_node := _game_map.camera_node
-	if not camera_node:
-		return
-	# Convert old and new screen positions to world positions at depth 0.
-	# For orthographic cameras the depth doesn't matter — the delta is the same.
-	var world_from = camera_node.project_position(_pan_start_mouse, 0)
-	var world_to = camera_node.project_position(event.position, 0)
-	# Move camera opposite to the mouse drag direction (drag right → view moves right)
-	_game_map.cameraholder_node.global_position -= (world_to - world_from)
-	_pan_start_mouse = event.position
-	_clamp_camera_to_bounds()
+	_active.reset_home()
 
 
 ## Check if the mouse position is over a token by raycasting against the token
@@ -774,7 +513,7 @@ func is_mouse_over_token(screen_pos: Vector2) -> bool:
 		return false
 	var from = camera_node.project_ray_origin(screen_pos)
 	# Rays start on the near plane, which stands well behind the camera (see
-	# _hold_near_plane_over_canopies), so this must reach past it to the far ground.
+	# OrbitView's near-plane hold), so this must reach past it to the far ground.
 	var to = from + camera_node.project_ray_normal(screen_pos) * 1000.0
 	var space_state = world.direct_space_state
 	if not space_state:
@@ -809,58 +548,36 @@ func rmb_is_short_click(release_pos: Vector2) -> bool:
 	return elapsed < RMB_PAN_CLICK_THRESHOLD_MS and distance < RMB_PAN_MOVE_THRESHOLD_PX
 
 
-## Snap camera.size to the aspect-corrected value when the SubViewport is resized
-## (triggered by window resize via SubViewportContainer.stretch = true).
-## Snapping immediately prevents handle_zoom() from treating the ratio change as
-## a user-initiated zoom-toward-cursor operation.
+## The window was resized: the active view re-fits its zoom and placement.
 func _on_viewport_size_changed() -> void:
-	var camera_node := _game_map.camera_node
-	if not is_instance_valid(camera_node):
-		return
-	camera_node.size = _corrected_size(_target_zoom)
-	_update_camera_offset()
+	_active.viewport_resized()
 
 
 ## Compute camera soft bounds from map geometry and snap the camera into
 ## range immediately. Called after a new map finishes loading.
 func notify_map_loaded() -> void:
-	_compute_map_bounds()
-	_clamp_camera_to_bounds()
+	_active.map_loaded()
 
 
 ## Use `bounds` (world space) as the map's extent for pan clamping instead of the mesh walk
 ## notify_map_loaded() does, and snap the camera into range. Authoring gives the document's
 ## extent, which is the map whatever has been painted on it so far.
 func set_map_bounds(bounds: AABB) -> void:
-	_map_bounds = bounds
-	_has_map_bounds = true
-	_fit_size = _fit_size_for_bounds(bounds)
-	_clamp_camera_to_bounds()
+	_active.set_map_bounds(bounds)
 
 
-## How far the pan range has narrowed toward the map centre, 0 (full range) to 1 (the view
-## centre is the map centre), at camera size `size` for a map that fits at `fit_size`.
-## Pure. Zero when the fit is unknown or not positive.
+## How far the pan range has narrowed toward the map centre (OrbitView, pure), 0 (full range) to
+## 1 (the view centre is the map centre), at camera size `size` for a map that fits at `fit_size`.
 static func recentre_weight(size: float, fit_size: float) -> float:
-	if fit_size <= 0.0 or is_inf(fit_size):
-		return 0.0
-	return smoothstep(fit_size * RECENTRE_START, fit_size, size)
-
-
-func _fit_size_for_bounds(bounds: AABB) -> float:
-	var camera_node := _game_map.camera_node
-	if not is_instance_valid(camera_node):
-		return INF
-	return fit_size_for_extent(
-		camera_node.global_transform.basis, Vector2(bounds.size.x, bounds.size.z), bounds.size.y
-	)
+	return OrbitView.recentre_weight(size, fit_size)
 
 
 ## Reset soft-bounds and shake state. Call before loading a new map so stale
 ## state from the previous level doesn't leak into the next one.
 func notify_map_clearing() -> void:
-	_has_map_bounds = false
-	_fit_size = INF
+	_orbit.map_clearing()
+	if _active != _orbit:
+		_active.map_clearing()
 	ground_top_y = 0.0
 	if _shake_tween and _shake_tween.is_valid():
 		_shake_tween.kill()
@@ -869,124 +586,32 @@ func notify_map_clearing() -> void:
 		_shake_offset = Vector3.ZERO
 
 
-## Handle camera edge-panning when dragging a token near screen edges.
-## Reads the edge_pan_direction from DragController and smoothly interpolates
-## to provide a gentle ramp-up entering the zone and coast-out when leaving.
-func _handle_edge_pan(delta: float) -> void:
-	var drag_and_drop_node := _game_map.drag_and_drop_node
-	# Determine raw target pan direction (zero if not dragging)
-	var target_pan = Vector2.ZERO
-	var paused := CameraRig.edge_pan_paused(Input.is_key_pressed(KEY_ALT), _view.orbiting)
-	if drag_and_drop_node and drag_and_drop_node.is_dragging() and not paused:
-		target_pan = drag_and_drop_node.edge_pan_direction
-
-	# Smoothly interpolate toward the target pan direction
-	var smooth_factor = 1.0 - exp(-EDGE_PAN_SMOOTH_SPEED * delta)
-	_current_edge_pan = _current_edge_pan.lerp(target_pan, smooth_factor)
-
-	# Only translate if pan is meaningful
-	if _current_edge_pan.length_squared() < 0.0001:
-		_current_edge_pan = Vector2.ZERO
-		return
-
-	# Convert screen-space pan direction to isometric camera movement.
-	# Same coordinate mapping as keyboard: up=(-1,-1), down=(+1,+1), left=(-1,+1), right=(+1,-1).
-	# Vertical component scaled by foreshortening compensation to match keyboard panning.
-	var vert := _current_edge_pan.y * _vertical_comp()
-	var cam_move = Vector3.ZERO
-	cam_move.x = _current_edge_pan.x + vert
-	cam_move.z = -_current_edge_pan.x + vert
-
-	var pan_speed = drag_and_drop_node.edge_pan_speed if drag_and_drop_node else 4.0
-	_game_map.cameraholder_node.translate(cam_move * pan_speed * delta)
-	_clamp_camera_to_bounds()
+# Old private names (see the class header): each forwards to the orbit view.
 
 
-## Compute the bounding box of all mesh geometry in the map container.
-## Used for camera soft bounds to prevent panning into the void.
-func _compute_map_bounds() -> void:
-	# The mesh walk skips decoration beyond the map (Constants.BOUNDS_EXEMPT_META).
-	_has_map_bounds = false
-	if not _game_map.map_container:
-		return
-	var bounds := LevelEnvironmentManager.compute_map_bounds(_game_map.map_container)
-	_has_map_bounds = bounds != AABB()
-	if _has_map_bounds:
-		_map_bounds = bounds
-		_fit_size = _fit_size_for_bounds(bounds)
-
-
-## Compute the XZ offset from the camera holder to the ground-level view center.
-## The isometric camera is positioned at a large local offset from the holder
-## and looks downward at an angle, so the point on the ground that the screen
-## center maps to is NOT at the holder's XZ position.
 func _get_view_center_ground_offset() -> Vector2:
-	var world_viewport := _game_map.world_viewport
-	var camera_node := _game_map.camera_node
-	var vp_size := world_viewport.size
-	var screen_center := Vector2(vp_size.x * 0.5, vp_size.y * 0.5)
-	var origin := camera_node.project_ray_origin(screen_center)
-	var dir := camera_node.project_ray_normal(screen_center)
-	if absf(dir.y) < 0.001:
-		return Vector2.ZERO
-	var t := -origin.y / dir.y
-	var ground := origin + dir * t
-	var holder := _game_map.cameraholder_node.global_position
-	return Vector2(ground.x - holder.x, ground.z - holder.z)
+	return _active.view_center_offset()
 
 
-## Return a position clamped so the view center stays within the map bounds
-## plus margin. The view center is the screen center projected to Y=0 — it
-## differs from the holder position due to the isometric camera offset.
-## This prevents infinite panning while preserving natural padding around
-## the map. When the map is very small, the view centers on it.
-func _clamp_position_to_bounds(pos: Vector3) -> Vector3:
-	if not _has_map_bounds:
-		return pos
-	if (
-		not is_instance_valid(_game_map.camera_node)
-		or not is_instance_valid(_game_map.world_viewport)
-	):
-		return pos
-
-	var view_off := _get_view_center_ground_offset()
-
-	var margin_x := _map_bounds.size.x * MAP_BOUNDS_MARGIN_FACTOR
-	var margin_z := _map_bounds.size.z * MAP_BOUNDS_MARGIN_FACTOR
-	var map_min_x := _map_bounds.position.x - margin_x
-	var map_max_x := _map_bounds.position.x + _map_bounds.size.x + margin_x
-	var map_min_z := _map_bounds.position.z - margin_z
-	var map_max_z := _map_bounds.position.z + _map_bounds.size.z + margin_z
-
-	# Zooming out toward the whole-map view, the range narrows onto the map centre.
-	var recentre := recentre_weight(_game_map.camera_node.size, _corrected_size(_fit_size))
-	if recentre > 0.0:
-		var centre := _map_bounds.get_center()
-		map_min_x = lerpf(map_min_x, centre.x, recentre)
-		map_max_x = lerpf(map_max_x, centre.x, recentre)
-		map_min_z = lerpf(map_min_z, centre.z, recentre)
-		map_max_z = lerpf(map_max_z, centre.z, recentre)
-
-	var vc_x := pos.x + view_off.x
-	var vc_z := pos.z + view_off.y
-
-	if map_min_x >= map_max_x:
-		vc_x = _map_bounds.position.x + _map_bounds.size.x * 0.5
-	else:
-		vc_x = clampf(vc_x, map_min_x, map_max_x)
-
-	if map_min_z >= map_max_z:
-		vc_z = _map_bounds.position.z + _map_bounds.size.z * 0.5
-	else:
-		vc_z = clampf(vc_z, map_min_z, map_max_z)
-
-	pos.x = vc_x - view_off.x
-	pos.z = vc_z - view_off.y
-	return pos
+func _update_camera_offset() -> void:
+	_active.update_camera_offset()
 
 
-## Clamp the camera position to the map bounds (soft limits).
-## Called after any camera translation to prevent panning into the void.
 func _clamp_camera_to_bounds() -> void:
-	var holder := _game_map.cameraholder_node
-	holder.global_position = _clamp_position_to_bounds(holder.global_position)
+	_active.clamp_to_bounds()
+
+
+func _corrected_size(height: float) -> float:
+	return _orbit.corrected_size(height)
+
+
+func _bottom_ray_origin_y(vp_size: Vector2) -> float:
+	return _orbit.bottom_ray_origin_y(vp_size)
+
+
+func _handle_edge_pan(delta: float) -> void:
+	_orbit.handle_edge_pan(delta)
+
+
+func _fit_size_for_bounds(bounds: AABB) -> float:
+	return _orbit.fit_size_for_bounds(bounds)

@@ -11,7 +11,9 @@ extends RefCounted
 ## whatever the pivot slipped. Both find the pivot live every frame, so panning or a zoom easing at
 ## the same time cannot pull the view off it. The camera is orthographic: the picture depends on the
 ## basis and the pivot alone; the offset along the view axis only matters for the near plane, which
-## CameraController._update_camera_offset keeps above the ground and the canopies at every pitch.
+## OrbitView.update_camera_offset keeps above the ground and the canopies at every pitch. What the
+## pivot is and how the camera is placed for a pitch belong to the active ViewMode
+## (CameraController.view_mode()); this class asks it.
 ##
 ## Home returns to yaw 45 and the home pitch first and glides to the home position after (the glide
 ## would fight the pivot-keeping shift of a running turn).
@@ -23,19 +25,12 @@ var orbiting: bool = false
 
 var _c: CameraController = null
 var _game_map: GameMap = null
-var _home_basis: Basis = Basis.IDENTITY  # the camera's local pose in the scene
-var _home_offset: Vector3 = Vector3.ZERO
-var _right: Vector3 = Vector3.RIGHT  # the camera's horizontal right axis, local to the holder
 var _glide_home_after: bool = false  # Home: glide to the home position once the view is home
 
 
 func _init(controller: CameraController, game_map: GameMap) -> void:
 	_c = controller
 	_game_map = game_map
-	var camera_node := game_map.camera_node
-	_home_basis = camera_node.basis
-	_home_offset = controller._base_camera_offset  # the scene's, before any placement scaled it
-	_right = Vector3(_home_basis.x.x, 0.0, _home_basis.x.z).normalized()
 
 
 ## Whether an eased turn or tilt, or an orbit drag, is running.
@@ -51,20 +46,20 @@ func is_waiting_to_glide() -> bool:
 ## The ground point under the screen centre, found now (world space, Y = 0).
 func pivot() -> Vector3:
 	var holder := _game_map.cameraholder_node
-	var offset := _c._get_view_center_ground_offset()
+	var offset := _c.view_mode().view_center_offset()
 	return Vector3(holder.global_position.x + offset.x, 0.0, holder.global_position.z + offset.y)
 
 
 ## Ease the view to the yaw `yaw_deg` about the pivot. Ends a Home that waits to glide.
 func set_yaw_target(yaw_deg: float) -> void:
-	_c._cancel_home_tween()
+	_c.view_mode().cancel_glide()
 	_glide_home_after = false
 	yaw.retarget(yaw_deg)
 
 
 ## Ease the view to the pitch `pitch_deg` (held to the rig's range) about the pivot.
 func set_pitch_target(pitch_deg: float) -> void:
-	_c._cancel_home_tween()
+	_c.view_mode().cancel_glide()
 	_glide_home_after = false
 	pitch.retarget(pitch_deg)
 
@@ -77,7 +72,7 @@ func tilt_by(degrees: float) -> void:
 
 ## The O key: ease straight down, or back to the pitch it left.
 func toggle_top_down() -> void:
-	_c._cancel_home_tween()
+	_c.view_mode().cancel_glide()
 	_glide_home_after = false
 	pitch.toggle_top_down()
 
@@ -93,7 +88,7 @@ func set_yaw_now(yaw_deg: float) -> void:
 
 ## Put the view at the pitch `pitch_deg` at once, about the same pivot (render jobs, tests).
 func set_pitch_now(pitch_deg: float) -> void:
-	_c._cancel_home_tween()
+	_c.view_mode().cancel_glide()
 	_glide_home_after = false
 	pitch.set_now(pitch_deg)
 	apply_pitch()
@@ -124,7 +119,7 @@ func advance(delta: float) -> void:
 	if not yaw.is_turning() and not pitch.is_easing():
 		_finish()
 	elif tilted:
-		_c._refit_bounds()
+		_c.view_mode().refit_bounds()
 		_c.view_tilted.emit(pitch.pitch)
 
 
@@ -137,20 +132,10 @@ func rotate_view(delta_deg: float) -> void:
 	holder.global_basis = Basis(Vector3.UP, deg_to_rad(delta_deg)) * holder.global_basis
 
 
-## Put the camera child at the pitch drawn now, then move the holder by what the pivot slipped:
-## the camera's basis and its offset swing about the right axis (the home pose exactly at home).
+## Put the camera child at the pitch drawn now: the active view swings the camera about its right
+## axis and moves the holder by what the pivot slipped (OrbitView.apply_pitch).
 func apply_pitch() -> void:
-	var camera_node := _game_map.camera_node
-	var before := pivot()
-	if is_equal_approx(pitch.pitch, CameraRig.HOME_PITCH):
-		camera_node.basis = _home_basis
-		_c._base_camera_offset = _home_offset
-	else:
-		camera_node.basis = CameraRig.camera_basis(_right, pitch.pitch)
-		_c._base_camera_offset = CameraRig.pitched_offset(_home_offset, _right, pitch.pitch)
-	_c._update_camera_offset()
-	var slip := before - pivot()
-	_game_map.cameraholder_node.global_position += Vector3(slip.x, 0.0, slip.z)
+	_c.view_mode().apply_pitch(pitch.pitch)
 
 
 ## The view has landed: the holder takes the yaw's exact basis (no drift from the steps), the pan
@@ -158,14 +143,14 @@ func apply_pitch() -> void:
 func _finish() -> void:
 	yaw.land()
 	_game_map.cameraholder_node.global_basis = CameraRig.holder_basis(yaw.yaw)
-	_c._refit_bounds()
-	_c._clamp_camera_to_bounds()
+	_c.view_mode().refit_bounds()
+	_c.view_mode().clamp_to_bounds()
 	_sync_compass()
 	_c.view_tilted.emit(pitch.pitch)
 	_c.view_turned.emit(yaw.yaw)
 	if _glide_home_after:
 		_glide_home_after = false
-		_c._glide_to_home()
+		_c.view_mode().glide_home()
 
 
 func _sync_compass() -> void:
@@ -192,7 +177,7 @@ func handle_orbit_input(event: InputEvent, over_gui: bool, blocked: bool) -> boo
 
 ## Start an orbit drag: a running turn, tilt or Home glide stops where it is.
 func begin_orbit() -> void:
-	_c._cancel_home_tween()
+	_c.view_mode().cancel_glide()
 	_c.cancel_pan()
 	_glide_home_after = false
 	yaw.nudge(0.0)
@@ -209,7 +194,7 @@ func orbit_by(change: Vector2) -> void:
 		pitch.set_now(pitch.pitch + change.y)
 		apply_pitch()
 	_sync_compass()
-	_c._refit_bounds()
+	_c.view_mode().refit_bounds()
 	_c.view_tilted.emit(pitch.pitch)
 
 

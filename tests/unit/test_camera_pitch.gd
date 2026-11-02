@@ -281,9 +281,9 @@ func test_w_and_a_cover_the_same_screen_distance_at_every_pitch() -> void:
 	for pitch in PITCHES:
 		cc.set_pitch_now(pitch)
 		cc.set("_camera_move_dir", W_LOCAL)
-		var w := _pan_speed(cc, func() -> void: cc.handle_movement(1.0 / 60.0))
+		var w := _pan_speed(cc, func() -> void: (cc.view_mode() as OrbitView).handle_movement(1.0 / 60.0))
 		cc.set("_camera_move_dir", A_LOCAL)
-		var a := _pan_speed(cc, func() -> void: cc.handle_movement(1.0 / 60.0))
+		var a := _pan_speed(cc, func() -> void: (cc.view_mode() as OrbitView).handle_movement(1.0 / 60.0))
 		assert_almost_eq(w.y / a.y, 1.0, 0.03, "W against A at %.1f" % pitch)
 		assert_almost_eq(a.x, 14.14, 0.1, "A is 10 m/s a key, 14.1 on the diagonal axis")
 		assert_almost_eq(w.x, a.x / sin(deg_to_rad(pitch)), 0.2, "W's ground speed is 1 / sin(pitch)")

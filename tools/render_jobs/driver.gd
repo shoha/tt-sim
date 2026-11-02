@@ -258,6 +258,27 @@ func _process(delta: float) -> void:
 			else:
 				for _n in 60:
 					cc.zoom_out_step()
+		"view":
+			# Yaw, pitch and zoom of the active view through the controller's public API, at once
+			# (the camera_rig probe's way), then the state the bridge reports. Only the orbit view
+			# exists; `mode` (default "orbit") must name the active one.
+			var cc := gm().get_camera_controller()
+			var mode := String(cc.view_mode().mode_name())
+			if String(step.get("mode", "orbit")) != mode:
+				log_line("view: mode %s asked, %s active; nothing changed" % [step.get("mode"), mode])
+			else:
+				if step.has("yaw"):
+					cc.set_yaw_now(float(step.yaw))
+				if step.has("pitch"):
+					cc.set_pitch_now(float(step.pitch))
+				if step.has("zoom"):
+					(cc.view_mode() as OrbitView).target_zoom = float(step.zoom)
+				log_line(
+					(
+						"view %s yaw %.1f pitch %.1f fov %.1f"
+						% [mode, cc.current_yaw(), cc.current_pitch(), cc.view_mode().fov_deg()]
+					)
+				)
 		"look_at":
 			# Pan so the screen centre looks at world XZ `at`.
 			var cc := gm().get_camera_controller()
