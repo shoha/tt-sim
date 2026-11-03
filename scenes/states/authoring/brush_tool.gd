@@ -304,6 +304,7 @@ func deactivate() -> void:
 	_active = false
 	mode.leave(self)
 	CanopyFade.clear_brush()
+	CanopyFade.clear_cut()
 	cursor.set_visible(false)
 	set_process(false)
 	toggled.emit(false)
@@ -687,6 +688,11 @@ func _update_fade() -> void:
 		CanopyFade.set_brush(Vector3(focus.x, focus.y, focus.z), focus.w * fade_radius_factor)
 	else:
 		CanopyFade.clear_brush()
+	var cut := mode.fade_cut(self) if _active else Vector4.ZERO
+	if cut.w > 0.0:
+		CanopyFade.set_cut(Vector3(cut.x, cut.y, cut.z), cut.w)
+	else:
+		CanopyFade.clear_cut()
 
 
 ## A point bedded on the ground below `point`: DragPlaceController's downward terrain ray,

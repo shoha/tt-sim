@@ -287,8 +287,11 @@ func _process(delta: float) -> void:
 			var at: Array = []
 			if step.at is Dictionary:
 				# A piece spec (RenderPieceAim): look at that piece.
+				# "dx"/"dz" look that many metres off it (a piece set near the screen's edge).
 				var found := RenderPieceAim.map_of(step.at, ctrl(), gm().camera_node)
 				at = [found.x, found.y] if found != Vector2.INF else [0.0, 0.0]
+				at[0] += float(step.at.get("dx", 0.0))
+				at[1] += float(step.at.get("dz", 0.0))
 			else:
 				at = step.at
 			holder.global_position = Vector3(
@@ -617,9 +620,18 @@ func _set_pointer(brush: BrushTool, world: Vector3) -> void:
 ## stands there: a handle drawn on the ground under a roof, card S5).
 func _screen_of(at: Variant) -> Vector2:
 	if at is Dictionary:
-		var aimed := RenderPieceAim.screen_of(
-			at, ctrl(), gm().camera_node, func(point: Array) -> Vector2: return _screen_of(point)
-		)
+		var aimed := Vector2.INF
+		if (at as Dictionary).has("control"):
+			# {"control": node name}: the middle of a visible Control, for a real click on it.
+			var node := root_node.find_child(str(at["control"]), true, false) as Control
+			if node != null and node.is_visible_in_tree():
+				aimed = node.get_global_rect().get_center()
+			else:
+				log_line("control %s: not shown" % str(at["control"]))
+		else:
+			aimed = RenderPieceAim.screen_of(
+				at, ctrl(), gm().camera_node, func(point: Array) -> Vector2: return _screen_of(point)
+			)
 		if aimed == Vector2.INF:
 			return Vector2(1200, 500)
 		# Window pixels: a window smaller than its viewport (the 720p capture) scales the aim.

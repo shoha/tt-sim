@@ -30,7 +30,7 @@ func _init() -> void:
 		["Drag a plaza's edge (Village)", "Resize it; the ground is repaved when you let go"],
 		["Click a plaza (Village)", "Pick it: the pane then sizes or removes it"],
 		["Drag a barrel, stall or bench (Village)", "Move it; it stays where you put it"],
-		["Click a piece (Village)", "Pick it: the pane then swaps, puts back or removes it"],
+		["Click a piece (Village)", "Pick it: Swap, Back and Remove show beside it and in the pane"],
 		["Q and E, R over a piece (Village)", "Turn it a notch (Shift a quarter); show another draw"],
 		["Delete (Village)", "Remove the piece or plaza under the cursor"],
 		["[ and ] (Village)", "A plaza one metre smaller or larger; Shift + scroll over one"],

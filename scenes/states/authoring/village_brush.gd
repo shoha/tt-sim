@@ -111,6 +111,9 @@ var lay_field: bool = false
 var field_kind: String = ""
 ## The furnishing half: hover, pick, move, turn, swap and remove a standing piece (VillageProps).
 var props := VillageProps.new()
+## Swap, Back and Remove beside the picked piece's ring, on the cursor's overlay (made on the first
+## frame that has one).
+var piece_buttons: VillagePieceButtons = null
 
 var _grab_village: int = -1
 var _grab_plaza: int = -1
@@ -494,6 +497,46 @@ func frame(brush: BrushTool) -> void:
 				if target > 0 and target != selected_village:
 					select(target, -1, false)
 	_announce(editor)
+	_place_buttons(brush)
+
+
+## Sets the Swap, Back and Remove buttons beside the picked piece, or hides them while none is
+## picked or a press is held (a carried piece shows its own pill instead).
+func _place_buttons(brush: BrushTool) -> void:
+	var cursor := brush.cursor
+	if cursor == null or not is_instance_valid(cursor.canvas) or cursor.camera == null:
+		return
+	if piece_buttons == null or not is_instance_valid(piece_buttons):
+		piece_buttons = VillagePieceButtons.new()
+		piece_buttons.acted.connect(_act.bind(brush))
+		cursor.canvas.add_child(piece_buttons)
+	var row := props.picked_row(brush.editor)
+	if row.is_empty() or gesture != &"" or props.gesture != &"":
+		piece_buttons.hide_all()
+		return
+	var ring_m := maxf(
+		VillageFurnishings.drawn_radius(row["item"]) + VillagePropRings.RING_GROW_M,
+		VillagePropRings.RING_FLOOR_M
+	)
+	var actions := VillagePieceButtons.actions_for(
+		props.pane_state(brush.editor.document, props.village)
+	)
+	piece_buttons.place(cursor.camera, brush.editor, row, ring_m, actions)
+
+
+## A button beside the picked piece was pressed: the pane's Swap, Back to its spot or Remove.
+func _act(action: StringName, brush: BrushTool) -> void:
+	var editor := brush.editor
+	if editor == null or not props.has_picked() or gesture != &"" or props.gesture != &"":
+		return
+	match action:
+		VillagePieceButtons.SWAP:
+			_tell(brush, props.swap(editor))
+		VillagePieceButtons.BACK:
+			props.unpin(editor)
+		VillagePieceButtons.REMOVE:
+			_tell(brush, props.remove(editor, false))
+	brush.redraw()
 
 
 ## A press inside a plaza turns into a move once the pointer is a click's distance from where it
@@ -606,6 +649,8 @@ func leave(brush: BrushTool) -> void:
 	hover_village = -1
 	hover_plaza = -1
 	props.clear()
+	if piece_buttons != null and is_instance_valid(piece_buttons):
+		piece_buttons.hide_all()
 	select(-1, -1, false)
 	_signature = ""
 
@@ -678,6 +723,26 @@ func step(brush: BrushTool, steps: int) -> void:
 		return
 	select(village, index, true, group)
 	brush.redraw()
+
+
+## The picked piece clears the bush it stands in, stems and all (VillageFurnishings.cut_radius),
+## at its standing place or, while carried, at the place it would go. None while no piece is
+## picked. The cut, not the brush window, keeps the piece clear while the pointer is on its
+## buttons: a window held open there stripped the leaves round the piece and left bare stems.
+func fade_cut(brush: BrushTool) -> Vector4:
+	if brush.editor == null or not props.has_picked():
+		return Vector4.ZERO
+	var row := props.picked_row(brush.editor)
+	if row.is_empty():
+		return Vector4.ZERO
+	var spot: Vector2 = row["item"]["position"]
+	var y := float(row["y"])
+	if props.moving():
+		spot = props.destination()
+		y = WaterGeometry.ground_at(brush.editor.document, spot)
+	var at := brush.editor.to_world(Vector3(spot.x, y, spot.y))
+	var radius := VillageFurnishings.cut_radius(row["item"]) * brush.editor.map_scale()
+	return Vector4(at.x, at.y, at.z, radius)
 
 
 func fade_focus(brush: BrushTool) -> Vector4:

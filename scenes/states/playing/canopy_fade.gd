@@ -28,12 +28,20 @@ extends RefCounted
 ## its edge over BRUSH_CLOSE_S, so the crowns grow back rather than pop. It used to be a
 ## token entry of the occlusion fade, whose per-pixel screen door dithered whole trees,
 ## trunks included, so a cleared ring's neighbours read as half erased.
+##
+## The cut (set_cut; the shader's canopy_cut): one authoring piece (the Village tool's picked
+## piece) clears every tree part, trunks and stems included, round it: a soft disc on the ground
+## round the piece and the soft column between it and the camera. The brush window keeps a
+## bush's stems by design, which left a picked barrel standing among bare stems
+## (villages5b, 2026-11-03). It opens and closes over the brush window's times. Off while no
+## mode asks for it (BrushMode.fade_cut), so play never sees it.
 
 ## Global shader parameters (project.godot [shader_globals]).
 const GLOBAL_CENTRE := &"canopy_fade_centre"
 const GLOBAL_VIEW := &"canopy_fade_view"
 const GLOBAL_SHAPE := &"canopy_fade_shape"
 const GLOBAL_BRUSH := &"canopy_brush"
+const GLOBAL_CUT := &"canopy_cut"
 ## xyz the eye, w the map scale in the eye view, 0 otherwise (EyeCanopy).
 const GLOBAL_EYE := &"canopy_eye"
 ## How long the brush window takes to open and to close, in seconds.
@@ -83,6 +91,11 @@ static var _brush_asked := Vector4.ZERO
 static var _brush_window := Vector4.ZERO
 ## How far the window is open, 0 to 1.
 static var _brush_open := 0.0
+static var _last_cut := Vector4(INF, INF, INF, INF)
+## The cut asked for and the last one held while it closes, as the brush window's.
+static var _cut_asked := Vector4.ZERO
+static var _cut_window := Vector4.ZERO
+static var _cut_open := 0.0
 
 
 ## Opens the brush window over the ground point `centre` with radius `radius` (metres in the
@@ -106,13 +119,47 @@ static func brush_asked() -> Vector4:
 ## The brush window after `seconds` more of opening or closing: (centre, radius scaled by how
 ## far it is open), zero once shut. Advances the window's state.
 static func step_brush(seconds: float) -> Vector4:
-	var opening := _brush_asked.w > 0.0
+	_brush_open = opened(_brush_open, _brush_asked.w > 0.0, seconds)
+	return scaled(_brush_window, _brush_open)
+
+
+## Cuts every tree part (trunks and stems too) round the ground point `centre` out to `radius`
+## metres, or moves the cut there while it is held; a radius of 0 lets it close.
+static func set_cut(centre: Vector3, radius: float) -> void:
+	_cut_asked = Vector4(centre.x, centre.y, centre.z, maxf(radius, 0.0))
+	if _cut_asked.w > 0.0:
+		_cut_window = _cut_asked
+
+
+## Lets the cut close (it shrinks back over BRUSH_CLOSE_S).
+static func clear_cut() -> void:
+	_cut_asked = Vector4.ZERO
+
+
+## Whether the cut is asked for (it may still be opening). For tests.
+static func cut_asked() -> Vector4:
+	return _cut_asked
+
+
+## The cut after `seconds` more of opening or closing, as step_brush. Advances its state.
+static func step_cut(seconds: float) -> Vector4:
+	_cut_open = opened(_cut_open, _cut_asked.w > 0.0, seconds)
+	return scaled(_cut_window, _cut_open)
+
+
+## How far a window that was `open` (0 to 1) is open `seconds` later, opening over BRUSH_OPEN_S
+## while `opening`, else closing over BRUSH_CLOSE_S. Pure.
+static func opened(open: float, opening: bool, seconds: float) -> float:
 	var rate := 1.0 / (BRUSH_OPEN_S if opening else BRUSH_CLOSE_S)
-	_brush_open = clampf(_brush_open + (rate if opening else -rate) * maxf(seconds, 0.0), 0.0, 1.0)
-	if _brush_open <= 0.0:
+	return clampf(open + (rate if opening else -rate) * maxf(seconds, 0.0), 0.0, 1.0)
+
+
+## The window `window` (centre, radius) with its radius eased by how far it is `open`; zero once
+## shut. Pure.
+static func scaled(window: Vector4, open: float) -> Vector4:
+	if open <= 0.0:
 		return Vector4.ZERO
-	var w := _brush_window
-	return Vector4(w.x, w.y, w.z, w.w * smoothstep(0.0, 1.0, _brush_open))
+	return Vector4(window.x, window.y, window.z, window.w * smoothstep(0.0, 1.0, open))
 
 
 ## How far the camera has closed in past the home zoom: 0 at home and above, 1 at
@@ -157,6 +204,10 @@ static func publish(
 	if brush != _last_brush:
 		_last_brush = brush
 		RenderingServer.global_shader_parameter_set(GLOBAL_BRUSH, brush)
+	var cut := step_cut(seconds)
+	if cut != _last_cut:
+		_last_cut = cut
+		RenderingServer.global_shader_parameter_set(GLOBAL_CUT, cut)
 	if camera.projection == Camera3D.PROJECTION_PERSPECTIVE:
 		_publish_eye(camera, viewport_size)
 		return

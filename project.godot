@@ -179,6 +179,10 @@ canopy_brush={
 "type": "vec4",
 "value": Vector4(0, 0, 0, 0)
 }
+canopy_cut={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
 canopy_eye={
 "type": "vec4",
 "value": Vector4(0, 0, 0, 0)

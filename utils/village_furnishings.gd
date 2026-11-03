@@ -17,6 +17,10 @@ const PICK_SHARE := 0.9
 const TURN_STEP := TAU / 24.0
 ## Two pieces keep at least this share of their radii apart (the plan keeps 0.7 plus 0.2 m).
 const CROWD_SHARE := 0.6
+## The canopy cut round a picked piece (cut_radius): the ground kept clear past its drawn radius,
+## and the least cut, in metres.
+const CUT_MARGIN_M := 1.0
+const CUT_FLOOR_M := 1.4
 ## The reasons a piece may not stand at a place (plain words: reason_text).
 const WET := &"water"
 const STEEP := &"steep"
@@ -26,6 +30,8 @@ const BRIDGE := &"bridge"
 const CROWDED := &"crowded"
 const FULL := &"full"
 const OUTSIDE := &"outside"
+const OFF_LOT := &"off_lot"
+const OFF_STREET := &"off_street"
 
 ## Kit name -> the rule ids of its plaza.centre slot (is_centre_piece), cached.
 static var _centre_rules: Dictionary = {}
@@ -75,6 +81,13 @@ static func is_centre_piece(kit_name: String, slot: String) -> bool:
 ## How far from its origin piece `item` is drawn, metres (the clearance radius at the drawn scale).
 static func drawn_radius(item: Dictionary) -> float:
 	return ProcgenPropStyles.radius_of(str(item["prop"])) * SettlementBake.visual_scale(item)
+
+
+## The canopy cut round a picked piece (CanopyFade.set_cut), metres: its drawn radius and
+## CUT_MARGIN_M of ground round it, at least CUT_FLOOR_M, so the bush a piece stands in goes
+## stems and all while the ones a step further keep their crowns.
+static func cut_radius(item: Dictionary) -> float:
+	return maxf(drawn_radius(item) + CUT_MARGIN_M, CUT_FLOOR_M)
 
 
 ## The row of `rows` under map point `p`, or {}: the one whose pointer distance, as a share of its
@@ -142,8 +155,10 @@ static func next_choice(choices: Array[String], current: String, fits: Callable)
 ## are the village's standing pieces; the one named `slot` is the piece itself and ignored. `plans`
 ## is VillageFieldGround.footprints(doc), made once by the caller. Water, ground steeper than the
 ## furnishings layer's own limit, a house, a bridge's deck and landings, too far from every
-## street or plaza of the village and another piece's clearance each refuse; the layer would
-## have skipped the piece on the first three anyway.
+## street or plaza of the village, outside the piece's home (VillagePieceHome: its plaza, lot or
+## street) and another piece's clearance each refuse; the layer would have skipped the piece on
+## the first three anyway. `home` is VillagePieceHome.of for the piece, made once by a caller that
+## asks often (a drag); empty, it is made here.
 static func problem(
 	doc: MapDocument,
 	village: int,
@@ -152,16 +167,17 @@ static func problem(
 	prop: String,
 	scale: float,
 	at: Vector2,
-	plans: Array[PackedVector2Array]
+	plans: Array[PackedVector2Array],
+	home: Dictionary = {}
 ) -> StringName:
 	var held := doc.settlement(village)
 	if held == null or VillagePlazas.distance_to(doc, held, at) > VillagePlazas.VILLAGE_REACH_M:
 		return REACH
-	var plaza := plaza_of(slot)
-	if plaza >= 0 and plaza < held.plazas.size():
-		var disc: Dictionary = held.plazas[plaza]
-		if at.distance_to(disc["at"] as Vector2) > float(disc["radius"]):
-			return OUTSIDE
+	var bound := VillagePieceHome.refusal(
+		home if not home.is_empty() else VillagePieceHome.of(doc, held, slot), at
+	)
+	if bound != &"":
+		return bound
 	var probe := {"prop": prop, "scale": scale, "slot": slot}
 	var radius := drawn_radius(probe)
 	var reach := AuthoredSettlements.footprint_reach(prop, SettlementBake.visual_scale(probe))
@@ -212,6 +228,10 @@ static func reason_text(reason: StringName) -> String:
 			return "That is too close to another piece."
 		OUTSIDE:
 			return "Keep it inside the plaza: that piece belongs to the square."
+		OFF_LOT:
+			return "Keep it on its own lot: that piece belongs to the house beside it."
+		OFF_STREET:
+			return "Keep it on its street: that piece belongs along the street."
 		FULL:
 			return "A village keeps at most %d hand-placed or swapped pieces." % Settlement.MAX_OVERRIDES
 	return "That piece cannot go there."
@@ -234,6 +254,10 @@ static func short_reason(reason: StringName) -> String:
 			return "Too close to another piece"
 		OUTSIDE:
 			return "Keep it inside the plaza"
+		OFF_LOT:
+			return "Keep it on its own lot"
+		OFF_STREET:
+			return "Keep it on its street"
 	return "A piece cannot go there"
 
 
