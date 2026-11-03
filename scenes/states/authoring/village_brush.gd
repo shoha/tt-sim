@@ -725,28 +725,29 @@ func step(brush: BrushTool, steps: int) -> void:
 	brush.redraw()
 
 
-## The pointer is on the picked piece's buttons: the canopy stays open over the piece, so a bush
-## or a crown does not grow back over it as the pointer leaves the ground for Swap or Remove.
-func holds_fade(brush: BrushTool) -> bool:
-	return (
-		brush.editor != null
-		and props.has_picked()
-		and piece_buttons != null
-		and is_instance_valid(piece_buttons)
-		and piece_buttons.visible
-	)
+## The picked piece clears the bush it stands in, stems and all (VillageFurnishings.cut_radius),
+## at its standing place or, while carried, at the place it would go. None while no piece is
+## picked. The cut, not the brush window, keeps the piece clear while the pointer is on its
+## buttons: a window held open there stripped the leaves round the piece and left bare stems.
+func fade_cut(brush: BrushTool) -> Vector4:
+	if brush.editor == null or not props.has_picked():
+		return Vector4.ZERO
+	var row := props.picked_row(brush.editor)
+	if row.is_empty():
+		return Vector4.ZERO
+	var spot: Vector2 = row["item"]["position"]
+	var y := float(row["y"])
+	if props.moving():
+		spot = props.destination()
+		y = WaterGeometry.ground_at(brush.editor.document, spot)
+	var at := brush.editor.to_world(Vector3(spot.x, y, spot.y))
+	var radius := VillageFurnishings.cut_radius(row["item"]) * brush.editor.map_scale()
+	return Vector4(at.x, at.y, at.z, radius)
 
 
 func fade_focus(brush: BrushTool) -> Vector4:
 	var reach := FADE_M
 	var at := brush.hit
-	if at == Vector3.INF:
-		var row := props.picked_row(brush.editor) if brush.editor != null else {}
-		if row.is_empty():
-			return Vector4(0.0, 0.0, 0.0, 0.0)
-		var spot: Vector2 = row["item"]["position"]
-		at = brush.editor.to_world(Vector3(spot.x, float(row["y"]), spot.y))
-		return Vector4(at.x, at.y, at.z, reach)
 	if gesture != &"" and brush.editor != null:
 		var middle := move_destination()
 		var radius := _start_radius if gesture == GESTURE_MOVE else preview_radius()

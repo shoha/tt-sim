@@ -17,6 +17,10 @@ const PICK_SHARE := 0.9
 const TURN_STEP := TAU / 24.0
 ## Two pieces keep at least this share of their radii apart (the plan keeps 0.7 plus 0.2 m).
 const CROWD_SHARE := 0.6
+## The canopy cut round a picked piece (cut_radius): the ground kept clear past its drawn radius,
+## and the least cut, in metres.
+const CUT_MARGIN_M := 1.0
+const CUT_FLOOR_M := 1.4
 ## The reasons a piece may not stand at a place (plain words: reason_text).
 const WET := &"water"
 const STEEP := &"steep"
@@ -77,6 +81,13 @@ static func is_centre_piece(kit_name: String, slot: String) -> bool:
 ## How far from its origin piece `item` is drawn, metres (the clearance radius at the drawn scale).
 static func drawn_radius(item: Dictionary) -> float:
 	return ProcgenPropStyles.radius_of(str(item["prop"])) * SettlementBake.visual_scale(item)
+
+
+## The canopy cut round a picked piece (CanopyFade.set_cut), metres: its drawn radius and
+## CUT_MARGIN_M of ground round it, at least CUT_FLOOR_M, so the bush a piece stands in goes
+## stems and all while the ones a step further keep their crowns.
+static func cut_radius(item: Dictionary) -> float:
+	return maxf(drawn_radius(item) + CUT_MARGIN_M, CUT_FLOOR_M)
 
 
 ## The row of `rows` under map point `p`, or {}: the one whose pointer distance, as a share of its

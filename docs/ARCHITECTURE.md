@@ -651,7 +651,9 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   between the camera and the ring drop out card by card and limb by limb with the trunks kept,
   as in the view-centre canopy fade; the window grows from the ring's centre in 0.15 s and
   closes back in from its edge in 0.4 s. In play only while a press is held
-  (`fade_held_only`). It was the occlusion fade's first token entry until 2026-10-10, whose
+  (`fade_held_only`). A mode may also ask for the canopy cut (`BrushMode.fade_cut`,
+  `CanopyFade.set_cut`, the `canopy_cut` global), the one fade that takes trunks too: only the
+  Village tool's picked piece does (villages.md section 14). It was the occlusion fade's first token entry until 2026-10-10, whose
   per-pixel screen door dithered whole trees, trunks included. Tree foliage materials are
   registered with the occlusion fade at `floor_threshold` 2.0 (`FOLIAGE_FLOOR_THRESHOLD`): the
   floor exemption meant for map floors also exempted every upward-facing leaf card, which left

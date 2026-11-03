@@ -304,6 +304,7 @@ func deactivate() -> void:
 	_active = false
 	mode.leave(self)
 	CanopyFade.clear_brush()
+	CanopyFade.clear_cut()
 	cursor.set_visible(false)
 	set_process(false)
 	toggled.emit(false)
@@ -682,12 +683,16 @@ func _structure_ray() -> Dictionary:
 ## so the canopy over it opens up; any other mode, no ground under the pointer, or no press
 ## held under `fade_held_only`, lets it close.
 func _update_fade() -> void:
-	var seen := hit != Vector3.INF or mode.holds_fade(self)
-	if _active and mode.fades and seen and (pressed or not fade_held_only):
+	if _active and mode.fades and hit != Vector3.INF and (pressed or not fade_held_only):
 		var focus := mode.fade_focus(self)
 		CanopyFade.set_brush(Vector3(focus.x, focus.y, focus.z), focus.w * fade_radius_factor)
 	else:
 		CanopyFade.clear_brush()
+	var cut := mode.fade_cut(self) if _active else Vector4.ZERO
+	if cut.w > 0.0:
+		CanopyFade.set_cut(Vector3(cut.x, cut.y, cut.z), cut.w)
+	else:
+		CanopyFade.clear_cut()
 
 
 ## A point bedded on the ground below `point`: DragPlaceController's downward terrain ray,

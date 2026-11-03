@@ -1068,6 +1068,15 @@ record") were saved, validated and applied by `SettlementPlan` since phase 1 and
   `GameMap` gives the brush no press over a control, and the click cannot also move, pick or let go of the piece. They
   call the pane's own actions (`VillageBrush._act`: `props.swap`, `props.unpin`, `props.remove`, so Remove leaves the
   "Removed barrel" toast with Put back).
+- **The canopy cut round the picked piece** (topic villages5b): a picked piece clears the bush or crown it stands in,
+  trunks and stems included, so it reads at once instead of standing among bare stems (the brush window keeps stems
+  by design). `VillageBrush.fade_cut` asks `CanopyFade.set_cut` for a disc at the piece (its carried place while a
+  move is held) of `VillageFurnishings.cut_radius` (the drawn radius plus 1 m, at least 1.4 m); the foliage shader's
+  `canopy_cut` term clears the ground disc round the piece and the column between it and the camera, leaf cards
+  full inside 0.6 of the radius, bark (limbs and trunks) full out to the radius and gone by 1.5 times it, so at the
+  soft edge a bush keeps leaves over missing stems rather than stems without leaves. Camera pass only (shadows
+  stay), opened and closed over the brush window's 0.15 s and 0.4 s, off with no pick or the tool put down, never in
+  play. It replaced holding the brush window open over the piece while the pointer is on its buttons.
 - **Limits left:** the tool does not draw per-piece thumbnails; Swap has no chooser (it cycles); a pinned piece does not
   follow its house when the street is edited (a pin is absolute, as the design says); fields still cannot be moved or
   drawn as polygons; the wealth and density sliders are still on the Wall tool's street bar; props stay walk-through.

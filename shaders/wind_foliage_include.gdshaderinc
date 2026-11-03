@@ -149,6 +149,18 @@ global uniform vec4 canopy_fade_shape;
 // (world), w the window's radius in metres (0: off). It grows from nothing as the brush asks
 // for it and shrinks back when it lets go, so the canopy closes in from the window's edge.
 global uniform vec4 canopy_brush;
+// The cut (CanopyFade.set_cut, the Village tool's picked piece): xyz the piece's ground point
+// (world), w the cut's radius in metres (0: off). Every tree part goes, trunks and stems too:
+// full inside CANOPY_CUT_INNER of the radius on the ground round the piece and across the
+// column between it and the camera, none past the radius, by the same dissolve key. Bark goes
+// first: full out to the radius and gone by CANOPY_CUT_BARK times it, so at the soft edge a
+// bush keeps leaf cards over missing stems rather than bare stems without leaves.
+global uniform vec4 canopy_cut;
+const float CANOPY_CUT_INNER = 0.6;
+const float CANOPY_CUT_BARK = 1.5;
+// The column starts this far behind the piece's ground point along the view axis, so the
+// stems standing just behind the piece go with the ones before it.
+const float CANOPY_CUT_BEHIND = 0.5;
 // The eye view's near fade (CanopyFade, EyeCanopy): xyz the eye (world), w the map scale, 0 when
 // the view is not the eye's. A leaf card or limb inside CANOPY_EYE_FULL metres (times the scale)
 // of the eye is gone and one inside CANOPY_EYE_NONE is thinned card by card, so a crown a step
@@ -343,18 +355,23 @@ vec3 two_sided_foliage_normal(vec3 normal, bool front_facing) {
 // dither on its cards and keeps its bark. `wind` is the fragment's COLOR.gb.
 // The brush window (canopy_brush) opens the canopy over a map brush's ring by the same law
 // and key, the larger of the two fades winning.
+// The cut (canopy_cut) is the one fade that takes trunks too, by the same key, so a picked
+// authoring piece stands clear of a bush's bare stems.
 // The eye view adds the near fade (canopy_eye) by the same key, tested against the eye
 // itself (the camera's origin), so it needs neither the window nor the published axis.
 void apply_canopy_fade(
 	vec3 vertex_view, mat4 inv_view_matrix, vec2 wind, vec2 frag_coord
 ) {
 	if (canopy_part == 0
-		|| (canopy_fade_centre.w <= 0.0 && canopy_brush.w <= 0.0 && canopy_eye.w <= 0.0)) {
+		|| (canopy_fade_centre.w <= 0.0 && canopy_brush.w <= 0.0 && canopy_eye.w <= 0.0
+			&& canopy_cut.w <= 0.0)) {
 		return;
 	}
-	// The trunk (authored flutter 0) always stays, on either surface: a Blender map's baked
-	// scatter counts its bark as cards too. Bark without authored weights stays whole.
-	if (use_vertex_wind ? wind.x < CANOPY_LIMB_FLUTTER : canopy_part == 1) {
+	// The trunk (authored flutter 0) stays, on either surface, for every fade but the cut: a
+	// Blender map's baked scatter counts its bark as cards too. Bark without authored weights
+	// stays whole.
+	bool trunk = use_vertex_wind ? wind.x < CANOPY_LIMB_FLUTTER : canopy_part == 1;
+	if (trunk && canopy_cut.w <= 0.0) {
 		return;
 	}
 	vec3 back = canopy_fade_view.xyz;
@@ -366,12 +383,28 @@ void apply_canopy_fade(
 	}
 	vec3 world = (inv_view_matrix * vec4(vertex_view, 1.0)).xyz;
 	float fade = 0.0;
-	if (eye_pass) {
-		fade = 1.0 - smoothstep(
-			CANOPY_EYE_FULL * canopy_eye.w, CANOPY_EYE_NONE * canopy_eye.w,
-			distance(world, canopy_eye.xyz));
+	if (camera_pass && canopy_cut.w > 0.0) {
+		vec3 offset = world - canopy_cut.xyz;
+		float ahead = dot(offset, back);
+		float across = length(offset - back * ahead);
+		bool bark = trunk || canopy_part == 1;
+		float inner = canopy_cut.w * (bark ? 1.0 : CANOPY_CUT_INNER);
+		float outer = canopy_cut.w * (bark ? CANOPY_CUT_BARK : 1.0);
+		float column = smoothstep(-CANOPY_CUT_BEHIND, 0.0, ahead)
+			* (1.0 - smoothstep(inner, outer, across));
+		float ground = 1.0 - smoothstep(inner, outer, length(offset.xz));
+		fade = max(column, ground);
 	}
-	if (camera_pass && canopy_fade_centre.w > 0.0) {
+	if (trunk) {
+		if (fade <= 0.0) {
+			return;
+		}
+	} else if (eye_pass) {
+		fade = max(fade, 1.0 - smoothstep(
+			CANOPY_EYE_FULL * canopy_eye.w, CANOPY_EYE_NONE * canopy_eye.w,
+			distance(world, canopy_eye.xyz)));
+	}
+	if (!trunk && camera_pass && canopy_fade_centre.w > 0.0) {
 		vec3 offset = world - canopy_fade_centre.xyz;
 		float ahead = dot(offset, back);
 		float across = length(offset - back * ahead);
@@ -379,7 +412,7 @@ void apply_canopy_fade(
 			* smoothstep(CANOPY_FADE_START, CANOPY_FADE_START + canopy_fade_shape.z, ahead)
 			* (1.0 - smoothstep(canopy_fade_shape.x, canopy_fade_shape.y, across)));
 	}
-	if (camera_pass && canopy_brush.w > 0.0) {
+	if (!trunk && camera_pass && canopy_brush.w > 0.0) {
 		vec3 offset = world - canopy_brush.xyz;
 		float ahead = dot(offset, back);
 		float across = length(offset - back * ahead);

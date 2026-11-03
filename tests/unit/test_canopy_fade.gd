@@ -96,6 +96,30 @@ func test_the_brush_window_opens_from_its_centre_and_closes_back_in() -> void:
 	assert_eq(CanopyFade.step_brush(CanopyFade.BRUSH_CLOSE_S), Vector4.ZERO, "shut")
 
 
+func test_the_cut_opens_and_closes_apart_from_the_brush_window() -> void:
+	CanopyFade.clear_brush()
+	CanopyFade.clear_cut()
+	CanopyFade.step_brush(1.0)
+	CanopyFade.step_cut(1.0)
+	CanopyFade.set_cut(Vector3(1.0, 0.5, 4.0), 2.0)
+	var half := CanopyFade.step_cut(CanopyFade.BRUSH_OPEN_S * 0.5)
+	assert_eq(Vector3(half.x, half.y, half.z), Vector3(1.0, 0.5, 4.0), "at the piece")
+	assert_almost_eq(half.w, 1.0, 0.0001, "half open: half the radius")
+	assert_almost_eq(CanopyFade.step_cut(CanopyFade.BRUSH_OPEN_S).w, 2.0, 0.0001, "open")
+	assert_eq(CanopyFade.step_brush(0.1), Vector4.ZERO, "the brush window stays shut")
+	CanopyFade.set_cut(Vector3(1.0, 0.5, 4.0), 0.0)
+	assert_eq(CanopyFade.cut_asked().w, 0.0, "a zero radius lets go")
+	var closing := CanopyFade.step_cut(CanopyFade.BRUSH_CLOSE_S * 0.25)
+	assert_eq(Vector3(closing.x, closing.y, closing.z), Vector3(1.0, 0.5, 4.0), "stays put")
+	assert_between(closing.w, 0.1, 2.0, "closing from its edge")
+	assert_eq(CanopyFade.step_cut(CanopyFade.BRUSH_CLOSE_S), Vector4.ZERO, "shut")
+
+
+func test_a_brush_mode_asks_for_no_cut_by_default() -> void:
+	var mode := BrushMode.new()
+	assert_eq(mode.fade_cut(null), Vector4.ZERO, "only the Village tool's picked piece cuts")
+
+
 func test_plane_hit_finds_the_ground_along_the_ray() -> void:
 	var dir := Vector3(-0.6574513, -BACK_Y, -0.6574513)
 	var hit := CanopyFade.plane_hit(Vector3(10.0, 8.0, 10.0), dir, 0.0)

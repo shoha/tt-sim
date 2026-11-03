@@ -186,6 +186,24 @@ func test_a_drag_off_its_lot_or_street_is_refused_with_plain_words() -> void:
 	)
 
 
+# --- the canopy cut round the picked piece -------------------------------------------------------
+
+
+func test_the_cut_clears_the_ground_round_a_piece_and_never_less_than_the_floor() -> void:
+	var barrel := {"prop": "barrel", "scale": 1.0, "slot": "w1l:l0/door_barrel/d0r"}
+	var stall := {"prop": "market_stall", "scale": 1.0, "slot": "w1l:p0/square_stalls/r1"}
+	for item: Dictionary in [barrel, stall]:
+		var cut := VillageFurnishings.cut_radius(item)
+		var drawn := VillageFurnishings.drawn_radius(item)
+		assert_gte(cut, VillageFurnishings.CUT_FLOOR_M, "%s: at least the floor" % item["prop"])
+		assert_gte(cut, drawn + VillageFurnishings.CUT_MARGIN_M - 0.0001, "%s: margin" % item["prop"])
+	assert_gt(
+		VillageFurnishings.cut_radius(stall),
+		VillageFurnishings.cut_radius(barrel),
+		"a bigger piece cuts wider"
+	)
+
+
 # --- the buttons beside the ring ---------------------------------------------------------------
 
 
