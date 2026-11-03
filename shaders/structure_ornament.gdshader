@@ -104,9 +104,14 @@ uniform float roughness_amount : hint_range(0.0, 1.0) = 0.92;
 // How far the painted colour is pushed from its grey (1 keeps it). A prop's palette is saturated
 // (honey wood, ruby cloth) and the painterly light grey-washes it, so props ask for more.
 uniform float saturation : hint_range(0.5, 2.0) = 1.0;
+// A door's paint (StructureMaterials.door, card streetdoors): procgen's sRGB tones converted to
+// linear first, so a blue or green door and its dark case keep the depth they were painted with
+// instead of lifting to a pale grey (every other part keeps the tuned look, off).
+uniform bool paint_srgb = false;
 
 void fragment() {
-	vec3 col = COLOR.rgb * tone * exposure;
+	vec3 paint = paint_srgb ? pow(COLOR.rgb, vec3(2.2)) : COLOR.rgb;
+	vec3 col = paint * tone * exposure;
 	col = mix(vec3(dot(col, vec3(0.299, 0.587, 0.114))), col, saturation);
 	float metres = COLOR.a * 16.0;
 	col *= s_break(s_noise(s_pos * 1.7 + 3.0), blotch, 0.3);

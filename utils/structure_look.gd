@@ -40,6 +40,13 @@ const WATER := "water"
 ## shader, cloth with its wind sway, glass as an unshaded pane; the water of a well or a trough is
 ## the WATER role (role_of_slot).
 const PROP := "prop"
+## A door (card streetdoors, 2026-11-03): the glazing node's leaf, panels, case and handle (tags
+## with a "leaf" or "case" segment, role_of_slot), painted wood and a metal handle. Every piece
+## keeps the colour procgen painted and is drawn lit (StructureMaterials.door), so a green or blue
+## door stays its paint; it was a glass leaf that the pane shader settled into sky.
+## A door still in the glass kind (a procgen before the streetdoors card) stays an OPENING
+## (material_role), so its digest does not move.
+const DOOR := "door"
 ## The surface kinds that keep the ORNAMENT role: foliage (`leaf`, `leaf_b`), `cloth` and `metal`
 ## (new free kinds: a host without their own shading falls back to masonry, wood or stone),
 ## the small `wood` parts, the rose window's `glass` and the Tree Core's `bark` (painted trunk).
@@ -52,9 +59,9 @@ const ROOF_KINDS: Array[String] = ["wood", "tile", "slate", "shingle", "thatch",
 const STYLE_WALL_KINDS: Array[String] = ["plaster", "adobe", "brick", "log"]
 ## The roof kinds the style roof shader draws, in its `pattern` order.
 const STYLE_ROOF_KINDS: Array[String] = ["slate", "shingle", "thatch", "turf"]
-## Every role, in the order a structure's meshes are made.
+## Every role, in the order a structure's meshes are made (a new role goes last: no digest moves).
 const ROLES: Array[String] = [
-	WALL, ROOF, TRIM, CHIMNEY, OPENING, FRAME, ORNAMENT, WATER, CANOPY, PROP
+	WALL, ROOF, TRIM, CHIMNEY, OPENING, FRAME, ORNAMENT, WATER, CANOPY, PROP, DOOR
 ]
 ## The surface kind of the panes and leaves (ProcgenGlazing.KIND); drawn unshaded from the vertex
 ## colours.
@@ -170,6 +177,11 @@ static func role_of_path(doc: PlantGraphDocument, path: String) -> String:
 static func role_of_slot(node_type: String, slot: String) -> String:
 	var last := slot.get_slice("/", slot.get_slice_count("/") - 1)
 	match node_type:
+		"glazing":
+			# "front0/door0/leaf", ".../leaf/panel", ".../leaf/handle", ".../case/jamb0": a door.
+			var parts := slot.split("/")
+			if parts.has("leaf") or parts.has("case"):
+				return DOOR
 		"gallery":
 			if last == "roof":
 				return ROOF
@@ -263,6 +275,8 @@ static func material_role(kind: String, role: String) -> String:
 		return WALL
 	if role == ORNAMENT and not ORNAMENT_KINDS.has(kind):
 		return WALL
+	if role == DOOR and kind == GLASS_KIND:
+		return OPENING
 	return role
 
 

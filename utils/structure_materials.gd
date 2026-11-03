@@ -40,6 +40,10 @@ const PROP_SHADE_TINT := Vector3(0.95, 0.9, 0.96)
 const PROP_SHADE_FLOOR := Vector3(0.34, 0.28, 0.31)
 const PROP_LIT_GAIN := Vector3(1.34, 1.22, 1.06)
 const PROP_STONE_TONE := Vector3(1.04, 0.98, 0.86)
+## A door (StructureMaterials.door): its sRGB paint converted to linear, then this exposure and
+## saturation under the prop's light balance.
+const DOOR_EXPOSURE := 1.0
+const DOOR_SATURATION := 1.2
 ## A treehouse crown is painted with less light than ivy (it is a big, lit mass) and sways this far.
 const CANOPY_EXPOSURE := 0.5
 const CANOPY_SWAY_M := 0.05
@@ -101,6 +105,8 @@ static func make(
 		return lantern() if kind == StructureLook.GLASS_KIND else prop(kind)
 	if role == StructureLook.ORNAMENT and kind != StructureLook.GLASS_KIND:
 		return ornament(kind)
+	if role == StructureLook.DOOR:
+		return door(kind)
 	match kind:
 		StructureLook.GLASS_KIND:
 			return pane()
@@ -166,6 +172,19 @@ static func prop(kind: String) -> ShaderMaterial:
 		# deeper they stay a sunlit stone.
 		material.set_shader_parameter("tone", PROP_STONE_TONE)
 		material.set_shader_parameter("exposure", PROP_EXPOSURE * 0.9)
+	return material
+
+
+## A door's piece (StructureLook.DOOR: the painted wood leaf, panels and case, the metal handle):
+## the prop material, so the paint procgen drew (honey oak, a green or blue door, the dark case)
+## stays a confident colour under the painterly light, and the handle is lifted toward gold. The
+## paint is read as sRGB (the shader's `paint_srgb`): taken as linear, as props are, a blue door
+## came out a pale periwinkle grey and the dark case a red brown (streetdoors round 2).
+static func door(kind: String) -> ShaderMaterial:
+	var material := prop(kind)
+	material.set_shader_parameter("paint_srgb", true)
+	material.set_shader_parameter("exposure", DOOR_EXPOSURE)
+	material.set_shader_parameter("saturation", DOOR_SATURATION)
 	return material
 
 
