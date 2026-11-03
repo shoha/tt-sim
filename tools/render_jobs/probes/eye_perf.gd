@@ -5,14 +5,15 @@ extends RefCounted
 ## edge fog, the near-eye canopy fade, MSAA 4x and the shadow fit are all live. One `call` step per
 ## action; every action writes into `dir`.
 ##   {action: "perf", name, dir, at: [x, z], yaws: [..], pitches: [..], rounds: 4, frames: 90,
-##    settle: 30, variants: [{name, sky?, fade?, aa?, shadow?}]}
+##    settle: 30, variants: [{name, sky?, fade?, aa?, shadow?, light?}]}
 ##       In-run A/B under the pinned procedure (vsync off, window and world viewport as the run
 ##       gives them, medians, order rotated each round): the home ortho pose first, then every
 ##       eye pose x variant (the eye stays on between them), then the home pose again for the
 ##       drift check. A variant may switch the painted sky (EyeSky.enabled), the near-eye fade
 ##       (CanopyFade.eye_fade_enabled), MSAA 4x at the eye (GameMap.eye_view_antialiasing, off =
 ##       the shipped setting) and the shadow distance (`shadow`: EyeShadow.forced_distance, 100 =
-##       what the eye got before the shadow fit; absent = the fit).
+##       what the eye got before the shadow fit; absent = the fit) and the foliage eye light
+##       (`light`: false sets foliage_eye_light 0 on every wind material, card eyefoliage).
 ##       Pitch is positive looking DOWN in the game's own convention (CameraController.set_pitch_now); a negative pitch looks up.
 ##       Writes <dir>/<name>_report.txt and <name>_table.txt.
 ##   {action: "trees", name, dir, at: [x, z], dist: 5.0, pitch: 14.0, caps: [100, 120, 160, 200]}
@@ -57,6 +58,7 @@ class PerfRig:
 	var _cc: CameraController = null
 	var _dir := ""
 	var _lines: Array[String] = []
+	var _wind_materials: Array[ShaderMaterial] = []
 
 	func _ready() -> void:
 		add_to_group(GROUP)
@@ -103,6 +105,7 @@ class PerfRig:
 		CanopyFade.eye_fade_enabled = true
 		EyeShadow.forced_distance = 0.0
 		gm.eye_view_antialiasing = _cc.view_mode() == _cc.eye
+		_set_eye_light(1.0)
 
 	func _apply(v: Dictionary) -> void:
 		EyeSky.enabled = bool(v.get("sky", true))
@@ -111,6 +114,27 @@ class PerfRig:
 		CanopyFade.eye_fade_enabled = bool(v.get("fade", true))
 		EyeShadow.forced_distance = float(v.get("shadow", 0.0))
 		gm.eye_view_antialiasing = bool(v.get("aa", true))
+		_set_eye_light(1.0 if bool(v.get("light", true)) else 0.0)
+
+	## The foliage shaders' eye light (wind_foliage_include foliage_eye_light) on every wind
+	## material of the map's scatter: 1 shipped, 0 for the "light: false" variant.
+	func _set_eye_light(value: float) -> void:
+		if _wind_materials.is_empty():
+			_collect_wind_materials(gm)
+		for material in _wind_materials:
+			material.set_shader_parameter("foliage_eye_light", value)
+
+	func _collect_wind_materials(node: Node) -> void:
+		var mmi := node as MultiMeshInstance3D
+		if mmi != null and mmi.multimesh != null and mmi.multimesh.mesh != null:
+			var mesh := mmi.multimesh.mesh
+			for i in mesh.get_surface_count():
+				var material := mesh.surface_get_material(i) as ShaderMaterial
+				if material != null and material.has_meta("wind_category"):
+					if not _wind_materials.has(material):
+						_wind_materials.append(material)
+		for child in node.get_children():
+			_collect_wind_materials(child)
 
 	# ---- perf ----
 

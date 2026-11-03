@@ -275,6 +275,11 @@ Scatter instances contract in full:
   treecube 26e031a): the savanna shrub (0.1, 0.17, 0.14), the badlands sage shrub (0.15, 0.13,
   0.19), every birch (0.12, 0.28, 0.1), the savanna acacia and young acacia (0.15, 0.16,
   0.06), the badlands acacia (0.15, 0.13, 0.19) and the wetland willow (0.12, 0.24, 0.22).
+  In the eye view only (street level, card eyefoliage 2026-11-03) tt-sim raises this floor per
+  channel to at least 0.3 of `foliage_paint_lit`, keeps the cards' full ambient and adds a warm
+  glow where the sun shines through a card toward the eye (`EyeCanopy` "eye light",
+  `CANOPY_EYE_*` in the include), so a crown's underside and backlit side never go near black;
+  the orbit view, where the floor above is judged, is unchanged. A producer needs nothing new.
   Palette treecube 66866b3 adds the savanna palm (round 3b: 0.12, 0.22, 0.08, a warm deep green
   under its warm-lit lime, set apart from the acacia's warmer floor; round 3 was 0.09, 0.17, 0.16
   and fell to a grey-olive) and the wetland short palm (round 3c, as approved: 0.07, 0.16, 0.1, a
