@@ -173,6 +173,12 @@ func fade_focus(brush: BrushTool) -> Vector4:
 	return Vector4(brush.hit.x, brush.hit.y, brush.hit.z, stroke_radius(brush))
 
 
+## While the pointer is off the ground (over a control), whether the canopy fade stays open at
+## fade_focus() (the Village tool's picked piece while the pointer is on its buttons). Default: no.
+func holds_fade(_brush: BrushTool) -> bool:
+	return false
+
+
 ## The ring's tint. Default: the glass accent.
 func cursor_tint(_brush: BrushTool) -> Color:
 	return BrushCursor.PLACE_TINT

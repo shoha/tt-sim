@@ -1011,9 +1011,22 @@ record") were saved, validated and applied by `SettlementPlan` since phase 1 and
   BARE (`style["bare"]` in `VillageRings.draw_plaza`: no interior disc), so a ring never dims a barrel or a bench. The
   reasons: water (the layer's ring test), ground steeper than the layer's 0.8 limit, a house
   (`VillageFieldGround.covers_building`), a bridge's deck and landings (`VillageDryGround.crossing_corridors`), more
-  than 60 m from the village, inside another piece's clearance (0.6 of the radii), and OUTSIDE: a plaza's own piece
-  (`VillageFurnishings.plaza_of`, slot `...:p0/...`) stays inside that plaza's disc ("Keep it inside the plaza"; a
-  piece of a lot or street is not bound to one). The pills draw at 16 px (`VillageProps.PILL_PX`, the body size: the
+  than 60 m from the village, inside another piece's clearance (0.6 of the radii), and off its HOME
+  (`VillagePieceHome`, topic villages5, owner board VP1, 2026-11-03): a plaza's own piece (`...:p0/...`) stays inside
+  that plaza's disc ("Keep it inside the plaza"), a lot's piece on its own lot ("Keep it on its own lot: that piece
+  belongs to the house beside it", `OFF_LOT`), a street's piece on its street ("Keep it on its street: that piece
+  belongs along the street", `OFF_STREET`), with the same refusal ring. The home is read from the slot name the plan
+  gave the piece (a pin keeps its slot, so a moved piece keeps its home): the owner (`p<k>` plaza, `l<k>` lot) and the
+  rule's slot kind in the kit. `beside_door`, `side_gap`, `front_yard` and `back_yard` pieces are the lot's;
+  `street_edge`, `junction` and `village_edge` pieces are the street's even when procgen names the lot they stand before
+  as their owner (a lamp is owned by a lot but belongs to the street). The geometry is the frontage record's: a lot is
+  its range of the facade line, the side gap after it included (the frontage gives it to the lot before), from its
+  back yard (`depth_m + yard_m`) to the kerb (`gap_m`), with 0.5 m of slack; a street is every side of it, from 0.5 m
+  behind the facades across to the facades opposite (twice the setback; a frozen village with no street keeps its
+  strip and the narrowest road), 3 m past either end, plus 5 m round each junction point. A piece whose lot is gone
+  (a pin after a re-plan) and a field's piece have no home and keep only the 60 m reach. Swap does not ask the home
+  (the piece does not move). `test_village_piece_home.gd` checks every planned piece of two kits and two seeds stands
+  at home, and a refusal table for the three kinds. The pills draw at 16 px (`VillageProps.PILL_PX`, the body size: the
   shared Caption chip's 14 falls to about 13 at a 720p window). The release pins the piece (`pin_furnishing`); a refused release changes nothing and
   toasts the long wording. Q and E turn the piece under the pointer (else the picked one) 15 degrees, Shift a quarter;
   R shows the next of its four draws (`ProcgenSettlement.VARIANTS`); both pin it. Delete or Backspace (and the pane's
@@ -1044,6 +1057,17 @@ record") were saved, validated and applied by `SettlementPlan` since phase 1 and
   ring and a faint copy of each removed piece stand where it would return (`VillageProps.preview_restore`,
   `AuthoredSettlements.rows_if_restored`). The caption names the gesture ("Click a barrel or stall to move or
   swap it").
+- **Buttons beside the ring** (`VillagePieceButtons`, topic villages5): the picked piece also shows Swap (only when
+  another prop belongs there), Back (only when pinned) and Remove (a field's piece: Remove only) as glass pills at 16 px
+  in a row just outside the piece and its ring, the same size on screen at any zoom. The row goes below the piece's
+  screen box (its ring and its mesh's bounds), else above, right or left: the first that fits on the board the open
+  drawers leave free (`DrawerContainer.free_span`, 64 px kept above the hint bar), slid along that side to fit; when
+  none fits it stays on the screen even if it must overlap. Hidden while nothing is picked, while a press is held (a
+  carried piece shows its pill instead) and when the tool is put down. The pills are real `Button`s on the cursor's
+  overlay (flat, drawing `MapOverlayUtils.draw_chip`, words gold under the pointer), so a click on one is the GUI's:
+  `GameMap` gives the brush no press over a control, and the click cannot also move, pick or let go of the piece. They
+  call the pane's own actions (`VillageBrush._act`: `props.swap`, `props.unpin`, `props.remove`, so Remove leaves the
+  "Removed barrel" toast with Put back).
 - **Limits left:** the tool does not draw per-piece thumbnails; Swap has no chooser (it cycles); a pinned piece does not
   follow its house when the street is edited (a pin is absolute, as the design says); fields still cannot be moved or
   drawn as polygons; the wealth and density sliders are still on the Wall tool's street bar; props stay walk-through.

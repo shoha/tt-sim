@@ -682,7 +682,8 @@ func _structure_ray() -> Dictionary:
 ## so the canopy over it opens up; any other mode, no ground under the pointer, or no press
 ## held under `fade_held_only`, lets it close.
 func _update_fade() -> void:
-	if _active and mode.fades and hit != Vector3.INF and (pressed or not fade_held_only):
+	var seen := hit != Vector3.INF or mode.holds_fade(self)
+	if _active and mode.fades and seen and (pressed or not fade_held_only):
 		var focus := mode.fade_focus(self)
 		CanopyFade.set_brush(Vector3(focus.x, focus.y, focus.z), focus.w * fade_radius_factor)
 	else:

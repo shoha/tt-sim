@@ -4,10 +4,11 @@ extends RefCounted
 ## The furnishing half of the Village tool's brush (VillageBrush owns one): which standing piece
 ## the pointer is over, which is picked, and the gestures that edit it (docs/systems/villages.md
 ## section 14). Hover a piece and it is outlined; click picks it; drag moves it and the release
-## pins it where it is put (refused over water, a steep bank, a house, a bridge or another piece);
-## Q and E turn it, R shows another draw of it (both pin it); Swap cycles the props that belong in
-## that kind of place; Delete or Remove takes it away; Put back lets a pinned piece go back to its
-## rule. The
+## pins it where it is put (refused over water, a steep bank, a house, a bridge, another piece, or
+## off its own plaza, lot or street: VillagePieceHome); Q and E turn it, R shows another draw of it
+## (both pin it); Swap cycles the props that belong in that kind of place; Delete or Remove takes it
+## away; Back lets a pinned piece go back to its rule. Swap, Back and Remove are in the pane and
+## beside the picked piece's ring (VillagePieceButtons). The
 ## record is SettlementEditor's (remove_furnishing, pin_furnishing, swap_furnishing,
 ## unpin_furnishing, restore_furnishings: one history entry each), the rules VillageFurnishings'. A
 ## piece is found by its slot name, so it stays picked through the rebuilds an edit causes.
@@ -71,6 +72,8 @@ var _dest: Vector2 = Vector2.ZERO
 var _reason: StringName = &""
 var _plans: Array[PackedVector2Array] = []
 var _rows: Array[Dictionary] = []
+## Where the carried piece belongs (VillagePieceHome.of), made when the move starts.
+var _home: Dictionary = {}
 var _info: Dictionary = {}
 
 
@@ -103,6 +106,16 @@ func item(editor: AuthoringEditor, id: int = -2, piece: String = "") -> Dictiona
 	for row in rows_of(editor, want_village):
 		if str(row["item"]["slot"]) == want_slot:
 			return row["item"]
+	return {}
+
+
+## The picked piece's whole standing row ({"item", "y", "normal", "ref"}), or {} when none stands.
+func picked_row(editor: AuthoringEditor) -> Dictionary:
+	if slot == "":
+		return {}
+	for row in rows_of(editor, village):
+		if str(row["item"]["slot"]) == slot:
+			return row
 	return {}
 
 
@@ -142,6 +155,7 @@ func reset() -> void:
 	_reason = &""
 	_plans = []
 	_rows = []
+	_home = {}
 	_free_ghost()
 
 
@@ -310,6 +324,7 @@ func track(
 		gesture = GESTURE_MOVE
 		_plans = VillageFieldGround.footprints(editor.document)
 		_rows = rows_of(editor, village)
+		_home = VillagePieceHome.of(editor.document, editor.document.settlement(village), slot)
 	if gesture != GESTURE_MOVE:
 		return
 	var at := VillagePlazas.moved_to(p, _offset)
@@ -335,7 +350,8 @@ func track(
 		str(held["prop"]),
 		float(held["scale"]),
 		at,
-		_plans
+		_plans,
+		_home
 	)
 	_carry_ghost(editor, at, ground_y)
 
@@ -437,7 +453,8 @@ func reroll(editor: AuthoringEditor) -> String:
 
 
 ## Swaps the picked piece for the next prop that belongs in that kind of place and fits where it
-## stands (the pane's Swap).
+## stands (the pane's Swap, the Swap beside its ring). The piece does not move, so its home is not
+## asked again (a piece pinned before homes were bound may stand outside its own).
 func swap(editor: AuthoringEditor) -> String:
 	var held := item(editor)
 	var settlement := editor.document.settlement(village)
@@ -456,7 +473,8 @@ func swap(editor: AuthoringEditor) -> String:
 				prop,
 				float(held["scale"]),
 				held["position"],
-				plans
+				plans,
+				VillagePieceHome.FREE_HOME
 			)
 			== &""
 		)
