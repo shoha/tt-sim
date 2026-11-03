@@ -1,0 +1,38 @@
+{
+ "out_dir": "render_jobs/eyegrass_sheets",
+ "timeout_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs", "columns": 2, "tile": [960, 540], "out": "eyegrass_hamlet", "names": [
+    "eyegrass_before_hamlet/eyegrass_hamlet_home", "eyegrass_after_hamlet/eyegrass_hamlet_home",
+    "eyegrass_before_hamlet/eyegrass_hamlet_p12_y045", "eyegrass_after_hamlet/eyegrass_hamlet_p12_y045",
+    "eyegrass_before_hamlet/eyegrass_hamlet_p12_y135", "eyegrass_after_hamlet/eyegrass_hamlet_p12_y135",
+    "eyegrass_before_hamlet/eyegrass_hamlet_p12_y225", "eyegrass_after_hamlet/eyegrass_hamlet_p12_y225",
+    "eyegrass_before_hamlet/eyegrass_hamlet_p12_y315", "eyegrass_after_hamlet/eyegrass_hamlet_p12_y315"
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs", "columns": 2, "tile": [960, 540], "out": "eyegrass_savanna_p00", "names": [
+    "eyegrass_before_biomes/eyegrass_savanna_p00_y045", "eyegrass_after_biomes/eyegrass_savanna_p00_y045",
+    "eyegrass_before_biomes/eyegrass_savanna_p00_y135", "eyegrass_after_biomes/eyegrass_savanna_p00_y135",
+    "eyegrass_before_biomes/eyegrass_savanna_p00_y225", "eyegrass_after_biomes/eyegrass_savanna_p00_y225",
+    "eyegrass_before_biomes/eyegrass_savanna_p00_y315", "eyegrass_after_biomes/eyegrass_savanna_p00_y315"
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs", "columns": 2, "tile": [960, 540], "out": "eyegrass_savanna_p12", "names": [
+    "eyegrass_before_biomes/eyegrass_savanna_p12_y045", "eyegrass_after_biomes/eyegrass_savanna_p12_y045",
+    "eyegrass_before_biomes/eyegrass_savanna_p12_y135", "eyegrass_after_biomes/eyegrass_savanna_p12_y135",
+    "eyegrass_before_biomes/eyegrass_savanna_p12_y225", "eyegrass_after_biomes/eyegrass_savanna_p12_y225",
+    "eyegrass_before_biomes/eyegrass_savanna_p12_y315", "eyegrass_after_biomes/eyegrass_savanna_p12_y315"
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs", "columns": 2, "tile": [960, 540], "out": "eyegrass_wetland", "names": [
+    "eyegrass_before_biomes/eyegrass_wetland_riparian_p00_y045", "eyegrass_after_biomes/eyegrass_wetland_riparian_p00_y045",
+    "eyegrass_before_biomes/eyegrass_wetland_riparian_p00_y225", "eyegrass_after_biomes/eyegrass_wetland_riparian_p00_y225",
+    "eyegrass_before_biomes/eyegrass_wetland_riparian_p12_y135", "eyegrass_after_biomes/eyegrass_wetland_riparian_p12_y135",
+    "eyegrass_before_biomes/eyegrass_wetland_riparian_p12_y315", "eyegrass_after_biomes/eyegrass_wetland_riparian_p12_y315"
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs", "columns": 2, "tile": [960, 540], "out": "eyegrass_wild", "names": [
+    "eyegrass_before_biomes/eyegrass_temperate_forest_p00_y045", "eyegrass_after_biomes/eyegrass_temperate_forest_p00_y045",
+    "eyegrass_before_biomes/eyegrass_temperate_forest_p00_y225", "eyegrass_after_biomes/eyegrass_temperate_forest_p00_y225",
+    "eyegrass_before_biomes/eyegrass_temperate_forest_p12_y135", "eyegrass_after_biomes/eyegrass_temperate_forest_p12_y135",
+    "eyegrass_before_biomes/eyegrass_temperate_forest_p12_y315", "eyegrass_after_biomes/eyegrass_temperate_forest_p12_y315"
+  ]}
+ ]
+}

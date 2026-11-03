@@ -4656,3 +4656,25 @@ the distance that keeps the fade band beyond the map's farthest corner from wher
 on every map under about 300 ft the fit is the 100 m floor and nothing changes; it takes effect on larger
 maps. A 600 ft build did not finish in 15 minutes and was dropped, so the fit above the floor was not
 measured in a real level (unit tests cover the maths).
+
+### Near grass at the eye (topic eyegrass, 2026-11-03)
+
+The near-grass term (`docs/lighting-and-environment.md` "The eye view's near grass": thinning by
+shrinking tufts into their foot, colour, taper; vertex and fragment work on grass only, eye pass
+only) measured in-run against itself switched off (`CanopyFade.eye_grass_enabled`, `eye_perf.gd`
+variant `grass`; job `eyegrass_perf`, the pinned procedure above, 4 rounds of 90 frames, debug
+build, GPU shared with nothing else known running). GPU ms, ship / off:
+
+| map, pose | yaw 45 | yaw 165 | yaw 285 |
+|---|---|---|---|
+| dressed hamlet, pitch 0 | 4.21 / 4.31 | 2.28 / 2.23 | 2.95 / 3.09 |
+| hamlet, pitch 12 | 4.44 / 4.69 | 2.53 / 2.51 | 3.15 / 3.36 |
+| savanna 150 ft valley, pitch 0 | 3.34 / 3.28 | 2.29 / 2.29 | 2.17 / 2.11 |
+| savanna, pitch 12 | 3.76 / 3.65 | 2.58 / 2.49 | 2.40 / 2.31 |
+
+Home 3.50 (hamlet) and 3.40 (savanna); drift home_end over home 1.011 (hamlet; single rounds 1.00 to
+1.14). Primitives are identical either way (a thinned tuft is still drawn, as degenerate triangles).
+On the meadow's dense grass the thinning pays for itself: 2 to 6 percent cheaper looking into the
+grass (yaw 45 and 285), 1 to 2 percent dearer (within noise) where there is little. On the savanna's
+sparser tufts it costs 0 to 4 percent, at most 0.11 ms. Net: within about 0.1 ms either way at every
+pose measured; the hamlet's worst pose (pitch 12, yaw 45) is 0.25 ms cheaper.

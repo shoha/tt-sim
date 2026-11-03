@@ -17,6 +17,15 @@ extends RefCounted
 ##   Settings switch is on) centred on a focus point, with the eye-to-focus distance standing in
 ##   for the orthographic size (window_size).
 ## - the GHOST RANGE: a token ghost further than GHOST_START_M fades out, gone by GHOST_END_M.
+## - the NEAR GRASS: a grass tuft seen from street level fills the lower third of the frame as one
+##   flat, full-sun slab (neon lime on the meadow, mustard cut-outs on the savanna). Within
+##   GRASS_NONE_M of the eye the tufts thin out tuft by tuft (the dropped ones shrink into their
+##   foot), take GRASS_DESAT of their own grey, deepen from a cool dark foot (GRASS_FOOT) to a
+##   tip a little under their own value (a darker foreground frames the view, the way a painted
+##   one does; a paler one read as frost, eyegrass round 1), taper at the tip and step their value
+##   per tuft, all of it in full inside GRASS_FULL_M.
+##   wind_foliage_main.gdshaderinc carries it, keyed on the `eye_grass` global (the map scale in
+##   the eye view, CanopyFade.eye_grass_enabled); the orbit view's grass is untouched.
 ##
 ## Distances are in metres at map scale 1; the eye view scales them by the map's scale (the same
 ## factor as its 1.6 m eye height), passed as `scale`.
@@ -35,6 +44,23 @@ const FOCUS_HOME_M := 12.0
 ## A shader only fades a fragment from the camera's own pass: the fragment's inverse view matrix
 ## puts the camera within this distance (metres) of the published eye.
 const PASS_TOLERANCE_M := 0.25
+## The near grass: in full inside GRASS_FULL_M of the eye, none from GRASS_NONE_M out.
+const GRASS_FULL_M := 1.5
+const GRASS_NONE_M := 9.0
+## At full nearness tufts whose key is under GRASS_THIN are thinned: gone below
+## GRASS_THIN - GRASS_THIN_BAND, shrinking into their foot across the band.
+const GRASS_THIN := 0.6
+const GRASS_THIN_BAND := 0.15
+## The share of a near tuft's colour that goes to its own grey (Rec. 709 luma, linear). Kept
+## small: in linear space the grey of a lime or a mustard is light, and 0.45 turned them milky.
+const GRASS_DESAT := 0.18
+## The near tuft's shade at its foot (cool and dark) and its tip.
+const GRASS_FOOT := Vector3(0.5, 0.58, 0.62)
+const GRASS_TIP := 0.88
+## Each near tuft's value steps by up to this much either way, from its key.
+const GRASS_JITTER := 0.12
+## How much alpha a near tuft loses at its tip (from 0.55 of its height up), so it tapers.
+const GRASS_TAPER := 0.5
 
 
 ## How much of the leaf cards at `distance` from the eye drop out, 0 to 1: 1 inside the full
@@ -42,6 +68,30 @@ const PASS_TOLERANCE_M := 0.25
 static func near_fade(distance: float, scale: float = 1.0) -> float:
 	var s := scale if scale > 0.0 else 1.0
 	return 1.0 - smoothstep(NEAR_FULL_M * s, NEAR_NONE_M * s, distance)
+
+
+## How near a grass tuft whose origin is `distance` (horizontal) from the eye is, 0 to 1: 1 inside
+## GRASS_FULL_M, 0 from GRASS_NONE_M. `scale` is the map scale (at most 0 reads as 1).
+static func grass_near(distance: float, scale: float = 1.0) -> float:
+	var s := scale if scale > 0.0 else 1.0
+	return 1.0 - smoothstep(GRASS_FULL_M * s, GRASS_NONE_M * s, distance)
+
+
+## The scale a tuft with key `key` (0 to 1) keeps at nearness `near`: 1 at nearness 0, 0 for a
+## key under the thinning less its band.
+static func grass_keep(key: float, near: float) -> float:
+	var thin := GRASS_THIN * near
+	return smoothstep(thin - GRASS_THIN_BAND, thin, key)
+
+
+## The near grass colour of linear albedo `albedo` at height fraction `h` (0 foot, 1 tip) of a
+## tuft with key `key` at nearness `near`; `albedo` itself at nearness 0.
+static func grass_albedo(albedo: Vector3, h: float, key: float, near: float) -> Vector3:
+	var luma := albedo.dot(Vector3(0.2126, 0.7152, 0.0722))
+	var g := albedo.lerp(Vector3.ONE * luma, GRASS_DESAT)
+	g *= GRASS_FOOT.lerp(Vector3.ONE * GRASS_TIP, smoothstep(0.0, 1.0, h))
+	g *= 1.0 + GRASS_JITTER * (fposmod(key * 7.13 + 0.37, 1.0) * 2.0 - 1.0)
+	return albedo.lerp(g, near)
 
 
 ## The ghost's opacity factor at `distance` from the eye: 1 up to the start, 0 from the end.

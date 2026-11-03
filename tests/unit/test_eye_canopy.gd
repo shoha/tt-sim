@@ -57,6 +57,66 @@ func test_the_near_fade_scales_with_the_map() -> void:
 	assert_eq(EyeCanopy.near_fade(1.5, 0.0), EyeCanopy.near_fade(1.5, 1.0), "no scale reads as 1")
 
 
+# --- the near grass --------------------------------------------------------------------------
+
+
+func test_grass_is_near_inside_the_full_radius_and_untouched_past_the_outer() -> void:
+	assert_eq(EyeCanopy.grass_near(0.0), 1.0)
+	assert_eq(EyeCanopy.grass_near(EyeCanopy.GRASS_FULL_M), 1.0)
+	assert_eq(EyeCanopy.grass_near(EyeCanopy.GRASS_NONE_M), 0.0)
+	assert_between(EyeCanopy.grass_near(4.0), 0.4, 0.9, "the lower third at pitch 0 is mostly near")
+	assert_almost_eq(EyeCanopy.grass_near(6.0, 2.0), EyeCanopy.grass_near(3.0), 0.00001)
+	assert_eq(EyeCanopy.grass_near(3.0, 0.0), EyeCanopy.grass_near(3.0), "no scale reads as 1")
+
+
+func test_far_grass_keeps_every_tuft_whole() -> void:
+	for k in 11:
+		assert_eq(EyeCanopy.grass_keep(k / 10.0, 0.0), 1.0, "key %d / 10" % k)
+
+
+func test_near_grass_drops_the_low_keys_and_keeps_the_high_ones() -> void:
+	var gone := EyeCanopy.GRASS_THIN - EyeCanopy.GRASS_THIN_BAND
+	assert_eq(EyeCanopy.grass_keep(0.0, 1.0), 0.0)
+	assert_eq(EyeCanopy.grass_keep(gone, 1.0), 0.0)
+	var mid := EyeCanopy.GRASS_THIN - 0.5 * EyeCanopy.GRASS_THIN_BAND
+	assert_between(EyeCanopy.grass_keep(mid, 1.0), 0.1, 0.9, "shrinking across the band")
+	assert_eq(EyeCanopy.grass_keep(EyeCanopy.GRASS_THIN, 1.0), 1.0)
+	assert_eq(EyeCanopy.grass_keep(0.9, 1.0), 1.0)
+	var kept := 0
+	for k in 100:
+		if EyeCanopy.grass_keep((k + 0.5) / 100.0, 1.0) > 0.5:
+			kept += 1
+	assert_between(kept, 40, 70, "about half the tufts stay at the eye's feet")
+
+
+func test_far_grass_keeps_its_colour() -> void:
+	var lime := Vector3(0.3, 0.8, 0.02)
+	assert_eq(EyeCanopy.grass_albedo(lime, 0.5, 0.3, 0.0), lime)
+
+
+func test_near_grass_loses_saturation_and_runs_dark_foot_to_light_tip() -> void:
+	var lime := Vector3(0.3, 0.8, 0.02)
+	var foot := EyeCanopy.grass_albedo(lime, 0.0, 0.3, 1.0)
+	var tip := EyeCanopy.grass_albedo(lime, 1.0, 0.3, 1.0)
+	var sat := func(c: Vector3) -> float:
+		var hi := maxf(c.x, maxf(c.y, c.z))
+		return (hi - minf(c.x, minf(c.y, c.z))) / hi
+	assert_lt(sat.call(tip), sat.call(lime) * 0.9, "the tip is no longer neon")
+	assert_lt(tip.length(), lime.length(), "and no paler than it was: a pale one reads as frost")
+	assert_lt(foot.length(), tip.length() * 0.8, "the foot is darker than the tip")
+	assert_gt(foot.z / foot.y, tip.z / tip.y, "the foot leans cool")
+
+
+func test_near_tufts_step_their_value_by_key() -> void:
+	var a := Vector3(0.2, 0.4, 0.1)
+	var values: Array[float] = []
+	for k in 20:
+		values.append(EyeCanopy.grass_albedo(a, 1.0, k / 20.0, 1.0).length())
+	values.sort()
+	assert_gt(values[-1] / values[0], 1.1, "neighbouring tufts differ in value")
+	assert_lt(values[-1] / values[0], 1.3, "but only a step")
+
+
 # --- the ghost range -------------------------------------------------------------------------
 
 
@@ -153,6 +213,35 @@ func test_the_foliage_shader_carries_the_near_fade_radii() -> void:
 	assert_eq(_shader_const(path, "CANOPY_EYE_PASS"), EyeCanopy.PASS_TOLERANCE_M)
 
 
+func test_the_grass_shader_carries_the_near_grass_constants() -> void:
+	var path := "res://shaders/wind_foliage_main.gdshaderinc"
+	assert_eq(_shader_const(path, "EYE_GRASS_FULL"), EyeCanopy.GRASS_FULL_M)
+	assert_eq(_shader_const(path, "EYE_GRASS_NONE"), EyeCanopy.GRASS_NONE_M)
+	assert_eq(_shader_const(path, "EYE_GRASS_THIN"), EyeCanopy.GRASS_THIN)
+	assert_eq(_shader_const(path, "EYE_GRASS_THIN_BAND"), EyeCanopy.GRASS_THIN_BAND)
+	assert_eq(_shader_const(path, "EYE_GRASS_DESAT"), EyeCanopy.GRASS_DESAT)
+	assert_eq(_shader_const(path, "EYE_GRASS_TIP"), EyeCanopy.GRASS_TIP)
+	assert_eq(_shader_const(path, "EYE_GRASS_JITTER"), EyeCanopy.GRASS_JITTER)
+	assert_eq(_shader_const(path, "EYE_GRASS_TAPER"), EyeCanopy.GRASS_TAPER)
+	var text := FileAccess.get_file_as_string(path)
+	var regex := RegEx.create_from_string(
+		"const vec3 EYE_GRASS_FOOT = vec3\\(([0-9.]+), ([0-9.]+), ([0-9.]+)\\);"
+	)
+	var found := regex.search(text)
+	assert_not_null(found, "the shader declares EYE_GRASS_FOOT")
+	if found:
+		var foot := Vector3(
+			float(found.get_string(1)), float(found.get_string(2)), float(found.get_string(3))
+		)
+		assert_almost_eq(foot, EyeCanopy.GRASS_FOOT, Vector3.ONE * 0.00001)
+
+
+func test_the_near_grass_runs_only_in_the_eye_pass() -> void:
+	var text := FileAccess.get_file_as_string("res://shaders/wind_foliage_main.gdshaderinc")
+	assert_string_contains(text, "if (eye_grass > 0.0 && blade_height > 0.0")
+	assert_string_contains(text, "distance(INV_VIEW_MATRIX[3].xyz, canopy_eye.xyz) < CANOPY_EYE_PASS")
+
+
 func test_the_ghost_shader_carries_the_range() -> void:
 	var path := "res://shaders/token_ghost.gdshader"
 	assert_eq(_shader_const(path, "GHOST_START"), EyeCanopy.GHOST_START_M)
@@ -211,6 +300,21 @@ func test_the_perspective_publish_carries_the_eye_and_ignores_the_stale_size() -
 	var back := camera.global_basis.z.normalized()
 	assert_eq(CanopyFade._last_view, Vector4(back.x, back.y, back.z, 0.0), "the axis the shaders test")
 	assert_ne(CanopyFade._last_shape, CanopyFade.shape(99.0, 99.0))
+
+
+func test_the_near_grass_global_is_the_map_scale_at_the_eye_and_off_in_orbit() -> void:
+	var eye_camera := _camera(Vector3(2.0, 1.6, 3.0), true)
+	CanopyFade.publish(eye_camera, eye_camera.size, Vector2(1920.0, 1080.0), 0.0)
+	assert_eq(CanopyFade._last_eye_grass, 1.0, "on at the eye, at the map scale")
+	CanopyFade.eye_grass_enabled = false
+	CanopyFade.publish(eye_camera, eye_camera.size, Vector2(1920.0, 1080.0), 0.0)
+	CanopyFade.eye_grass_enabled = true
+	assert_eq(CanopyFade._last_eye_grass, 0.0, "the probe switch holds it off")
+	assert_eq(CanopyFade._last_eye.w, 1.0, "the canopy near fade is a separate switch")
+	var orbit := _camera(Vector3(10.0, 20.0, 10.0), false)
+	orbit.look_at(Vector3.ZERO)
+	CanopyFade.publish(orbit, HOME, Vector2(1920.0, 1080.0), 0.0)
+	assert_eq(CanopyFade._last_eye_grass, 0.0, "the orbit view's grass is untouched")
 
 
 func test_the_probe_switch_holds_the_eye_fade_off() -> void:

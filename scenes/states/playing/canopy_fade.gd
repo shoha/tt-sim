@@ -36,6 +36,8 @@ const GLOBAL_SHAPE := &"canopy_fade_shape"
 const GLOBAL_BRUSH := &"canopy_brush"
 ## xyz the eye, w the map scale in the eye view, 0 otherwise (EyeCanopy).
 const GLOBAL_EYE := &"canopy_eye"
+## The map scale while the eye view's near grass is on, 0 otherwise (EyeCanopy GRASS_*).
+const GLOBAL_EYE_GRASS := &"eye_grass"
 ## How long the brush window takes to open and to close, in seconds.
 const BRUSH_OPEN_S := 0.15
 const BRUSH_CLOSE_S := 0.4
@@ -69,6 +71,9 @@ static var enabled := DEFAULT_ENABLED
 ## False holds the eye view's near fade and the ghost's range fade off (EyeCanopy), the way the
 ## orbit view has them; on by default. A switch for render probes (before and after stills).
 static var eye_fade_enabled := true
+## False holds the eye view's near grass off (EyeCanopy GRASS_*: thinned, softened tufts near the
+## eye); on by default. A switch for render probes (before and after stills, the cost A/B).
+static var eye_grass_enabled := true
 static var play_inner := 0.2
 static var play_outer := 0.55
 
@@ -77,6 +82,7 @@ static var _last_view := Vector4(INF, INF, INF, INF)
 static var _last_shape := Vector4(INF, INF, INF, INF)
 static var _last_brush := Vector4(INF, INF, INF, INF)
 static var _last_eye := Vector4(INF, INF, INF, INF)
+static var _last_eye_grass := INF
 ## The brush window asked for: (ground centre, radius in metres), w 0 when let go; the last
 ## centre and radius stay while it closes.
 static var _brush_asked := Vector4.ZERO
@@ -161,6 +167,7 @@ static func publish(
 		_publish_eye(camera, viewport_size)
 		return
 	_push_eye(Vector4.ZERO)
+	_push_eye_grass(0.0)
 	var s := strength(camera.size, home) if enabled else 0.0
 	var back := camera.global_basis.z.normalized()
 	var centre := Vector4.ZERO
@@ -195,6 +202,7 @@ static func _publish_eye(camera: Camera3D, viewport_size: Vector2) -> void:
 			centre = Vector4(focus.x, focus.y, focus.z, s)
 			window = shape(size, home) * scale
 	_push_eye(Vector4(eye.x, eye.y, eye.z, scale if eye_fade_enabled else 0.0))
+	_push_eye_grass(scale if eye_grass_enabled else 0.0)
 	_push(centre, Vector4(back.x, back.y, back.z, 0.0), window)
 
 
@@ -214,6 +222,13 @@ static func _push_eye(eye: Vector4) -> void:
 	if eye != _last_eye:
 		_last_eye = eye
 		RenderingServer.global_shader_parameter_set(GLOBAL_EYE, eye)
+
+
+## Pushes the near grass global when it changed (the map scale, 0: off).
+static func _push_eye_grass(scale: float) -> void:
+	if scale != _last_eye_grass:
+		_last_eye_grass = scale
+		RenderingServer.global_shader_parameter_set(GLOBAL_EYE_GRASS, scale)
 
 
 ## Pushes the centre, view and window globals that changed.

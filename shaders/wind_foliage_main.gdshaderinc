@@ -29,11 +29,68 @@ varying flat vec4 zone_tuft;
 varying flat vec2 zone_mass;
 varying float zone_mass_h;
 
+// The eye view's near grass (EyeCanopy, the GRASS_* constants mirror these term for term). A
+// tuft seen from street level fills the lower third of the frame as one flat, full-sun slab, so
+// within EYE_GRASS_NONE metres (times the map scale) of the eye a grass tuft (blade_height > 0)
+// is thinned tuft by tuft, its colour eased a little toward its own grey and deepened from a cool
+// dark foot to a tip just under its own value, its tip tapered and its value stepped per tuft so neighbours read as separate
+// shapes; all of it in full inside EYE_GRASS_FULL. `eye_grass` is the map scale while the eye
+// view is on (CanopyFade publishes it), 0 otherwise, and only the eye's own pass takes the term
+// (CANOPY_EYE_PASS): the orbit view's grass is untouched.
+global uniform float eye_grass;
+const float EYE_GRASS_FULL = 1.5;
+const float EYE_GRASS_NONE = 9.0;
+const float EYE_GRASS_THIN = 0.6;
+const float EYE_GRASS_THIN_BAND = 0.15;
+const float EYE_GRASS_DESAT = 0.18;
+const vec3 EYE_GRASS_FOOT = vec3(0.5, 0.58, 0.62);
+const float EYE_GRASS_TIP = 0.88;
+const float EYE_GRASS_JITTER = 0.12;
+const float EYE_GRASS_TAPER = 0.5;
+// The tuft's nearness to the eye (0 to 1, constant over the tuft) and its own key (0 to 1).
+varying flat float eye_grass_near;
+varying flat float eye_grass_key;
+
+
+// A tuft's key from its instance origin `xz`, 0 to 1, the same for every vertex of the tuft.
+float eye_grass_hash(vec2 xz) {
+	return fract(sin(dot(floor(xz * 64.0), vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+
+// The scale a tuft with key `key` keeps at nearness `near`: 1 far from the eye; near it the
+// tufts whose key falls under the thinning shrink into their foot and are gone.
+float eye_grass_keep(float key, float near) {
+	float thin = EYE_GRASS_THIN * near;
+	return smoothstep(thin - EYE_GRASS_THIN_BAND, thin, key);
+}
+
+
+// The near grass colour: albedo `a` at height fraction `h` (0 foot, 1 tip) of a tuft with key
+// `key` at nearness `near`; `a` itself at nearness 0.
+vec3 eye_grass_albedo(vec3 a, float h, float key, float near) {
+	float luma = dot(a, vec3(0.2126, 0.7152, 0.0722));
+	vec3 g = mix(a, vec3(luma), EYE_GRASS_DESAT);
+	g *= mix(EYE_GRASS_FOOT, vec3(EYE_GRASS_TIP), smoothstep(0.0, 1.0, h));
+	g *= 1.0 + EYE_GRASS_JITTER * (fract(key * 7.13 + 0.37) * 2.0 - 1.0);
+	return mix(a, g, near);
+}
+
 
 void vertex() {
 	local_vertex_y = VERTEX.y;
 	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
 	VERTEX *= grow_scale(MODEL_MATRIX[3].xyz);
+	eye_grass_near = 0.0;
+	eye_grass_key = 0.0;
+	if (eye_grass > 0.0 && blade_height > 0.0
+		&& distance(INV_VIEW_MATRIX[3].xyz, canopy_eye.xyz) < CANOPY_EYE_PASS) {
+		vec2 origin = MODEL_MATRIX[3].xz;
+		eye_grass_near = 1.0 - smoothstep(
+			EYE_GRASS_FULL * eye_grass, EYE_GRASS_NONE * eye_grass, distance(origin, canopy_eye.xz));
+		eye_grass_key = eye_grass_hash(origin);
+		VERTEX *= eye_grass_keep(eye_grass_key, eye_grass_near);
+	}
 	zone_tuft = vec4(1.0);
 	zone_mass = vec2(0.0);
 	zone_mass_h = 0.0;
@@ -62,6 +119,11 @@ void fragment() {
 		pbr_albedo, pbr_alpha, pbr_ao, pbr_roughness, pbr_metallic, pbr_normal_map);
 	if (zone_tuft_strength > 0.0) {
 		pbr_albedo = zone_tuft_albedo(pbr_albedo, zone_tuft, vec3(zone_mass, zone_mass_h));
+	}
+	if (eye_grass_near > 0.0) {
+		float h = clamp(local_vertex_y / blade_height, 0.0, 1.0);
+		pbr_albedo = eye_grass_albedo(pbr_albedo, h, eye_grass_key, eye_grass_near);
+		pbr_alpha *= 1.0 - EYE_GRASS_TAPER * eye_grass_near * smoothstep(0.55, 1.0, h);
 	}
 
 	ALBEDO = pbr_albedo;
