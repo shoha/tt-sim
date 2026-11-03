@@ -1,0 +1,29 @@
+{
+ "out_dir": "render_jobs/ep_shadow_wild",
+ "timeout_s": 900,
+ "hang_s": 180,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_camera_ep2_wild"},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "trees", "name": "tree5", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ef_wild", "at": [10, 10], "dist": 5.0, "pitch": 14.0, "caps": [100, 120, 160, 200]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "trees", "name": "tree3", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ef_wild", "at": [-20, 25], "dist": 3.0, "pitch": 18.0, "caps": [100, 120, 160, 200]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+  {"op": "vsync_off"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "perf", "name": "shadowcost", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ef_wild", "at": [10, 10], "yaws": [45, 165], "pitches": [0, 10], "rounds": 4, "frames": 90, "settle": 30, "variants": [{"name": "fit"}, {"name": "d200", "shadow": 200}, {"name": "d160", "shadow": 160}, {"name": "d120", "shadow": 120}]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

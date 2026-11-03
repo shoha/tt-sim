@@ -1,0 +1,15 @@
+{
+ "out_dir": "render_jobs/ep_build_wild",
+ "timeout_s": 600,
+ "hang_s": 180,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "new", "biome": "temperate_forest_summer_s1", "size": 150, "seed": 3, "landform": "valley"},
+  {"op": "wait_ready", "settle": 1.5},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "save", "folder": "_camera_ep2_wild", "replace": true},
+  {"op": "wait", "s": 1.0},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

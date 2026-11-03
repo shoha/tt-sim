@@ -741,6 +741,23 @@ that the four cascades spread, so look at a full-size eye frame for near sharpne
 Not covered: one spot per map, no tree-dense forest spot, and the block metric cannot see a small far
 pop.
 
+Applied at the eye (card eyeperf, 2026-11-03): while the camera is perspective, `MapViewFit.follow()`
+fits the sun's max distance with `EyeShadow` (the farthest corner of the map from where the eye
+stands, horizontal, so a turn never moves the cascade splits; rounded up to 10 m; between the 100 m floor
+and 200 m x map scale) instead of the top-edge fit, which finds no ground under an eye camera at most
+pitches. The ortho views are untouched, and leaving the eye needs no restore (the next ortho frame refits).
+Near sharpness (full-size frames 1920x1080, a spruce's shadow 3 m from the eye, distance forced to 100 and
+200 m, `clips/ef_wild/tree3_cap100.png` and `tree3_cap200.png`, read once each): the same soft pool at
+the trunk, no visible softening at 200; the shadow-edge gradient proxy (p99 of the shadow picture's
+gradient, lower half of the frame) is 30 at 100 m and 32 at 200 m. The cost is none to slightly negative
+(GPU 3.51 / 3.45 / 3.37 ms at pitch 0 for 100 / 160 / 200 m, wild map yaw 45), so the cap stays 200. Pop
+sweep on the wild map, pitch 0..25 by 1 degree, four yaws (`clips/ef_sweep/summary.txt`): worst 30 px
+block change 8.73 to 11.61 with the fit (the same as the old 100 m: the 150 ft map is 46 m, the fit is the
+floor) and 8.74 to 11.23 forced to 200 m, inside the 8.7 to 12.5 floor of camera motion. The map size
+numbers are feet, so the 105 to 180 m farthest ground in the sweep is backdrop beyond a 46 to 76 m map;
+the fit goes above 100 m only on maps over about 300 ft, which was not built here (a 600 ft map did not
+finish building in 15 minutes).
+
 Shadow cost was measured directly rather than estimated: sun shadows are 41% of the
 frame on a dense forest map, but PCF filter quality is only 0.6 ms of it and shortening
 `directional_shadow_max_distance` changes nothing at all (every caster is already inside
