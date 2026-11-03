@@ -42,10 +42,16 @@ const MASS_DELIVERED := {
 	"wetland_riparian_summer_s1 bromeliad": 0.578,
 }
 const MASS_PIN := 0.15
-## A regression guard on each biome's whole 200 ft map (ms), not a budget: the densest, the
-## savanna, measured about 9 s on 2026-10-22. The density test's one generation per biome is
-## the whole-map timing; the timing test no longer generates the map again.
-const WHOLE_MAP_GUARD_MS := 15000.0
+## A regression guard on each biome's whole 200 ft map, not a budget, as a multiple of SPIN_COUNT
+## iterations of arithmetic timed on the same machine at the same moment (_spin_ms). The densest,
+## the savanna, measured about 9 s on 2026-10-22; an absolute 15 s guard then failed a loaded
+## machine at 14.7 s with nothing wrong (2026-11-02, 20 shards on 24 threads), while a ratio to the
+## spin stays put when the whole machine slows. Quiet, the spin takes 11.5 ms and the biomes run
+## 16 to 763 times that (the savanna 8.7 s); the guard is 2000, so a generator 2.6x slower than
+## the savanna's today trips it on any machine. The density test's one generation per biome is the
+## whole-map timing; the timing test no longer generates the map again.
+const WHOLE_MAP_GUARD_RATIO := 2000.0
+const SPIN_COUNT := 400000
 
 
 func before_all() -> void:
@@ -54,6 +60,17 @@ func before_all() -> void:
 
 func after_all() -> void:
 	PaletteLibrary.clear_cache()
+
+
+## Milliseconds a fixed amount of GDScript arithmetic takes now: the machine's speed at this
+## moment, which a timing guard scales by so that a loaded machine does not fail it.
+func _spin_ms() -> float:
+	var started := Time.get_ticks_usec()
+	var sum := 0.0
+	for i in SPIN_COUNT:
+		sum += sqrt(float(i)) * 0.5
+	assert_gt(sum, 0.0)
+	return (Time.get_ticks_usec() - started) / 1000.0
 
 
 func _one(_p: Vector2) -> float:
@@ -161,14 +178,22 @@ func test_every_biome_delivers_the_palette_density() -> void:
 	for biome in PaletteLibrary.biomes():
 		var species := PaletteLibrary.species(biome.id)
 		var the_plan := ScatterPlan.build(biome.id, species, 1)
+		var spin_before := _spin_ms()
 		var started := Time.get_ticks_usec()
 		var rows := _generate(biome.id, species, map_bounds)
 		var elapsed := (Time.get_ticks_usec() - started) / 1000.0
+		# The slower of the spins either side: the load the generation ran under.
+		var spin := maxf(spin_before, _spin_ms())
 		var total := 0
 		for asset_id in rows:
 			total += rows[asset_id].size() / ScatterGenerator.ROW_STRIDE
-		timings.append("%-26s %6d instances %8.1f ms" % [biome.id, total, elapsed])
-		assert_lt(elapsed, WHOLE_MAP_GUARD_MS, "%s: the whole 200 ft map" % biome.id)
+		timings.append(
+			"%-26s %6d instances %8.1f ms  (%.0f x a %.1f ms spin)"
+			% [biome.id, total, elapsed, elapsed / spin, spin]
+		)
+		assert_lt(
+			elapsed / spin, WHOLE_MAP_GUARD_RATIO, "%s: the whole 200 ft map" % biome.id
+		)
 		_assert_spacing(biome.id, the_plan, rows)
 		var tiers := {}
 		for size_class in ["large", "medium", "small"]:

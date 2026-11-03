@@ -161,6 +161,15 @@ func _busy(copy: Copy) -> bool:
 	)
 
 
+## The median of `values` (the upper middle one for an even count), 0 for none.
+func _median(values: Array[int]) -> int:
+	if values.is_empty():
+		return 0
+	var sorted := values.duplicate()
+	sorted.sort()
+	return sorted[sorted.size() / 2]
+
+
 ## Frames until `copy` has no work left (height work, a water edit's landing, regeneration,
 ## grow-in, the water surface's refresh), driving the editor's per-frame step as a play-side
 ## driver would, or `queue` (a peer's LiveEditCodec.Queue), which also applies its ops; at most
@@ -171,6 +180,8 @@ func _busy(copy: Copy) -> bool:
 ## that applied an op), "queued" (an applied op left terrain chunks queued), "height_frames"
 ## (frames that updated chunks), "chunks" and "chunks_max" (chunks updated in all, and in one
 ## frame), "terrain_usec", "snap_usec", "collision_usec" (the most one frame spent on each),
+## "terrain_median_usec" and "snap_median_usec" (the median over the frames that did that work:
+## what a budgeted part spends on a typical frame, which one slow frame cannot move),
 ## "trace" (a line per frame of height work)}.
 func _settle(
 	copy: Copy, what: String, started: int = -1, queue: LiveEditCodec.Queue = null
@@ -187,6 +198,8 @@ func _settle(
 		"terrain_usec": 0,
 		"snap_usec": 0,
 		"collision_usec": 0,
+		"terrain_median_usec": 0,
+		"snap_median_usec": 0,
 		"chunks": 0,
 		"chunks_max": 0,
 		"trace": [],
@@ -194,6 +207,8 @@ func _settle(
 	var e := copy.editor
 	var heights := e.heights
 	var applied := [0]
+	var terrain_frames: Array[int] = []
+	var snap_frames: Array[int] = []
 	var on_applied := func(_cells: Array) -> void: applied[0] += e.scatter.last_apply_usec
 	e.scatter.cells_applied.connect(on_applied)
 	var is_pending := func() -> bool: return _busy(copy) or (queue != null and queue.size() > 0)
@@ -221,6 +236,10 @@ func _settle(
 			out.terrain_usec = maxi(out.terrain_usec, heights.last_terrain_usec)
 			out.snap_usec = maxi(out.snap_usec, heights.last_snap_usec)
 			out.collision_usec = maxi(out.collision_usec, heights.last_collision_usec)
+			if chunks > 0:
+				terrain_frames.append(heights.last_terrain_usec)
+			if heights.last_snap_rows > 0:
+				snap_frames.append(heights.last_snap_usec)
 			out.height_frames += 1 if chunks > 0 else 0
 			out.chunks += chunks
 			out.chunks_max = maxi(out.chunks_max, chunks)
@@ -260,6 +279,8 @@ func _settle(
 		last = now
 		out.frames += 1
 	e.scatter.cells_applied.disconnect(on_applied)
+	out["terrain_median_usec"] = _median(terrain_frames)
+	out["snap_median_usec"] = _median(snap_frames)
 	out["settled"] = not is_pending.call()
 	var took := "%d frames, %.0f ms" % [out.frames, (last - begin) / 1000.0]
 	assert_true(out.settled, "%s: settled within %.0f s (%s)" % [what, SETTLE_S, took])
@@ -512,11 +533,15 @@ func test_live_ops_reach_a_peer_identical_to_the_host_and_a_reload() -> void:
 			var spread := "chunks, the collision and the settling on frames of their own"
 			assert_gt(settled.trace.size(), 2, "%s: %s" % [label, spread])
 			assert_lt(settled.chunks_max, settled.chunks, label + ": no frame took every chunk")
-			# Indicative (headless, a shared machine): a budget lets one chunk or cell finish
-			# past it; all at once, this raise spent 17 ms on chunks and 15 on snapping.
-			var budgets := "%s: per-frame parts near the budgets" % label
-			assert_lt(settled.terrain_usec, HeightEditor.TERRAIN_BUDGET_USEC * 3, budgets)
-			assert_lt(settled.snap_usec, HeightEditor.SNAP_BUDGET_USEC * 3, budgets)
+			# A budget lets the first chunk or cell of a frame finish past it (one cell of this
+			# raise holds 616 rows and takes 7 ms against a 2.5 ms budget), and a slow frame on a
+			# shared machine adds more, so the worst frame is no fair judge (7.8 ms against a
+			# 7.5 ms limit failed a run on 2026-11-02). The typical working frame is: all at once,
+			# this raise spent 17 ms on chunks and 15 on snapping in one frame, a median far
+			# past three times the budget, while one slow frame leaves the median where it was.
+			var budgets := "%s: a typical frame of each part near its budget" % label
+			assert_lt(settled.terrain_median_usec, HeightEditor.TERRAIN_BUDGET_USEC * 3, budgets)
+			assert_lt(settled.snap_median_usec, HeightEditor.SNAP_BUDGET_USEC * 3, budgets)
 			for line in settled.trace:
 				print("P-LIVE-FRAMES %s %s" % [label, line])
 		var reload := await _reloaded(host)

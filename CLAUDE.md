@@ -94,6 +94,10 @@ other's shard files. It looked like a code failure twice in one day: a cluster o
 `test_surface_store` failures, then a run that reported FAILED after half the tests. The
 affected files passed alone. With agents in several worktrees, run the gate one at a time, and
 treat a cluster of failures in files nobody touched as a collision until the rerun in quiet.
+Since 2026-11-02 the runner guards the sharded case itself: it writes `user://gut_shards/runner.lock`
+(refreshed every 5 s) and a second runner that finds it younger than 20 s exits 2 with a message
+naming the file, instead of overwriting the first one's files. A render job or a serial run is not
+detected, so the lane lock (`docs/coordinating.md`) still applies.
 
 Run the `gdlint` line with `D:/dev/tabletop/tt-sim` as the working directory: gdlint reads `.gdlintrc`
 only from the current directory, and run from `D:/dev/tabletop` it reports false max-public-methods and

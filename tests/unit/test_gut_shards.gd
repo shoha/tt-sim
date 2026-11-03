@@ -68,6 +68,16 @@ func test_committed_table_keeps_the_slow_scripts_and_weighs_the_rest_by_their_me
 	assert_eq(table, {"slow": 12.3, "edge": 1.0, "*": 0.3})
 
 
+func test_a_young_lock_file_is_live_and_an_old_or_unreadable_one_is_not() -> void:
+	assert_true(Shards.lock_is_live("1000 4242", 1005.0), "five seconds old: another run is alive")
+	assert_true(Shards.lock_is_live("1000 4242\n", 1000.0), "just written")
+	assert_false(Shards.lock_is_live("1000 4242", 1000.0 + Shards.LOCK_LIVE_S), "a killed run's lock")
+	assert_false(Shards.lock_is_live("1000 4242", 1500.0), "long stale")
+	assert_false(Shards.lock_is_live("2000 4242", 1500.0), "dated in the future: a bad clock")
+	assert_false(Shards.lock_is_live("", 1500.0), "empty")
+	assert_false(Shards.lock_is_live("soon", 1500.0), "unreadable")
+
+
 func test_the_committed_table_names_existing_scripts() -> void:
 	var parsed = JSON.parse_string(FileAccess.get_file_as_string(Shards.COMMITTED_TIMES))
 	assert_true(parsed is Dictionary, "tests/gut_times.json parses")
