@@ -323,14 +323,19 @@ So only at the eye, `wind_foliage_main.gdshaderinc` treats every grass tuft (`bl
 by its nearness to the eye (constant per tuft, from its instance origin; full inside 1.5 m, none
 from 9 m, times the map scale):
 
-- thinning: a per-tuft key (a hash of the origin) drops about half of the nearest tufts (keys
-  under 0.45 gone, 0.45 to 0.6 shrinking, at full nearness), which
-  shrink into their foot across a band rather than pop, so walking reveals the turf between them;
-- colour: 18 percent toward its own grey, a cool dark foot (0.5 to 0.62 of its value) deepening
-  to a tip at 0.88 of it, and a per-tuft value step of up to 12 percent so neighbouring tufts read
-  as separate soft shapes, not one slab. A darker foreground frames the view the way a painted one
-  does; 45 percent toward grey with the tip at full value (the first round) turned lime and
-  mustard milky, frost-pale (in linear space the grey of a bright hue is light);
+- thinning: a per-tuft key (a hash of the origin) drops most of the nearest tufts (at full
+  nearness keys under 0.7 are gone, 0.7 to 0.85 shrinking; the threshold follows nearness to the
+  power 0.7, so it bites earlier mid-range), which shrink into their foot across a band rather than
+  pop, so walking reveals the turf between them. Flowers share the grass pass and thin with it;
+- colour, green blades: 18 percent toward their own grey, a cool dark foot (0.5 to 0.62 of its
+  value) deepening to a tip at 0.88 of it. Warm blades (red over green in linear albedo: dry gold,
+  straw; a smoothstep on (r - g) / r) keep their colour instead, gaining 5 percent saturation, a
+  warm foot (0.74, 0.6, 0.5) and a glowing tip (1.04, 1.0, 0.86): the savanna's grey-leaning round
+  one read dusty tan (eyegrass round one, owner verdict "warm"). Both get a per-tuft value step of
+  up to 12 percent so neighbouring tufts read as separate soft shapes, not one slab. A darker
+  foreground frames the view the way a painted one does; 45 percent toward grey with the tip at
+  full value (the first round) turned lime and mustard milky, frost-pale (in linear space the
+  grey of a bright hue is light);
 - shape: the tip loses up to half its alpha, so a round painted tip tapers.
 
 The `eye_grass` global (project.godot) is the map scale while the eye view is on and 0 otherwise

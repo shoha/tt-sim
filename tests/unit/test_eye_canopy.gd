@@ -86,7 +86,7 @@ func test_near_grass_drops_the_low_keys_and_keeps_the_high_ones() -> void:
 	for k in 100:
 		if EyeCanopy.grass_keep((k + 0.5) / 100.0, 1.0) > 0.5:
 			kept += 1
-	assert_between(kept, 40, 70, "about half the tufts stay at the eye's feet")
+	assert_between(kept, 15, 40, "about a quarter of the tufts stay at the eye's feet")
 
 
 func test_far_grass_keeps_its_colour() -> void:
@@ -105,6 +105,19 @@ func test_near_grass_loses_saturation_and_runs_dark_foot_to_light_tip() -> void:
 	assert_lt(tip.length(), lime.length(), "and no paler than it was: a pale one reads as frost")
 	assert_lt(foot.length(), tip.length() * 0.8, "the foot is darker than the tip")
 	assert_gt(foot.z / foot.y, tip.z / tip.y, "the foot leans cool")
+
+
+func test_near_warm_grass_keeps_its_saturation_and_glows_at_the_tip() -> void:
+	var gold := Vector3(0.8, 0.5, 0.06)
+	var tip := EyeCanopy.grass_albedo(gold, 1.0, 0.5, 1.0)
+	var foot := EyeCanopy.grass_albedo(gold, 0.0, 0.5, 1.0)
+	var sat := func(c: Vector3) -> float:
+		var hi := maxf(c.x, maxf(c.y, c.z))
+		return (hi - minf(c.x, minf(c.y, c.z))) / hi
+	assert_gte(sat.call(tip), sat.call(gold), "gold is not desaturated")
+	assert_gt(tip.length(), foot.length(), "the tip is brighter than the foot")
+	assert_gt(tip.x, tip.z * 3.0, "the tip stays warm")
+	assert_gt(foot.length(), gold.length() * 0.6, "the warm foot is only a little darker")
 
 
 func test_near_tufts_step_their_value_by_key() -> void:
@@ -234,6 +247,21 @@ func test_the_grass_shader_carries_the_near_grass_constants() -> void:
 			float(found.get_string(1)), float(found.get_string(2)), float(found.get_string(3))
 		)
 		assert_almost_eq(foot, EyeCanopy.GRASS_FOOT, Vector3.ONE * 0.00001)
+	assert_eq(_shader_const(path, "EYE_GRASS_WARM_SAT"), EyeCanopy.GRASS_WARM_SAT)
+	assert_eq(_shader_const(path, "EYE_GRASS_THIN_CURVE"), EyeCanopy.GRASS_THIN_CURVE)
+	for name in ["EYE_GRASS_WARM_FOOT", "EYE_GRASS_WARM_TIP"]:
+		var vec := RegEx.create_from_string(
+			"const vec3 %s = vec3\\(([0-9.]+), ([0-9.]+), ([0-9.]+)\\);" % name
+		).search(text)
+		assert_not_null(vec, "the shader declares %s" % name)
+		if vec:
+			var want: Vector3 = (
+				EyeCanopy.GRASS_WARM_FOOT if name.ends_with("FOOT") else EyeCanopy.GRASS_WARM_TIP
+			)
+			var got := Vector3(
+				float(vec.get_string(1)), float(vec.get_string(2)), float(vec.get_string(3))
+			)
+			assert_almost_eq(got, want, Vector3.ONE * 0.00001)
 
 
 func test_the_near_grass_runs_only_in_the_eye_pass() -> void:

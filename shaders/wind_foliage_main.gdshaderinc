@@ -40,7 +40,11 @@ varying float zone_mass_h;
 global uniform float eye_grass;
 const float EYE_GRASS_FULL = 1.5;
 const float EYE_GRASS_NONE = 9.0;
-const float EYE_GRASS_THIN = 0.6;
+const float EYE_GRASS_THIN = 0.85;
+const float EYE_GRASS_THIN_CURVE = 0.7;
+const float EYE_GRASS_WARM_SAT = 0.05;
+const vec3 EYE_GRASS_WARM_FOOT = vec3(0.74, 0.6, 0.5);
+const vec3 EYE_GRASS_WARM_TIP = vec3(1.04, 1.0, 0.86);
 const float EYE_GRASS_THIN_BAND = 0.15;
 const float EYE_GRASS_DESAT = 0.18;
 const vec3 EYE_GRASS_FOOT = vec3(0.5, 0.58, 0.62);
@@ -61,7 +65,7 @@ float eye_grass_hash(vec2 xz) {
 // The scale a tuft with key `key` keeps at nearness `near`: 1 far from the eye; near it the
 // tufts whose key falls under the thinning shrink into their foot and are gone.
 float eye_grass_keep(float key, float near) {
-	float thin = EYE_GRASS_THIN * near;
+	float thin = EYE_GRASS_THIN * pow(near, EYE_GRASS_THIN_CURVE);
 	return smoothstep(thin - EYE_GRASS_THIN_BAND, thin, key);
 }
 
@@ -70,10 +74,15 @@ float eye_grass_keep(float key, float near) {
 // `key` at nearness `near`; `a` itself at nearness 0.
 vec3 eye_grass_albedo(vec3 a, float h, float key, float near) {
 	float luma = dot(a, vec3(0.2126, 0.7152, 0.0722));
-	vec3 g = mix(a, vec3(luma), EYE_GRASS_DESAT);
-	g *= mix(EYE_GRASS_FOOT, vec3(EYE_GRASS_TIP), smoothstep(0.0, 1.0, h));
+	// Warm (red over green: dry gold, straw) blades keep and gain saturation and glow at the tip;
+	// the green ones are calmed and deepened.
+	float warm = smoothstep(0.0, 0.15, (a.r - a.g) / max(a.r, 0.01));
+	vec3 g = mix(a, vec3(luma), mix(EYE_GRASS_DESAT, -EYE_GRASS_WARM_SAT, warm));
+	vec3 foot = mix(EYE_GRASS_FOOT, EYE_GRASS_WARM_FOOT, warm);
+	vec3 tip = mix(vec3(EYE_GRASS_TIP), EYE_GRASS_WARM_TIP, warm);
+	g *= mix(foot, tip, smoothstep(0.0, 1.0, h));
 	g *= 1.0 + EYE_GRASS_JITTER * (fract(key * 7.13 + 0.37) * 2.0 - 1.0);
-	return mix(a, g, near);
+	return mix(a, max(g, vec3(0.0)), near);
 }
 
 

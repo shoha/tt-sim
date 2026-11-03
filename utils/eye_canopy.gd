@@ -49,8 +49,17 @@ const GRASS_FULL_M := 1.5
 const GRASS_NONE_M := 9.0
 ## At full nearness tufts whose key is under GRASS_THIN are thinned: gone below
 ## GRASS_THIN - GRASS_THIN_BAND, shrinking into their foot across the band.
-const GRASS_THIN := 0.6
+const GRASS_THIN := 0.85
 const GRASS_THIN_BAND := 0.15
+## The thinning follows nearness to this power (under 1: it bites earlier, mid-range, than a
+## straight ramp; eyegrass2 thinned the dense meadow harder).
+const GRASS_THIN_CURVE := 0.7
+## Warm blades (red over green: dry gold, straw) gain GRASS_WARM_SAT of saturation instead of
+## losing GRASS_DESAT, and take a warmer foot and a glowing tip (eyegrass2: the green-biased
+## constants turned the savanna's gold to dusty tan).
+const GRASS_WARM_SAT := 0.05
+const GRASS_WARM_FOOT := Vector3(0.74, 0.6, 0.5)
+const GRASS_WARM_TIP := Vector3(1.04, 1.0, 0.86)
 ## The share of a near tuft's colour that goes to its own grey (Rec. 709 luma, linear). Kept
 ## small: in linear space the grey of a lime or a mustard is light, and 0.45 turned them milky.
 const GRASS_DESAT := 0.18
@@ -80,7 +89,7 @@ static func grass_near(distance: float, scale: float = 1.0) -> float:
 ## The scale a tuft with key `key` (0 to 1) keeps at nearness `near`: 1 at nearness 0, 0 for a
 ## key under the thinning less its band.
 static func grass_keep(key: float, near: float) -> float:
-	var thin := GRASS_THIN * near
+	var thin := GRASS_THIN * pow(near, GRASS_THIN_CURVE)
 	return smoothstep(thin - GRASS_THIN_BAND, thin, key)
 
 
@@ -88,9 +97,13 @@ static func grass_keep(key: float, near: float) -> float:
 ## tuft with key `key` at nearness `near`; `albedo` itself at nearness 0.
 static func grass_albedo(albedo: Vector3, h: float, key: float, near: float) -> Vector3:
 	var luma := albedo.dot(Vector3(0.2126, 0.7152, 0.0722))
-	var g := albedo.lerp(Vector3.ONE * luma, GRASS_DESAT)
-	g *= GRASS_FOOT.lerp(Vector3.ONE * GRASS_TIP, smoothstep(0.0, 1.0, h))
+	var warm := smoothstep(0.0, 0.15, (albedo.x - albedo.y) / maxf(albedo.x, 0.01))
+	var g := albedo.lerp(Vector3.ONE * luma, lerpf(GRASS_DESAT, -GRASS_WARM_SAT, warm))
+	var foot := GRASS_FOOT.lerp(GRASS_WARM_FOOT, warm)
+	var tip := (Vector3.ONE * GRASS_TIP).lerp(GRASS_WARM_TIP, warm)
+	g *= foot.lerp(tip, smoothstep(0.0, 1.0, h))
 	g *= 1.0 + GRASS_JITTER * (fposmod(key * 7.13 + 0.37, 1.0) * 2.0 - 1.0)
+	g = Vector3(maxf(g.x, 0.0), maxf(g.y, 0.0), maxf(g.z, 0.0))
 	return albedo.lerp(g, near)
 
 

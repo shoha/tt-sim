@@ -4678,3 +4678,13 @@ On the meadow's dense grass the thinning pays for itself: 2 to 6 percent cheaper
 grass (yaw 45 and 285), 1 to 2 percent dearer (within noise) where there is little. On the savanna's
 sparser tufts it costs 0 to 4 percent, at most 0.11 ms. Net: within about 0.1 ms either way at every
 pose measured; the hamlet's worst pose (pitch 12, yaw 45) is 0.25 ms cheaper.
+
+Round two (eyegrass2, 2026-11-03: warm path keyed on red over green, thinning 0.85 on a 0.7
+power curve; same job, GPU shared and noisier, hamlet drift per round 0.29 / 1.01 / 0.97 / 1.24, so
+indicative only). GPU ms, ship / off: hamlet pitch 0 yaw 45 5.90 / 5.07 (the slow first round),
+yaw 165 2.60 / 2.30, yaw 285 2.94 / 3.14; pitch 12 yaw 45 4.92 / 5.01, yaw 165 2.68 / 2.50, yaw 285
+3.12 / 3.55. Savanna pitch 0: 3.50 / 3.39, 2.56 / 2.29, 2.16 / 2.10; pitch 12: 3.86 / 3.65, 2.73 /
+2.47, 2.45 / 2.30. Savanna ship is 0.07 to 0.27 ms dearer than off (mean about 0.18 ms), the hamlet
+swings both ways by up to 0.4 ms with no pattern beyond the noise. The extra work is one `pow` per
+tuft in the vertex stage and a few mixes in the fragment: expect it to stay within noise (about
+0.2 ms on a sparse map).
