@@ -1391,6 +1391,23 @@ parity check, `MapFingerprint`, rounds to 1 mm), so a remaining last-bit differe
 not a desync. The `core-library` repo keeps copies of `pins.txt` and `prop_pins.txt`: copy the two
 files there.
 
+**macOS arm64, the cause found (2026-11-03, cards `detdump` and `detdump2`).** The digest rounding above
+did not turn the macOS run green: blackhouse and pueblo still differed. A diagnostic branch dumped every
+mesh vertex and then the corner maths as raw float bits on all three platforms (Linux equals Windows bit
+for bit; macOS had the same topology and indices and 1 to 20 float32 ulp differences, only in walls near
+a rounded corner). The first difference was `Vector2.angle()` (the float32 `atan2f`) in
+`ProcgenRoundCorners._corner`: for the axis-aligned vector (-r, 0) macOS returned pi one float ulp low
+(0x40490fda against 0x40490fdb), which moved that corner's arc points and everything built on them. The
+double libm calls (`acos`, `tan`, `sin`, `cos`) differ in the last bit between platforms too but never
+reached the float32 values, and `Vector2.rotated`, `from_angle` and `Vector3.rotated` were bit-identical
+on macOS in the probes. Fix, procgen 9517c81: the start angle is the double `atan2` narrowed to float32
+(`PackedFloat32Array([atan2(y, x)])[0]`), which gives the same bits on every platform for the
+axis-aligned corners and moves no digest. A Determinism run with that pin was green on Linux, Windows and
+macOS (run 41716978245 on a CI-only branch). Lesson: do not read an angle back from a vector with a
+float32 libm call when it feeds geometry that is hashed; other float32 trig in procgen
+(`ornaments_top.gd` `from_angle` and `rotated`, `stone_builder.gd`, `blade_mesher`, `frond_mesher`) was
+equal on macOS in the probes but is the next place to look if a macOS DIFF returns.
+
 **The digest split (2026-10-30, topic `digest_split`).** The exporter (`tools/export_core_structures.gd`)
 and the tests once pinned different digests for the same structures: nine houses (`house_flat`,
 `house_hip`, `stone_house`, the townhouse and its chimneyed, end, flat, hip and trimmed variants) at
