@@ -68,6 +68,7 @@ const EXCLUDED_SHADERS := {
 	"res://shaders/wind_foliage_debug_cheap_lighting.gdshader": "debug toggles only",
 	"res://shaders/wind_foliage_debug_trivial.gdshader": "debug toggles only",
 	"res://shaders/wind_foliage_debug_unshaded.gdshader": "debug toggles only",
+	"res://shaders/street_sky.gdshader": "sky shader: needs a Sky, the eye view compiles it on entry",
 	"res://shaders/pixelate.gdshader": "no references in the code",
 	"res://shaders/sharpen.gdshader": "no references in the code",
 	"res://shaders/selected_indicator.gdshader": "no references in the code",

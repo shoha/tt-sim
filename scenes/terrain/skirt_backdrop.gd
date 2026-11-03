@@ -16,7 +16,8 @@ extends Node
 ## Sky backdrops: a PanoramaSkyMaterial is sampled by the shader itself in the camera's view
 ## direction (MODE_SKY); a ProceduralSkyMaterial's colour there is computed here (its gradient,
 ## MODE_COLOR); any other sky material (physical, a map's own shader) falls back to the dither
-## (MODE_DITHER), which needs no colour.
+## (MODE_DITHER), which needs no colour. The eye view's painted sky (a ShaderMaterial with foot_on)
+## is the exception: the skirt fades to its foot colour, the depth fog colour (MODE_COLOR).
 
 const NODE_NAME := "SkirtBackdrop"
 const MODE_COLOR := 0
@@ -106,6 +107,12 @@ static func _sky(env: Environment, forward: Vector3, energy: float, out: Diction
 		out.skirt_sky_panorama = panorama.panorama
 		out.skirt_sky_basis = basis
 		out.skirt_sky_energy = panorama.energy_multiplier * energy
+	elif sky_material is ShaderMaterial and is_painted_sky(sky_material as ShaderMaterial):
+		# The eye view's painted sky (EyeSky): the skirt and the water fade to the nearest ridge's
+		# foot colour, which is also the depth fog colour, so grass, skirt, fogged ground and ridge
+		# foot are one tone.
+		var painted := sky_material as ShaderMaterial
+		out.skirt_backdrop = _linear(painted.get_shader_parameter("foot_color"), energy)
 	elif sky_material is ProceduralSkyMaterial:
 		var color := procedural_color(sky_material as ProceduralSkyMaterial, basis * forward)
 		out.skirt_backdrop = Vector3(color.r, color.g, color.b) * energy
@@ -135,6 +142,13 @@ static func procedural_color(sky: ProceduralSkyMaterial, dir: Vector3) -> Color:
 			* sky.ground_energy_multiplier
 		)
 	return color * sky.energy_multiplier
+
+
+## Whether `material` is the eye view's painted sky with the foot fade on (EyeSky sets foot_on 1).
+static func is_painted_sky(material: ShaderMaterial) -> bool:
+	var foot_on: Variant = material.get_shader_parameter("foot_on")
+	var foot: Variant = material.get_shader_parameter("foot_color")
+	return foot_on != null and float(foot_on) > 0.5 and foot is Color
 
 
 static func _clear_color() -> Color:

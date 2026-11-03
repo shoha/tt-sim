@@ -82,6 +82,7 @@ func fit(map_root: Node3D, document: MapDocument) -> void:
 		_local_extent.size.y = 0.0
 	_pans_on_extent = document != null and not document.has_base_map
 	_has_document = document != null
+	_set_eye_sky(document)
 	refit()
 
 
@@ -131,6 +132,7 @@ func follow() -> void:
 func clear() -> void:
 	_map_root = null
 	_has_document = false
+	_set_eye_sky(null)
 	_set_eye_bounds(AABB())
 	shadow_bounds = AABB()
 	_fitted_ground = Vector2.ZERO
@@ -165,6 +167,20 @@ func _set_eye_bounds(bounds: AABB) -> void:
 	var camera_controller := _game_map.get_camera_controller()
 	if camera_controller != null and camera_controller.eye != null:
 		camera_controller.eye.set_document_bounds(bounds)
+
+
+## Tell the eye view's painted sky the map's dominant biome and seed (none: the default look).
+func _set_eye_sky(document: MapDocument) -> void:
+	if not is_instance_valid(_game_map):
+		return
+	var camera_controller := _game_map.get_camera_controller()
+	if camera_controller == null or camera_controller.eye == null:
+		return
+	if document == null:
+		camera_controller.eye.sky.set_map("", 0)
+		return
+	var biome := StreetSkyLook.dominant_biome(document.biome_ids, document.biome_slots)
+	camera_controller.eye.sky.set_map(biome, document.map_seed)
 
 
 func _has_map() -> bool:

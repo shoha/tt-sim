@@ -36,6 +36,10 @@ const FAR_PLANE := 600.0
 ## The near plane at the eye, metres (eyeprobe: nothing slices at 0.05).
 const NEAR_PLANE := 0.05
 
+## The painted sky and edge fog installed in the level's environment while the eye is on
+## (MapViewFit tells it the map's biome and seed).
+var sky: EyeSky = EyeSky.new()
+
 var _entered: bool = false
 var _foot: Vector2 = Vector2.ZERO  # world XZ the eye stands on
 var _foot_y: float = 0.0  # the ground's height under the foot, eased
@@ -128,6 +132,7 @@ func activate(owner_controller: CameraController, map: GameMap) -> void:
 	_lens = _lens_target
 	_apply_fov()
 	_sync_sky(0.0)
+	_sync_painted_sky()
 	map.eye_view_antialiasing = true
 	apply_pitch(pitch.pitch)
 	if owner_controller.compass != null:
@@ -141,6 +146,7 @@ func deactivate() -> void:
 	if not _entered:
 		return
 	_entered = false
+	sky.leave()
 	if not is_instance_valid(game_map) or not is_instance_valid(game_map.camera_node):
 		return
 	var camera := game_map.camera_node
@@ -170,6 +176,7 @@ func deactivate() -> void:
 func process(delta: float) -> void:
 	var camera := game_map.camera_node
 	_sync_sky(0.0)
+	_sync_painted_sky()
 	_step_lens(delta)
 	_step_walk(delta)
 	_step_glide(delta)
@@ -541,8 +548,26 @@ func _clear_input() -> void:
 ## Set the sky's drawn field of view (0: the camera's own; the orthographic view uses 2 degrees).
 ## Written every frame because a settings change re-applies the orthographic value.
 func _sync_sky(fov: float) -> void:
-	if not is_instance_valid(game_map) or game_map.world_viewport.world_3d == null:
-		return
-	var env := game_map.world_viewport.world_3d.environment
+	var env := level_environment()
 	if env != null and not is_equal_approx(env.sky_custom_fov, fov):
 		env.sky_custom_fov = fov
+
+
+## The Environment the world viewport renders under (the level's WorldEnvironment sets it on the
+## world the viewport shares; the viewport's own world_3d property is null here), or null.
+func level_environment() -> Environment:
+	if not is_instance_valid(game_map):
+		return null
+	var world := game_map.world_viewport.find_world_3d()
+	return world.environment if world != null else null
+
+
+## Keep the painted sky and the edge fog installed in the environment (EyeSky.sync): a settings
+## change that re-applies the environment is put right the next frame. The sun is the one the
+## foliage light follows (the level's, or the map's own), or a high southern one when none shines.
+func _sync_painted_sky() -> void:
+	var sun := FoliageLight.last_sun
+	var to_sun := Vector3(sun.x, sun.y, sun.z)
+	if to_sun.length() < 0.5:
+		to_sun = Vector3(0.0, 0.64, 0.77)
+	sky.sync(level_environment(), to_sun.normalized())

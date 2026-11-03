@@ -1,0 +1,24 @@
+{
+ "out_dir": "render_jobs/es_clip",
+ "timeout_s": 400,
+ "hang_s": 150,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_camera_es_hamlet"},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "enter", "at": [0, 30], "yaw": 90, "pitch": 3, "fov": 60},
+  {"op": "wait", "s": 0.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "walk", "name": "turn", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/es_clip", "seconds": 6.0, "fps": 30, "every": 1, "width": 960, "events": [
+    {"at": 0, "do": "spin", "from": 90, "to": 450, "frames": 180}
+  ]},
+  {"op": "wait", "s": 8.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "leave"},
+  {"op": "wind", "freeze": false},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

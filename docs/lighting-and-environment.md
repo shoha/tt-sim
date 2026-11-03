@@ -286,6 +286,34 @@ When a sky preset is selected:
 
 The special `map_default` preset reuses the `Sky` resource that was extracted from the map's embedded `WorldEnvironment` during loading. This allows maps with custom skies to have their sky preserved and restorable.
 
+### The eye view's painted sky and edge fog (2026-11-02, card eyesky)
+
+Only while the eye view (F9) is the camera, `EyeSky` (`scenes/states/playing/eye_sky.gd`) swaps
+the level's Environment to `shaders/street_sky.gdshader` (a painted gradient, flat clouds in four
+shapes, and three layered ridges that hide where the map ends) and turns on a depth fog of 25 to
+85 m whose colour is the biome's foot colour; leaving restores every field. The ortho and
+top-down views never see any of it.
+
+- Lighting: the shader returns exactly what it replaces in the cubemap pass
+  (`AT_CUBEMAP_PASS`, which fills the radiance map): the HDRI's `texture(source_panorama,
+  SKY_COORDS) * exposure` or the level's flat colour. The visible pass alone paints the sky.
+  `tools/eyesky_radiance_probe.gd`: HDRI base, diffuse, rough metal and mirror spheres 0.0000 mean
+  byte difference against the old sky (a loud red band proves the probe sees the sky). A flat-colour
+  level has one difference: its global reflection source, black under `BG_COLOR` in a bare scene, is
+  the flat colour under the shader sky (diffuse within 1 LSB). A level's own ReflectionProbe is not
+  re-rendered. Gradient skies (`ProceduralSkyMaterial`) are not swapped.
+- `StreetSkyLook` (`utils/street_sky_look.gd`) holds the per-biome table (zenith, horizon haze,
+  far, near and foot colours, ridge height, noise seed and period, tree-crown height, count and
+  shape, and a few extras); a biome id such as `temperate_forest_summer_s1` finds its look by
+  prefix, `default` covers the rest, and the map seed shifts the lattice seed. `MapViewFit` names
+  the map's dominant biome. The foot colour is also the fog colour and the colour the ground skirt
+  and water backdrop fade to (`SkirtBackdrop` reads the shader's `foot_on`), so grass, skirt,
+  fog and ridge foot are one tone.
+- `EyeView` also owns `sky_custom_fov` 0 at the eye; it reads the Environment from
+  `world_viewport.find_world_3d()` (the SubViewport's own `world_3d` is null).
+- Godot 4.7 resets `Environment.fog_density` when `fog_mode` is assigned: set the mode first.
+- First entry compiles the sky shader (not in the graphics warm-up; the hitch was not measured).
+
 ### Curating a sky
 
 1. Add a manifest entry to `tools/skies_manifest.json`.

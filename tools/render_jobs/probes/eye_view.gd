@@ -46,6 +46,23 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _pose(cc, step) + " | " + _state(gm, cc)
 		"state":
 			return _state(gm, cc)
+		"sky":
+			# {on: bool}: the painted sky and edge fog (EyeSky.enabled), off for before stills.
+			EyeSky.enabled = bool(step.get("on", true))
+			if not EyeSky.enabled:
+				cc.eye.sky.leave()
+			return "painted sky %s" % ("on" if EyeSky.enabled else "off")
+		"skystate":
+			var env := cc.eye.level_environment()
+			return (
+				"bg %d sky %s fov %.1f fog %s mode %d %.0f..%.0f color %s sky_affect %.2f biome '%s' seed %d"
+				% [
+					env.background_mode, str(env.sky), env.sky_custom_fov, str(env.fog_enabled),
+					env.fog_mode, env.fog_depth_begin, env.fog_depth_end,
+					str(env.fog_light_color), env.fog_sky_affect,
+					cc.eye.sky.biome, cc.eye.sky.map_seed
+				]
+			)
 		"walk":
 			var rig := WalkRig.new()
 			rig.gm = gm
@@ -116,6 +133,7 @@ class WalkRig:
 	var _grabbed: Variant = null
 	var _prev_foot := Vector2.ZERO
 	var _drags: Array[Dictionary] = []
+	var _spins: Array[Dictionary] = []
 	var _fired := {}
 	var _min := Vector2(INF, INF)
 	var _max := Vector2(-INF, -INF)
@@ -135,6 +153,9 @@ class WalkRig:
 				_start(events[i])
 		for d in _drags:
 			_drag_frame(d)
+		for s in _spins:
+			var t := clampf(float(_frame - int(s.at)) / float(s.frames), 0.0, 1.0)
+			cc.set_yaw_now(lerpf(float(s.from), float(s.to), smoothstep(0.0, 1.0, t)))
 		Wind.set_clock_override(_wind0 + float(_frame) / float(fps))
 
 	func _start(e: Dictionary) -> void:
@@ -169,6 +190,9 @@ class WalkRig:
 				_grabbed = null
 			"drag":
 				_drags.append(e)
+			"spin":
+				# {from, to: degrees, frames}: a smoothstep turn from the event's frame on.
+				_spins.append(e)
 
 	func _drag_frame(d: Dictionary) -> void:
 		var from := int(d.at)
