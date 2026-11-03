@@ -774,7 +774,7 @@ func test_the_scatter_snapshot_carries_the_structures_so_workers_clear_under_the
 # --- panes ---------------------------------------------------------------------------------
 
 
-func test_the_recipes_glazing_gives_panes_and_leaves_in_the_opening_role() -> void:
+func test_the_recipes_glazing_gives_panes_in_the_opening_role_and_leaves_in_the_door_role() -> void:
 	var parts := StructureGeometry.build_one(_doc, _structure("core:townhouse"))
 	var panes: Dictionary = {}
 	var frames: Dictionary = {}
@@ -796,8 +796,16 @@ func test_the_recipes_glazing_gives_panes_and_leaves_in_the_opening_role() -> vo
 	for tag: int in panes.tags:
 		var path := String((parts.tag_table as PackedStringArray)[tag])
 		assert_true(path.begins_with("glazing_"), path)
-		seen[path.get_slice("/", path.get_slice_count("/") - 1).replace("panel", "leaf")] = true
-	assert_true(seen.has("pane") and seen.has("leaf"), "a window pane and a door leaf: %s" % seen)
+		seen[path.get_slice("/", path.get_slice_count("/") - 1)] = true
+	assert_true(seen.has("pane"), "a window pane in the glass mesh: %s" % seen)
+	assert_false(seen.has("leaf"), "a door leaf is wood now, not glass: %s" % seen)
+	var doors := {}
+	for mesh: Dictionary in parts.meshes:
+		if mesh.role == StructureLook.DOOR:
+			for tag: int in mesh.tags:
+				var door_path := String((parts.tag_table as PackedStringArray)[tag])
+				doors[door_path.get_slice("/", door_path.get_slice_count("/") - 1)] = true
+	assert_true(doors.has("leaf"), "a door leaf in the door role: %s" % doors)
 	var nodes := AuthoredStructures.new()
 	_map.add_child(nodes)
 	nodes.apply({"structures": [parts]})
