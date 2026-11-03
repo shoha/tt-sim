@@ -3,7 +3,8 @@ extends RefCounted
 
 ## Aims a render job's pointer at a village furnishing by what it is, not by a map coordinate: an
 ## `input` event's "at" may be {"piece": "bench", "nth": 0, "as": "bench1", "dx": 3, "dz": 2}. The
-## piece is the `nth` (default 0) visible standing piece of that prop in the 3D view, nearest the
+## piece is the `nth` (default 0) visible standing piece of that prop (or, with "rule": id in place
+## of "piece", of that kit rule) in the 3D view, nearest the
 ## view's centre first (on screen, not behind a building: BrushTool.structure_blocks, the same test
 ## the Village tool picks by). "as" remembers the choice under that name, so a later event finds
 ## the same piece after it has been moved; "dx" and "dz" aim that many metres from the piece on the
@@ -71,7 +72,11 @@ static func _find(spec: Dictionary, ctrl: AuthoringController, camera: Camera3D)
 	var middle := view.get_center()
 	var seen: Array[Dictionary] = []
 	for row in rows:
-		if str(row["item"]["prop"]) != str(spec.get("piece", "")):
+		# {"rule": id} takes any piece its kit rule placed (a street's carts or haystacks alike).
+		if spec.has("rule"):
+			if VillageFurnishings.rule_of(str(row["item"]["slot"])) != str(spec["rule"]):
+				continue
+		elif str(row["item"]["prop"]) != str(spec.get("piece", "")):
 			continue
 		var centre := _centre(row)
 		if camera.is_position_behind(centre):

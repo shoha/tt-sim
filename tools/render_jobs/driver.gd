@@ -287,8 +287,11 @@ func _process(delta: float) -> void:
 			var at: Array = []
 			if step.at is Dictionary:
 				# A piece spec (RenderPieceAim): look at that piece.
+				# "dx"/"dz" look that many metres off it (a piece set near the screen's edge).
 				var found := RenderPieceAim.map_of(step.at, ctrl(), gm().camera_node)
 				at = [found.x, found.y] if found != Vector2.INF else [0.0, 0.0]
+				at[0] += float(step.at.get("dx", 0.0))
+				at[1] += float(step.at.get("dz", 0.0))
 			else:
 				at = step.at
 			holder.global_position = Vector3(
