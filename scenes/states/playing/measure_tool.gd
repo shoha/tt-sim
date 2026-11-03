@@ -86,6 +86,10 @@ var _segment_label_pool: Array[PanelContainer] = []
 ## Cached per-frame data to avoid redundant computation
 var _cached_points: PackedVector3Array = PackedVector3Array()
 var _screen_points: PackedVector2Array = PackedVector2Array()
+## Per waypoint: whether the camera sees it (at the eye a point can be behind the camera, where
+## unproject_position would mirror it). Per segment: its visible screen ends, empty when none.
+var _point_seen: Array[bool] = []
+var _screen_segments: Array[PackedVector2Array] = []
 var _committed_count: int = 0
 
 ## 2D position of the cursor dot shown during PLACING_START (before first click)
@@ -100,8 +104,7 @@ var _needs_redraw: bool = false
 var _preview_dirty: bool = false
 
 ## Camera state tracking — detect zoom/pan so we redraw when the camera moves
-var _last_camera_size: float = 0.0
-var _last_camera_pos: Vector3 = Vector3.ZERO
+var _last_view_key: Array = []
 
 
 ## Returns the next mode in the cycle: LINE -> SPHERE -> CYLINDER -> LINE.
@@ -343,11 +346,9 @@ func _mark_dirty() -> void:
 func _check_camera_changed() -> void:
 	if not _camera:
 		return
-	var cam_size := _camera.size
-	var cam_pos := _camera.global_position
-	if cam_size != _last_camera_size or cam_pos != _last_camera_pos:
-		_last_camera_size = cam_size
-		_last_camera_pos = cam_pos
+	var key := CameraRig.view_key(_camera)
+	if key != _last_view_key:
+		_last_view_key = key
 		_mark_dirty()
 
 
@@ -520,6 +521,8 @@ func _build_points() -> PackedVector3Array:
 
 func _clear_visuals() -> void:
 	_screen_points.clear()
+	_point_seen.clear()
+	_screen_segments.clear()
 	_cached_points.clear()
 	_show_cursor_dot = false
 	_committed_count = 0
@@ -562,8 +565,10 @@ func _do_redraw() -> void:
 	# Volume mode — skip line rendering entirely
 	if _mode != Mode.LINE:
 		if _state != State.INACTIVE and _has_preview and _camera:
-			_cursor_dot = _camera.unproject_position(_preview_point)
-			_show_cursor_dot = true
+			var dot: Variant = CameraRig.screen_of(_camera, _preview_point)
+			_show_cursor_dot = dot != null
+			if dot != null:
+				_cursor_dot = dot
 		else:
 			_show_cursor_dot = false
 		if _draw_control:
@@ -589,8 +594,10 @@ func _do_redraw() -> void:
 	# In PLACING_START this is the only visual; in PLACING_WAYPOINT it reinforces
 	# the endpoint of the tentative segment (especially useful when very short).
 	if _state != State.INACTIVE and _has_preview and _camera:
-		_cursor_dot = _camera.unproject_position(_preview_point)
-		_show_cursor_dot = true
+		var dot: Variant = CameraRig.screen_of(_camera, _preview_point)
+		_show_cursor_dot = dot != null
+		if dot != null:
+			_cursor_dot = dot
 	else:
 		_show_cursor_dot = false
 
@@ -599,6 +606,8 @@ func _do_redraw() -> void:
 
 	if _cached_points.size() < 2:
 		_screen_points.clear()
+		_point_seen.clear()
+		_screen_segments.clear()
 		if _draw_control:
 			_draw_control.queue_redraw()
 		if _total_label_panel:
@@ -609,8 +618,15 @@ func _do_redraw() -> void:
 
 	# Project 3D waypoints to 2D screen coordinates
 	_screen_points.clear()
+	_point_seen.clear()
+	_screen_segments.clear()
 	for pt in _cached_points:
 		_screen_points.append(_camera.unproject_position(pt))
+		_point_seen.append(not _camera.is_position_behind(pt))
+	for i in range(_cached_points.size() - 1):
+		var a: Vector3 = _cached_points[i]
+		var b: Vector3 = _cached_points[i + 1]
+		_screen_segments.append(CameraRig.screen_segment(_camera, a, b))
 
 	if _draw_control:
 		_draw_control.queue_redraw()
@@ -634,11 +650,11 @@ func _do_redraw() -> void:
 		# Hide the preview (tentative) segment label when it's too short on
 		# screen — prevents overlap with the total label and the previous endpoint.
 		var is_preview_seg := has_preview_seg and i == segment_count - 1
+		var seen: PackedVector2Array = _screen_segments[i]
 		if is_preview_seg:
-			var screen_len := _screen_points[i].distance_to(_screen_points[i + 1])
-			panel.visible = screen_len > 80.0
+			panel.visible = seen.size() == 2 and seen[0].distance_to(seen[1]) > 80.0
 		else:
-			panel.visible = true
+			panel.visible = seen.size() == 2
 
 	# Hide any excess pooled labels
 	for i in range(segment_count, _segment_label_pool.size()):
@@ -673,21 +689,31 @@ func _on_draw_control_draw() -> void:
 
 	# Draw committed segments (full opacity)
 	for i in range(1, mini(_committed_count, _screen_points.size())):
-		_draw_dashed_line_2d(_screen_points[i - 1], _screen_points[i], LINE_COLOR)
+		var seen: PackedVector2Array = _screen_segments[i - 1]
+		if seen.size() == 2:
+			_draw_dashed_line_2d(seen[0], seen[1], LINE_COLOR)
 
 	# Draw preview segment (half opacity) — last segment when there's a preview
 	if _screen_points.size() > _committed_count:
-		var preview_idx := _screen_points.size() - 1
-		_draw_dashed_line_2d(
-			_screen_points[preview_idx - 1], _screen_points[preview_idx], PREVIEW_LINE_COLOR
-		)
+		var last: PackedVector2Array = _screen_segments[_screen_points.size() - 2]
+		if last.size() == 2:
+			_draw_dashed_line_2d(last[0], last[1], PREVIEW_LINE_COLOR)
 
-	# Draw endpoint circles at each waypoint
-	for pt in _screen_points:
-		_draw_control.draw_circle(pt, ENDPOINT_RADIUS_PX, ENDPOINT_COLOR)
+	# Draw endpoint circles at each waypoint the camera sees
+	for i in _screen_points.size():
+		if _point_seen[i]:
+			_draw_control.draw_circle(_screen_points[i], ENDPOINT_RADIUS_PX, ENDPOINT_COLOR)
 
 
 func _draw_dashed_line_2d(from_pt: Vector2, to_pt: Vector2, color: Color) -> void:
+	# A line cut at the eye's near plane ends far off screen: draw only what the control shows.
+	var visible := CameraRig.clip_line_to_rect(
+		from_pt, to_pt, Rect2(Vector2.ZERO, _draw_control.size).grow(40.0)
+	)
+	if visible.size() < 2:
+		return
+	from_pt = visible[0]
+	to_pt = visible[1]
 	var total_dist := from_pt.distance_to(to_pt)
 	if total_dist < 0.5:
 		return
@@ -740,23 +766,29 @@ func _update_label_positions() -> void:
 	var segment_count := _cached_points.size() - 1
 
 	# Position per-segment labels at each segment's midpoint
-	for i in range(mini(segment_count, _segment_label_pool.size())):
+	for i in range(mini(mini(segment_count, _segment_label_pool.size()), _screen_segments.size())):
 		var panel: PanelContainer = _segment_label_pool[i]
 		if not panel.visible:
 			continue
-		var a: Vector3 = _cached_points[i]
-		var b: Vector3 = _cached_points[i + 1]
-		var midpoint := (a + b) * 0.5
-		var screen_pos := _camera.unproject_position(midpoint)
+		var seen: PackedVector2Array = _screen_segments[i]
+		if seen.size() == 2:
+			# The part on screen: a segment cut at the eye's near plane runs far below the screen.
+			seen = CameraRig.clip_line_to_rect(seen[0], seen[1], Rect2(Vector2.ZERO, _draw_control.size))
+		if seen.size() < 2:
+			panel.visible = false
+			continue
+		var screen_pos := (seen[0] + seen[1]) * 0.5
 		screen_pos.y -= 24.0
 		panel.position = screen_pos - panel.size * 0.5
 
-	# Position total label at the endpoint of the path
+	# Position total label at the endpoint of the path (hidden when it is behind the camera)
 	if _total_label_panel and _total_label_panel.visible:
-		var endpoint := _cached_points[_cached_points.size() - 1]
-		var screen_pos := _camera.unproject_position(endpoint)
-		screen_pos.y -= 40.0
-		_total_label_panel.position = screen_pos - _total_label_panel.size * 0.5
+		var end_screen: Variant = CameraRig.screen_of(_camera, _cached_points[_cached_points.size() - 1])
+		_total_label_panel.visible = end_screen != null
+		if end_screen != null:
+			var screen_pos: Vector2 = end_screen
+			screen_pos.y -= 40.0
+			_total_label_panel.position = screen_pos - _total_label_panel.size * 0.5
 
 
 # ============================================================================

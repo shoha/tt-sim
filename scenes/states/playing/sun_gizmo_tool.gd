@@ -60,9 +60,12 @@ var _dragging: bool = false
 var _azimuth_degrees: float = 0.0
 var _elevation_degrees: float = 45.0
 
+## The map the tool belongs to (setup's overlay parent): its ground height places the ring at
+## the eye.
+var _game_map: GameMap = null
+
 var _needs_redraw: bool = false
-var _last_camera_size: float = -1.0
-var _last_camera_pos := Vector3.INF
+var _last_view_key: Array = []
 
 
 ## Map a ground offset from the ring centre, in world units on the Y=0 plane,
@@ -106,6 +109,7 @@ func _process(_delta: float) -> void:
 func setup(cam: Camera3D, viewport: SubViewport, overlay_parent: Node) -> void:
 	_camera = cam
 	_world_viewport = viewport
+	_game_map = overlay_parent as GameMap
 	_create_overlay(overlay_parent)
 
 
@@ -196,7 +200,7 @@ func _apply_drag() -> void:
 	var centre := _viewport_centre_ground_point()
 	if centre == Vector3.INF:
 		return
-	var pointer := _ground_point_at(_world_viewport.get_mouse_position())
+	var pointer := _ground_point_at(_world_viewport.get_mouse_position(), centre.y)
 	if pointer == Vector3.INF:
 		return
 	var direction := direction_from_ground_offset(pointer - centre, RING_RADIUS_WORLD)
@@ -207,40 +211,52 @@ func _apply_drag() -> void:
 
 
 ## World point where the ray through [param screen_pos] (in SubViewport space)
-## meets the Y=0 ground plane, or Vector3.INF if it never does.
-func _ground_point_at(screen_pos: Vector2) -> Vector3:
+## meets the horizontal plane at [param plane_y] (the Y=0 ground plane by default), or
+## Vector3.INF if it never does. A perspective camera (the eye view) also refuses a ray flatter
+## than EyeRig.MIN_GROUND_RAY_DEG below the horizon: one pixel there is metres of ground.
+func _ground_point_at(screen_pos: Vector2, plane_y: float = 0.0) -> Vector3:
 	var from := _camera.project_ray_origin(screen_pos)
 	var dir := _camera.project_ray_normal(screen_pos)
 	if absf(dir.y) < 0.001:
 		return Vector3.INF
-	var t := -from.y / dir.y
+	if _camera.projection == Camera3D.PROJECTION_PERSPECTIVE and ViewGround.too_flat(dir):
+		return Vector3.INF
+	var t := (plane_y - from.y) / dir.y
 	if t < 0.0:
 		return Vector3.INF
 	return from + dir * t
 
 
 ## Ring centre: the point on the Y=0 ground plane at the centre of the viewport,
-## so the compass sits in the world rather than floating in screen space.
+## so the compass sits in the world rather than floating in screen space. At the eye
+## (a perspective camera) the centre ray meets the ground at the horizon or never, so the ring
+## is centred ViewGround.AHEAD_M ahead of the eye, on the ground there.
 func _viewport_centre_ground_point() -> Vector3:
 	if not _camera or not _world_viewport:
 		return Vector3.INF
-	return _ground_point_at(Vector2(_world_viewport.size) * 0.5)
+	var centre_px := Vector2(_world_viewport.size) * 0.5
+	if _camera.projection == Camera3D.PROJECTION_PERSPECTIVE:
+		return ViewGround.eye_point(
+			_camera.project_ray_origin(centre_px),
+			_camera.project_ray_normal(centre_px),
+			0.0,
+			ViewGround.height_function(_game_map)
+		)
+	return _ground_point_at(centre_px)
 
 
 func _mark_dirty() -> void:
 	_needs_redraw = true
 
 
-## Compare current camera state to last frame; mark dirty if it moved or zoomed,
-## so the ground-anchored ring stays put under a pan or zoom.
+## Compare the camera's view (CameraRig.view_key: pose, projection, size, fov) to last frame;
+## mark dirty when it changed, so the ground-anchored ring stays put under a pan, turn or zoom.
 func _check_camera_changed() -> void:
 	if not _camera:
 		return
-	var cam_size := _camera.size
-	var cam_pos := _camera.global_position
-	if cam_size != _last_camera_size or cam_pos != _last_camera_pos:
-		_last_camera_size = cam_size
-		_last_camera_pos = cam_pos
+	var key := CameraRig.view_key(_camera)
+	if key != _last_view_key:
+		_last_view_key = key
 		_mark_dirty()
 
 
@@ -269,10 +285,12 @@ func _on_draw_control_draw() -> void:
 	var offset := ground_offset_from_direction(
 		_azimuth_degrees, _elevation_degrees, RING_RADIUS_WORLD
 	)
-	var centre_screen := _camera.unproject_position(centre)
-	var handle_screen := _camera.unproject_position(centre + offset)
-	_draw_control.draw_line(centre_screen, handle_screen, RAY_COLOR, 2.0, true)
-	_draw_control.draw_circle(handle_screen, HANDLE_RADIUS_PX, HANDLE_COLOR)
+	var ray := CameraRig.screen_segment(_camera, centre, centre + offset)
+	if ray.size() == 2:
+		_draw_control.draw_line(ray[0], ray[1], RAY_COLOR, 2.0, true)
+	var handle_screen: Variant = CameraRig.screen_of(_camera, centre + offset)
+	if handle_screen != null:
+		_draw_control.draw_circle(handle_screen, HANDLE_RADIUS_PX, HANDLE_COLOR)
 
 
 ## Draw a circle that lives on the Y=0 ground plane, by unprojecting points
@@ -280,10 +298,10 @@ func _on_draw_control_draw() -> void:
 ## which is both truer to where the compass actually is and a clearer cue that
 ## the handle's direction is a world direction, not a screen one.
 func _draw_ground_ring(centre: Vector3, radius: float, width: float) -> void:
-	var points := PackedVector2Array()
+	var points := PackedVector3Array()
 	for i in range(RING_SEGMENTS + 1):
 		var angle := TAU * float(i) / float(RING_SEGMENTS)
-		points.append(
-			_camera.unproject_position(centre + Vector3(cos(angle), 0.0, sin(angle)) * radius)
-		)
-	_draw_control.draw_polyline(points, RING_COLOR, width, true)
+		points.append(centre + Vector3(cos(angle), 0.0, sin(angle)) * radius)
+	# Runs: at the eye a ring around a point just ahead can pass behind the camera.
+	for run in CameraRig.screen_runs(_camera, points):
+		_draw_control.draw_polyline(run, RING_COLOR, width, true)

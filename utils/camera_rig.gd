@@ -39,6 +39,8 @@ const TURN_SECONDS := 0.35
 const EASE_PEAK := 1.5
 ## Never divide the vertical pan by less than this fraction of a metre of rise per metre.
 const MIN_BACK_Y := 0.2
+## How far in front of the near plane a line is cut when part of it is behind the camera.
+const FRONT_CLIP_M := 0.02
 
 
 ## `yaw_deg` wrapped to [0, 360).
@@ -293,3 +295,90 @@ static func screen_of(camera: Camera3D, world_point: Vector3) -> Variant:
 	if camera.is_position_behind(world_point):
 		return null
 	return camera.unproject_position(world_point)
+
+
+## What a dirty check compares to see that the picture changed: the camera's pose, projection,
+## orthographic size and field of view. An overlay that compared `size` alone missed a lens change
+## at the eye, and one that compared the position alone missed a turn about it.
+static func view_key(camera: Camera3D) -> Array:
+	return [camera.global_transform, camera.projection, camera.size, camera.fov]
+
+
+## The part of the segment `a` to `b` in front of the camera, as [from, to] in world space (an end
+## behind the near plane moved onto it along the segment), or null when all of it is behind.
+## Unchanged ends come back as given, so an orthographic camera, whose near plane is far behind
+## it, returns the segment whole.
+static func front_segment(camera: Camera3D, a: Vector3, b: Vector3) -> Variant:
+	var forward := -camera.global_basis.z
+	var origin := camera.global_position
+	var cut := camera.near + FRONT_CLIP_M
+	var depth_a := forward.dot(a - origin) - cut
+	var depth_b := forward.dot(b - origin) - cut
+	if depth_a >= 0.0 and depth_b >= 0.0:
+		return [a, b]
+	if depth_a < 0.0 and depth_b < 0.0:
+		return null
+	var at := a.lerp(b, depth_a / (depth_a - depth_b))
+	return [at, b] if depth_a < 0.0 else [a, at]
+
+
+## The screen positions [from, to] of the part of the segment `a` to `b` the camera can see, or
+## an empty array when none of it is in front. Overlays draw a line with this, so a measure line
+## that starts at the feet runs off the screen edge instead of mirroring behind the eye.
+static func screen_segment(camera: Camera3D, a: Vector3, b: Vector3) -> PackedVector2Array:
+	var seg: Variant = front_segment(camera, a, b)
+	if seg == null:
+		return PackedVector2Array()
+	return PackedVector2Array([camera.unproject_position(seg[0]), camera.unproject_position(seg[1])])
+
+
+## The part of the screen segment `a` to `b` inside `rect` (Liang-Barsky), as [from, to], or an
+## empty array when none of it is. A segment cut at the near plane runs to a point thousands of
+## pixels off screen; a dashed line drawn along it would cost a draw call per dash.
+static func clip_line_to_rect(a: Vector2, b: Vector2, rect: Rect2) -> PackedVector2Array:
+	var t0 := 0.0
+	var t1 := 1.0
+	var d := b - a
+	var p := [-d.x, d.x, -d.y, d.y]
+	var q := [a.x - rect.position.x, rect.end.x - a.x, a.y - rect.position.y, rect.end.y - a.y]
+	for i in 4:
+		if is_zero_approx(p[i]):
+			if q[i] < 0.0:
+				return PackedVector2Array()
+			continue
+		var r: float = q[i] / p[i]
+		if p[i] < 0.0:
+			t0 = maxf(t0, r)
+		else:
+			t1 = minf(t1, r)
+		if t0 > t1:
+			return PackedVector2Array()
+	return PackedVector2Array([a + d * t0, a + d * t1])
+
+
+## The screen polylines of the world polyline `points`: its parts in front of the camera, each a
+## run of at least two screen points, split where the line passes behind the camera. A ground
+## ring around a point 5 m ahead of the eye is one run when it is all in front.
+static func screen_runs(camera: Camera3D, points: PackedVector3Array) -> Array[PackedVector2Array]:
+	var runs: Array[PackedVector2Array] = []
+	var run := PackedVector2Array()
+	for i in range(points.size() - 1):
+		var seg: Variant = front_segment(camera, points[i], points[i + 1])
+		if seg == null:
+			if run.size() > 1:
+				runs.append(run)
+			run = PackedVector2Array()
+			continue
+		var start_cut: bool = not (seg[0] as Vector3).is_equal_approx(points[i])
+		var end_cut: bool = not (seg[1] as Vector3).is_equal_approx(points[i + 1])
+		if start_cut or run.is_empty():
+			if run.size() > 1:
+				runs.append(run)
+			run = PackedVector2Array([camera.unproject_position(seg[0])])
+		run.append(camera.unproject_position(seg[1]))
+		if end_cut:
+			runs.append(run)
+			run = PackedVector2Array()
+	if run.size() > 1:
+		runs.append(run)
+	return runs

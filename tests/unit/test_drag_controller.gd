@@ -289,6 +289,76 @@ func test_the_ground_resolver_sets_the_target_height() -> void:
 	assert_almost_eq(_controller.get_target_ground_position().y, 3.0, 0.001)
 
 
+# --- the ground ray at the eye (a perspective camera with a ground height function) ------------
+
+
+## The camera at the eye: 1.6 m up, looking down `pitch_deg` toward -Z, on flat ground at y 0.
+func _eye(pitch_deg: float) -> void:
+	_camera.projection = Camera3D.PROJECTION_PERSPECTIVE
+	_camera.position = Vector3(0.0, 1.6, 0.0)
+	_camera.rotation_degrees = Vector3(-pitch_deg, 0.0, 0.0)
+	_controller.ground_height = func(_xz: Vector2) -> float: return 0.0
+
+
+## A 3 m high wall across the way, 2.5 to 3.5 m ahead of the eye, on the ground layer.
+func _wall() -> StaticBody3D:
+	var body := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(20.0, 3.0, 1.0)
+	shape.shape = box
+	body.add_child(shape)
+	body.position = Vector3(0.0, 1.5, -3.0)
+	add_child_autofree(body)
+	return body
+
+
+func test_the_eye_drag_target_is_the_ground_under_the_ray() -> void:
+	_eye(20.0)
+	_drag(_draggable(), _center() + Vector2(60, 0), _center())
+	_controller.update_target_position(_center())
+	var expected := -1.6 / tan(deg_to_rad(20.0))
+	assert_almost_eq(_controller.get_target_ground_position().z, expected, 0.01)
+	assert_almost_eq(_controller.get_target_ground_position().y, 0.0, 0.01)
+
+
+func test_the_eye_drag_target_ignores_a_wall_in_front_of_the_ground() -> void:
+	_eye(20.0)
+	_wall()
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	# Control: without the height function the physics ray stops at the wall's face (z -2.5).
+	var height: Callable = _controller.ground_height
+	_controller.ground_height = Callable()
+	_drag(_draggable(), _center() + Vector2(60, 0), _center())
+	_controller.update_target_position(_center())
+	assert_almost_eq(_controller.get_target_ground_position().z, -2.5, 0.05, "control: the wall")
+	_controller.ground_height = height
+	_controller.update_target_position(_center())
+	assert_almost_eq(
+		_controller.get_target_ground_position().z, -1.6 / tan(deg_to_rad(20.0)), 0.01, "the ground"
+	)
+	assert_almost_eq(_controller.get_target_ground_position().y, 0.0, 0.01)
+
+
+func test_a_grazing_ray_at_the_eye_leaves_the_token_where_it_was() -> void:
+	_eye(3.0)
+	_drag(_draggable(), _center() + Vector2(60, 0), _center())
+	_controller.update_target_position(_center())
+	assert_false(_controller.has_target(), "a ray 3 degrees below the horizon names no ground")
+
+
+func test_an_orthographic_camera_keeps_the_physics_ray_with_a_height_function() -> void:
+	_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	_camera.size = 10.0
+	_floor()
+	await get_tree().physics_frame
+	_controller.ground_height = func(_xz: Vector2) -> float: return -50.0
+	_drag(_draggable(), Vector2(100, 100), Vector2(200, 100))
+	_controller.update_target_position(_center())
+	assert_almost_eq(_controller.get_target_ground_position().z, FLOOR_HIT.z, 0.001)
+
+
 # --- the wheel -----------------------------------------------------------------------------
 
 

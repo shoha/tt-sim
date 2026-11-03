@@ -307,5 +307,14 @@ func _process(_delta: float) -> void:
 			floor_y,
 			height_at
 		)
+		if cam.projection == Camera3D.PROJECTION_PERSPECTIVE:
+			# At the eye the centre ray meets the ground at the horizon or never: fade the grid
+			# around the ground a few metres ahead of the eye instead.
+			center = ViewGround.eye_point(
+				cam.project_ray_origin(center_screen),
+				cam.project_ray_normal(center_screen),
+				floor_y,
+				height_at
+			)
 		_material.set_shader_parameter("grid_center", center)
 	PerformanceMonitor.stop_timer(&"perf/grid_overlay_ms")

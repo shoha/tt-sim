@@ -7,6 +7,9 @@ extends Node3D
 
 const TRANSITION_DURATION := 1.0
 const EMISSION_MARGIN := 1.25  # 25% beyond visible area to prevent pop-in at edges
+## Half-width of the weather box around the eye (metres): the eye view's stand-in for the
+## visible area.
+const EYE_HALF_EXTENT := 20.0
 const RAIN_VELOCITY_MIN := 12.0
 const RAIN_VELOCITY_MAX := 16.0
 const WIND_ALPHA := 0.4  # wind streak colour alpha in a lull; brightens with gustiness
@@ -305,11 +308,15 @@ func _create_wind_emitter() -> GPUParticles3D:
 
 
 func _update_emitter_positions() -> void:
-	# Orthographic: camera holder position is the view center on the ground plane
+	# Orthographic: camera holder position is the view center on the ground plane. At the eye
+	# (perspective) the weather surrounds the eye itself.
 	var holder := _camera.get_parent() as Node3D
 	if not holder:
 		return
 	var center: Vector3 = holder.global_position
+	var at_eye := _camera.projection == Camera3D.PROJECTION_PERSPECTIVE
+	if at_eye:
+		center = _camera.global_position
 	_view_center = center
 	var rain_pos := Vector3(center.x, center.y + 10.0, center.z)
 	var snow_pos := Vector3(center.x, center.y + 8.0, center.z)
@@ -323,10 +330,9 @@ func _update_emitter_positions() -> void:
 		_wind_emitter.global_position = wind_pos
 
 	var viewport_size: Vector2i = _camera.get_viewport().size
-	var aspect := float(viewport_size.x) / float(viewport_size.y)
-	var half_h := _camera.size * 0.5
-	var half_w := half_h * aspect
-	var half_extent := maxf(half_w, half_h) * EMISSION_MARGIN
+	var half_extent := emission_half_extent(
+		_camera.projection == Camera3D.PROJECTION_PERSPECTIVE, _camera.size, viewport_size
+	)
 	_update_emission_extents(_rain_emitter, Vector3(half_extent, 0.5, half_extent))
 	_update_emission_extents(_snow_emitter, Vector3(half_extent, 0.5, half_extent))
 	_update_emission_extents(_wind_emitter, Vector3(half_extent, 3.0, half_extent))
@@ -340,6 +346,20 @@ func _update_emitter_positions() -> void:
 	if _rain_collision:
 		var collision_extent := half_extent * 2.0
 		_rain_collision.size = Vector3(collision_extent, 20, collision_extent)
+
+
+## The half-width of the box the weather falls in, in metres. Orthographic: the visible area of
+## a camera of `ortho_size` over a `viewport_px` window, plus EMISSION_MARGIN. At the eye
+## (`perspective`): EYE_HALF_EXTENT around the eye, whatever the stale orthographic size says.
+static func emission_half_extent(
+	perspective: bool, ortho_size: float, viewport_px: Vector2i
+) -> float:
+	if perspective:
+		return EYE_HALF_EXTENT
+	var aspect := float(viewport_px.x) / float(viewport_px.y)
+	var half_h := ortho_size * 0.5
+	var half_w := half_h * aspect
+	return maxf(half_w, half_h) * EMISSION_MARGIN
 
 
 ## Grow (never shrink) an emitter's local-space visibility_aabb so its horizontal

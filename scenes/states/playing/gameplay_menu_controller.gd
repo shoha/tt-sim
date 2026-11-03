@@ -347,6 +347,11 @@ func _get_camera_ground_position() -> Vector3:
 	if not game_map or not game_map.camera_node or not game_map.world_viewport:
 		return Vector3.ZERO
 
+	# At the eye the centre ray meets the ground at the horizon or never: land ahead of the eye.
+	var eye: Variant = ViewGround.eye_centre(game_map)
+	if eye != null:
+		return _snapped_if_enabled(game_map, eye)
+
 	var viewport_center := Vector2(game_map.world_viewport.size) / 2.0
 	var origin := game_map.camera_node.project_ray_origin(viewport_center)
 	var direction := game_map.camera_node.project_ray_normal(viewport_center)
@@ -367,19 +372,17 @@ func _get_camera_ground_position() -> Vector3:
 			0,
 			game_map.cameraholder_node.global_position.z,
 		)
-	var ground_pos := origin + direction * t
+	return _snapped_if_enabled(game_map, origin + direction * t)
 
-	# Apply grid snap if enabled
+
+## `ground_pos` snapped to the grid when grid snap is on.
+func _snapped_if_enabled(game_map: GameMap, ground_pos: Vector3) -> Vector3:
 	if game_map.drag_and_drop_node and game_map.drag_and_drop_node.grid_snap_enabled:
-		ground_pos = (
-			ScaleUtils
-			. snap_to_grid(
-				ground_pos,
-				game_map.drag_and_drop_node.grid_cell_size,
-				game_map.drag_and_drop_node.grid_origin,
-			)
+		return ScaleUtils.snap_to_grid(
+			ground_pos,
+			game_map.drag_and_drop_node.grid_cell_size,
+			game_map.drag_and_drop_node.grid_origin,
 		)
-
 	return ground_pos
 
 

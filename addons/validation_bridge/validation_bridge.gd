@@ -334,14 +334,15 @@ func _get_camera_state() -> Dictionary:
 	var pos: Vector3 = holder.global_position if holder else camera.global_position
 	var state := {
 		"position": _vec3_to_dict(pos),
-		"zoom": camera.size,
+		"zoom": camera.size if camera.projection == Camera3D.PROJECTION_ORTHOGONAL else 0.0,
 		"view_mode": "orbit",
 		"yaw": 0.0,
 		"pitch": 0.0,
 		"fov": 0.0,
 	}
 	# The active view mode, the yaw and pitch scalars and the lens (0 for an orthographic view);
-	# "zoom" stays the Camera3D's size, which is stale under a perspective view.
+	# "zoom" is the Camera3D's size for an orthographic view and 0 under a perspective one, where
+	# the size is stale and "fov" is the zoom.
 	var controller: CameraController = game_map.call("get_camera_controller")
 	if controller != null:
 		var mode := controller.view_mode()

@@ -84,6 +84,7 @@ const TEST_PREFIXES: Array[String] = [
 	"_camera_ev_",
 	"_camera_ec_",
 	"_camera_ek_",
+	"_camera_ep_",
 	"_marker_"
 ]
 const NET_PREFIX := "_nettest_"

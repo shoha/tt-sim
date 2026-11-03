@@ -342,7 +342,6 @@ func _draw(strength: float, refresh: bool) -> void:
 		multi.instance_count = maxi(tokens.size() * 2, 8)
 	var camera_basis := _camera.global_basis
 	var up := camera_basis.y.normalized()
-	var head := head_metres(_camera.size, float(_viewport.size.y))
 	var pins: Array[Array] = []
 	for node in tokens:
 		var token := node as BoardToken
@@ -376,7 +375,7 @@ func _draw(strength: float, refresh: bool) -> void:
 	for i in pins.size():
 		var pin: Array = pins[i]
 		var hover: bool = _hovered != 0 and pin[PIN_ID] == _hovered
-		var scale := head * (HOVER_SCALE if hover else 1.0)
+		var scale := _head_at(pin[1]) * (HOVER_SCALE if hover else 1.0)
 		multi.set_instance_transform(i, pin_transform(pin[1], scale, camera_basis))
 		multi.set_instance_color(i, pin[2])
 		var cell: int = pin[3]
@@ -403,13 +402,26 @@ func _update_hits(pins: Array[Array], strength: float) -> void:
 		# The hovered pin is tested at its enlarged size, so the pointer on its rim does not
 		# make it flicker between the two sizes.
 		var scale := HOVER_SCALE if id == was else 1.0
-		_hit_centres.append(pin_head_centre(_camera.unproject_position(pin[1]), HEAD_PX * scale))
+		var tip_px: Variant = CameraRig.screen_of(_camera, pin[1])
+		if tip_px == null:
+			continue  # behind the eye: not a target
+		_hit_centres.append(pin_head_centre(tip_px, HEAD_PX * scale))
 		_hit_radii.append(HEAD_PX * 0.5 * scale)
 		_hit_ids.append(id)
 	if not _pointer_in or _is_blocked():
 		return
 	var i := pick_pin(_hit_centres, _hit_radii, _pointer)
 	_hovered = _hit_ids[i] if i >= 0 else 0
+
+
+## The pin head's diameter in metres at `tip`: HEAD_PX across whatever the zoom. Orthographic: from
+## the camera size, the same everywhere; perspective (the eye view): from the field of view at the
+## tip's distance in front of the camera, so a near pin is small in metres and a far one large.
+func _head_at(tip: Vector3) -> float:
+	if _camera.projection != Camera3D.PROJECTION_PERSPECTIVE:
+		return head_metres(_camera.size, float(_viewport.size.y))
+	var depth := maxf((-_camera.global_basis.z).dot(tip - _camera.global_position), 0.0)
+	return HEAD_PX * CameraRig.metres_per_pixel(_camera, Vector2(_viewport.size), depth)
 
 
 func _clear_hits() -> void:

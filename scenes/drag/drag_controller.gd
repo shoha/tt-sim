@@ -69,6 +69,12 @@ var grid_origin: Vector2 = Vector2.ZERO
 ## (Draggable3D.drag_resolver).
 var ground_resolver: Callable = Callable()
 
+## Optional func(world_xz: Vector2) -> float: the ground height under world XZ (the map's
+## GroundHeightField.world_height_at). With it, a perspective camera (the eye view) aims the
+## drag at the first ground its ray meets on that field instead of the first physics hit
+## (_pick_terrain); an orthographic camera keeps the physics ray either way. GameMap sets it.
+var ground_height: Callable = Callable()
+
 var _state: DragState = DragState.new()
 var _target_drag_position: Vector3 = Vector3.ZERO
 var _has_target_position: bool = false
@@ -299,6 +305,8 @@ func _pick_ground(screen_position: Vector2, subject: Draggable3D) -> Vector3:
 	var camera := get_viewport().get_camera_3d()
 	if camera == null:
 		return Vector3.INF
+	if camera.projection == Camera3D.PROJECTION_PERSPECTIVE and ground_height.is_valid():
+		return _pick_terrain(camera, screen_position)
 	var query := PhysicsRayQueryParameters3D.new()
 	query.from = camera.project_ray_origin(screen_position)
 	query.to = camera.project_position(screen_position, ray_depth)
@@ -308,3 +316,17 @@ func _pick_ground(screen_position: Vector2, subject: Draggable3D) -> Vector3:
 		query.exclude = [subject.get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	return hit["position"] if not hit.is_empty() else Vector3.INF
+
+
+## The drag target under `screen_position` for a perspective camera (the eye view): the first
+## ground the ray meets on the map's height field (ViewGround.march), never a wall, roof or
+## trunk in front of it, so a token pressed behind a house is carried on the ground and not onto
+## its facade. Vector3.INF for a ray flatter than EyeRig.MIN_GROUND_RAY_DEG below the horizon or
+## past ViewGround.MARCH_MAX_M: the token stays where it was.
+func _pick_terrain(camera: Camera3D, screen_position: Vector2) -> Vector3:
+	var hit: Variant = ViewGround.march(
+		camera.project_ray_origin(screen_position),
+		camera.project_ray_normal(screen_position),
+		ground_height
+	)
+	return hit if hit != null else Vector3.INF

@@ -92,6 +92,14 @@ func _process(delta: float) -> void:
 	_reset_frame_accumulators()
 
 
+## The overlay's zoom line: the orthographic size, or the field of view under a perspective
+## camera (the eye view), where the size is stale.
+static func _camera_zoom_line(camera: Camera3D) -> String:
+	if camera.projection == Camera3D.PROJECTION_PERSPECTIVE:
+		return "Camera fov: %.1f" % camera.fov
+	return "Camera zoom: %.2f" % camera.size
+
+
 ## Maps a Viewport.MSAA enum value to the short label used in the on-screen display
 ## and the CSV log's antialiasing column.
 static func _msaa_level_label(msaa_level: int) -> String:
@@ -171,7 +179,7 @@ func _update_display() -> void:
 			]
 		),
 		"GPU: %s (%s)" % [_video_adapter_name, _video_adapter_vendor],
-		"Camera zoom: %.2f" % _game_map.camera_node.size,
+		_camera_zoom_line(_game_map.camera_node),
 		"Screen scale: %.2f" % DisplayServer.screen_get_scale(),
 		(
 			"World viewport: %dx%d"
@@ -333,7 +341,12 @@ func _write_log_row() -> void:
 		),
 		"video_adapter_name": _video_adapter_name,
 		"video_adapter_vendor": _video_adapter_vendor,
-		"camera_zoom": _game_map.camera_node.size,
+		"camera_zoom":
+		(
+			_game_map.camera_node.size
+			if _game_map.camera_node.projection == Camera3D.PROJECTION_ORTHOGONAL
+			else 0.0
+		),
 		"screen_scale": DisplayServer.screen_get_scale(),
 		"antialiasing": _msaa_level_label(_game_map.world_viewport.msaa_3d),
 		"rendering_method": _rendering_method_label(),

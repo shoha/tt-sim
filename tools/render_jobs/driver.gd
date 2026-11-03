@@ -874,15 +874,20 @@ func _grab(capture_name: String) -> void:
 				Image.INTERPOLATE_LANCZOS
 			)
 	images[0].save_png(out_dir.path_join(capture_name + ".png"))
-	var zoom := map.camera_node.size if map else 0.0
+	# Camera3D.size is stale under a perspective camera (the eye view): log 0 for the zoom and
+	# the field of view beside it.
+	var ortho := map != null and map.camera_node.projection == Camera3D.PROJECTION_ORTHOGONAL
+	var zoom := map.camera_node.size if ortho else 0.0
+	var fov := map.camera_node.fov if map != null and not ortho else 0.0
 	var sub_size := Vector2i.ZERO
 	if map:
 		images[1].save_png(out_dir.path_join(capture_name + "_sub.png"))
 		sub_size = images[1].get_size()
-	_captures.append({"name": capture_name, "desc": String(step.get("desc", "")), "zoom": zoom})
-	log_line(
-		"captured %s sub %s win %s zoom %.2f" % [capture_name, sub_size, images[0].get_size(), zoom]
-	)
+	var size_text := "%.1f" % zoom if ortho or fov == 0.0 else "fov %.0f" % fov
+	var desc := String(step.get("desc", ""))
+	_captures.append({"name": capture_name, "desc": desc, "zoom": zoom, "size_text": size_text})
+	var win := images[0].get_size()
+	log_line("captured %s sub %s win %s zoom %.2f fov %.1f" % [capture_name, sub_size, win, zoom, fov])
 	_state.phase = 2
 
 
@@ -965,8 +970,8 @@ func _write_index(step: Dictionary) -> void:
 	for entry in _captures:
 		lines.append(
 			(
-				"| %s.png | %s_sub.png | %.1f | %s |"
-				% [entry.name, entry.name, float(entry.zoom), String(entry.desc)]
+				"| %s.png | %s_sub.png | %s | %s |"
+				% [entry.name, entry.name, entry.size_text, String(entry.desc)]
 			)
 		)
 	lines.append("")

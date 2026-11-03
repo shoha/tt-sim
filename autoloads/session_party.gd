@@ -267,10 +267,14 @@ static func landing_point(level: LevelData, game_map: GameMap) -> Vector3:
 
 ## Where the centre of `game_map`'s view meets the Y=0 plane, as the asset browser places a
 ## new token; the camera holder's X/Z when the view never meets it, the origin without a
-## camera.
+## camera. At the eye (a perspective camera) the centre ray meets the ground at the horizon or
+## never, so it is the ground ViewGround.AHEAD_M ahead of the eye (ViewGround.eye_centre).
 static func camera_ground_point(game_map: GameMap) -> Vector3:
 	if game_map == null or game_map.camera_node == null or game_map.world_viewport == null:
 		return Vector3.ZERO
+	var eye: Variant = ViewGround.eye_centre(game_map)
+	if eye != null:
+		return eye
 	var centre := Vector2(game_map.world_viewport.size) / 2.0
 	var origin := game_map.camera_node.project_ray_origin(centre)
 	var direction := game_map.camera_node.project_ray_normal(centre)

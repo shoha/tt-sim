@@ -183,6 +183,14 @@ func set_view_mode(mode: ViewMode) -> void:
 	_active.activate(self, _game_map)
 
 
+## Leave the eye view for the orbit rig (its pose restored, EyeView.deactivate), or do nothing
+## when another view is active. Authoring is an orbit-only tool (its brushes and rings assume a
+## steep orthographic view), so GameMap.setup_authoring calls this (decision SL2, 2026-11-02).
+func leave_eye() -> void:
+	if eye != null and _active == eye:
+		set_view_mode(_orbit)
+
+
 ## Store the current camera position/zoom as "home" for the Home-key reset.
 ## Called by GameMap.setup() once the level play controller is wired up.
 func capture_home_position() -> void:

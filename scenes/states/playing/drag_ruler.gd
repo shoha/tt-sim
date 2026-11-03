@@ -53,8 +53,7 @@ var _distance_label: Label
 
 ## Dirty flag + camera tracking (same pattern as MeasureTool)
 var _needs_redraw: bool = false
-var _last_camera_size: float = 0.0
-var _last_camera_pos: Vector3 = Vector3.ZERO
+var _last_view_key: Array = []
 
 
 func _ready() -> void:
@@ -188,18 +187,17 @@ func _do_redraw() -> void:
 		if _distance_panel:
 			_distance_panel.reset_size()
 
-	# Project to screen
-	var screen_start := _camera.unproject_position(_start_pos)
-	var screen_end := _camera.unproject_position(end_pos)
+	# Project to screen: the part of the line in front of the camera (at the eye the start can be
+	# behind it), none when all of it is behind.
+	var seg := CameraRig.screen_segment(_camera, _start_pos, end_pos)
 
 	# Only show label if the line is long enough (or the drop point is in fire: a short step
 	# into a fire still says so)
 	if _distance_panel:
-		var screen_len := screen_start.distance_to(screen_end)
-		_distance_panel.visible = screen_len > 40.0 or burning
+		var screen_len := seg[0].distance_to(seg[1]) if seg.size() == 2 else 0.0
+		_distance_panel.visible = seg.size() == 2 and (screen_len > 40.0 or burning)
 		if _distance_panel.visible:
-			var midpoint := (_start_pos + end_pos) * 0.5
-			var screen_mid := _camera.unproject_position(midpoint)
+			var screen_mid := (seg[0] + seg[1]) * 0.5
 			screen_mid.y -= 24.0
 			_distance_panel.position = screen_mid - _distance_panel.size * 0.5
 
@@ -265,8 +263,12 @@ func _on_draw_control_draw() -> void:
 	if not _drag_and_drop.has_target():
 		return
 
-	var screen_start := _camera.unproject_position(_start_pos)
-	var screen_end := _camera.unproject_position(_drag_and_drop.get_target_position())
+	var end_pos := _drag_and_drop.get_target_position()
+	var seg := CameraRig.screen_segment(_camera, _start_pos, end_pos)
+	if seg.size() < 2:
+		return
+	var screen_start := seg[0]
+	var screen_end := seg[1]
 
 	# Draw the ruler line
 	var total_dist := screen_start.distance_to(screen_end)
@@ -274,9 +276,11 @@ func _on_draw_control_draw() -> void:
 		return
 	_draw_control.draw_line(screen_start, screen_end, LINE_COLOR, LINE_WIDTH_PX, true)
 
-	# Endpoint circles
-	_draw_control.draw_circle(screen_start, ENDPOINT_RADIUS_PX, ENDPOINT_COLOR)
-	_draw_control.draw_circle(screen_end, ENDPOINT_RADIUS_PX, ENDPOINT_COLOR)
+	# Endpoint circles, only for an end the camera can see (a cut end is not the ruler's end)
+	if CameraRig.screen_of(_camera, _start_pos) != null:
+		_draw_control.draw_circle(screen_start, ENDPOINT_RADIUS_PX, ENDPOINT_COLOR)
+	if CameraRig.screen_of(_camera, end_pos) != null:
+		_draw_control.draw_circle(screen_end, ENDPOINT_RADIUS_PX, ENDPOINT_COLOR)
 
 
 # ============================================================================
@@ -287,11 +291,9 @@ func _on_draw_control_draw() -> void:
 func _check_camera_changed() -> void:
 	if not _camera:
 		return
-	var cam_size := _camera.size
-	var cam_pos := _camera.global_position
-	if cam_size != _last_camera_size or cam_pos != _last_camera_pos:
-		_last_camera_size = cam_size
-		_last_camera_pos = cam_pos
+	var key := CameraRig.view_key(_camera)
+	if key != _last_view_key:
+		_last_view_key = key
 		_needs_redraw = true
 
 

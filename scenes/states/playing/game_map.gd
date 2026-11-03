@@ -182,6 +182,8 @@ func setup(level_play_controller: LevelPlayController) -> void:
 ## functions it needs itself.
 func setup_authoring() -> void:
 	authoring_mode = true
+	# Authoring is orbit-only: a map at the eye returns to the orbit rig (its pose restored) first.
+	_camera_controller.leave_eye()
 	if gameplay_menu:
 		gameplay_menu.visible = false
 		gameplay_menu.process_mode = Node.PROCESS_MODE_DISABLED
@@ -736,6 +738,8 @@ func set_grid_ground(field: GroundHeightField) -> void:
 	_grid_ground = field
 	if _grid_overlay:
 		_grid_overlay.set_ground(field)
+	if drag_and_drop_node:
+		drag_and_drop_node.ground_height = ViewGround.height_function(self)
 
 
 ## The ground the grid overlay draws on, or null (the fixed band).

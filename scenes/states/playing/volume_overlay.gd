@@ -252,6 +252,11 @@ func _process(_delta: float) -> void:
 func _update_label_position() -> void:
 	# Position label at the right edge of the shape, offset up to avoid overlapping the mesh.
 	var edge_world := _center + Vector3.RIGHT * _radius
-	var screen_pos := _camera.unproject_position(edge_world)
+	var seen: Variant = CameraRig.screen_of(_camera, edge_world)
+	if seen == null:
+		# Behind the eye: no label is better than one mirrored onto the screen.
+		_label_panel.position = Vector2(-10000.0, -10000.0)
+		return
+	var screen_pos: Vector2 = seen
 	screen_pos.y -= 24.0
 	_label_panel.position = screen_pos - _label_panel.size * 0.5
