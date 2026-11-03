@@ -731,14 +731,14 @@ Follow-ups:
 **Next** (agreed at the end of the 2026-10-04 to 05 session; one line each, no plan yet):
 
 - Camera (owner's 2026-11-02 verdicts; `CONVENTIONS.md` "Camera System"): turn, tilt, top-down and
-  the token pin are done and shipped (tt-sim main c712849d). Next is **street level as a play view**
-  (tools, picking, bounds and tokens all work there; every view meets the home look bar, from every
-  side, with the sun fixed in the world), in this order: a perspective rig with eye-position
-  bounds, near-eye canopy fade, picking; the end of the ground hidden by a per-biome sky with a
-  painted horizon band (one sky shader: the cubemap pass keeps lighting from the existing HDRI,
-  the visible pass draws three or four ridge layers) plus depth fog of about 25 to 85 m; window
-  fixes (windows are flat cream rectangles at eye level); a shadow sweep from 5 to 25 degrees
-  (`lighting-and-environment.md` "Sun and Shadow"); then a full-size look round on the board.
+  the token pin are done and shipped (tt-sim main c712849d). **Street level as a play view** (tools,
+  picking, bounds and tokens all work there; every view meets the home look bar, from every side,
+  with the sun fixed in the world) has landed in pieces on main (2026-11-02): the perspective rig
+  with eye-position bounds and collision, near-eye canopy fade, play tools at the eye, the
+  per-biome painted sky with depth fog, and dressed windows (a painted frame and a room behind the
+  glass); F9 toggles it for now. Still to do: the entry gesture, a shadow sweep from 5 to 25
+  degrees (`lighting-and-environment.md` "Sun and Shadow"; the probe's finding is in the
+  `shadowsweep` handoff), then a full-size look round on the board.
   Also queued: a right-click and double-click route for the token pin, and a real-mouse check of
   pin hover and click. (Pack-token collision shapes were fixed in the `collshapes` card,
   `docs/CONVENTIONS.md` "Camera System".)
