@@ -149,6 +149,16 @@ global uniform vec4 canopy_fade_shape;
 // (world), w the window's radius in metres (0: off). It grows from nothing as the brush asks
 // for it and shrinks back when it lets go, so the canopy closes in from the window's edge.
 global uniform vec4 canopy_brush;
+// The eye view's near fade (CanopyFade, EyeCanopy): xyz the eye (world), w the map scale, 0 when
+// the view is not the eye's. A leaf card or limb inside CANOPY_EYE_FULL metres (times the scale)
+// of the eye is gone and one inside CANOPY_EYE_NONE is thinned card by card, so a crown a step
+// away never fills the frame; a trunk is kept and a crown further away stays whole. Mirrors
+// EyeCanopy.near_fade. Only the camera's own pass fades: the fragment's inverse view matrix
+// puts the camera at the eye (CANOPY_EYE_PASS), which the shadow pass's light never does.
+global uniform vec4 canopy_eye;
+const float CANOPY_EYE_FULL = 0.7;
+const float CANOPY_EYE_NONE = 2.6;
+const float CANOPY_EYE_PASS = 0.25;
 // Metres in front of the view-centre ground (along the view axis) where the fade starts.
 const float CANOPY_FADE_START = 0.5;
 // The brush window's fade: full inside CANOPY_BRUSH_INNER of its radius, none past it; it
@@ -333,10 +343,13 @@ vec3 two_sided_foliage_normal(vec3 normal, bool front_facing) {
 // dither on its cards and keeps its bark. `wind` is the fragment's COLOR.gb.
 // The brush window (canopy_brush) opens the canopy over a map brush's ring by the same law
 // and key, the larger of the two fades winning.
+// The eye view adds the near fade (canopy_eye) by the same key, tested against the eye
+// itself (the camera's origin), so it needs neither the window nor the published axis.
 void apply_canopy_fade(
 	vec3 vertex_view, mat4 inv_view_matrix, vec2 wind, vec2 frag_coord
 ) {
-	if (canopy_part == 0 || (canopy_fade_centre.w <= 0.0 && canopy_brush.w <= 0.0)) {
+	if (canopy_part == 0
+		|| (canopy_fade_centre.w <= 0.0 && canopy_brush.w <= 0.0 && canopy_eye.w <= 0.0)) {
 		return;
 	}
 	// The trunk (authored flutter 0) always stays, on either surface: a Blender map's baked
@@ -345,20 +358,28 @@ void apply_canopy_fade(
 		return;
 	}
 	vec3 back = canopy_fade_view.xyz;
-	if (dot(inv_view_matrix[2].xyz, back) < 0.999) {
+	bool eye_pass = canopy_eye.w > 0.0
+		&& distance(inv_view_matrix[3].xyz, canopy_eye.xyz) < CANOPY_EYE_PASS;
+	bool camera_pass = dot(inv_view_matrix[2].xyz, back) >= 0.999;
+	if (!camera_pass && !eye_pass) {
 		return;
 	}
 	vec3 world = (inv_view_matrix * vec4(vertex_view, 1.0)).xyz;
 	float fade = 0.0;
-	if (canopy_fade_centre.w > 0.0) {
+	if (eye_pass) {
+		fade = 1.0 - smoothstep(
+			CANOPY_EYE_FULL * canopy_eye.w, CANOPY_EYE_NONE * canopy_eye.w,
+			distance(world, canopy_eye.xyz));
+	}
+	if (camera_pass && canopy_fade_centre.w > 0.0) {
 		vec3 offset = world - canopy_fade_centre.xyz;
 		float ahead = dot(offset, back);
 		float across = length(offset - back * ahead);
-		fade = canopy_fade_centre.w
+		fade = max(fade, canopy_fade_centre.w
 			* smoothstep(CANOPY_FADE_START, CANOPY_FADE_START + canopy_fade_shape.z, ahead)
-			* (1.0 - smoothstep(canopy_fade_shape.x, canopy_fade_shape.y, across));
+			* (1.0 - smoothstep(canopy_fade_shape.x, canopy_fade_shape.y, across)));
 	}
-	if (canopy_brush.w > 0.0) {
+	if (camera_pass && canopy_brush.w > 0.0) {
 		vec3 offset = world - canopy_brush.xyz;
 		float ahead = dot(offset, back);
 		float across = length(offset - back * ahead);
@@ -413,6 +434,7 @@ void apply_wind_foliage_pbr(
 	vec3 normal,
 	vec3 vertex_view,
 	mat4 view_matrix,
+	mat4 projection_matrix,
 	vec2 frag_coord,
 	vec2 viewport_size,
 	float vertex_local_y,
@@ -457,7 +479,8 @@ void apply_wind_foliage_pbr(
 	}
 
 	vec3 world_normal = mat3(inv_view_matrix) * normal;
-	apply_occlusion_fade(world_normal, vertex_view, view_matrix, frag_coord, viewport_size);
+	apply_occlusion_fade(
+		world_normal, vertex_view, view_matrix, projection_matrix, frag_coord, viewport_size);
 }
 
 

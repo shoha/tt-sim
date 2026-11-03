@@ -11,6 +11,13 @@ extends RefCounted
 ## CameraController calls publish() once a frame; the global shader parameters it writes
 ## reach every tree material at once.
 ##
+## The eye view (a perspective camera, EyeView): Camera3D.size means nothing there, so publish()
+## takes the eye, the camera's forward and a focus point instead (EyeCanopy has the maths): a
+## near fade thins every crown within a few metres of the eye whether or not the Settings switch
+## is on, the same globals carry the eye to the token ghost's range fade, and the window (Settings
+## switch) uses the eye-to-focus distance in place of the size. The orthographic path is the
+## code it always was.
+##
 ## The camera's near plane stands clear of every canopy (CameraController
 ## _hold_near_plane_over_canopies), so without this fade a dense forest fills the frame.
 ##
@@ -27,6 +34,8 @@ const GLOBAL_CENTRE := &"canopy_fade_centre"
 const GLOBAL_VIEW := &"canopy_fade_view"
 const GLOBAL_SHAPE := &"canopy_fade_shape"
 const GLOBAL_BRUSH := &"canopy_brush"
+## xyz the eye, w the map scale in the eye view, 0 otherwise (EyeCanopy).
+const GLOBAL_EYE := &"canopy_eye"
 ## How long the brush window takes to open and to close, in seconds.
 const BRUSH_OPEN_S := 0.15
 const BRUSH_CLOSE_S := 0.4
@@ -57,6 +66,9 @@ static var play_strength := 0.9
 ## found the tunnel disruptive (2026-10-24), the token ghost and the per-token occlusion fade
 ## now show tokens under foliage without it.
 static var enabled := DEFAULT_ENABLED
+## False holds the eye view's near fade and the ghost's range fade off (EyeCanopy), the way the
+## orbit view has them; on by default. A switch for render probes (before and after stills).
+static var eye_fade_enabled := true
 static var play_inner := 0.2
 static var play_outer := 0.55
 
@@ -64,6 +76,7 @@ static var _last_centre := Vector4(INF, INF, INF, INF)
 static var _last_view := Vector4(INF, INF, INF, INF)
 static var _last_shape := Vector4(INF, INF, INF, INF)
 static var _last_brush := Vector4(INF, INF, INF, INF)
+static var _last_eye := Vector4(INF, INF, INF, INF)
 ## The brush window asked for: (ground centre, radius in metres), w 0 when let go; the last
 ## centre and radius stay while it closes.
 static var _brush_asked := Vector4.ZERO
@@ -144,6 +157,10 @@ static func publish(
 	if brush != _last_brush:
 		_last_brush = brush
 		RenderingServer.global_shader_parameter_set(GLOBAL_BRUSH, brush)
+	if camera.projection == Camera3D.PROJECTION_PERSPECTIVE:
+		_publish_eye(camera, viewport_size)
+		return
+	_push_eye(Vector4.ZERO)
 	var s := strength(camera.size, home) if enabled else 0.0
 	var back := camera.global_basis.z.normalized()
 	var centre := Vector4.ZERO
@@ -152,6 +169,55 @@ static func publish(
 		centre = Vector4(ground.x, ground.y, ground.z, s)
 	var view := Vector4(back.x, back.y, back.z, 0.0)
 	var window := shape(camera.size, home)
+	_push(centre, view, window)
+
+
+## The eye view's fade (a perspective camera; EyeCanopy has the maths). Camera3D.size means
+## nothing here, so the inputs are the eye, the camera's forward and a focus point (the ground
+## under the centre ray, or FOCUS_AHEAD_M ahead when it misses): `canopy_eye` carries the eye
+## and the map scale for the near fade and the ghost range, and the focus window (only while
+## `enabled`) takes the eye-to-focus distance in place of the orthographic size.
+static func _publish_eye(camera: Camera3D, viewport_size: Vector2) -> void:
+	var scale := map_scale(camera)
+	var eye := camera.global_position
+	var forward := -camera.global_basis.z.normalized()
+	var back := -forward
+	var centre := Vector4.ZERO
+	var window := Vector4(1.0, 2.0, 1.0, 0.0)
+	if enabled:
+		var ground := view_centre_ground(camera, viewport_size)
+		var hit := ground != eye and absf(forward.y) > 0.0001 and (ground - eye).dot(forward) > 0.0
+		var focus := EyeCanopy.focus_point(eye, forward, hit, ground, scale)
+		var size := EyeCanopy.window_size((focus - eye).length(), camera.fov, scale)
+		var home := EyeCanopy.home_size(camera.fov)
+		var s := strength(size, home)
+		if s > 0.0:
+			centre = Vector4(focus.x, focus.y, focus.z, s)
+			window = shape(size, home) * scale
+	_push_eye(Vector4(eye.x, eye.y, eye.z, scale if eye_fade_enabled else 0.0))
+	_push(centre, Vector4(back.x, back.y, back.z, 0.0), window)
+
+
+## The map's scale (world metres per map metre) as the eye sees it: the "LevelMap" under the
+## camera's viewport's MapContainer, 1 with no map or a camera outside the game map.
+static func map_scale(camera: Camera3D) -> float:
+	var holder := camera.get_parent()
+	var viewport := holder.get_parent() if holder != null else null
+	var map := viewport.get_node_or_null("MapContainer/LevelMap") as Node3D if viewport else null
+	if map == null:
+		return 1.0
+	return maxf(map.global_transform.basis.get_scale().x, 0.0001)
+
+
+## Pushes the eye global when it changed (w 0: not the eye view).
+static func _push_eye(eye: Vector4) -> void:
+	if eye != _last_eye:
+		_last_eye = eye
+		RenderingServer.global_shader_parameter_set(GLOBAL_EYE, eye)
+
+
+## Pushes the centre, view and window globals that changed.
+static func _push(centre: Vector4, view: Vector4, window: Vector4) -> void:
 	if centre != _last_centre:
 		_last_centre = centre
 		RenderingServer.global_shader_parameter_set(GLOBAL_CENTRE, centre)

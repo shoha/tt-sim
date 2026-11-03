@@ -63,6 +63,15 @@ uniform float min_gap : hint_range(0.0, 2.0) = 0.5;
 uniform float bound_gap : hint_range(0.0, 2.0) = 0.15;
 uniform float gap_ramp : hint_range(0.01, 4.0) = 0.5;
 
+// The eye view's range fade (EyeCanopy.ghost_weight): w the map scale, 0 when the view is not
+// the eye's (CanopyFade publishes it with the eye position). A ghost further than
+// GHOST_START metres (times the scale) from the eye fades out, gone by GHOST_END, so a far
+// token does not draw through everything at 100 m. Only a perspective camera reads it; the
+// orbit camera sits far back on its view axis and its ghosts keep their full strength.
+global uniform vec4 canopy_eye;
+const float GHOST_START = 30.0;
+const float GHOST_END = 50.0;
+
 // The token's bounding cylinder in this mesh's local space: its centre, its radius and half
 // height in the token body's own metres (x, y; 0 = none), and the body's up axis in this
 // mesh's local space (its length through MODEL_MATRIX is the body's world scale).
@@ -106,6 +115,9 @@ void fragment() {
 		* abs(VIEW.z);
 	float gap_floor = bound_extent.x > 0.0 ? bound_gap : min_gap;
 	float hidden = smoothstep(gap_floor, gap_floor + gap_ramp, own_dist - scene_dist - own_stretch);
+	if (canopy_eye.w > 0.0 && PROJECTION_MATRIX[3][3] < 0.5) {
+		hidden *= 1.0 - smoothstep(GHOST_START * canopy_eye.w, GHOST_END * canopy_eye.w, length(VERTEX));
+	}
 	if (hidden <= 0.01) {
 		discard;
 	}

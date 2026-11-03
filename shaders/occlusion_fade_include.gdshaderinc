@@ -78,8 +78,11 @@ float bayer16(vec2 screen_coord) {
 // headless probe that Godot's shader compiler does not resolve stage built-ins
 // referenced inside a plain (non-vertex/fragment) function, even one called from
 // fragment(); the caller must read them itself and pass the values in.
+// `projection_matrix` (PROJECTION_MATRIX) tells the projection: a perspective view shrinks the
+// fragment's offset to the token's depth before the radius test (see below).
 void apply_occlusion_fade(
-	vec3 world_normal, vec3 vertex_view, mat4 view_matrix, vec2 frag_coord, vec2 viewport_size
+	vec3 world_normal, vec3 vertex_view, mat4 view_matrix, mat4 projection_matrix,
+	vec2 frag_coord, vec2 viewport_size
 ) {
 	bool is_floor = world_normal.y > floor_threshold;
 	if (!enable_occlusion || occlusion_token_count <= 0 || is_floor) {
@@ -104,7 +107,16 @@ void apply_occlusion_fade(
 		// Skip if this fragment is behind (further from camera than) the token
 		if (vertex_view.z <= token_view.z) continue;
 
-		vec2 offset = vertex_view.xy - token_view.xy;
+		// Orthographic views see every ray parallel, so the view-space xy offset is the
+		// separation across the ray. A perspective view fans the rays out: a fragment in
+		// front of the token along the same ray has a smaller xy than the token, so the hole
+		// would drift off the token away from the screen centre. Scale the fragment's xy to
+		// the token's depth first (EyeCanopy.token_plane_xy mirrors this).
+		vec2 fragment_xy = vertex_view.xy;
+		if (projection_matrix[3][3] < 0.5 && vertex_view.z < -0.0001) {
+			fragment_xy *= token_view.z / vertex_view.z;
+		}
+		vec2 offset = fragment_xy - token_view.xy;
 		if (figure) {
 			// An upright ellipse round the figure (half-height `radius`, half-width
 			// FIGURE_WIDTH of it), cleared almost fully over the figure's core and
