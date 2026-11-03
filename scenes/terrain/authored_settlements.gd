@@ -459,6 +459,27 @@ func _bake_cell(cell: Dictionary) -> void:
 	_keys[cell_name] = cell["key"]
 
 
+## A one-piece node drawing the placement `row` ({"item", "y", "normal", "ref"} as `standing`
+## gives them) with its own materials, faded to `transparency`, for the Village tool to carry at the
+## pointer while a piece is dragged (it is not part of any cell and is the caller's to free).
+func ghost_of(row: Dictionary, transparency: float) -> MeshInstance3D:
+	var built := variant(String(row["ref"]))
+	var mesh := ArrayMesh.new()
+	for surface: Dictionary in built.get("surfaces", []):
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface["arrays"])
+		mesh.surface_set_material(
+			mesh.get_surface_count() - 1,
+			_material(String(surface["kind"]), String(surface["role"]))
+		)
+	var node := MeshInstance3D.new()
+	node.name = "PieceGhost"
+	node.mesh = mesh
+	node.transparency = transparency
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.transform = SettlementBake.transform_of(row["item"], float(row["y"]), row["normal"])
+	return node
+
+
 func _free_cell(cell_name: String) -> void:
 	var node := get_node_or_null(NodePath(cell_name))
 	if node != null:

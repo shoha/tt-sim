@@ -1168,10 +1168,14 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   (`k_720_pane`). Run with `--full` for the verdict captures.
 - `jobs/villageprops_look.json` (keeps no level; topic villages4, writes `villages4_look`; `probes/settlements.gd`
   `pieces` logs the standing furnishings of a village with their map positions, `jobs/villageprops_survey.json` runs it
-  alone): the market town with a plaza, then the touchable furnishings through real input: hover a stall
-  (`a_hover_stall`), pick it (`b_picked_stall`), carry it (`c_carry_stall`), let go (`d_pinned_stall`), Swap
-  (`e_swapped`), a barrel carried over a house (`f_refused_house`), a barrel removed with the Put back button
-  (`g_removed`) and the pane at 1280x720 (`h_720_pane`). Run with `--full` for the verdict captures.
+  alone): the market town with a plaza, then the touchable furnishings through real input, aimed by WHAT a piece is
+  (`tools/render_jobs/piece_aim.gd`: an `input` event's `at` may be `{"piece": "bench", "nth": 0, "as": "name", "dx",
+  "dz"}`, the nth visible piece of that prop, not behind a building; `as` remembers it) and the `input` events
+  `key` (q, e, r, delete, ...) and `press_button` (a pane Button by node name): hover a stall (`a_hover_stall`), pick it
+  (`b_picked_stall`), Q three times (`c_turned_stall`), the Swap button (`d_swapped`), the carry ghost
+  (`e_carry_ghost`), the drop (`f_dropped`), a bench over a house (`g_refused`), the frame after the release
+  (`h_after_refusal`), five seconds and a turn later (`i_toast_cleared`), a lamp hovered (`j_hover_lamp`), a barrel
+  removed (`k_removed`) and the piece pane at 1280x720 (`l_720_piece_pane`). Run with `--full` for the verdict captures.
 - `jobs/fields_look.json` (about 30 s, keeps no level; topic fields, writes `fields_look`, probe
   `probes/fields.gd`): a 320 ft map (80 m, the document's 64-cell limit; `new_map` `size` is feet, and 400 ft
   stalls at `wait_ready`), the two villages of villagetool_look on short streets (x = -14 and 14, z -12..12). Round 4

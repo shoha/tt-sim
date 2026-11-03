@@ -375,6 +375,8 @@ func press(brush: BrushTool) -> bool:
 	var doc := editor.document
 	var p := editor.to_map_xz(brush.hit)
 	var found := VillageFields.pick_any(doc.settlements, p, _rim_m, _handle_m)
+	var view := brush.cursor.camera if brush.cursor != null else null
+	props.set_view(view, brush.pointer, brush.structure_blocks)
 	if props.press(editor, p):
 		select(props.village, -1, true)
 		return false
@@ -470,7 +472,7 @@ func frame(brush: BrushTool) -> void:
 		)
 		var p := editor.to_map_xz(brush.hit)
 		if props.gesture != &"":
-			props.track(editor, p)
+			props.track(editor, p, brush.hit.y, brush.building_under_pointer())
 		elif gesture != &"":
 			_to = p
 			_track_move(editor, p)
@@ -481,6 +483,7 @@ func frame(brush: BrushTool) -> void:
 			hover_group = found.get("group", VillageFields.GROUP_PLAZAS)
 			hover_part = found.get("part", &"")
 			var pad := StructureBrush.metres_for_pixels(camera, brush.hit, PIECE_PAD_PX, scale)
+			props.set_view(camera, brush.pointer, brush.structure_blocks)
 			props.hover(editor, p, pad)
 			if props.has_hover():
 				# A piece under the pointer is the target, not the plaza it stands in.

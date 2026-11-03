@@ -121,6 +121,52 @@ func test_the_pick_takes_the_nearest_piece_in_reach_and_the_pad_widens_it() -> v
 	assert_false(VillageFurnishings.pick(rows, Vector2(0, 1.2), 1.0).is_empty(), "a pad reaches")
 
 
+func test_a_piece_is_under_the_pointer_by_where_it_is_drawn_and_a_hidden_one_is_not() -> void:
+	var camera := Camera3D.new()
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = 10.0
+	add_child_autofree(camera)
+	camera.global_position = Vector3(0, 10, 0)
+	camera.look_at(Vector3.ZERO, Vector3.FORWARD)
+	var front := {
+		"item": {"prop": "barrel", "scale": 1.0, "slot": "front", "position": Vector2(0, 0)},
+		"village": 1,
+		"y": 0.0,
+	}
+	var behind := {
+		"item": {"prop": "barrel", "scale": 1.0, "slot": "behind", "position": Vector2(0.05, 0)},
+		"village": 1,
+		"y": 0.0,
+	}
+	var all: Array[Dictionary] = [behind, front]
+	var props := VillageProps.new()
+	var pointer := camera.unproject_position(Vector3(0.05, 0, 0))
+	# Nothing in the way: the piece nearest the pointer's own drawn centre wins.
+	props.set_view(camera, pointer, Callable())
+	assert_eq(props._pick_drawn(all)["item"]["slot"], "behind")
+	# A building between the camera and `behind`: the pointer is on what is drawn, the piece in front.
+	props.set_view(camera, pointer, func(_from: Vector3, to: Vector3) -> bool: return to.x > 0.02)
+	assert_eq(props._pick_drawn(all)["item"]["slot"], "front")
+	# Both hidden: no piece is under the pointer.
+	props.set_view(camera, pointer, func(_from: Vector3, _to: Vector3) -> bool: return true)
+	assert_true(props._pick_drawn(all).is_empty())
+	# Far from either: none.
+	props.set_view(camera, pointer + Vector2(400, 0), Callable())
+	assert_true(props._pick_drawn(all).is_empty())
+
+
+func test_the_furnish_box_names_its_two_put_back_buttons_apart() -> void:
+	var box := VillageFurnishBox.new()
+	add_child_autofree(box)
+	box.show_state({"picked": true, "label": "Barrel", "pinned": true, "removed": 1})
+	assert_eq(box.title.text, "Barrel", "no 'placed by hand' tag")
+	assert_eq(box.unpin_button.text, "Back to its spot")
+	assert_eq(box.restore_button.text, "Put back 1 removed piece")
+	box.show_state({"picked": true, "label": "Barrel", "pinned": false, "removed": 3})
+	assert_eq(box.restore_button.text, "Put back 3 removed pieces")
+	assert_false(box.unpin_button.visible)
+
+
 func test_the_swap_choices_are_the_kits_own_props_of_that_kind_of_place() -> void:
 	var scene := _scene()
 	var editor: AuthoringEditor = scene["editor"]

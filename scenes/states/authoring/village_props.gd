@@ -20,6 +20,14 @@ const HOVER := "Drag to move this piece, click to pick it"
 const HOVER_FIELD := "Click to pick this piece, Delete removes it"
 const HOVER_PICKED := "Drag to move it, Q and E turn it, Delete removes it"
 const MOVE_HINT := "Release to put it here"
+## A piece's drawn centre stands this share of its radius above its foot; the pointer reaches it
+## within its drawn size plus this many pixels.
+const DRAWN_CENTRE := 0.8
+## The carried piece's ghost, and the same where the place is refused (GeometryInstance3D
+## transparency: 0 opaque, 1 gone).
+const GHOST_FADE := 0.45
+const GHOST_REFUSED_FADE := 0.75
+const PICK_PAD_PX := 10.0
 
 ## False leaves every piece untouchable: the plaza and field tests of the older slices, whose
 ## coordinates were chosen on bare ground, set it so a stall there does not take the press.
@@ -33,6 +41,11 @@ var hover_slot: String = ""
 var gesture: StringName = &""
 
 var _pad_m: float = 0.0
+var _ghost: MeshInstance3D = null
+var _over_building: bool = false
+var _camera: Camera3D = null
+var _pointer: Vector2 = Vector2.ZERO
+var _blocks: Callable = Callable()
 var _press_at: Vector2 = Vector2.ZERO
 var _offset: Vector2 = Vector2.ZERO
 var _dest: Vector2 = Vector2.ZERO
@@ -109,6 +122,73 @@ func reset() -> void:
 	_reason = &""
 	_plans = []
 	_rows = []
+	_free_ghost()
+
+
+## Carries a translucent copy of the dragged piece at map point `at` (ground height `y`, the
+## original's when NAN), so the player sees what is being carried; fainter where the place is
+## refused. Built on the first call of a move and freed when the gesture ends.
+func _carry_ghost(editor: AuthoringEditor, at: Vector2, y: float) -> void:
+	var layer := layer_of(editor)
+	var row := {}
+	for candidate in _rows:
+		if str(candidate["item"]["slot"]) == slot:
+			row = candidate
+	if layer == null or row.is_empty():
+		return
+	if _ghost == null or not is_instance_valid(_ghost):
+		_ghost = layer.ghost_of(row, GHOST_FADE)
+		layer.add_child(_ghost)
+	var moved: Dictionary = (row["item"] as Dictionary).duplicate()
+	moved["position"] = at
+	var height := float(row["y"]) if is_nan(y) else y
+	_ghost.transform = SettlementBake.transform_of(moved, height, row["normal"])
+	_ghost.transparency = GHOST_REFUSED_FADE if _reason != &"" else GHOST_FADE
+
+
+func _free_ghost() -> void:
+	if _ghost != null and is_instance_valid(_ghost):
+		_ghost.get_parent().remove_child(_ghost)
+		_ghost.free()
+	_ghost = null
+
+
+## Tells the next hover or press what the camera sees: a piece is under the pointer by where it is
+## DRAWN (screen distance to its centre against its drawn size), and not when a building stands
+## between the camera and it (`blocks` is BrushTool.structure_blocks). Without a camera (the unit
+## tests) a piece is found by the ground point under the pointer instead.
+func set_view(camera: Camera3D, pointer: Vector2, blocks: Callable) -> void:
+	_camera = camera
+	_pointer = pointer
+	_blocks = blocks
+
+
+## The piece drawn under the pointer among `all` ({"item", "village"} rows, each with its row's
+## "y"): the nearest in drawn size, skipping any a building hides.
+func _pick_drawn(all: Array[Dictionary]) -> Dictionary:
+	var best := {}
+	var best_score := INF
+	var eye := _camera.global_position
+	var right := _camera.global_transform.basis.x
+	for entry in all:
+		var item: Dictionary = entry["item"]
+		var at: Vector2 = item["position"]
+		var radius := VillageFurnishings.drawn_radius(item)
+		var centre := Vector3(at.x, float(entry["y"]) + radius * DRAWN_CENTRE, at.y)
+		if _camera.is_position_behind(centre):
+			continue
+		var screen := _camera.unproject_position(centre)
+		var size_px := absf(_camera.unproject_position(centre + right * radius).x - screen.x)
+		var reach_m := maxf(radius * VillageFurnishings.PICK_SHARE, VillageFurnishings.PICK_FLOOR_M)
+		var reach_px := size_px / maxf(radius, 0.01) * reach_m + PICK_PAD_PX
+		var score := screen.distance_to(_pointer) / reach_px
+		if score > 1.0 or score >= best_score:
+			continue
+		if _blocks.is_valid() and bool(_blocks.call(eye, centre)):
+			continue
+		best = entry
+		best_score = score
+	return best
 
 
 ## Finds the piece under map point `p` (`pad_m` metres of extra reach from the camera) among every
@@ -124,8 +204,8 @@ func hover(editor: AuthoringEditor, p: Vector2, pad_m: float = 0.0) -> void:
 		for row in rows_of(editor, settlement.id):
 			if VillageFurnishings.is_centre_piece(settlement.kit, str(row["item"]["slot"])):
 				continue
-			all.append({"item": row["item"], "village": settlement.id})
-	var found := VillageFurnishings.pick(all, p, pad_m)
+			all.append({"item": row["item"], "village": settlement.id, "y": row["y"]})
+	var found := _pick_drawn(all) if _camera != null else VillageFurnishings.pick(all, p, pad_m)
 	hover_village = int(found.get("village", -1))
 	hover_slot = str(found["item"]["slot"]) if not found.is_empty() else ""
 
@@ -143,6 +223,7 @@ func press(editor: AuthoringEditor, p: Vector2) -> bool:
 		return false
 	gesture = GESTURE_PICK
 	_press_at = p
+	_over_building = false
 	_offset = (held["position"] as Vector2) - p
 	_dest = held["position"]
 	_reason = &""
@@ -152,7 +233,9 @@ func press(editor: AuthoringEditor, p: Vector2) -> bool:
 ## Follows the pointer to map point `p` while a gesture is held: a press dragged past a click's
 ## distance on a movable piece becomes a move, and the place it would go is judged each time it
 ## changes.
-func track(editor: AuthoringEditor, p: Vector2) -> void:
+func track(
+	editor: AuthoringEditor, p: Vector2, ground_y: float = NAN, over_building: bool = false
+) -> void:
 	var held := item(editor)
 	if held.is_empty():
 		reset()
@@ -165,11 +248,19 @@ func track(editor: AuthoringEditor, p: Vector2) -> void:
 	if gesture != GESTURE_MOVE:
 		return
 	var at := VillagePlazas.moved_to(p, _offset)
-	if at.is_equal_approx(_dest):
+	if at.is_equal_approx(_dest) and over_building == _over_building:
 		return
 	_dest = at
+	_over_building = over_building
+	if over_building:
+		# The pointer is on a roof or wall: the ground the brush ray reaches is behind it, hidden,
+		# so the place the piece would go is the building, and a building is refused.
+		_reason = VillageFurnishings.BUILDING
+		_carry_ghost(editor, at, ground_y)
+		return
 	if at.is_equal_approx(held["position"]):
 		_reason = &""
+		_carry_ghost(editor, at, ground_y)
 		return
 	_reason = VillageFurnishings.problem(
 		editor.document,
@@ -181,6 +272,7 @@ func track(editor: AuthoringEditor, p: Vector2) -> void:
 		at,
 		_plans
 	)
+	_carry_ghost(editor, at, ground_y)
 
 
 ## The release: a move pins the piece at its new place unless that place is refused. Returns the
@@ -340,4 +432,4 @@ func pane_state(doc: MapDocument, id: int) -> Dictionary:
 
 ## A short string that changes when the pick, the hover or the pane's view of the piece changes.
 func signature() -> String:
-	return "%d|%s|%s|%s" % [village, slot, str(gesture), var_to_str(_info)]
+	return "%d|%s|%s|%s|%s" % [village, slot, str(gesture), var_to_str(_info), hover_slot]

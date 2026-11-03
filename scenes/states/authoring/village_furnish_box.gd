@@ -2,11 +2,11 @@ class_name VillageFurnishBox
 extends VBoxContainer
 
 ## The furnishing part of the Village tool's pane (VillageToolPane embeds one in its plaza box): for
-## the picked piece its name and three buttons (Swap, Put back, Remove), and, once the picked
-## village has had pieces taken away, one button that brings them all back. It stands in the place
-## of the size row, which is only for a picked plaza or field, so the pane is no taller with a
-## piece picked. Shows what show_state was last given (VillageProps.pane_state); no state of its
-## own. Docs: docs/systems/villages.md section 14.
+## the picked piece its name and three buttons (Swap, Back to its spot, Remove), and, once the
+## picked village has had pieces taken away, one button that brings them all back. It stands in
+## the place of the size row, which is only for a picked plaza or field, so the pane is no taller
+## with a piece picked. Shows what show_state was last given (VillageProps.pane_state); no state
+## of its own. Docs: docs/systems/villages.md section 14.
 
 signal swap_requested
 signal unpin_requested
@@ -15,11 +15,12 @@ signal restore_requested
 
 const SWAP_TIP := "Swap this piece for another that belongs in this kind of place"
 const SWAP_NONE_TIP := "Nothing else belongs in this kind of place"
-const UNPIN_TIP := "Put this piece back where the village's own rules place it"
-const REMOVE_TIP := "Take this piece away (Delete); Put back brings it again"
+const UNPIN_TIP := "Send this piece back to the spot the village's own rules give it"
+const UNPIN_TEXT := "Back to its spot"
+const REMOVE_TIP := "Take this piece away (Delete); the button below brings it back"
 const RESTORE_TIP := "Bring back every piece taken away from this village"
-const HAND_NOTE := "%s, placed by hand"
-const RESTORE_TEXT := "Put back %d taken away"
+const RESTORE_ONE := "Put back 1 removed piece"
+const RESTORE_MANY := "Put back %d removed pieces"
 
 var title: Label
 var row: HBoxContainer
@@ -35,7 +36,6 @@ func _init() -> void:
 	theme_type_variation = &"BoxContainerSnug"
 	title = Label.new()
 	title.name = "FurnishTitle"
-	title.theme_type_variation = &"Caption"
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title.custom_minimum_size = Vector2(1, 0)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -44,7 +44,7 @@ func _init() -> void:
 	row.name = "FurnishRow"
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	swap_button = _button("FurnishSwap", "Swap", SWAP_TIP, swap_requested)
-	unpin_button = _button("FurnishPutBack", "Put back", UNPIN_TIP, unpin_requested)
+	unpin_button = _button("FurnishPutBack", UNPIN_TEXT, UNPIN_TIP, unpin_requested)
 	remove_button = _button("FurnishRemove", "Remove", REMOVE_TIP, remove_requested)
 	row.add_child(swap_button)
 	row.add_child(unpin_button)
@@ -63,14 +63,14 @@ func show_state(state: Dictionary) -> void:
 	var label := str(state.get("label", ""))
 	title.visible = picked
 	row.visible = picked
-	title.text = HAND_NOTE % label if bool(state.get("pinned", false)) else label
+	title.text = label
 	var field := bool(state.get("field", false))
 	swap_button.visible = not field
 	swap_button.disabled = not bool(state.get("swappable", false))
 	swap_button.tooltip_text = SWAP_TIP if not swap_button.disabled else SWAP_NONE_TIP
 	unpin_button.visible = bool(state.get("pinned", false))
 	restore_button.visible = removed > 0
-	restore_button.text = RESTORE_TEXT % removed
+	restore_button.text = RESTORE_ONE if removed == 1 else RESTORE_MANY % removed
 	visible = picked or removed > 0
 
 

@@ -33,6 +33,8 @@ const WASH_PULL := 0.7
 ## A refused place is washed in the one erase salmon at this alpha (the ring is the erase ring's
 ## own stroke, 5.5 px over ink).
 const REFUSED_FILL_ALPHA := 0.28
+## A plaza's ring strength while a furnishing is hovered or picked.
+const PIECE_FADE := 0.35
 ## The ink outline round a handle dot, beyond its radius, in pixels.
 const DOT_INK_PX := 2.5
 ## Line weights (times the brush cursor's widths) and handle dot radii, in pixels. The ghost and a
@@ -72,6 +74,9 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> v
 				)
 				var radius := float(plaza["radius"])
 				var style := ring_style(picked, hovered)
+				if mode.props.has_hover() or mode.props.has_picked():
+					# A piece is the subject: the plaza it stands in steps back.
+					style["strength"] = PIECE_FADE
 				if mode.gesture == VillageBrush.GESTURE_RESIZE and picked:
 					radius = mode.preview_radius()
 					style["fill"] = _fill(editor, settlement.kit, str(plaza.get("kind", "")), PREVIEW_FILL_ALPHA)

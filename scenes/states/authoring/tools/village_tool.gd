@@ -39,6 +39,25 @@ func _init() -> void:
 	]
 
 
+## While a furnishing is under the pointer or picked, the keys that act on it, so the screen says
+## which mapping is live (Q and E turn the piece here, the camera's turn keys move to Alt).
+func key_hints(brush: BrushTool) -> Array:
+	var mode := of(brush)
+	if mode == null or not (mode.props.has_hover() or mode.props.has_picked()):
+		return []
+	var field := VillageFurnishings.is_field_piece(
+		mode.props.hover_slot if mode.props.has_hover() else mode.props.slot
+	)
+	if field:
+		return [{"key": "Del", "action": "Remove piece"}]
+	return [
+		{"key": "Drag", "action": "Move piece"},
+		{"key": "Q E", "action": "Turn piece"},
+		{"key": "R", "action": "Re-roll"},
+		{"key": "Del", "action": "Remove"},
+	]
+
+
 ## The tool's mode on `brush`.
 static func of(brush: BrushTool) -> VillageBrush:
 	return brush.mode_for(ToolRegistry.find(ID)) as VillageBrush
@@ -73,7 +92,11 @@ func connect_pane(controller: AuthoringController, pane: Control) -> void:
 	var mode := of(brush)
 	for link: Dictionary in mode.view_changed.get_connections():
 		mode.view_changed.disconnect(link["callable"])
-	mode.view_changed.connect(func() -> void: refresh_pane(brush, mode, village_pane))
+	mode.view_changed.connect(
+		func() -> void:
+			refresh_pane(brush, mode, village_pane)
+			controller.refresh_tool_hints()
+	)
 	village_pane.village_picked.connect(
 		func(village: int) -> void:
 			mode.select(village, -1)

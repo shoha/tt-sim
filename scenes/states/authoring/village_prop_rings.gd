@@ -37,6 +37,8 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> b
 		if reason != &"":
 			text = VillageFurnishings.short_reason(reason)
 			colour = VillageRings.REFUSED_COLOR
+			# The erase cross at the pointer, so a refusal reads on any ground or roof colour.
+			BridgeBrush.draw_marker(cursor.canvas, camera, brush.hit, VillageRings.TINT_REFUSED)
 		BridgeBrush.draw_pill(cursor.canvas, pill_at + Vector2(18, -22), text, colour)
 		return true
 	if props.gesture != &"" or hovered.is_empty() or mode.gesture != &"":

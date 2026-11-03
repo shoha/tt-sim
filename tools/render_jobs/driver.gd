@@ -609,7 +609,16 @@ func _set_pointer(brush: BrushTool, world: Vector3) -> void:
 ## misses): where a real pointer over what is drawn at that point would be. A third number in
 ## `at` is the height to aim at instead (0: the flat ground itself, not the top of whatever
 ## stands there: a handle drawn on the ground under a roof, card S5).
-func _screen_of(at: Array) -> Vector2:
+func _screen_of(at: Variant) -> Vector2:
+	if at is Dictionary:
+		var aimed := RenderPieceAim.screen_of(
+			at, ctrl(), gm().camera_node, func(point: Array) -> Vector2: return _screen_of(point)
+		)
+		if aimed == Vector2.INF:
+			return Vector2(1200, 500)
+		# Window pixels: a window smaller than its viewport (the 720p capture) scales the aim.
+		var viewport_size := gm().camera_node.get_viewport().get_visible_rect().size
+		return aimed * Vector2(DisplayServer.window_get_size()) / viewport_size
 	var world := Vector3(float(at[0]), 0.0, float(at[1]))
 	if at.size() > 2:
 		world.y = float(at[2])
@@ -632,7 +641,7 @@ func _send(event: InputEvent) -> void:
 	Input.flush_buffered_events()
 
 
-func _mouse_move(at: Array, ctrl_held: bool) -> void:
+func _mouse_move(at: Variant, ctrl_held: bool) -> void:
 	var motion := InputEventMouseMotion.new()
 	motion.position = _screen_of(at)
 	motion.global_position = motion.position
@@ -640,7 +649,7 @@ func _mouse_move(at: Array, ctrl_held: bool) -> void:
 	_send(motion)
 
 
-func _mouse_button(at: Array, button: MouseButton, pressed: bool, ctrl_held: bool) -> void:
+func _mouse_button(at: Variant, button: MouseButton, pressed: bool, ctrl_held: bool) -> void:
 	var event := InputEventMouseButton.new()
 	event.button_index = button
 	event.pressed = pressed
@@ -699,7 +708,8 @@ func _gesture(step: Dictionary) -> bool:
 
 ## `input` (P4b-2): `events`, one per frame, as real input: {"type": "move", "at"}, {"type":
 ## "press" / "release", "at", "button" ("left" default, "right")}, {"type": "key", "key"
-## ("ctrl", "escape", "tab", "delete", "r", "e"), "pressed" (default true)}; mouse events take `ctrl` (held).
+## ("ctrl", "escape", "tab", "delete", "r", "e", "q"), "pressed" (default true)}, {"type":
+## "press_button", "name"} (a Button by node name); mouse events take `ctrl` (held).
 func _input_events(step: Dictionary) -> bool:
 	var events: Array = step.get("events", [])
 	var k := int(_state.phase)
@@ -717,6 +727,8 @@ func _input_events(step: Dictionary) -> bool:
 				else MOUSE_BUTTON_LEFT
 			)
 			_mouse_button(event.at, button, String(event.type) == "press", held)
+		"press_button":
+			_press_button(String(event.get("name", "")))
 		"key":
 			var keys := {
 					"ctrl": KEY_CTRL,
@@ -724,6 +736,8 @@ func _input_events(step: Dictionary) -> bool:
 					"tab": KEY_TAB,
 					"delete": KEY_DELETE,
 					"r": KEY_R,
+						"e": KEY_E,
+						"q": KEY_Q,
 				}
 			_key(
 				keys.get(String(event.get("key", "ctrl")), KEY_CTRL),
@@ -731,6 +745,16 @@ func _input_events(step: Dictionary) -> bool:
 			)
 	_state.phase = k + 1
 	return false
+
+
+## A pane Button found by node name and pressed as a click would (the render job's way to press
+## a pane button: `input` event {"type": "press_button", "name"}).
+func _press_button(node_name: String) -> void:
+	var node := root_node.find_child(node_name, true, false)
+	if node is Button and not (node as Button).disabled:
+		(node as Button).pressed.emit()
+	else:
+		log_line("press_button %s: no enabled button" % node_name)
 
 
 ## `points` ([[x, z], ...]) as a Catmull-Rom curve through them, ten pieces per span.

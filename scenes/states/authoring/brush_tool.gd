@@ -96,6 +96,9 @@ const MAX_FRAME_SECONDS := 0.1
 const MIN_FLOW := 0.25
 const MAX_FLOW := 2.0
 const RAY_LENGTH := 500.0
+## structure_blocks ends its segment this far short of the target, so a piece standing at a wall's
+## foot is not hidden by the wall it stands against.
+const BLOCK_STOP_SHORT_M := 0.25
 const DOWNCAST_HEIGHT := 200.0
 const TERRAIN_LAYER := 1
 ## Canopy fade radius as a multiple of the mode's reach (BrushMode.fade_focus; view-plane
@@ -606,13 +609,64 @@ func _resolve_hit() -> void:
 ## building, not the ground behind it that the brush ray reaches with the structures excluded,
 ## so the Structure tool picks by this.
 func structure_under_pointer() -> int:
-	if not has_pointer or _camera == null or _world_viewport == null:
+	var result := _structure_ray()
+	if result.is_empty():
 		return -1
-	if _over_gui.is_valid() and _over_gui.call() and not pressed:
-		return -1
+	var body := result.get("collider") as Node
+	return int(body.get_meta(AuthoredStructures.STRUCTURE_META, -1)) if body != null else -1
+
+
+## Whether a building's collision (a roof, a wall) stands between `from` and `to`: the Village tool
+## asks it with the camera and a furnishing's centre, so a piece hidden behind a building cannot be
+## hovered or picked, and one in front of it can be. The segment stops a little short of `to`.
+func structure_blocks(from: Vector3, to: Vector3) -> bool:
+	if _world_viewport == null or editor == null:
+		return false
 	var space := _world_viewport.find_world_3d().direct_space_state
 	if space == null:
-		return -1
+		return false
+	var end := to - (to - from).normalized() * BLOCK_STOP_SHORT_M
+	return _building_between(space, from, end)
+
+
+## Whether a building (an authored structure, or a wall row's house) is what the pointer is over:
+## its ray meets one before the ground. The Village tool refuses a carried piece there, since the
+## ground the brush ray reaches through a roof is hidden behind it.
+func building_under_pointer() -> bool:
+	if not has_pointer or _camera == null or _world_viewport == null or editor == null:
+		return false
+	if _over_gui.is_valid() and _over_gui.call() and not pressed:
+		return false
+	var space := _world_viewport.find_world_3d().direct_space_state
+	if space == null:
+		return false
+	var origin := _camera.project_ray_origin(pointer)
+	return _building_between(space, origin, origin + _camera.project_ray_normal(pointer) * RAY_LENGTH)
+
+
+## True when the first thing the segment meets (bridges skipped) is a structure's body or a wall's.
+func _building_between(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3) -> bool:
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collision_mask = TERRAIN_LAYER
+	query.exclude = AuthoredCrossings.exclude_of(editor.map_root)
+	var result := space.intersect_ray(query)
+	if result.is_empty():
+		return false
+	var body := result.get("collider") as Node
+	if body != null and int(body.get_meta(AuthoredStructures.STRUCTURE_META, -1)) >= 0:
+		return true
+	return AuthoredWalls.exclude_of(editor.map_root).has(result.get("rid"))
+
+
+## The pointer's ray cast against the authored buildings (bridges and walls skipped), {} for none.
+func _structure_ray() -> Dictionary:
+	if not has_pointer or _camera == null or _world_viewport == null:
+		return {}
+	if _over_gui.is_valid() and _over_gui.call() and not pressed:
+		return {}
+	var space := _world_viewport.find_world_3d().direct_space_state
+	if space == null:
+		return {}
 	var origin := _camera.project_ray_origin(pointer)
 	var direction := _camera.project_ray_normal(pointer)
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * RAY_LENGTH)
@@ -621,11 +675,7 @@ func structure_under_pointer() -> int:
 		var excluded := AuthoredCrossings.exclude_of(editor.map_root)
 		excluded.append_array(AuthoredWalls.exclude_of(editor.map_root))
 		query.exclude = excluded
-	var result := space.intersect_ray(query)
-	if result.is_empty():
-		return -1
-	var body := result.get("collider") as Node
-	return int(body.get_meta(AuthoredStructures.STRUCTURE_META, -1)) if body != null else -1
+	return space.intersect_ray(query)
 
 
 ## A mode that `fades` makes the cursor the canopy fade's brush window (BrushMode.fade_focus),

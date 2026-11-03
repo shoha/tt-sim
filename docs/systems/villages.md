@@ -985,16 +985,25 @@ record") were saved, validated and applied by `SettlementPlan` since phase 1 and
 - **Pick** (`VillageProps`, `scenes/states/authoring/village_props.gd`, owned by `VillageBrush.props`; pure rules in
   `VillageFurnishings`, `utils/village_furnishings.gd`). The pick table is the layer's own standing rows
   (`AuthoredSettlements.standing`, ground applied), so a piece the layer skipped (wet, steep) cannot be picked. A pointer
-  is over a piece within 0.9 of its drawn radius (floor 0.45 m) plus a 10 px pad in metres; the nearest in share wins.
+  is over a piece by where it is DRAWN (the critic's P1, 2026-11-02): the screen distance from the pointer to the piece's
+  drawn centre (0.8 of its radius above its foot) within 0.9 of its drawn radius (floor 0.45 m) plus a 10 px pad, the
+  nearest in share winning, and NOT when a building stands between the camera and that centre
+  (`BrushTool.structure_blocks`, a physics segment against the authored structures AND the wall rows' houses; the pick
+  through a roof to a piece behind it is gone, and a carried piece whose pointer is over a building
+  (`BrushTool.building_under_pointer`) is refused as "Over a building", since the ground the brush ray reaches through a
+  roof is hidden behind it). Without a camera (the unit tests) the ground point under the pointer is used instead.
   A piece beats a plaza's rim band and its interior (the plaza's stalls stand on the rim, so a rim that won would make
   them unpickable); the plaza is still sized from the rim where no piece stands. The
   plaza's centre piece (the well or cross) is NOT touchable (`VillageFurnishings.is_centre_piece`): it stands where the
   plaza's centre does and presses on it move the plaza. A hovered piece is outlined (`VillagePropRings`: the plaza rings' strokes at the piece's
   radius plus 0.2 m, handle-less: chalk under the pointer, the Wall tool's gold when picked) and the plaza under it is
-  not highlighted. Pill: "Drag to move this piece, click to pick it".
+  not highlighted, its ring faded to 0.35 while any piece is hovered or picked. Pill: "Drag to move this piece, click to
+  pick it". The hint bar says which keys are live (`VillageTool.key_hints`: Drag Move piece, Q E Turn piece, R Re-roll,
+  Del Remove; a field's piece only Del), and returns to the base hints when no piece is hovered or picked.
 - **Gestures.** Click picks (Escape lets go). Press and drag past the plaza move's 1.5 m click threshold MOVES it: the
-  piece keeps its place under the pointer (`grab_offset`), the place it left is a calm ring, the carried ring gold with
-  "Release to put it here", or salmon with the reason where `VillageFurnishings.problem` refuses: water (the layer's
+  piece keeps its place under the pointer (`grab_offset`), the place it left is a calm ring, a translucent copy of the
+  piece (`AuthoredSettlements.ghost_of`, 0.45 transparent, 0.75 where refused) is carried at the pointer, the carried
+  ring gold with "Release to put it here", or the refusal pink with an erase cross at the pointer and the reason where `VillageFurnishings.problem` refuses: water (the layer's
   ring test), ground steeper than the layer's 0.8 limit, a house (`VillageFieldGround.covers_building`), a bridge's deck
   and landings (`VillageDryGround.crossing_corridors`), more than 60 m from the village, or inside another piece's
   clearance (0.6 of the radii). The release pins the piece (`pin_furnishing`); a refused release changes nothing and
@@ -1015,10 +1024,11 @@ record") were saved, validated and applied by `SettlementPlan` since phase 1 and
   **Decision for the board:** a re-dress now KEEPS pins (the design's "a pin must survive a re-dress", section 7, which
   the code did not do) and still drops `removed` and `swapped` (they name slots of the old draw); a change of character
   drops everything. A pin that lands on a house of the new draw is the author's choice; Undo is one step.
-- **Pane** (`VillageFurnishBox`, inside the plaza box): with a piece picked, its name ("Barrel", "Market stall, placed
-  by hand"), then Swap, Put back (only when pinned) and Remove; it stands where the size row stands, which only a
-  picked plaza or field uses, so the pane grows no taller. Once the picked village has had pieces taken away a "Put
-  back N taken away" button brings them all back. The caption names the gesture ("Click a barrel or stall to move or
+- **Pane** (`VillageFurnishBox`, inside the plaza box): with a piece picked, its name ("Barrel", in the label weight),
+  then Swap, "Back to its spot" (only when pinned: it returns a moved or turned piece to where the rules put it) and
+  Remove; it stands where the size row stands, which only a picked plaza or field uses, so the pane grows no taller.
+  Once the picked village has had pieces taken away a "Put back 1 removed piece" / "Put back N removed pieces" button
+  brings them all back (the two buttons were both "Put back" until the 2026-11-02 critic). The caption names the gesture ("Click a barrel or stall to move or
   swap it").
 - **Limits left:** the tool does not draw per-piece thumbnails; Swap has no chooser (it cycles); a pinned piece does not
   follow its house when the street is edited (a pin is absolute, as the design says); fields still cannot be moved or
