@@ -649,8 +649,8 @@ keeps the lean and flutter but the cloth is modelled for the default. Looks: ren
 `_after`: the keep's pennants were a speck at the tower tips and are now readable flags; the cottage's
 three pennants read as streaming flags at home zoom. Core's `bartizan_keep` was re-exported (its style's
 banner row changed, and the extra `length` draw moved the keep's random draws so its optional ivy patch
-no longer appears: 1559 to 1352 triangles, pin `2afe936a`); its tile in `thumbnails/structures/` was not
-redrawn.
+no longer appears: 1559 to 1352 triangles, pin `2afe936a`); its tile in `thumbnails/structures/` was redrawn
+later (the dressed windows and then the arrow slits, "Arrow slits" below).
 
 **Flags that flag (topic looks3, 2026-10-31).** The owner: "i don't see the pennants flagging in the
 calm weather". Cause: a pennant was three vertices, so the vertex shader could lean it but never bend
@@ -669,7 +669,24 @@ the gust field scales the swing by 0.8 to 1.2. The lean (the downwind stretch) i
 with a small kink at the tips where 8 strips are few for the wave; fixed by pennantkink below). Core's `bartizan_keep` is the one
 core structure with banners: its pin moved from `2afe936a` (1352 triangles) to `9b37d53d` (1456) in
 `pins.txt` and `tests/fixtures/structure_digests.txt` (its recipe text did not change; its tile was not
-redrawn). procgen pin `4c1a524`.
+redrawn then). procgen pin `4c1a524`.
+
+**Arrow slits (topic bartizan2, 2026-11-03).** The owner on the keep's redrawn tile: it "needs more of the
+windows/archer holes", clarified to arrow slits only (the dressed windows stay). The keep's slits were
+0.28 m dressed windows (amber frame, 36 triangles each) that were about 6 px on the 512 px tile. Procgen
+gained an opt-in facade symbol key `slit: true` (procgen docs/building_generation.md "Arrow slits"): the
+glazing paints the pane near-black (opaque, no flag, no dressing: `structure_pane.gdshader` keeps the
+violet-brown as paint because its green is under its red) and the opening trim builds a dressed-stone
+surround 0.14 m wide (28 triangles), so a slit reads as a dark recess in a pale outline. The built-in
+tower styles do not set the flag, so no other digest moved. The core `bartizan_keep` entry in
+`tools/export_core_structures_run.gd` writes the keep facade style out with slit symbols
+(`style_patch.facade`: 0.34 to 0.36 m wide, 1.1 to 2.3 m tall; an uneven rhythm per face: a slit each side of
+the door, low pairs on the ground floor, stair-tall slits among shorter ones on the sides, high ones under the
+parapet on the back; the front's arched windows are as before). The keep went from 1676 to
+1692 triangles at the 6 by 4 pin footprint (pin `524b4461`; the 7 by 7 m tile footprint shows about a dozen
+slits per two faces against four). The tile was retaken at the same framing (render job from
+`make_tile_job.gd`; `bk2_*` captures in `docs/plans/2026-11-02-camera/clips/`). Needs procgen pin
+`bartizan` branch (the `slit` key) in tt-sim and plantgen.
 
 **Pennant kink (topic pennantkink, 2026-10-31).** The tip of a windy or stormy pennant folded into a
 small hook (render job `pennantkink_look`, cottage, `windy_t0` and `storm_t2`). Cause: the ripple's phase

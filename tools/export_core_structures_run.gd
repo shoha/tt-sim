@@ -845,6 +845,98 @@ const STARTERS: Array[Dictionary] = [
 		"name": "Bartizan keep",
 		"family": "castle",
 		"variant": "Crenellated, corner turrets, banners",
+		# The "keep" facade style written out with arrow slits (bartizan2, 2026-11-03; a symbol's
+		# `slit: true` makes a dark recess in a pale stone surround, ProcgenGlazing and
+		# ProcgenOpeningTrim): tall slits in an uneven rhythm on the sides and the back (a stair
+		# slit, a pair of low ones, a high one under the parapet), a slit each side of the door,
+		# and the front's dressed arched windows as the keep style has them.
+		"style_patch":
+		{
+			"facade":
+			{
+				"name": "keep",
+				"floors": "auto",
+				"floor_height_target": 3.0,
+				"ground_floor_height": 3.4,
+				"bay_width": 2.4,
+				"symbols":
+				{
+					"door": {"kind": "door", "head": "round"},
+					"slit": {"kind": "window", "width": 0.36, "height": 1.7, "sill": 0.8, "slit": true},
+					"slit_low":
+					{"kind": "window", "width": 0.34, "height": 1.35, "sill": 0.9, "slit": true},
+					"slit_tall":
+					{"kind": "window", "width": 0.36, "height": 2.3, "sill": 0.6, "slit": true},
+					"slit_high":
+					{"kind": "window", "width": 0.34, "height": 1.1, "sill": 2.5, "slit": true},
+					"arch_window":
+					{"kind": "window", "width": 0.7, "height": 1.35, "sill": 0.75, "head": "round"},
+					"blank": {"kind": "blank"},
+				},
+				"patterns":
+				{
+					"front":
+					{
+						"ground":
+						[
+							{"size": "~1", "symbol": "slit_low"},
+							{"size": "~1.3", "symbol": "door"},
+							{"size": "~1", "symbol": "slit_low"},
+						],
+						"upper":
+						[
+							{
+								"repeat":
+								[
+									{"size": "~bay", "symbol": "arch_window"},
+									{"size": "~bay", "symbol": "blank"},
+								]
+							}
+						],
+					},
+					"side":
+					{
+						"ground":
+						[
+							{"size": "~1.4", "symbol": "blank"},
+							{"size": "~1", "symbol": "slit_low"},
+							{"size": "~2.2", "symbol": "blank"},
+							{"size": "~1", "symbol": "slit_low"},
+							{"size": "~1.4", "symbol": "blank"},
+						],
+						"upper":
+						[
+							{"size": "~0.9", "symbol": "blank"},
+							{"size": "~1", "symbol": "slit_tall"},
+							{"size": "~1.5", "symbol": "blank"},
+							{"size": "~1", "symbol": "slit"},
+							{"size": "~1.5", "symbol": "blank"},
+							{"size": "~1", "symbol": "slit_tall"},
+							{"size": "~0.9", "symbol": "blank"},
+						],
+					},
+					"back":
+					{
+						"ground":
+						[
+							{"size": "~1.2", "symbol": "blank"},
+							{"size": "~1", "symbol": "slit_low"},
+							{"size": "~1.2", "symbol": "blank"},
+						],
+						"upper":
+						[
+							{"size": "~1", "symbol": "blank"},
+							{"size": "~1", "symbol": "slit_high"},
+							{"size": "~0.6", "symbol": "blank"},
+							{"size": "~1", "symbol": "slit_tall"},
+							{"size": "~0.6", "symbol": "blank"},
+							{"size": "~1", "symbol": "slit_high"},
+							{"size": "~1", "symbol": "blank"},
+						],
+					},
+				},
+			},
+		},
 	},
 	{
 		"id": "chapel_rose",
