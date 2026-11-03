@@ -75,6 +75,12 @@
   {"op": "input", "events": [{"type": "press_button", "name": "FurnishRestore"}, {"type": "leave_button", "name": "FurnishRestore"}]},
   {"op": "wait", "s": 0.6},
   {"op": "capture", "name": "k3_put_back_result", "desc": "Put back pressed: the barrel stands again, the pane has no restore button"},
+  {"op": "input", "events": [{"type": "key", "key": "delete", "pressed": true}, {"type": "key", "key": "delete", "pressed": false}]},
+  {"op": "wait", "s": 0.6},
+  {"op": "capture", "name": "k3b_removed_again", "desc": "the barrel removed a second time: its toast is up again"},
+  {"op": "input", "events": [{"type": "press_button", "name": "FurnishRestore"}]},
+  {"op": "wait", "s": 0.9},
+  {"op": "capture", "name": "k4_pane_put_back_clears_toast", "desc": "the pane's Put back pressed (not the toast's): the barrel is back and the toast has gone with it"},
   {"op": "zoom", "size": 20.0},
   {"op": "look_at", "at": [28, 6]},
   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": [1280, 720]},
@@ -82,6 +88,9 @@
   {"op": "input", "events": [{"type": "move", "at": {"piece": "bench", "as": "bench"}}, {"type": "move", "at": {"piece": "bench", "as": "bench"}}, {"type": "press", "at": {"piece": "bench", "as": "bench"}}, {"type": "release", "at": {"piece": "bench", "as": "bench"}}]},
   {"op": "settle"},
   {"op": "capture", "name": "l_720_piece_pane", "desc": "1280x720: a picked piece with the pointer over it: the 16 px pill, the piece box with its rule, heading and Swap / Remove, whole pane in view"},
+  {"op": "input", "events": [{"type": "key", "key": "delete", "pressed": true}, {"type": "key", "key": "delete", "pressed": false}]},
+  {"op": "wait", "s": 0.6},
+  {"op": "capture", "name": "m_720_toast_centre", "desc": "1280x720: a removal toast over the hint bar, for the centre-line measurement"},
   {"op": "index", "title": "villages4 look", "intro": "Touchable furnishings in the Village tool"}
  ]
 }

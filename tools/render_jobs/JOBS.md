@@ -1178,7 +1178,9 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   dragged out of its plaza (`g1_outside_refused`, `g2_after_outside`), a bench over a house (`g_refused`), the frame after
   the release (`h_after_refusal`), seven seconds and a turn later (`i_toast_cleared`), a lamp hovered (`j_hover_lamp`),
   a barrel at zoom 9 before and after Delete (`k0_barrel_before`, `k1_barrel_removed` with its toast), the Put back
-  hover and result (`k2_put_back_preview`, `k3_put_back_result`) and the piece pane at 1280x720 (`l_720_piece_pane`).
+  hover and result (`k2_put_back_preview`, `k3_put_back_result`), the barrel removed again and put back through the PANE
+  (`k3b_removed_again`, `k4_pane_put_back_clears_toast`: the toast goes with it), the piece pane at 1280x720
+  (`l_720_piece_pane`) and a removal toast over the hint bar at 720p (`m_720_toast_centre`, the centre-line check).
   Run with `--full` for the verdict captures. After an edit `settle` waits about 8 s (scatter regrowth), longer than a
   6 s toast: use `wait` to capture a toast.
 - `jobs/fields_look.json` (about 30 s, keeps no level; topic fields, writes `fields_look`, probe

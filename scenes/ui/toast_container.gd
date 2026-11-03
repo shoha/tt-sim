@@ -20,6 +20,8 @@ const DEFAULT_DURATION := 3.0
 ## A toast with an action stays long enough to read it and reach for the button.
 const ACTION_DURATION := 6.0
 const ICON_SIZE := 20
+## The meta a toast carries its tag in (dismiss_tag).
+const TAG_META := &"tt_toast_tag"
 ## A toast hugs its one line up to this width and wraps past it: room for a two-line warning
 ## ("Maps are built offline. Leave the session to build or edit a map.") rather than three,
 ## and a short one ("Raise undone") is no wider than its words (the 2a critic: a 360 px chip
@@ -48,6 +50,22 @@ var _active_toasts: Array[Control] = []
 @onready var toast_vbox: VBoxContainer = %VBoxContainer
 
 
+## The toasts stand on the centre line of the board the open drawers leave free, the line the
+## input hint bar centres on (InputHints.on_drawers_moved), so the two never disagree: with a
+## drawer open both sit beside it, with none both sit on the viewport's centre.
+func _process(_delta: float) -> void:
+	if _active_toasts.is_empty():
+		return
+	var viewport := get_viewport()
+	var span := DrawerContainer.free_span(viewport)
+	var rect := viewport.get_visible_rect()
+	# The full-rect container is narrowed to the span by its offsets (a real layout, so the
+	# Put back button's clicks land where it is drawn); the column centres in what is left.
+	var margin := toast_vbox.get_parent() as Control
+	margin.offset_left = span.x - rect.position.x
+	margin.offset_right = span.y - rect.end.x
+
+
 ## Show a toast for `duration` seconds, or as long as its words take to read when that is
 ## longer (reading_seconds(); 0 keeps it up). With `action_label` and a valid `action`, a
 ## button at its end runs the action and dismisses the toast (`action_icon` is its Tabler
@@ -60,8 +78,10 @@ func show_toast(
 	action: Callable = Callable(),
 	action_icon: String = "",
 	icon: String = "",
+	tag: StringName = &"",
 ) -> void:
 	var toast = _create_toast(message, type, icon)
+	toast.set_meta(TAG_META, tag)
 	var has_action := action.is_valid() and not action_label.is_empty()
 	if has_action:
 		var button := _action_button(action_label, action_icon)
@@ -91,6 +111,16 @@ func show_toast(
 				if shown != null:
 					_dismiss_toast(shown, false)
 		)
+
+
+## Fades out every toast shown with `tag` (a toast whose subject changed under it: a removal
+## toast whose piece came back some other way). Nothing to do for a tag no toast wears.
+func dismiss_tag(tag: StringName) -> void:
+	if tag == &"":
+		return
+	for toast in _active_toasts.duplicate():
+		if is_instance_valid(toast) and toast.get_meta(TAG_META, &"") == tag:
+			_dismiss_toast(toast, false)
 
 
 ## How long `message` takes to read: LOOK_S, then WORDS_PER_S words a second. Pure.

@@ -262,11 +262,24 @@ func show_undo_toast(message: String, undo: Callable, icon: String = "") -> void
 
 ## Show an info toast with one action button labelled `action_label` (for example "Keep" on the
 ## plants received from a host); pressing it calls `action` and dismisses the toast.
+## A `tag` lets dismiss_toasts take it down when its subject changes some other way.
 func show_action_toast(
-	message: String, action_label: String, action: Callable, duration: float = 12.0
+	message: String,
+	action_label: String,
+	action: Callable,
+	duration: float = 12.0,
+	tag: StringName = &""
 ) -> void:
 	if _toast_container and _toast_container.has_method("show_toast"):
-		_toast_container.show_toast(message, TOAST_INFO, duration, action_label, action, "", "")
+		_toast_container.show_toast(
+			message, TOAST_INFO, duration, action_label, action, "", "", tag
+		)
+
+
+## Fades out the toasts shown with `tag` (show_action_toast).
+func dismiss_toasts(tag: StringName) -> void:
+	if _toast_container and _toast_container.has_method("dismiss_tag"):
+		_toast_container.dismiss_tag(tag)
 
 
 ## Show an info toast

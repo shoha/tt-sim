@@ -59,6 +59,8 @@ var _ghost_layer: AuthoredSettlements = null
 var _hidden_doc: MapDocument = null
 var _hidden_slot: String = ""
 var _restore_ghosts: Array[MeshInstance3D] = []
+## Removal toast tag -> [village, slot], until its piece is back (_dismiss_returned).
+var _removal_toasts: Dictionary = {}
 var _over_building: bool = false
 var _camera: Camera3D = null
 var _pointer: Vector2 = Vector2.ZERO
@@ -393,9 +395,23 @@ func _tell_removed(editor: AuthoringEditor, id: int, gone_slot: String, prop: St
 	var back := func() -> void:
 		if is_instance_valid(editor) and is_instance_valid(editor.settlements):
 			editor.settlements.restore_furnishing(id, gone_slot)
+	var tag := StringName("village_removed:%d:%s" % [id, gone_slot])
+	_removal_toasts[tag] = [id, gone_slot]
 	UIManager.show_action_toast(
-		REMOVED_TOAST % last_removed, PUT_BACK_WORDS, back, ToastContainer.ACTION_DURATION
+		REMOVED_TOAST % last_removed, PUT_BACK_WORDS, back, ToastContainer.ACTION_DURATION, tag
 	)
+
+
+## Takes down each removal toast whose piece is no longer removed (it came back by the pane's
+## Put back, an undo, a redo or a peer's edit) or can no longer come back (its village is gone, or
+## a re-dress forgot the removal). Called every frame by sync.
+func _dismiss_returned(editor: AuthoringEditor) -> void:
+	for tag: StringName in _removal_toasts.keys():
+		var gone: Array = _removal_toasts[tag]
+		var held := editor.document.settlement(int(gone[0]))
+		if held == null or not held.removed.has(str(gone[1])):
+			UIManager.dismiss_toasts(tag)
+			_removal_toasts.erase(tag)
 
 
 ## Turns the target piece `steps` notches (a notch is 15 degrees), pinning it.
@@ -476,6 +492,7 @@ func _pin(editor: AuthoringEditor, id: int, piece: String, pin: Dictionary) -> S
 ## Lets go of a pick an undo or an edit took away, and refreshes what the pane shows of the picked
 ## piece. Called every frame by VillageBrush.
 func sync(editor: AuthoringEditor) -> void:
+	_dismiss_returned(editor)
 	if slot == "":
 		_info = {}
 		return

@@ -13,6 +13,12 @@ extends RefCounted
 ## in metres.
 const RING_GROW_M := 0.2
 const RING_FLOOR_M := 0.55
+## Stroke weights (times the brush ring's 2.5 px line): the picked piece's ring always outweighs
+## the hover on a neighbour, and a refused place carries its pink line at 3 px so it does not
+## lean on its dark edge.
+const HOVER_WEIGHT := 1.2
+const PICKED_WEIGHT := 1.9
+const REFUSED_WEIGHT := 1.2
 
 
 ## Draws the pieces' rings and pill for `mode`. True when it drew a pill (a piece is under the
@@ -29,6 +35,7 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> b
 	for row in props.restoring:
 		var again := VillageRings.ring_style(false, true)
 		again["handles"] = 0.0
+		again["weight"] = HOVER_WEIGHT
 		_ring(cursor.canvas, cursor.camera, editor, row["item"]["position"], row["item"], again)
 	if not picked.is_empty() or not hovered.is_empty():
 		_rings(editor, cursor, props, picked, hovered)
@@ -77,6 +84,7 @@ static func _rings(
 		if not props.moving():
 			var style := VillageRings.ring_style(false, true)
 			style["handles"] = 0.0
+			style["weight"] = HOVER_WEIGHT
 			_ring(canvas, camera, editor, hovered["position"], hovered, style)
 	if picked.is_empty():
 		return
@@ -87,15 +95,18 @@ static func _rings(
 		calm["strength"] = 1.0
 		_ring(canvas, camera, editor, at, picked, calm)
 		var carried := VillageRings.ring_style(true, false)
+		carried["weight"] = PICKED_WEIGHT
 		if props.refusal() != &"":
-			# The line tools' erase ring: chalk-pink 2.5 px over a 5.5 px ink outline, no wash.
+			# The line tools' erase ring in chalk-pink (3 px over its ink outline), no wash.
 			carried = VillageRings.ghost_style(Color.TRANSPARENT, VillageRings.TINT_REFUSED)
+			carried["weight"] = REFUSED_WEIGHT
 		carried["handles"] = 0.0
 		_ring(canvas, camera, editor, props.destination(), picked, carried)
 		return
 	var under_pointer: bool = not hovered.is_empty() and hovered["slot"] == picked["slot"]
 	var style := VillageRings.ring_style(true, under_pointer)
 	style["handles"] = 0.0
+	style["weight"] = PICKED_WEIGHT
 	_ring(canvas, camera, editor, at, picked, style)
 
 

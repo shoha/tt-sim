@@ -559,6 +559,53 @@ func test_removing_a_piece_names_it_and_one_piece_can_be_put_back_alone() -> voi
 	assert_false(editor.settlements.restore_furnishing(id, str(first["slot"])), "not removed now")
 
 
+func test_the_removal_toast_goes_when_the_piece_returns_by_any_route() -> void:
+	var scene := _scene()
+	var editor: AuthoringEditor = scene["editor"]
+	var id: int = scene["id"]
+	var tool := _tool(editor)
+	var mode := VillageBrush.new()
+	for route in ["restore_one", "undo", "restore_all", "village_gone"]:
+		var item: Dictionary = {}
+		for row in VillageProps.rows_of(editor, id):
+			if not VillageFurnishings.is_centre_piece("market_town", str(row["item"]["slot"])):
+				item = row["item"]
+				break
+		_frame(mode, tool, item["position"])
+		mode.remove_target(tool)
+		assert_eq(mode.props._removal_toasts.size(), 1, "a removal toast is tracked: " + route)
+		mode.props.sync(editor)
+		assert_eq(mode.props._removal_toasts.size(), 1, "still removed, so still tracked")
+		match route:
+			"restore_one":
+				editor.settlements.restore_furnishing(id, str(item["slot"]))
+			"undo":
+				_history.undo()
+			"restore_all":
+				editor.settlements.restore_furnishings(id)
+			"village_gone":
+				editor.settlements.clear(id)
+		mode.props.sync(editor)
+		assert_true(mode.props._removal_toasts.is_empty(), "the toast is dismissed: " + route)
+		if route == "village_gone":
+			break
+
+
+func test_a_toast_is_dismissed_by_its_tag() -> void:
+	var container: ToastContainer = (
+		load("res://scenes/ui/toast_container.tscn").instantiate() as ToastContainer
+	)
+	add_child_autofree(container)
+	var info := ToastContainer.ToastType.INFO
+	container.show_toast("Removed barrel", info, 6.0, "", Callable(), "", "", &"a")
+	container.show_toast("Other", info, 6.0, "", Callable(), "", "", &"b")
+	assert_eq(container._active_toasts.size(), 2)
+	container.dismiss_tag(&"a")
+	assert_eq(container._active_toasts.size(), 1)
+	container.dismiss_tag(&"none")
+	assert_eq(container._active_toasts.size(), 1)
+
+
 func test_a_carried_piece_leaves_its_cell_and_the_put_back_preview_plans_the_removed() -> void:
 	var scene := _scene()
 	var editor: AuthoringEditor = scene["editor"]

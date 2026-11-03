@@ -1006,7 +1006,8 @@ record") were saved, validated and applied by `SettlementPlan` since phase 1 and
   piece steps out of its baked cell while it is carried (`AuthoredSettlements.hidden`, a slot set the next refresh
   leaves out; the rows still hold it), so only the copy is drawn and the place it left is the calm ring. The carried
   ring is gold ("Release to put it here"), or where `VillageFurnishings.problem` refuses the line tools' erase ring
-  (`#FFB6A8`, 2.5 px over a 5.5 px ink outline, no wash, no cross) with the reason on the pill. Rings of pieces are
+  (`#FFB6A8`, 3 px (weight 1.2) over its ink outline, no wash, no cross; a picked piece's ring is weight 1.9, a hovered
+  neighbour's 1.2, so the pick always outweighs the hover: `VillagePropRings.PICKED_WEIGHT` / `HOVER_WEIGHT`) with the reason on the pill. Rings of pieces are
   BARE (`style["bare"]` in `VillageRings.draw_plaza`: no interior disc), so a ring never dims a barrel or a bench. The
   reasons: water (the layer's ring test), ground steeper than the layer's 0.8 limit, a house
   (`VillageFieldGround.covers_building`), a bridge's deck and landings (`VillageDryGround.crossing_corridors`), more
@@ -1017,7 +1018,10 @@ record") were saved, validated and applied by `SettlementPlan` since phase 1 and
   toasts the long wording. Q and E turn the piece under the pointer (else the picked one) 15 degrees, Shift a quarter;
   R shows the next of its four draws (`ProcgenSettlement.VARIANTS`); both pin it. Delete or Backspace (and the pane's
   Remove) takes it away and says so: a toast "Removed barrel" with a "Put back" button that puts that ONE piece back
-  (`SettlementEditor.restore_furnishing`, a new history entry, so it still works after newer edits). A field's own scarecrow, haystack or skeps can be picked and removed but not moved, turned or
+  (`SettlementEditor.restore_furnishing`, a new history entry, so it still works after newer edits). The toast is tagged
+  (`UIManager.show_action_toast(..., tag)`, `UIManager.dismiss_toasts`) and `VillageProps.sync` takes it down once its
+  piece is no longer removed (pane Put back, undo, redo, a peer) or its village or removal is gone (a re-dress, a clear).
+  Toasts stand on the centre line of the board the open drawers leave free, the hint bar's (`ToastContainer._process`). A field's own scarecrow, haystack or skeps can be picked and removed but not moved, turned or
   swapped (they stand where their field puts them, `VillageFurnishings.is_field_piece`).
 - **Swap** (the pane's button). The candidates are the props the kit's rules draw for the same slot kind
   (`street_edge`, `beside_door`, `plaza.edge`, `back_yard` ...), in the kit's order, the piece's own included so it
