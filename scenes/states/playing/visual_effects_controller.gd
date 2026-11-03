@@ -16,6 +16,7 @@ var _game_map: GameMap = null
 var _lofi_material: ShaderMaterial = null  # Cached lo-fi material (from scene or created)
 var _occlusion_fade_enabled: bool = true  # Whether the occlusion fade effect is active
 var _foliage_antialiasing_level: int = Viewport.MSAA_DISABLED  # Current Antialiasing setting
+var _eye_view_active: bool = false  # The eye view raises the level to at least 4x
 
 ## Last pixelation value pushed to the occlusion fade manager. The Visuals
 ## drawer calls apply_lofi_overrides() on every slider tick, so _sync_lofi_pixelation()
@@ -269,10 +270,28 @@ func set_foliage_antialiasing_level(level: int) -> void:
 ## must be reapplied on every map load, not just once.
 func apply_foliage_antialiasing() -> void:
 	if _game_map.world_viewport:
-		_game_map.world_viewport.msaa_3d = _foliage_antialiasing_level as Viewport.MSAA
+		_game_map.world_viewport.msaa_3d = effective_antialiasing_level() as Viewport.MSAA
 	_apply_antialiasing_variant(
 		WindFoliage.collect_foliage_shader_materials(_game_map.map_container)
 	)
+
+
+## The Antialiasing level in effect: the saved setting, raised to MSAA 4x while the eye view is
+## on (a perspective view at eye height stair-steps fences, roof edges and thin foliage with MSAA
+## off, card eyeprobe 2026-11-02; the orthographic view does not). A setting above 4x is kept.
+func effective_antialiasing_level() -> int:
+	if _eye_view_active:
+		return maxi(_foliage_antialiasing_level, Viewport.MSAA_4X)
+	return _foliage_antialiasing_level
+
+
+## Raise (or put back) the antialiasing level for the eye view; applies at once. The setting
+## itself is not changed, so leaving the eye restores exactly what the player chose.
+func set_eye_view_antialiasing(active: bool) -> void:
+	if _eye_view_active == active:
+		return
+	_eye_view_active = active
+	apply_foliage_antialiasing()
 
 
 ## Gives wind materials created after the map loaded (a species first painted mid-session;
@@ -289,7 +308,7 @@ func adopt_foliage_materials(materials: Array[ShaderMaterial]) -> void:
 ## Points `materials` at the antialiased or plain-cutout wind shader for the current level,
 ## each keeping its plain or painted-light form (WindFoliage.shader_for).
 func _apply_antialiasing_variant(materials: Array[ShaderMaterial]) -> void:
-	var antialiased := _foliage_antialiasing_level != Viewport.MSAA_DISABLED
+	var antialiased := effective_antialiasing_level() != Viewport.MSAA_DISABLED
 	if not antialiased and not WindFoliage.get_shader_no_aa():
 		push_warning(
 			(

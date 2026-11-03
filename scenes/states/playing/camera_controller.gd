@@ -70,6 +70,9 @@ var ground_top_y: float = 0.0
 var compass: CameraCompass = null
 ## The eye-level view (always there, active or not); set_view_mode(eye) or F9 makes it active.
 var eye: EyeView = EyeView.new()
+## What a shake has added to the holder's position right now (read-only to others: a view that
+## rewrites the holder every frame, the eye, adds it on top).
+var shake_offset: Vector3 = Vector3.ZERO
 
 ## The orbit view's zoom range (the 16:9 reference height of the camera's size).
 var min_zoom: float:
@@ -97,7 +100,6 @@ var _rmb_press_pos: Vector2 = Vector2.ZERO  # Screen position of RMB press
 
 # Camera shake state
 var _shake_tween: Tween = null
-var _shake_offset: Vector3 = Vector3.ZERO
 
 # The view's yaw, pitch and orbit (CameraView; CameraRig has the maths); made in setup()
 var _view: CameraView = null
@@ -155,7 +157,7 @@ func setup(game_map: GameMap) -> void:
 	compass = CameraCompass.attach(self)
 	compass.turn_requested.connect(turn_view)
 	compass.tilt_requested.connect(_view.tilt_by)
-	compass.top_down_requested.connect(_view.toggle_top_down)
+	compass.top_down_requested.connect(_toggle_top_down)
 
 
 ## The view mode in charge of the camera now (OrbitView unless set_view_mode gave another).
@@ -315,7 +317,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if CameraRig.is_top_down_key(event):
-		_view.toggle_top_down()
+		_toggle_top_down()
 		get_viewport().set_input_as_handled()
 		return
 
@@ -486,8 +488,8 @@ func camera_shake(intensity: float, duration: float = SHAKE_DURATION) -> void:
 	if _shake_tween and _shake_tween.is_valid():
 		_shake_tween.kill()
 		# Remove old offset before starting new shake
-		_game_map.cameraholder_node.global_position -= _shake_offset
-		_shake_offset = Vector3.ZERO
+		_game_map.cameraholder_node.global_position -= shake_offset
+		shake_offset = Vector3.ZERO
 
 	_shake_tween = create_tween()
 	var steps := 4
@@ -507,9 +509,9 @@ func camera_shake(intensity: float, duration: float = SHAKE_DURATION) -> void:
 
 
 func _apply_shake_offset(new_offset: Vector3) -> void:
-	_game_map.cameraholder_node.global_position -= _shake_offset
-	_shake_offset = new_offset
-	_game_map.cameraholder_node.global_position += _shake_offset
+	_game_map.cameraholder_node.global_position -= shake_offset
+	shake_offset = new_offset
+	_game_map.cameraholder_node.global_position += shake_offset
 
 
 ## Smoothly center the camera on a world position.
@@ -588,6 +590,14 @@ func set_map_bounds(bounds: AABB) -> void:
 	_active.set_map_bounds(bounds)
 
 
+## O (and the compass's top-down button): from the eye, leave it for the orbit view first (which
+## restores the orbit pose), then toggle top-down there.
+func _toggle_top_down() -> void:
+	if _active == eye:
+		set_view_mode(_orbit)
+	_view.toggle_top_down()
+
+
 ## How far the pan range has narrowed toward the map centre (OrbitView, pure), 0 (full range) to
 ## 1 (the view centre is the map centre), at camera size `size` for a map that fits at `fit_size`.
 static func recentre_weight(size: float, fit_size: float) -> float:
@@ -603,9 +613,9 @@ func notify_map_clearing() -> void:
 	ground_top_y = 0.0
 	if _shake_tween and _shake_tween.is_valid():
 		_shake_tween.kill()
-	if _shake_offset != Vector3.ZERO:
-		_game_map.cameraholder_node.global_position -= _shake_offset
-		_shake_offset = Vector3.ZERO
+	if shake_offset != Vector3.ZERO:
+		_game_map.cameraholder_node.global_position -= shake_offset
+		shake_offset = Vector3.ZERO
 
 
 # Old private names (see the class header): each forwards to the orbit view.

@@ -39,6 +39,13 @@ var authoring_mode: bool = false
 ## Set by an owner that loads a map without a LevelPlayController (AuthoringController), so
 ## input and the camera wait during that load exactly as they do during a play-time load.
 var map_loading: bool = false
+## The eye view sets this while it is the view: the world viewport is raised to MSAA 4x and put
+## back to the player's Antialiasing setting when it goes false (EyeView.activate / deactivate).
+var eye_view_antialiasing: bool = false:
+	set(active):
+		eye_view_antialiasing = active
+		if _visual_effects != null:
+			_visual_effects.set_eye_view_antialiasing(active)
 
 var _level_play_controller: LevelPlayController = null
 var _measure_tool: MeasureTool = null

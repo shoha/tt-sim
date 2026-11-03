@@ -42,6 +42,8 @@ var _map_root: Node3D = null
 var _local_extent: AABB = AABB()
 ## Whether the pan range is the extent (an authored map with no GLB).
 var _pans_on_extent: bool = false
+## Whether the extent is a map document's (the eye view walks all of it, even under a GLB).
+var _has_document: bool = false
 ## The ground range the last fit used.
 var _fitted_ground: Vector2 = Vector2.ZERO
 
@@ -79,6 +81,7 @@ func fit(map_root: Node3D, document: MapDocument) -> void:
 		_local_extent.position.y = 0.0
 		_local_extent.size.y = 0.0
 	_pans_on_extent = document != null and not document.has_base_map
+	_has_document = document != null
 	refit()
 
 
@@ -100,6 +103,7 @@ func refit() -> void:
 	_game_map.set_zoom_limits(MIN_ZOOM, max_zoom)
 	if _pans_on_extent:
 		_game_map.set_map_bounds(bounds)
+	_set_eye_bounds(bounds if _has_document else AABB())
 	shadow_bounds = bounds.expand(
 		Vector3(bounds.position.x, ground.y + CONTENT_HEIGHT_M, bounds.position.z)
 	)
@@ -126,6 +130,8 @@ func follow() -> void:
 ## Forgets the map and puts the zoom-out limit back to PLAY_MAX_ZOOM.
 func clear() -> void:
 	_map_root = null
+	_has_document = false
+	_set_eye_bounds(AABB())
 	shadow_bounds = AABB()
 	_fitted_ground = Vector2.ZERO
 	max_zoom = PLAY_MAX_ZOOM
@@ -149,6 +155,16 @@ static func view_bounds(local_extent: AABB, to_world: Transform3D, ground: Vecto
 	bounds.position.y = ground.x
 	bounds.size.y = ground.y - ground.x
 	return bounds
+
+
+## Tell the eye view the document's extent (an empty AABB for none): it walks all of it, even
+## where a dressed GLB's meshes (the pan range) end sooner.
+func _set_eye_bounds(bounds: AABB) -> void:
+	if not is_instance_valid(_game_map):
+		return
+	var camera_controller := _game_map.get_camera_controller()
+	if camera_controller != null and camera_controller.eye != null:
+		camera_controller.eye.set_document_bounds(bounds)
 
 
 func _has_map() -> bool:

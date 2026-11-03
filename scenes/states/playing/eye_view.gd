@@ -16,8 +16,13 @@ extends ViewMode
 ## - A double-click on the ground glides the foot there; a double-click on a token glides to
 ##   1.5 m short of it.
 ## - The wheel is the lens: the vertical field of view, 40 to 75 degrees, eased.
-## - The foot stays 1.5 m inside the map; the eye follows the ground's height, eased.
-## Walls, doors and trees do not stop the eye yet (collision is the next card).
+## - The foot stays 1.5 m inside the map (the map document's whole extent when it has one, else
+##   the orbit view's bounds); the eye follows the ground's height, eased.
+## - Walls and doors stop the eye (owner verdict SL6): every move of the foot is swept by a
+##   sphere against the map's collision and slides along what it meets (EyeCollider). Tokens,
+##   grass, scatter and tree crowns have no collision and do not block.
+## - A camera shake (token drops) is added on top of the pose, in the holder.
+## - The world viewport is raised to MSAA 4x while here (VisualEffectsController).
 ##
 ## Entering from the orbit view stands the foot at the ground point under the screen centre and
 ## keeps the yaw; the orbit camera, holder, yaw pivot and pitch are remembered, and leaving puts
@@ -37,7 +42,11 @@ var _foot_y: float = 0.0  # the ground's height under the foot, eased
 var _pitch: float = EyeRig.PITCH_ENTRY
 var _lens: float = EyeRig.FOV_DEFAULT
 var _lens_target: float = EyeRig.FOV_DEFAULT
-var _bounds: AABB = AABB()
+var _bounds: AABB = AABB()  # the walking area now: the document's, else the fallback
+var _document_bounds: AABB = AABB()
+var _fallback_bounds: AABB = AABB()
+var _terrain_body: Object = null  # the authored ground's body, which the sphere ignores
+var _terrain_looked: bool = false  # whether the map was searched for it (a GLB map has none)
 var _velocity: Vector2 = Vector2.ZERO
 var _keys: Dictionary = {&"forward": false, &"back": false, &"left": false, &"right": false}
 var _running: bool = false
@@ -101,9 +110,11 @@ func activate(owner_controller: CameraController, map: GameMap) -> void:
 	_saved_pivot = Vector3(centre.x, 0.0, centre.y)
 	_entered = true
 	var orbit := owner_controller.orbit_view()
-	_bounds = orbit.map_bounds if orbit.has_map_bounds else AABB()
-	if _bounds.size == Vector3.ZERO and is_instance_valid(map.map_container):
-		_bounds = LevelEnvironmentManager.compute_map_bounds(map.map_container)
+	_fallback_bounds = orbit.map_bounds if orbit.has_map_bounds else AABB()
+	if _fallback_bounds.size == Vector3.ZERO and is_instance_valid(map.map_container):
+		_fallback_bounds = LevelEnvironmentManager.compute_map_bounds(map.map_container)
+	_refresh_bounds()
+	_terrain_looked = false
 	_foot = EyeRig.clamp_foot(centre, _bounds)
 	_foot_y = _ground_y(_foot)
 	_clear_input()
@@ -117,6 +128,7 @@ func activate(owner_controller: CameraController, map: GameMap) -> void:
 	_lens = _lens_target
 	_apply_fov()
 	_sync_sky(0.0)
+	map.eye_view_antialiasing = true
 	apply_pitch(pitch.pitch)
 	if owner_controller.compass != null:
 		owner_controller.compass.set_view(owner_controller.current_yaw(), pitch.pitch)
@@ -141,9 +153,12 @@ func deactivate() -> void:
 	camera.position = _saved_position
 	camera.basis = _saved_basis
 	var turned := controller.current_yaw() - _saved_yaw
-	game_map.cameraholder_node.global_position = CameraRig.rotate_about_pivot(
-		_saved_holder, _saved_pivot, turned
+	# A shake in flight is still in the holder's position as far as the controller knows.
+	game_map.cameraholder_node.global_position = (
+		CameraRig.rotate_about_pivot(_saved_holder, _saved_pivot, turned)
+		+ controller.shake_offset
 	)
+	game_map.eye_view_antialiasing = false
 	var pitch := controller.view().pitch
 	pitch.set_range(CameraRig.MIN_PITCH, CameraRig.TOP_DOWN_PITCH)
 	pitch.set_now(_saved_pitch)
@@ -263,7 +278,7 @@ func pan_motion(event: InputEventMouseMotion) -> bool:
 	var dir := camera.project_ray_normal(event.position)
 	var foot: Variant = EyeRig.grab_pan_foot(_grab, dir, camera.global_position.y)
 	if foot != null:
-		_foot = EyeRig.clamp_foot(foot, _bounds)
+		_foot = EyeRig.clamp_foot(_collide(_foot, foot), _bounds)
 		_place()
 	return _grab_rmb
 
@@ -323,7 +338,7 @@ func apply_pitch(pitch_deg: float) -> void:
 func view_center_offset() -> Vector2:
 	if not is_instance_valid(game_map):
 		return Vector2.ZERO
-	var holder := game_map.cameraholder_node.global_position
+	var holder := game_map.cameraholder_node.global_position - controller.shake_offset
 	return _foot - Vector2(holder.x, holder.z)
 
 
@@ -341,16 +356,32 @@ func clamp_to_bounds() -> void:
 
 func map_loaded() -> void:
 	if is_instance_valid(game_map.map_container):
-		_bounds = LevelEnvironmentManager.compute_map_bounds(game_map.map_container)
+		_fallback_bounds = LevelEnvironmentManager.compute_map_bounds(game_map.map_container)
+	_terrain_looked = false
+	_refresh_bounds()
 	clamp_to_bounds()
 
 
 func set_map_bounds(bounds: AABB) -> void:
-	_bounds = bounds
+	_fallback_bounds = bounds
+	_refresh_bounds()
 	clamp_to_bounds()
 
 
+## The map document's extent in world space (an empty AABB for none), set by MapViewFit whenever
+## the map is fit, whichever view is active. It is the walking area when it has a size, so the
+## whole map is walkable even where a dressed GLB's meshes end sooner.
+func set_document_bounds(bounds: AABB) -> void:
+	_document_bounds = bounds
+	_refresh_bounds()
+	if _entered:
+		clamp_to_bounds()
+
+
 func map_clearing() -> void:
+	_fallback_bounds = AABB()
+	_document_bounds = AABB()
+	_terrain_looked = false
 	_bounds = AABB()
 
 
@@ -419,7 +450,7 @@ func _centre_ground_xz(camera: Camera3D, viewport_px: Vector2) -> Vector2:
 func _place() -> void:
 	var holder := game_map.cameraholder_node
 	var camera := game_map.camera_node
-	var at := Vector3(_foot.x, _foot_y, _foot.y)
+	var at := Vector3(_foot.x, _foot_y, _foot.y) + controller.shake_offset
 	if not holder.global_position.is_equal_approx(at):
 		holder.global_position = at
 	camera.position = Vector3(0.0, _eye_height(), 0.0)
@@ -448,16 +479,53 @@ func _step_walk(delta: float) -> void:
 		_velocity = Vector2.ZERO
 	if wish != Vector2.ZERO:
 		_glide = null
-	_foot = EyeRig.walk_step(_foot, _velocity, delta)
+	_foot = _collide(_foot, EyeRig.walk_step(_foot, _velocity, delta))
 
 
 func _step_glide(delta: float) -> void:
 	if _glide == null:
 		return
 	var goal: Vector2 = _glide
-	_foot = EyeRig.glide_step(_foot, goal, delta, _map_scale())
-	if _foot == goal:
+	var wanted := EyeRig.glide_step(_foot, goal, delta, _map_scale())
+	_foot = _collide(_foot, wanted)
+	# A glide that met a wall ends there rather than grinding along it.
+	if _foot == goal or not _foot.is_equal_approx(wanted):
 		_glide = null
+
+
+## The foot after moving from `from` toward `to`, stopped at walls and slid along them
+## (EyeCollider). The sphere's centre is at the eye. A move of nothing, or with no map to touch,
+## is returned as asked.
+func _collide(from: Vector2, to: Vector2) -> Vector2:
+	var motion := to - from
+	if motion.length_squared() < 0.0000001 or not is_instance_valid(game_map.map_container):
+		return to
+	var scale := _map_scale()
+	var collider := EyeCollider.new(
+		game_map.map_container.get_world_3d().direct_space_state,
+		_excluded_bodies(),
+		EyeCollider.RADIUS_M * scale
+	)
+	return collider.move(from, motion, _foot_y + _eye_height())
+
+
+## The bodies the sphere ignores: the authored ground's. The eye follows the ground by height.
+func _excluded_bodies() -> Array[RID]:
+	var rids: Array[RID] = []
+	if not _terrain_looked or (_terrain_body != null and not is_instance_valid(_terrain_body)):
+		_terrain_looked = true
+		_terrain_body = game_map.map_container.find_child(
+			AuthoredTerrain.COLLISION_NAME, true, false
+		)
+	var body := _terrain_body as CollisionObject3D
+	if body != null:
+		rids.append(body.get_rid())
+	return rids
+
+
+## The walking area: the map document's extent when it has one, else the orbit view's bounds.
+func _refresh_bounds() -> void:
+	_bounds = EyeRig.walk_bounds(_document_bounds, _fallback_bounds)
 
 
 func _clear_input() -> void:

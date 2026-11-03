@@ -358,6 +358,115 @@ func test_grab_pan_moves_the_foot_so_the_point_stays_under_the_cursor() -> void:
 	assert_false(eye.is_panning())
 
 
+func test_slide_motion_removes_only_the_part_into_the_wall() -> void:
+	var wall := Vector2(0.0, -1.0)  # a wall facing -z
+	assert_eq(EyeRig.slide_motion(Vector2(3.0, 4.0), wall), Vector2(3.0, 0.0), "slides along x")
+	assert_eq(EyeRig.slide_motion(Vector2(0.0, 2.0), wall), Vector2.ZERO, "head on stops")
+	assert_eq(EyeRig.slide_motion(Vector2(1.0, -2.0), wall), Vector2(1.0, -2.0), "leaving is free")
+	assert_eq(EyeRig.slide_motion(Vector2(2.0, 0.0), wall), Vector2(2.0, 0.0), "along is free")
+	assert_eq(EyeRig.slide_motion(Vector2(1.0, 1.0), Vector2.ZERO), Vector2.ZERO, "no normal: stop")
+	var diagonal := Vector2(1.0, -1.0).normalized()
+	var slid := EyeRig.slide_motion(Vector2(-1.0, 1.0) * 2.0, diagonal * 7.0)
+	assert_almost_eq(slid.dot(diagonal), 0.0, 0.0001, "nothing left into a skew wall")
+	assert_almost_eq(EyeRig.slide_motion(Vector2(-2.0, 0.0), diagonal).length(), 1.4142, 0.001)
+
+
+func test_cast_steps_are_never_longer_than_the_radius() -> void:
+	assert_eq(EyeRig.cast_step_count(0.0, 0.35), 0)
+	assert_eq(EyeRig.cast_step_count(0.1, 0.35), 1)
+	assert_eq(EyeRig.cast_step_count(0.35, 0.35), 1)
+	assert_eq(EyeRig.cast_step_count(0.36, 0.35), 2)
+	# 10 m/s at 20 fps is the worst frame anyone plays at: 0.5 m, two segments.
+	assert_eq(EyeRig.cast_step_count(0.5, 0.35), 2)
+	assert_eq(EyeRig.cast_step_count(20.0, 0.35), 58)
+	for distance in [0.2, 0.7, 3.3, 20.0]:
+		var n := EyeRig.cast_step_count(distance, 0.35)
+		assert_lte(float(distance) / float(n), 0.35 + 0.00001)
+
+
+func test_the_document_extent_is_the_walking_area_when_there_is_one() -> void:
+	var doc := AABB(Vector3(-125.0, 0.0, -125.0), Vector3(250.0, 0.0, 250.0))
+	var meshes := AABB(Vector3(-38.0, 0.0, -30.0), Vector3(76.0, 5.0, 60.0))
+	assert_eq(EyeRig.walk_bounds(doc, meshes), doc)
+	assert_eq(EyeRig.walk_bounds(AABB(), meshes), meshes, "no document: the orbit bounds")
+	assert_eq(EyeRig.walk_bounds(AABB(), AABB()), AABB())
+	var inside := EyeRig.clamp_foot(Vector2(500.0, -500.0), doc)
+	assert_eq(inside, Vector2(123.5, -123.5), "1.5 m inside the document's edge")
+	assert_eq(EyeRig.clamp_foot(Vector2(100.0, 100.0), doc), Vector2(100.0, 100.0), "the whole map")
+
+
+func test_the_eye_walks_the_document_extent_not_the_mesh_bounds() -> void:
+	_controller.set_view_mode(_controller.eye)
+	var eye := _controller.eye
+	eye.set_map_bounds(AABB(Vector3(-10.0, 0.0, -10.0), Vector3(20.0, 5.0, 20.0)))
+	eye.frame_ground(Vector2(100.0, 0.0), 0.0)
+	assert_almost_eq(eye.foot().x, 8.5, 0.0001, "held to the mesh bounds")
+	eye.set_document_bounds(AABB(Vector3(-125.0, 0.0, -125.0), Vector3(250.0, 0.0, 250.0)))
+	eye.frame_ground(Vector2(100.0, 0.0), 0.0)
+	assert_almost_eq(eye.foot().x, 100.0, 0.0001, "the document's extent replaces them")
+	eye.frame_ground(Vector2(400.0, 0.0), 0.0)
+	assert_almost_eq(eye.foot().x, 123.5, 0.0001)
+	eye.set_document_bounds(AABB())
+	assert_almost_eq(eye.foot().x, 8.5, 0.0001, "no document: back to the orbit bounds")
+
+
+func test_o_at_the_eye_leaves_it_and_toggles_top_down() -> void:
+	var pitch_before := _controller.current_pitch()
+	_controller.set_view_mode(_controller.eye)
+	var key := InputEventKey.new()
+	key.keycode = KEY_O
+	key.pressed = true
+	_controller._unhandled_key_input(key)
+	assert_eq(_controller.view_mode().mode_name(), &"orbit", "O leaves the eye")
+	assert_eq(_camera().projection, Camera3D.PROJECTION_ORTHOGONAL)
+	var pitch := _controller.view().pitch
+	assert_almost_eq(pitch.pitch, pitch_before, 0.0001, "the orbit pitch was restored first")
+	assert_almost_eq(pitch.target, CameraRig.TOP_DOWN_PITCH, 0.0001, "then it tilts top-down")
+	_controller._unhandled_key_input(key)
+	assert_almost_eq(pitch.target, pitch_before, 0.0001, "the next O goes back")
+
+
+func test_a_shake_shows_in_the_eye_and_goes_when_it_ends() -> void:
+	_controller.set_view_mode(_controller.eye)
+	var eye := _controller.eye
+	eye.process(0.016)
+	var rest := _camera().global_position
+	_controller._apply_shake_offset(Vector3(0.04, 0.0, -0.03))
+	eye.process(0.016)
+	assert_true(_camera().global_position.is_equal_approx(rest + Vector3(0.04, 0.0, -0.03)))
+	assert_eq(eye.foot(), Vector2(rest.x, rest.z), "the foot itself is not moved by it")
+	_controller._apply_shake_offset(Vector3.ZERO)
+	eye.process(0.016)
+	assert_true(_camera().global_position.is_equal_approx(rest))
+
+
+func test_leaving_mid_shake_leaves_no_drift() -> void:
+	var holder_before := _holder().global_position
+	_controller.set_view_mode(_controller.eye)
+	_controller._apply_shake_offset(Vector3(0.04, 0.0, 0.02))
+	_controller.eye.process(0.016)
+	_controller.set_view_mode(_controller.orbit_view())
+	_controller._apply_shake_offset(Vector3.ZERO)
+	assert_true(_holder().global_position.is_equal_approx(holder_before))
+
+
+func test_the_eye_raises_antialiasing_to_4x_and_restores_the_setting() -> void:
+	var viewport := _game_map.world_viewport
+	_game_map.set_foliage_antialiasing_level(Viewport.MSAA_DISABLED)
+	assert_eq(viewport.msaa_3d, Viewport.MSAA_DISABLED)
+	_controller.set_view_mode(_controller.eye)
+	assert_eq(viewport.msaa_3d, Viewport.MSAA_4X, "the eye is smoothed")
+	_controller.set_view_mode(_controller.orbit_view())
+	assert_eq(viewport.msaa_3d, Viewport.MSAA_DISABLED, "the setting is back")
+	_game_map.set_foliage_antialiasing_level(Viewport.MSAA_8X)
+	_controller.set_view_mode(_controller.eye)
+	assert_eq(viewport.msaa_3d, Viewport.MSAA_8X, "a higher setting is kept")
+	_game_map.set_foliage_antialiasing_level(Viewport.MSAA_2X)
+	assert_eq(viewport.msaa_3d, Viewport.MSAA_4X, "a settings change at the eye is raised too")
+	_controller.set_view_mode(_controller.orbit_view())
+	assert_eq(viewport.msaa_3d, Viewport.MSAA_2X)
+
+
 func test_a_grab_on_the_sky_grabs_nothing() -> void:
 	_controller.set_view_mode(_controller.eye)
 	var eye := _controller.eye

@@ -1,0 +1,12 @@
+{
+ "out_dir": "render_jobs/eye_collide_sheet",
+ "timeout_s": 60,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ec_walk", "columns": 4, "tile": [480, 270], "out": "ec_sheet", "names": [
+    "a_headon_0000", "a_headon_0018", "d_door_0000", "d_door_0018",
+    "b_slide_0000", "b_slide_0024", "b_slide_0048", "b_slide_0060",
+    "c_corner_0000", "c_corner_0020", "f_edge_0000", "f_edge_0030"
+  ]}
+ ]
+}

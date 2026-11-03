@@ -1,0 +1,32 @@
+{
+ "out_dir": "render_jobs/eye_collide_perf",
+ "timeout_s": 300,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_camera_ec_hamlet"},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "hide_ui"},
+  {"op": "vsync_off"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "before"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "enter", "at": [-18, -20], "yaw": 45, "pitch": 3, "fov": 60},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_collide.gd", "action": "aa", "on": false},
+  {"op": "gpu", "name": "eye_msaa_shipped_1", "s": 4.0, "for": "eye_aa_gpu"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_collide.gd", "action": "aa", "on": true},
+  {"op": "gpu", "name": "eye_msaa4_1", "s": 4.0, "for": "eye_aa_gpu"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_collide.gd", "action": "aa", "on": true},
+  {"op": "gpu", "name": "eye_msaa4_2", "s": 4.0, "for": "eye_aa_gpu"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_collide.gd", "action": "aa", "on": false},
+  {"op": "gpu", "name": "eye_msaa_shipped_2", "s": 4.0, "for": "eye_aa_gpu"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_collide.gd", "action": "aa", "on": false},
+  {"op": "gpu", "name": "eye_msaa_shipped_3", "s": 4.0, "for": "eye_aa_gpu"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_collide.gd", "action": "aa", "on": true},
+  {"op": "gpu", "name": "eye_msaa4_3", "s": 4.0, "for": "eye_aa_gpu"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "eye"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "after"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "leave"},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

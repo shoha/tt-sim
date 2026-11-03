@@ -163,3 +163,33 @@ static func stop_short(foot: Vector2, target: Vector2, distance: float) -> Vecto
 	if gap.length() <= distance:
 		return foot
 	return target - gap.normalized() * distance
+
+
+## The bounds the foot is held in: the map document's extent (world AABB, XZ used) when it has
+## one, else the `fallback` (the orbit view's mesh-walk bounds). An empty AABB means none.
+static func walk_bounds(document: AABB, fallback: AABB) -> AABB:
+	if document.size.x > 0.0 and document.size.z > 0.0:
+		return document
+	return fallback
+
+
+## How many cast segments a move of `distance` is cut into so that none is longer than the
+## collision `radius`: a fast move can never jump a wall thinner than the sphere.
+static func cast_step_count(distance: float, radius: float) -> int:
+	if distance <= 0.0:
+		return 0
+	return maxi(1, ceili(distance / maxf(radius, 0.0001)))
+
+
+## `remaining` motion with the part that pushes into a surface removed: `normal` is the surface's
+## horizontal normal (any length, pointing away from the surface). Motion already leaving or
+## running along the surface is returned as it is; a zero normal (a hit with no horizontal
+## direction) gives no motion.
+static func slide_motion(remaining: Vector2, normal: Vector2) -> Vector2:
+	if normal.length_squared() < 0.000001:
+		return Vector2.ZERO
+	var n := normal.normalized()
+	var into := remaining.dot(n)
+	if into >= 0.0:
+		return remaining
+	return remaining - n * into

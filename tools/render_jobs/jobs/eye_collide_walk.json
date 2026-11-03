@@ -1,0 +1,58 @@
+{
+ "out_dir": "render_jobs/eye_collide_walk",
+ "timeout_s": 600,
+ "hang_s": 150,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_camera_ec_hamlet"},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "enter", "at": [-18, -23], "yaw": 270, "pitch": 3, "fov": 60},
+  {"op": "wait", "s": 0.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_collide.gd", "action": "occupancy", "at": [-14, -20], "half": 12, "cell": 0.25, "mark": [[-18, -23, "A"], [-18, -24, "B"], [-18, -22, "C"], [-18, -22.63, "D"]], "out": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ec_walk/occupancy_r055.txt"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "walk", "name": "a_headon", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ec_walk", "seconds": 1.5, "fps": 30, "every": 9, "width": 640, "events": [
+    {"at": 0, "do": "place", "xz": [-18, -20.6]},
+    {"at": 0, "do": "face", "to": [1, 0]},
+    {"at": 1, "do": "walk", "v": [0, 1], "run": true}
+  ]},
+  {"op": "wait", "s": 2.2},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "walk", "name": "b_slide", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ec_walk", "seconds": 2.4, "fps": 30, "every": 12, "width": 640, "events": [
+    {"at": 0, "do": "place", "xz": [-18, -24]},
+    {"at": 0, "do": "face", "to": [1, 0.45]},
+    {"at": 1, "do": "walk", "v": [0, 1], "run": true}
+  ]},
+  {"op": "wait", "s": 3.1},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "walk", "name": "c_corner", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ec_walk", "seconds": 2.0, "fps": 30, "every": 10, "width": 640, "events": [
+    {"at": 0, "do": "place", "xz": [-18, -22.2]},
+    {"at": 0, "do": "face", "to": [1, 1]},
+    {"at": 1, "do": "walk", "v": [0, 1], "run": true}
+  ]},
+  {"op": "wait", "s": 2.7},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "walk", "name": "d_door", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ec_walk", "seconds": 1.5, "fps": 30, "every": 9, "width": 640, "events": [
+    {"at": 0, "do": "place", "xz": [-18, -22.63]},
+    {"at": 0, "do": "face", "to": [1, 0]},
+    {"at": 1, "do": "walk", "v": [0, 1], "run": true}
+  ]},
+  {"op": "wait", "s": 2.2},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "walk", "name": "e_alley", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ec_walk", "seconds": 2.0, "fps": 30, "every": 10, "width": 640, "events": [
+    {"at": 0, "do": "place", "xz": [-18, -18.2]},
+    {"at": 0, "do": "face", "to": [1, 0]},
+    {"at": 1, "do": "walk", "v": [0, 1], "run": true}
+  ]},
+  {"op": "wait", "s": 2.7},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "walk", "name": "f_edge", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ec_walk", "seconds": 1.5, "fps": 30, "every": 15, "width": 640, "events": [
+    {"at": 0, "do": "place", "xz": [28, 20]},
+    {"at": 0, "do": "face", "to": [1, 0]},
+    {"at": 1, "do": "walk", "v": [0, 1], "run": true}
+  ]},
+  {"op": "wait", "s": 2.2},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "state"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "leave"},
+  {"op": "wind", "freeze": false},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

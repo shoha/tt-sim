@@ -15,7 +15,7 @@ extends RefCounted
 ##                             <dir>/<name>_report.txt (a frame is saved every `every` frames, `width`
 ##                             px wide, default 0: none). The job must `wait` seconds + 0.5 afterwards.
 ##                             Events {at: frame, do: ...}: "walk" (v: [right, forward], run),
-##                             "turn" (dir), "yaw" (deg), "grab" (px: [x, y] screen fractions),
+##                             "turn" (dir), "yaw" (deg), "face" (to: [dx, dz]), "place" (at: [x, z]), "grab" (px: [x, y] screen fractions),
 ##                             "drag" (to: frame, dx, dy: cursor pixels over the frames), "release",
 ##                             "glide" (xz: [x, z])
 ## Run walk jobs with `--fixed-fps 30` (before `--script`) so every step is exactly 1/30 s.
@@ -146,6 +146,14 @@ class WalkRig:
 				cc.turn_view(int(e.get("dir", 1)))
 			"yaw":
 				cc.set_yaw_now(float(e.deg))
+			"face":
+				# Face the world direction `to` [dx, dz] (screen_up(yaw) = (-sin, -cos)).
+				var to: Array = e.to
+				cc.set_yaw_now(rad_to_deg(atan2(-float(to[0]), -float(to[1]))))
+			"place":
+				# Stand at world XZ `xz` at once (no collision), as a teleport.
+				var xz: Array = e.xz
+				eye.frame_ground(Vector2(float(xz[0]), float(xz[1])), 0.0)
 			"glide":
 				var xz: Array = e.xz
 				eye.glide_to(Vector2(float(xz[0]), float(xz[1])))

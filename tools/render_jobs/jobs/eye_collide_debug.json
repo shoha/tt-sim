@@ -1,0 +1,18 @@
+{
+ "out_dir": "render_jobs/eye_collide_debug",
+ "timeout_s": 120,
+ "hang_s": 100,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_camera_ec_hamlet"},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "enter", "at": [-18, -20], "yaw": 270, "pitch": 3, "fov": 60},
+  {"op": "wait", "s": 0.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_collide.gd", "action": "sweep", "at": [-15.775, -19.524], "motions": [[0, 0.17], [0.12, 0.12], [0, -0.17], [-0.17, 0], [0.17, 0], [0.12, 0.03], [0, 0.5], [0, 1.0]], "out": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ec_scan/sweep_stuck.txt"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_collide.gd", "action": "sweep", "at": [-15.775, -20.5], "motions": [[0, 0.17], [0.12, 0.12], [0, 1.0]], "out": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ec_scan/sweep_wall.txt"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "leave"},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

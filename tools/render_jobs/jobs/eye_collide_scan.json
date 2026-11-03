@@ -1,0 +1,32 @@
+{
+ "out_dir": "render_jobs/eye_collide_scan",
+ "timeout_s": 900,
+ "hang_s": 150,
+ "saved": {"folder": "_camera_ec_hamlet", "load": "play"},
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_camera_ec_hamlet", "load": "play"},
+  {"op": "new_map", "biome": "", "size": 250, "seed": 1234, "phase": "build"},
+  {"op": "wait_ready", "settle": 1.0, "phase": "build"},
+  {"op": "no_autosave", "phase": "build"},
+  {"op": "eval", "expr": "_authoring_controller.panel._on_rail_item_pressed(\"wall\")", "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/walls.gd", "action": "kind", "kind": "row", "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "street", "from": [-18, -26], "to": [-18, 26], "preset": 3, "seed": 21, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "street", "from": [18, -26], "to": [18, 26], "preset": 2, "seed": 31, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "dress", "id": 1, "kit": "farming_hamlet", "wealth": 0.3, "density": 1.2, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "dress", "id": 2, "kit": "market_town", "wealth": 0.7, "density": 1.2, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "save", "folder": "_camera_ec_hamlet", "replace": true, "phase": "build"},
+  {"op": "play", "folder": "_camera_ec_hamlet", "phase": "build"},
+  {"op": "wait_ready", "settle": 2.0, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "enter", "at": [-18, -20], "yaw": 45, "pitch": 3, "fov": 60},
+  {"op": "wait", "s": 0.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_collide.gd", "action": "bodies", "out": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ec_scan/bodies.txt"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_collide.gd", "action": "occupancy", "at": [-18, -14], "half": 16, "cell": 0.25, "out": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ec_scan/occupancy_west.txt"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_collide.gd", "action": "occupancy", "at": [18, -14], "half": 16, "cell": 0.25, "out": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ec_scan/occupancy_east.txt"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "leave"},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}
