@@ -680,12 +680,12 @@ violet-brown as paint because its green is under its red) and the opening trim b
 surround 0.14 m wide (28 triangles), so a slit reads as a dark recess in a pale outline. The built-in
 tower styles do not set the flag, so no other digest moved. The core `bartizan_keep` entry in
 `tools/export_core_structures_run.gd` writes the keep facade style out with slit symbols
-(`style_patch.facade`: 0.34 to 0.36 m wide, 1.1 to 2.3 m tall; an uneven rhythm per face: a slit each side of
-the door, low pairs on the ground floor, stair-tall slits among shorter ones on the sides, high ones under the
-parapet on the back; the front's arched windows are as before). The keep went from 1676 to
-1692 triangles at the 6 by 4 pin footprint (pin `524b4461`; the 7 by 7 m tile footprint shows about a dozen
-slits per two faces against four). The tile was retaken at the same framing (render job from
-`make_tile_job.gd`; `bk2_*` captures in `docs/plans/2026-11-02-camera/clips/`). Needs procgen pin
+(`style_patch.facade`: 0.36 m wide, 1.4 m tall on the ground floor and 2.0 m above; owner verdict BK3: one
+rhythm for every face, a slit in each bay, evenly spaced and centred; a low slit each side of the door; the
+front's arched windows keep their bays and the bays between them are slits). The keep went from 1676 to
+2154 triangles at the 6 by 4 pin footprint (pin `5c3dc6da`; the 7 by 7 m tile footprint shows 12 slits
+on two faces against four). The tile was retaken at the same framing (render job from
+`make_tile_job.gd`; `bk2_*` and `bk3_*` captures in `docs/plans/2026-11-02-camera/clips/`). Needs procgen pin
 `bartizan` branch (the `slit` key) in tt-sim and plantgen.
 
 **Pennant kink (topic pennantkink, 2026-10-31).** The tip of a windy or stormy pennant folded into a

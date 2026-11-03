@@ -847,9 +847,10 @@ const STARTERS: Array[Dictionary] = [
 		"variant": "Crenellated, corner turrets, banners",
 		# The "keep" facade style written out with arrow slits (bartizan2, 2026-11-03; a symbol's
 		# `slit: true` makes a dark recess in a pale stone surround, ProcgenGlazing and
-		# ProcgenOpeningTrim): tall slits in an uneven rhythm on the sides and the back (a stair
-		# slit, a pair of low ones, a high one under the parapet), a slit each side of the door,
-		# and the front's dressed arched windows as the keep style has them.
+		# ProcgenOpeningTrim): one rhythm for every face (owner verdict BK3, 2026-11-03): a slit in
+		# each bay, low ones (`slit_low`) on the ground floor and taller ones (`slit`) above, evenly
+		# spaced and centred on the bays; the door has a low slit each side, and the front's dressed
+		# arched windows keep their bays (the bays between them are slits instead of blank wall).
 		"style_patch":
 		{
 			"facade":
@@ -862,13 +863,9 @@ const STARTERS: Array[Dictionary] = [
 				"symbols":
 				{
 					"door": {"kind": "door", "head": "round"},
-					"slit": {"kind": "window", "width": 0.36, "height": 1.7, "sill": 0.8, "slit": true},
+					"slit": {"kind": "window", "width": 0.36, "height": 2.0, "sill": 1.2, "slit": true},
 					"slit_low":
-					{"kind": "window", "width": 0.34, "height": 1.35, "sill": 0.9, "slit": true},
-					"slit_tall":
-					{"kind": "window", "width": 0.36, "height": 2.3, "sill": 0.6, "slit": true},
-					"slit_high":
-					{"kind": "window", "width": 0.34, "height": 1.1, "sill": 2.5, "slit": true},
+					{"kind": "window", "width": 0.36, "height": 1.4, "sill": 0.9, "slit": true},
 					"arch_window":
 					{"kind": "window", "width": 0.7, "height": 1.35, "sill": 0.75, "head": "round"},
 					"blank": {"kind": "blank"},
@@ -889,50 +886,20 @@ const STARTERS: Array[Dictionary] = [
 								"repeat":
 								[
 									{"size": "~bay", "symbol": "arch_window"},
-									{"size": "~bay", "symbol": "blank"},
+									{"size": "~bay", "symbol": "slit"},
 								]
 							}
 						],
 					},
 					"side":
 					{
-						"ground":
-						[
-							{"size": "~1.4", "symbol": "blank"},
-							{"size": "~1", "symbol": "slit_low"},
-							{"size": "~2.2", "symbol": "blank"},
-							{"size": "~1", "symbol": "slit_low"},
-							{"size": "~1.4", "symbol": "blank"},
-						],
-						"upper":
-						[
-							{"size": "~0.9", "symbol": "blank"},
-							{"size": "~1", "symbol": "slit_tall"},
-							{"size": "~1.5", "symbol": "blank"},
-							{"size": "~1", "symbol": "slit"},
-							{"size": "~1.5", "symbol": "blank"},
-							{"size": "~1", "symbol": "slit_tall"},
-							{"size": "~0.9", "symbol": "blank"},
-						],
+						"ground": [{"repeat": [{"size": "~bay", "symbol": "slit_low"}]}],
+						"upper": [{"repeat": [{"size": "~bay", "symbol": "slit"}]}],
 					},
 					"back":
 					{
-						"ground":
-						[
-							{"size": "~1.2", "symbol": "blank"},
-							{"size": "~1", "symbol": "slit_low"},
-							{"size": "~1.2", "symbol": "blank"},
-						],
-						"upper":
-						[
-							{"size": "~1", "symbol": "blank"},
-							{"size": "~1", "symbol": "slit_high"},
-							{"size": "~0.6", "symbol": "blank"},
-							{"size": "~1", "symbol": "slit_tall"},
-							{"size": "~0.6", "symbol": "blank"},
-							{"size": "~1", "symbol": "slit_high"},
-							{"size": "~1", "symbol": "blank"},
-						],
+						"ground": [{"repeat": [{"size": "~bay", "symbol": "slit_low"}]}],
+						"upper": [{"repeat": [{"size": "~bay", "symbol": "slit"}]}],
 					},
 				},
 			},
