@@ -1,0 +1,20 @@
+{
+ "out_dir": "render_jobs/eyewindows_t",
+ "timeout_s": 600,
+ "hang_s": 180,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_windows.gd", "action": "variant", "v": ""},
+  {"op": "play", "folder": "_camera_ew_hamlet"},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_windows.gd", "action": "shots", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ew_r3", "tag": "T", "dists": [2.0, 3.5, 5.0], "windows": [{"name": "hamlet", "c": [-20.88, 1.35, -4.61], "n": [1, 0]}, {"name": "street", "c": [15.13, 1.35, -5.76], "n": [1, 0]}]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_windows.gd", "action": "await"},
+  {"op": "wait", "s": 1.0},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}
