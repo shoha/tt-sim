@@ -93,7 +93,6 @@ var _brush_tool: BrushTool = null
 
 var _orbit: OrbitView = OrbitView.new()
 var _active: ViewMode = null  # the view mode in charge: _orbit, or the one set_view_mode gave
-
 # RMB press (short-click vs. drag detection); the pan itself is the active view's
 var _rmb_press_time: int = 0  # Timestamp (msec) of RMB press for short-click detection
 var _rmb_press_pos: Vector2 = Vector2.ZERO  # Screen position of RMB press
@@ -307,14 +306,29 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if _game_map._is_text_input_focused():
 		return
 
+	# A key ends a glide between the orbit view and the eye at its end; V (and F9) only end it.
+	var key := event as InputEventKey
+	var key_down: bool = key != null and key.pressed and not key.echo
+	if key_down and eye.is_view_gliding():
+		eye.skip_view_glide()
+		if CameraRig.is_street_key(event) or key.keycode == KEY_F9:
+			get_viewport().set_input_as_handled()
+			return
+
 	# Camera reset (Home key) - tween back to initial position, zoom and yaw
 	if event.is_action_pressed("camera_reset"):
 		_reset_camera_to_home()
 		return
 
 	# F9: step into the eye view and back (debug key)
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F9:
-		set_view_mode(_orbit if _active == eye else eye)
+	if key_down and key.keycode == KEY_F9:
+		_view.toggle_street()
+		get_viewport().set_input_as_handled()
+		return
+
+	# V: step down to the street and back up (not while authoring: an orbit-only tool)
+	if CameraRig.is_street_key(event) and (_active == eye or not _game_map.authoring_mode):
+		_view.toggle_street()
 		get_viewport().set_input_as_handled()
 		return
 

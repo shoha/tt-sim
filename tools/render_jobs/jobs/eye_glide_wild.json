@@ -1,0 +1,34 @@
+{
+ "out_dir": "render_jobs/eyeglide_wild",
+ "timeout_s": 900,
+ "hang_s": 200,
+ "saved": {"folder": "_camera_eg_wild", "load": "play"},
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_camera_eg_wild", "load": "play"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "new", "biome": "temperate_forest_summer_s1", "size": 150, "seed": 3, "landform": "valley", "phase": "build"},
+  {"op": "wait_ready", "settle": 1.5, "phase": "build"},
+  {"op": "no_autosave", "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "save", "folder": "_camera_eg_wild", "replace": true, "phase": "build"},
+  {"op": "play", "folder": "_camera_eg_wild", "phase": "build"},
+  {"op": "wait_ready", "settle": 2.0, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "look_at", "at": [10, 10]},
+  {"op": "zoom", "size": 26.0},
+  {"op": "settle"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_glide.gd", "action": "clip", "name": "w_enter", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/eg_frames_wild", "direction": "enter", "keep": true},
+  {"op": "wait", "s": 4.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_glide.gd", "action": "leave"},
+  {"op": "settle"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_glide.gd", "action": "stand", "at": [6, 4]},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_glide.gd", "action": "clip", "name": "w_exit", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/eg_frames_wild", "direction": "exit", "keep": true},
+  {"op": "wait", "s": 4.5},
+  {"op": "wind", "freeze": false},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

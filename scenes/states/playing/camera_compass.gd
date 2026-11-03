@@ -8,7 +8,8 @@ extends Control
 ## side of a small elevation gauge that doubles as the top-down button (O). Glass, as the rest
 ## of the play HUD (UI_TASTE C8): a plum disc with a chalk rim, the north wedge and the gauge's
 ## elevation ray in lake light (cool means "is": it shows state), the buttons chalk, deepening
-## on hover.
+## on hover. The gauge's ray reads below home too: the street (EyeView) looks from 35 degrees up
+## to 60 down, and a flatter press at home glides down to it (CameraView.tilt_by).
 ##
 ## A plain Control that draws itself and hit-tests its buttons, so it needs no theme
 ## and costs nothing while it is still. It stops mouse events (mouse_filter STOP) over its own
@@ -184,9 +185,9 @@ func _press(at: Vector2) -> void:
 func _get_tooltip(at_position: Vector2) -> String:
 	match tilt_at(at_position):
 		Tilt.FLATTER:
-			return "Tilt the view flatter (Alt + drag down to up)"
+			return "Tilt flatter (Alt + drag down to up). Past home it steps down to the street (V)."
 		Tilt.STEEPER:
-			return "Tilt the view steeper (Alt + drag up to down)"
+			return "Tilt steeper (Alt + drag up to down). From the street the steepest look climbs up (V)."
 		Tilt.TOP_DOWN:
 			return "Top-down view (O); press again to go back"
 	var side := button_at(at_position)

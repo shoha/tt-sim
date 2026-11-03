@@ -27,6 +27,8 @@ const MIN_PITCH := 21.6
 const TOP_DOWN_PITCH := 90.0
 ## The seconds the O toggle and Home take over the whole range (eased like a turn).
 const TILT_SECONDS := 0.5
+## An Alt + drag that pulls this many degrees flatter than home steps down to the street.
+const STREET_PULL_DEG := 8.0
 ## Alt + drag: degrees of yaw per pixel dragged sideways, and of pitch per pixel dragged down.
 ## A 1080 px drag down the screen covers the 68 degree pitch range three times over.
 const ORBIT_YAW_PER_PX := 0.3
@@ -199,6 +201,14 @@ static func orbit_action(
 static func is_top_down_key(event: InputEvent) -> bool:
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo or key.keycode != KEY_O:
+		return false
+	return not (key.alt_pressed or key.ctrl_pressed or key.meta_pressed or key.shift_pressed)
+
+
+## Whether `event` is a fresh bare V press: step down to the street (the eye view) and back.
+static func is_street_key(event: InputEvent) -> bool:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo or key.keycode != KEY_V:
 		return false
 	return not (key.alt_pressed or key.ctrl_pressed or key.meta_pressed or key.shift_pressed)
 

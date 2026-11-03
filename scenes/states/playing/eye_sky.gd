@@ -30,6 +30,9 @@ static var enabled: bool = true
 ## Dominant biome id of the map and its seed (set at map load; "" and 0 for none).
 var biome: String = ""
 var map_seed: int = 0
+## Metres added to the fog's begin and end while the camera is far from what it looks at (the
+## glide between the orbit view and the eye, EyeGlide: the camera starts 974 m back); 0 at the eye.
+var fog_offset: float = 0.0
 
 var _env: Environment = null
 var _sky: Sky = null
@@ -77,6 +80,7 @@ func sync(env: Environment, to_sun: Vector3) -> void:
 	if _active and env != _env:
 		leave()
 	if _active and _still_ours(env, to_sun):
+		_apply_fog_depth(env)
 		return
 	if not _active and not can_paint(env):
 		return
@@ -96,6 +100,7 @@ func sync(env: Environment, to_sun: Vector3) -> void:
 		return
 	_saved = _read_applied(env)
 	_install(env, to_sun)
+	_apply_fog_depth(env)
 
 
 ## Puts every field back as it was before the sky was installed. Safe to call when not active.
@@ -103,6 +108,7 @@ func leave() -> void:
 	if not _active:
 		return
 	_active = false
+	fog_offset = 0.0
 	var env := _env
 	_env = null
 	if env == null:
@@ -130,8 +136,17 @@ func _still_ours(env: Environment, to_sun: Vector3) -> bool:
 		and env.sky == _sky
 		and env.fog_enabled
 		and env.fog_light_color.is_equal_approx(look["foot_color"])
-		and absf(env.fog_depth_end - StreetSkyLook.FOG_END_M) < 0.01
+		and env.fog_depth_curve == StreetSkyLook.FOG_CURVE
 	)
+
+
+## The fog's begin and end at the camera's distance from what it looks at (fog_offset).
+func _apply_fog_depth(env: Environment) -> void:
+	var begin := StreetSkyLook.FOG_BEGIN_M + fog_offset
+	var end := StreetSkyLook.FOG_END_M + fog_offset
+	if absf(env.fog_depth_end - end) >= 0.01 or absf(env.fog_depth_begin - begin) >= 0.01:
+		env.fog_depth_begin = begin
+		env.fog_depth_end = end
 
 
 ## The manager-written fields as they are now (the values to restore). Includes the sky and fog

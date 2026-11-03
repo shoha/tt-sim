@@ -39,8 +39,13 @@ const NEAR_PLANE := 0.05
 ## The painted sky and edge fog installed in the level's environment while the eye is on
 ## (MapViewFit tells it the map's biome and seed).
 var sky: EyeSky = EyeSky.new()
+## The glide between the orbit view and the eye (EyeGlide): runs while this mode is active, in
+## either direction, so the eye's sky and fog are live all through it.
+var glide: EyeGlide = EyeGlide.new()
 
 var _entered: bool = false
+var _home_after_glide: bool = false  # the glide out is a Home: the orbit's Home runs on landing
+var _leave_after_frame: int = -1  # the glide out landed behind a veil: leave after this frame
 var _foot: Vector2 = Vector2.ZERO  # world XZ the eye stands on
 var _foot_y: float = 0.0  # the ground's height under the foot, eased
 var _pitch: float = EyeRig.PITCH_ENTRY
@@ -146,6 +151,9 @@ func deactivate() -> void:
 	if not _entered:
 		return
 	_entered = false
+	glide.end()
+	_home_after_glide = false
+	_leave_after_frame = -1
 	sky.leave()
 	if not is_instance_valid(game_map) or not is_instance_valid(game_map.camera_node):
 		return
@@ -175,7 +183,15 @@ func deactivate() -> void:
 
 func process(delta: float) -> void:
 	var camera := game_map.camera_node
+	if _leave_after_frame >= 0:
+		# The glide out has landed behind its veil; the orbit takes over once the veil was drawn.
+		if Engine.get_process_frames() > _leave_after_frame:
+			_leave_now()
+		return
 	_sync_sky(0.0)
+	if glide.is_active():
+		_process_glide(delta)
+		return
 	_sync_painted_sky()
 	_step_lens(delta)
 	_step_walk(delta)
@@ -250,6 +266,116 @@ func glide_to(at: Vector2) -> void:
 
 func cancel_glide() -> void:
 	_glide = null
+	skip_view_glide()
+
+
+# The glide between the orbit view and the eye (EyeGlide)
+
+
+## Whether the glide between the orbit view and the eye runs.
+func is_view_gliding() -> bool:
+	return glide.is_active()
+
+
+## Whether a glide out has landed and waits one frame (behind its veil) to hand over to the orbit.
+func is_leaving() -> bool:
+	return _leave_after_frame >= 0
+
+
+## Start the glide into the eye (call right after activate: the camera is at the eye then and the
+## home pose is the saved orbit pose). The first frame is the home picture.
+func begin_glide_in() -> void:
+	_home_after_glide = false
+	_begin_glide(true)
+
+
+## Start the glide back to the orbit view's pose; the orbit view takes over when it lands
+## (CameraController.set_view_mode). `go_home`: the orbit's Home runs on landing.
+func begin_glide_out(go_home: bool = false) -> void:
+	if is_leaving():
+		return
+	_clear_input()
+	_home_after_glide = go_home
+	_begin_glide(false)
+
+
+## End a running glide at once, at its end: the eye's own pose going in, the orbit view going
+## out. Any key or pointer input does this before it acts. No-op when no glide runs.
+func skip_view_glide() -> void:
+	if glide.is_active():
+		_land_glide(false)
+
+
+func _begin_glide(entering: bool) -> void:
+	var camera := game_map.camera_node
+	var aspect := float(game_map.world_viewport.size.x) / maxf(game_map.world_viewport.size.y, 1.0)
+	var home := _home_pose()
+	var eye_basis := (
+		game_map.cameraholder_node.global_basis
+		* CameraRig.camera_basis(CameraRig.screen_right(CameraRig.HOME_YAW), _pitch)
+	)
+	glide.begin(
+		camera,
+		sky,
+		entering,
+		{
+			"home_basis": home.basis.orthonormalized(),
+			"pivot": _saved_pivot,
+			"eye_basis": eye_basis.orthonormalized(),
+			"eye_position": eye_position(),
+			"view_height": _saved_size if _saved_keep == Camera3D.KEEP_HEIGHT else _saved_size / aspect,
+			"lens": EyeRig.corrected_fov(_lens, aspect),
+		}
+	)
+	_sync_painted_sky()
+
+
+## The orbit camera's world pose as leaving would restore it (deactivate: the holder turned about
+## the orbit pivot by whatever yaw the eye added).
+func _home_pose() -> Transform3D:
+	var turned := controller.current_yaw() - _saved_yaw
+	var holder_basis := CameraRig.holder_basis(controller.current_yaw())
+	var holder_at := CameraRig.rotate_about_pivot(_saved_holder, _saved_pivot, turned)
+	return Transform3D(holder_basis * _saved_basis, holder_at + holder_basis * _saved_position)
+
+
+func _process_glide(delta: float) -> void:
+	var camera := game_map.camera_node
+	var running := glide.step(delta)
+	_sync_painted_sky()
+	CanopyFade.publish(camera, camera.size, Vector2(game_map.world_viewport.size), delta)
+	if not running:
+		_land_glide(true)
+
+
+## The glide has reached its end (`finished`) or is skipped: going in, the eye is placed as the
+## plain eye view places it; going out, the orbit view takes over, behind a dissolve of the last
+## frame when the glide ran its course (a skipped one is cut, as the input that skipped it is).
+func _land_glide(finished: bool) -> void:
+	var entering := glide.is_entering()
+	glide.end()
+	if entering:
+		var camera := game_map.camera_node
+		camera.near = NEAR_PLANE
+		camera.far = FAR_PLANE
+		_apply_fov()
+		_place()
+		_sync_painted_sky()
+		return
+	if finished and EyeGlide.freeze_veil(game_map.viewport_container.get_parent()):
+		# The veil is drawn once over the last glide frame; the orbit takes over next frame.
+		_leave_after_frame = Engine.get_process_frames()
+		return
+	_leave_now()
+
+
+func _leave_now() -> void:
+	var go_home := _home_after_glide
+	_home_after_glide = false
+	_leave_after_frame = -1
+	controller.set_view_mode(controller.orbit_view())
+	if go_home:
+		controller.orbit_view().reset_home()
 
 
 # Pointer: grab the ground
@@ -264,6 +390,7 @@ func is_rmb_pan_active() -> bool:
 
 
 func pan_begin(screen_pos: Vector2, rmb: bool) -> void:
+	skip_view_glide()
 	_glide = null
 	_grab = _pointer_ground(screen_pos)
 	_grab_rmb = rmb and _grab != null
@@ -295,6 +422,10 @@ func pan_motion(event: InputEventMouseMotion) -> bool:
 func primary_button(event: InputEventMouseButton) -> bool:
 	if event.button_index != MOUSE_BUTTON_LEFT:
 		return false
+	if event.pressed and glide.is_active():
+		skip_view_glide()
+		if controller.view_mode() != self:
+			return false
 	if not event.pressed:
 		if _grab != null and not _grab_rmb:
 			pan_cancel()
@@ -314,10 +445,12 @@ func primary_button(event: InputEventMouseButton) -> bool:
 
 
 func zoom_by(delta: float) -> void:
+	skip_view_glide()
 	_lens_target = EyeRig.clamp_lens(_lens_target + delta)
 
 
 func zoom_notch(direction: int) -> void:
+	skip_view_glide()
 	_lens_target = EyeRig.lens_after_notch(_lens_target, direction)
 
 
@@ -351,6 +484,15 @@ func view_center_offset() -> Vector2:
 
 ## Home leaves the eye for the orbit view and runs the orbit's Home from there.
 func reset_home() -> void:
+	if is_leaving():
+		return
+	if glide.is_active():
+		skip_view_glide()
+		if controller.view_mode() != self:
+			return
+	if EyeGlide.allowed():
+		begin_glide_out(true)
+		return
 	var orbit := controller.orbit_view()
 	controller.set_view_mode(orbit)
 	orbit.reset_home()

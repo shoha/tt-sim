@@ -26,6 +26,8 @@ var orbiting: bool = false
 var _c: CameraController = null
 var _game_map: GameMap = null
 var _glide_home_after: bool = false  # Home: glide to the home position once the view is home
+var _pulled_past_home: float = 0.0  # degrees an Alt + drag has pulled flatter than home
+var _enter_after_frame: int = -1  # a glide in waits for its veil to be drawn (frame number)
 
 
 func _init(controller: CameraController, game_map: GameMap) -> void:
@@ -67,7 +69,61 @@ func set_pitch_target(pitch_deg: float) -> void:
 ## Ease the pitch on by `degrees` (the compass arrows; negative is flatter), from the pitch being
 ## eased to, so presses made mid-tilt add up.
 func tilt_by(degrees: float) -> void:
+	if degrees < 0.0 and _tilts_past_home():
+		enter_street()
+		return
+	if degrees > 0.0 and _c.view_mode() == _c.eye and pitch.target >= EyeRig.PITCH_MAX - 0.01:
+		leave_street()  # the steepest look down from the street climbs back up
+		return
 	set_pitch_target(pitch.target + degrees)
+
+
+## Step down from the orbit view into the eye (the street): the glide of EyeGlide (a dolly zoom,
+## 1.3 s), or at once when `smooth` is false, the system asks for reduced motion or the setting is
+## off. The last orbit frame is held as a veil first and the switch comes the frame after (advance),
+## once the veil has been drawn; a headless run has no veil and switches at once. No-op unless the
+## orbit view is the view (owner verdict SL1, 2026-11-03).
+func enter_street(smooth: bool = true) -> void:
+	var eye := _c.eye
+	if _c.view_mode() != _c.orbit_view() or _enter_after_frame >= 0:
+		return
+	if smooth and EyeGlide.allowed():
+		if EyeGlide.freeze_veil(_game_map.viewport_container.get_parent()):
+			_enter_after_frame = Engine.get_process_frames()
+			return
+		_c.set_view_mode(eye)
+		eye.begin_glide_in()
+		return
+	_c.set_view_mode(eye)
+
+
+## Climb from the eye back to the orbit view the eye remembered: the glide in reverse, or at once.
+## No-op when the eye is not the view.
+func leave_street(smooth: bool = true) -> void:
+	if _c.view_mode() != _c.eye:
+		return
+	if smooth and EyeGlide.allowed():
+		_c.eye.begin_glide_out()
+	else:
+		_c.set_view_mode(_c.orbit_view())
+
+
+## V and F9: the street if the orbit is the view, the orbit if the street is.
+func toggle_street() -> void:
+	if _c.view_mode() == _c.eye:
+		leave_street()
+	else:
+		enter_street()
+
+
+## Whether a flatter tilt from here goes past home: the orbit view is at (or easing to) its
+## flattest, so the next flatter step goes down to the street (owner verdict SL1, 2026-11-03).
+func _tilts_past_home() -> bool:
+	return (
+		_c.view_mode() == _c.orbit_view()
+		and not _game_map.authoring_mode
+		and pitch.target <= CameraRig.MIN_PITCH + 0.01
+	)
 
 
 ## The O key: ease straight down, or back to the pitch it left.
@@ -108,6 +164,11 @@ func go_home() -> bool:
 
 ## One frame of the eased turn and tilt: move the view by their steps, keeping the pivot.
 func advance(delta: float) -> void:
+	if _enter_after_frame >= 0 and Engine.get_process_frames() > _enter_after_frame:
+		_enter_after_frame = -1
+		if _c.view_mode() == _c.orbit_view():
+			_c.set_view_mode(_c.eye)
+			_c.eye.begin_glide_in()
 	var tilted := pitch.step(delta)
 	if not yaw.is_turning() and not tilted:
 		return
@@ -180,6 +241,7 @@ func begin_orbit() -> void:
 	_c.view_mode().cancel_glide()
 	_c.cancel_pan()
 	_glide_home_after = false
+	_pulled_past_home = 0.0
 	yaw.nudge(0.0)
 	pitch.set_now(pitch.pitch)
 	orbiting = true
@@ -191,6 +253,15 @@ func orbit_by(change: Vector2) -> void:
 		rotate_view(change.x)
 		yaw.nudge(change.x)
 	if not is_zero_approx(change.y):
+		# Dragging on past home, flatter, steps down to the street.
+		if change.y < 0.0 and _tilts_past_home():
+			_pulled_past_home -= change.y
+			if _pulled_past_home >= CameraRig.STREET_PULL_DEG:
+				_pulled_past_home = 0.0
+				enter_street()
+				return
+		else:
+			_pulled_past_home = 0.0
 		pitch.set_now(pitch.pitch + change.y)
 		apply_pitch()
 	_sync_compass()

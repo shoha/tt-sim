@@ -323,6 +323,8 @@ func test_leaving_the_eye_puts_the_orbit_camera_back() -> void:
 
 
 func test_f9_toggles_the_eye() -> void:
+	# The instant switch (the glide has its own tests, test_eye_glide.gd).
+	EyeGlide.enabled = false
 	assert_eq(_controller.view_mode().mode_name(), &"orbit")
 	var key := InputEventKey.new()
 	key.keycode = KEY_F9
@@ -331,6 +333,7 @@ func test_f9_toggles_the_eye() -> void:
 	assert_eq(_controller.view_mode().mode_name(), &"eye")
 	_controller._unhandled_key_input(key)
 	assert_eq(_controller.view_mode().mode_name(), &"orbit")
+	EyeGlide.enabled = true
 
 
 func test_grab_pan_moves_the_foot_so_the_point_stays_under_the_cursor() -> void:
