@@ -3,8 +3,10 @@ extends RefCounted
 
 ## The painted sky and edge fog of the eye view (cards eyesky SR0b and SR6). While the eye view
 ## is the camera, the level's Environment gets the shader sky (shaders/street_sky.gdshader: a
-## painted gradient, clouds and layered ridges that hide where the map ends) and a depth fog of
-## 25 to 85 m whose colour is the biome's foot colour; leaving puts every field back as it was.
+## painted gradient, clouds and layered ridges that hide where the map ends) and a depth fog
+## scaled to the map (it ramps up toward the map's far side and never nearer than 25 to 85 m:
+## StreetSkyLook.fog_range) whose colour is the biome's foot colour; leaving puts every field back
+## as it was.
 ## The orthographic and top-down views never see any of this: nothing here runs outside the eye.
 ##
 ## What the sky replaces is read from the Environment: a flat background colour (the default
@@ -33,6 +35,9 @@ var map_seed: int = 0
 ## Metres added to the fog's begin and end while the camera is far from what it looks at (the
 ## glide between the orbit view and the eye, EyeGlide: the camera starts 974 m back); 0 at the eye.
 var fog_offset: float = 0.0
+## The eye's reach on the map (StreetSkyLook.map_reach, metres; 0 for no map), which EyeView sets
+## every frame: the fog's begin and end scale with it (StreetSkyLook.fog_range).
+var reach: float = 0.0
 
 var _env: Environment = null
 var _sky: Sky = null
@@ -140,11 +145,14 @@ func _still_ours(env: Environment, to_sun: Vector3) -> bool:
 	)
 
 
-## The fog's begin and end at the camera's distance from what it looks at (fog_offset).
+## The fog's begin and end scaled to the map (reach), moved out by the camera's distance from
+## what it looks at (fog_offset). Rewritten only when it moved by a few centimetres or more, so
+## walking does not touch the environment every frame.
 func _apply_fog_depth(env: Environment) -> void:
-	var begin := StreetSkyLook.FOG_BEGIN_M + fog_offset
-	var end := StreetSkyLook.FOG_END_M + fog_offset
-	if absf(env.fog_depth_end - end) >= 0.01 or absf(env.fog_depth_begin - begin) >= 0.01:
+	var fog := StreetSkyLook.fog_range(reach)
+	var begin := fog.x + fog_offset
+	var end := fog.y + fog_offset
+	if absf(env.fog_depth_end - end) >= 0.05 or absf(env.fog_depth_begin - begin) >= 0.05:
 		env.fog_depth_begin = begin
 		env.fog_depth_end = end
 
@@ -186,8 +194,9 @@ func _install(env: Environment, to_sun: Vector3) -> void:
 		env.fog_mode = Environment.FOG_MODE_DEPTH
 	env.fog_light_color = look["foot_color"]
 	env.fog_light_energy = 1.0
-	env.fog_depth_begin = StreetSkyLook.FOG_BEGIN_M
-	env.fog_depth_end = StreetSkyLook.FOG_END_M
+	var fog := StreetSkyLook.fog_range(reach)
+	env.fog_depth_begin = fog.x + fog_offset
+	env.fog_depth_end = fog.y + fog_offset
 	env.fog_depth_curve = StreetSkyLook.FOG_CURVE
 	env.fog_sky_affect = 0.0
 	env.fog_height_density = 0.0

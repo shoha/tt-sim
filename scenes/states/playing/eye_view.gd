@@ -712,4 +712,5 @@ func _sync_painted_sky() -> void:
 	var to_sun := Vector3(sun.x, sun.y, sun.z)
 	if to_sun.length() < 0.5:
 		to_sun = Vector3(0.0, 0.64, 0.77)
+	sky.reach = StreetSkyLook.map_reach(_foot, _bounds)
 	sky.sync(level_environment(), to_sun.normalized())

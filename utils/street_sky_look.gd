@@ -14,10 +14,17 @@ extends RefCounted
 ## look is found by the longest table key the id starts with. A map without a biome (or one this
 ## table does not know) gets DEFAULT.
 
-## Depth fog in the eye view, metres (owner verdict, 2026-11-02: 25 to 85 m).
+## Depth fog in the eye view, metres: the nearest it ever begins and ends (owner verdict,
+## 2026-11-02: 25 to 85 m). The fog is scaled to the map (fog_range): it begins and ends further
+## out as the map's far side does, so a small valley keeps its own detail clear and a large map is
+## hazed only toward its far edge, where the ground melts into the ridge foot.
 const FOG_BEGIN_M := 25.0
 const FOG_END_M := 85.0
 const FOG_CURVE := 1.0
+## The fog's begin and end as fractions of the eye's reach (the distance to the map's farthest
+## point): begin three quarters of the way out, end half as far again past the farthest edge.
+const FOG_BEGIN_REACH := 0.75
+const FOG_END_REACH := 1.5
 
 const DEFAULT := "default"
 
@@ -51,6 +58,8 @@ const RANGES := {
 	"lit_amount": Vector2(0.0, 1.0),
 	"warm_amount": Vector2(0.0, 1.0),
 	"sun_glow": Vector2(0.0, 2.0),
+	"cloud2_cover": Vector2(0.0, 1.0),
+	"snow_amount": Vector2(0.0, 1.0),
 }
 
 ## Shared defaults: the optional keys a look may leave out.
@@ -64,6 +73,8 @@ const COMMON := {
 	"lit_amount": 0.5,
 	"warm_amount": 0.4,
 	"sun_glow": 0.6,
+	"cloud2_cover": 0.45,
+	"snow_amount": 0.0,
 }
 
 const LOOKS := {
@@ -163,7 +174,8 @@ const LOOKS := {
 		"teeth_deg": 0.6,
 		"teeth_freq": 40.0,
 		"tree_shape": 0.0,
-		"cloud_cover": 0.5,
+		"cloud_cover": 0.65,
+		"cloud2_cover": 0.75,
 	},
 	"rocky_badlands":
 	{
@@ -185,20 +197,24 @@ const LOOKS := {
 	},
 	"savanna":
 	{
-		"zenith_color": Color(0.34, 0.54, 0.92),
-		"horizon_color": Color(0.88, 0.91, 0.90),
-		"warm_color": Color(1.0, 0.80, 0.50),
-		"far_color": Color(0.58, 0.62, 0.72),
-		"near_color": Color(0.48, 0.50, 0.24),
-		"foot_color": Color(0.66, 0.62, 0.38),
-		"height_deg": 10.0,
+		# A warm golden haze at the horizon, dusty violet far ridges and ochre-olive near hills with
+		# sparse flat crowns: three values a step apart, so the ridges read through the warmth.
+		"zenith_color": Color(0.28, 0.50, 0.92),
+		"horizon_color": Color(0.99, 0.88, 0.70),
+		"warm_color": Color(1.0, 0.76, 0.46),
+		"far_color": Color(0.60, 0.54, 0.76),
+		"near_color": Color(0.44, 0.40, 0.18),
+		"foot_color": Color(0.70, 0.58, 0.36),
+		"height_deg": 14.0,
 		"noise_seed": 61.0,
 		"noise_period": 3.0,
-		"teeth_deg": 0.9,
-		"teeth_freq": 30.0,
+		"teeth_deg": 1.1,
+		"teeth_freq": 26.0,
 		"tree_shape": 0.0,
-		"cloud_cover": 0.45,
-		"warm_amount": 0.55,
+		"angular": 0.3,
+		"cloud_cover": 0.5,
+		"haze_far": 0.4,
+		"warm_amount": 0.7,
 	},
 	"wetland_riparian":
 	{
@@ -219,19 +235,23 @@ const LOOKS := {
 	},
 	"alpine_meadow":
 	{
-		"zenith_color": Color(0.24, 0.44, 0.92),
+		# Pale blue snow-capped peaks over a dark blue-green conifer line: the far, near and meadow
+		# values a clear step apart (the green-on-green blobs read as one soft mass).
+		"zenith_color": Color(0.20, 0.40, 0.92),
 		"horizon_color": Color(0.80, 0.90, 1.0),
-		"far_color": Color(0.70, 0.78, 0.92),
-		"near_color": Color(0.28, 0.46, 0.42),
-		"foot_color": Color(0.44, 0.64, 0.46),
+		"far_color": Color(0.42, 0.53, 0.86),
+		"near_color": Color(0.10, 0.28, 0.34),
+		"foot_color": Color(0.44, 0.64, 0.52),
 		"height_deg": 34.0,
 		"noise_seed": 83.0,
 		"noise_period": 4.0,
-		"teeth_deg": 0.4,
-		"teeth_freq": 50.0,
+		"teeth_deg": 1.2,
+		"teeth_freq": 70.0,
 		"tree_shape": 1.0,
-		"angular": 0.6,
-		"cloud_cover": 0.6,
+		"angular": 0.9,
+		"cloud_cover": 0.55,
+		"haze_far": 0.2,
+		"snow_amount": 1.0,
 	},
 }
 
@@ -265,6 +285,26 @@ static func shader_params(biome_id: String, map_seed: int, sun: Vector2) -> Dict
 	params["glow_az_deg"] = sun.x
 	params["sun_el_deg"] = clampf(sun.y, 5.0, 85.0)
 	return params
+
+
+## The eye's reach on the map: the ground distance from `eye` (world x, z) to the farthest corner
+## of `bounds` (the walking area). 0 for an empty box (no map). The same at every yaw, so turning
+## never moves the fog.
+static func map_reach(eye: Vector2, bounds: AABB) -> float:
+	if bounds.size.x <= 0.0 or bounds.size.z <= 0.0:
+		return 0.0
+	var far_x := maxf(absf(eye.x - bounds.position.x), absf(eye.x - bounds.end.x))
+	var far_z := maxf(absf(eye.y - bounds.position.z), absf(eye.y - bounds.end.z))
+	return Vector2(far_x, far_z).length()
+
+
+## The depth fog's begin (x) and end (y) in metres for an eye whose reach is `reach` (map_reach):
+## FOG_BEGIN_REACH and FOG_END_REACH of the reach, never nearer than FOG_BEGIN_M and FOG_END_M,
+## and the end always at least the old 60 m ramp past the begin.
+static func fog_range(reach: float) -> Vector2:
+	var begin := maxf(FOG_BEGIN_M, reach * FOG_BEGIN_REACH)
+	var end := maxf(maxf(FOG_END_M, reach * FOG_END_REACH), begin + (FOG_END_M - FOG_BEGIN_M))
+	return Vector2(begin, end)
 
 
 ## The sun's azimuth (0..360, the sky shader's convention) and elevation in degrees along `to_sun`
