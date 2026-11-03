@@ -696,9 +696,22 @@ largest block-to-block change between pitches one degree apart fell from 32 to 8
 caster set depends on the camera slab, which changes with pitch; the engine mechanism is inferred,
 the effect measured (`tools/render_jobs/probes/camera_shadow.gd`, jobs `camera_shadow_*`). Max
 distance, fade start, split fractions and the 2 m shadow push are not involved. Cost about
-+0.1 ms of GPU time a frame (indicative, not the pinned procedure). Street level (pitch below
-21.6) was not swept: re-run the sweep from 5 to 25 degrees on a street map, and consider a scatter
-chunk `extra_cull_margin` of about 30 m, before relying on it there.
++0.1 ms of GPU time a frame (indicative, not the pinned procedure).
+
+Street level (a perspective eye camera, fov 60, eye 1.6 m) was swept on 2026-11-02 (probe
+`tools/render_jobs/probes/shadow_eye.gd` on branch `shadowsweep`, 3f9a4acb, not merged; numbers in
+`docs/plans/2026-11-02-camera/clips/sw_*`): tree shadows do not pop between pitch -20 and 90 with the
+shipped settings. The worst 30 px block change between pitches one degree apart is 8.7 to 12.5 on the
+wild, hamlet and street maps at every snap yaw, which is the floor of camera motion (the ortho pop
+was 32); the shadowed share of the frame moves smoothly, and a 3 m/s walk shows none either. A scatter
+chunk `extra_cull_margin` of 30 m changes nothing in the images and costs about 0.2 ms GPU and doubles
+main-pass culling, so it is not adopted. Blend off is also invisible at the eye: the ortho pop was a
+property of the ortho slab, so keep the blend for the home camera. Raising
+`directional_shadow_max_distance` to 200 m (the farthest ground seen from a spot is 105 to 180 m) adds
+far shadows at no measured cost (+0.2 to +0.9 points of shadowed share); the unmeasured trade-off is
+that the four cascades spread, so look at a full-size eye frame for near sharpness before adopting it.
+Not covered: one spot per map, no tree-dense forest spot, and the block metric cannot see a small far
+pop.
 
 Shadow cost was measured directly rather than estimated: sun shadows are 41% of the
 frame on a dense forest map, but PCF filter quality is only 0.6 ms of it and shortening
