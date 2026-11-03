@@ -535,7 +535,7 @@
 			"thumbnails/structures/alpine_chalet.jpg": "bcf98c418d816d73de059f58745a36f5691177d1e226f4476ee8fc9776da9892",
 			"thumbnails/structures/barn.jpg": "a594733834165056f547d9b908b5ef8a1a4e7050b45975ee27806f575096747d",
 			"thumbnails/structures/barrel.jpg": "33b4937a1e6579770b9ccc263d693a11808f661995354132042cd9aa7ad77dd7",
-			"thumbnails/structures/bartizan_keep.jpg": "8f38f293c04d315f1b9d4af51ad24c9723000d72780dd3d5791c102a4bed1108",
+			"thumbnails/structures/bartizan_keep.jpg": "7831d10b3ff3fcc14a445a4e4fb1a4028f0dd223700e48897947438331c5988c",
 			"thumbnails/structures/beehive_skeps.jpg": "3d6f13ba15c7ce349b320ebdeebd5aed09bbd55fd6344e601d58f80b2d4e58e7",
 			"thumbnails/structures/bench.jpg": "ff37ea0201e1a7a1bed8b828644d25f9d7724fbbafed8f47c0e33d29bf2ecea3",
 			"thumbnails/structures/bike_rack.jpg": "1caaca3b03ec0012607ef8a511d9adadb40862d4cb111d2f35e2d4b7abf39588",
@@ -659,7 +659,7 @@
 			"thumbnails/temperate_forest.jpg": "9620edcbf1ff4dfb0eff53a3dcfd17cbe80112c5e62ed39cd23e9649a74c362c",
 			"thumbnails/wetland_riparian.jpg": "07d7f6be77f394eac6044bd80aa72681cff11337fa26905537960570982cd009"
 		},
-		"surface_bytes": 156536661,
+		"surface_bytes": 156536719,
 		"surfaces": 39,
 		"thumb_bytes": 3661121,
 		"thumbs": 293,
