@@ -1,0 +1,27 @@
+{
+ "out_dir": "render_jobs/el_tokens",
+ "timeout_s": 600,
+ "hang_s": 240,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_camera_el_street"},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "wind", "freeze": true},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_look.gd", "action": "tokens", "dir": "user://render_jobs/el_tokens",
+   "at": [-18, -20],
+   "tokens": [[-18, -14], [-18, -8], [-18, 4], [-11, -16], [-25, -16]],
+   "hints": [["WASD", "Walk"], ["Q E", "Turn"], ["F9", "Leave eye"]],
+   "views": [
+    {"name": "el_tokens_street_y180", "yaw": 180, "pitch": 6},
+    {"name": "el_tokens_east_y090", "yaw": 90, "pitch": 3},
+    {"name": "el_tokens_west_y270", "yaw": 270, "pitch": 3},
+    {"name": "el_tokens_street_p12", "yaw": 200, "pitch": 12}
+   ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_look.gd", "action": "await"},
+  {"op": "wait", "s": 1.0},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

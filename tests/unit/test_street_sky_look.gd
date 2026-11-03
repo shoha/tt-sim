@@ -131,3 +131,43 @@ func test_dominant_biome_is_the_one_covering_most() -> void:
 func test_fog_is_the_owner_verdict() -> void:
 	assert_eq(StreetSkyLook.FOG_BEGIN_M, 25.0)
 	assert_eq(StreetSkyLook.FOG_END_M, 85.0)
+
+
+func test_the_reach_is_the_farthest_corner_at_every_yaw() -> void:
+	# A 150 ft (45.72 m) map centred on the origin, the eye at (10, 10): the far corner is
+	# 32.86 m away on each axis.
+	var bounds := AABB(Vector3(-22.86, 0.0, -22.86), Vector3(45.72, 4.0, 45.72))
+	var reach := StreetSkyLook.map_reach(Vector2(10.0, 10.0), bounds)
+	assert_almost_eq(reach, Vector2(32.86, 32.86).length(), 0.001)
+	assert_almost_eq(
+		StreetSkyLook.map_reach(Vector2.ZERO, bounds), Vector2(22.86, 22.86).length(), 0.001
+	)
+	assert_eq(StreetSkyLook.map_reach(Vector2(3.0, 4.0), AABB()), 0.0, "no map: no reach")
+
+
+func test_the_fog_keeps_a_small_valley_clear_and_scales_with_the_map() -> void:
+	# No map: the owner's 25 to 85 m.
+	assert_eq(StreetSkyLook.fog_range(0.0), Vector2(25.0, 85.0))
+	# The 150 ft valley from (10, 10): the fog begins past the middle of the far side, so the
+	# ground across the valley (30 to 45 m) is nearly clear.
+	var small := StreetSkyLook.fog_range(46.47)
+	assert_gt(small.x, 30.0, "begins past the across-the-valley ground")
+	assert_lt(small.x, 46.47, "begins on the map")
+	assert_gt(small.y, 46.47, "ends past the farthest edge")
+	assert_lt(_fog_amount(small, 45.0), 0.1, "the far side of the valley is not a veil")
+	# A large map (about 1000 ft, eye at its centre): further out, still ending past the edge.
+	var big := StreetSkyLook.fog_range(215.0)
+	assert_gt(big.x, small.x)
+	assert_gt(big.y, 215.0)
+	# Never nearer than the verdict, and the ramp never shorter than its 60 m.
+	for reach in [0.0, 5.0, 20.0, 46.0, 80.0, 300.0]:
+		var fog := StreetSkyLook.fog_range(reach)
+		assert_true(fog.x >= 25.0 and fog.y >= 85.0, "floors at reach %s" % reach)
+		assert_true(fog.y - fog.x >= 60.0 - 0.001, "ramp at reach %s" % reach)
+	# Monotonic: walking toward the middle never thickens the fog.
+	assert_true(StreetSkyLook.fog_range(60.0).x <= StreetSkyLook.fog_range(61.0).x)
+
+
+## Godot's depth fog amount at `d` metres for begin and end `fog` (curve 1, density 1).
+func _fog_amount(fog: Vector2, d: float) -> float:
+	return smoothstep(fog.x, fog.y, d)

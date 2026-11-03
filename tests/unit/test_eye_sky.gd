@@ -140,6 +140,22 @@ func test_a_steady_environment_is_not_rewritten_every_frame() -> void:
 	assert_eq(_sky.material(), sky.sky_material)
 
 
+func test_the_fog_follows_the_reach_and_the_glide_offset() -> void:
+	var env := _flat_env()
+	_sky.reach = 100.0
+	_sky.sync(env, SUN)
+	var fog := StreetSkyLook.fog_range(100.0)
+	assert_almost_eq(env.fog_depth_begin, fog.x, 0.001, "installed at the map's scale")
+	assert_almost_eq(env.fog_depth_end, fog.y, 0.001)
+	_sky.fog_offset = 500.0
+	_sky.sync(env, SUN)
+	assert_almost_eq(env.fog_depth_begin, fog.x + 500.0, 0.001, "the glide still moves it out")
+	_sky.fog_offset = 0.0
+	_sky.reach = 0.0
+	_sky.sync(env, SUN)
+	assert_almost_eq(env.fog_depth_begin, 25.0, 0.001, "no map: the verdict's 25 m")
+
+
 func test_a_moved_sun_updates_the_glow() -> void:
 	var env := _flat_env()
 	_sky.sync(env, SUN)
