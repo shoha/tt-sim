@@ -2115,6 +2115,11 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
   (`roof_furniture`), opening (`glazing`: procgen's glazing node puts a recessed pane in every
   window and a leaf in every door, surface kind `glass`, tags `<glazing id>/<opening path>/pane` or
   `/leaf`, flat vertex colours; the recipes' walls are hollow, so tt-sim draws no quads of its own).
+  Windows are dressed by default (card eyewindows, 2026-11-02): a painted frame (two jambs and a
+  head, tags `<glazing id>/<opening path>/frame/jamb0`, `/jamb1`, `/head`), a sill (`/sill`) and a
+  cross of bars (`/muntin`), surface kind `wood`, 30 triangles with hidden faces dropped, plus 2 to
+  4 for the bars. A window's pane carries a per-window vertex alpha flag (0.3 to 0.8) and every other
+  vertex alpha 1.0; `structure_pane.gdshader` draws an interior-mapped room behind a flagged pane.
   The table is `StructureLook`; the painterly version is card S6.
 - **Round trip.** A structure change is done when a recipe from a library folder builds through
   tt-sim's `StructureGeometry` with its pinned digest, a token stands on its roof, and the map

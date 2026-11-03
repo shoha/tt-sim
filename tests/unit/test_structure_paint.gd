@@ -252,11 +252,19 @@ func test_porches_galleries_and_dormers_build_with_timber_roofs_and_a_frame_mesh
 
 func test_panes_keep_their_procgen_colours() -> void:
 	var parts := StructureGeometry.build_one(_doc, Structure.make(1, "core:cottage", _plan(), 5))
+	var flagged := 0
 	for mesh: Dictionary in parts.meshes:
 		if mesh.role != StructureLook.OPENING:
 			continue
 		for c: Color in mesh.arrays[Mesh.ARRAY_COLOR]:
-			assert_eq(c.a, 1.0, "panes are not graded")
+			if mesh.kind == StructureLook.GLASS_KIND and c.a < 0.9:
+				# A window pane's vertex alpha is its room flag (0.3 to 0.8, card eyewindows):
+				# structure_pane.gdshader draws the room behind it.
+				assert_between(c.a, 0.3, 0.8, "a window's room flag")
+				flagged += 1
+			else:
+				assert_eq(c.a, 1.0, "panes, leaves and the frames are not graded")
+	assert_gt(flagged, 0, "the cottage's windows carry the room flag")
 
 
 func test_two_seeds_paint_differently_and_one_seed_the_same() -> void:

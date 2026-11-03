@@ -1,10 +1,8 @@
 extends RefCounted
 
-## Render-job probe for the eye-level window variants (card eyewindows, WIP). Same probe camera as
+## Render-job probe for the eye-level windows (card eyewindows). Same probe camera as
 ## eye_probe.gd (controller process off, perspective fov 60, KEEP_HEIGHT, eye 1.6 m above the
 ## terrain, near 0.05). Pitch and yaw come from looking at the window's centre.
-##   variant {v}                 sets ProcgenGlazing.eye_variant ("" today, A, B, C) BEFORE `play`
-##                               (the level's structures are built when it loads).
 ##   list {dir, street_x, z0}    logs the window panes west of the street line x = street_x
 ##                               (facing +x) nearest z0: centre, normal, size. Reports to
 ##                               report_list.txt.
@@ -32,9 +30,6 @@ static func run(base: Node, step: Dictionary) -> String:
 	var action := String(step.get("action", ""))
 	if action == "await":
 		return "idle"
-	if action == "variant":
-		ProcgenGlazing.eye_variant = String(step.get("v", ""))
-		return "variant %s" % ProcgenGlazing.eye_variant
 	var rig := Rig.new()
 	rig.gm = base.get("_game_map")
 	rig.step = step

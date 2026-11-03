@@ -777,10 +777,20 @@ func test_the_scatter_snapshot_carries_the_structures_so_workers_clear_under_the
 func test_the_recipes_glazing_gives_panes_and_leaves_in_the_opening_role() -> void:
 	var parts := StructureGeometry.build_one(_doc, _structure("core:townhouse"))
 	var panes: Dictionary = {}
+	var frames: Dictionary = {}
 	for mesh: Dictionary in parts.meshes:
-		if mesh.role == StructureLook.OPENING:
+		if mesh.role == StructureLook.OPENING and mesh.kind == StructureLook.GLASS_KIND:
 			panes = mesh
+		elif mesh.role == StructureLook.OPENING:
+			frames = mesh
 	assert_false(panes.is_empty(), "panes")
+	assert_false(frames.is_empty(), "the windows' frames and sills, wood in the opening role")
+	var frame_parts := {}
+	for tag: int in frames.tags:
+		var frame_path := String((parts.tag_table as PackedStringArray)[tag])
+		frame_parts[frame_path.get_slice("/", frame_path.get_slice_count("/") - 1)] = true
+	for part: String in ["jamb0", "jamb1", "head", "sill"]:
+		assert_true(frame_parts.has(part), "a window has its %s: %s" % [part, frame_parts])
 	assert_eq(panes.kind, StructureLook.GLASS_KIND)
 	var seen := {}
 	for tag: int in panes.tags:

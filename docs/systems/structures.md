@@ -270,6 +270,11 @@ colour, suggestion over literal detail, nothing grey. Three parts, no new asset:
   glass): unshaded as before, but a cool pane (blue at least as strong as red; amber glow and
   wooden leaves are left alone) is scaled to a mid tone and pulled 40 % toward one sky teal with a
   breath of warm reflected light, so panes keep their variety but stop reading as pale stickers.
+  Window panes carry a vertex-alpha flag (card eyewindows, 2026-11-02: alpha 0.3 to 0.8 per window,
+  1.0 for every other piece), and a flagged pane shows a room: an interior-mapped box 1.3 m deep
+  (parallax from the UV gradients, a vignette, a floor gradient, a mantel band, a lamp pool, straight
+  curtains with sine folds and a sky share), keyed on the pane's flag so every window differs. The
+  glazing node also draws a painted frame, sill and bars on each window (`dress`, default on).
 - **Ink and clump patches** (card structures-ink, 2026-10-28). Two shared terms in
   `structure_painterly.gdshaderinc`, both free of mesh data and texture reads. `s_ink` is the plants'
   silhouette ink (`foliage_view_ink`) at a building's scale: the albedo is multiplied toward a deep

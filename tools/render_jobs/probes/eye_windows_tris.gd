@@ -1,11 +1,12 @@
 extends SceneTree
 
-## Triangle budget of the eye-level window variants (card eyewindows, WIP probe). Headless:
+## Triangle budget of the dressed windows (card eyewindows). Headless:
 ##   godot --headless --path <tt-sim worktree> --script <this file>
-## Builds a few styled houses with procgen's own recipes under each ProcgenGlazing.eye_variant
-## ("" today, A geometry, B pane flag, C geometry plus flag) and prints, per house, the whole
-## triangle count, the window count, and the glazing node's triangles by piece (pane, bars, frame
-## and sill, shutters, curtain), then per window. Writes the text to user://eye_windows_tris.txt.
+## Builds a few styled houses with procgen's own recipes (whichever procgen is mounted at
+## res://procgen/) and prints, per house, the whole triangle count, the window count, and the
+## glazing node's triangles by piece (pane, bars, frame and sill), then per window. Writes the text
+## to user://eye_windows_tris.txt. Run it once with procgen at the commit before the dressing and
+## once after to get the before and after table.
 
 const HOUSES := [
 	["thatched_cottage", 9, 6.0, 4.0],
@@ -14,7 +15,6 @@ const HOUSES := [
 	["brick_terrace", 4, 5.0, 7.0],
 	["barn", 2, 9.0, 6.0],
 ]
-const VARIANTS := ["", "A", "B", "C"]
 
 var _lines: Array[String] = []
 
@@ -22,10 +22,7 @@ var _lines: Array[String] = []
 func _init() -> void:
 	for h in HOUSES:
 		_lines.append("== %s (seed %d, %.0f x %.0f m)" % [h[0], h[1], h[2], h[3]])
-		for v in VARIANTS:
-			ProcgenGlazing.eye_variant = v
-			_report(h, v)
-	ProcgenGlazing.eye_variant = ""
+		_report(h)
 	var f := FileAccess.open("user://eye_windows_tris.txt", FileAccess.WRITE)
 	for l in _lines:
 		print(l)
@@ -33,7 +30,7 @@ func _init() -> void:
 	quit()
 
 
-func _report(h: Array, variant: String) -> void:
+func _report(h: Array) -> void:
 	var reg := ProcgenStructureRegistry.new()
 	var doc: PlantGraphDocument = ProcgenBuildingStyles.document(h[0], int(h[1]))
 	doc.registry = reg
@@ -52,14 +49,14 @@ func _report(h: Array, variant: String) -> void:
 	var evaluator := PlantGraphEvaluator.new(reg)
 	var plant: Variant = evaluator.evaluate_structure(doc, inputs)
 	if plant == null:
-		_lines.append("  %-2s none %s" % [variant, str(evaluator.errors)])
+		_lines.append("  none %s" % str(evaluator.errors))
 		return
 	var g: PlantGeometry = plant["lods"][0]
-	var by := {"pane": 0, "bars": 0, "frame_sill": 0, "shutter": 0, "curtain": 0, "other": 0}
+	var by := {"pane": 0, "bars": 0, "frame_sill": 0, "other": 0}
 	var panes := {}
-	for s in g.surfaces:
-		for t in s.indices.size() / 3:
-			var path := g.tag_at(g.surfaces.find(s), t)
+	for k in g.surfaces.size():
+		for t in g.surfaces[k].indices.size() / 3:
+			var path := g.tag_at(k, t)
 			if not path.contains("glazing_"):
 				continue
 			var key := "other"
@@ -70,29 +67,21 @@ func _report(h: Array, variant: String) -> void:
 				key = "bars"
 			elif path.contains("/frame/") or path.ends_with("/sill"):
 				key = "frame_sill"
-			elif path.contains("/shutter"):
-				key = "shutter"
-			elif path.contains("/curtain"):
-				key = "curtain"
 			by[key] += 1
 	var n := maxi(panes.size(), 1)
-	var win := (
-		int(by.pane) + int(by.bars) + int(by.frame_sill) + int(by.shutter) + int(by.curtain)
-	)
+	var win := int(by.pane) + int(by.bars) + int(by.frame_sill) + int(by.other)
 	_lines.append(
 		(
-			"  %-2s house %5d tris | windows %2d | glazing tris: pane %3d bars %3d frame+sill %3d"
-			+ " shutters %3d curtain %3d | per window %.1f (pane %.1f)"
+			"  house %5d tris | windows %2d | glazing tris: pane %3d bars %3d frame+sill %3d"
+			+ " other %3d | per window %.1f (pane %.1f)"
 		)
 		% [
-			variant if variant != "" else "-",
 			g.triangle_count(),
 			panes.size(),
 			by.pane,
 			by.bars,
 			by.frame_sill,
-			by.shutter,
-			by.curtain,
+			by.other,
 			float(win) / n,
 			float(by.pane) / n,
 		]
