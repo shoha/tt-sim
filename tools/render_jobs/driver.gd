@@ -699,7 +699,7 @@ func _gesture(step: Dictionary) -> bool:
 
 ## `input` (P4b-2): `events`, one per frame, as real input: {"type": "move", "at"}, {"type":
 ## "press" / "release", "at", "button" ("left" default, "right")}, {"type": "key", "key"
-## ("ctrl", "escape", "tab"), "pressed" (default true)}; mouse events take `ctrl` (held).
+## ("ctrl", "escape", "tab", "delete", "r", "e"), "pressed" (default true)}; mouse events take `ctrl` (held).
 func _input_events(step: Dictionary) -> bool:
 	var events: Array = step.get("events", [])
 	var k := int(_state.phase)
@@ -718,7 +718,13 @@ func _input_events(step: Dictionary) -> bool:
 			)
 			_mouse_button(event.at, button, String(event.type) == "press", held)
 		"key":
-			var keys := {"ctrl": KEY_CTRL, "escape": KEY_ESCAPE, "tab": KEY_TAB}
+			var keys := {
+					"ctrl": KEY_CTRL,
+					"escape": KEY_ESCAPE,
+					"tab": KEY_TAB,
+					"delete": KEY_DELETE,
+					"r": KEY_R,
+				}
 			_key(
 				keys.get(String(event.get("key", "ctrl")), KEY_CTRL),
 				bool(event.get("pressed", true))

@@ -84,6 +84,8 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> v
 	if doc.settlements.size() > 1:
 		for settlement in doc.settlements:
 			_draw_badge(canvas, camera, editor, settlement, settlement.id == mode.selected_village)
+	if VillagePropRings.draw(brush, cursor, mode):
+		return
 	var units := [brush.unit_cell_m, brush.unit_per_cell, brush.unit_label]
 	if mode.gesture == VillageBrush.GESTURE_MOVE:
 		_draw_move(brush, cursor, mode)

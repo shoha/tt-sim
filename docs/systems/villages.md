@@ -971,3 +971,55 @@ pane switch, so the author can override it per village (see "The pane switch" be
   drawn wall or fence crossing the line is not a gap; a boundary does not follow a crossing edit until the next
   settlement refresh; a split street (source 0) has no boundary; the plan is derived several times per refresh (the
   layer, the hedge plants, the scatter clearance), each reading every street's lots.
+
+## 14. Phase 3, fourth slice as built: touchable furnishings (topic villages4, 2026-11-02)
+
+The design's section 3d.5, "Props are touchable": the barrels, stalls, benches and lamps a Dress places can be picked,
+moved, turned, swapped and taken away in the Village tool. Decided in the card (owner away; for the board): it is the
+first undone slice in the design's order (plazas, fields, bridges and boundaries are built; the free-polygon field and
+moving a field are refinements of built gestures, the wealth and density sliders already live on the Wall tool's street
+bar), and it needs no owner decision (tokens colliding with props, section 6, is not touched: pieces stay walk-through).
+No format change and no new live-edit op: the record's `removed`, `swapped` and `pinned` lists (settlements.md "The
+record") were saved, validated and applied by `SettlementPlan` since phase 1 and had no gesture.
+
+- **Pick** (`VillageProps`, `scenes/states/authoring/village_props.gd`, owned by `VillageBrush.props`; pure rules in
+  `VillageFurnishings`, `utils/village_furnishings.gd`). The pick table is the layer's own standing rows
+  (`AuthoredSettlements.standing`, ground applied), so a piece the layer skipped (wet, steep) cannot be picked. A pointer
+  is over a piece within 0.9 of its drawn radius (floor 0.45 m) plus a 10 px pad in metres; the nearest in share wins.
+  A piece beats a plaza's rim band and its interior (the plaza's stalls stand on the rim, so a rim that won would make
+  them unpickable); the plaza is still sized from the rim where no piece stands. The
+  plaza's centre piece (the well or cross) is NOT touchable (`VillageFurnishings.is_centre_piece`): it stands where the
+  plaza's centre does and presses on it move the plaza. A hovered piece is outlined (`VillagePropRings`: the plaza rings' strokes at the piece's
+  radius plus 0.2 m, handle-less: chalk under the pointer, the Wall tool's gold when picked) and the plaza under it is
+  not highlighted. Pill: "Drag to move this piece, click to pick it".
+- **Gestures.** Click picks (Escape lets go). Press and drag past the plaza move's 1.5 m click threshold MOVES it: the
+  piece keeps its place under the pointer (`grab_offset`), the place it left is a calm ring, the carried ring gold with
+  "Release to put it here", or salmon with the reason where `VillageFurnishings.problem` refuses: water (the layer's
+  ring test), ground steeper than the layer's 0.8 limit, a house (`VillageFieldGround.covers_building`), a bridge's deck
+  and landings (`VillageDryGround.crossing_corridors`), more than 60 m from the village, or inside another piece's
+  clearance (0.6 of the radii). The release pins the piece (`pin_furnishing`); a refused release changes nothing and
+  toasts the long wording. Q and E turn the piece under the pointer (else the picked one) 15 degrees, Shift a quarter;
+  R shows the next of its four draws (`ProcgenSettlement.VARIANTS`); both pin it. Delete or Backspace (and the pane's
+  Remove) takes it away. A field's own scarecrow, haystack or skeps can be picked and removed but not moved, turned or
+  swapped (they stand where their field puts them, `VillageFurnishings.is_field_piece`).
+- **Swap** (the pane's button). The candidates are the props the kit's rules draw for the same slot kind
+  (`street_edge`, `beside_door`, `plaza.edge`, `back_yard` ...), in the kit's order, the piece's own included so it
+  cycles: a door's barrel may become a crate, a bench or a cart, a plaza's stall a bench or a lamp. The next one that
+  FITS where the piece stands (the same `problem` test with the new prop's radius) is taken; "Nothing else fits here."
+  when none does. A piece that is not pinned gets a `swapped` entry; a pinned one has its pin's prop changed. The
+  button is disabled with a tooltip when nothing else belongs in that place.
+- **Edits** (`SettlementEditor`): `remove_furnishing`, `pin_furnishing`, `swap_furnishing`, `unpin_furnishing`,
+  `restore_furnishings`, each ONE history entry ("Remove piece", "Place piece", "Swap piece", "Put piece back", "Put
+  pieces back"), reaching peers as the ordinary `settlements` op (`test_village_furnishings.gd`: a peer ends byte for byte
+  level through a move, a removal and their undos). The 64-override cap is a refusal ("A village keeps at most 64 ...").
+  **Decision for the board:** a re-dress now KEEPS pins (the design's "a pin must survive a re-dress", section 7, which
+  the code did not do) and still drops `removed` and `swapped` (they name slots of the old draw); a change of character
+  drops everything. A pin that lands on a house of the new draw is the author's choice; Undo is one step.
+- **Pane** (`VillageFurnishBox`, inside the plaza box): with a piece picked, its name ("Barrel", "Market stall, placed
+  by hand"), then Swap, Put back (only when pinned) and Remove; it stands where the size row stands, which only a
+  picked plaza or field uses, so the pane grows no taller. Once the picked village has had pieces taken away a "Put
+  back N taken away" button brings them all back. The caption names the gesture ("Click a barrel or stall to move or
+  swap it").
+- **Limits left:** the tool does not draw per-piece thumbnails; Swap has no chooser (it cycles); a pinned piece does not
+  follow its house when the street is edited (a pin is absolute, as the design says); fields still cannot be moved or
+  drawn as polygons; the wealth and density sliders are still on the Wall tool's street bar; props stay walk-through.

@@ -1166,6 +1166,12 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   `i_ghost_hillfort`), the four ghosts on one sheet (`sheet_ghosts`), market plazas of 5, 6 and 7 m side by side
   (`j_market_5_6_7`, the evidence for the market's 6 m floor), then the window at 1280x720 with a picked plaza
   (`k_720_pane`). Run with `--full` for the verdict captures.
+- `jobs/villageprops_look.json` (keeps no level; topic villages4, writes `villages4_look`; `probes/settlements.gd`
+  `pieces` logs the standing furnishings of a village with their map positions, `jobs/villageprops_survey.json` runs it
+  alone): the market town with a plaza, then the touchable furnishings through real input: hover a stall
+  (`a_hover_stall`), pick it (`b_picked_stall`), carry it (`c_carry_stall`), let go (`d_pinned_stall`), Swap
+  (`e_swapped`), a barrel carried over a house (`f_refused_house`), a barrel removed with the Put back button
+  (`g_removed`) and the pane at 1280x720 (`h_720_pane`). Run with `--full` for the verdict captures.
 - `jobs/fields_look.json` (about 30 s, keeps no level; topic fields, writes `fields_look`, probe
   `probes/fields.gd`): a 320 ft map (80 m, the document's 64-cell limit; `new_map` `size` is feet, and 400 ft
   stalls at `wait_ready`), the two villages of villagetool_look on short streets (x = -14 and 14, z -12..12). Round 4

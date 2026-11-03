@@ -17,6 +17,8 @@ extends RefCounted
 ##   report                              cells, surfaces, triangles, placements, skipped
 ##   perf {...}                          lays a long street, dresses it and measures the layer
 ##   undo                                the editor's history undo
+##   pieces {id, near, max}              logs the standing furnishings of settlement `id` nearest
+##                                       `near` (slot, prop, map XZ, pinned)
 ## Every action returns the line the job log prints.
 
 
@@ -76,7 +78,35 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _corridor(ctrl)
 		"aim":
 			return _aim(base, ctrl.editor, step)
+		"pieces":
+			return _pieces(ctrl.editor, step)
 	return _report(ctrl.editor)
+
+
+## Logs the standing furnishings of village `id` (one line each: slot, prop, map XZ, pinned), up to
+## `max` of them, `near` [x, z] first: the job author reads the log to aim a pointer at one (the
+## villages4 look job).
+static func _pieces(editor: AuthoringEditor, step: Dictionary) -> String:
+	var id := int(step.get("id", 1))
+	var near: Array = step.get("near", [0, 0])
+	var from := Vector2(float(near[0]), float(near[1]))
+	var rows := VillageProps.rows_of(editor, id)
+	rows.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			return (
+				(a["item"]["position"] as Vector2).distance_to(from)
+				< (b["item"]["position"] as Vector2).distance_to(from)
+			)
+	)
+	var lines := PackedStringArray()
+	for row in rows.slice(0, int(step.get("max", 14))):
+		var item: Dictionary = row["item"]
+		var at: Vector2 = item["position"]
+		lines.append(
+			"%s %s (%.1f, %.1f)%s"
+			% [item["slot"], item["prop"], at.x, at.y, " pinned" if item["pinned"] else ""]
+		)
+	return "pieces of %d: %d standing\n%s" % [id, rows.size(), "\n".join(lines)]
 
 
 static func _street(base: Node, editor: AuthoringEditor, step: Dictionary) -> String:

@@ -38,7 +38,12 @@ signal kit_picked(kit: String)
 signal boundary_picked(choice: String)
 ## The size slider was let go (or keyed) at this radius in map metres.
 signal radius_committed(radius: float)
+## Remove: the picked plaza or field, or (a piece picked, VillageFurnishBox) the picked piece.
 signal remove_requested
+## The furnishing buttons: Swap and Put back act on the picked piece, Restore on the village.
+signal swap_requested
+signal unpin_requested
+signal restore_requested
 
 const HINT := "Click or drag beside a street to open a plaza."
 const FIELD_HINT := "Click or drag the ground at the village's edge to lay %s."
@@ -52,7 +57,9 @@ const EMPTY := (
 	"No village yet. Draw a street with the Wall tool and press Dress this street, then come back"
 	+ " here to open a plaza on it."
 )
-const PICK_NOTE := "Drag a plaza to move it, drag its edge to size it."
+const PICK_NOTE := (
+	"Drag a plaza to move it, its edge to size it. Click a barrel or stall to move or swap it."
+)
 const ROOM := "Room for %d more plazas"
 const ROOM_ONE := "Room for 1 more plaza"
 const ROOM_NONE := "Four plazas: the village is full"
@@ -110,6 +117,8 @@ var size_row: HBoxContainer
 var size_slider: HSlider
 var size_value: Label
 var remove_button: Button
+## The picked piece's name and buttons, and the village's Put back (topic villages4).
+var furnish_box: VillageFurnishBox
 
 var _palette_root: String = PaletteLibrary.DEFAULT_ROOT
 var _village_ids: Array = []
@@ -212,6 +221,12 @@ func show_state(state: Dictionary, unit_k: float = 1.0, unit_label: String = "m"
 	if has_plaza or sizing:
 		size_slider.set_value_no_signal(float(state["radius"]))
 	_show_size(float(state["radius"]) if (has_plaza or sizing) else 0.0)
+	# A picked piece stands in the place of the size row (it is the only thing picked).
+	var prop: Dictionary = state.get("prop", {})
+	furnish_box.show_state(prop)
+	if bool(prop.get("picked", false)):
+		size_row.visible = false
+		pick_note.visible = false
 	_syncing = false
 
 
@@ -470,6 +485,12 @@ func _build_plaza_box() -> void:
 	remove_button.pressed.connect(remove_requested.emit)
 	size_row.add_child(remove_button)
 	plaza_box.add_child(size_row)
+	furnish_box = VillageFurnishBox.new()
+	furnish_box.swap_requested.connect(swap_requested.emit)
+	furnish_box.unpin_requested.connect(unpin_requested.emit)
+	furnish_box.remove_requested.connect(remove_requested.emit)
+	furnish_box.restore_requested.connect(restore_requested.emit)
+	plaza_box.add_child(furnish_box)
 	add_child(plaza_box)
 
 

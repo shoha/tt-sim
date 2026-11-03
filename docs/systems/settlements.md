@@ -93,7 +93,10 @@ after any edit, undo or redo.
 
 A village's plazas and character are also edited in the Village tool (`VillageTool`, `VillageBrush`,
 `VillageToolPane`): the pane's character tiles call `set_kit`, its size slider `resize_plaza`, Remove
-`remove_plaza`; see `docs/systems/villages.md` section 10.
+`remove_plaza`; see `docs/systems/villages.md` section 10. The record's `removed`, `swapped` and `pinned` lists
+have gestures there since 2026-11-02 (`remove_furnishing`, `pin_furnishing`, `swap_furnishing`, `unpin_furnishing`,
+`restore_furnishings`, one history entry each; villages.md section 14); a re-dress keeps pins and drops the other
+two, a change of character drops all three.
 
 ## Split into buildings
 

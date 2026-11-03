@@ -18,7 +18,13 @@ var _doc: MapDocument = null
 var _history: AuthoringHistory = null
 
 
+func after_each() -> void:
+	VillageProps.touchable = true
+
+
 func before_each() -> void:
+	# The field gestures here press on bare ground; the furnishings have their own tests.
+	VillageProps.touchable = false
 	_map = Node3D.new()
 	_map.name = "LevelMap"
 	add_child_autofree(_map)

@@ -116,9 +116,7 @@ func dress(wall_id: int, kit: String, wealth: float = -1.0, density: float = -1.
 		changed = held.copy()
 		changed.kit = kit
 		changed.seed_value = next_seed(held.seed_value)
-		changed.removed = PackedStringArray()
-		changed.pinned = {}
-		changed.swapped = {}
+		_forget_overrides(changed, held.kit != kit)
 	changed.boundary = _boundary_for(changed)
 	if wealth >= 0.0:
 		changed.wealth = clampf(snappedf(wealth, Settlement.WEALTH_STEP), 0.0, 1.0)
@@ -136,17 +134,16 @@ func dress(wall_id: int, kit: String, wealth: float = -1.0, density: float = -1.
 	)
 
 
-## Gives settlement `settlement_id` the next seed (its overrides are dropped: they named slots
-## of the old seed). False when there is none.
+## Gives settlement `settlement_id` the next seed (its removed and swapped pieces are dropped: they
+## named slots of the old seed; pieces the author moved, turned or re-rolled stay, since a pin is
+## the author's own placement). False when there is none.
 func redress(settlement_id: int) -> bool:
 	var held := _editor().document.settlement(settlement_id)
 	if held == null:
 		return false
 	var changed := held.copy()
 	changed.seed_value = next_seed(held.seed_value)
-	changed.removed = PackedStringArray()
-	changed.pinned = {}
-	changed.swapped = {}
+	_forget_overrides(changed, false)
 	changed.boundary = _boundary_for(changed)
 	return (
 		_replace(held, changed, "Re-dress street", SettlementGround.PAINT_ORDER, null, true) > 0
@@ -161,9 +158,7 @@ func set_kit(settlement_id: int, kit: String) -> bool:
 		return false
 	var changed := held.copy()
 	changed.kit = kit
-	changed.removed = PackedStringArray()
-	changed.pinned = {}
-	changed.swapped = {}
+	_forget_overrides(changed, true)
 	changed.boundary = _boundary_for(changed)
 	return (
 		_replace(
@@ -433,6 +428,71 @@ func auto_boundary(settlement_id: int) -> bool:
 	changed.boundary_manual = false
 	changed.boundary = _boundary_for(changed)
 	return _replace(held, changed, "Village boundary") > 0
+
+
+# --- furnishings (topic villages4, VillageFurnishings) ----------------------------------------
+
+
+## Drops the overrides that named slots of the old draw: the removed and swapped pieces, and with
+## `pins` too the pinned ones (a change of character: a stall pinned in a hill fort is wrong).
+static func _forget_overrides(settlement: Settlement, pins: bool) -> void:
+	settlement.removed = PackedStringArray()
+	settlement.swapped = {}
+	if pins:
+		settlement.pinned = {}
+
+
+## Takes furnishing `slot` of settlement `settlement_id` away, as one history entry "Remove piece".
+## False (last_refusal REFUSED_FULL at the 64-override cap) when it is already gone.
+func remove_furnishing(settlement_id: int, slot: String) -> bool:
+	return _override(settlement_id, "Remove piece", func(held: Settlement) -> Settlement:
+		return VillageFurnishings.with_removed(held, slot)
+	)
+
+
+## Pins furnishing `slot` as `pin` (SettlementPlan.pin_of's shape: prop, at, yaw, scale, seed): a
+## move, a turn or a re-roll, one history entry "Place piece". It stays where it is put through a
+## re-dress of the same character.
+func pin_furnishing(settlement_id: int, slot: String, pin: Dictionary) -> bool:
+	return _override(settlement_id, "Place piece", func(held: Settlement) -> Settlement:
+		return VillageFurnishings.with_pin(held, slot, pin)
+	)
+
+
+## Swaps furnishing `slot` for prop `prop`, one history entry "Swap piece".
+func swap_furnishing(settlement_id: int, slot: String, prop: String) -> bool:
+	if not ProcgenProps.NAMES.has(prop):
+		return false
+	return _override(settlement_id, "Swap piece", func(held: Settlement) -> Settlement:
+		return VillageFurnishings.with_swapped(held, slot, prop)
+	)
+
+
+## Puts furnishing `slot` back where its rule places it (its pin dropped), one history entry.
+func unpin_furnishing(settlement_id: int, slot: String) -> bool:
+	return _override(settlement_id, "Put piece back", func(held: Settlement) -> Settlement:
+		return VillageFurnishings.with_unpinned(held, slot)
+	)
+
+
+## Puts every removed furnishing of settlement `settlement_id` back, one history entry.
+func restore_furnishings(settlement_id: int) -> bool:
+	return _override(settlement_id, "Put pieces back", VillageFurnishings.with_restored)
+
+
+## One override edit: `change` (Settlement -> Settlement or null) is called with the held record;
+## null means it changes nothing (or is over the cap: last_refusal REFUSED_FULL).
+func _override(settlement_id: int, label: String, change: Callable) -> bool:
+	var held := _editor().document.settlement(settlement_id)
+	last_refusal = &""
+	if held == null:
+		last_refusal = REFUSED_STREET
+		return false
+	var changed: Settlement = change.call(held)
+	if changed == null:
+		last_refusal = REFUSED_FULL
+		return false
+	return _replace(held, changed, label) > 0
 
 
 ## Removes settlement `settlement_id` (and with it every furnishing and the paint its Dress laid,

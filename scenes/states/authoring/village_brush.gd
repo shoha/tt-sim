@@ -52,6 +52,8 @@ const GESTURE_MOVE := &"move"
 ## S6 target, 44 px across).
 const RIM_PX := 12.0
 const HANDLE_HIT_PX := 22.0
+## The pixels a pointer reaches past a piece's drawn radius (a barrel is small on screen).
+const PIECE_PAD_PX := 10.0
 ## The canopy fade's reach round a plaza (metres, before the brush's fade factor).
 const FADE_M := 3.0
 ## Plain-words reasons a press makes nothing.
@@ -107,6 +109,8 @@ var gesture: StringName = &""
 ## A press on bare ground lays a field (true) or a plaza; the kind asked for ("" the default).
 var lay_field: bool = false
 var field_kind: String = ""
+## The furnishing half: hover, pick, move, turn, swap and remove a standing piece (VillageProps).
+var props := VillageProps.new()
 
 var _grab_village: int = -1
 var _grab_plaza: int = -1
@@ -326,6 +330,8 @@ func remove(
 
 ## Removes the picked plaza or field (the pane's Remove).
 func remove_selected(editor: AuthoringEditor) -> bool:
+	if props.has_picked():
+		return props.remove(editor, false) == ""
 	if selected_plaza < 0:
 		return false
 	return remove(editor, selected_village, selected_plaza, selected_group)
@@ -356,17 +362,23 @@ func _resize(
 
 
 func has_target() -> bool:
-	return hover_plaza >= 0
+	return hover_plaza >= 0 or props.has_hover()
 
 
-## A press on a plaza's rim grabs the edge, inside it picks the plaza, on bare ground starts a
-## new plaza of the picked (or nearest) village. The edit is the release's.
+## A press on a standing piece picks it (a drag moves it); on a plaza's rim grabs the edge, inside
+## it picks the plaza, on bare ground starts a new plaza of the picked (or nearest) village. The
+## edit is the release's. A piece beats the plaza it stands on, even on its rim (a market's stalls
+## stand on the edge); the edge between them still grabs.
 func press(brush: BrushTool) -> bool:
 	_message = ""
 	var editor := brush.editor
 	var doc := editor.document
 	var p := editor.to_map_xz(brush.hit)
 	var found := VillageFields.pick_any(doc.settlements, p, _rim_m, _handle_m)
+	if props.press(editor, p):
+		select(props.village, -1, true)
+		return false
+	props.drop()
 	if not found.is_empty():
 		var village := int(found["settlement"])
 		_grab_village = village
@@ -427,7 +439,7 @@ func refusal_at(
 
 
 func took_press() -> bool:
-	return gesture != &""
+	return gesture != &"" or props.gesture != &""
 
 
 ## Follows the pointer: the gesture's end, or the plaza under it; keeps the pick and the pane
@@ -444,6 +456,8 @@ func frame(brush: BrushTool) -> void:
 	if brush.hit == Vector3.INF:
 		hover_village = -1
 		hover_plaza = -1
+		props.hover_village = -1
+		props.hover_slot = ""
 	else:
 		var camera := brush.cursor.camera if brush.cursor != null else null
 		var scale := editor.map_scale()
@@ -455,7 +469,9 @@ func frame(brush: BrushTool) -> void:
 			_rim_m, StructureBrush.metres_for_pixels(camera, brush.hit, HANDLE_HIT_PX, scale)
 		)
 		var p := editor.to_map_xz(brush.hit)
-		if gesture != &"":
+		if props.gesture != &"":
+			props.track(editor, p)
+		elif gesture != &"":
 			_to = p
 			_track_move(editor, p)
 		else:
@@ -464,6 +480,12 @@ func frame(brush: BrushTool) -> void:
 			hover_plaza = int(found.get("index", -1))
 			hover_group = found.get("group", VillageFields.GROUP_PLAZAS)
 			hover_part = found.get("part", &"")
+			var pad := StructureBrush.metres_for_pixels(camera, brush.hit, PIECE_PAD_PX, scale)
+			props.hover(editor, p, pad)
+			if props.has_hover():
+				# A piece under the pointer is the target, not the plaza it stands in.
+				hover_village = -1
+				hover_plaza = -1
 			if not _explicit:
 				var target := hover_village if hover_plaza >= 0 else ghost_village(editor, p)
 				if target > 0 and target != selected_village:
@@ -519,6 +541,13 @@ func _end_move(brush: BrushTool) -> void:
 ## The release: lays the new plaza, or sizes or moves the grabbed one, as one history entry.
 func end(brush: BrushTool) -> void:
 	var editor := brush.editor
+	if props.gesture != &"" and editor != null:
+		var refused := props.end(editor)
+		if refused != "":
+			_message = refused
+			brush.refused.emit(refused)
+		reset()
+		return
 	if gesture == &"" or editor == null:
 		reset()
 		return
@@ -552,15 +581,18 @@ func end(brush: BrushTool) -> void:
 
 ## Escape or RMB: drops a held gesture, else lets go of the picked plaza.
 func cancel(_brush: BrushTool) -> void:
-	if gesture != &"":
+	if gesture != &"" or props.gesture != &"":
 		reset()
+	elif props.has_picked():
+		props.drop()
+		view_changed.emit()
 	elif selected_plaza >= 0:
 		select(selected_village, -1)
 
 
-## Escape with no press held is the brush's while a plaza is picked.
+## Escape with no press held is the brush's while a plaza or a piece is picked.
 func has_selection() -> bool:
-	return selected_plaza >= 0
+	return selected_plaza >= 0 or props.has_picked()
 
 
 ## The tool is put down or another is picked.
@@ -570,6 +602,7 @@ func leave(brush: BrushTool) -> void:
 	reset()
 	hover_village = -1
 	hover_plaza = -1
+	props.clear()
 	select(-1, -1, false)
 	_signature = ""
 
@@ -577,6 +610,7 @@ func leave(brush: BrushTool) -> void:
 ## Drops a held gesture.
 func reset() -> void:
 	gesture = &""
+	props.reset()
 	_grab_village = -1
 	_grab_plaza = -1
 	_verdict = {}
@@ -584,11 +618,42 @@ func reset() -> void:
 	_plans = []
 
 
-## Delete or Backspace over a plaza.
+## Delete or Backspace over a piece or a plaza.
 func remove_target(brush: BrushTool) -> void:
-	if brush.editor != null and hover_plaza >= 0:
+	if brush.editor == null:
+		return
+	if props.has_hover():
+		_tell(brush, props.remove(brush.editor))
+	elif hover_plaza >= 0:
 		if not remove(brush.editor, hover_village, hover_plaza, hover_group):
 			brush.refused.emit(REFUSED)
+
+
+## Q and E turn the piece under the pointer (else the picked one) a notch, Shift a quarter.
+func rotates() -> bool:
+	return props.has_hover() or props.has_picked()
+
+
+func rotate(brush: BrushTool, steps: int) -> void:
+	if brush.editor != null and gesture == &"" and props.gesture == &"":
+		_tell(brush, props.turn(brush.editor, steps))
+
+
+## R shows another draw of the piece under the pointer (else the picked one).
+func rerolls() -> bool:
+	return props.has_hover() or props.has_picked()
+
+
+func reroll(brush: BrushTool) -> void:
+	if brush.editor != null and gesture == &"" and props.gesture == &"":
+		_tell(brush, props.reroll(brush.editor))
+
+
+## Toasts `words` when an edit was refused.
+func _tell(brush: BrushTool, words: String) -> void:
+	if words != "":
+		_message = words
+		brush.refused.emit(words)
 
 
 ## Shift+wheel over a plaza or a bracket key: the plaza under the pointer (else the picked one)
@@ -632,6 +697,7 @@ func fade_focus(brush: BrushTool) -> Vector4:
 ## Lets go of a pick an undo took away, and picks the first village when none is picked, so the
 ## pane's character tiles are live from the first frame.
 func _sync_selection(editor: AuthoringEditor) -> void:
+	props.sync(editor)
 	var doc := editor.document
 	var held := doc.settlement(selected_village) if selected_village > 0 else null
 	if held == null:
@@ -653,9 +719,18 @@ func _announce(editor: AuthoringEditor) -> void:
 		lay_field,
 		field_kind,
 		preview_radius() if sizing() else 0.0,
+		props.signature(),
 	]
 	for settlement in editor.document.settlements:
-		parts.append([settlement.id, settlement.kit, settlement.plazas, settlement.fields])
+		parts.append(
+			[
+				settlement.id,
+				settlement.kit,
+				settlement.plazas,
+				settlement.fields,
+				settlement.removed.size(),
+			]
+		)
 	var now := var_to_str(parts)
 	if now != _signature:
 		_signature = now

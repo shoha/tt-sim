@@ -162,6 +162,7 @@
 		"res://tests/unit/test_village_dry_ground.gd",
 		"res://tests/unit/test_village_field_ground.gd",
 		"res://tests/unit/test_village_fields.gd",
+		"res://tests/unit/test_village_furnishings.gd",
 		"res://tests/unit/test_village_plaza_move.gd",
 		"res://tests/unit/test_village_tool.gd",
 		"res://tests/unit/test_water_carve.gd",

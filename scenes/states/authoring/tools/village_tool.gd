@@ -29,7 +29,10 @@ func _init() -> void:
 		],
 		["Drag a plaza's edge (Village)", "Resize it; the ground is repaved when you let go"],
 		["Click a plaza (Village)", "Pick it: the pane then sizes or removes it"],
-		["Delete (Village)", "Remove the plaza under the cursor with its paving"],
+		["Drag a barrel, stall or bench (Village)", "Move it; it stays where you put it"],
+		["Click a piece (Village)", "Pick it: the pane then swaps, puts back or removes it"],
+		["Q and E, R over a piece (Village)", "Turn it a notch (Shift a quarter); show another draw"],
+		["Delete (Village)", "Remove the piece or plaza under the cursor"],
 		["[ and ] (Village)", "A plaza one metre smaller or larger; Shift + scroll over one"],
 		["Escape (picked plaza)", "Let go of the plaza"],
 		["Crops, Orchard, Garden (Lay out)","Clicks then lay that field at the village's edge"],
@@ -106,6 +109,26 @@ func connect_pane(controller: AuthoringController, pane: Control) -> void:
 				mode.remove_selected(brush.editor)
 			refresh_pane(brush, mode, village_pane)
 	)
+	village_pane.swap_requested.connect(
+		func() -> void:
+			if brush.editor != null:
+				var words := mode.props.swap(brush.editor)
+				if words != "":
+					brush.refused.emit(words)
+			refresh_pane(brush, mode, village_pane)
+	)
+	village_pane.unpin_requested.connect(
+		func() -> void:
+			if brush.editor != null:
+				mode.props.unpin(brush.editor)
+			refresh_pane(brush, mode, village_pane)
+	)
+	village_pane.restore_requested.connect(
+		func() -> void:
+			if brush.editor != null and mode.selected_village > 0:
+				mode.props.restore(brush.editor, mode.selected_village)
+			refresh_pane(brush, mode, village_pane)
+	)
 
 
 ## Applies a Boundary pane choice to village `village`: Automatic gives back the kit's draw, None
@@ -142,4 +165,5 @@ static func state_for(doc: MapDocument, mode: VillageBrush) -> Dictionary:
 		state, doc, mode.selected_village, mode.selected_group, mode.selected_plaza, mode.field_kind
 	)
 	state["lay_field"] = mode.lay_field
+	state["prop"] = mode.props.pane_state(doc, mode.selected_village)
 	return state
