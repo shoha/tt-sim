@@ -143,6 +143,11 @@ static func _measure() -> String:
 	lines.append("gap above caps %.2f, gap below caps %.2f" % [above, below])
 	lines.append("backdrop %.2f tall, caps span %.2f" % [panel.size.y, caps_bottom - caps_top])
 	lines.append("backdrop above the screen's bottom edge by %.2f" % (screen.y - panel.end.y))
+	for node in bar.get_tree().get_nodes_in_group(InputHints.OBSTACLES):
+		var control := node as Control
+		if control != null and control.is_visible_in_tree():
+			var hit := control.get_global_rect().intersects(panel)
+			lines.append("obstacle %s %s overlaps backdrop: %s" % [control.name, _rect(control), hit])
 	return "\n".join(lines)
 
 

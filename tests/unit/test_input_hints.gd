@@ -221,7 +221,8 @@ func _assert_caps_centred(label: String) -> void:
 	var above := top - panel.position.y
 	var below := panel.end.y - bottom
 	assert_almost_eq(above, below, 1.0, "%s: top gap equals bottom gap" % label)
-	assert_gt(above, 0.0, "%s: the caps stand inside the backdrop" % label)
+	var air := float(_hints._backdrop.get_theme_constant(&"space_2", &"Space"))
+	assert_almost_eq(above, air, 1.0, "%s: the air is the theme's space_2" % label)
 
 
 func test_hints_set_while_hidden_arrive_with_the_bar() -> void:

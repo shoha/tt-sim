@@ -23,7 +23,7 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 4
 mouse_filter = 2
-theme_type_variation = &"Chip"
+theme_type_variation = &"HintBackdrop"
 
 [node name="HintRow" type="HFlowContainer" parent="HintBar/BackdropPanel"]
 unique_name_in_owner = true

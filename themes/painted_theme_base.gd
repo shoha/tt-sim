@@ -613,6 +613,13 @@ func _define_status() -> void:
 		var pencil := edge(1, c(ThemeColors.EDGE))
 		chip = box(c(ThemeColors.SURFACE_RAISED), RADIUS_CHIP, SPACE_3, SPACE_1, pencil)
 	define_variant_style("Chip", "PanelContainer", {panel = chip})
+	# The input hint bar's backdrop: the chip with air above and below its key caps (8 px, owner
+	# 2026-11-02: the chip's 4 px read snug on a bar of caps).
+	var hint_backdrop := box(c(ThemeColors.SURFACE), RADIUS_CHIP, SPACE_3, SPACE_2, rim())
+	if not on_glass:
+		var pencil := edge(1, c(ThemeColors.EDGE))
+		hint_backdrop = box(c(ThemeColors.SURFACE_RAISED), RADIUS_CHIP, SPACE_3, SPACE_2, pencil)
+	define_variant_style("HintBackdrop", "PanelContainer", {panel = hint_backdrop})
 	# "Needs attention": a chip with a danger edge, an alert icon and its words inside (the
 	# collections manager's pill, standing where a failing row's switch would be).
 	var attention := box(
