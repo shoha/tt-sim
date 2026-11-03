@@ -21,6 +21,7 @@
 		"res://tests/unit/test_environment_edit_model.gd",
 		"res://tests/unit/test_environment_glow.gd",
 		"res://tests/unit/test_eye_canopy.gd",
+		"res://tests/unit/test_eye_shadow.gd",
 		"res://tests/unit/test_film_pane.gd",
 		"res://tests/unit/test_fire_sound.gd",
 		"res://tests/unit/test_focus_trap_stacking.gd",

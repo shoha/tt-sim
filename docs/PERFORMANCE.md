@@ -4597,3 +4597,62 @@ the colour and depth pipelines of the first draw).
 
 Not done. The 72 ms frame of a cold first place (5 frames after the add; still not identified) and an
 async `ProcgenSettlement.place` (21 to 25 ms) were not attempted (budget).
+
+## Eye view frame cost (topic eyeperf, 2026-11-03)
+
+Measured overnight with the GPU otherwise idle (nvidia-smi before each run: 16 to 19 percent, 44 to 46 C,
+P0), debug build, everything landed: painted sky and edge fog, the near-eye canopy fade, MSAA 4x at the
+eye, the eye shadow fit (`EyeShadow`, below). Procedure: the pinned one above (1920x1080 window and world
+viewport, vsync off, in-run A/B, medians of 4 rounds of 90 frames after 30 settle frames, order rotated
+and reversed on odd rounds, home measured again after each round for the drift check), through the real
+`EyeView` (`tools/render_jobs/probes/eye_perf.gd`, jobs `ep_perf_wild`, `ep_perf_hamlet`). Pitch is
+positive looking down. "x home" is GPU time over the home ortho pose in the same run.
+
+| map, pose (yaw 45 / 165 / 285) | GPU ms (wall ms) | x home | primitives |
+|---|---|---|---|
+| wild 150 ft valley, home | 2.99 (3.49) | 1.00 | 445,000 |
+| wild, eye pitch 0 | 3.36 / 2.81 / 2.33 (3.78 / 3.30 / 2.82) | 1.12 / 0.94 / 0.78 | 526k / 288k / 223k |
+| wild, eye pitch 10 | 3.69 / 2.99 / 2.51 (4.19 / 3.48 / 2.98) | 1.23 / 1.00 / 0.84 | 534k / 307k / 238k |
+| wild, eye pitch -20 | 2.28 / 1.84 / 1.91 (2.72 / 2.31 / 2.38) | 0.76 / 0.62 / 0.64 | 444k / 234k / 228k |
+| dressed hamlet (76 m), home | 2.68 (3.17) | 1.00 | 526,000 |
+| hamlet, eye pitch 0 | 2.21 / 2.85 / 2.29 (2.68 / 3.33 / 2.80) | 0.82 / 1.06 / 0.86 | 312k / 814k / 567k |
+| hamlet, eye pitch 10 | 2.39 / 3.07 / 2.55 (2.90 / 3.55 / 3.03) | 0.89 / 1.14 / 0.95 | 325k / 815k / 549k |
+| hamlet, eye pitch -20 | 1.56 / 2.15 / 1.94 (2.03 / 2.63 / 2.42) | 0.58 / 0.80 / 0.72 | 299k / 771k / 566k |
+
+Drift: home measured after each round against home before it, GPU ratio over all rounds 0.996 (wild),
+1.007 (hamlet), 1.005 and 1.008 in the A/B runs; single rounds scatter 0.91 to 1.25, so only the medians
+over four rounds mean anything. The eyeprobe numbers (one spot, forced camera, no sky, no MSAA: home 2.66
+GPU, eye pitch 0 1.71, pitch 10 1.90, at a different yaw: its yaw 45 looked another way than
+`EyeView`'s) say the same thing: the eye was cheaper than home there, and it still is on every pose
+except the wild map looking at yaw 45 (the denser direction: 526k primitives against 445k at home).
+
+Over the home budget by more than 15 percent: only the wild map at yaw 45, pitch 10 (1.23 x; 1.32 x in the
+A/B run, which ran hotter at 70 C), and pitch 0 at 1.12 to 1.19 x. In-run A/B at that pose (yaw 45, GPU ms,
+wild; hamlet in parentheses, same variants):
+
+| variant | pitch 0 | pitch 10 |
+|---|---|---|
+| shipped | 3.51 (2.30) | 3.89 (2.51) |
+| no painted sky and fog | 3.33 (2.20) | 3.71 (2.44) |
+| no near-eye fade | 3.41 (2.25) | 3.79 (2.47) |
+| no MSAA 4x (the shipped setting 0) | 2.51 (1.88) | 2.82 (2.08) |
+| shadow distance 100 m | 3.52 (2.32) | 3.89 (2.55) |
+| all four off | 2.26 (1.73) | 2.60 (1.97) |
+
+The cause is MSAA 4x at the eye: +1.0 ms (+40 percent of the frame) on the wild map and +0.4 ms on the
+hamlet; the painted sky costs 0.1 to 0.2 ms and the fade 0.05 to 0.1. A longer shadow distance costs
+nothing: forcing 120 / 160 / 200 m on the wild map gave 3.48 / 3.45 / 3.37 ms at pitch 0 against 3.51 for
+the fit (the 100 m floor there), so longer is, if anything, slightly cheaper. Proposed smallest fixes,
+NOT applied (each changes the look, and the owner judges clips): MSAA 2x at the eye
+(`VisualEffectsController.effective_antialiasing_level`, one line, not measured) or FXAA (cheaper, read
+clean in the eyeprobe stills, needs the foliage variant logic). The eye is at most 1.23 x home on the
+densest pose measured and 1.14 x on the dressed hamlet, which is far under any frame budget (3.7 ms).
+Not covered: a forest interior, other spots, release builds, and the map sizes below.
+
+Shadow distance at the eye (`EyeShadow`, `MapViewFit.follow()` under a perspective camera): the fit is
+the distance that keeps the fade band beyond the map's farthest corner from where the eye stands
+(horizontal, so it does not move when the eye turns), rounded up to 10 m, between the 100 m floor and
+200 m x map scale. Map "sizes" in the new-map dialog are feet: the 150 map is 45.7 m, the 250 map 76 m, so
+on every map under about 300 ft the fit is the 100 m floor and nothing changes; it takes effect on larger
+maps. A 600 ft build did not finish in 15 minutes and was dropped, so the fit above the floor was not
+measured in a real level (unit tests cover the maths).

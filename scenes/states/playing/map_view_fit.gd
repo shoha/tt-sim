@@ -123,8 +123,17 @@ func follow() -> void:
 		return
 	var ground := ground_range()
 	_game_map.set_ground_top(ground.y)
+	var camera := _game_map.camera_node
+	if camera.projection == Camera3D.PROJECTION_PERSPECTIVE:
+		# The eye sees to the horizon: fit to how far the map reaches from where it stands (the
+		# top-edge fit below finds no ground at most pitches). Leaving the eye needs no restore:
+		# the first orthographic frame after fits the orthographic way.
+		_environment.fit_shadow_distance_for_eye(
+			camera.global_position, shadow_bounds, _map_root.global_transform.basis.get_scale().x
+		)
+		return
 	_environment.fit_shadow_distance_to_view(
-		_game_map.camera_node, Vector2(_game_map.world_viewport.size), shadow_bounds, ground.x
+		camera, Vector2(_game_map.world_viewport.size), shadow_bounds, ground.x
 	)
 
 

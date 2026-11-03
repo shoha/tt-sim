@@ -614,6 +614,19 @@ func fit_shadow_distance_to_view(
 	return _sun_light.directional_shadow_max_distance
 
 
+## The same for a perspective eye at `eye` (EyeShadow): the distance that reaches the map's far
+## side from where the eye stands, whatever way it faces. Returns the distance in effect.
+## MapViewFit.follow() calls it instead of fit_shadow_distance_to_view while the camera is
+## perspective; the first orthographic frame after refits the orthographic way.
+func fit_shadow_distance_for_eye(eye: Vector3, map_bounds: AABB, map_scale: float) -> float:
+	if not is_instance_valid(_sun_light):
+		return 0.0
+	var wanted := EyeShadow.distance(eye, map_bounds, map_scale)
+	if absf(_sun_light.directional_shadow_max_distance - wanted) >= 1.0:
+		_sun_light.directional_shadow_max_distance = wanted
+	return _sun_light.directional_shadow_max_distance
+
+
 ## Write the three global rendering-quality toggles (SSAO, SSR, SDFGI) onto the
 ## live WorldEnvironment. Takes explicit values rather than reading
 ## settings.cfg itself, so both call sites can supply the right source: the

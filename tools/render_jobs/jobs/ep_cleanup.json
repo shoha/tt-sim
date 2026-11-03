@@ -1,0 +1,10 @@
+{
+ "out_dir": "render_jobs/ep_cleanup",
+ "timeout_s": 120,
+ "hang_s": 60,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "cleanup", "prefix": "_camera_ep2_"},
+  {"op": "wait", "s": 0.5}
+ ]
+}
