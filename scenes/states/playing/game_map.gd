@@ -399,6 +399,12 @@ func _input(event: InputEvent) -> void:
 					get_viewport().set_input_as_handled()
 				return
 
+	# Left button: the active view's own gesture (the eye view grabs the ground with it)
+	if event.button_index == MOUSE_BUTTON_LEFT:
+		if _camera_controller.handle_primary_button(event):
+			get_viewport().set_input_as_handled()
+		return
+
 	# Don't zoom when scrolling over any UI element (e.g. asset browser list)
 	# Don't zoom while dragging - scroll wheel is used for token height adjustment
 	if drag_and_drop_node and drag_and_drop_node.is_dragging():

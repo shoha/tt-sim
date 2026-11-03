@@ -79,6 +79,13 @@ func is_rmb_pan_active() -> bool:
 	return false
 
 
+## A left mouse button press or release that no tool, token or UI took (GameMap._input, after the
+## pan buttons). The orbit view has no left-button gesture; the eye view grabs the ground with it.
+## True when the event must be marked handled.
+func primary_button(_event: InputEventMouseButton) -> bool:
+	return false
+
+
 ## Pointer motion during a pan. True when the event must be marked handled.
 func pan_motion(_event: InputEventMouseMotion) -> bool:
 	return false

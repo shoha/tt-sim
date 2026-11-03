@@ -68,6 +68,8 @@ const REFERENCE_ASPECT := 16.0 / 9.0  # Reference window aspect ratio for frustu
 var ground_top_y: float = 0.0
 ## The on-screen compass and tilt handle, or null before setup().
 var compass: CameraCompass = null
+## The eye-level view (always there, active or not); set_view_mode(eye) or F9 makes it active.
+var eye: EyeView = EyeView.new()
 
 ## The orbit view's zoom range (the 16:9 reference height of the camera's size).
 var min_zoom: float:
@@ -159,6 +161,11 @@ func setup(game_map: GameMap) -> void:
 ## The view mode in charge of the camera now (OrbitView unless set_view_mode gave another).
 func view_mode() -> ViewMode:
 	return _active
+
+
+## The orthographic orbit view (always there, active or not).
+func orbit_view() -> OrbitView:
+	return _orbit
 
 
 ## Make `mode` the active view mode: the current one is deactivated (an Alt + drag orbit ends, held
@@ -295,6 +302,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_reset_camera_to_home()
 		return
 
+	# F9: step into the eye view and back (debug key)
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F9:
+		set_view_mode(_orbit if _active == eye else eye)
+		get_viewport().set_input_as_handled()
+		return
+
 	# Turn the view: Q / E, `[` / `]`, or Alt+Q / Alt+E under a brush (CameraRig.key_turn)
 	var turn := CameraRig.event_turn(event, brush_owns_turn_keys())
 	if turn != 0:
@@ -408,6 +421,12 @@ func cancel_pan() -> void:
 	_active.pan_cancel()
 
 
+## A left button press or release nothing else took: the active view's own gesture (the eye view
+## grabs the ground with it). True when the event must be marked handled.
+func handle_primary_button(event: InputEventMouseButton) -> bool:
+	return _active.primary_button(event)
+
+
 ## Handle mouse motion while a pan may be active. Returns true if the
 ## viewport's input should be marked as handled (RMB-driven pan).
 func handle_pan_mouse_motion(event: InputEventMouseMotion) -> bool:
@@ -423,7 +442,10 @@ func adjust_zoom(delta: float) -> void:
 ## a map is fit; MapViewFit (play and authoring alike) raises the upper limit so a whole map
 ## fits.
 func set_zoom_limits(low: float, high: float) -> void:
-	_active.set_zoom_limits(low, high)
+	# The orbit view keeps up while another mode is in charge, so it returns with a current range.
+	_orbit.set_zoom_limits(low, high)
+	if _active != _orbit:
+		_active.set_zoom_limits(low, high)
 
 
 ## The orthographic size at which a map fits a camera with rotation `basis` (OrbitView, pure):

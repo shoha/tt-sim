@@ -1,0 +1,13 @@
+{
+ "out_dir": "render_jobs/eye_view_sheet",
+ "timeout_s": 60,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/eye_view_hamlet", "columns": 4, "tile": [480, 270], "out": "ev_sheet", "names": [
+    "ev_hamlet_y045_sub", "ev_hamlet_y135_sub", "ev_hamlet_y225_sub", "ev_hamlet_y315_sub",
+    "user://render_jobs/eye_view_wild/ev_wild_y045_sub", "user://render_jobs/eye_view_wild/ev_wild_y135_sub", "user://render_jobs/eye_view_wild/ev_wild_y225_sub", "user://render_jobs/eye_view_wild/ev_wild_y315_sub",
+    "user://render_jobs/eye_view_street/ev_street_y045_sub", "user://render_jobs/eye_view_street/ev_street_y135_sub", "user://render_jobs/eye_view_street/ev_street_y225_sub", "user://render_jobs/eye_view_street/ev_street_y315_sub",
+    "ev_hamlet_orbit_before_sub", "ev_hamlet_orbit_after_sub", "ev_hamlet_up20_f75_sub", "ev_hamlet_f40_sub"
+  ]}
+ ]
+}

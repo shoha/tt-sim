@@ -1,0 +1,24 @@
+{
+ "out_dir": "render_jobs/eye_view_walk_wild",
+ "timeout_s": 600,
+ "hang_s": 150,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_camera_ev_wild"},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "enter", "at": [10, 10], "yaw": 68, "pitch": 3, "fov": 60},
+  {"op": "wait", "s": 0.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "walk", "name": "slope", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/ev_walk", "seconds": 5.0, "fps": 30, "every": 30, "width": 480, "events": [
+    {"at": 0, "do": "walk", "v": [0, 1]}
+  ]},
+  {"op": "wait", "s": 5.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "leave"},
+  {"op": "wind", "freeze": false},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}
