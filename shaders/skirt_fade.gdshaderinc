@@ -6,8 +6,9 @@
  *
  * skirt_alpha_seeded(): 1 on the map, falling to 0 skirt_fade_m past its edge, the distance to
  * the map rectangle (rounded at the corners) stretched +- skirt_wobble by two octaves of value
- * noise on the map seed, so the outline is organic, not a rectangle; it holds near the map,
- * then falls off softly, like haze rather than a linear ramp.
+ * noise on the map seed, so the outline is organic, not a rectangle; it holds near the map
+ * (wholly for skirt_hold_m, the eye view's), then falls off softly, like haze rather than a
+ * linear ramp. RiverExits.skirt_alpha (the orbit view's, no hold) ends at the same place.
  *
  * skirt_backdrop_color(): what the camera shows behind the skirt (the environment's flat
  * colour, or a panorama sky in the view direction), fogged as Godot fogs the background;
@@ -25,6 +26,10 @@ uniform vec2 skirt_half_extent = vec2(30.0);
 uniform float skirt_fade_m : hint_range(1.0, 100.0) = 24.0;
 // How much low-frequency noise stretches and shrinks the fade (0 = a clean rounded rect).
 uniform float skirt_wobble : hint_range(0.0, 1.0) = 0.45;
+// The fade starts this far past the edge (the stretched distance) and still ends at skirt_fade_m:
+// 0 in the orbit view; at the eye (SkirtBackdrop.EYE_HOLD_M) the ground runs on past the edge
+// before it fades, instead of a teal veil starting at the edge line (card eyeedge).
+uniform float skirt_hold_m = 0.0;
 // The backdrop the fade goes to: 0 the flat colour skirt_backdrop (linear), 1 the panorama sky
 // skirt_sky_panorama in the camera's view direction (turned by skirt_sky_basis, times
 // skirt_sky_energy), 2 a per-pixel dither of the fade instead of a colour.
@@ -122,6 +127,7 @@ float skirt_alpha_seeded(vec2 world_xz, int seed) {
 	float n = skirt_value_noise(p + vec2(3.7, -8.2), seed) * 0.7
 		+ skirt_value_noise(p * 2.3 + vec2(-5.1, 2.9), seed) * 0.3;
 	d *= 1.0 + (n - 0.5) * 2.0 * skirt_wobble;
-	float t = clamp(d / skirt_fade_m, 0.0, 1.0);
+	float hold = min(skirt_hold_m, skirt_fade_m - 1.0);
+	float t = clamp((d - hold) / (skirt_fade_m - hold), 0.0, 1.0);
 	return 1.0 - t * t * (3.0 - 2.0 * t);
 }

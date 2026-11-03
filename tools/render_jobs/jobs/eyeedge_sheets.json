@@ -1,0 +1,13 @@
+{
+ "out_dir": "render_jobs/eyeedge_look",
+ "timeout_s": 120,
+ "steps": [
+  {"op": "wait", "s": 0.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/eyeedge_look", "columns": 2, "tile": [960, 540], "out": "eyeedge_sheet_hamlet",
+   "names": ["eyeedge_hamlet_p00_y135_before", "eyeedge_hamlet_p00_y135", "eyeedge_hamlet_p00_y225_before", "eyeedge_hamlet_p00_y225", "eyeedge_hamlet_orbit_before", "eyeedge_hamlet_orbit_after", "eyeedge_hamlet_p00_y315"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/eyeedge_look", "columns": 2, "tile": [960, 540], "out": "eyeedge_sheet_wild",
+   "names": ["eyeedge_temperate_forest_p00_y135_before", "eyeedge_temperate_forest_p00_y135", "eyeedge_temperate_forest_p00_y135_noskirt", "eyeedge_temperate_forest_p00_y135_nofade", "eyeedge_temperate_forest_p00_y225_before", "eyeedge_temperate_forest_p00_y225", "eyeedge_temperate_forest_orbit", "eyeedge_temperate_forest_pm15_y315"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/eyeedge_look", "columns": 2, "tile": [960, 540], "out": "eyeedge_sheet_savanna",
+   "names": ["eyeedge_savanna_pm15_y225", "eyeedge_savanna_pm15_y315", "eyeedge_savanna_p00_y135_before", "eyeedge_savanna_p00_y135", "eyeedge_savanna_p00_y225_before", "eyeedge_savanna_p00_y225", "eyeedge_savanna_orbit"]}
+ ]
+}

@@ -23,6 +23,11 @@ const NODE_NAME := "SkirtBackdrop"
 const MODE_COLOR := 0
 const MODE_SKY := 1
 const MODE_DITHER := 2
+## Under the eye's painted sky the skirt's fade starts this far past the edge (skirt_hold_m) and
+## ends where it always does (skirt_fade_m), so the ground runs on past the edge before it fades:
+## from the eye a fade that started at the edge line laid a teal veil over everything beyond it,
+## with a straight boundary along the edge (card eyeedge, the wild valley at yaw 135).
+const EYE_HOLD_M := 14.0
 
 ## The materials kept in step: the skirt's, and the water's when a river runs past the edge.
 var materials: Array[ShaderMaterial] = []
@@ -68,6 +73,7 @@ static func uniforms(env: Environment, forward: Vector3) -> Dictionary:
 		"skirt_fog": Vector4.ZERO,
 		"skirt_fog_params": Vector4(0.01, 0.0, 0.0, 1.0),
 		"skirt_fog_depth": Vector4(0.0, 10.0, 100.0, 1.0),
+		"skirt_hold_m": 0.0,
 	}
 	if env == null:
 		return out
@@ -113,6 +119,7 @@ static func _sky(env: Environment, forward: Vector3, energy: float, out: Diction
 		# foot are one tone.
 		var painted := sky_material as ShaderMaterial
 		out.skirt_backdrop = _linear(painted.get_shader_parameter("foot_color"), energy)
+		out.skirt_hold_m = EYE_HOLD_M
 	elif sky_material is ProceduralSkyMaterial:
 		var color := procedural_color(sky_material as ProceduralSkyMaterial, basis * forward)
 		out.skirt_backdrop = Vector3(color.r, color.g, color.b) * energy

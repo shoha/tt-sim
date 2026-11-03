@@ -308,7 +308,18 @@ top-down views never see any of it.
   prefix, `default` covers the rest, and the map seed shifts the lattice seed. `MapViewFit` names
   the map's dominant biome. The foot colour is also the fog colour and the colour the ground skirt
   and water backdrop fade to (`SkirtBackdrop` reads the shader's `foot_on`), so grass, skirt,
-  fog and ridge foot are one tone.
+  fog and ridge foot are one tone. At the eye the skirt's fade holds for `SkirtBackdrop.EYE_HOLD_M`
+  (14 m, the shader's `skirt_hold_m`) past the edge and still ends at `skirt_fade_m` (24 m), so the
+  ground runs on past the edge and fades near the ridge foot instead of laying a teal veil whose
+  straight boundary followed the edge line (card eyeedge; the orbit view's fade is unchanged).
+- `EyeRim` (`utils/eye_rim.gd`): hedgerows and copses of the dominant biome's trees and shrubs
+  planted 2 to 14 m past the map edge on the skirt, an `AuthoredScatter` named `EyeRim` under the
+  map root that `EyeView` shows on entering and hides on leaving (rebuilt from the document each
+  time), so a view toward the edge has a middle ground and the orbit view's feathered edge is
+  untouched. River mouths stay open; a biome without trees or shrubs plants none.
+- Open: a thin white streak beside a bank when looking up 15 degrees (savanna, yaw 225 and 315)
+  belongs to the high cloudlet layer (it goes when `cloud2_cover` is 0); capping the cloudlets'
+  longness did not change it, and neither did an ellipse-free bank body (card eyeedge).
 - `EyeView` also owns `sky_custom_fov` 0 at the eye; it reads the Environment from
   `world_viewport.find_world_3d()` (the SubViewport's own `world_3d` is null).
 - Godot 4.7 resets `Environment.fog_density` when `fog_mode` is assigned: set the mode first.

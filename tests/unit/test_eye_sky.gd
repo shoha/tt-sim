@@ -191,3 +191,7 @@ func test_the_skirt_fades_to_the_foot_colour_under_the_painted_sky() -> void:
 	assert_true((wanted["skirt_backdrop"] as Vector3).is_equal_approx(Vector3(lin.r, lin.g, lin.b)))
 	assert_eq((wanted["skirt_fog_depth"] as Vector4).y, 25.0, "the skirt fogs by the same 25 m")
 	assert_eq((wanted["skirt_fog_params"] as Vector4).w, 0.0, "fog does not touch the backdrop")
+	assert_eq(
+		wanted["skirt_hold_m"], SkirtBackdrop.EYE_HOLD_M, "the ground holds past the edge at the eye"
+	)
+	assert_eq(SkirtBackdrop.uniforms(null, Vector3.FORWARD)["skirt_hold_m"], 0.0, "not elsewhere")

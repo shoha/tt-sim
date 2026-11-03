@@ -138,6 +138,7 @@ func activate(owner_controller: CameraController, map: GameMap) -> void:
 	_apply_fov()
 	_sync_sky(0.0)
 	_sync_painted_sky()
+	_show_rim(true)
 	map.eye_view_antialiasing = true
 	UIManager.set_street_hints(true, owner_controller.brush_owns_turn_keys())
 	apply_pitch(pitch.pitch)
@@ -156,6 +157,7 @@ func deactivate() -> void:
 	_home_after_glide = false
 	_leave_after_frame = -1
 	sky.leave()
+	_show_rim(false)
 	UIManager.set_street_hints(false, controller.brush_owns_turn_keys())
 	if not is_instance_valid(game_map) or not is_instance_valid(game_map.camera_node):
 		return
@@ -561,6 +563,18 @@ func _map_scale() -> float:
 	if map == null:
 		return 1.0
 	return maxf(map.global_transform.basis.get_scale().x, 0.0001)
+
+
+## Show or hide the hedgerows and copses past an authored map's edge (EyeRim): only the eye sees
+## them, so the orbit view's feathered edge keeps its look.
+func _show_rim(on: bool) -> void:
+	if not is_instance_valid(game_map) or not is_instance_valid(game_map.map_container):
+		return
+	var map := game_map.map_container.get_node_or_null("LevelMap") as Node3D
+	if map == null:
+		return
+	var terrain := map.get_node_or_null(^"AuthoredTerrain") as AuthoredTerrain
+	EyeRim.show(map, terrain.document if terrain != null else null, on, game_map)
 
 
 ## The ground's world height under world XZ `at`: the map's ground field, 0 on the fixed band.
