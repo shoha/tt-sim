@@ -22,8 +22,18 @@ extends SceneTree
 ## its first message, and the totals, then exits 1 when a shard failed, crashed or hung. A
 ## shard still running after HANG_S is killed and counts as failed. Killing the runner itself
 ## leaves its shards running: stop them by process id.
+##
+## Two runners must not overlap: every worktree without its own user folder shares user://, so a
+## second run overwrites the first one's shard files and the tests' fixed scratch folders, and
+## the first reports a cluster of failures that are nobody's (2026-10-30, test_surface_store).
+## A runner therefore writes LOCK_FILE with the time, refreshes it every LOCK_REFRESH_S and
+## removes it at the end; a runner that finds one younger than LOCK_LIVE_S refuses to start
+## (exit 2) instead of corrupting the other. A killed runner's lock goes stale by itself.
 
 const OUT_DIR := "user://gut_shards/"
+const LOCK_FILE := "user://gut_shards/runner.lock"
+const LOCK_REFRESH_S := 5.0
+const LOCK_LIVE_S := 20.0
 const TIMES_FILE := "user://gut_shards/times.json"
 const COMMITTED_TIMES := "res://tests/gut_times.json"
 const DEFAULT_CONFIG := "res://tests/.gutconfig.json"
@@ -55,10 +65,25 @@ func _initialize() -> void:
 		times = _read_json(COMMITTED_TIMES)
 	var shards := partition(scripts, times, int(opts.shards))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
+	if FileAccess.file_exists(LOCK_FILE):
+		var held := FileAccess.get_file_as_string(LOCK_FILE)
+		if lock_is_live(held, Time.get_unix_time_from_system()):
+			printerr(
+				(
+					"gut_shards: another sharded run holds %s (%s); two runs overwrite each "
+					+ "other's files in the shared user folder. Wait for it, or delete the file "
+					+ "if no run is alive."
+				)
+				% [ProjectSettings.globalize_path(LOCK_FILE), held.strip_edges()]
+			)
+			quit(2)
+			return
+	_touch_lock()
 	var start_ms := Time.get_ticks_msec()
 	for i in shards.size():
 		_start_shard(shards[i], i, base)
 	await _wait_for(shards)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(LOCK_FILE))
 	var wall_s := (Time.get_ticks_msec() - start_ms) / 1000.0
 	var ok := _report(shards, wall_s)
 	var measured := {}
@@ -146,6 +171,25 @@ static func partition(scripts: PackedStringArray, times: Dictionary, count: int)
 	return out
 
 
+## True when the text of a lock file ("<unix time> <process id>") is younger than LOCK_LIVE_S at
+## `now`; an unreadable or future-dated text is not live (a leftover is never a reason to refuse
+## forever).
+static func lock_is_live(text: String, now: float) -> bool:
+	var stamp := text.strip_edges().get_slice(" ", 0)
+	if not stamp.is_valid_float():
+		return false
+	var age := now - stamp.to_float()
+	return age >= 0.0 and age < LOCK_LIVE_S
+
+
+## Writes the lock file with the time now and this process id.
+func _touch_lock() -> void:
+	var file := FileAccess.open(LOCK_FILE, FileAccess.WRITE)
+	if file != null:
+		file.store_string("%.0f %d" % [Time.get_unix_time_from_system(), OS.get_process_id()])
+		file.close()
+
+
 ## The committed weights from a run's per-script `times`: each script at or above
 ## COMMIT_MIN_S to a tenth of a second, and "*", the mean of the rest to a hundredth.
 static func committed_table(times: Dictionary) -> Dictionary:
@@ -208,7 +252,11 @@ func _start_shard(shard: Dictionary, index: int, base: Dictionary) -> void:
 
 ## Wait until every shard has exited, recording each one's wall time; kill a hung one.
 func _wait_for(shards: Array) -> void:
+	var touched_ms := Time.get_ticks_msec()
 	while true:
+		if (Time.get_ticks_msec() - touched_ms) / 1000.0 >= LOCK_REFRESH_S:
+			_touch_lock()
+			touched_ms = Time.get_ticks_msec()
 		var running := 0
 		for shard: Dictionary in shards:
 			if shard.has("wall_s"):
