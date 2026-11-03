@@ -2120,6 +2120,13 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
   cross of bars (`/muntin`), surface kind `wood`, 30 triangles with hidden faces dropped, plus 2 to
   4 for the bars. A window's pane carries a per-window vertex alpha flag (0.3 to 0.8) and every other
   vertex alpha 1.0; `structure_pane.gdshader` draws an interior-mapped room behind a flagged pane.
+  Doors (card streetdoors, 2026-11-03, procgen c97f101 on): the leaf and its panels are surface kind
+  `wood` (`/leaf`, `/leaf/panel`, `/leaf/panel1`), with a dark case (`/case/jamb0`, `/jamb1`,
+  `/head`, `wood`) and a brass handle (`/leaf/handle`, `metal`); 28 triangles a rectangular door.
+  A path with a `leaf` or `case` segment is the door role (`StructureLook.DOOR`, last in ROLES),
+  drawn lit with procgen's paint read as sRGB (`StructureMaterials.door`); in a street row the
+  door meshes go to the row's extra parts with `door: true`. A door still in the glass kind (an
+  older procgen) stays an opening, so no digest moves at the old pin.
   The table is `StructureLook`; the painterly version is card S6.
 - **Round trip.** A structure change is done when a recipe from a library folder builds through
   tt-sim's `StructureGeometry` with its pinned digest, a token stands on its roof, and the map

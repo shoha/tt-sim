@@ -59,6 +59,11 @@ func test_tag_paths_give_roles_and_lots() -> void:
 	assert_eq(StructureLook.role_of_tag_path("street_row_2/left/lot1/building_walls_3"), "wall")
 	assert_eq(
 		StructureLook.role_of_tag_path("street_row_2/right/lot0/glazing_6/front0/door0/leaf"),
+		StructureLook.DOOR,
+		"a door's leaf is the door role (card streetdoors)"
+	)
+	assert_eq(
+		StructureLook.role_of_tag_path("street_row_2/right/lot0/glazing_6/front0/window1/pane"),
 		StructureLook.OPENING
 	)
 	assert_eq(StructureLook.role_of_tag_path("street_row_2/left/lot2/yard"), "wall", "a yard")

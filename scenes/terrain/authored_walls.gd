@@ -242,7 +242,7 @@ func _wall_node(parts: Dictionary) -> Node3D:
 		roof_instance.name = "Roof"
 		roof_instance.mesh = roof_mesh
 		node.add_child(roof_instance)
-	# A street's panes and door leaves (procgen's glazing node, surface kind "glass").
+	# A street's panes (procgen's glazing node, surface kind "glass"; its doors are wood, below).
 	var glass: Array = parts.get("glass", [])
 	if not glass.is_empty():
 		var glass_mesh := ArrayMesh.new()
@@ -255,12 +255,20 @@ func _wall_node(parts: Dictionary) -> Node3D:
 		node.add_child(glass_instance)
 	# The street's other surfaces (WallGeometry.EXTRA_PART): plaster, adobe, brick, log and boards
 	# walls, tile, slate, shingle, thatch and turf roofs, each in the material of its kind.
+	# A door's pieces (`door`) are drawn as a structure's door (StructureLook.DOOR).
 	for extra: Dictionary in parts.get(WallGeometry.EXTRA_PART, []):
 		var extra_mesh := ArrayMesh.new()
 		extra_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, extra.arrays)
-		extra_mesh.surface_set_material(0, _row_material(String(extra.kind), style, bool(extra.roof)))
+		var door := bool(extra.get("door", false))
+		var material := (
+			_door_material(String(extra.kind))
+			if door
+			else _row_material(String(extra.kind), style, bool(extra.roof))
+		)
+		extra_mesh.surface_set_material(0, material)
 		var extra_instance := MeshInstance3D.new()
-		extra_instance.name = "%s_%s" % ["Roof" if extra.roof else "Wall", extra.kind]
+		var label := "Door" if door else ("Roof" if extra.roof else "Wall")
+		extra_instance.name = "%s_%s" % [label, extra.kind]
 		extra_instance.mesh = extra_mesh
 		node.add_child(extra_instance)
 	var faces: PackedVector3Array = parts.get("collision", PackedVector3Array())
@@ -303,6 +311,14 @@ func _row_material(kind: String, style: String, roof: bool = false) -> Material:
 	var key := "row:%s:%s:%s" % [kind, role, style]
 	if not _materials.has(key):
 		_materials[key] = StructureMaterials.make(kind, role, style, _palette_root)
+	return _materials[key]
+
+
+## A street door's painted wood or metal handle, shared per kind (StructureMaterials.door).
+func _door_material(kind: String) -> Material:
+	var key := "door:%s" % kind
+	if not _materials.has(key):
+		_materials[key] = StructureMaterials.door(kind)
 	return _materials[key]
 
 

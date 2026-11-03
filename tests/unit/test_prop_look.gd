@@ -48,9 +48,8 @@ func test_a_prop_node_is_the_prop_role_and_its_water_is_water() -> void:
 	for kind in ["wood", "stone", "thatch", "accent", "cloth", "glass"]:
 		assert_eq(StructureLook.material_role(kind, StructureLook.PROP), StructureLook.PROP, kind)
 	assert_true(StructureLook.PROP in StructureLook.ROLES)
-	assert_eq(
-		StructureLook.ROLES.back(), StructureLook.PROP, "the new role is last: no digest moves"
-	)
+	# PROP came after every older role (and DOOR after it), so no digest moved.
+	assert_eq(StructureLook.ROLES.find(StructureLook.PROP), 9, "PROP keeps its place")
 
 
 func test_a_prop_part_is_drawn_by_the_ornament_shader_with_the_prop_balance() -> void:

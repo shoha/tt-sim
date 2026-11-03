@@ -434,8 +434,13 @@ static func _is_roof(mesh: Dictionary) -> bool:
 	return mesh.role == StructureLook.ROOF and mesh.kind != StructureLook.ACCENT_KIND
 
 
+## A door keeps procgen's paint, as a pane does (StructureLook.DOOR).
 static func _paints(mesh: Dictionary) -> bool:
-	return mesh.role != StructureLook.OPENING and mesh.kind != StructureLook.GLASS_KIND
+	return (
+		mesh.role != StructureLook.OPENING
+		and mesh.role != StructureLook.DOOR
+		and mesh.kind != StructureLook.GLASS_KIND
+	)
 
 
 static func _group(

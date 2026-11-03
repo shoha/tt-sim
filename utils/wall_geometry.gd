@@ -186,12 +186,17 @@ static func _row_surfaces(
 	for lot in standing:
 		lot_hints[ProcgenRow.lot_path(lot)] = StructureLook.lot_hints(lot.get("palette", {}))
 	var roles := PackedStringArray()
+	# The same with a door's pieces (StructureLook.DOOR) apart, for every kind but glass: a door in
+	# the glass kind (an older procgen) stays with the panes, as it always was.
+	var door_roles := PackedStringArray()
 	var groups := PackedInt32Array()
 	var lots := {}
 	var palettes: Array = []
 	for path in geometry.tag_table:
-		var roof := StructureLook.role_of_tag_path(path) == StructureLook.ROOF
+		var role := StructureLook.role_of_tag_path(path)
+		var roof := role == StructureLook.ROOF
 		roles.append(StructureLook.ROOF if roof else StructureLook.WALL)
+		door_roles.append(role if role == StructureLook.DOOR else roles[roles.size() - 1])
 		var lot := StructureLook.lot_of_tag_path(path)
 		if not lots.has(lot):
 			lots[lot] = palettes.size()
@@ -203,16 +208,21 @@ static func _row_surfaces(
 		groups.append(lots[lot])
 	var meshes: Array = []
 	for surface in geometry.merged_by_kind():
-		meshes.append_array(StructureGeometry.split_surface(surface, roles))
+		var by := roles if surface.kind == StructureLook.GLASS_KIND else door_roles
+		meshes.append_array(StructureGeometry.split_surface(surface, by))
 	StructurePaint.paint(meshes, groups, palettes)
 	var extra: Array[Dictionary] = []
 	for mesh: Dictionary in meshes:
 		var roof: bool = mesh.role == StructureLook.ROOF
+		var door: bool = mesh.role == StructureLook.DOOR
 		var kind := String(mesh.kind)
 		if roof and kind == "wood":
 			parts[ROOF_PART] = mesh.arrays
-		elif not roof and OWN_KINDS.has(kind):
+		elif not roof and not door and OWN_KINDS.has(kind):
 			parts[kind] = mesh.arrays
+		elif door:
+			# A door's painted wood and metal handle (card streetdoors), drawn as a structure's.
+			extra.append({"kind": kind, "roof": false, "door": true, "arrays": mesh.arrays})
 		else:
 			extra.append({"kind": kind, "roof": roof, "arrays": mesh.arrays})
 	parts[EXTRA_PART] = extra
