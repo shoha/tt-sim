@@ -258,6 +258,40 @@ static func tilt_hint() -> Dictionary:
 	return {"key": "Alt + drag", "action": "Tilt (O top-down)"}
 
 
+## The hint bar's base hints while playing: the orbit view's, or the eye's (the street) with
+## `street` set. At the street WASD walks, Shift runs, the wheel is the lens and F9 or V leaves
+## (Home leaves too, but it is the orbit's reset in the orbit's row). The run chip is
+## "Shift + WASD", not "Shift": a token drag lays a "Shift" free-move hint on that key and
+## removes it again, which would take a plain "Shift" run chip with it. `brush_owns_keys`: the
+## turn chip names the live mapping (turn_hint). Pure but for InputProfile's labels.
+static func play_hints(street: bool, brush_owns_keys: bool = false) -> Array[Dictionary]:
+	var pause := {"key": InputProfile.label(&"pause"), "action": "Pause"}
+	var help := {"key": "F1", "action": "Help"}
+	var measure := {"key": InputProfile.label(&"measure"), "action": "Measure"}
+	if street:
+		return [
+			pause,
+			{"key": InputProfile.label(&"wasd"), "action": "Walk"},
+			{"key": "Shift + WASD", "action": "Run"},
+			{"key": InputProfile.label(&"zoom"), "action": "Lens"},
+			turn_hint(brush_owns_keys),
+			{"key": "F9 or V", "action": "Leave"},
+			measure,
+			help,
+		]
+	return [
+		pause,
+		{"key": InputProfile.label(&"wasd"), "action": "Pan"},
+		{"key": InputProfile.label(&"zoom"), "action": "Zoom"},
+		turn_hint(brush_owns_keys),
+		tilt_hint(),
+		{"key": InputProfile.label(&"reset_camera"), "action": "Reset camera"},
+		measure,
+		{"key": InputProfile.label(&"grid"), "action": "Grid"},
+		help,
+	]
+
+
 ## The hint-bar key cap and caption naming the turn keys that are live.
 static func turn_hint(brush_owns_keys: bool) -> Dictionary:
 	return {

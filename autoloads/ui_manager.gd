@@ -363,6 +363,18 @@ func remove_hint(key: String) -> void:
 		_input_hints.remove_hint(key)
 
 
+## The camera is at the street (the eye view) or back in the orbit view: swap the play base hints
+## to that view's (InputHints.set_street).
+func set_street_hints(on: bool, brush_owns_keys: bool = false) -> void:
+	if _input_hints:
+		_input_hints.set_street(on, brush_owns_keys)
+
+
+## Whether the base hints are the street's (the camera is at the eye).
+func is_street_hints() -> bool:
+	return _input_hints != null and _input_hints.is_street()
+
+
 ## Lay an active tool's own hints over the base ones (InputHints.set_tool_hints): they lead,
 ## the camera keys step out and Help stays.
 func set_tool_hints(hints: Array) -> void:

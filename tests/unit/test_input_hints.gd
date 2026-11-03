@@ -66,6 +66,43 @@ func test_replace_hint_swaps_a_chip_in_place_and_adds_when_absent() -> void:
 	assert_has(_row_keys(), "Alt + Q E", "the live turn keys stay beside a tool's hints")
 
 
+func test_set_street_swaps_the_play_row_and_back() -> void:
+	_hints.set_street(true)
+	assert_true(_hints.is_street())
+	assert_eq(_hints.shown_hints().size(), 0, "a bar with no base hints stays empty")
+	_hints.set_hints(CameraRig.play_hints(false))
+	await wait_seconds(SETTLE_S)
+	var orbit_row := _row_keys()
+	assert_has(orbit_row, "Alt + drag")
+	_hints.set_street(true)
+	await wait_seconds(SETTLE_S)
+	var street := CameraRig.play_hints(true)
+	var keys := []
+	for hint in street:
+		keys.append(hint["key"])
+	assert_eq(_row_keys(), keys.map(func(k: String) -> String: return k.validate_node_name()))
+	assert_eq(street[1]["action"], "Walk")
+	assert_eq(_hints.chip_for("WASD").get_node("Action").text, "Walk", "the WASD chip is relabelled")
+	_hints.set_street(false)
+	await wait_seconds(SETTLE_S)
+	assert_eq(_row_keys(), orbit_row, "the orbit row comes back in its order")
+	assert_false(_hints.is_street())
+
+
+func test_street_row_lists_only_working_keys() -> void:
+	var labels := {}
+	for hint in CameraRig.play_hints(true):
+		labels[hint["key"]] = hint["action"]
+	assert_eq(labels["Shift + WASD"], "Run")
+	assert_eq(labels["F9 or V"], "Leave")
+	assert_eq(labels["Scroll"], "Lens")
+	assert_false(labels.has("Home"), "the orbit's reset is not the street's")
+	assert_false(labels.has("G"), "the grid is not adapted to the eye yet")
+	assert_false(labels.has("Alt + drag"))
+	for key in ["Pan", "Zoom"]:
+		assert_false(labels.values().has(key), "%s is the orbit view's caption" % key)
+
+
 func test_chips_use_the_key_chip_style() -> void:
 	await _show_grid_and_measure()
 	var chip: Control = _hints.chip_for("G")

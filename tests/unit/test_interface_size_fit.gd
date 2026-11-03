@@ -637,6 +637,28 @@ func test_hint_bar_centres_beside_the_visuals_drawer_at_720p_auto() -> void:
 	assert_almost_eq(bar.get_center().x, CANVAS_720P_AUTO.x / 2.0, 1.0, "back in the centre")
 
 
+## The street (eye) hint row, the real set (CameraRig.play_hints), beside the Visuals drawer at
+## 720p Auto: whole, on the canvas and clear of the drawer, as the orbit row is.
+func test_street_hint_row_fits_beside_the_visuals_drawer_at_720p_auto() -> void:
+	_host.size = CANVAS_720P_AUTO
+	var play := PLAY_SCENE.instantiate()
+	_host.add_child(play)
+	var drawer := play.get_node("GameplayMenu").get("level_edit_panel") as LevelEditPanel
+	drawer.initialize(LevelData.new())
+	var hints := _play_hints(true)
+	drawer._on_rail_item_pressed(&"sun")
+	await _assert_fits("street hint row beside the drawer", drawer, Vector2(CANVAS_720P_AUTO))
+	_assert_uncovered("the street hint row beside the drawer at 720p Auto", hints)
+	var bar := _drawn_rect(_backdrop(hints))
+	assert_true(
+		Rect2(Vector2.ZERO, Vector2(CANVAS_720P_AUTO)).encloses(bar), "on the canvas: %s" % bar
+	)
+	assert_almost_eq(_drawn_alpha(_backdrop(hints)), 1.0, 0.01, "the bar shows whole")
+	assert_lte(_chip_lines(hints), 2, "at most two lines")
+	drawer.mark_clean()
+	drawer.close()
+
+
 func test_pause_menu_fits() -> void:
 	var pause := PAUSE_SCENE.instantiate()
 	_host.add_child(pause)
@@ -771,10 +793,14 @@ func _tiles(field: TileField) -> Array[Control]:
 	return out
 
 
-## A hint bar in the host with the play HUD's hints (GameplayMenuController's defaults).
-func _play_hints() -> InputHints:
+## A hint bar in the host with the play HUD's hints (GameplayMenuController's defaults), or with
+## `street` the real street row (CameraRig.play_hints).
+func _play_hints(street: bool = false) -> InputHints:
 	var hints := HINTS_SCENE.instantiate() as InputHints
 	_host.add_child(hints)
+	if street:
+		hints.set_hints(CameraRig.play_hints(true))
+		return hints
 	(
 		hints
 		. set_hints(

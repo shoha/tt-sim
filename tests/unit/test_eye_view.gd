@@ -25,6 +25,11 @@ func before_each() -> void:
 	_controller = _game_map.get_camera_controller()
 
 
+func after_each() -> void:
+	# A test that ends at the eye leaves the street flag on the shared hint bar.
+	UIManager.set_street_hints(false)
+
+
 # --- EyeRig: pure maths ---
 
 
@@ -320,6 +325,47 @@ func test_leaving_the_eye_puts_the_orbit_camera_back() -> void:
 	assert_almost_eq(_controller.current_pitch(), pitch_before, 0.0001)
 	_controller.set_pitch_now(5.0)
 	assert_almost_eq(_controller.current_pitch(), CameraRig.MIN_PITCH, 0.0001, "orbit range back")
+
+
+func _hint_keys() -> Array:
+	var keys := []
+	for hint in UIManager._input_hints.shown_hints():
+		keys.append(hint["key"])
+	return keys
+
+
+func test_the_hint_bar_follows_the_eye_in_and_out() -> void:
+	UIManager.set_hints(CameraRig.play_hints(false))
+	var orbit_keys := _hint_keys()
+	assert_has(orbit_keys, "Alt + drag", "the orbit row tells the tilt gesture")
+	_controller.set_view_mode(_controller.eye)
+	var street_keys := _hint_keys()
+	assert_has(street_keys, "Shift + WASD", "the run key")
+	assert_has(street_keys, "F9 or V", "the way out")
+	assert_does_not_have(street_keys, "Alt + drag")
+	assert_eq(UIManager._input_hints.shown_hints()[1]["action"], "Walk")
+	_controller.set_view_mode(_controller.orbit_view())
+	assert_eq(_hint_keys(), orbit_keys, "back to the orbit row, in its order")
+	UIManager.clear_hints()
+
+
+func test_the_street_row_survives_a_default_hints_reset_at_the_eye() -> void:
+	UIManager.set_hints(CameraRig.play_hints(false))
+	_controller.set_view_mode(_controller.eye)
+	assert_true(UIManager.is_street_hints())
+	UIManager.set_hints(CameraRig.play_hints(UIManager.is_street_hints()))
+	assert_has(_hint_keys(), "F9 or V")
+	_controller.set_view_mode(_controller.orbit_view())
+	assert_false(UIManager.is_street_hints())
+	UIManager.clear_hints()
+
+
+func test_an_empty_bar_stays_empty_when_the_eye_comes_and_goes() -> void:
+	UIManager.clear_hints()
+	_controller.set_view_mode(_controller.eye)
+	assert_eq(_hint_keys(), [], "no hints are conjured outside play")
+	_controller.set_view_mode(_controller.orbit_view())
+	assert_eq(_hint_keys(), [])
 
 
 func test_f9_toggles_the_eye() -> void:
