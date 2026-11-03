@@ -51,10 +51,10 @@ extends RefCounted
 ##   so for `glass_tile` the probe sets the tile's focus_mode first. `blur` takes focus away
 ##   again.
 ## - `save` (`folder`, `name`, `replace`): write the open authoring map as a test level
-##   (`_u1_ui_` or `_ui_tour_` folders only), shown under `name` (default the folder).
-## - `cleanup`: delete every `_u1_ui_*` and `_ui_tour_*` level folder.
+##   (`_u1_ui_`, `_ui_tour_` or `_hintbar_` folders only), shown under `name` (default the folder).
+## - `cleanup`: delete every `_u1_ui_*`, `_ui_tour_*` and `_hintbar_*` level folder.
 
-const PREFIXES: Array[String] = ["_u1_ui_", "_ui_tour_"]
+const PREFIXES: Array[String] = ["_u1_ui_", "_ui_tour_", "_hintbar_"]
 
 
 static func run(base: Node, step: Dictionary) -> String:

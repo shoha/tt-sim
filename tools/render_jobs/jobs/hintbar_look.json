@@ -1,0 +1,39 @@
+{
+ "out_dir": "render_jobs/hintbar_look",
+ "timeout_s": 600,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 100, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "save", "folder": "_hintbar_room", "name": "Hint Bar Room", "replace": true},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_hintbar_room"},
+  {"op": "wait", "s": 0.5},
+  {"op": "wait_ready", "settle": 1.5},
+  {"op": "expand", "values": ["1280x720", "1920x1080", "2560x1440"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/hint_bar.gd", "action": "row", "which": "play"},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/hint_bar.gd", "action": "measure"},
+   {"op": "capture", "name": "{value}_play", "desc": "{value}: the play hint bar, one line"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/hint_bar.gd", "action": "row", "which": "alt"},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/hint_bar.gd", "action": "measure"},
+   {"op": "capture", "name": "{value}_alt", "desc": "{value}: the play row with the Alt + Q E chip"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/hint_bar.gd", "action": "row", "which": "two"},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/hint_bar.gd", "action": "measure"},
+   {"op": "capture", "name": "{value}_two", "desc": "{value}: a row long enough to wrap onto two lines"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/hint_bar.gd", "action": "row", "which": "long"},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/hint_bar.gd", "action": "measure"},
+   {"op": "capture", "name": "{value}_long", "desc": "{value}: the authoring-length row"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "cleanup"}
+ ]
+}

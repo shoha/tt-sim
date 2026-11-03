@@ -39,7 +39,7 @@ func test_bar_slides_in_without_leaving_the_bottom_edge() -> void:
 	await _show_grid_and_measure()
 	assert_eq(_bar().anchor_top, 1.0)
 	assert_eq(_bar().anchor_bottom, 1.0)
-	assert_eq(_bar().offset_top, -52.0)
+	assert_eq(_bar().offset_top, 0.0, "no fixed height: the bar is as tall as its row")
 	assert_eq(_bar().offset_bottom, 0.0)
 	assert_eq(_bar().offset_transform_position, Vector2.ZERO)
 	assert_almost_eq(_bar().modulate.a, 1.0, 0.001)
@@ -146,7 +146,8 @@ func test_clear_slides_the_bar_out_and_frees_the_chips() -> void:
 	await wait_seconds(SETTLE_S)
 	assert_almost_eq(_bar().modulate.a, 0.0, 0.001)
 	assert_eq(_bar().offset_transform_position.y, InputHints.SLIDE_DISTANCE)
-	assert_eq(_bar().offset_top, -52.0, "still anchored at the bottom")
+	assert_eq(_bar().offset_top, 0.0, "still anchored at the bottom")
+	assert_eq(_bar().offset_bottom, 0.0, "still anchored at the bottom")
 	assert_eq(_hints.hints_container.get_child_count(), 0)
 
 
@@ -183,6 +184,44 @@ func test_a_wrapped_row_balances_its_lines() -> void:
 	assert_true(width <= 331.0, "three chips a line, not five and one: %.0f" % width)
 	assert_eq(InputHints.balanced_width(widths, 10.0, 700.0), 610.0, "one line fits")
 	assert_eq(InputHints.balanced_width([] as Array[float], 10.0, 600.0), 0.0)
+
+
+## The key caps stand centred in the backdrop: the gap above the topmost cap equals the gap below
+## the lowest (2026-11-02: the bar was a fixed 52 px tall and its flow row sat at the top, 4 px
+## under the edge and 9 px above the foot). Held for a single line and for a wrapped row.
+func test_key_caps_are_centred_in_the_backdrop() -> void:
+	_hints.set_hints([{"key": "WASD", "action": "Pan"}, {"key": "Scroll", "action": "Zoom"}])
+	await wait_seconds(SETTLE_S)
+	_assert_caps_centred("one line")
+	var keys := ["Esc", "WASD", "Scroll", "Q E", "Home", "M", "G", "Click", "Tab", "Ctrl + click"]
+	var many: Array[Dictionary] = []
+	for key in keys:
+		many.append({"key": key, "action": "A caption of some length"})
+	_hints.set_hints(many)
+	await wait_seconds(SETTLE_S)
+	var caps := _cap_rects()
+	assert_gt(caps[caps.size() - 1].position.y, caps[0].position.y, "the row wrapped")
+	_assert_caps_centred("wrapped")
+
+
+func _cap_rects() -> Array[Rect2]:
+	var caps: Array[Rect2] = []
+	for chip in _hints.hints_container.get_children():
+		caps.append((chip.get_child(0) as Control).get_global_rect())
+	return caps
+
+
+func _assert_caps_centred(label: String) -> void:
+	var panel: Rect2 = _hints._backdrop.get_global_rect()
+	var top := INF
+	var bottom := -INF
+	for cap in _cap_rects():
+		top = minf(top, cap.position.y)
+		bottom = maxf(bottom, cap.end.y)
+	var above := top - panel.position.y
+	var below := panel.end.y - bottom
+	assert_almost_eq(above, below, 1.0, "%s: top gap equals bottom gap" % label)
+	assert_gt(above, 0.0, "%s: the caps stand inside the backdrop" % label)
 
 
 func test_hints_set_while_hidden_arrive_with_the_bar() -> void:

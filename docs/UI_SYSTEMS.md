@@ -369,6 +369,14 @@ Contextual keybinding hints in a bar at the bottom centre of the screen (`InputH
   0), a draw offset that never touches anchors or offsets; tweening `position` instead rewrote
   the offsets against the top anchor and parked the bar at the top of the screen until
   2026-10-09. The bar slides only when it appears (first hint) or empties (last hint gone).
+- **Height**: the bar has no fixed height (`offset_top` is 0 and it grows up from the bottom
+  edge): it is as tall as its row, so the key caps stand centred in `%BackdropPanel` with
+  `Chip`'s own 4 px (`space_1`) above and below, plus the `MarginContainer` theme's 8 px
+  (`space_2`) between the backdrop and the screen edge and around it. Until 2026-11-02 the bar was
+  a fixed 52 px, 4 px more than its single line needs, and the flow row sits at the top of its
+  box: the caps stood 4 px under the backdrop's top and 8 px above its foot. A wrapped row grows
+  the bar upward in the same 4 px rhythm. `tests/unit/test_input_hints.gd` pins equal gaps
+  (within 1 px), and `jobs/hintbar_look.json` with `probes/hint_bar.gd` prints the rects.
 - **Beside drawers and buttons**: the bar never lies under an open drawer or a bottom-corner
   button. It centres in the board span the open drawers leave free
   (`DrawerContainer.free_span`; every drawer is in `DrawerContainer.GROUP` and calls
