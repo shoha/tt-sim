@@ -49,12 +49,54 @@ func test_the_near_fade_falls_steadily_between_the_radii() -> void:
 		var f := EyeCanopy.near_fade(d)
 		assert_lt(f, last, "monotone at %f m" % d)
 		last = f
-	assert_between(EyeCanopy.near_fade(1.5), 0.3, 0.8, "a crown 1.5 m away is thinned, not gone")
+	var middle := (EyeCanopy.NEAR_FULL_M + EyeCanopy.NEAR_NONE_M) * 0.5
+	assert_between(EyeCanopy.near_fade(middle), 0.3, 0.8, "a crown between the radii is thinned")
 
 
 func test_the_near_fade_scales_with_the_map() -> void:
 	assert_almost_eq(EyeCanopy.near_fade(3.0, 2.0), EyeCanopy.near_fade(1.5, 1.0), 0.00001)
 	assert_eq(EyeCanopy.near_fade(1.5, 0.0), EyeCanopy.near_fade(1.5, 1.0), "no scale reads as 1")
+
+
+# --- the eye light ---------------------------------------------------------------------------
+
+
+func test_the_eye_shade_rises_to_the_floor_of_the_lit_tone() -> void:
+	var lit := Vector3(1.9, 2.4, 2.8)
+	var shade := EyeCanopy.eye_shade(Vector3(0.065, 0.19, 0.1), lit)
+	assert_almost_eq(shade, lit * EyeCanopy.SHADE_FLOOR, Vector3.ONE * 0.00001)
+	assert_gt(shade.y, 0.19 * 3.0, "the shipped green shade comes up by more than three times")
+
+
+func test_a_shade_already_above_the_floor_is_kept() -> void:
+	var lit := Vector3(1.0, 1.0, 1.0)
+	var bright := Vector3(0.5, 0.1, 0.4)
+	assert_eq(EyeCanopy.eye_shade(bright, lit), Vector3(0.5, EyeCanopy.SHADE_FLOOR, 0.4))
+
+
+func test_the_back_glow_is_only_against_the_sun() -> void:
+	assert_eq(EyeCanopy.back_glow(-1.0), 0.0, "sun behind the eye")
+	assert_eq(EyeCanopy.back_glow(0.0), 0.0, "side-on")
+	assert_eq(EyeCanopy.back_glow(1.0), 1.0, "looking into the sun")
+	assert_between(EyeCanopy.back_glow(0.5), 0.2, 0.8)
+
+
+func test_the_foliage_shader_carries_the_eye_light() -> void:
+	var path := "res://shaders/wind_foliage_include.gdshaderinc"
+	assert_eq(_shader_const(path, "CANOPY_EYE_SHADE_FLOOR"), EyeCanopy.SHADE_FLOOR)
+	assert_eq(_shader_const(path, "CANOPY_EYE_GLOW_START"), EyeCanopy.GLOW_START)
+	assert_eq(_shader_const(path, "CANOPY_EYE_GLOW_FULL"), EyeCanopy.GLOW_FULL)
+	assert_eq(_shader_const(path, "CANOPY_EYE_BARK_LIFT"), EyeCanopy.BARK_LIFT)
+	var text := FileAccess.get_file_as_string(path)
+	assert_string_contains(
+		text,
+		"if (canopy_part == 0 || canopy_eye.w <= 0.0 || foliage_eye_light <= 0.0) {",
+		"grass and the orbit view take no eye light"
+	)
+	assert_string_contains(text, "max(shade, foliage_paint_lit * CANOPY_EYE_SHADE_FLOOR)")
+	assert_string_contains(
+		text, "smoothstep(CANOPY_EYE_GLOW_START, CANOPY_EYE_GLOW_FULL, dot(-VIEW, LIGHT))"
+	)
 
 
 # --- the ghost range -------------------------------------------------------------------------

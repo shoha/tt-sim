@@ -4656,3 +4656,20 @@ the distance that keeps the fade band beyond the map's farthest corner from wher
 on every map under about 300 ft the fit is the 100 m floor and nothing changes; it takes effect on larger
 maps. A 600 ft build did not finish in 15 minutes and was dropped, so the fit above the floor was not
 measured in a real level (unit tests cover the maths).
+
+## Eye foliage light (card eyefoliage, 2026-11-03)
+
+The eye view's foliage light (`EyeCanopy` "eye light": a raised painted shade floor, full ambient and a
+back glow on painted cards in `light()`, a small emission lift on bark, tree surfaces only) costs nothing
+measurable. In-run A/B through `eye_perf.gd` (variant `light: false` sets `foliage_eye_light` 0 on every
+wind material; job `eyefoliage_perf`), the pinned procedure, 4 rounds of 90 frames, 150 ft valley seed 3,
+eye at (10, 10), debug build, GPU 20 percent and 47 C before. GPU ms, ship / no light:
+
+| map | p0 y45 | p0 y225 | p0 y315 | p10 y45 | p10 y225 | p10 y315 |
+|---|---|---|---|---|---|---|
+| boreal taiga (home 2.78) | 4.20 / 4.25 | 2.34 / 2.33 | 3.08 / 3.05 | 4.36 / 4.37 | 2.55 / 2.57 | 3.28 / 3.26 |
+| temperate forest (home 3.12) | 3.65 / 3.67 | 2.50 / 2.50 | 2.82 / 2.82 | 4.07 / 4.06 | 2.81 / 2.80 | 2.93 / 2.93 |
+
+Every pair is within 0.06 ms (noise; drift 0.99 to 1.01). The orbit view takes one uniform branch that
+returns 0 (`eye_light_weight`), not measured separately. The same card widened the near-eye fade from
+0.7 / 2.6 m to 1.2 / 4.0 m, which discards more fragments near the eye; not A/B'd against the old radii.

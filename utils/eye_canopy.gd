@@ -17,13 +17,19 @@ extends RefCounted
 ##   Settings switch is on) centred on a focus point, with the eye-to-focus distance standing in
 ##   for the orthographic size (window_size).
 ## - the GHOST RANGE: a token ghost further than GHOST_START_M fades out, gone by GHOST_END_M.
+## - the EYE LIGHT: at street level the camera sees a crown's underside and its far side against
+##   the sun, which the orbit view looking down never shows, and the painted ramp's shade end
+##   left them near black (eyelook, 2026-11-02). In the eye's own pass a tree's painted card
+##   lifts its shade end to SHADE_FLOOR of its lit tone (eye_shade), keeps all of its ambient,
+##   and glows warm where the sun shines through it toward the eye (back_glow); bark and plain
+##   cards gain BARK_LIFT of their albedo. Grass and the orbit view are untouched.
 ##
 ## Distances are in metres at map scale 1; the eye view scales them by the map's scale (the same
 ## factor as its 1.6 m eye height), passed as `scale`.
 
 ## The near fade: full inside NEAR_FULL_M of the eye, none from NEAR_NONE_M out.
-const NEAR_FULL_M := 0.7
-const NEAR_NONE_M := 2.6
+const NEAR_FULL_M := 1.2
+const NEAR_NONE_M := 4.0
 ## The ghost's range fade starts and ends here.
 const GHOST_START_M := 30.0
 const GHOST_END_M := 50.0
@@ -35,6 +41,13 @@ const FOCUS_HOME_M := 12.0
 ## A shader only fades a fragment from the camera's own pass: the fragment's inverse view matrix
 ## puts the camera within this distance (metres) of the published eye.
 const PASS_TOLERANCE_M := 0.25
+## The eye light: the share of a painted card's lit tone its shade end keeps at the eye.
+const SHADE_FLOOR := 0.3
+## The back glow rises from GLOW_START to GLOW_FULL of dot(view ray, direction to the sun).
+const GLOW_START := 0.1
+const GLOW_FULL := 0.85
+## The share of its albedo bark and plain cards add as emission at the eye.
+const BARK_LIFT := 0.35
 
 
 ## How much of the leaf cards at `distance` from the eye drop out, 0 to 1: 1 inside the full
@@ -74,6 +87,20 @@ static func window_size(distance: float, fov_deg: float, scale: float = 1.0) -> 
 ## The window size at which the focus window is at home strength, for the same lens.
 static func home_size(fov_deg: float) -> float:
 	return window_size(FOCUS_HOME_M, fov_deg)
+
+
+## The shade end of a painted card's sun ramp at the eye, from its own `shade` and `lit` tones
+## (foliage_paint_shade and foliage_paint_lit): each channel at least SHADE_FLOOR of the lit one,
+## so the hue of the lit tone carries into the shade and a darker shade never goes below it.
+static func eye_shade(shade: Vector3, lit: Vector3) -> Vector3:
+	return shade.max(lit * SHADE_FLOOR)
+
+
+## How much a card glows with the sun behind it, 0 to 1, from `toward_sun`: the dot of the unit
+## view ray (camera to card) with the unit direction toward the sun. 0 side-on or with the sun
+## behind the eye, 1 looking into it.
+static func back_glow(toward_sun: float) -> float:
+	return smoothstep(GLOW_START, GLOW_FULL, toward_sun)
 
 
 ## True when the fragment's camera origin (`view_origin`, INV_VIEW_MATRIX's translation) is the

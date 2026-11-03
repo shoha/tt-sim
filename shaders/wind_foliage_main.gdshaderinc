@@ -64,6 +64,17 @@ void fragment() {
 		pbr_albedo = zone_tuft_albedo(pbr_albedo, zone_tuft, vec3(zone_mass, zone_mass_h));
 	}
 
+	// The eye light (wind_foliage_include CANOPY_EYE_SHADE_FLOOR): 0 off the eye's own pass and on
+	// grass, so those draw as before. A painted card keeps all of its ambient and hands the weight
+	// to light(); bark and plain cards gain a little emission instead.
+	float eye = eye_light_weight(INV_VIEW_MATRIX);
+#ifdef FOLIAGE_PAINTED_LIGHT
+	eye_light = eye;
+	pbr_ao = mix(pbr_ao, 1.0, eye);
+#else
+	EMISSION = pbr_albedo * (CANOPY_EYE_BARK_LIFT * eye);
+#endif
+
 	ALBEDO = pbr_albedo;
 	ALPHA = pbr_alpha;
 	AO = pbr_ao;

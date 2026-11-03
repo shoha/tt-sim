@@ -1,0 +1,25 @@
+{
+ "out_dir": "render_jobs/eyefoliage_perf",
+ "timeout_s": 900,
+ "hang_s": 180,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "expand", "values": ["boreal_taiga", "temperate_forest"], "template": [
+   {"op": "play", "folder": "_eyefoliage_{value}"},
+   {"op": "wait_ready", "settle": 2.0},
+   {"op": "hide_ui"},
+   {"op": "vsync_off"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "before_{value}"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "perf", "name": "ab_{value}", "dir": "user://render_jobs/eyefoliage_perf", "at": [10, 10], "yaws": [45, 225, 315], "pitches": [0, 10], "rounds": 4, "frames": 90, "settle": 30, "variants": [{"name": "ship"}, {"name": "nolight", "light": false}]},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "after_{value}"},
+   {"op": "title"},
+   {"op": "wait", "s": 0.5}
+  ]}
+ ]
+}

@@ -1,0 +1,48 @@
+{
+ "out_dir": "render_jobs/eyefoliage_look",
+ "timeout_s": 1800,
+ "hang_s": 150,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "expand", "values": ["temperate_forest", "boreal_taiga", "wetland_riparian"], "template": [
+   {"op": "saved", "folder": "_eyefoliage_{value}", "load": "play"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "new", "biome": "{value}_summer_s1", "size": 150, "seed": 3, "landform": "valley", "phase": "build"},
+   {"op": "wait_ready", "settle": 1.5, "phase": "build"},
+   {"op": "no_autosave", "phase": "build"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "save", "folder": "_eyefoliage_{value}", "replace": true, "phase": "build"},
+   {"op": "play", "folder": "_eyefoliage_{value}", "phase": "build"},
+   {"op": "wait_ready", "settle": 2.0, "phase": "build"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+   {"op": "hide_ui"},
+   {"op": "wind", "freeze": true},
+   {"op": "home"},
+   {"op": "settle"},
+   {"op": "capture", "name": "eyefoliage_{value}_home"},
+   {"op": "look_at", "at": [0, 0]},
+   {"op": "zoom", "size": 26.0},
+   {"op": "settle"},
+   {"op": "capture", "name": "eyefoliage_{value}_near"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "enter", "at": [10, 10], "yaw": 45, "pitch": 0, "fov": 60},
+   {"op": "settle"},
+   {"op": "capture", "name": "eyefoliage_{value}_y045"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 135, "pitch": 0}, {"op": "settle"}, {"op": "capture", "name": "eyefoliage_{value}_y135"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 225, "pitch": 0}, {"op": "settle"}, {"op": "capture", "name": "eyefoliage_{value}_y225"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 315, "pitch": 0}, {"op": "settle"}, {"op": "capture", "name": "eyefoliage_{value}_y315"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "leave"},
+   {"op": "wind", "freeze": false},
+   {"op": "title"},
+   {"op": "wait", "s": 1.0}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/eyefoliage_look", "out": "eyefoliage_sheet_eye", "columns": 2, "tile": [960, 540], "names": [
+   "user://render_jobs/eyefoliage_before/eyefoliage_boreal_taiga_y045", "eyefoliage_boreal_taiga_y045",
+   "user://render_jobs/eyefoliage_before/eyefoliage_boreal_taiga_y315", "eyefoliage_boreal_taiga_y315",
+   "user://render_jobs/eyefoliage_before/eyefoliage_wetland_riparian_y135", "eyefoliage_wetland_riparian_y135",
+   "user://render_jobs/eyefoliage_before/eyefoliage_wetland_riparian_y225", "eyefoliage_wetland_riparian_y225",
+   "user://render_jobs/eyefoliage_before/eyefoliage_temperate_forest_y225", "eyefoliage_temperate_forest_y225"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/eyefoliage_look", "out": "eyefoliage_sheet_orbit", "columns": 2, "tile": [960, 540], "names": [
+   "user://render_jobs/eyefoliage_before/eyefoliage_temperate_forest_home", "eyefoliage_temperate_forest_home",
+   "user://render_jobs/eyefoliage_before/eyefoliage_boreal_taiga_home", "eyefoliage_boreal_taiga_home",
+   "user://render_jobs/eyefoliage_before/eyefoliage_wetland_riparian_home", "eyefoliage_wetland_riparian_home",
+   "user://render_jobs/eyefoliage_before/eyefoliage_boreal_taiga_near", "eyefoliage_boreal_taiga_near"]}
+ ]
+}

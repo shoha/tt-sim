@@ -168,9 +168,24 @@ const float CANOPY_CUT_BEHIND = 0.5;
 // EyeCanopy.near_fade. Only the camera's own pass fades: the fragment's inverse view matrix
 // puts the camera at the eye (CANOPY_EYE_PASS), which the shadow pass's light never does.
 global uniform vec4 canopy_eye;
-const float CANOPY_EYE_FULL = 0.7;
-const float CANOPY_EYE_NONE = 2.6;
+const float CANOPY_EYE_FULL = 1.2;
+const float CANOPY_EYE_NONE = 4.0;
 const float CANOPY_EYE_PASS = 0.25;
+// The eye view's foliage light (EyeCanopy "eye light"), tree surfaces only (canopy_part 1 and 2):
+// at street level the camera sees a crown's underside and its far side against the sun, which the
+// orbit view looking down never shows, and the painted ramp's shade end left them near black. In
+// the eye's own pass a painted card's shade end rises to CANOPY_EYE_SHADE_FLOOR of its lit tone,
+// it keeps all of its ambient, and a card seen against the sun glows by CANOPY_EYE_GLOW (warm
+// light through the leaf) where the sun reaches it, rising from CANOPY_EYE_GLOW_START to
+// CANOPY_EYE_GLOW_FULL of dot(view ray, sun); bark and plain cards gain CANOPY_EYE_BARK_LIFT of
+// their albedo as emission. Never in the orbit view (canopy_eye.w is 0 there), so its look is
+// untouched. foliage_eye_light scales the whole term (1 shipped; the perf probe's A/B sets 0).
+const float CANOPY_EYE_SHADE_FLOOR = 0.3;
+const float CANOPY_EYE_GLOW_START = 0.1;
+const float CANOPY_EYE_GLOW_FULL = 0.85;
+const vec3 CANOPY_EYE_GLOW = vec3(0.9, 1.0, 0.35);
+const float CANOPY_EYE_BARK_LIFT = 0.35;
+uniform float foliage_eye_light : hint_range(0.0, 1.0) = 1.0;
 // Metres in front of the view-centre ground (along the view axis) where the fade starts.
 const float CANOPY_FADE_START = 0.5;
 // The brush window's fade: full inside CANOPY_BRUSH_INNER of its radius, none past it; it
@@ -237,6 +252,8 @@ uniform float foliage_ambient : hint_range(0.0, 2.0) = 0.25;
 // instead of a flat neon yellow brighter than by day, and a far crown, lit weakly, is almost
 // untouched (card F4b-1 round 5).
 const float FOLIAGE_NEAR_CAP = 0.8;
+// The eye light's weight (eye_light_weight), written by fragment() for light().
+varying float eye_light;
 #endif
 
 
@@ -430,6 +447,17 @@ void apply_canopy_fade(
 }
 
 
+// The eye light's weight for this fragment (see CANOPY_EYE_SHADE_FLOOR): foliage_eye_light on a
+// tree surface in the eye view's own pass (the camera at the published eye), else 0, so grass,
+// the orbit view and every other pass are left exactly as they were.
+float eye_light_weight(mat4 inv_view_matrix) {
+	if (canopy_part == 0 || canopy_eye.w <= 0.0 || foliage_eye_light <= 0.0) {
+		return 0.0;
+	}
+	return distance(inv_view_matrix[3].xyz, canopy_eye.xyz) < CANOPY_EYE_PASS ? foliage_eye_light : 0.0;
+}
+
+
 #ifdef FOLIAGE_PAINTED_LIGHT
 // The painted light's fragment terms (see the uniforms above): the sun-ward albedo ramp, the
 // edge-on cut in the camera's pass, and the silhouette ink. `normal` is the view-space
@@ -519,12 +547,21 @@ void apply_wind_foliage_pbr(
 
 #ifdef FOLIAGE_PAINTED_LIGHT
 // The painted crown light (see the uniforms above). Replaces the engine's diffuse and direct
-// specular for every light; directional lights get the painted ramp, the rest Lambert.
+// specular for every light; directional lights get the painted ramp, the rest Lambert. At the eye
+// (eye_light > 0) the shade end rises toward its floor and a card against the sun glows.
 void light() {
 	if (LIGHT_IS_DIRECTIONAL) {
 		float lit = smoothstep(foliage_paint_band.x, foliage_paint_band.y, dot(NORMAL, LIGHT));
 		float k = lit * mix(1.0 - foliage_paint_shadow, 1.0, ATTENUATION);
-		DIFFUSE_LIGHT += LIGHT_COLOR / PI * mix(foliage_paint_shade, foliage_paint_lit, k);
+		vec3 shade = foliage_paint_shade;
+		vec3 glow = vec3(0.0);
+		if (eye_light > 0.0) {
+			vec3 floor_tone = max(shade, foliage_paint_lit * CANOPY_EYE_SHADE_FLOOR);
+			shade = mix(shade, floor_tone, eye_light);
+			float back = smoothstep(CANOPY_EYE_GLOW_START, CANOPY_EYE_GLOW_FULL, dot(-VIEW, LIGHT));
+			glow = CANOPY_EYE_GLOW * (eye_light * back * ATTENUATION * (1.0 - lit));
+		}
+		DIFFUSE_LIGHT += LIGHT_COLOR / PI * (mix(shade, foliage_paint_lit, k) + glow);
 	} else {
 		vec3 near = LIGHT_COLOR / PI * max(dot(NORMAL, LIGHT), 0.0) * ATTENUATION;
 		float peak = max(near.r, max(near.g, near.b));

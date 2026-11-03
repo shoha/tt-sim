@@ -92,7 +92,8 @@ const TEST_PREFIXES: Array[String] = [
 	"_camera_el_",
 	"_camera_sd_",
 	"_marker_",
-	"_villages4_"
+	"_villages4_",
+	"_eyefoliage_"
 ]
 const NET_PREFIX := "_nettest_"
 const BASIN := {"id": 21, "at": [-17, -14], "r": 4.0, "depth": "waist"}
