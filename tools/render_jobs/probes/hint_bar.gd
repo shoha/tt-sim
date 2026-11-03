@@ -8,6 +8,7 @@ extends RefCounted
 ## - `row` (`which`): stage a hint row on the live bar. `two` is a row long enough to wrap onto
 ##   two lines, `alt` swaps the camera chip for the Alt + Q E one, `long` is the authoring row
 ##   with the tool's keys, `play` is the usual play row.
+## - `base` (`street`): set the real base row of the orbit view or the street.
 
 const ROWS := {
 	"play":
@@ -59,6 +60,14 @@ static func run(_base: Node, step: Dictionary) -> String:
 			return _measure()
 		"row":
 			return _row(String(step.get("which", "play")))
+		"base":
+			# `street` (bool): the real base row (CameraRig.play_hints) of the orbit view or the
+			# street, set as it was before the eye swapped it itself (jobs/eyehints_look.json).
+			var hints := _hints()
+			if hints == null:
+				return "no hint bar"
+			hints.set_hints(CameraRig.play_hints(bool(step.get("street", false))))
+			return "base row street=%s" % bool(step.get("street", false))
 	return "unknown action %s" % step.get("action", "")
 
 

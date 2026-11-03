@@ -50,6 +50,8 @@ const KEPT_WITH_A_TOOL: Array[String] = ["Alt + Q E", "Q E", "F1"]
 var _current_hints: Array[Dictionary] = []
 ## The active tool's own hints; while any, they lead and replace the base hints but the kept.
 var _tool_hints: Array[Dictionary] = []
+## Whether the camera is at the street (set_street): the base set is the eye's.
+var _street: bool = false
 ## Key -> chip, for every chip in the row, leaving ones included.
 var _chips: Dictionary = {}
 ## Key -> the chip's running fade.
@@ -235,6 +237,23 @@ func remove_hint(key: String) -> void:
 			removed = true
 	if removed:
 		_sync()
+
+
+## Whether the street (eye) hints are the base set now (set_street).
+func is_street() -> bool:
+	return _street
+
+
+## The camera is at the street (`on`) or back in the orbit view: when the bar holds the play
+## base hints, swap them for CameraRig.play_hints of that view (the diff keeps the chips whose key
+## stays and fades the others). The view is remembered either way, so a later set of the default
+## hints (a controls-profile change) comes out in the right set. A bar with no base hints (not
+## playing) stays empty.
+func set_street(on: bool, brush_owns_keys: bool = false) -> void:
+	_street = on
+	if _current_hints.is_empty():
+		return
+	set_hints(CameraRig.play_hints(on, brush_owns_keys))
 
 
 ## Lay a tool's own hints over the base ones while it is active (see the header). Each hint

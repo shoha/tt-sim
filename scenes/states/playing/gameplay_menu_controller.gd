@@ -86,6 +86,8 @@ func _exit_tree() -> void:
 	if InputProfile.profile_changed.is_connected(_on_input_profile_changed):
 		InputProfile.profile_changed.disconnect(_on_input_profile_changed)
 	UIManager.clear_hints()
+	# The camera that was at the street goes with the map; the next one starts in the orbit view.
+	UIManager.set_street_hints(false)
 
 
 func _on_input_profile_changed(_new_profile: InputProfile.Profile) -> void:
@@ -696,21 +698,7 @@ func clear_level() -> void:
 	_update_save_level_button_visibility()
 
 
-## Display the default gameplay input hints
+## Display the default gameplay input hints: the street's while the camera is at the eye
+## (EyeView tells UIManager.set_street_hints), else the orbit view's.
 func _set_default_hints() -> void:
-	(
-		UIManager
-		. set_hints(
-			[
-				{"key": InputProfile.label(&"pause"), "action": "Pause"},
-				{"key": InputProfile.label(&"wasd"), "action": "Pan"},
-				{"key": InputProfile.label(&"zoom"), "action": "Zoom"},
-				CameraRig.turn_hint(false),
-					CameraRig.tilt_hint(),
-				{"key": InputProfile.label(&"reset_camera"), "action": "Reset camera"},
-				{"key": InputProfile.label(&"measure"), "action": "Measure"},
-				{"key": InputProfile.label(&"grid"), "action": "Grid"},
-				{"key": "F1", "action": "Help"},
-			]
-		)
-	)
+	UIManager.set_hints(CameraRig.play_hints(UIManager.is_street_hints()))

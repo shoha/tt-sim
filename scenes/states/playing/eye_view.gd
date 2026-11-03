@@ -139,6 +139,7 @@ func activate(owner_controller: CameraController, map: GameMap) -> void:
 	_sync_sky(0.0)
 	_sync_painted_sky()
 	map.eye_view_antialiasing = true
+	UIManager.set_street_hints(true, owner_controller.brush_owns_turn_keys())
 	apply_pitch(pitch.pitch)
 	if owner_controller.compass != null:
 		owner_controller.compass.set_view(owner_controller.current_yaw(), pitch.pitch)
@@ -155,6 +156,7 @@ func deactivate() -> void:
 	_home_after_glide = false
 	_leave_after_frame = -1
 	sky.leave()
+	UIManager.set_street_hints(false, controller.brush_owns_turn_keys())
 	if not is_instance_valid(game_map) or not is_instance_valid(game_map.camera_node):
 		return
 	var camera := game_map.camera_node
