@@ -25,6 +25,7 @@ const REACH := &"reach"
 const BRIDGE := &"bridge"
 const CROWDED := &"crowded"
 const FULL := &"full"
+const OUTSIDE := &"outside"
 
 ## Kit name -> the rule ids of its plaza.centre slot (is_centre_piece), cached.
 static var _centre_rules: Dictionary = {}
@@ -47,6 +48,15 @@ static func is_field_piece(slot: String) -> bool:
 static func rule_of(slot: String) -> String:
 	var parts := slot.get_slice(":", 1).split("/")
 	return parts[1] if parts.size() >= 3 else ""
+
+
+## The index of the plaza whose piece `slot` is ("w1l:p0/square_stalls/r1" is plaza 0), or -1 for a
+## piece of a lot, a junction or a field. A plaza's piece stays inside its plaza.
+static func plaza_of(slot: String) -> int:
+	var owner := slot.get_slice(":", 1).get_slice("/", 0)
+	if owner.length() > 1 and owner.begins_with("p") and owner.substr(1).is_valid_int():
+		return int(owner.substr(1))
+	return -1
 
 
 ## The plaza's centrepiece (a market's well, rule slot "plaza.centre") is the plaza's own heart: the
@@ -147,6 +157,11 @@ static func problem(
 	var held := doc.settlement(village)
 	if held == null or VillagePlazas.distance_to(doc, held, at) > VillagePlazas.VILLAGE_REACH_M:
 		return REACH
+	var plaza := plaza_of(slot)
+	if plaza >= 0 and plaza < held.plazas.size():
+		var disc: Dictionary = held.plazas[plaza]
+		if at.distance_to(disc["at"] as Vector2) > float(disc["radius"]):
+			return OUTSIDE
 	var probe := {"prop": prop, "scale": scale, "slot": slot}
 	var radius := drawn_radius(probe)
 	var reach := AuthoredSettlements.footprint_reach(prop, SettlementBake.visual_scale(probe))
@@ -195,6 +210,8 @@ static func reason_text(reason: StringName) -> String:
 			return "That piece would block a bridge: keep the crossing clear."
 		CROWDED:
 			return "That is too close to another piece."
+		OUTSIDE:
+			return "Keep it inside the plaza: that piece belongs to the square."
 		FULL:
 			return "A village keeps at most %d hand-placed or swapped pieces." % Settlement.MAX_OVERRIDES
 	return "That piece cannot go there."
@@ -215,6 +232,8 @@ static func short_reason(reason: StringName) -> String:
 			return "On the bridge: keep it clear"
 		CROWDED:
 			return "Too close to another piece"
+		OUTSIDE:
+			return "Keep it inside the plaza"
 	return "A piece cannot go there"
 
 
@@ -269,6 +288,16 @@ static func with_unpinned(held: Settlement, slot: String) -> Settlement:
 		return null
 	var changed := held.copy()
 	changed.pinned.erase(slot)
+	return changed
+
+
+## `held` with the removed piece `slot` back. Null when it was not removed.
+static func with_restored_one(held: Settlement, slot: String) -> Settlement:
+	var at := held.removed.find(slot)
+	if at < 0:
+		return null
+	var changed := held.copy()
+	changed.removed.remove_at(at)
 	return changed
 
 

@@ -25,9 +25,17 @@ const MOVE_HINT := "Release to put it here"
 const DRAWN_CENTRE := 0.8
 ## The carried piece's ghost, and the same where the place is refused (GeometryInstance3D
 ## transparency: 0 opaque, 1 gone).
-const GHOST_FADE := 0.45
-const GHOST_REFUSED_FADE := 0.75
+const GHOST_FADE := 0.55
+const GHOST_REFUSED_FADE := 0.68
+## The faint copies a Put back would stand, while the pointer is over its button.
+const RESTORE_FADE := 0.6
 const PICK_PAD_PX := 10.0
+## The toast a removal leaves, and the button on it.
+const REMOVED_TOAST := "Removed %s"
+const PUT_BACK_WORDS := "Put back"
+## The pill's text size: the body size, since the caption's 14 falls under the floor on a 720p
+## window once the interface scales down (the UI critic measured 13).
+const PILL_PX := 16
 
 ## False leaves every piece untouchable: the plaza and field tests of the older slices, whose
 ## coordinates were chosen on bare ground, set it so a stall there does not take the press.
@@ -39,9 +47,18 @@ var slot: String = ""
 var hover_village: int = -1
 var hover_slot: String = ""
 var gesture: StringName = &""
+## The name of the piece the last removal took ("barrel"), for the toast and tests.
+var last_removed: String = ""
+## The pieces a Put back would restore, drawn as faint ghosts while the pointer is over its button
+## ({"item", "y", "normal", "ref"} rows), and their meshes.
+var restoring: Array[Dictionary] = []
 
 var _pad_m: float = 0.0
 var _ghost: MeshInstance3D = null
+var _ghost_layer: AuthoredSettlements = null
+var _hidden_doc: MapDocument = null
+var _hidden_slot: String = ""
+var _restore_ghosts: Array[MeshInstance3D] = []
 var _over_building: bool = false
 var _camera: Camera3D = null
 var _pointer: Vector2 = Vector2.ZERO
@@ -112,6 +129,7 @@ func drop() -> void:
 func clear() -> void:
 	reset()
 	drop()
+	_drop_restore_ghosts()
 	hover_village = -1
 	hover_slot = ""
 
@@ -139,6 +157,13 @@ func _carry_ghost(editor: AuthoringEditor, at: Vector2, y: float) -> void:
 	if _ghost == null or not is_instance_valid(_ghost):
 		_ghost = layer.ghost_of(row, GHOST_FADE)
 		layer.add_child(_ghost)
+		# The real piece steps out of the street's baked cell while its ghost is carried, so the
+		# one that moves is the only one drawn; the place it left is the calm ring.
+		_ghost_layer = layer
+		_hidden_doc = editor.document
+		_hidden_slot = slot
+		layer.hidden[slot] = true
+		layer.refresh(editor.document)
 	var moved: Dictionary = (row["item"] as Dictionary).duplicate()
 	moved["position"] = at
 	var height := float(row["y"]) if is_nan(y) else y
@@ -151,6 +176,44 @@ func _free_ghost() -> void:
 		_ghost.get_parent().remove_child(_ghost)
 		_ghost.free()
 	_ghost = null
+	_unhide()
+
+
+## Lets the carried piece back into its street's baked cell.
+func _unhide() -> void:
+	if _hidden_slot == "":
+		return
+	if is_instance_valid(_ghost_layer) and _ghost_layer.hidden.erase(_hidden_slot):
+		if _hidden_doc != null:
+			_ghost_layer.refresh(_hidden_doc)
+	_hidden_slot = ""
+	_hidden_doc = null
+	_ghost_layer = null
+
+
+func _drop_restore_ghosts() -> void:
+	for ghost in _restore_ghosts:
+		if is_instance_valid(ghost):
+			ghost.get_parent().remove_child(ghost)
+			ghost.free()
+	_restore_ghosts = []
+	restoring = []
+
+
+## Shows (`on`) or clears the faint copies of the pieces village `id`'s Put back would restore: the
+## removed pieces planned again where their rules put them. Drawn while the pointer is over the
+## button, so a removal is never a mystery.
+func preview_restore(editor: AuthoringEditor, id: int, on: bool) -> void:
+	_drop_restore_ghosts()
+	var layer := layer_of(editor)
+	var held := editor.document.settlement(id) if on else null
+	if layer == null or held == null or held.removed.is_empty():
+		return
+	restoring = layer.rows_if_restored(editor.document, held, held.removed)
+	for row in restoring:
+		var ghost := layer.ghost_of(row, RESTORE_FADE)
+		layer.add_child(ghost)
+		_restore_ghosts.append(ghost)
 
 
 ## Tells the next hover or press what the camera sees: a piece is under the pointer by where it is
@@ -309,13 +372,30 @@ func remove(editor: AuthoringEditor, hovered_first: bool = true) -> String:
 	var target := _target(hovered_first)
 	if str(target[1]) == "":
 		return ""
-	if editor.settlements.remove_furnishing(int(target[0]), str(target[1])):
-		if int(target[0]) == village and str(target[1]) == slot:
+	var gone_village := int(target[0])
+	var gone_slot := str(target[1])
+	var gone := item(editor, gone_village, gone_slot)
+	if editor.settlements.remove_furnishing(gone_village, gone_slot):
+		if gone_village == village and gone_slot == slot:
 			drop()
 		hover_slot = ""
 		hover_village = -1
+		if not gone.is_empty():
+			_tell_removed(editor, gone_village, gone_slot, str(gone["prop"]))
 		return ""
 	return VillageFurnishings.reason_text(editor.settlements.last_refusal)
+
+
+## Tells the author which piece went, with a way back (a removal leaves no mark on a busy street):
+## a toast "Removed barrel" with a "Put back" that puts that one piece back.
+func _tell_removed(editor: AuthoringEditor, id: int, gone_slot: String, prop: String) -> void:
+	last_removed = VillageFurnishings.label_of(prop).to_lower()
+	var back := func() -> void:
+		if is_instance_valid(editor) and is_instance_valid(editor.settlements):
+			editor.settlements.restore_furnishing(id, gone_slot)
+	UIManager.show_action_toast(
+		REMOVED_TOAST % last_removed, PUT_BACK_WORDS, back, ToastContainer.ACTION_DURATION
+	)
 
 
 ## Turns the target piece `steps` notches (a notch is 15 degrees), pinning it.
@@ -380,6 +460,7 @@ func unpin(editor: AuthoringEditor) -> void:
 
 ## Puts every removed piece of village `id` back.
 func restore(editor: AuthoringEditor, id: int) -> void:
+	_drop_restore_ghosts()
 	editor.settlements.restore_furnishings(id)
 
 

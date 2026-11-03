@@ -284,7 +284,13 @@ func _process(delta: float) -> void:
 			var cc := gm().get_camera_controller()
 			var off: Vector2 = cc.call("_get_view_center_ground_offset")
 			var holder := gm().cameraholder_node
-			var at: Array = step.at
+			var at: Array = []
+			if step.at is Dictionary:
+				# A piece spec (RenderPieceAim): look at that piece.
+				var found := RenderPieceAim.map_of(step.at, ctrl(), gm().camera_node)
+				at = [found.x, found.y] if found != Vector2.INF else [0.0, 0.0]
+			else:
+				at = step.at
 			holder.global_position = Vector3(
 				float(at[0]) - off.x, holder.global_position.y, float(at[1]) - off.y
 			)
@@ -729,6 +735,8 @@ func _input_events(step: Dictionary) -> bool:
 			_mouse_button(event.at, button, String(event.type) == "press", held)
 		"press_button":
 			_press_button(String(event.get("name", "")))
+		"hover_button", "leave_button":
+			_hover_button(String(event.get("name", "")), String(event.type) == "hover_button")
 		"key":
 			var keys := {
 					"ctrl": KEY_CTRL,
@@ -755,6 +763,19 @@ func _press_button(node_name: String) -> void:
 		(node as Button).pressed.emit()
 	else:
 		log_line("press_button %s: no enabled button" % node_name)
+
+
+## A pane Button found by node name told the pointer came over it (`over`) or left it: its
+## mouse_entered / mouse_exited, for a hover look without a real cursor over the pane.
+func _hover_button(node_name: String, over: bool) -> void:
+	var node := root_node.find_child(node_name, true, false)
+	if node is Button:
+		if over:
+			(node as Button).mouse_entered.emit()
+		else:
+			(node as Button).mouse_exited.emit()
+	else:
+		log_line("hover_button %s: no button" % node_name)
 
 
 ## `points` ([[x, z], ...]) as a Catmull-Rom curve through them, ten pieces per span.

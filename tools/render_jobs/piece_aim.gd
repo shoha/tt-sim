@@ -36,6 +36,15 @@ static func screen_of(
 	return camera.unproject_position(_centre(row))
 
 
+## The map point (XZ) of the piece `spec` names, or Vector2.INF when none is in view (a `look_at`
+## step aims the camera at a piece by it).
+static func map_of(spec: Dictionary, ctrl: AuthoringController, camera: Camera3D) -> Vector2:
+	var row := _find(spec, ctrl, camera)
+	if row.is_empty():
+		return Vector2.INF
+	return row["item"]["position"]
+
+
 static func _centre(row: Dictionary) -> Vector3:
 	var at: Vector2 = row["item"]["position"]
 	var radius := VillageFurnishings.drawn_radius(row["item"])

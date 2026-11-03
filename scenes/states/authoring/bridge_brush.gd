@@ -509,13 +509,17 @@ static func draw_marker(canvas: Control, camera: Camera3D, at: Vector3, tint: Co
 
 ## `text` in a glass chip beside screen point `at` (below and right of the cursor): the hint
 ## bar's plum glass with caption text in `color` (MapOverlayUtils.draw_chip; chalk when
-## transparent).
+## transparent). `size_px` above zero sets the text's size instead of the caption's.
 static func draw_pill(
-	canvas: Control, at: Vector2, text: String, color: Color = Color.TRANSPARENT
+	canvas: Control,
+	at: Vector2,
+	text: String,
+	color: Color = Color.TRANSPARENT,
+	size_px: int = 0
 ) -> void:
 	if text == "":
 		return
-	var box := Rect2(at + Vector2(16.0, 14.0), MapOverlayUtils.chip_size(canvas, text))
+	var box := Rect2(at + Vector2(16.0, 14.0), MapOverlayUtils.chip_size(canvas, text, size_px))
 	# Kept on the board an open drawer leaves free (the 2a critic: the pill ran under the
 	# drawer's glass): flipped to the cursor's left near the free span's right edge, and held
 	# inside its left edge.
@@ -526,4 +530,4 @@ static func draw_pill(
 	box.position.x = maxf(box.position.x, span.x + 4.0)
 	if box.end.y > view.y - 4.0:
 		box.position.y = at.y - 14.0 - box.size.y
-	MapOverlayUtils.draw_chip(canvas, box.position, text, color)
+	MapOverlayUtils.draw_chip(canvas, box.position, text, color, size_px)

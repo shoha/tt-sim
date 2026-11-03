@@ -50,9 +50,10 @@ static func create_label_panel(font_size: int = CAPTION_SIZE) -> Dictionary:
 
 ## The size of `text` drawn as a glass chip on `canvas` (draw_chip): the caption's line inside
 ## the Chip variation's margins. `canvas` wears the glass theme (create_overlay's control).
-static func chip_size(canvas: Control, text: String) -> Vector2:
+## `size_px` above zero sets the text's size instead of the caption's.
+static func chip_size(canvas: Control, text: String, size_px: int = 0) -> Vector2:
 	var font := canvas.get_theme_font(&"font", &"Caption")
-	var size := canvas.get_theme_font_size(&"font_size", &"Caption")
+	var size := size_px if size_px > 0 else canvas.get_theme_font_size(&"font_size", &"Caption")
 	var box := canvas.get_theme_stylebox(&"panel", &"Chip")
 	var line := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size)
 	return Vector2(line.x, font.get_height(size)) + box.get_minimum_size()
@@ -61,14 +62,20 @@ static func chip_size(canvas: Control, text: String) -> Vector2:
 ## Draws `text` as a glass chip with its top-left corner at `at` on `canvas`, the cursor's
 ## readouts over the board: the hint bar's and the rulers' Chip (plum glass with its top rim)
 ## and caption text (14, the floor, T2) in `color`, chalk (the glass TEXT role) by default.
-## Drawn, not a node, so it follows a cursor every frame without a layout pass.
+## Drawn, not a node, so it follows a cursor every frame without a layout pass. `size_px` above
+## zero sets the text's size instead of the caption's (a readout that must stay legible on a small
+## window).
 static func draw_chip(
-	canvas: Control, at: Vector2, text: String, color: Color = Color.TRANSPARENT
+	canvas: Control,
+	at: Vector2,
+	text: String,
+	color: Color = Color.TRANSPARENT,
+	size_px: int = 0
 ) -> void:
 	var font := canvas.get_theme_font(&"font", &"Caption")
-	var size := canvas.get_theme_font_size(&"font_size", &"Caption")
+	var size := size_px if size_px > 0 else canvas.get_theme_font_size(&"font_size", &"Caption")
 	var box := canvas.get_theme_stylebox(&"panel", &"Chip")
-	var rect := Rect2(at, chip_size(canvas, text))
+	var rect := Rect2(at, chip_size(canvas, text, size_px))
 	canvas.draw_style_box(box, rect)
 	var ink := color if color.a > 0.0 else ThemeColors.of(canvas, ThemeColors.TEXT)
 	var baseline := (

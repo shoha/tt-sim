@@ -1002,14 +1002,22 @@ record") were saved, validated and applied by `SettlementPlan` since phase 1 and
   Del Remove; a field's piece only Del), and returns to the base hints when no piece is hovered or picked.
 - **Gestures.** Click picks (Escape lets go). Press and drag past the plaza move's 1.5 m click threshold MOVES it: the
   piece keeps its place under the pointer (`grab_offset`), the place it left is a calm ring, a translucent copy of the
-  piece (`AuthoredSettlements.ghost_of`, 0.45 transparent, 0.75 where refused) is carried at the pointer, the carried
-  ring gold with "Release to put it here", or the refusal pink with an erase cross at the pointer and the reason where `VillageFurnishings.problem` refuses: water (the layer's
-  ring test), ground steeper than the layer's 0.8 limit, a house (`VillageFieldGround.covers_building`), a bridge's deck
-  and landings (`VillageDryGround.crossing_corridors`), more than 60 m from the village, or inside another piece's
-  clearance (0.6 of the radii). The release pins the piece (`pin_furnishing`); a refused release changes nothing and
+  piece (`AuthoredSettlements.ghost_of`, 0.55 transparent, 0.68 where refused) is carried at the pointer and the REAL
+  piece steps out of its baked cell while it is carried (`AuthoredSettlements.hidden`, a slot set the next refresh
+  leaves out; the rows still hold it), so only the copy is drawn and the place it left is the calm ring. The carried
+  ring is gold ("Release to put it here"), or where `VillageFurnishings.problem` refuses the line tools' erase ring
+  (`#FFB6A8`, 2.5 px over a 5.5 px ink outline, no wash, no cross) with the reason on the pill. Rings of pieces are
+  BARE (`style["bare"]` in `VillageRings.draw_plaza`: no interior disc), so a ring never dims a barrel or a bench. The
+  reasons: water (the layer's ring test), ground steeper than the layer's 0.8 limit, a house
+  (`VillageFieldGround.covers_building`), a bridge's deck and landings (`VillageDryGround.crossing_corridors`), more
+  than 60 m from the village, inside another piece's clearance (0.6 of the radii), and OUTSIDE: a plaza's own piece
+  (`VillageFurnishings.plaza_of`, slot `...:p0/...`) stays inside that plaza's disc ("Keep it inside the plaza"; a
+  piece of a lot or street is not bound to one). The pills draw at 16 px (`VillageProps.PILL_PX`, the body size: the
+  shared Caption chip's 14 falls to about 13 at a 720p window). The release pins the piece (`pin_furnishing`); a refused release changes nothing and
   toasts the long wording. Q and E turn the piece under the pointer (else the picked one) 15 degrees, Shift a quarter;
   R shows the next of its four draws (`ProcgenSettlement.VARIANTS`); both pin it. Delete or Backspace (and the pane's
-  Remove) takes it away. A field's own scarecrow, haystack or skeps can be picked and removed but not moved, turned or
+  Remove) takes it away and says so: a toast "Removed barrel" with a "Put back" button that puts that ONE piece back
+  (`SettlementEditor.restore_furnishing`, a new history entry, so it still works after newer edits). A field's own scarecrow, haystack or skeps can be picked and removed but not moved, turned or
   swapped (they stand where their field puts them, `VillageFurnishings.is_field_piece`).
 - **Swap** (the pane's button). The candidates are the props the kit's rules draw for the same slot kind
   (`street_edge`, `beside_door`, `plaza.edge`, `back_yard` ...), in the kit's order, the piece's own included so it
@@ -1024,11 +1032,13 @@ record") were saved, validated and applied by `SettlementPlan` since phase 1 and
   **Decision for the board:** a re-dress now KEEPS pins (the design's "a pin must survive a re-dress", section 7, which
   the code did not do) and still drops `removed` and `swapped` (they name slots of the old draw); a change of character
   drops everything. A pin that lands on a house of the new draw is the author's choice; Undo is one step.
-- **Pane** (`VillageFurnishBox`, inside the plaza box): with a piece picked, its name ("Barrel", in the label weight),
-  then Swap, "Back to its spot" (only when pinned: it returns a moved or turned piece to where the rules put it) and
+- **Pane** (`VillageFurnishBox`, inside the plaza box): with a piece picked, a rule and its name ("Barrel", the Heading
+  variation, 19 px), then Swap, "Back to its spot" (only when pinned: it returns a moved or turned piece to where the rules put it) and
   Remove; it stands where the size row stands, which only a picked plaza or field uses, so the pane grows no taller.
   Once the picked village has had pieces taken away a "Put back 1 removed piece" / "Put back N removed pieces" button
-  brings them all back (the two buttons were both "Put back" until the 2026-11-02 critic). The caption names the gesture ("Click a barrel or stall to move or
+  brings them all back (the two buttons were both "Put back" until the 2026-11-02 critic); while the pointer is over it a
+  ring and a faint copy of each removed piece stand where it would return (`VillageProps.preview_restore`,
+  `AuthoredSettlements.rows_if_restored`). The caption names the gesture ("Click a barrel or stall to move or
   swap it").
 - **Limits left:** the tool does not draw per-piece thumbnails; Swap has no chooser (it cycles); a pinned piece does not
   follow its house when the street is edited (a pin is absolute, as the design says); fields still cannot be moved or

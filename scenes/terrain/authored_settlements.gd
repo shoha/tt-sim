@@ -41,6 +41,10 @@ var placed: int = 0
 ## Microseconds the last refresh() took (plans and keys, not the bakes).
 var last_refresh_usec: int = 0
 
+## Slot names left out of the baked cells (the piece the Village tool is carrying, drawn as its
+## ghost instead): set by the tool, and the next refresh bakes the cell without them.
+var hidden: Dictionary = {}
+
 var _palette_root: String = PaletteLibrary.DEFAULT_ROOT
 var _materials: Dictionary = {}
 ## Cell node name -> key it was built from.
@@ -116,7 +120,8 @@ func refresh(doc: MapDocument) -> void:
 		if not live.has(id):
 			_plans.erase(id)
 	for child in get_children():
-		if not wanted.has(String(child.name)):
+		# The Village tool's ghosts are children too (ghost_of); only baked cells are the layer's.
+		if child.has_meta(META) and not wanted.has(String(child.name)):
 			_free_cell(String(child.name))
 	for name_key: String in _todo.keys():
 		if not wanted.has(name_key):
@@ -147,7 +152,8 @@ func pending_count() -> int:
 func cell_names() -> PackedStringArray:
 	var out := PackedStringArray()
 	for child in get_children():
-		out.append(String(child.name))
+		if child.has_meta(META):
+			out.append(String(child.name))
 	out.sort()
 	return out
 
@@ -165,6 +171,27 @@ func standing(settlement_id: int) -> Array[Dictionary]:
 	for row: Dictionary in plan.get("rows", []):
 		out.append(row)
 	return out
+
+
+## The rows `settlement` would stand for the pieces `slots` it has removed, were they put back
+## (the same {"item", "y", "normal", "ref"} rows as `standing`): planned again with its removed list
+## empty, so the Village tool can show where a put back would stand them. [] for a street that is
+## gone. The skip counters are left as they were.
+func rows_if_restored(
+	doc: MapDocument, settlement: Settlement, slots: PackedStringArray
+) -> Array[Dictionary]:
+	var whole := settlement.copy()
+	whole.removed = PackedStringArray()
+	var items: Array[Dictionary] = []
+	for item in SettlementPlan.placements(doc, whole):
+		if slots.has(str(item["slot"])):
+			items.append(item)
+	var ground := skipped_ground
+	var missing := skipped_missing
+	var rows := _stand(doc, items)
+	skipped_ground = ground
+	skipped_missing = missing
+	return rows
 
 
 ## The built surfaces of prop variant `ref` ({"surfaces": [{"key", "role", "kind", "arrays"}]}),
@@ -235,6 +262,8 @@ func cells_of(
 		_stand_plan(doc, plan, ground)
 	var by_cell := {}
 	for row: Dictionary in plan["rows"]:
+		if hidden.has(row["item"]["slot"]):
+			continue
 		var at: Vector2 = row["item"]["position"]
 		var cell := Vector2i(floori(at.x / CELL_M), floori(at.y / CELL_M))
 		if not by_cell.has(cell):

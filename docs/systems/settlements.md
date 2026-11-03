@@ -75,6 +75,10 @@ lines (slot, variant, position, yaw, scale, ground y in mm): a refresh rebuilds 
 plan is cached per record and lot fingerprint. Prop variants (4 per prop, `StructureGeometry.build_one` over
 `ProcgenProps.footprint(default_size_m)`) are built once and kept in a static cache (`clear_variants()` for
 tests); `_process` builds variants and then cells within 3 ms a frame, `flush()` does all at once.
+The Village tool's furnishing gestures use three extras (villages.md section 14): `ghost_of(row, transparency)` (a
+one-piece node, a child that is not a cell: only children with the `tt_settlement` meta are cells), `hidden` (slot names
+a refresh leaves out of the baked cells, for the piece being carried) and `rows_if_restored(doc, settlement, slots)`
+(where removed pieces would stand again).
 Refresh hooks: `WallEditor.apply_list` and `StructureEditor.apply_list` (so a sculpt, a street edit or a moved
 house re-derives), `SettlementEditor.apply_list`.
 A refresh that finds a plan's `sig` and the ground print it was stood on unchanged keeps the plan's stood rows (and

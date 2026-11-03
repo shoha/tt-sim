@@ -513,3 +513,78 @@ func test_the_pane_swap_cycles_to_a_prop_that_fits_and_the_box_shows_the_pick() 
 	assert_string_contains(box.restore_button.text, "1")
 	box.show_state({})
 	assert_false(box.visible, "nothing picked, nothing taken away: no box")
+
+
+func test_a_plaza_piece_stays_inside_its_plaza() -> void:
+	assert_eq(VillageFurnishings.plaza_of("w1l:p0/square_stalls/r1"), 0)
+	assert_eq(VillageFurnishings.plaza_of("w1l:p12/square_stalls/r1"), 12)
+	assert_eq(VillageFurnishings.plaza_of("w3l:l2/door_barrel/d0r"), -1)
+	assert_eq(VillageFurnishings.plaza_of("f0:scarecrow"), -1)
+	assert_string_contains(VillageFurnishings.short_reason(VillageFurnishings.OUTSIDE), "inside")
+	var scene := _scene()
+	var editor: AuthoringEditor = scene["editor"]
+	var id: int = scene["id"]
+	var rows := VillageProps.rows_of(editor, id)
+	var plans := VillageFieldGround.footprints(_doc)
+	var edge: Dictionary = {}
+	for row in scene["rows"]:
+		if VillageFurnishings.plaza_of(str(row["item"]["slot"])) == 0:
+			edge = row["item"]
+	assert_false(edge.is_empty(), "the plaza has a piece")
+	var plaza: Dictionary = _doc.settlement(id).plazas[0]
+	var outside: Vector2 = (plaza["at"] as Vector2) + Vector2(float(plaza["radius"]) + 3.0, 0.0)
+	assert_eq(
+		VillageFurnishings.problem(
+			_doc, id, rows, str(edge["slot"]), str(edge["prop"]), float(edge["scale"]), outside, plans
+		),
+		VillageFurnishings.OUTSIDE
+	)
+
+
+func test_removing_a_piece_names_it_and_one_piece_can_be_put_back_alone() -> void:
+	var scene := _scene()
+	var editor: AuthoringEditor = scene["editor"]
+	var id: int = scene["id"]
+	var first: Dictionary = scene["rows"][0]["item"]
+	var second: Dictionary = scene["rows"][1]["item"]
+	var tool := _tool(editor)
+	var mode := VillageBrush.new()
+	_frame(mode, tool, first["position"])
+	mode.remove_target(tool)
+	assert_eq(mode.props.last_removed, str(first["prop"]).replace("_", " "))
+	assert_true(editor.settlements.remove_furnishing(id, str(second["slot"])))
+	assert_true(editor.settlements.restore_furnishing(id, str(first["slot"])))
+	assert_true(_slots(editor, id).has(str(first["slot"])))
+	assert_false(_slots(editor, id).has(str(second["slot"])), "the other stays removed")
+	assert_false(editor.settlements.restore_furnishing(id, str(first["slot"])), "not removed now")
+
+
+func test_a_carried_piece_leaves_its_cell_and_the_put_back_preview_plans_the_removed() -> void:
+	var scene := _scene()
+	var editor: AuthoringEditor = scene["editor"]
+	var id: int = scene["id"]
+	var layer := VillageProps.layer_of(editor)
+	layer.flush()
+	var item: Dictionary = scene["rows"][0]["item"]
+	var at: Vector2 = item["position"]
+	var cell_name := (
+		"S%d_%d_%d"
+		% [id, floori(at.x / AuthoredSettlements.CELL_M), floori(at.y / AuthoredSettlements.CELL_M)]
+	)
+	var before := layer.key_of_cell(cell_name)
+	layer.hidden[str(item["slot"])] = true
+	layer.refresh(_doc)
+	layer.flush()
+	assert_ne(layer.key_of_cell(cell_name), before, "the cell is baked without the carried piece")
+	assert_true(VillageProps.rows_of(editor, id).size() > 0, "the rows still hold it")
+	layer.hidden.erase(str(item["slot"]))
+	layer.refresh(_doc)
+	layer.flush()
+	assert_eq(layer.key_of_cell(cell_name), before)
+	var props := VillageProps.new()
+	assert_true(editor.settlements.remove_furnishing(id, str(item["slot"])))
+	props.preview_restore(editor, id, true)
+	assert_eq(props.restoring.size(), 1)
+	assert_eq(str(props.restoring[0]["item"]["slot"]), str(item["slot"]))
+	props.preview_restore(editor, id, false)
+	assert_true(props.restoring.is_empty())

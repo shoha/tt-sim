@@ -12,6 +12,8 @@ signal swap_requested
 signal unpin_requested
 signal remove_requested
 signal restore_requested
+## The pointer came over, or left, the Put back button: the tool shows where the pieces return.
+signal restore_hover_changed(over: bool)
 
 const SWAP_TIP := "Swap this piece for another that belongs in this kind of place"
 const SWAP_NONE_TIP := "Nothing else belongs in this kind of place"
@@ -22,6 +24,7 @@ const RESTORE_TIP := "Bring back every piece taken away from this village"
 const RESTORE_ONE := "Put back 1 removed piece"
 const RESTORE_MANY := "Put back %d removed pieces"
 
+var divider: HSeparator
 var title: Label
 var row: HBoxContainer
 var swap_button: Button
@@ -34,8 +37,13 @@ func _init() -> void:
 	name = "VillageFurnish"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	theme_type_variation = &"BoxContainerSnug"
+	# A rule and a heading-weight name set the piece apart from the plaza section above it.
+	divider = HSeparator.new()
+	divider.name = "FurnishDivider"
+	add_child(divider)
 	title = Label.new()
 	title.name = "FurnishTitle"
+	title.theme_type_variation = &"Heading"
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title.custom_minimum_size = Vector2(1, 0)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -52,6 +60,8 @@ func _init() -> void:
 	add_child(row)
 	restore_button = _button("FurnishRestore", "", RESTORE_TIP, restore_requested)
 	restore_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	restore_button.mouse_entered.connect(restore_hover_changed.emit.bind(true))
+	restore_button.mouse_exited.connect(restore_hover_changed.emit.bind(false))
 	add_child(restore_button)
 	show_state({})
 
@@ -61,6 +71,7 @@ func show_state(state: Dictionary) -> void:
 	var picked := bool(state.get("picked", false))
 	var removed := int(state.get("removed", 0))
 	var label := str(state.get("label", ""))
+	divider.visible = picked or removed > 0
 	title.visible = picked
 	row.visible = picked
 	title.text = label

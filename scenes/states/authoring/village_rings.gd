@@ -295,14 +295,17 @@ static func draw_plaza(
 	for k in RING_POINTS:
 		ring.append(screen.call(at + Vector2.from_angle(TAU * k / RING_POINTS) * radius))
 	ring.append(ring[0])
-	var fan := ring.duplicate()
-	fan.append(screen.call(at))
-	var colors := PackedColorArray()
-	colors.resize(fan.size())
-	colors.fill(fill if fill.a > 0.0 else _alpha(tint, FILL_ALPHA * strength))
-	RenderingServer.canvas_item_add_triangle_array(
-		canvas.get_canvas_item(), BrushCursor.fan_indices(ring.size()), fan, colors
-	)
+	# A "bare" ring (a furnishing's) has no disc: a wash over a barrel or a bench dims the very
+	# thing it marks.
+	if not bool(style.get("bare", false)):
+		var fan := ring.duplicate()
+		fan.append(screen.call(at))
+		var colors := PackedColorArray()
+		colors.resize(fan.size())
+		colors.fill(fill if fill.a > 0.0 else _alpha(tint, FILL_ALPHA * strength))
+		RenderingServer.canvas_item_add_triangle_array(
+			canvas.get_canvas_item(), BrushCursor.fan_indices(ring.size()), fan, colors
+		)
 	# The brush ring's own stroke (glow, ink, line), the one every line tool and plaza shares.
 	for stroke: Array in BrushCursor.ring_strokes(_alpha(tint, strength)):
 		canvas.draw_polyline(ring, stroke[0], float(stroke[1]) * weight, true)

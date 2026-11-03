@@ -149,8 +149,15 @@ func connect_pane(controller: AuthoringController, pane: Control) -> void:
 	village_pane.restore_requested.connect(
 		func() -> void:
 			if brush.editor != null and mode.selected_village > 0:
+				mode.props.preview_restore(brush.editor, mode.selected_village, false)
 				mode.props.restore(brush.editor, mode.selected_village)
 			refresh_pane(brush, mode, village_pane)
+	)
+	village_pane.restore_hover_changed.connect(
+		func(over: bool) -> void:
+			if brush.editor != null and mode.selected_village > 0:
+				mode.props.preview_restore(brush.editor, mode.selected_village, over)
+				brush.redraw()
 	)
 
 

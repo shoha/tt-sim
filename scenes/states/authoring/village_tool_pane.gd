@@ -44,6 +44,8 @@ signal remove_requested
 signal swap_requested
 signal unpin_requested
 signal restore_requested
+## The pointer is over (true) or left (false) the Put back button.
+signal restore_hover_changed(over: bool)
 
 const HINT := "Click or drag beside a street to open a plaza."
 const FIELD_HINT := "Click or drag the ground at the village's edge to lay %s."
@@ -490,6 +492,7 @@ func _build_plaza_box() -> void:
 	furnish_box.unpin_requested.connect(unpin_requested.emit)
 	furnish_box.remove_requested.connect(remove_requested.emit)
 	furnish_box.restore_requested.connect(restore_requested.emit)
+	furnish_box.restore_hover_changed.connect(restore_hover_changed.emit)
 	plaza_box.add_child(furnish_box)
 	add_child(plaza_box)
 

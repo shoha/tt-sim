@@ -475,6 +475,14 @@ func unpin_furnishing(settlement_id: int, slot: String) -> bool:
 	)
 
 
+## Puts the one removed furnishing `slot` of settlement `settlement_id` back, one history entry (the
+## removal toast's Undo: it stays right after newer edits, which an undo of the stack would not).
+func restore_furnishing(settlement_id: int, slot: String) -> bool:
+	return _override(settlement_id, "Put piece back", func(held: Settlement) -> Settlement:
+		return VillageFurnishings.with_restored_one(held, slot)
+	)
+
+
 ## Puts every removed furnishing of settlement `settlement_id` back, one history entry.
 func restore_furnishings(settlement_id: int) -> bool:
 	return _override(settlement_id, "Put pieces back", VillageFurnishings.with_restored)

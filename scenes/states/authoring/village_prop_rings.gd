@@ -24,6 +24,12 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> b
 	var hovered := (
 		props.item(editor, props.hover_village, props.hover_slot) if props.has_hover() else {}
 	)
+	# While the pointer is over "Put back N removed pieces", a faint ring marks each piece that
+	# would return (its ghost stands in the street).
+	for row in props.restoring:
+		var again := VillageRings.ring_style(false, true)
+		again["handles"] = 0.0
+		_ring(cursor.canvas, cursor.camera, editor, row["item"]["position"], row["item"], again)
 	if not picked.is_empty() or not hovered.is_empty():
 		_rings(editor, cursor, props, picked, hovered)
 	var camera := cursor.camera
@@ -37,9 +43,9 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> b
 		if reason != &"":
 			text = VillageFurnishings.short_reason(reason)
 			colour = VillageRings.REFUSED_COLOR
-			# The erase cross at the pointer, so a refusal reads on any ground or roof colour.
-			BridgeBrush.draw_marker(cursor.canvas, camera, brush.hit, VillageRings.TINT_REFUSED)
-		BridgeBrush.draw_pill(cursor.canvas, pill_at + Vector2(18, -22), text, colour)
+		BridgeBrush.draw_pill(
+			cursor.canvas, pill_at + Vector2(18, -22), text, colour, VillageProps.PILL_PX
+		)
 		return true
 	if props.gesture != &"" or hovered.is_empty() or mode.gesture != &"":
 		return props.gesture != &""
@@ -48,7 +54,13 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> b
 		words = VillageProps.HOVER_FIELD
 	elif not picked.is_empty() and str(picked["slot"]) == str(hovered["slot"]):
 		words = VillageProps.HOVER_PICKED
-	BridgeBrush.draw_pill(cursor.canvas, pill_at + Vector2(18, -22), words, VillageRings.READOUT_COLOR)
+	BridgeBrush.draw_pill(
+		cursor.canvas,
+		pill_at + Vector2(18, -22),
+		words,
+		VillageRings.READOUT_COLOR,
+		VillageProps.PILL_PX
+	)
 	return true
 
 
@@ -76,9 +88,8 @@ static func _rings(
 		_ring(canvas, camera, editor, at, picked, calm)
 		var carried := VillageRings.ring_style(true, false)
 		if props.refusal() != &"":
-			var wash := VillageRings.TINT_REFUSED
-			wash.a = VillageRings.REFUSED_FILL_ALPHA
-			carried = VillageRings.ghost_style(wash, VillageRings.TINT_REFUSED)
+			# The line tools' erase ring: chalk-pink 2.5 px over a 5.5 px ink outline, no wash.
+			carried = VillageRings.ghost_style(Color.TRANSPARENT, VillageRings.TINT_REFUSED)
 		carried["handles"] = 0.0
 		_ring(canvas, camera, editor, props.destination(), picked, carried)
 		return
@@ -97,4 +108,6 @@ static func _ring(
 	style: Dictionary
 ) -> void:
 	var radius := maxf(VillageFurnishings.drawn_radius(item) + RING_GROW_M, RING_FLOOR_M)
-	VillageRings.draw_plaza(canvas, camera, editor, at, radius, style)
+	var bare := style.duplicate()
+	bare["bare"] = true
+	VillageRings.draw_plaza(canvas, camera, editor, at, radius, bare)

@@ -1171,11 +1171,16 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   alone): the market town with a plaza, then the touchable furnishings through real input, aimed by WHAT a piece is
   (`tools/render_jobs/piece_aim.gd`: an `input` event's `at` may be `{"piece": "bench", "nth": 0, "as": "name", "dx",
   "dz"}`, the nth visible piece of that prop, not behind a building; `as` remembers it) and the `input` events
-  `key` (q, e, r, delete, ...) and `press_button` (a pane Button by node name): hover a stall (`a_hover_stall`), pick it
-  (`b_picked_stall`), Q three times (`c_turned_stall`), the Swap button (`d_swapped`), the carry ghost
-  (`e_carry_ghost`), the drop (`f_dropped`), a bench over a house (`g_refused`), the frame after the release
-  (`h_after_refusal`), five seconds and a turn later (`i_toast_cleared`), a lamp hovered (`j_hover_lamp`), a barrel
-  removed (`k_removed`) and the piece pane at 1280x720 (`l_720_piece_pane`). Run with `--full` for the verdict captures.
+  `key` (q, e, r, delete, ...), `press_button` (a pane Button by node name) and `hover_button` / `leave_button` (its
+  mouse_entered / mouse_exited; the cursor stays on the map); `look_at`'s `at` may be a piece spec too: hover a stall
+  (`a_hover_stall`), pick it (`b_picked_stall`), Q three times (`c_turned_stall`), the Swap button (`d_swapped`), R
+  (`d2_rerolled`), mid-carry over the plaza (`e0_carry_mid`, `e_carry_ghost`), the drop (`f_dropped`), a plaza piece
+  dragged out of its plaza (`g1_outside_refused`, `g2_after_outside`), a bench over a house (`g_refused`), the frame after
+  the release (`h_after_refusal`), seven seconds and a turn later (`i_toast_cleared`), a lamp hovered (`j_hover_lamp`),
+  a barrel at zoom 9 before and after Delete (`k0_barrel_before`, `k1_barrel_removed` with its toast), the Put back
+  hover and result (`k2_put_back_preview`, `k3_put_back_result`) and the piece pane at 1280x720 (`l_720_piece_pane`).
+  Run with `--full` for the verdict captures. After an edit `settle` waits about 8 s (scatter regrowth), longer than a
+  6 s toast: use `wait` to capture a toast.
 - `jobs/fields_look.json` (about 30 s, keeps no level; topic fields, writes `fields_look`, probe
   `probes/fields.gd`): a 320 ft map (80 m, the document's 64-cell limit; `new_map` `size` is feet, and 400 ft
   stalls at `wait_ready`), the two villages of villagetool_look on short streets (x = -14 and 14, z -12..12). Round 4
