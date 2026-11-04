@@ -332,7 +332,6 @@ func _on_dragging_cancelled() -> void:
 
 ## Settle the token to the ground below it (normal drop).
 func _settle_to_ground() -> void:
-	_step_off_props()
 	var landing_pos = water.landing_position()
 	if landing_pos == null:
 		# No surface below - just finalize in place
@@ -340,18 +339,6 @@ func _settle_to_ground() -> void:
 		return
 
 	_settle_to_position(landing_pos)
-
-
-## Moves the token sideways off the bulky village props it was dropped on or against, to the nearest
-## ground that is clear of them (PropFootprints, card eyepin option A3; off until the owner decides,
-## `PropFootprints.enabled`). Only the XZ changes: the landing cast that follows finds the ground
-## height at the new spot.
-func _step_off_props() -> void:
-	if not PropFootprints.enabled or rigid_body == null:
-		return
-	var box := TokenMarkers.shape_box(rigid_body)
-	var radius := clampf(maxf(box.size.x, box.size.z) * 0.5, 0.15, 1.0)
-	rigid_body.global_position = PropFootprints.clear_of(rigid_body.global_position, radius)
 
 
 ## Public wrapper around _settle_to_ground() for external callers that just

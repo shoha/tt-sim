@@ -355,6 +355,11 @@ while a brush is out). From pitch 55 degrees up, every token wears a map pin (`T
 a 44 px round picture with a tail onto the token, drawn in the world viewport, not as UI nodes);
 a hovered pin comes to the front and a left click on it picks its token. The rules, sizes and
 hit test are in `CONVENTIONS.md` "Camera System"; the owner's verdicts are in `UI_TASTE.md`.
+The eye view (a perspective camera) has the same pins at any pitch for a token 9 to 18 m or more
+away (nearer, its own model shows), and a token out of frame gets a chevron with its distance on
+the screen edge (`TokenEdgeArrows`, 50 px long in screen pixels, arrows in nearly one direction
+fan out along the edge, nearest in front, "+N" past three); a click on a chevron turns the eye
+toward its token. Owner verdict 2026-11-04: both on. The orbit view is unchanged.
 
 ---
 

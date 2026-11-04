@@ -132,12 +132,8 @@ func refresh(doc: MapDocument) -> void:
 		if not wanted.has(name_key):
 			_todo.erase(name_key)
 	placed = 0
-	var everything: Array[Dictionary] = []
 	for plan: Dictionary in _plans.values():
 		placed += (plan["items"] as Array).size()
-		everything.append_array(plan["items"])
-	# The bulky props are boxes a dropped token keeps out of (PropFootprints, card eyepin).
-	PropFootprints.active = PropFootprints.boxes_of(everything)
 	set_process(not _todo.is_empty())
 	last_refresh_usec = Time.get_ticks_usec() - started
 	version += 1

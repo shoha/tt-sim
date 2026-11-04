@@ -33,6 +33,16 @@ extends Node3D
 ## A token the players cannot see (BoardToken.is_visible_to_players false) gets no pin for a
 ## player and a dimmed one for the GM, as the token itself is drawn; one that is not drawn at
 ## all (hidden body, spawning) gets none. The pins belong to the local view: nothing is synced.
+##
+## The eye view (a perspective camera; card eyepin) has its own rule: pins show whatever the
+## pitch, with a distance fade (a token nearer than EYE_PIN_NEAR_M shows its model and no pin),
+## and a token out of frame gets a chevron on the screen edge (TokenEdgeArrows). Both are on in the
+## eye and never in the orbit view; `eye_pins` and `eye_arrows` are probe switches, as
+## CanopyFade.eye_grass_enabled is. A click on an arrow asks for the eye to turn toward that
+## token (`turn_requested`; CameraController turns the view, CameraRig.yaw_toward).
+
+## A click on an edge arrow: turn the view toward this world point (the token's position).
+signal turn_requested(world_position: Vector3)
 
 const SHADER := preload("res://shaders/token_marker.gdshader")
 ## The pin head's diameter on screen, in pixels, whatever the zoom or the token's size.
@@ -60,18 +70,17 @@ const GM_HIDDEN_ALPHA := 0.4
 const NO_COLOUR := Color(0.62, 0.66, 0.78)
 ## Most vertex colours sampled from a mesh surface.
 const VERTEX_SAMPLES := 64
-## The eye view's far pins (an option, off): a token nearer than EYE_PIN_NEAR_M shows its own
+## The eye view's far pins: a token nearer than EYE_PIN_NEAR_M shows its own
 ## model and has no pin, one farther than EYE_PIN_FULL_M has the whole pin, smooth between.
 const EYE_PIN_NEAR_M := 9.0
 const EYE_PIN_FULL_M := 18.0
 ## The pin's index of its eye-view fade in the per-frame pin arrays.
 const PIN_FADE := 5
 
-## The eye view shows pins for far tokens and edge arrows for tokens out of frame (card eyepin).
-## Off by default: the pin belongs to the top-down view (above 55 degrees of pitch) until the
-## owner decides.
-var eye_pins: bool = false
-var eye_arrows: bool = false
+## The eye view shows pins for far tokens and edge arrows for tokens out of frame (card eyepin;
+## on by the owner's verdict of 2026-11-04). Switches for probes and tests.
+var eye_pins: bool = true
+var eye_arrows: bool = true
 
 ## Set by the owner: Callable() -> bool, true while the pointer is over interface (not the
 ## world), when pins take neither hover nor clicks.
@@ -173,6 +182,17 @@ static func is_hittable(strength: float, alpha: float) -> bool:
 ## close where the model reads, whole from EYE_PIN_FULL_M out.
 static func eye_pin_fade(distance_m: float, scale: float = 1.0) -> float:
 	return smoothstep(EYE_PIN_NEAR_M * scale, EYE_PIN_FULL_M * scale, distance_m)
+
+
+## The pins' strength: the eye view (a perspective camera) with `eye_pins_on` has them whole at
+## any pitch; every other view keeps the pitch rule's `pitch_strength` (CameraRig.marker_strength).
+static func strength_for(pitch_strength: float, perspective: bool, eye_pins_on: bool) -> float:
+	return 1.0 if perspective and eye_pins_on else pitch_strength
+
+
+## Whether the edge arrows are shown: only in the eye view (a perspective camera), when on.
+static func arrows_wanted(perspective: bool, eye_arrows_on: bool) -> bool:
+	return perspective and eye_arrows_on
 
 
 ## The pin under `point`: the index of the head circle (centre `centres[i]`, radius `radii[i]`)
@@ -297,13 +317,19 @@ func _notification(what: int) -> void:
 		_pointer_in = false
 
 
-## A left press on a pin picks its token up as a press on the token's body would, and is
-## consumed only when that press took (a refused one, no permission or a tool in use, falls
-## through to whatever lies beneath).
+## A left press on an edge arrow turns the eye toward its token (consumed). A left press on a pin
+## picks its token up as a press on the token's body would, and is consumed only when that press
+## took (a refused one, no permission or a tool in use, falls through to whatever lies beneath).
 func _unhandled_input(event: InputEvent) -> void:
 	var button := event as InputEventMouseButton
 	if button == null or button.button_index != MOUSE_BUTTON_LEFT or not button.pressed:
 		return
+	if _arrows != null and _arrows.visible and pointer_free():
+		var pointed := _arrows.token_at(button.position)
+		if pointed != null:
+			turn_requested.emit(pointed.rigid_body.global_position)
+			_viewport.set_input_as_handled()
+			return
 	var token := token_at(button.position)
 	if token == null:
 		return
@@ -333,10 +359,11 @@ func hovered_token() -> BoardToken:
 func _process(delta: float) -> void:
 	if _camera == null or not is_instance_valid(_camera):
 		return
-	var strength := CameraRig.marker_strength(CameraRig.pitch_of_back_y(_camera.global_basis.z.y))
+	var eye := _camera.projection == Camera3D.PROJECTION_PERSPECTIVE
+	var strength := strength_for(
+		CameraRig.marker_strength(CameraRig.pitch_of_back_y(_camera.global_basis.z.y)), eye, eye_pins
+	)
 	_sync_arrows()
-	if eye_pins and _camera.projection == Camera3D.PROJECTION_PERSPECTIVE:
-		strength = 1.0
 	if strength <= 0.0:
 		if _instances.visible:
 			_instances.visible = false
@@ -451,10 +478,14 @@ func _head_at(tip: Vector3) -> float:
 	return HEAD_PX * CameraRig.metres_per_pixel(_camera, Vector2(_viewport.size), depth)
 
 
-## The edge arrows node (TokenEdgeArrows) follows `eye_arrows` and the eye camera: made on first
-## need, shown only while the camera is a perspective one (the eye view).
+## The edge arrows node (TokenEdgeArrows): made on first need in the eye view, null before.
+func arrows_node() -> TokenEdgeArrows:
+	return _arrows
+
+
+## Makes, shows or hides the edge arrows (see `arrows_wanted`) and hands them the pointer.
 func _sync_arrows() -> void:
-	var wanted := eye_arrows and _camera.projection == Camera3D.PROJECTION_PERSPECTIVE
+	var wanted := arrows_wanted(_camera.projection == Camera3D.PROJECTION_PERSPECTIVE, eye_arrows)
 	if wanted and _arrows == null:
 		_arrows = TokenEdgeArrows.new()
 		_arrows.name = "TokenEdgeArrows"
@@ -464,6 +495,13 @@ func _sync_arrows() -> void:
 	if _arrows != null:
 		_arrows.visible = wanted
 		_arrows.set_process(wanted)
+		_arrows.pointer = _pointer if wanted and pointer_free() else null
+
+
+## Whether the pointer is in the window, not over interface and no token is held: free to hover
+## and click what is drawn on the world.
+func pointer_free() -> bool:
+	return _pointer_in and not _is_blocked()
 
 
 ## A token's marker colour (what its pin and the edge arrow are painted in), read on demand.

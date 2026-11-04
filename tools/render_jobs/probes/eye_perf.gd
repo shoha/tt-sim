@@ -5,7 +5,10 @@ extends RefCounted
 ## edge fog, the near-eye canopy fade, MSAA 4x and the shadow fit are all live. One `call` step per
 ## action; every action writes into `dir`.
 ##   {action: "perf", name, dir, at: [x, z], yaws: [..], pitches: [..], rounds: 4, frames: 90,
-##    settle: 30, variants: [{name, sky?, fade?, grass?, aa?, shadow?, light?}]}
+##    settle: 30, tokens?: [{x, z, preset?}],
+##    variants: [{name, sky?, fade?, grass?, aa?, shadow?, light?, markers?}]}
+##       `tokens` stands avatars on the map first; the variant key `markers` (false = off) switches the
+##       eye's token pins and edge arrows (TokenMarkers.eye_pins, eye_arrows; card eyepin).
 ##       In-run A/B under the pinned procedure (vsync off, window and world viewport as the run
 ##       gives them, medians, order rotated each round): the home ortho pose first, then every
 ##       eye pose x variant (the eye stays on between them), then the home pose again for the
@@ -111,8 +114,28 @@ class PerfRig:
 		gm.eye_view_antialiasing = _cc.view_mode() == _cc.eye
 		_set_eye_light(1.0)
 		_set_flowers_exempt(true)
+		_set_markers(true)
+
+	## The eye's token pins and edge arrows (card eyepin): on is shipped.
+	func _set_markers(on: bool) -> void:
+		var markers := gm.world_viewport.get_node_or_null("TokenMarkers")
+		if markers != null:
+			markers.set("eye_pins", on)
+			markers.set("eye_arrows", on)
+
+	## `step.tokens` ([{x, z, preset?}], world XZ): avatars stood on the ground before the run, so
+	## the pins and arrows have something to draw (the `markers` variant key then A/Bs them).
+	func _spawn_tokens() -> void:
+		var height := ViewGround.height_function(gm)
+		for t in step.get("tokens", []):
+			var xz := Vector2(float(t.x), float(t.z))
+			var y := float(height.call(xz)) if height.is_valid() else 0.0
+			var recipe := AvatarPresets.recipe(int(t.get("preset", 0)))
+			lpc.spawn_avatar(recipe, "eyeperf", Vector3(xz.x, y, xz.y), false)
+		await _frames(120)
 
 	func _apply(v: Dictionary) -> void:
+		_set_markers(bool(v.get("markers", true)))
 		EyeSky.enabled = bool(v.get("sky", true))
 		if not EyeSky.enabled:
 			_cc.eye.sky.leave()
@@ -172,6 +195,11 @@ class PerfRig:
 				]
 			)
 		)
+		if step.has("tokens"):
+			_cc.set_view_mode(_cc.eye)
+			_cc.eye.frame_ground(at, 0.0)
+			await _spawn_tokens()
+			_cc.set_view_mode(_cc.orbit_view())
 		var variants: Array = step.get("variants", [{"name": "ship"}])
 		var configs: Array[Dictionary] = []
 		for pitch in step.get("pitches", [0.0]):

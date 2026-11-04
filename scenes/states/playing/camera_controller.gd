@@ -152,7 +152,10 @@ func setup(game_map: GameMap) -> void:
 	# React to viewport resizes (e.g. window resize) so aspect correction stays current
 	game_map.world_viewport.size_changed.connect(_on_viewport_size_changed)
 	_view = CameraView.new(self, game_map)
-	TokenMarkers.attach(game_map.world_viewport, game_map.camera_node, game_map.is_mouse_over_gui)
+	var markers := TokenMarkers.attach(
+		game_map.world_viewport, game_map.camera_node, game_map.is_mouse_over_gui
+	)
+	markers.turn_requested.connect(_turn_toward)
 	compass = CameraCompass.attach(self)
 	compass.turn_requested.connect(turn_view)
 	compass.tilt_requested.connect(_view.tilt_by)
@@ -221,6 +224,19 @@ func brush_owns_turn_keys() -> bool:
 ## made while a turn runs add up: the next snap is taken from the one being eased to.
 func turn_view(direction: int) -> void:
 	set_yaw_target(CameraRig.snap_target(_view.yaw.target, direction))
+
+
+## Ease the view round to face `world_position` (a click on a token's edge arrow in the eye
+## view), by the short way. The eye stays where it stands.
+func _turn_toward(world_position: Vector3) -> void:
+	if _game_map == null or _game_map.camera_node == null:
+		return
+	var from := _game_map.camera_node.global_position
+	set_yaw_target(
+		CameraRig.yaw_toward(
+			Vector2(from.x, from.z), Vector2(world_position.x, world_position.z), _view.yaw.target
+		)
+	)
 
 
 ## Ease the view to the yaw `yaw_deg` about the ground point under the screen centre.

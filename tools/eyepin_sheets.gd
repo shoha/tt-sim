@@ -35,11 +35,20 @@ func _run() -> void:
 			continue
 		var parts := String(items[i]).split("|")
 		var at := Vector2(GAP + (i % columns) * (tile_w + GAP), GAP + (i / columns) * (tile_h + BAR + GAP))
+		# A bar of its own under the label, so the text is light on a dark ground whatever the sheet's
+		# background does, with a dark outline besides.
+		var bar := ColorRect.new()
+		bar.color = Color(0.2, 0.21, 0.28)
+		bar.position = at
+		bar.size = Vector2(tile_w, BAR)
+		viewport.add_child(bar)
 		var label := Label.new()
 		label.text = parts[0]
 		label.position = at + Vector2(6, 2)
 		label.add_theme_font_size_override("font_size", 18)
 		label.add_theme_color_override("font_color", Color.WHITE)
+		label.add_theme_color_override("font_outline_color", Color.BLACK)
+		label.add_theme_constant_override("outline_size", 4)
 		viewport.add_child(label)
 		var image := Image.load_from_file(parts[1])
 		if image == null:

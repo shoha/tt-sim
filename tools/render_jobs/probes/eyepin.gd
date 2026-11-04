@@ -16,6 +16,22 @@ extends RefCounted
 ##       Holds the job while the rig runs.
 
 const GROUP := "eyepin_rig"
+## The village props `scan @props` lists (the bulky ones; villages.md 3f has their sizes).
+const BULKY: Array[String] = [
+	"barrel",
+	"crate_stack",
+	"well",
+	"haystack",
+	"woodpile",
+	"market_stall",
+	"hand_cart",
+	"farm_wagon",
+	"wayside_shrine",
+	"water_trough",
+	"beehive_skeps",
+	"planter",
+	"parked_car",
+]
 
 
 static func blocker(base: Node, _step: Dictionary) -> String:
@@ -68,14 +84,14 @@ static func _scan_props(gm: GameMap) -> String:
 	for id in range(1, 9):
 		for row in layer.standing(id):
 			var item: Dictionary = row["item"]
-			if not PropFootprints.SIZES.has(String(item["prop"])):
+			if not BULKY.has(String(item["prop"])):
 				continue
 			count += 1
 			print(
 				"RJ| eyepin prop %s at %s yaw %.2f scale %.2f y %.2f"
 				% [item["prop"], item["position"], item["yaw"], item["scale"], row["y"]]
 			)
-	return "%d bulky props; footprints %d" % [count, PropFootprints.active.size()]
+	return "%d bulky props" % count
 
 
 class PinRig:
@@ -97,11 +113,38 @@ class PinRig:
 		var height := ViewGround.height_function(gm)
 		return Vector3(x, float(height.call(Vector2(x, z))) if height.is_valid() else 0.0, z)
 
+	## Puts the pointer on the nearest arrow (the last drawn) and, when `click`, presses the left
+	## button there through the world viewport, as a real click reaches TokenMarkers; then reports the
+	## eye's yaw before and after the turn it asks for.
+	func _point_at_arrow(markers: Node, cc: CameraController, click: bool) -> void:
+		var arrows := markers.get("_arrows") as TokenEdgeArrows
+		var list: Array = arrows.get("_arrows")
+		if list.is_empty():
+			print("RJ| eyepin point: no arrow drawn")
+			return
+		var arrow: Dictionary = list[list.size() - 1]
+		var circle := TokenEdgeArrows.hit_circle(arrow["pos"], arrow["dir"], arrows.unit)
+		var point: Vector2 = circle["centre"]
+		markers.set("_pointer", point)
+		markers.set("_pointer_in", true)
+		await _frames(4)
+		print("RJ| eyepin point at %s unit %.2f hovered %s" % [str(point), arrows.unit, str(arrows.get("_hovered"))])
+		if not click:
+			return
+		print("RJ| eyepin yaw before %.1f" % cc.current_yaw())
+		var press := InputEventMouseButton.new()
+		press.button_index = MOUSE_BUTTON_LEFT
+		press.pressed = true
+		press.position = point
+		gm.world_viewport.push_input(press)
+		await _frames(150)
+		print("RJ| eyepin yaw after %.1f" % cc.current_yaw())
+		markers.set("_pointer_in", false)
+
 	func _main() -> void:
 		var dir := ProjectSettings.globalize_path(String(step.get("dir", "user://render_jobs/eyepin")))
 		DirAccess.make_dir_recursive_absolute(dir)
 		var cc := gm.get_camera_controller()
-		PropFootprints.enabled = bool(step.get("step_off", false))
 		cc.set_view_mode(cc.eye)
 		var at: Array = step.get("at", [0, 0])
 		cc.eye.frame_ground(Vector2(float(at[0]), float(at[1])), 0.0)
@@ -147,9 +190,17 @@ class PinRig:
 				cc.set_yaw_now(yaw)
 				cc.set_pitch_now(float(view.pitch))
 			if markers != null:
-				markers.set("eye_pins", bool(view.get("pins", false)))
-				markers.set("eye_arrows", bool(view.get("arrows", false)))
+				# On unless the view says otherwise (the code's default is on).
+				markers.set("eye_pins", bool(view.get("pins", true)))
+				markers.set("eye_arrows", bool(view.get("arrows", true)))
+			var window_before := DisplayServer.window_get_size()
+			if view.has("window"):
+				# A smaller window (the stretch shrinks the world viewport's pixels with it).
+				DisplayServer.window_set_size(Vector2i(int(view.window[0]), int(view.window[1])))
+				await _frames(20)
 			await _frames(30)
+			if markers != null and (view.get("hover", false) or view.get("click", false)):
+				await _point_at_arrow(markers, cc, bool(view.get("click", false)))
 			await RenderingServer.frame_post_draw
 			var camera := gm.camera_node
 			var report := PackedStringArray()
@@ -159,10 +210,16 @@ class PinRig:
 					"%s%s" % [str(camera.unproject_position(head).round()), " behind" if camera.is_position_behind(head) else ""]
 				)
 			print("RJ| eyepin view %s forward %s tokens %s" % [view.name, str(-camera.global_basis.z), report])
+			print(
+				"RJ| eyepin sizes window %s world viewport %s"
+				% [str(get_tree().root.size), str(gm.world_viewport.size)]
+			)
 			var path := dir.path_join(String(view.name) + ".png")
 			get_tree().root.get_texture().get_image().save_png(path)
 			print("RJ| eyepin window %s" % path)
+			if view.has("window"):
+				DisplayServer.window_set_size(window_before)
+				await _frames(10)
 		UIManager.clear_hints()
-		PropFootprints.enabled = false
 		print("RJ| eyepin shoot done")
 		queue_free()
