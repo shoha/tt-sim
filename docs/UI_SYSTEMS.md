@@ -401,6 +401,19 @@ Contextual keybinding hints in a bar at the bottom centre of the screen (`InputH
   fades out where it stands and is freed, and a key re-added while its chip is still fading out
   takes that chip back. So a hint toggled mid-drag (Shift: Free Move) moves nothing else.
   `remove_hint` on a key that is not shown does nothing.
+- **The street row** (cards eyehints, eyeglide): while the camera is at the eye (street) view, the
+  base hints are `CameraRig.play_hints(true)` instead of the orbit view's: Esc Pause, WASD Walk,
+  Shift + WASD Run (not a plain Shift: a token drag lays a Shift "Free Move" hint on that key and
+  would take it away), Scroll Lens, Q E Turn view (Alt + Q E when a brush owns the turn keys), F9 or
+  V Leave, M Measure, F1 Help. `EyeView` tells `UIManager.set_street_hints(on, brush_owns_keys)`
+  as it activates and deactivates, which forwards to `InputHints.set_street`: when the bar holds
+  base hints it swaps them for the new view's (the diff keeps the chips whose key stays, so Pause,
+  Measure and Help do not flicker); a bar with none (not playing) stays empty. The view is
+  remembered either way, so `GameplayMenuController._set_default_hints` (a controls-profile change
+  or a returning drawer) rebuilds the right row from `UIManager.is_street_hints()`, and the HUD's
+  `_exit_tree` clears the hints and the street flag so the next map starts in the orbit view.
+  Tests: `test_input_hints.gd` (the bar), `test_eye_view.gd` (the HUD's reset and exit);
+  `jobs/eyehints_look.json` takes the look.
 
 ### Usage
 
