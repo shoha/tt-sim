@@ -9,7 +9,7 @@ You run the tt-sim pre-push gate in D:/dev/tabletop/tt-sim and report the result
 code. Do not run `gdformat`: a hook formats every `.gd` edit.
 
 Commands, strictly: only commands starting with `git`, `godot` or `gdlint` are
-pre-approved; one command per Bash call; no `cd`, no `&&` or `;` chains, no heredocs, no
+pre-approved (plus the `pwsh ... lane.ps1` lane call in step 2); one command per Bash call; no `cd`, no `&&` or `;` chains, no heredocs, no
 `bash -c`, no `$(...)`; absolute paths. Run the sharded GUT runner in the foreground with
 `timeout` 600000 (it takes about 1.5 minutes), or in the background and wait for the completion
 notification; never poll an output file with `tail`.
@@ -21,7 +21,12 @@ Steps, in order, stopping at the first failure:
    as one command with the working directory D:/dev/tabletop/tt-sim (the brief says whether your
    shell is already there; if not, lint each named file by absolute path instead and say
    that the whole-tree lint was not run).
-2. `godot --headless --path D:/dev/tabletop/tt-sim --quit-after 1`.
+2. Take the Godot lane unless the brief says the coordinator already holds it: one foreground
+   call, timeout 600000, `pwsh -NoProfile -File D:/dev/tabletop/tools/lane.ps1 acquire tt-sim-gate`.
+   Exit 3 means busy: report "lane busy" with the holder from its output and stop; never retry in
+   a loop or start a background waiter. Release it right after step 3 (and on any failure):
+   `pwsh -NoProfile -File D:/dev/tabletop/tools/lane.ps1 release tt-sim-gate`.
+   Then `godot --headless --path D:/dev/tabletop/tt-sim --quit-after 1`.
 3. `godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/gut_shards.gd`
    (the sharded runner, the gate's test run since 2026-10-22; not the serial
    `gut_cmdln.gd`). It prints one line per shard, each failing test and the totals, and exits 1

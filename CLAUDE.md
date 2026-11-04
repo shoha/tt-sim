@@ -97,7 +97,9 @@ treat a cluster of failures in files nobody touched as a collision until the rer
 Since 2026-11-02 the runner guards the sharded case itself: it writes `user://gut_shards/runner.lock`
 (refreshed every 5 s) and a second runner that finds it younger than 20 s exits 2 with a message
 naming the file, instead of overwriting the first one's files. A render job or a serial run is not
-detected, so the lane lock (`docs/coordinating.md`) still applies.
+detected, so the lane lock still applies: take it with
+`pwsh -NoProfile -File D:/dev/tabletop/tools/lane.ps1 acquire <name>` and `release` it after the run
+(`D:/dev/tabletop/docs/coordinating.md` "The lane lock").
 
 Run the `gdlint` line with `D:/dev/tabletop/tt-sim` as the working directory: gdlint reads `.gdlintrc`
 only from the current directory, and run from `D:/dev/tabletop` it reports false max-public-methods and

@@ -56,6 +56,25 @@ A command off the allowlist costs a classifier check, or a user prompt outside a
    in the repo's style (`git -C D:/dev/tabletop/tt-sim log --oneline -10` shows it), ending with
    the attribution line the card gives. Never push.
 
+## The Godot lane
+
+Every Godot run against tt-sim (the gate, a render job, a net scenario, a bridge session, a
+headless test run) happens while you hold the lane, because every worktree shares the `TTSim`
+user folder and two runs at once look like code failures. Edit, think and lint without it.
+
+- Take it with ONE foreground call, tool timeout 600000: `pwsh -NoProfile -File
+  D:/dev/tabletop/tools/lane.ps1 acquire <your card name>`. It queues first come first served
+  and waits at most 9 minutes inside that call. Exit 0: you hold it. Run, then release at once,
+  also after a failed run: `pwsh -NoProfile -File D:/dev/tabletop/tools/lane.ps1 release <your
+  card name>`. Hold it only for the run, never while you read captures or think.
+- Exit 3 means busy. Do the work that needs no Godot, then hand back with "lane busy" and the
+  holder's name from the output. Never retry in a loop, never start a background waiter, and
+  never watch another task's output file for a result: those loops outlive you and keep the
+  harness showing you as working (2026-11-04, the haytop card). Never delete the lock folder
+  yourself; `lane.ps1 status` shows the holder, the queue and any Godot process.
+- Before you hand back, wait for or stop every background command and Monitor you started,
+  release the lane, run the process check below, and say in the report that none is left.
+
 ## Godot processes and test data
 
 - Every command must exit on its own. After any render job or bridge use, and before
