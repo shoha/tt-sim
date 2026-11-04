@@ -70,6 +70,14 @@ static func nearest_snap(yaw_deg: float) -> float:
 	return HOME_YAW + roundf((yaw_deg - HOME_YAW) / SNAP_STEP) * SNAP_STEP
 
 
+## The yaw, in degrees, that has an eye standing at `from` (map XZ) look straight at `to`,
+## reached from `current_deg` by the short way (unwrapped: never more than half a turn away).
+## Forward at yaw y is (-sin y, -cos y) on the map's XZ (measured: yaw 90 looks west).
+static func yaw_toward(from: Vector2, to: Vector2, current_deg: float) -> float:
+	var want := rad_to_deg(atan2(-(to.x - from.x), -(to.y - from.y)))
+	return current_deg + wrapf(want - current_deg, -180.0, 180.0)
+
+
 ## The holder's turn about +Y for a view yaw.
 static func holder_basis(yaw_deg: float) -> Basis:
 	return Basis(Vector3.UP, deg_to_rad(yaw_deg - HOME_YAW))

@@ -473,6 +473,32 @@ barrel 9 to 18, woodpile 8 to 10.
 - Not covered: a token pushed against a prop is not blocked (`solid` and any movement rule are still an owner
   call, section 6); the owner's real-mouse drag over hay and crates is unverified.
 
+**Measured, card eyepin (2026-11-03), the input for the real-collision card.** A token's drop lands through
+`TokenWater.landing_position` -> `WaterSurface.landing_below`, a cast on the terrain layer only, and the baked
+prop cells have no collision yet, so a token dropped on a haystack or a crate stack lands on the ground inside
+it (street map, seed 1234, farming hamlet, 27 bulky props: token at the haystack (-24.46, -16.11) and at the
+crate stack (-15.56, -20.7), y = 0.0). At the eye the bales and crates then go through the figure's legs and
+torso. A footprint push-out (a pure box test: default size x placement scale x yaw, drop moved to the nearest
+ground outside by the token radius, four rounds) was prototyped and unit-tested, then dropped by the owner
+(2026-11-04: "collision", real collision as its own card, no push-out); it would also have kept the player from
+placing a token against a prop on purpose. The default sizes it used, width x depth in metres at scale 1
+(procgen `props_and_settlements.md`), are the size table the collision faces can be checked against:
+
+| Prop | W x D | Prop | W x D |
+|------|-------|------|-------|
+| barrel | 1.5 x 1.2 | water_trough | 1.8 x 0.8 |
+| crate_stack | 1.3 x 1.0 | beehive_skeps | 1.6 x 1.0 |
+| well | 1.8 x 1.8 | planter | 0.9 x 0.9 |
+| haystack | 2.2 x 2.0 | hand_cart | 1.3 x 2.3 |
+| woodpile | 1.6 x 0.9 | farm_wagon | 1.8 x 3.4 |
+| market_stall | 2.4 x 1.7 | parked_car | 1.9 x 4.3 |
+| wayside_shrine | 1.1 x 1.1 | | |
+
+Low and thin props (bench, signpost, lamp post, gates, laundry) were left out as ones a token may stand
+against. Open points the prototype showed: a one-metre gap in a closed yard fits a 0.6 m token but a
+push-out loop could eject it; synced moves are the host's landing, so any rule must run on the host; a
+reground on load must apply it too (a saved token already inside a prop stays).
+
 ## 4. Phases
 
 Each phase is independently shippable and ends with the repo gates green. Sizes are ideal working days for

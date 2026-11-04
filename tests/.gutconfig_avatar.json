@@ -17,6 +17,7 @@
 		"res://tests/unit/test_eye_canopy.gd",
 		"res://tests/unit/test_token_ghost.gd",
 		"res://tests/unit/test_token_grounding.gd",
+		"res://tests/unit/test_token_edge_arrows.gd",
 		"res://tests/unit/test_token_markers.gd",
 		"res://tests/unit/test_token_placement_from_token.gd",
 		"res://tests/unit/test_token_shape.gd",

@@ -4657,6 +4657,25 @@ on every map under about 300 ft the fit is the 100 m floor and nothing changes; 
 maps. A 600 ft build did not finish in 15 minutes and was dropped, so the fit above the floor was not
 measured in a real level (unit tests cover the maths).
 
+## Eye token pins and edge arrows (card eyepin2, 2026-11-04)
+
+The eye's far-token pins (one MultiMesh draw, `TokenMarkers`) and screen-edge arrows (`TokenEdgeArrows`, a
+Control drawing polygons and text per arrow) measured in-run against themselves switched off
+(`eye_perf.gd` with `tokens` and variant key `markers`; job `eyepin2_perf`; the pinned procedure above:
+vsync off, 1920x1080 window and world viewport, 4 rounds of 90 frames, medians, order rotated and reversed,
+debug build). The street map (250 ft hamlet, 27 bulky props), eye at (-18, -17), pitch 3, 8 avatar tokens
+12 to 47 m away, so some pose always has pins in frame and several arrows at the edges. GPU ms, ship / off:
+
+| yaw 0 | yaw 90 | yaw 180 | yaw 270 |
+|---|---|---|---|
+| 4.550 / 4.543 | 3.442 / 3.467 | 5.488 / 5.460 | 5.922 / 5.927 |
+
+Home (orbit) 6.134 GPU; drift home_end over home 1.000 overall (single rounds 0.85 to 1.22: the GPU was
+shared, so only the in-run pairs count). Every pair is within 0.03 ms GPU (noise). CPU render time is
+0.02 to 0.04 ms higher with the markers and the draw calls 21 to 39 higher (the arrows' canvas items),
+primitives about 240 higher. Net: no measurable cost with 8 tokens; the orbit view takes the same early
+return as before (a perspective-camera check), not measured separately.
+
 ## Eye foliage light (card eyefoliage, 2026-11-03)
 
 The eye view's foliage light (`EyeCanopy` "eye light": a raised painted shade floor, full ambient and a

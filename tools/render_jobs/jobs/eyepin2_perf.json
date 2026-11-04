@@ -1,0 +1,23 @@
+{
+ "out_dir": "render_jobs/eyepin2_perf",
+ "timeout_s": 600,
+ "hang_s": 200,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_eyepin_street"},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "look_at", "at": [-18, -17]},
+  {"op": "zoom", "size": 30.0},
+  {"op": "settle"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "perf", "name": "eyepin2_street", "dir": "user://render_jobs/eyepin2_perf", "at": [-18, -17], "yaws": [0, 90, 180, 270], "pitches": [3], "rounds": 4, "frames": 90, "settle": 30,
+   "tokens": [{"x": -18, "z": 12}, {"x": -18, "z": 2, "preset": 1}, {"x": -26, "z": -30, "preset": 2}, {"x": -10, "z": 5}, {"x": -9, "z": 11, "preset": 1}, {"x": -46, "z": -22, "preset": 3}, {"x": -47, "z": -17, "preset": 4}, {"x": -18, "z": -45, "preset": 2}],
+   "variants": [{"name": "ship"}, {"name": "nomarkers", "markers": false}]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+  {"op": "wind", "freeze": false},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

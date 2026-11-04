@@ -97,6 +97,7 @@ const TEST_PREFIXES: Array[String] = [
 	"_villages4_",
 	"_eyefoliage_",
 	"_verify1_",
+	"_eyepin_",
 	"_eyeflowers_",
 	"_eyeclouds_",
 	"_propstand_"
