@@ -68,7 +68,8 @@ Root (Node3D)
 │
 ├── [Dynamic] GameMap (Node3D) - also shown in AUTHORING state, set up with
 │   │                            setup_authoring() (GameplayMenu hidden and disabled)
-│   └── .../MapContainer/LevelMap - AuthoredTerrain or the GLB, AuthoredScatter, AuthoredProps
+│   └── .../MapContainer/LevelMap - AuthoredTerrain or the GLB, AuthoredScatter, AuthoredProps,
+│       [Eye view] EyeRim (AuthoredScatter past the map edge, hidden in the orbit view)
 └── [Dynamic] AuthoringController (Node) - AUTHORING state
     ├── AuthoringUI (CanvasLayer, LAYER_AUTHORING)
     │   └── AuthoringPanel (DrawerContainer, left edge rail) - tools, save, leave
@@ -1316,6 +1317,19 @@ stands up to four short warm lights at dusk and night, and `FireSound` plays a r
 on two positional players at the strongest fires in view (the world SubViewport is the game's
 only 3D audio listener, `audio_listener_enable_3d` in `game_map.tscn`). See
 [docs/systems/fire.md](systems/fire.md).
+
+### The eye view (street level)
+
+`EyeView` (`scenes/states/playing/eye_view.gd`) is the `CameraController`'s second view mode: a perspective
+camera at a walker's eye height (1.6 m times the map scale) that takes over the same Camera3D and CameraHolder,
+entered with V, F9 or a tilt past home through a 1.3 s dolly-zoom glide (`EyeGlide`, a frozen-frame veil at each
+end) and left the same way. While it is the camera, `EyeSky` swaps the level's Environment to the painted street
+sky (`shaders/street_sky.gdshader`, the per-biome `StreetSkyLook` table) with a depth fog scaled to the map and
+restores every field on leaving; `EyeCanopy` and the `canopy_eye` / `eye_grass` globals thin the foliage near the
+eye and lift crown shade; `EyeRim` plants hedgerows and copses past the map edge as an `AuthoredScatter` named
+`EyeRim` under `LevelMap` (made on first entry, hidden in the orbit view); `SkirtBackdrop` holds the skirt's fade
+14 m past the edge; `UIManager.set_street_hints` swaps the hint bar to the street row. Nothing is saved or
+networked; authoring is orbit-only. See [docs/systems/eye_view.md](systems/eye_view.md).
 
 ### Authored terrain
 

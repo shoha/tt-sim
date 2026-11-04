@@ -36,8 +36,21 @@ Documents here:
 - [structures.md](structures.md): buildings as a library recipe plus footprint, seed and params
   (`Structure`, the `structures.json` entry, validation, the live edit, the fingerprint key); the
   data layer only so far. Walls and fences are in `walls.md`.
-- [villages.md](villages.md): design (not built) for lived-in villages and streets: props, settlement
-  kits, the derived `Settlement` layer, dressing gestures and phases.
+- [villages.md](villages.md): the design for lived-in villages and streets (props, settlement kits, the
+  derived `Settlement` layer, dressing gestures, phases) and, in sections 7 to 14, what is built: the
+  Village tool, plazas, fields, bridges, boundary walls and gates, and touchable furnishings (piece
+  homes, the Swap / Back / Remove buttons, the canopy cut).
+- [settlements.md](settlements.md): the as-built settlement record, the derived layer, Dress and the
+  ground (villages phases 1 and 2).
+- [walls.md](walls.md): walls, fences and the street `row` kind: `Wall`, `WallGeometry`, `AuthoredWalls`
+  and the Wall tool.
+- [procgen.md](procgen.md): the shared procgen module (a git submodule shared with plantgen): the
+  node-graph document, evaluator, generator nodes and meshers, and how tt-sim uses them.
+- [structure_performance.md](structure_performance.md): what building, placing and drawing structures
+  costs, measured 2026-10-30.
+- [eye_view.md](eye_view.md): the street-level eye view: the walking camera, its painted sky and
+  map-scaled fog (`EyeSky`, `StreetSkyLook`), the rim past the map edge (`EyeRim`), the near-eye canopy
+  (`EyeCanopy`), the entry glide (`EyeGlide`), the skirt hold and the street hint row.
 - [landforms.md](landforms.md): the starting landforms a new map opens with (Valley, Hilltop,
   Terraces, Lakeshore, Gorge): the seeded frame, the shared steps, each recipe, the stage and
   the open path.

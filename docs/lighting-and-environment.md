@@ -288,11 +288,17 @@ The special `map_default` preset reuses the `Sky` resource that was extracted fr
 
 ### The eye view's painted sky and edge fog (2026-11-02, card eyesky)
 
-Only while the eye view (F9) is the camera, `EyeSky` (`scenes/states/playing/eye_sky.gd`) swaps
-the level's Environment to `shaders/street_sky.gdshader` (a painted gradient, flat clouds in four
-shapes, and three layered ridges that hide where the map ends) and turns on a depth fog of 25 to
-85 m whose colour is the biome's foot colour; leaving restores every field. The ortho and
-top-down views never see any of it.
+Only while the eye view (V or F9) is the camera, `EyeSky` (`scenes/states/playing/eye_sky.gd`) swaps
+the level's Environment to `shaders/street_sky.gdshader` (a painted gradient, flat cumulus banks
+of a continuous family under a layer of cloudlets, and up to four layered ridges that hide where
+the map ends) and turns on a depth fog scaled to the map (card eyesky2, owner ES2) whose colour
+is the biome's foot colour; leaving restores every field. The ortho and top-down views never see
+any of it. The fog is `StreetSkyLook.fog_range(reach)`: it begins at 0.75 and ends at 1.5 of the
+eye's reach (`map_reach`, the ground distance to the walking area's farthest corner, the same at
+every yaw), and 25 and 85 m are only the floors, with the end at least 60 m past the begin. So
+a small valley keeps its detail clear and a large map is hazed toward its far edge. During the
+entry glide `EyeSky.fog_offset` adds the camera's distance from the pivot to both. The system
+doc is [systems/eye_view.md](systems/eye_view.md).
 
 - Lighting: the shader returns exactly what it replaces in the cubemap pass
   (`AT_CUBEMAP_PASS`, which fills the radiance map): the HDRI's `texture(source_panorama,

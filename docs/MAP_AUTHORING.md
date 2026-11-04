@@ -733,12 +733,15 @@ Follow-ups:
 - Camera (owner's 2026-11-02 verdicts; `CONVENTIONS.md` "Camera System"): turn, tilt, top-down and
   the token pin are done and shipped (tt-sim main c712849d). **Street level as a play view** (tools,
   picking, bounds and tokens all work there; every view meets the home look bar, from every side,
-  with the sun fixed in the world) has landed in pieces on main (2026-11-02): the perspective rig
-  with eye-position bounds and collision, near-eye canopy fade, play tools at the eye, the
-  per-biome painted sky with depth fog, and dressed windows (a painted frame and a room behind the
-  glass); F9 toggles it for now. Still to do: the entry gesture, a shadow sweep from 5 to 25
-  degrees (`lighting-and-environment.md` "Sun and Shadow"; the probe's finding is in the
-  `shadowsweep` handoff), then a full-size look round on the board.
+  with the sun fixed in the world) is on main (2026-11-02 and 03; map and model in
+  `docs/systems/eye_view.md`): the perspective rig with eye-position bounds and collision, the
+  near-eye canopy fade and eye light, play tools at the eye, the per-biome painted sky with a depth
+  fog scaled to the map, the rim of hedgerows and copses past the edge, the near-grass thinning,
+  painted door leaves and dressed windows, the street hint row, and the entry: V, F9 or a tilt
+  past home glide down in 1.3 s (a dolly zoom) and back up. Authoring stays orbit-only. The shadow
+  sweep and the full-size look round are done (the sun's shadow distance is fitted from the eye,
+  `EyeShadow`; the `el_*` look round was judged on the board). Still queued from the look notes
+  (owner EL1): edge props and street props.
   Also queued: a right-click and double-click route for the token pin, and a real-mouse check of
   pin hover and click. (Pack-token collision shapes were fixed in the `collshapes` card,
   `docs/CONVENTIONS.md` "Camera System".)

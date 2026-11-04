@@ -1,7 +1,13 @@
-# Villages and streets: composing lived-in settlements (design)
+# Villages and streets: composing lived-in settlements (design, built through section 14)
 
-Status: DESIGN ONLY (card villages_design, topic `villages_design`, 2026-10-30). No code changed. Nothing
-here is built; every "exists" claim cites the code as of tt-sim `4fa55739` and procgen `4b7c5d2`.
+Status (2026-11-03): sections 0 to 6 are the design (card villages_design, topic `villages_design`,
+2026-10-30), written before any code, so their "exists" claims cite the code as of tt-sim `4fa55739` and
+procgen `4b7c5d2`. The design is built in slices, each documented as built in sections 7 to 14: the record,
+layer and Dress bar (7), the plaza ground and widened roads (8 and 9, details in `settlements.md` "Ground"), the
+Village tool (10), fields (11), bridges (12), boundary walls and gates (13) and touchable furnishings with the
+villages5 piece binding, buttons and canopy cut (14).
+Read the as-built sections for what the code does; the design sections record why. The Verification list is at
+the end of section 14.
 The owner's call (2026-10-30): the next effort goes to world life, villages and streets, performance
 hardening and test tooling; new styles are queued behind it (`procgen/docs/style_backlog.md`, whose last
 line asks for "bridges, wells, market stalls, shrines and gates as small structures that make streets feel
@@ -1080,3 +1086,11 @@ record") were saved, validated and applied by `SettlementPlan` since phase 1 and
 - **Limits left:** the tool does not draw per-piece thumbnails; Swap has no chooser (it cycles); a pinned piece does not
   follow its house when the street is edited (a pin is absolute, as the design says); fields still cannot be moved or
   drawn as polygons; the wealth and density sliders are still on the Wall tool's street bar; props stay walk-through.
+- **Verification (villages5).** `tests/unit/test_village_piece_home.gd`: `VillagePieceHome` (every planned piece of two
+  kits and two seeds stands at home; the refusal table for plaza, lot and street; the refusal reasons `OFF_LOT` and
+  `OFF_STREET` are constants of `VillageFurnishings`) and the `VillagePieceButtons` layout, actions and press behaviour.
+  `tests/unit/test_canopy_fade.gd`: `CanopyFade.set_cut` / `step_cut` and `BrushMode.fade_cut` with no pick. Not
+  covered by a test: `VillageBrush.fade_cut` itself and the shader's cut constants (`CANOPY_CUT_INNER`,
+  `CANOPY_CUT_BARK`, `CANOPY_CUT_BEHIND` in `shaders/wind_foliage_include.gdshaderinc`; audit1, 2026-11-03). Render job
+  `tools/render_jobs/jobs/villages5_buttons.json` (topic villages5, keeps no level): the pills beside a picked barrel
+  and cart, hover, click and the drag-refused states, 14 captures with an `INDEX.md`.

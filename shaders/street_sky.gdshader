@@ -13,7 +13,7 @@ shader_type sky;
 // returns: texture(source_panorama, SKY_COORDS) * exposure for an HDRI sky (the stock
 // PanoramaSkyMaterial's formula, filter_linear), or the flat level colour. Only the visible pass
 // paints the sky, clouds and ridges. TIME, POSITION and LIGHTn are never read, so the radiance map
-// stays a one-time render. Verified by tools/streetsky_radiance_probe.gd (diffuse, rough and mirror
+// stays a one-time render. Verified by tools/eyesky_radiance_probe.gd (diffuse, rough and mirror
 // spheres: 0.0000 mean byte difference against the old sky).
 //
 // Everything is a function of the view direction in the sky's frame (EYEDIR, which already

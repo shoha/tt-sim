@@ -184,6 +184,9 @@ the Dress and reloaded with plants on the cleared road (widestreets, 2026-11-01)
 | `ui_primitives.gd` | `action` plus its fields (see the script header) | UI captures (card U1 and the UI tour): `settings` (`section`), `foldout`, `close_settings`, `report` (rail underline, Foldout chevron, hint bar rects); `window` (`size` [w, h], `"WxH"` or `"WxH@P"`, `content_scale`) resizes the window, sets the run's Interface size (Auto, or the fixed percent P or `content_scale` names) and logs the size it took; `drawer` (`which` `authoring` or `visuals`, `pane`, `open`); `toasts`; `danger`; `dismiss`; `browser` (`open`); `save` (`folder`, `name`) and `cleanup` for `_u1_ui_` and `_ui_tour_` levels. |
 | `ui_room.gd` | `action` plus its fields (see the script header) | The UI tour's session screens with no network (never hosts or joins): `opening` (`open`) shows or hides the "Opening a room..." wait on Root's loading overlay; `host_room` (`folder`, optional: without it no map is picked, as after Move everyone to the room) and `client_room` (the waiting view) stage a room over the hidden title with a sample code and players, `close_room` frees it; `join` (`open`) presses the title's Join Game or the join screen's Back; `pause_host` shows the host-only Move everyone to the room group on an open pause menu (`PauseOverlay.show_room_row`) and `return_room` presses it (it asks nothing; a solo pause has no room to move to). |
 | `ui_size.gd` | `action` plus its fields (see the script header) | The UI tour's Interface size passes: `dropdown` (`open`) opens or closes the Interface Size dropdown on Settings > Graphics; `measure` (`on`) turns the measure tool on in play and lays a two-segment line across the board (camera rays onto the terrain at fixed shares of the view), or off; `new_map_scroll` (`to` `end` or `start`) scrolls the open new-map dialog's fields. |
+| `eye_look.gd` | `action` (`tokens`, `await`) plus its fields (see the script header) | The eye-level look round (card SR10, `jobs/el_tokens.json`): `tokens` (`dir`, `at`, `tokens` [[x, z]], `hints` [[key, action]], `views` [{name, yaw, pitch}]) enters the eye at `at`, spawns an avatar token at each point, fills the hint bar and saves the composited window per view as `<dir>/<name>.png`; `await` holds the job while the rig runs. Creates no levels. |
+| `eye_perf.gd` | `action` (`perf`, `trees`) plus its fields (see the script header) | The eye view's frame cost and near shadow sharpness through the real `EyeView` (cards eyeperf, eyefoliage, eyegrass): `perf` is an in-run A/B under the pinned procedure over `variants` [{name, sky, fade, grass, aa, shadow, light}] (`grass` switches `CanopyFade.eye_grass_enabled`, `light` the foliage eye light), writing `<name>_report.txt` and `<name>_table.txt`; `trees` stands the eye beside a tree and takes a shadow-sharpness capture per shadow-distance cap. Jobs `ep_perf_*`, `eyefoliage_perf`, `eyegrass_perf`. |
+| `hint_bar.gd` | `action` (`measure`, `row`, `base`) plus its fields (see the script header) | The input hint bar's layout (`jobs/hintbar_look.json`): `measure` logs the rects and the gap above and below the key caps, `row` (`which`) stages a row, and `base` (`street`: bool) sets the real base row of the orbit view (`false`) or the street (`true`, `CameraRig.play_hints`), as `jobs/eyehints_look.json` uses it. |
 
 ## Capture readers
 
@@ -207,6 +210,11 @@ then covers 18x18 window pixels.
 channel difference and the pixels over 8 and over 32. It is pixel-exact, so it needs
 full-size captures (halving averages a one-pixel difference away); `avatar_probe.json` pins
 its twin captures at `scale` 1.0 for it.
+
+`tools/eyelook_sheets.gd` (`godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/eyelook_sheets.gd -- <out_dir> <job:map>...`)
+tiles an `el_*` run's `user://render_jobs/<job>/el_<map>_p<pitch>_y<yaw>.png` captures into one
+`el_<map>_sheet.png` (three pitch columns, 0, 12 and -15, by four yaw rows); a
+`cmp:<before_job>:<after_job>:<map>:<name>` argument writes a before and after sheet instead.
 
 ## Caveats
 
