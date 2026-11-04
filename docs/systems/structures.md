@@ -624,6 +624,15 @@ the hand cart spoked wheels; a plank wall (`wood` in the WALL role) gets painted
 `structure_digests.txt`) and twelve prop pins (`prop_pins.txt`, `prop_digests.txt`) moved, re-made with
 `tools/export_core_structures.gd --out <scratch>` and copied over; the procgen pin must move with them.
 
+**Hay crown (2026-11-04, branch `haytop`, procgen branch `haytop`).** A hay mound ends in a broad low
+crown, not a cone (`ProcgenPropsGoods._mound`: tiers narrow to 0.68 of the foot, a 0.17 m cap rounds
+off to a flat top 0.6 of the foot in radius), so the standing box PropStand measures from the mesh is a
+token's width: a default mound's top box is 0.96 x 0.84 m on a 1.68 m foot (0.50 of the foot across,
+was 0.48 x 0.48, 0.29) and the crown is 1.68 m high (was 1.44). Only the haystack draws 0, 1 and 3
+moved (`prop_pins.txt`, `tests/fixtures/prop_digests.txt`; the bales draw 2 did not); no structure
+JSON changed, since a prop is a recipe the exporter's own pin hashes. `core-library` keeps a copy of
+`prop_pins.txt`. Test: `test_prop_stand.gd` `test_a_hay_mound_has_a_broad_flat_crown_not_an_apex`.
+
 **Since wind_c (2026-10-30)** the mill follows the global wind instead of a fixed facing: the cap yaw
 is clamped to 30 degrees about `MillMotion.WIND_FROM`, the sails' speed is `0.12 + 0.045 * wind speed`
 rad/s (cap 1.1) and both ease with a 2 s time constant (`StructureWind`; docs/systems/wind.md

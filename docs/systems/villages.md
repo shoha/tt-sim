@@ -458,7 +458,9 @@ cannot be scaled), one `StaticBody3D` `Stand_<cell>` per bake cell (layer 1, mas
 `tt_stand`), made and freed with the cell's mesh. Measured on the farming hamlet (seed 1234): crate stack 3 to 9
 boxes (tops 0.48 and 1.02 m at default size), haystack 24 boxes (tops 0.61 and 1.22 of a 1.83 apex before the
 1.3 drawn scale; the apex is a cone, a token stands on its upper part), hand cart about 10, wagon about 18,
-barrel 9 to 18, woodpile 8 to 10.
+barrel 9 to 18, woodpile 8 to 10. Since topic haytop (2026-11-04) a mound ends in a broad flat crown instead
+of a cone apex, so a token stands on one box 0.96 x 0.84 m (0.50 of the 1.68 m foot across, was 0.48 x 0.48 m);
+see structures.md "Hay crown".
 
 - A token's landing (`WaterSurface.landing_below`, terrain layer) needs no change: it meets the box tops. The
   eye view's sphere, the brush rays, the building test and the dressing ground fit EXCLUDE these bodies

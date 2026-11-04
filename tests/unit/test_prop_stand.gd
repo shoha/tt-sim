@@ -205,6 +205,43 @@ func test_a_drop_on_a_hay_stack_lands_on_the_mound_not_the_ground() -> void:
 	assert_almost_eq(await _land(Vector2(-5, 8)), 0.0, 0.001, "beside it: the ground")
 
 
+## The extent of the boxes of `boxes` whose top is at least `floor_top`: Rect2, empty if none.
+func _extent(boxes: Array[Dictionary], floor_top: float) -> Rect2:
+	var out := Rect2()
+	var first := true
+	for box in boxes:
+		if float(box["top"]) < floor_top:
+			continue
+		var rect := Rect2(Vector2(box["min"]), Vector2(box["max"]) - Vector2(box["min"]))
+		out = rect if first else out.merge(rect)
+		first = false
+	return out
+
+
+func test_a_hay_mound_has_a_broad_flat_crown_not_an_apex() -> void:
+	# Draws 0 and 3 are the plain mound, 1 the twin, 2 the bales (recipes/props/haystack.json).
+	for seed_value in [0, 1, 3]:
+		var row := LibraryStructureStore.prop("haystack", seed_value)
+		_layer._build_variant(String(row["ref"]))
+		var boxes := AuthoredSettlements.stand_boxes(String(row["ref"]), "haystack")
+		assert_false(boxes.is_empty(), "draw %d stands" % seed_value)
+		var highest := 0.0
+		for box in boxes:
+			highest = maxf(highest, float(box["top"]))
+		var foot := _extent(boxes, 0.0)
+		var crown := _extent(boxes, highest - 0.001)
+		var across := minf(crown.size.x, crown.size.y)
+		var share := across / minf(foot.size.x, foot.size.y)
+		var numbers := (
+			"draw %d: foot %s, crown %s at %.2f m, %.2f of the foot"
+			% [seed_value, foot.size, crown.size, highest, share]
+		)
+		# The twin's smaller crown is held to a token's width; its foot is two mounds wide.
+		assert_gt(across, 0.4 if seed_value == 1 else 0.7, "a token-sized crown; " + numbers)
+		if seed_value != 1:
+			assert_gt(share, 0.45, "the top box is about half the foot across; " + numbers)
+
+
 func test_a_token_standing_inside_a_prop_with_its_top_under_the_prop_is_not_lifted() -> void:
 	var cell := _cell("crate_stack", 0, Vector2(4, 3), 0.0, 1.0)
 	_layer._build_variant(String(cell["items"][0]["ref"]))
