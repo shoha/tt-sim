@@ -1,0 +1,63 @@
+{
+ "out_dir": "render_jobs/eyeclouds_fix",
+ "timeout_s": 600,
+ "hang_s": 150,
+ "saved": {"folder": "_eyeclouds_base", "load": "play"},
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_eyeclouds_base", "load": "play"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "new", "biome": "savanna_summer_s1", "size": 150, "seed": 3, "landform": "valley", "phase": "build"},
+  {"op": "wait_ready", "settle": 1.5, "phase": "build"},
+  {"op": "no_autosave", "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "save", "folder": "_eyeclouds_base", "replace": true, "phase": "build"},
+  {"op": "play", "folder": "_eyeclouds_base", "phase": "build"},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "zoom", "size": 26.0},
+  {"op": "settle"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "enter", "at": [10, 10], "yaw": 315, "pitch": -15, "fov": 60},
+  {"op": "settle"},
+  {"op": "settle"},
+  {"op": "expand", "values": ["45", "135", "225", "315"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": "{value}", "pitch": -15},
+   {"op": "eval", "expr": "_game_map.get_camera_controller().eye.sky.material().set_shader_parameter(\"cloud2_min_deg\", 24.0)"},
+   {"op": "eval", "expr": "_game_map.get_camera_controller().eye.sky.material().set_shader_parameter(\"cloud2_span_deg\", 18.0)"},
+   {"op": "settle"},
+   {"op": "capture", "name": "b_sav_pm15_y{value}"},
+   {"op": "eval", "expr": "_game_map.get_camera_controller().eye.sky.material().set_shader_parameter(\"cloud2_min_deg\", 26.0)"},
+   {"op": "eval", "expr": "_game_map.get_camera_controller().eye.sky.material().set_shader_parameter(\"cloud2_span_deg\", 16.0)"},
+   {"op": "settle"},
+   {"op": "capture", "name": "a_sav_pm15_y{value}"}
+  ]},
+  {"op": "expand", "values": ["45", "135", "225", "315"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": "{value}", "pitch": -30},
+   {"op": "eval", "expr": "_game_map.get_camera_controller().eye.sky.material().set_shader_parameter(\"cloud2_min_deg\", 24.0)"},
+   {"op": "eval", "expr": "_game_map.get_camera_controller().eye.sky.material().set_shader_parameter(\"cloud2_span_deg\", 18.0)"},
+   {"op": "settle"},
+   {"op": "capture", "name": "b_sav_pm30_y{value}"},
+   {"op": "eval", "expr": "_game_map.get_camera_controller().eye.sky.material().set_shader_parameter(\"cloud2_min_deg\", 26.0)"},
+   {"op": "eval", "expr": "_game_map.get_camera_controller().eye.sky.material().set_shader_parameter(\"cloud2_span_deg\", 16.0)"},
+   {"op": "settle"},
+   {"op": "capture", "name": "a_sav_pm30_y{value}"}
+  ]},
+  {"op": "expand", "values": ["grassland_meadow", "temperate_forest"], "template": [
+   {"op": "eval", "expr": "_game_map.get_camera_controller().eye.sky.set_map(\"{value}_summer_s1\", 3)"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 225, "pitch": -25},
+   {"op": "eval", "expr": "_game_map.get_camera_controller().eye.sky.material().set_shader_parameter(\"cloud2_min_deg\", 24.0)"},
+   {"op": "eval", "expr": "_game_map.get_camera_controller().eye.sky.material().set_shader_parameter(\"cloud2_span_deg\", 18.0)"},
+   {"op": "settle"},
+   {"op": "capture", "name": "b_{value}_pm25_y225"},
+   {"op": "eval", "expr": "_game_map.get_camera_controller().eye.sky.material().set_shader_parameter(\"cloud2_min_deg\", 26.0)"},
+   {"op": "eval", "expr": "_game_map.get_camera_controller().eye.sky.material().set_shader_parameter(\"cloud2_span_deg\", 16.0)"},
+   {"op": "settle"},
+   {"op": "capture", "name": "a_{value}_pm25_y225"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "leave"},
+  {"op": "wind", "freeze": false},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}
