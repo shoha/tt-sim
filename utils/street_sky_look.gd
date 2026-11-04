@@ -26,6 +26,16 @@ const FOG_CURVE := 1.0
 const FOG_BEGIN_REACH := 0.75
 const FOG_END_REACH := 1.5
 
+## The cloud layers' base ranges in degrees of elevation (the shader's defaults, mirrored here for
+## the test that keeps them in step): banks from CLOUD_MIN_DEG up by CLOUD_SPAN_DEG, the high
+## cloudlets from CLOUD2_MIN_DEG up by CLOUD2_SPAN_DEG. The cloudlets are drawn under the banks, so
+## their lowest base must not lie below the banks' highest: a cloudlet based a little under a
+## bank's flat base shows only a hard thin ribbon of itself beneath the bank (card eyeclouds).
+const CLOUD_MIN_DEG := 8.0
+const CLOUD_SPAN_DEG := 18.0
+const CLOUD2_MIN_DEG := 26.0
+const CLOUD2_SPAN_DEG := 16.0
+
 const DEFAULT := "default"
 
 ## Keys every look must carry (the card's "about 11 numbers").

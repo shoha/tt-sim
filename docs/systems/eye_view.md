@@ -192,9 +192,7 @@ sky and edge fog" and "The eye view's near grass"; the controls table in [../CON
 
 ## Open work
 
-The map hub owns the list: [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work". Eye-specific items: a thin white
-streak beside a bank when looking up 15 degrees (savanna, yaw 225 and 315) belongs to the high cloudlet layer and goes
-when `cloud2_cover` is 0 (card eyeedge); `EyeSky._still_ours` calls `StreetSkyLook.look_for` every frame (a dictionary
+The map hub owns the list: [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work". Eye-specific items: `EyeSky._still_ours` calls `StreetSkyLook.look_for` every frame (a dictionary
 merge) and `EyeView` reads the environment twice a frame; `EyeRim.show` and `plan_for` and the street-hint wiring
 (`GameplayMenuController`) lack direct tests (audit1, 2026-11-03).
 

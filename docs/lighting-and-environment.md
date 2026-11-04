@@ -323,9 +323,12 @@ doc is [systems/eye_view.md](systems/eye_view.md).
   map root that `EyeView` shows on entering and hides on leaving (rebuilt from the document each
   time), so a view toward the edge has a middle ground and the orbit view's feathered edge is
   untouched. River mouths stay open; a biome without trees or shrubs plants none.
-- Open: a thin white streak beside a bank when looking up 15 degrees (savanna, yaw 225 and 315)
-  belongs to the high cloudlet layer (it goes when `cloud2_cover` is 0); capping the cloudlets'
-  longness did not change it, and neither did an ellipse-free bank body (card eyeedge).
+- Fixed (card eyeclouds): the thin white streak under a bank when looking up (savanna, pitch -15
+  and -30, several yaws) was a high cloudlet based a little below a bank's flat base: the banks
+  draw over the cloudlets, so only the strip between the two bases showed, a hard straight
+  ribbon. The cloudlets' bases now start at the banks' highest base (`cloud2_min_deg` 26,
+  `cloud2_span_deg` 16; `StreetSkyLook.CLOUD2_MIN_DEG` mirrors it, a test keeps the shader in step).
+  Cloudlets elsewhere keep their shapes and move up by at most 2 degrees.
 - `EyeView` also owns `sky_custom_fov` 0 at the eye; it reads the Environment from
   `world_viewport.find_world_3d()` (the SubViewport's own `world_3d` is null).
 - Godot 4.7 resets `Environment.fog_density` when `fog_mode` is assigned: set the mode first.
