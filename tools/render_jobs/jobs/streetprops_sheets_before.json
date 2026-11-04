@@ -1,0 +1,17 @@
+{
+ "out_dir": "render_jobs/streetprops_sheets_before",
+ "timeout_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs", "columns": 2, "tile": [960, 540], "out": "streetprops_before_eye", "names": [
+    "streetprops_before/sp_eye_p00_y045", "streetprops_before/sp_eye_p12_y045",
+    "streetprops_before/sp_eye_p00_y135", "streetprops_before/sp_eye_p12_y135",
+    "streetprops_before/sp_eye_p00_y225", "streetprops_before/sp_eye_p12_y225",
+    "streetprops_before/sp_eye_p00_y315", "streetprops_before/sp_eye_p12_y315"
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs", "columns": 2, "tile": [960, 540], "out": "streetprops_before_home", "names": [
+    "streetprops_before/sp_home_a", "streetprops_before/sp_home_b",
+    "streetprops_before/sp_home_top", "streetprops_before/sp_home_top"
+  ]}
+ ]
+}

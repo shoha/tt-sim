@@ -29,6 +29,29 @@ func test_a_glazing_doors_pieces_are_the_door_role() -> void:
 	)
 
 
+func test_a_windows_shutters_are_drawn_like_a_door_and_the_rest_of_the_trim_is_trim() -> void:
+	# Card streetprops: a shutter is a painted louvred leaf (its own paint, lit), not a wood board.
+	for slot in ["front0/win1/shutter0", "front0/win1/shutter1", "side2/win0/shutter1"]:
+		assert_eq(StructureLook.role_of_slot("facade_trim", slot), StructureLook.DOOR, slot)
+	var plain: Array[String] = ["front0/win1/sill", "front0/win1/lintel", "front0/door0/step"]
+	for slot in plain:
+		assert_eq(StructureLook.role_of_slot("facade_trim", slot), StructureLook.TRIM, slot)
+	assert_eq(
+		StructureLook.role_of_tag_path("street_row_2/left/lot0/facade_trim_4/front0/win1/shutter0"),
+		StructureLook.DOOR
+	)
+
+
+func test_a_plank_wall_gets_painted_boards_and_its_trim_does_not() -> void:
+	var wall := StructureMaterials.make("wood", StructureLook.WALL, "", "") as ShaderMaterial
+	assert_eq(float(wall.get_shader_parameter("board_m")), StructureMaterials.BOARD_M)
+	assert_eq(float(wall.get_shader_parameter("board_tex_keep")), StructureMaterials.BOARD_TEX_KEEP)
+	var trim := StructureMaterials.make("wood", StructureLook.TRIM, "", "") as ShaderMaterial
+	assert_null(trim.get_shader_parameter("board_m"), "trim keeps the plain planks")
+	# No palette root here, so the first timber material logs that the palette is empty.
+	assert_engine_error(1, "the empty palette is logged once")
+
+
 func test_a_door_in_the_glass_kind_stays_an_opening() -> void:
 	assert_eq(
 		StructureLook.material_role(StructureLook.GLASS_KIND, StructureLook.DOOR),

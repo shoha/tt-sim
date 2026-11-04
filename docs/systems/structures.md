@@ -616,6 +616,14 @@ weather's direction was not used because it put the wheel edge-on to the default
 there is no in-game one) keeps the wheel still. `provenance_at` finds a mesh under the pivots by name.
 Tests: `tests/unit/test_structure_mill.gd`.
 
+**Street props (2026-11-03, branch `streetprops`, procgen branch `streetprops`).** Shutters are painted
+louvred leaves (`ProcgenTrimShutters`, vertex-colour blocks) drawn in the DOOR role (a tag segment
+`shutter*` under `facade_trim`), crates gain a lid rim, corner posts and braces, hay bundles ropes,
+the hand cart spoked wheels; a plank wall (`wood` in the WALL role) gets painted boards in
+`structure_wall.gdshader` (`board_m`, `board_tex_keep`). Thirteen structure pins (`pins.txt`,
+`structure_digests.txt`) and twelve prop pins (`prop_pins.txt`, `prop_digests.txt`) moved, re-made with
+`tools/export_core_structures.gd --out <scratch>` and copied over; the procgen pin must move with them.
+
 **Since wind_c (2026-10-30)** the mill follows the global wind instead of a fixed facing: the cap yaw
 is clamped to 30 degrees about `MillMotion.WIND_FROM`, the sails' speed is `0.12 + 0.045 * wind speed`
 rad/s (cap 1.1) and both ease with a 2 s time constant (`StructureWind`; docs/systems/wind.md

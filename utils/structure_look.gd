@@ -182,6 +182,12 @@ static func role_of_slot(node_type: String, slot: String) -> String:
 			var parts := slot.split("/")
 			if parts.has("leaf") or parts.has("case"):
 				return DOOR
+		"facade_trim":
+			# "front0/win1/shutter0": a window's painted louvred shutter (card streetprops), drawn lit
+			# with its own paint like a door; every other trim piece (sill, frame, lintel) is trim.
+			for part in slot.split("/"):
+				if part.begins_with("shutter"):
+					return DOOR
 		"gallery":
 			if last == "roof":
 				return ROOF
