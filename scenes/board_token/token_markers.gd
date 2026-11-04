@@ -60,6 +60,18 @@ const GM_HIDDEN_ALPHA := 0.4
 const NO_COLOUR := Color(0.62, 0.66, 0.78)
 ## Most vertex colours sampled from a mesh surface.
 const VERTEX_SAMPLES := 64
+## The eye view's far pins (an option, off): a token nearer than EYE_PIN_NEAR_M shows its own
+## model and has no pin, one farther than EYE_PIN_FULL_M has the whole pin, smooth between.
+const EYE_PIN_NEAR_M := 9.0
+const EYE_PIN_FULL_M := 18.0
+## The pin's index of its eye-view fade in the per-frame pin arrays.
+const PIN_FADE := 5
+
+## The eye view shows pins for far tokens and edge arrows for tokens out of frame (card eyepin).
+## Off by default: the pin belongs to the top-down view (above 55 degrees of pitch) until the
+## owner decides.
+var eye_pins: bool = false
+var eye_arrows: bool = false
 
 ## Set by the owner: Callable() -> bool, true while the pointer is over interface (not the
 ## world), when pins take neither hover nor clicks.
@@ -68,6 +80,7 @@ var gui_blocked: Callable = Callable()
 var _camera: Camera3D = null
 var _viewport: SubViewport = null
 var _instances: MultiMeshInstance3D = null
+var _arrows: TokenEdgeArrows = null
 var _portraits: TokenPortraits = null
 var _since_refresh: float = REFRESH_PERIOD_S
 ## The pointer in the world viewport's pixels, from the motion events that reach the viewport,
@@ -154,6 +167,12 @@ static func pin_head_centre(tip_px: Vector2, head_px: float = HEAD_PX) -> Vector
 ## player has none) and the fade has brought it to HIT_MIN_STRENGTH.
 static func is_hittable(strength: float, alpha: float) -> bool:
 	return alpha > 0.0 and strength >= HIT_MIN_STRENGTH
+
+
+## The eye view's pin fade for a token `distance_m` from the eye (times the map `scale`): none up
+## close where the model reads, whole from EYE_PIN_FULL_M out.
+static func eye_pin_fade(distance_m: float, scale: float = 1.0) -> float:
+	return smoothstep(EYE_PIN_NEAR_M * scale, EYE_PIN_FULL_M * scale, distance_m)
 
 
 ## The pin under `point`: the index of the head circle (centre `centres[i]`, radius `radii[i]`)
@@ -315,6 +334,9 @@ func _process(delta: float) -> void:
 	if _camera == null or not is_instance_valid(_camera):
 		return
 	var strength := CameraRig.marker_strength(CameraRig.pitch_of_back_y(_camera.global_basis.z.y))
+	_sync_arrows()
+	if eye_pins and _camera.projection == Camera3D.PROJECTION_PERSPECTIVE:
+		strength = 1.0
 	if strength <= 0.0:
 		if _instances.visible:
 			_instances.visible = false
@@ -350,6 +372,11 @@ func _draw(strength: float, refresh: bool) -> void:
 		var alpha := pin_alpha(
 			strength, token.is_visible_to_players, token.rigid_body.visible, gm_access
 		)
+		var fade := 1.0
+		if eye_pins and _camera.projection == Camera3D.PROJECTION_PERSPECTIVE:
+			var away := token.rigid_body.global_position.distance_to(_camera.global_position)
+			fade = eye_pin_fade(away)
+			alpha *= fade
 		if alpha <= 0.0:
 			continue
 		var id := token.get_instance_id()
@@ -366,7 +393,7 @@ func _draw(strength: float, refresh: bool) -> void:
 		var tip := centre + up * top_edge_metres(look.radius, look.half_height, up)
 		var colour: Color = look.colour
 		colour.a = alpha
-		pins.append([tip.dot(up), tip, colour, cell, id])
+		pins.append([tip.dot(up), tip, colour, cell, id, fade])
 	# Higher on the screen first, so a lower pin lies over the one above it.
 	pins.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
 	_update_hits(pins, strength)
@@ -396,7 +423,7 @@ func _update_hits(pins: Array[Array], strength: float) -> void:
 	if strength < HIT_MIN_STRENGTH:
 		return
 	for pin in pins:
-		if not is_hittable(strength, (pin[2] as Color).a):
+		if not is_hittable(strength, (pin[2] as Color).a) or pin[PIN_FADE] < HIT_MIN_STRENGTH:
 			continue
 		var id: int = pin[PIN_ID]
 		# The hovered pin is tested at its enlarged size, so the pointer on its rim does not
@@ -422,6 +449,29 @@ func _head_at(tip: Vector3) -> float:
 		return head_metres(_camera.size, float(_viewport.size.y))
 	var depth := maxf((-_camera.global_basis.z).dot(tip - _camera.global_position), 0.0)
 	return HEAD_PX * CameraRig.metres_per_pixel(_camera, Vector2(_viewport.size), depth)
+
+
+## The edge arrows node (TokenEdgeArrows) follows `eye_arrows` and the eye camera: made on first
+## need, shown only while the camera is a perspective one (the eye view).
+func _sync_arrows() -> void:
+	var wanted := eye_arrows and _camera.projection == Camera3D.PROJECTION_PERSPECTIVE
+	if wanted and _arrows == null:
+		_arrows = TokenEdgeArrows.new()
+		_arrows.name = "TokenEdgeArrows"
+		_arrows.camera = _camera
+		_arrows.colour_of = colour_of
+		add_child(_arrows)
+	if _arrows != null:
+		_arrows.visible = wanted
+		_arrows.set_process(wanted)
+
+
+## A token's marker colour (what its pin and the edge arrow are painted in), read on demand.
+func colour_of(token: BoardToken) -> Color:
+	var id := token.get_instance_id()
+	if not _look.has(id):
+		_look[id] = _read_look(token)
+	return (_look[id] as Dictionary).colour
 
 
 func _clear_hits() -> void:
