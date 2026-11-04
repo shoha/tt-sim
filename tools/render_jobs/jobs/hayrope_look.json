@@ -1,0 +1,32 @@
+{
+ "out_dir": "render_jobs/hayrope_look",
+ "timeout_s": 600,
+ "hang_s": 240,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_hayrope_street"},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/hayrope.gd", "action": "frame", "index": 0, "back": 4.5, "yaw": 90, "pitch": 4, "fov": 40},
+  {"op": "settle"}, {"op": "capture", "name": "hay0_tele_y090"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/hayrope.gd", "action": "frame", "index": 0, "back": 4.5, "yaw": 180, "pitch": 4, "fov": 40},
+  {"op": "settle"}, {"op": "capture", "name": "hay0_tele_y180"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/hayrope.gd", "action": "frame", "index": 1, "back": 4.5, "yaw": 90, "pitch": 4, "fov": 40},
+  {"op": "settle"}, {"op": "capture", "name": "hay1_tele_y090"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/hayrope.gd", "action": "frame", "index": 2, "back": 6.0, "yaw": 270, "pitch": 4, "fov": 40},
+  {"op": "settle"}, {"op": "capture", "name": "hay2_tele_y270"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/hayrope.gd", "action": "frame", "index": 2, "back": 6.0, "yaw": 0, "pitch": 4, "fov": 40},
+  {"op": "settle"}, {"op": "capture", "name": "hay2_tele_y000"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "enter", "at": [-18, -20], "yaw": 222, "pitch": 6, "fov": 22},
+  {"op": "settle"}, {"op": "capture", "name": "ref_hay_tele"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 225, "pitch": 12, "fov": 60},
+  {"op": "settle"}, {"op": "capture", "name": "ref_p12_y225"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "leave"},
+  {"op": "wind", "freeze": false},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}
