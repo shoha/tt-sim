@@ -12,8 +12,12 @@ extends RefCounted
 ## The landing is the drop's: cast down from the token's top, so a bridge or a roof above
 ## it stays out of the cast, with the float rule in water. A token buried by raised ground
 ## has no ground under its top; it is cast from cast_top() (above every surface) instead.
-## Props have no collision, so a token inside a placed prop stays there; authoring shows
-## it, and the author moves it.
+## A bulky prop (crate stack, hay stack, barrel, woodpile, cart; PropStand) has a standing
+## surface on the terrain layer, so a token on top of one is grounded there and a saved one is
+## not pulled down. A token standing on the ground beside a prop, or inside one with its top
+## under the prop's top (the cast starts inside the box and meets no face), stays where it is;
+## one whose top is above the prop's is set on the prop. The other furnishings have no
+## collision.
 
 ## A token this close to its landing height is left where it is (the settle tween's and the
 ## float32 save's rounding).

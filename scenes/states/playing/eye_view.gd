@@ -57,6 +57,7 @@ var _document_bounds: AABB = AABB()
 var _fallback_bounds: AABB = AABB()
 var _terrain_body: Object = null  # the authored ground's body, which the sphere ignores
 var _terrain_looked: bool = false  # whether the map was searched for it (a GLB map has none)
+var _settlements_node: Node = null  # the furnishings layer, whose standing surfaces it ignores
 var _velocity: Vector2 = Vector2.ZERO
 var _keys: Dictionary = {&"forward": false, &"back": false, &"left": false, &"right": false}
 var _running: bool = false
@@ -684,9 +685,15 @@ func _excluded_bodies() -> Array[RID]:
 		_terrain_body = game_map.map_container.find_child(
 			AuthoredTerrain.COLLISION_NAME, true, false
 		)
+		_settlements_node = game_map.map_container.find_child(
+			AuthoredSettlements.NODE_NAME, true, false
+		)
 	var body := _terrain_body as CollisionObject3D
 	if body != null:
 		rids.append(body.get_rid())
+	# The furnishings' standing surfaces are for tokens; the eye walks through a haystack as it did.
+	if _settlements_node != null and is_instance_valid(_settlements_node):
+		rids.append_array(AuthoredSettlements.exclude_of(_settlements_node.get_parent()))
 	return rids
 
 

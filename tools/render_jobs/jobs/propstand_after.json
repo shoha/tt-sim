@@ -1,0 +1,33 @@
+{
+ "out_dir": "render_jobs/propstand_after",
+ "timeout_s": 600,
+ "hang_s": 240,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_propstand_street"},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "wind", "freeze": true},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/propstand.gd", "action": "shoot", "dir": "user://render_jobs/propstand_after",
+   "prop": "haystack", "stands": true, "eye_yaw": 90, "back": 5.5, "side": -1,
+   "views": [
+    {"name": "hay_eye", "mode": "eye", "pitch": 3},
+    {"name": "hay_eye_close", "mode": "eye", "pitch": 3, "back": 3.2},
+    {"name": "hay_home", "mode": "home", "size": 8, "yaw": 0, "pitch": 62}
+   ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/propstand.gd", "action": "await"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/propstand.gd", "action": "shoot", "dir": "user://render_jobs/propstand_after",
+   "prop": "crate_stack", "stands": true, "eye_yaw": 270, "back": 5.0,
+   "views": [
+    {"name": "crate_eye", "mode": "eye", "pitch": 3},
+    {"name": "crate_eye_close", "mode": "eye", "pitch": 3, "back": 3.0},
+    {"name": "crate_home", "mode": "home", "size": 8, "yaw": 0, "pitch": 62}
+   ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/propstand.gd", "action": "await"},
+  {"op": "wait", "s": 1.0},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

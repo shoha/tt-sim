@@ -269,6 +269,8 @@ static func _report(editor: AuthoringEditor) -> String:
 	var triangles := 0
 	var vertices := 0
 	for child in layer.get_children():
+		if not child is MeshInstance3D:
+			continue
 		var mesh := (child as MeshInstance3D).mesh
 		surfaces += mesh.get_surface_count()
 		for s in mesh.get_surface_count():

@@ -661,7 +661,9 @@ func building_under_pointer() -> bool:
 func _building_between(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3) -> bool:
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collision_mask = TERRAIN_LAYER
-	query.exclude = AuthoredCrossings.exclude_of(editor.map_root)
+	var skipped := AuthoredCrossings.exclude_of(editor.map_root)
+	skipped.append_array(AuthoredSettlements.exclude_of(editor.map_root))
+	query.exclude = skipped
 	var result := space.intersect_ray(query)
 	if result.is_empty():
 		return false
@@ -687,6 +689,7 @@ func _structure_ray() -> Dictionary:
 	if editor != null:
 		var excluded := AuthoredCrossings.exclude_of(editor.map_root)
 		excluded.append_array(AuthoredWalls.exclude_of(editor.map_root))
+		excluded.append_array(AuthoredSettlements.exclude_of(editor.map_root))
 		query.exclude = excluded
 	return space.intersect_ray(query)
 
@@ -724,6 +727,7 @@ func _crossing_bodies() -> Array[RID]:
 	var bodies := AuthoredCrossings.exclude_of(editor.map_root)
 	bodies.append_array(AuthoredWalls.exclude_of(editor.map_root))
 	bodies.append_array(AuthoredStructures.exclude_of(editor.map_root))
+	bodies.append_array(AuthoredSettlements.exclude_of(editor.map_root))
 	return bodies
 
 

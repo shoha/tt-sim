@@ -59,7 +59,9 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   raised ground buried it. Authoring re-grounds after each edit settles (one physics frame
   on) and before each save; a play-time load re-grounds every placement as it spawns
   (`LevelPlayLoader`, before tracking, so GameState and peers get the grounded position).
-  Props have no collision, so a token inside a placed prop stays there; authoring shows it.
+  The bulky village props (crate stack, hay stack, barrel, woodpile, cart, wagon) have a standing
+  surface (`PropStand`, villages.md 3f), so a token on one stays on it; the other props have no
+  collision, and a token inside one stays there (authoring shows it).
 - Save equals reload. `ScatterGenerator` snaps the rows it generates to the saved precision
   (`MapDocumentIO.snap_rows`, `ROW_DECIMALS` 6), so a regenerated cell and the same cell
   read back are bit-equal. A save replans the ground layers from scratch when the session's
