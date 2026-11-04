@@ -92,6 +92,7 @@ const TEST_PREFIXES: Array[String] = [
 	"_camera_el_",
 	"_camera_eyeedge_",
 	"_camera_sd_",
+	"_camera_eyegrass_",
 	"_marker_",
 	"_villages4_",
 	"_eyefoliage_"

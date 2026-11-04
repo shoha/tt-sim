@@ -5,12 +5,13 @@ extends RefCounted
 ## edge fog, the near-eye canopy fade, MSAA 4x and the shadow fit are all live. One `call` step per
 ## action; every action writes into `dir`.
 ##   {action: "perf", name, dir, at: [x, z], yaws: [..], pitches: [..], rounds: 4, frames: 90,
-##    settle: 30, variants: [{name, sky?, fade?, aa?, shadow?, light?}]}
+##    settle: 30, variants: [{name, sky?, fade?, grass?, aa?, shadow?, light?}]}
 ##       In-run A/B under the pinned procedure (vsync off, window and world viewport as the run
 ##       gives them, medians, order rotated each round): the home ortho pose first, then every
 ##       eye pose x variant (the eye stays on between them), then the home pose again for the
 ##       drift check. A variant may switch the painted sky (EyeSky.enabled), the near-eye fade
-##       (CanopyFade.eye_fade_enabled), MSAA 4x at the eye (GameMap.eye_view_antialiasing, off =
+##       (CanopyFade.eye_fade_enabled), the near grass (`grass`: CanopyFade.eye_grass_enabled),
+##       MSAA 4x at the eye (GameMap.eye_view_antialiasing, off =
 ##       the shipped setting) and the shadow distance (`shadow`: EyeShadow.forced_distance, 100 =
 ##       what the eye got before the shadow fit; absent = the fit) and the foliage eye light
 ##       (`light`: false sets foliage_eye_light 0 on every wind material, card eyefoliage).
@@ -103,6 +104,7 @@ class PerfRig:
 	func _defaults() -> void:
 		EyeSky.enabled = true
 		CanopyFade.eye_fade_enabled = true
+		CanopyFade.eye_grass_enabled = true
 		EyeShadow.forced_distance = 0.0
 		gm.eye_view_antialiasing = _cc.view_mode() == _cc.eye
 		_set_eye_light(1.0)
@@ -112,6 +114,7 @@ class PerfRig:
 		if not EyeSky.enabled:
 			_cc.eye.sky.leave()
 		CanopyFade.eye_fade_enabled = bool(v.get("fade", true))
+		CanopyFade.eye_grass_enabled = bool(v.get("grass", true))
 		EyeShadow.forced_distance = float(v.get("shadow", 0.0))
 		gm.eye_view_antialiasing = bool(v.get("aa", true))
 		_set_eye_light(1.0 if bool(v.get("light", true)) else 0.0)

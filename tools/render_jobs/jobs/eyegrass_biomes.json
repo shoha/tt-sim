@@ -1,0 +1,38 @@
+{
+ "out_dir": "render_jobs/eyegrass_biomes",
+ "timeout_s": 2400,
+ "hang_s": 150,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "expand", "values": ["temperate_forest", "savanna", "wetland_riparian"], "template": [
+   {"op": "saved", "folder": "_camera_eyegrass_{value}", "load": "play"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "new", "biome": "{value}_summer_s1", "size": 150, "seed": 3, "landform": "valley", "phase": "build"},
+   {"op": "wait_ready", "settle": 1.5, "phase": "build"},
+   {"op": "no_autosave", "phase": "build"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "save", "folder": "_camera_eyegrass_{value}", "replace": true, "phase": "build"},
+   {"op": "play", "folder": "_camera_eyegrass_{value}", "phase": "build"},
+   {"op": "wait_ready", "settle": 2.0, "phase": "build"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+   {"op": "hide_ui"},
+   {"op": "wind", "freeze": true},
+   {"op": "look_at", "at": [0, 0]},
+   {"op": "zoom", "size": 26.0},
+   {"op": "settle"},
+   {"op": "capture", "name": "eyegrass_{value}_home"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "enter", "at": [10, 10], "yaw": 45, "pitch": 0, "fov": 60},
+   {"op": "settle"},
+   {"op": "capture", "name": "eyegrass_{value}_p00_y045"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 135, "pitch": 0}, {"op": "settle"}, {"op": "capture", "name": "eyegrass_{value}_p00_y135"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 225, "pitch": 0}, {"op": "settle"}, {"op": "capture", "name": "eyegrass_{value}_p00_y225"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 315, "pitch": 0}, {"op": "settle"}, {"op": "capture", "name": "eyegrass_{value}_p00_y315"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 45, "pitch": 12}, {"op": "settle"}, {"op": "capture", "name": "eyegrass_{value}_p12_y045"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 135, "pitch": 12}, {"op": "settle"}, {"op": "capture", "name": "eyegrass_{value}_p12_y135"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 225, "pitch": 12}, {"op": "settle"}, {"op": "capture", "name": "eyegrass_{value}_p12_y225"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 315, "pitch": 12}, {"op": "settle"}, {"op": "capture", "name": "eyegrass_{value}_p12_y315"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "leave"},
+   {"op": "wind", "freeze": false},
+   {"op": "title"},
+   {"op": "wait", "s": 1.0}
+  ]}
+ ]
+}

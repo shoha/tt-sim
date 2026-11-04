@@ -187,6 +187,10 @@ canopy_eye={
 "type": "vec4",
 "value": Vector4(0, 0, 0, 0)
 }
+eye_grass={
+"type": "float",
+"value": 0.0
+}
 figure_ambient={
 "type": "vec3",
 "value": Vector3(0.22, 0.22, 0.2475)
