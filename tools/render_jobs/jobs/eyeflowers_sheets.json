@@ -1,0 +1,19 @@
+{
+ "out_dir": "render_jobs/eyeflowers_sheets",
+ "timeout_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs", "columns": 2, "tile": [960, 540], "out": "eyeflowers_hamlet", "names": [
+    "eyeflowers_before_hamlet/eyeflowers_hamlet_p12_y045", "eyeflowers_after_hamlet/eyeflowers_hamlet_p12_y045",
+    "eyeflowers_before_hamlet/eyeflowers_hamlet_p12_y135", "eyeflowers_after_hamlet/eyeflowers_hamlet_p12_y135",
+    "eyeflowers_before_hamlet/eyeflowers_hamlet_p12_y225", "eyeflowers_after_hamlet/eyeflowers_hamlet_p12_y225",
+    "eyeflowers_before_hamlet/eyeflowers_hamlet_p12_y315", "eyeflowers_after_hamlet/eyeflowers_hamlet_p12_y315"
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs", "columns": 2, "tile": [960, 540], "out": "eyeflowers_wetland", "names": [
+    "eyeflowers_before_wetland/eyeflowers_wetland_p12_y045", "eyeflowers_after_wetland/eyeflowers_wetland_p12_y045",
+    "eyeflowers_before_wetland/eyeflowers_wetland_p12_y135", "eyeflowers_after_wetland/eyeflowers_wetland_p12_y135",
+    "eyeflowers_before_wetland/eyeflowers_wetland_p12_y225", "eyeflowers_after_wetland/eyeflowers_wetland_p12_y225",
+    "eyeflowers_before_wetland/eyeflowers_wetland_p12_y315", "eyeflowers_after_wetland/eyeflowers_wetland_p12_y315"
+  ]}
+ ]
+}

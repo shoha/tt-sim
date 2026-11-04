@@ -153,6 +153,10 @@ static func _compile_biome(
 			"size_class": entry["size_class"],
 			"dimensions_m": [dims[0], dims[1], dims[2]],
 		}
+		# Flowers share the grass wind category; the flag keeps them out of the eye view's
+		# near grass term (WindFoliage.apply_material).
+		if String(entry.get("category", "")) == "flower":
+			assets[asset_id]["flower"] = true
 		var folder := String(found["folder"])
 		(surface_context["origins"] as Dictionary)[asset_id] = {
 			"library": found["library"],

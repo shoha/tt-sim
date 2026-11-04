@@ -4705,3 +4705,14 @@ yaw 165 2.60 / 2.30, yaw 285 2.94 / 3.14; pitch 12 yaw 45 4.92 / 5.01, yaw 165 2
 swings both ways by up to 0.4 ms with no pattern beyond the noise. The extra work is one `pow` per
 tuft in the vertex stage and a few mixes in the fragment: expect it to stay within noise (about
 0.2 ms on a sparse map).
+
+Flowers exempt from the term (eyeflowers, 2026-11-03): in-run A/B of the flower exemption on versus
+off (`eye_perf.gd` variant `flowers`, job `eyeflowers_perf`, dressed hamlet, pitch 12, four yaws, 4
+rounds of 90 frames, a headless Godot from another session running beside it, so indicative only).
+GPU ms, flowers kept / flowers thinned / grass off: yaw 45 4.659 / 4.651 / 4.888, yaw 135 3.867 /
+3.876 / 3.846, yaw 225 3.060 / 3.106 / 3.159, yaw 315 3.739 / 3.728 / 4.061. Primitives and draw calls
+are identical in every pair (a thinned flower is still drawn as degenerate triangles, so a surviving
+one adds no draw and no triangle); drift home_end over home 1.016 (per round 1.063 / 1.024 / 1.005 /
+1.020). Kept versus thinned is within 0.05 ms at every pose, i.e. noise. On the hamlet (eye at 0, 30):
+1348 flower instances in all, 103 within 9 m of the eye, about 60 of which the near grass term would
+have thinned (530 other grass tufts lie within that radius).

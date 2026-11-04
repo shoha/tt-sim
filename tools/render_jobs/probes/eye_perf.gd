@@ -74,6 +74,8 @@ class PerfRig:
 				await _perf()
 			"trees":
 				await _trees()
+			"flowers":
+				await _flowers()
 			_:
 				_log("unknown action %s" % mode)
 		_defaults()
@@ -108,6 +110,7 @@ class PerfRig:
 		EyeShadow.forced_distance = 0.0
 		gm.eye_view_antialiasing = _cc.view_mode() == _cc.eye
 		_set_eye_light(1.0)
+		_set_flowers_exempt(true)
 
 	func _apply(v: Dictionary) -> void:
 		EyeSky.enabled = bool(v.get("sky", true))
@@ -118,6 +121,7 @@ class PerfRig:
 		EyeShadow.forced_distance = float(v.get("shadow", 0.0))
 		gm.eye_view_antialiasing = bool(v.get("aa", true))
 		_set_eye_light(1.0 if bool(v.get("light", true)) else 0.0)
+		_set_flowers_exempt(bool(v.get("flowers", true)))
 
 	## The foliage shaders' eye light (wind_foliage_include foliage_eye_light) on every wind
 	## material of the map's scatter: 1 shipped, 0 for the "light: false" variant.
@@ -126,6 +130,15 @@ class PerfRig:
 			_collect_wind_materials(gm)
 		for material in _wind_materials:
 			material.set_shader_parameter("foliage_eye_light", value)
+
+	## The flower materials' eye_flower exemption (card eyeflowers): true is shipped, false is how
+	## the near grass behaved before it (flowers thinned and recoloured with the grass).
+	func _set_flowers_exempt(exempt: bool) -> void:
+		if _wind_materials.is_empty():
+			_collect_wind_materials(gm)
+		for material in _wind_materials:
+			if material.get_meta("flower_material", false) == true:
+				material.set_shader_parameter("eye_flower", exempt)
 
 	func _collect_wind_materials(node: Node) -> void:
 		var mmi := node as MultiMeshInstance3D
@@ -136,6 +149,8 @@ class PerfRig:
 				if material != null and material.has_meta("wind_category"):
 					if not _wind_materials.has(material):
 						_wind_materials.append(material)
+						if material.get_shader_parameter("eye_flower") == true:
+							material.set_meta("flower_material", true)
 		for child in node.get_children():
 			_collect_wind_materials(child)
 
@@ -252,6 +267,54 @@ class PerfRig:
 		)
 		d.calls = RenderingServer.get_rendering_info(
 			RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME
+		)
+
+	# ---- flowers ----
+
+	## Counts the flower instances (materials with eye_flower) near the eye at `at`, and how many
+	## of them the near grass term would have thinned (grass_keep under 0.5 at their nearness; the
+	## key is the shader's hash recomputed in double precision, so the figure is indicative).
+	func _flowers() -> void:
+		var at := Vector2(float(step.at[0]), float(step.at[1]))
+		var nodes := 0
+		var total := 0
+		var near := 0
+		var would_thin := 0
+		var all_grass_near := 0
+		for node in gm.find_children("*", "MultiMeshInstance3D", true, false):
+			var mmi := node as MultiMeshInstance3D
+			var mm := mmi.multimesh
+			if mm == null or mm.mesh == null or mm.mesh.get_surface_count() == 0:
+				continue
+			var material := mm.mesh.surface_get_material(0) as ShaderMaterial
+			if material == null or not material.has_meta("wind_category"):
+				continue
+			var is_flower: bool = material.get_shader_parameter("eye_flower") == true
+			var is_grass: bool = material.get_meta("wind_category") == "grass"
+			if is_flower:
+				nodes += 1
+			for i in mm.visible_instance_count if mm.visible_instance_count >= 0 else mm.instance_count:
+				var origin := (mmi.global_transform * mm.get_instance_transform(i)).origin
+				var xz := Vector2(origin.x, origin.z)
+				var n := EyeCanopy.grass_near(xz.distance_to(at))
+				if is_flower:
+					total += 1
+					if n > 0.0:
+						near += 1
+						var key := fposmod(
+							sin(floorf(xz.x * 64.0) * 12.9898 + floorf(xz.y * 64.0) * 78.233) * 43758.5453,
+							1.0
+						)
+						if EyeCanopy.grass_keep(key, n) < 0.5:
+							would_thin += 1
+				elif is_grass and n > 0.0:
+					all_grass_near += 1
+		_log(
+			(
+				"flowers: %d flower multimeshes, %d instances, %d within %.0f m of the eye (of which about"
+				+ " %d the near grass term would have thinned); %d other grass tufts within that radius"
+			)
+			% [nodes, total, near, EyeCanopy.GRASS_NONE_M, would_thin, all_grass_near]
 		)
 
 	# ---- trees ----

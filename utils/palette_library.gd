@@ -284,6 +284,7 @@ static func resolve(asset_id: String, root: String = DEFAULT_ROOT) -> Dictionary
 	return {
 		"mesh": source.duplicate() as Mesh,
 		"wind_category": entry["wind_category"],
+		"flower": entry.get("flower", false) == true,
 		"name": asset_id.validate_node_name(),
 	}
 
