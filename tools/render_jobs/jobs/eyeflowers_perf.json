@@ -1,0 +1,22 @@
+{
+ "out_dir": "render_jobs/eyeflowers_perf",
+ "timeout_s": 900,
+ "hang_s": 150,
+ "saved": {"folder": "_eyeflowers_hamlet", "load": "play"},
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_eyeflowers_hamlet", "load": "play"},
+  {"op": "new_map", "biome": "grassland_meadow_summer_s1", "size": 250, "seed": 1234, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "zoom", "size": 34.0},
+  {"op": "settle"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "perf", "name": "flowers_hamlet_perf", "dir": "user://render_jobs/eyeflowers_perf", "at": [0, 30], "yaws": [45, 135, 225, 315], "pitches": [12], "rounds": 4, "frames": 90, "settle": 30, "variants": [{"name": "flowers_on", "flowers": true}, {"name": "flowers_thinned", "flowers": false}, {"name": "nograss", "grass": false, "flowers": false}]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_perf.gd", "action": "await"},
+  {"op": "wind", "freeze": false},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

@@ -40,6 +40,7 @@
 				0.435
 			],
 			"file": "assets/flower/Flower_Daisy_v0.glb",
+			"flower": true,
 			"node": "Flower_Daisy_v0_LOD0",
 			"size_class": "ground",
 			"wind_category": "grass"
@@ -51,6 +52,7 @@
 				0.472
 			],
 			"file": "assets/flower/Flower_Poppy_v0.glb",
+			"flower": true,
 			"node": "Flower_Poppy_v0_LOD0",
 			"size_class": "ground",
 			"wind_category": "grass"

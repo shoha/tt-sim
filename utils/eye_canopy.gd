@@ -29,7 +29,8 @@ extends RefCounted
 ##   foot), take GRASS_DESAT of their own grey, deepen from a cool dark foot (GRASS_FOOT) to a
 ##   tip a little under their own value (a darker foreground frames the view, the way a painted
 ##   one does; a paler one read as frost, eyegrass round 1), taper at the tip and step their value
-##   per tuft, all of it in full inside GRASS_FULL_M.
+##   per tuft, all of it in full inside GRASS_FULL_M. Flowers (library category "flower", the
+##   shader's `eye_flower` material flag) are exempt: they stay whole and keep their colour.
 ##   wind_foliage_main.gdshaderinc carries it, keyed on the `eye_grass` global (the map scale in
 ##   the eye view, CanopyFade.eye_grass_enabled); the orbit view's grass is untouched.
 ##
@@ -120,6 +121,20 @@ static func grass_albedo(albedo: Vector3, h: float, key: float, near: float) -> 
 	g *= 1.0 + GRASS_JITTER * (fposmod(key * 7.13 + 0.37, 1.0) * 2.0 - 1.0)
 	g = Vector3(maxf(g.x, 0.0), maxf(g.y, 0.0), maxf(g.z, 0.0))
 	return albedo.lerp(g, near)
+
+
+## True when the near grass term touches a material: a grass material (blade_height above 0) that
+## is not a flower. A flower shares the grass wind category (and its blade_height gradient) but is
+## one of the meadow's small bold accents, so it keeps its colour and every instance (eyeflowers).
+## The shader's `blade_height > 0.0 && !eye_flower`.
+static func grass_applies(blade_height: float, flower: bool) -> bool:
+	return blade_height > 0.0 and not flower
+
+
+## The scale a tuft of a material (`blade_height`, `flower`) with key `key` keeps at nearness
+## `near`: grass_keep() for grass, always 1 for a flower or anything that is not grass.
+static func tuft_keep(blade_height: float, flower: bool, key: float, near: float) -> float:
+	return grass_keep(key, near) if grass_applies(blade_height, flower) else 1.0
 
 
 ## The ghost's opacity factor at `distance` from the eye: 1 up to the start, 0 from the end.

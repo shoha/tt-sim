@@ -52,8 +52,12 @@ func test_no_two_biomes_share_a_skyline_or_a_foot_colour() -> void:
 		feet[look["foot_color"]] = biome
 
 
+func _sky_shader() -> Shader:
+	return load("res://shaders/street_sky.gdshader") as Shader
+
+
 func test_every_value_is_a_uniform_of_the_shader() -> void:
-	var shader := load("res://shaders/street_sky.gdshader") as Shader
+	var shader := _sky_shader()
 	assert_not_null(shader)
 	var uniforms := {}
 	for entry in shader.get_shader_uniform_list():
@@ -61,6 +65,32 @@ func test_every_value_is_a_uniform_of_the_shader() -> void:
 	var params := StreetSkyLook.shader_params("temperate_forest", 7, Vector2(180.0, 40.0))
 	for key: String in params:
 		assert_true(uniforms.has(key), "uniform %s exists" % key)
+
+
+func test_cloudlets_never_start_below_the_banks_highest_base() -> void:
+	# Card eyeclouds: a cloudlet based under a bank's flat base showed as a thin white ribbon below
+	# the bank, so the layers' base ranges must not overlap that way.
+	assert_gte(
+		StreetSkyLook.CLOUD2_MIN_DEG, StreetSkyLook.CLOUD_MIN_DEG + StreetSkyLook.CLOUD_SPAN_DEG
+	)
+
+
+func test_the_shader_defaults_match_the_cloud_base_constants() -> void:
+	var shader := _sky_shader()
+	assert_not_null(shader)
+	var expected := {
+		"cloud_min_deg": StreetSkyLook.CLOUD_MIN_DEG,
+		"cloud_span_deg": StreetSkyLook.CLOUD_SPAN_DEG,
+		"cloud2_min_deg": StreetSkyLook.CLOUD2_MIN_DEG,
+		"cloud2_span_deg": StreetSkyLook.CLOUD2_SPAN_DEG,
+	}
+	# The dummy headless renderer reports no parameter defaults, so read them from the source.
+	for key: String in expected:
+		var found := RegEx.create_from_string("uniform float %s[^=;]*= *([-0-9.]+);" % key)
+		var hit := found.search(shader.code)
+		assert_not_null(hit, "shader declares %s with a default" % key)
+		if hit != null:
+			assert_almost_eq(hit.get_string(1).to_float(), float(expected[key]), 0.0001, key)
 
 
 func test_the_horizon_haze_is_blue_not_cream() -> void:

@@ -38,6 +38,11 @@ varying float zone_mass_h;
 // view is on (CanopyFade publishes it), 0 otherwise, and only the eye's own pass takes the term
 // (CANOPY_EYE_PASS): the orbit view's grass is untouched.
 global uniform float eye_grass;
+// A flower (an asset of the library category "flower") shares the grass wind category and so the
+// blade_height gradient, but it is a small bold accent of the meadow, not a slab: it keeps the
+// eye view's term off (EyeCanopy.grass_applies), its colour and its numbers as authored.
+// WindFoliage.apply_material sets it per material from the palette entry.
+uniform bool eye_flower = false;
 const float EYE_GRASS_FULL = 1.5;
 const float EYE_GRASS_NONE = 9.0;
 const float EYE_GRASS_THIN = 0.85;
@@ -92,7 +97,7 @@ void vertex() {
 	VERTEX *= grow_scale(MODEL_MATRIX[3].xyz);
 	eye_grass_near = 0.0;
 	eye_grass_key = 0.0;
-	if (eye_grass > 0.0 && blade_height > 0.0
+	if (eye_grass > 0.0 && blade_height > 0.0 && !eye_flower
 		&& distance(INV_VIEW_MATRIX[3].xyz, canopy_eye.xyz) < CANOPY_EYE_PASS) {
 		vec2 origin = MODEL_MATRIX[3].xz;
 		eye_grass_near = 1.0 - smoothstep(

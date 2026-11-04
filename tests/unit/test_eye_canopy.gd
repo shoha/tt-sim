@@ -155,6 +155,54 @@ func test_near_grass_drops_the_low_keys_and_keeps_the_high_ones() -> void:
 	assert_between(kept, 15, 40, "about a quarter of the tufts stay at the eye's feet")
 
 
+func test_a_flower_is_never_thinned_and_a_grass_tuft_still_is() -> void:
+	var blade := 0.4
+	for k in 101:
+		var key := k / 100.0
+		assert_eq(EyeCanopy.tuft_keep(blade, true, key, 1.0), 1.0, "a flower key %.2f stays" % key)
+	assert_eq(EyeCanopy.tuft_keep(blade, false, 0.0, 1.0), 0.0, "a low grass key is thinned")
+	assert_eq(EyeCanopy.tuft_keep(blade, false, 0.0, 1.0), EyeCanopy.grass_keep(0.0, 1.0))
+	assert_eq(EyeCanopy.tuft_keep(blade, false, 0.99, 1.0), 1.0, "a high grass key stays")
+	assert_true(EyeCanopy.grass_applies(blade, false))
+	assert_false(EyeCanopy.grass_applies(blade, true))
+	assert_false(EyeCanopy.grass_applies(0.0, false), "a tree (no blade height) is not grass")
+
+
+func test_the_library_flags_flowers_and_not_grass() -> void:
+	var flowers := 0
+	var grasses := 0
+	var seen := {}
+	for biome in PaletteLibrary.biomes():
+		for rule in PaletteLibrary.species(String(biome.id)):
+			for asset_id in rule.get("assets", []):
+				if seen.has(asset_id):
+					continue
+				seen[asset_id] = true
+				var file := String(asset_id).get_file()
+				var entry := PaletteLibrary.asset(String(asset_id))
+				if file.begins_with("Flower_"):
+					flowers += 1
+					assert_true(entry.get("flower", false), "%s is flagged a flower" % asset_id)
+				elif file.begins_with("Grass_"):
+					grasses += 1
+					assert_false(entry.get("flower", false), "%s is not a flower" % asset_id)
+	assert_gt(flowers, 0, "the core palette holds flowers")
+	assert_gt(grasses, 0, "and grass")
+
+
+func test_a_flower_material_carries_the_exemption_and_a_grass_one_does_not() -> void:
+	var flower_mesh := BoxMesh.new()
+	flower_mesh.material = StandardMaterial3D.new()
+	WindFoliage.apply_material(flower_mesh, "grass", {}, true)
+	var flower_material := flower_mesh.surface_get_material(0) as ShaderMaterial
+	assert_eq(flower_material.get_shader_parameter("eye_flower"), true)
+	var grass_mesh := BoxMesh.new()
+	grass_mesh.material = StandardMaterial3D.new()
+	WindFoliage.apply_material(grass_mesh, "grass")
+	var grass_material := grass_mesh.surface_get_material(0) as ShaderMaterial
+	assert_null(grass_material.get_shader_parameter("eye_flower"), "grass keeps the default")
+
+
 func test_far_grass_keeps_its_colour() -> void:
 	var lime := Vector3(0.3, 0.8, 0.02)
 	assert_eq(EyeCanopy.grass_albedo(lime, 0.5, 0.3, 0.0), lime)
@@ -332,7 +380,8 @@ func test_the_grass_shader_carries_the_near_grass_constants() -> void:
 
 func test_the_near_grass_runs_only_in_the_eye_pass() -> void:
 	var text := FileAccess.get_file_as_string("res://shaders/wind_foliage_main.gdshaderinc")
-	assert_string_contains(text, "if (eye_grass > 0.0 && blade_height > 0.0")
+	assert_string_contains(text, "if (eye_grass > 0.0 && blade_height > 0.0 && !eye_flower")
+	assert_string_contains(text, "uniform bool eye_flower = false;")
 	assert_string_contains(text, "distance(INV_VIEW_MATRIX[3].xyz, canopy_eye.xyz) < CANOPY_EYE_PASS")
 
 

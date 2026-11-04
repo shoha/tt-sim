@@ -99,10 +99,13 @@ uniform float cloud_size_deg = 34.0;
 uniform vec3 cloud_light : source_color = vec3(1.0, 0.97, 0.9);
 uniform vec3 cloud_shade : source_color = vec3(0.62, 0.64, 0.88);
 // The high layer of small cloudlets: how many cells hold one (0 none), where their bases lie and
-// their size as a fraction of the banks'.
+// their size as a fraction of the banks'. The cloudlets are drawn under the banks, so their lowest
+// base must not lie below the banks' highest (cloud_min_deg + cloud_span_deg = 26): a cloudlet
+// based a little under a bank's flat base would show only a hard thin ribbon of itself under the
+// bank (the "streak", card eyeclouds). StreetSkyLook.CLOUD2_MIN_DEG mirrors these two numbers.
 uniform float cloud2_cover : hint_range(0.0, 1.0) = 0.5;
-uniform float cloud2_min_deg = 24.0;
-uniform float cloud2_span_deg = 18.0;
+uniform float cloud2_min_deg = 26.0;
+uniform float cloud2_span_deg = 16.0;
 uniform float cloud2_scale : hint_range(0.1, 1.0) = 0.4;
 
 group_uniforms snow;
