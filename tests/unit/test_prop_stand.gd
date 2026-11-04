@@ -184,7 +184,8 @@ func test_a_drop_on_a_crate_stack_lands_on_its_top_and_beside_it_on_the_ground()
 		)
 		if inside:
 			top = maxf(top, float(box["top"]))
-	assert_gt(top, 0.4, "the middle of a crate stack is a crate")
+	# One level of the braced crates is 0.46 * 0.82 = 0.38 m, floored to the box quantum.
+	assert_gt(top, 0.3, "the middle of a crate stack is a crate")
 	var landed := await _land(Vector2(4, 3))
 	# The mesh is drawn larger than the record's scale (SettlementBake.visual_scale); so is the box.
 	var drawn := SettlementBake.visual_scale(cell["items"][0]["item"])
