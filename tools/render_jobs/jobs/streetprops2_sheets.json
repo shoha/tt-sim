@@ -1,0 +1,25 @@
+{
+ "out_dir": "render_jobs/streetprops2_sheets",
+ "timeout_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs", "columns": 2, "tile": [960, 540], "out": "streetprops2_props", "names": [
+    "streetprops_after/sp_eye_p00_y315", "streetprops2_after/sp_eye_p00_y315",
+    "streetprops_after/sp_eye_p12_y315", "streetprops2_after/sp_eye_p12_y315",
+    "streetprops_after/sp_eye_p00_y135", "streetprops2_after/sp_eye_p00_y135",
+    "streetprops_after/sp_eye_p12_y225", "streetprops2_after/sp_eye_p12_y225",
+    "streetprops2_after/sp_eye_cart_y120", "streetprops2_after/sp_eye_cart_y150"
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs", "columns": 2, "tile": [960, 540], "out": "streetprops2_walls", "names": [
+    "streetprops_after/sp_eye_p00_y045", "streetprops2_after/sp_eye_p00_y045",
+    "streetprops_after/sp_eye_p12_y135", "streetprops2_after/sp_eye_p12_y135",
+    "streetprops_after/sp_eye_p00_y225", "streetprops2_after/sp_eye_p00_y225",
+    "streetprops_after/sp_eye_p12_y045", "streetprops2_after/sp_eye_p12_y045"
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs", "columns": 2, "tile": [960, 540], "out": "streetprops2_home", "names": [
+    "streetprops_after/sp_home_a", "streetprops2_after/sp_home_a",
+    "streetprops_after/sp_home_b", "streetprops2_after/sp_home_b",
+    "streetprops_after/sp_home_top", "streetprops2_after/sp_home_top"
+  ]}
+ ]
+}
