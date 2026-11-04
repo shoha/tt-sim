@@ -429,6 +429,13 @@ func _finalize_map_loading(map: Node3D) -> void:
 	)
 	if not standing:
 		return
+	# The furnishings' standing surfaces (crates, hay, carts) come with their cells: tokens are set
+	# down and the ground fit runs after they stand.
+	var furnished := await StructureLoadWait.wait_settlements_async(
+		_level_play_controller.get_tree(), map, func() -> bool: return _superseded(generation)
+	)
+	if not furnished:
+		return
 	var loader := MapSourceLoader.new(_level_play_controller.get_tree())
 	loader.is_superseded = func() -> bool: return _superseded(generation)
 	var document := _level_play_controller.loaded_map_document

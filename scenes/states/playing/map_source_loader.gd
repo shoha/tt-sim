@@ -579,6 +579,7 @@ func fit_dressing_ground_async(map: Node3D, game_map: GameMap, doc: MapDocument)
 	var excluded := AuthoredCrossings.exclude_of(map)
 	excluded.append_array(AuthoredWalls.exclude_of(map))
 	excluded.append_array(AuthoredStructures.exclude_of(map))
+	excluded.append_array(AuthoredSettlements.exclude_of(map))
 	var sampler := DressingGround.begin(
 		doc, map.get_world_3d(), map.global_transform, top, excluded
 	)

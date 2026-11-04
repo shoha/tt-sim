@@ -70,7 +70,8 @@ same method. A late joiner gets the settlements with the map document (they are 
 root, created only when a settlement exists; `MapSourceLoader.add_authored_settlements`). Placements are stood on
 `WaterGeometry.grounds_at` (a placement on water or on ground steeper than 0.8 is skipped, 3 cm sink), grouped
 into 24 m cells `S<id>_<cx>_<cz>`, one `MeshInstance3D` per cell, one surface per (role, kind) material
-(`StructureMaterials.make`, role `prop`). No collision (class none). The cell key is the md5 of its placement
+(`StructureMaterials.make`, role `prop`). Collision: only the bulky props' standing surface (`PropStand`,
+villages.md 3f), one `Stand_<cell>` body per cell on the terrain layer. The cell key is the md5 of its placement
 lines (slot, variant, position, yaw, scale, ground y in mm): a refresh rebuilds only cells whose key moved, a
 plan is cached per record and lot fingerprint. Prop variants (4 per prop, `StructureGeometry.build_one` over
 `ProcgenProps.footprint(default_size_m)`) are built once and kept in a static cache (`clear_variants()` for

@@ -440,14 +440,38 @@ Walls today: a stone wall is a surface to stand on, a fence blocks nothing, and 
 rule decision still to make" (`walls.md` "Not yet"). Props follow the same line so they add no rule:
 
 - `blocks: none` (default): no collision (lamp post top, signpost, laundry, hedge segment, hay).
-- `blocks: stand`: simple upward faces on the terrain layer so a token placed on it does not fall through
-  (crate stack, cart bed, bench, well curb, stall counter), derived from tags like `StructureWalkable` does
-  (`utils/structure_walkable.gd`); about 6 to 20 faces a prop.
+- `blocks: stand` (BUILT, topic propstand, 2026-11-03, owner verdict TK1: a token dropped on hay or crates
+  stands ON them): simple upward boxes on the terrain layer so a token placed on it lands on its top and is
+  grounded there. Built for the bulky props only: crate stack, haystack, barrel, woodpile, hand cart, farm
+  wagon (`PropStand.STANDING`); the well, bench, stall and the rest stay `none` until asked for.
 - `blocks: solid`: all faces (well, shrine, cross, market stall posts), still a standing surface, not a rule.
+  Not built.
 
-Collision is merged into one `StaticBody3D` per cell (section 4 performance), carries `tt_prop` meta so the
-ground tools and the Building tool skip it (as they skip `exclude_of` bodies). Owner call: whether tokens
-should be blocked by solid props (section 6).
+How `stand` is built (`utils/prop_stand.gd`, `AuthoredSettlements._add_stand`). The boxes are MEASURED from
+each prop variant's own mesh, not tabulated, because a draw changes the shape (a crate stack is one to three
+crates tall, a hay stack a mound, a twin mound or bales): the variant's upward faces are sampled on a 0.12 m
+lattice, a cell takes the lowest top at its corners and centre (a token sinks a little into hay rather than
+floating over a slope), heights are floored to 0.06 m, and runs of equal height merge into boxes. If a variant
+needs more boxes than its limit (24, haystack 72) the height quantum grows by 1.5 until it fits. The boxes
+are placed with the mesh's own transform (tilt, yaw, drawn scale folded into the box size, since a physics shape
+cannot be scaled), one `StaticBody3D` `Stand_<cell>` per bake cell (layer 1, mask 0, not ray pickable, meta
+`tt_stand`), made and freed with the cell's mesh. Measured on the farming hamlet (seed 1234): crate stack 3 to 9
+boxes (tops 0.48 and 1.02 m at default size), haystack 24 boxes (tops 0.61 and 1.22 of a 1.83 apex before the
+1.3 drawn scale; the apex is a cone, a token stands on its upper part), hand cart about 10, wagon about 18,
+barrel 9 to 18, woodpile 8 to 10.
+
+- A token's landing (`WaterSurface.landing_below`, terrain layer) needs no change: it meets the box tops. The
+  eye view's sphere, the brush rays, the building test and the dressing ground fit EXCLUDE these bodies
+  (`AuthoredSettlements.exclude_of`), so a prop is never a wall to the eye or ground to a brush or a plant.
+  The drag pointer ray, the drop indicator, the ruler and the measure tool do see them (a token dragged over hay
+  follows its top).
+- A play load waits for the furnishings' bake (`StructureLoadWait.wait_settlements_async`) before tokens are set
+  down and the ground fit runs, so a saved token standing on a crate is not pulled to the ground.
+- A saved token standing on the ground inside a prop with its top under the prop's top is not moved (the cast
+  starts inside the box and meets no face); one whose top is above the prop's is set on the prop at the next
+  re-ground. Synced moves are unchanged: the host's landing is what peers receive.
+- Not covered: a token pushed against a prop is not blocked (`solid` and any movement rule are still an owner
+  call, section 6); the owner's real-mouse drag over hay and crates is unverified.
 
 ## 4. Phases
 

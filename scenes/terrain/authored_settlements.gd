@@ -6,7 +6,11 @@ extends Node3D
 ## and the street's lots. The placements are stood on the ground (a placement on water or on a
 ## steep bank is skipped), grouped into cells of CELL_M metres and each cell baked into ONE
 ## MeshInstance3D with one surface per material (SettlementBake), so a 150 m street is a few
-## draws. No collision: furnishings are walk-through (docs/systems/villages.md "Collision").
+## draws. Furnishings are walk-through except the bulky ones (PropStand: crate stacks, hay stacks,
+## barrels, woodpiles, carts), which get a few upward boxes so a token dropped on top stands on it
+## (docs/systems/villages.md 3f): one StaticBody3D `Stand_<cell>` per cell on the terrain layer
+## (layer 1, mask 0, not ray pickable, STAND_META = the settlement's id), built and freed with
+## the cell's mesh, and listed by exclude_of() for the rays and sweeps that must not meet a prop.
 ##
 ## A cell is keyed by its placements, the ground heights under them and the variants they use; a
 ## refresh rebuilds only the cells whose key moved, so moving one house re-bakes the cell of its
@@ -23,10 +27,15 @@ const SLOPE_LIMIT := 0.8
 ## Props stand this far into the ground (metres).
 const SINK_M := 0.03
 const META := &"tt_settlement"
+## Set on a cell's standing-surface body: the settlement's id.
+const STAND_META := &"tt_stand"
+const STAND_PREFIX := "Stand_"
 
 ## ref -> {"surfaces": [...]} of the built variants (shared by every map: a library's recipes
 ## do not change under a running game; tests clear it).
 static var _variants: Dictionary = {}
+## ref -> the PropStand boxes of that variant (local frame), measured once from its surfaces.
+static var _boxes: Dictionary = {}
 static var _flat: MapDocument = null
 
 var version: int = 0
@@ -49,6 +58,8 @@ var _palette_root: String = PaletteLibrary.DEFAULT_ROOT
 var _materials: Dictionary = {}
 ## Cell node name -> key it was built from.
 var _keys: Dictionary = {}
+## Cell node name -> RID of its standing-surface body (only cells with a standing prop).
+var _bodies: Dictionary = {}
 ## Settlement id -> {"sig": String, "items": Array[Dictionary]} (the plan of the last refresh).
 var _plans: Dictionary = {}
 ## The last standing_row answer: its village, slot, the plan's row array it came from, the row.
@@ -89,6 +100,32 @@ static func refresh_map(root: Node3D, doc: MapDocument) -> AuthoredSettlements:
 ## Forgets the built variants (a library changed, or a test wants a cold start).
 static func clear_variants() -> void:
 	_variants.clear()
+	_boxes.clear()
+
+
+## The standing-surface bodies' RIDs of the settlements under map root `root` (none: []), for a ray
+## or a sweep that must see the ground and the walls but not the props (the brush rays, the dressing
+## ground fit, the eye's collider). A token's landing does not exclude them: that is the point.
+static func exclude_of(root: Node) -> Array[RID]:
+	var rids: Array[RID] = []
+	if root == null:
+		return rids
+	var layer := root.get_node_or_null(NODE_NAME) as AuthoredSettlements
+	if layer != null:
+		rids.assign(layer._bodies.values())
+	return rids
+
+
+## The PropStand boxes of variant `ref` of prop `prop` (local frame), measured once.
+static func stand_boxes(ref: String, prop: String) -> Array[Dictionary]:
+	if not _boxes.has(ref):
+		if not _variants.has(ref):
+			return []
+		var surfaces: Array = (_variants.get(ref, {}) as Dictionary).get("surfaces", [])
+		_boxes[ref] = PropStand.boxes_of(prop, PropStand.triangles_of(surfaces))
+	var out: Array[Dictionary] = []
+	out.assign(_boxes[ref])
+	return out
 
 
 ## Brings the cells up to `doc`: plans every settlement again when its record or its lots moved,
@@ -126,6 +163,9 @@ func refresh(doc: MapDocument) -> void:
 			_plans.erase(id)
 	for child in get_children():
 		# The Village tool's ghosts are children too (ghost_of); only baked cells are the layer's.
+		# A freed cell takes its standing body with it, which this snapshot may still list.
+		if not is_instance_valid(child):
+			continue
 		if child.has_meta(META) and not wanted.has(String(child.name)):
 			_free_cell(String(child.name))
 	for name_key: String in _todo.keys():
@@ -151,6 +191,20 @@ func flush() -> int:
 ## Cells still waiting for their bake.
 func pending_count() -> int:
 	return _todo.size()
+
+
+## True while a cell or a prop variant is still to be built (the standing surfaces come with the
+## cells, so a load that sets tokens down waits for this to clear).
+func busy() -> bool:
+	return not _todo.is_empty() or not _missing.is_empty()
+
+
+## Does up to `budget_ms` of the queued work now (a load that waits for the layer calls it each
+## frame with more than _process spends). Returns the cells made.
+func bake_for(budget_ms: float) -> int:
+	var made := _step(budget_ms)
+	set_process(busy())
+	return made
 
 
 ## The names of the baked cells, sorted.
@@ -515,7 +569,40 @@ func _bake_cell(cell: Dictionary) -> void:
 		node.extra_cull_margin = StructureGlow.CULL_MARGIN_M
 	node.set_meta(META, int(cell["settlement"]))
 	add_child(node)
+	_add_stand(cell)
 	_keys[cell_name] = cell["key"]
+
+
+## The cell's standing-surface body (PropStand boxes of its bulky props, placed as their meshes
+## are), or nothing when it holds none. The shapes are added before the body enters the tree, so the
+## physics server takes them in one go.
+func _add_stand(cell: Dictionary) -> void:
+	var body: StaticBody3D = null
+	for row: Dictionary in cell["items"]:
+		var prop := str(row["item"]["prop"])
+		if PropStand.kind_of(prop) != PropStand.STAND:
+			continue
+		var boxes := stand_boxes(String(row["ref"]), prop)
+		if boxes.is_empty():
+			continue
+		var placement := SettlementBake.transform_of(row["item"], float(row["y"]), row["normal"])
+		for shape: Dictionary in PropStand.shapes_of(boxes, placement):
+			if body == null:
+				body = StaticBody3D.new()
+				body.name = STAND_PREFIX + String(cell["name"])
+				body.collision_layer = WaterSurface.TERRAIN_LAYER
+				body.collision_mask = 0
+				body.input_ray_pickable = false
+				body.set_meta(STAND_META, int(cell["settlement"]))
+			var box := BoxShape3D.new()
+			box.size = shape["size"]
+			var node := CollisionShape3D.new()
+			node.shape = box
+			node.transform = shape["transform"]
+			body.add_child(node)
+	if body != null:
+		add_child(body)
+		_bodies[String(cell["name"])] = body.get_rid()
 
 
 ## A one-piece node drawing the placement `row` ({"item", "y", "normal", "ref"} as `standing`
@@ -544,6 +631,11 @@ func _free_cell(cell_name: String) -> void:
 	if node != null:
 		remove_child(node)
 		node.free()
+	var stand := get_node_or_null(NodePath(STAND_PREFIX + cell_name))
+	if stand != null:
+		remove_child(stand)
+		stand.free()
+	_bodies.erase(cell_name)
 	_keys.erase(cell_name)
 
 

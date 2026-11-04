@@ -64,7 +64,7 @@ func _mesh_count(layer: AuthoredSettlements) -> int:
 	return total
 
 
-func test_dressing_a_street_builds_baked_cells_with_no_collision() -> void:
+func test_dressing_a_street_builds_baked_cells_with_no_collision_of_their_own() -> void:
 	var editor := _editor()
 	_dressed(editor)
 	var layer := _layer()
@@ -72,6 +72,10 @@ func test_dressing_a_street_builds_baked_cells_with_no_collision() -> void:
 	assert_gt(_mesh_count(layer), 0)
 	assert_lte(_mesh_count(layer), 6, "a 24 m street is a few cells")
 	for child in layer.get_children():
+		if child is StaticBody3D:
+			# The standing surface of the bulky props (PropStand), a sibling of its cell's mesh.
+			assert_true(child.has_meta(AuthoredSettlements.STAND_META))
+			continue
 		var node := child as MeshInstance3D
 		assert_not_null(node, "a cell is one MeshInstance3D")
 		assert_gt(node.mesh.get_surface_count(), 0)
@@ -80,6 +84,8 @@ func test_dressing_a_street_builds_baked_cells_with_no_collision() -> void:
 		assert_true(node.has_meta(AuthoredSettlements.META))
 	var triangles := 0
 	for child in layer.get_children():
+		if not child is MeshInstance3D:
+			continue
 		var mesh := (child as MeshInstance3D).mesh
 		for s in mesh.get_surface_count():
 			triangles += (
