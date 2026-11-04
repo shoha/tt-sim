@@ -1,0 +1,31 @@
+{
+ "out_dir": "render_jobs/verify1_rim2",
+ "timeout_s": 900,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "expand", "values": ["wetland_riparian", "boreal_taiga", "alpine_meadow", "rocky_badlands", "burnt_forest", "birch_woodland"], "template": [
+   {"op": "play", "folder": "_verify1_{value}"},
+   {"op": "wait_ready", "settle": 2.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+   {"op": "hide_ui"},
+   {"op": "wind", "freeze": true},
+   {"op": "call", "script": "res://tools/render_jobs/probes/verify1_rim_face.gd", "action": "face", "nth": 0, "dist": 12},
+   {"op": "settle"},
+   {"op": "capture", "name": "rim2_{value}_a"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/verify1_rim_face.gd", "action": "face", "nth": 1, "dist": 12},
+   {"op": "settle"},
+   {"op": "capture", "name": "rim2_{value}_b"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "leave"},
+   {"op": "wind", "freeze": false},
+   {"op": "title"},
+   {"op": "wait", "s": 1.0}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/verify1_rim2", "out": "rim2_sheet_a", "columns": 2, "tile": [960, 540], "names": [
+   "rim2_wetland_riparian_a", "rim2_boreal_taiga_a", "rim2_alpine_meadow_a", "rim2_rocky_badlands_a"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/verify1_rim2", "out": "rim2_sheet_b", "columns": 2, "tile": [960, 540], "names": [
+   "rim2_burnt_forest_a", "rim2_birch_woodland_a", "rim2_burnt_forest_b", "rim2_rocky_badlands_b"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/verify1_rim2", "out": "rim2_sheet_c", "columns": 2, "tile": [960, 540], "names": [
+   "rim2_wetland_riparian_b", "rim2_boreal_taiga_b", "rim2_alpine_meadow_b", "rim2_birch_woodland_b"]}
+ ]
+}

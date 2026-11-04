@@ -1,0 +1,9 @@
+{
+ "out_dir": "render_jobs/verify1_village",
+ "timeout_s": 120,
+ "steps": [
+  {"op": "wait", "s": 0.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/verify1_village", "out": "village_sheet", "columns": 2, "tile": [960, 540], "names": [
+   "b_lamp_pinned_back", "d_lamp_off_street", "e_lamp_off_street_toast", "f_lamp_moved_along"]}
+ ]
+}

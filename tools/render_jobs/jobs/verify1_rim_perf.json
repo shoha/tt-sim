@@ -1,0 +1,28 @@
+{
+ "out_dir": "render_jobs/verify1_perf",
+ "timeout_s": 1200,
+ "hang_s": 240,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "expand", "values": ["boreal_taiga", "temperate_forest"], "template": [
+   {"op": "play", "folder": "_verify1_{value}"},
+   {"op": "wait_ready", "settle": 2.0},
+   {"op": "hide_ui"},
+   {"op": "vsync_off"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "before_{value}"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/verify1_rim_perf.gd", "action": "perf", "name": "rim_{value}", "dir": "user://render_jobs/verify1_perf", "poses": [
+     {"name": "edge", "at": [0, 60], "yaw": 180, "pitch": 0},
+     {"name": "corner", "at": [48, 48], "yaw": 225, "pitch": 0},
+     {"name": "inner", "at": [0, 0], "yaw": 0, "pitch": 0}], "rounds": 4, "frames": 90, "settle": 30},
+   {"op": "call", "script": "res://tools/render_jobs/probes/verify1_rim_perf.gd", "action": "await"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/verify1_rim_perf.gd", "action": "await"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/verify1_rim_perf.gd", "action": "await"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/verify1_rim_perf.gd", "action": "await"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/verify1_rim_perf.gd", "action": "await"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/verify1_rim_perf.gd", "action": "await"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "after_{value}"},
+   {"op": "title"},
+   {"op": "wait", "s": 0.5}
+  ]}
+ ]
+}

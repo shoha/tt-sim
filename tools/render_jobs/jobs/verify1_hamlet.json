@@ -1,0 +1,25 @@
+{
+ "out_dir": "render_jobs/verify1_hamlet",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_verify1_village"},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "enter", "at": [-14, 20], "yaw": 180, "pitch": 12, "fov": 60},
+  {"op": "settle"},
+  {"op": "capture", "name": "hamlet_p12_south"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 90, "pitch": 12}, {"op": "settle"}, {"op": "capture", "name": "hamlet_p12_west"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 0, "pitch": -15}, {"op": "settle"}, {"op": "capture", "name": "hamlet_pm15_north"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "pose", "yaw": 270, "pitch": -15}, {"op": "settle"}, {"op": "capture", "name": "hamlet_pm15_east"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/eye_view.gd", "action": "leave"},
+  {"op": "wind", "freeze": false},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/verify1_hamlet", "out": "hamlet_sheet", "columns": 2, "tile": [960, 540], "names": [
+   "hamlet_p12_south", "hamlet_p12_west", "hamlet_pm15_north", "hamlet_pm15_east"]}
+ ]
+}

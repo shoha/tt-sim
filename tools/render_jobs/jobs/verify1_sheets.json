@@ -1,0 +1,13 @@
+{
+ "out_dir": "render_jobs/verify1_rim",
+ "timeout_s": 120,
+ "steps": [
+  {"op": "wait", "s": 0.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/verify1_rim", "out": "foliage_sheet_temperate", "columns": 2, "tile": [960, 540], "names": [
+   "foliage_temperate_forest_p12_y045", "foliage_temperate_forest_p12_y225", "foliage_temperate_forest_pm15_y135", "foliage_temperate_forest_pm15_y315"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/verify1_rim", "out": "foliage_sheet_boreal", "columns": 2, "tile": [960, 540], "names": [
+   "foliage_boreal_taiga_p12_y045", "foliage_boreal_taiga_p12_y225", "foliage_boreal_taiga_pm15_y135", "foliage_boreal_taiga_pm15_y315"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/verify1_rim", "out": "foliage_sheet_other", "columns": 2, "tile": [960, 540], "names": [
+   "foliage_birch_woodland_p12_y045", "foliage_birch_woodland_pm15_y135", "foliage_wetland_riparian_p12_y225", "foliage_wetland_riparian_pm15_y315"]}
+ ]
+}

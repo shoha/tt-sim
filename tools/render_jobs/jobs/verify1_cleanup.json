@@ -1,0 +1,8 @@
+{
+ "out_dir": "render_jobs/verify1_cleanup",
+ "timeout_s": 120,
+ "steps": [
+  {"op": "wait", "s": 0.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "cleanup", "prefix": "_verify1_"}
+ ]
+}
