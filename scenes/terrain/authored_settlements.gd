@@ -51,6 +51,11 @@ var _materials: Dictionary = {}
 var _keys: Dictionary = {}
 ## Settlement id -> {"sig": String, "items": Array[Dictionary]} (the plan of the last refresh).
 var _plans: Dictionary = {}
+## The last standing_row answer: its village, slot, the plan's row array it came from, the row.
+var _found_village: int = -1
+var _found_slot: String = ""
+var _found_rows: Array = []
+var _found_row: Dictionary = {}
 ## Cells still to bake: node name -> {"key", "settlement", "items": [{"item", "y", "ref"}]}.
 var _todo: Dictionary = {}
 ## Variant refs still to build, with the prop (name, seed) each is.
@@ -161,6 +166,31 @@ func cell_names() -> PackedStringArray:
 ## The key of the baked cell `cell_name` ("" when none).
 func key_of_cell(cell_name: String) -> String:
 	return String(_keys.get(cell_name, ""))
+
+
+## The standing row of settlement `settlement_id`'s piece `slot` (the same dictionary `standing`
+## lists), or {} when none stands. The Village tool asks for its picked piece every frame, which
+## `standing`'s copy of the whole row array (and a scan of it) would repeat each time: the last
+## answer is kept while the plan's row array is the same object (a re-planned village makes a new
+## one, `_stand_plan`), so an unchanged village is searched once.
+func standing_row(settlement_id: int, slot: String) -> Dictionary:
+	var plan: Dictionary = _plans.get(settlement_id, {})
+	var rows: Array = plan.get("rows", [])
+	if (
+		settlement_id == _found_village
+		and slot == _found_slot
+		and is_same(rows, _found_rows)
+		and not _found_row.is_empty()
+	):
+		return _found_row
+	for row: Dictionary in rows:
+		if row["item"]["slot"] == slot:
+			_found_village = settlement_id
+			_found_slot = slot
+			_found_rows = rows
+			_found_row = row
+			return row
+	return {}
 
 
 ## The standing placements of settlement `settlement_id` ({"item", "y", "ref"} rows, ground

@@ -48,6 +48,10 @@ var _saved: Dictionary = {}
 var _saved_fog_mode: Dictionary = {}
 var _active: bool = false
 var _last_sun: Vector3 = Vector3.ZERO
+## The foot colour of the look of `_foot_biome` (_foot_color); `_foot_known` is false until read.
+var _foot_color_cache: Color = Color.BLACK
+var _foot_biome: String = ""
+var _foot_known: bool = false
 
 
 func is_active() -> bool:
@@ -133,14 +137,23 @@ func _paintable_after_reapply(env: Environment) -> bool:
 	return (env.sky != null and env.sky == _sky) or can_paint(env)
 
 
+## The biome look's foot colour, looked up again only when the biome changed: sync() asks for it
+## every frame, and StreetSkyLook.look_for builds the whole merged look each time.
+func _foot_color() -> Color:
+	if not _foot_known or _foot_biome != biome:
+		_foot_color_cache = StreetSkyLook.look_for(biome)["foot_color"]
+		_foot_biome = biome
+		_foot_known = true
+	return _foot_color_cache
+
+
 func _still_ours(env: Environment, to_sun: Vector3) -> bool:
-	var look := StreetSkyLook.look_for(biome)
 	return (
 		_last_sun.is_equal_approx(to_sun)
 		and env.background_mode == Environment.BG_SKY
 		and env.sky == _sky
 		and env.fog_enabled
-		and env.fog_light_color.is_equal_approx(look["foot_color"])
+		and env.fog_light_color.is_equal_approx(_foot_color())
 		and env.fog_depth_curve == StreetSkyLook.FOG_CURVE
 	)
 

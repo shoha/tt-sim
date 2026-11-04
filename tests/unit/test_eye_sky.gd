@@ -173,6 +173,26 @@ func test_the_map_biome_picks_the_look() -> void:
 	assert_eq(env.fog_light_color, foot)
 
 
+func test_a_biome_change_while_installed_repaints_the_fog_colour() -> void:
+	# The still-ours check reads the biome's foot colour every frame (cached per biome): a new
+	# biome must be seen by the next sync, not the one after.
+	var env := _flat_env()
+	_sky.sync(env, SUN)
+	var temperate: Color = StreetSkyLook.look_for("temperate_forest")["foot_color"]
+	var boreal: Color = StreetSkyLook.look_for("boreal_taiga")["foot_color"]
+	assert_ne(temperate, boreal, "two looks to tell apart")
+	assert_eq(env.fog_light_color, temperate)
+	_sky.sync(env, SUN)
+	_sky.set_map("boreal_taiga", 0)
+	_sky.sync(env, SUN)
+	assert_eq(env.fog_light_color, boreal, "the fog colour followed the biome at once")
+	assert_eq((env.sky.sky_material as ShaderMaterial).get_shader_parameter("foot_color"), boreal)
+	_sky.set_map("no_such_biome_anywhere", 0)
+	_sky.sync(env, SUN)
+	var fallback: Color = StreetSkyLook.look_for("no_such_biome_anywhere")["foot_color"]
+	assert_eq(env.fog_light_color, fallback, "an unknown biome takes the default look")
+
+
 func test_disabled_does_nothing() -> void:
 	EyeSky.enabled = false
 	var env := _flat_env()

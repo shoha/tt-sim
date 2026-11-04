@@ -5,6 +5,7 @@ extends GutTest
 ## pivots on the foot, leaving puts the orbit camera back as it was).
 
 const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
+const GAMEPLAY_MENU_SCRIPT := "res://scenes/states/playing/gameplay_menu_controller.gd"
 
 var _game_map: GameMap
 var _controller: CameraController
@@ -349,14 +350,40 @@ func test_the_hint_bar_follows_the_eye_in_and_out() -> void:
 	UIManager.clear_hints()
 
 
+## The real play HUD's controller, not in the tree (its scene is not needed for the hint code).
+func _hud() -> Control:
+	var hud: Control = autofree(load(GAMEPLAY_MENU_SCRIPT).new())
+	autofree(hud._visual_broadcast)  # a field node _ready would parent
+	return hud
+
+
 func test_the_street_row_survives_a_default_hints_reset_at_the_eye() -> void:
-	UIManager.set_hints(CameraRig.play_hints(false))
+	var hud := _hud()
+	hud._set_default_hints()
+	assert_has(_hint_keys(), "Alt + drag", "the HUD's default row is the orbit one")
 	_controller.set_view_mode(_controller.eye)
 	assert_true(UIManager.is_street_hints())
-	UIManager.set_hints(CameraRig.play_hints(UIManager.is_street_hints()))
-	assert_has(_hint_keys(), "F9 or V")
+	# What a profile change or a returning drawer does: the HUD resets its default hints.
+	hud._set_default_hints()
+	assert_has(_hint_keys(), "F9 or V", "the reset keeps the street's row at the eye")
+	assert_does_not_have(_hint_keys(), "Alt + drag")
 	_controller.set_view_mode(_controller.orbit_view())
 	assert_false(UIManager.is_street_hints())
+	hud._set_default_hints()
+	assert_has(_hint_keys(), "Alt + drag", "and the orbit row once the eye is left")
+	UIManager.clear_hints()
+
+
+func test_the_hud_leaving_the_tree_clears_the_hints_and_the_street_flag() -> void:
+	var hud := _hud()
+	hud._set_default_hints()
+	_controller.set_view_mode(_controller.eye)
+	assert_true(UIManager.is_street_hints())
+	assert_false(_hint_keys().is_empty())
+	hud._exit_tree()
+	assert_false(UIManager.is_street_hints(), "the next map starts in the orbit view")
+	assert_eq(_hint_keys(), [], "no hints outlive the play HUD")
+	_controller.set_view_mode(_controller.orbit_view())
 	UIManager.clear_hints()
 
 

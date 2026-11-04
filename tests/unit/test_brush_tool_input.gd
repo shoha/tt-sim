@@ -124,6 +124,22 @@ func test_the_brush_runs_each_tool_s_own_mode_and_keeps_it() -> void:
 	assert_eq(brush.tool, ToolRegistry.find(SculptTool.ID), "a tool with no mode is ignored")
 
 
+func test_a_brush_that_leaves_the_tree_active_lets_go_of_the_canopy_window_and_cut() -> void:
+	# The window and the cut are static (they outlive any node): a map unloaded under an active
+	# brush must not leave a bush cut open in the next map or in play.
+	var brush := BrushTool.new()
+	add_child_autofree(brush)
+	brush.use_tool(ToolRegistry.find(ThinTool.ID))
+	brush.activate()
+	CanopyFade.set_brush(Vector3(1.0, 0.0, 2.0), 3.0)
+	CanopyFade.set_cut(Vector3(4.0, 0.0, 5.0), 2.0)
+	assert_gt(CanopyFade.brush_asked().w, 0.0, "the window is asked for")
+	assert_gt(CanopyFade.cut_asked().w, 0.0, "the cut is asked for")
+	remove_child(brush)
+	assert_eq(CanopyFade.brush_asked(), Vector4.ZERO, "the window lets go")
+	assert_eq(CanopyFade.cut_asked(), Vector4.ZERO, "the cut lets go")
+
+
 func test_thin_ring_is_the_canopy_brush_window() -> void:
 	var brush := BrushTool.new()
 	add_child_autofree(brush)

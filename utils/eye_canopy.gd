@@ -55,6 +55,8 @@ const SHADE_FLOOR := 0.3
 ## The back glow rises from GLOW_START to GLOW_FULL of dot(view ray, direction to the sun).
 const GLOW_START := 0.1
 const GLOW_FULL := 0.85
+## The warm light through a leaf (linear rgb), the shader's CANOPY_EYE_GLOW.
+const GLOW_COLOR := Vector3(0.9, 1.0, 0.35)
 ## The share of its albedo bark and plain cards add as emission at the eye.
 const BARK_LIFT := 0.35
 ## The near grass: in full inside GRASS_FULL_M of the eye, none from GRASS_NONE_M out.

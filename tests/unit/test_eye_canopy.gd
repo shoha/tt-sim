@@ -99,6 +99,30 @@ func test_the_foliage_shader_carries_the_eye_light() -> void:
 	)
 
 
+func test_the_foliage_shader_carries_the_glow_colour() -> void:
+	var text := FileAccess.get_file_as_string("res://shaders/wind_foliage_include.gdshaderinc")
+	var found := RegEx.create_from_string(
+		"const vec3 CANOPY_EYE_GLOW = vec3\\(([0-9.]+), ([0-9.]+), ([0-9.]+)\\);"
+	).search(text)
+	assert_not_null(found, "the shader declares CANOPY_EYE_GLOW")
+	if found:
+		var got := Vector3(
+			float(found.get_string(1)), float(found.get_string(2)), float(found.get_string(3))
+		)
+		assert_almost_eq(got, EyeCanopy.GLOW_COLOR, Vector3.ONE * 0.00001)
+
+
+func test_the_foliage_shader_carries_the_cut_shape() -> void:
+	var path := "res://shaders/wind_foliage_include.gdshaderinc"
+	assert_eq(_shader_const(path, "CANOPY_CUT_INNER"), CanopyFade.CUT_INNER)
+	assert_eq(_shader_const(path, "CANOPY_CUT_BARK"), CanopyFade.CUT_BARK)
+	assert_eq(_shader_const(path, "CANOPY_CUT_BEHIND"), CanopyFade.CUT_BEHIND_M)
+	var text := FileAccess.get_file_as_string(path)
+	assert_string_contains(text, "global uniform vec4 canopy_cut;")
+	# The shader reads the cut only in the camera's own pass and only while its radius is set.
+	assert_string_contains(text, "if (camera_pass && canopy_cut.w > 0.0) {")
+
+
 # --- the near grass --------------------------------------------------------------------------
 
 

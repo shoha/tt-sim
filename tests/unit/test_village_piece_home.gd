@@ -204,6 +204,103 @@ func test_the_cut_clears_the_ground_round_a_piece_and_never_less_than_the_floor(
 	)
 
 
+## A BrushTool on `editor` and a VillageBrush with the first standing piece of village `id` picked.
+func _picked(editor: AuthoringEditor, id: int) -> Dictionary:
+	var tool := BrushTool.new()
+	add_child_autofree(tool)
+	tool.editor = editor
+	var mode := VillageBrush.new()
+	var row: Dictionary = VillageProps.rows_of(editor, id)[0]
+	mode.props.village = id
+	mode.props.slot = str(row["item"]["slot"])
+	return {"tool": tool, "mode": mode, "row": row}
+
+
+func test_the_picked_row_is_found_in_place_without_copying_the_village() -> void:
+	var scene := _village("market_town")
+	var editor: AuthoringEditor = scene["editor"]
+	var id: int = scene["id"]
+	var layer := VillageProps.layer_of(editor)
+	var rows := layer.standing(id)
+	assert_gt(rows.size(), 3, "a village to search")
+	var props := VillageProps.new()
+	props.village = id
+	for row in rows:
+		var slot := str(row["item"]["slot"])
+		assert_true(is_same(layer.standing_row(id, slot), row), "%s: the plan's own row" % slot)
+		props.slot = slot
+		assert_true(is_same(props.picked_row(editor), row), "%s: picked_row agrees" % slot)
+	# The last answer is kept while the plan's rows are the same array, and dropped when the village
+	# is planned again (the plan then holds a new array of new rows).
+	var slot := str(rows[2]["item"]["slot"])
+	var first := layer.standing_row(id, slot)
+	assert_true(is_same(layer.standing_row(id, slot), first), "asked twice: the same row")
+	var plan: Dictionary = layer._plans[id]
+	var replanned: Array[Dictionary] = []
+	for row in plan["rows"]:
+		replanned.append(row.duplicate(true))
+	plan["rows"] = replanned
+	var fresh := layer.standing_row(id, slot)
+	assert_false(is_same(fresh, first), "a re-planned village is searched again")
+	assert_true(is_same(fresh, replanned[2]), "and answers with its new row")
+	assert_eq(layer.standing_row(id, "w1l:l0/no_such_piece/x"), {})
+	assert_eq(layer.standing_row(id + 100, str(rows[0]["item"]["slot"])), {}, "another village")
+	props.slot = ""
+	assert_eq(props.picked_row(editor), {}, "nothing picked")
+
+
+func test_fade_cut_is_none_until_a_piece_is_picked_or_when_it_is_gone() -> void:
+	var scene := _village("farming_hamlet")
+	var picked := _picked(scene["editor"], scene["id"])
+	var mode: VillageBrush = picked["mode"]
+	var tool: BrushTool = picked["tool"]
+	mode.props.drop()
+	assert_eq(mode.fade_cut(tool), Vector4.ZERO, "nothing picked")
+	mode.props.village = scene["id"]
+	mode.props.slot = "w1l:l0/no_such_piece/x"
+	assert_eq(mode.fade_cut(tool), Vector4.ZERO, "a picked slot that no longer stands")
+	tool.editor = null
+	mode.props.slot = str(picked["row"]["item"]["slot"])
+	assert_eq(mode.fade_cut(tool), Vector4.ZERO, "no editor")
+
+
+func test_fade_cut_is_the_standing_piece_scaled_to_the_map() -> void:
+	var scene := _village("farming_hamlet")
+	var editor: AuthoringEditor = scene["editor"]
+	var picked := _picked(editor, scene["id"])
+	var row: Dictionary = picked["row"]
+	var spot: Vector2 = row["item"]["position"]
+	var cut: Vector4 = (picked["mode"] as VillageBrush).fade_cut(picked["tool"])
+	var at := editor.to_world(Vector3(spot.x, float(row["y"]), spot.y))
+	assert_almost_eq(Vector3(cut.x, cut.y, cut.z), at, Vector3.ONE * 0.0001, "at the standing place")
+	assert_almost_eq(
+		cut.w,
+		VillageFurnishings.cut_radius(row["item"]) * editor.map_scale(),
+		0.0001,
+		"the piece's cut radius times the map scale"
+	)
+	assert_gt(cut.w, 0.0)
+
+
+func test_fade_cut_follows_a_carried_piece_to_where_it_would_go() -> void:
+	var scene := _village("farming_hamlet")
+	var editor: AuthoringEditor = scene["editor"]
+	var picked := _picked(editor, scene["id"])
+	var mode: VillageBrush = picked["mode"]
+	var row: Dictionary = picked["row"]
+	var home: Vector2 = row["item"]["position"]
+	var there := home + Vector2(4.0, 6.0)
+	mode.props.gesture = VillageProps.GESTURE_MOVE
+	mode.props._dest = there
+	assert_true(mode.props.moving())
+	var cut := mode.fade_cut(picked["tool"])
+	var want := editor.to_world(Vector3(there.x, WaterGeometry.ground_at(_doc, there), there.y))
+	assert_almost_eq(Vector3(cut.x, cut.y, cut.z), want, Vector3.ONE * 0.0001, "at the destination")
+	assert_almost_eq(
+		cut.w, VillageFurnishings.cut_radius(row["item"]) * editor.map_scale(), 0.0001, "same radius"
+	)
+
+
 # --- the buttons beside the ring ---------------------------------------------------------------
 
 

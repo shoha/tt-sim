@@ -28,8 +28,9 @@ extends ViewMode
 ## keeps the yaw; the orbit camera, holder, yaw pivot and pitch are remembered, and leaving puts
 ## them back (with any turn made at the eye applied about the orbit pivot), so the orbit view
 ## returns as it was. The sky is drawn at the camera's real field of view while here
-## (Environment.sky_custom_fov 0, instead of the orthographic 2 degrees). The canopy fade, token
-## markers, weather, grid and the other readers of Camera3D.size are not adapted yet.
+## (Environment.sky_custom_fov 0, instead of the orthographic 2 degrees). The canopy fade
+## (EyeCanopy), picking, the weather box and the overlays that read Camera3D.size are adapted
+## (docs/CONVENTIONS.md "Camera System").
 
 ## The camera's far plane at the eye, metres (fog and the sky band hide the rest).
 const FAR_PLANE := 600.0
@@ -192,11 +193,12 @@ func process(delta: float) -> void:
 		if Engine.get_process_frames() > _leave_after_frame:
 			_leave_now()
 		return
-	_sync_sky(0.0)
+	var env := level_environment()
+	_sync_sky(0.0, env)
 	if glide.is_active():
-		_process_glide(delta)
+		_process_glide(delta, env)
 		return
-	_sync_painted_sky()
+	_sync_painted_sky(env)
 	_step_lens(delta)
 	_step_walk(delta)
 	_step_glide(delta)
@@ -343,10 +345,10 @@ func _home_pose() -> Transform3D:
 	return Transform3D(holder_basis * _saved_basis, holder_at + holder_basis * _saved_position)
 
 
-func _process_glide(delta: float) -> void:
+func _process_glide(delta: float, env: Environment = null) -> void:
 	var camera := game_map.camera_node
 	var running := glide.step(delta)
-	_sync_painted_sky()
+	_sync_painted_sky(env)
 	CanopyFade.publish(camera, camera.size, Vector2(game_map.world_viewport.size), delta)
 	if not running:
 		_land_glide(true)
@@ -704,9 +706,10 @@ func _clear_input() -> void:
 
 
 ## Set the sky's drawn field of view (0: the camera's own; the orthographic view uses 2 degrees).
-## Written every frame because a settings change re-applies the orthographic value.
-func _sync_sky(fov: float) -> void:
-	var env := level_environment()
+## Written every frame because a settings change re-applies the orthographic value. `known_env`
+## is the level's environment when the caller already looked it up this frame.
+func _sync_sky(fov: float, known_env: Environment = null) -> void:
+	var env := known_env if known_env != null else level_environment()
 	if env != null and not is_equal_approx(env.sky_custom_fov, fov):
 		env.sky_custom_fov = fov
 
@@ -723,10 +726,11 @@ func level_environment() -> Environment:
 ## Keep the painted sky and the edge fog installed in the environment (EyeSky.sync): a settings
 ## change that re-applies the environment is put right the next frame. The sun is the one the
 ## foliage light follows (the level's, or the map's own), or a high southern one when none shines.
-func _sync_painted_sky() -> void:
+## `known_env` is the level's environment when the caller already looked it up this frame.
+func _sync_painted_sky(known_env: Environment = null) -> void:
 	var sun := FoliageLight.last_sun
 	var to_sun := Vector3(sun.x, sun.y, sun.z)
 	if to_sun.length() < 0.5:
 		to_sun = Vector3(0.0, 0.64, 0.77)
 	sky.reach = StreetSkyLook.map_reach(_foot, _bounds)
-	sky.sync(level_environment(), to_sun.normalized())
+	sky.sync(known_env if known_env != null else level_environment(), to_sun.normalized())

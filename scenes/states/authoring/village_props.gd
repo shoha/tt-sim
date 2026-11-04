@@ -113,10 +113,8 @@ func item(editor: AuthoringEditor, id: int = -2, piece: String = "") -> Dictiona
 func picked_row(editor: AuthoringEditor) -> Dictionary:
 	if slot == "":
 		return {}
-	for row in rows_of(editor, village):
-		if str(row["item"]["slot"]) == slot:
-			return row
-	return {}
+	var layer := layer_of(editor)
+	return layer.standing_row(village, slot) if layer != null else {}
 
 
 ## Where the held move would put the piece (map XZ), the reason that place is refused (&"" none),

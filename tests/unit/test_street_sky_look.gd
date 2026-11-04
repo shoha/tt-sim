@@ -128,11 +128,6 @@ func test_dominant_biome_is_the_one_covering_most() -> void:
 	assert_eq(StreetSkyLook.dominant_biome(ids, empty), "a", "no painted sample: the first id")
 
 
-func test_fog_is_the_owner_verdict() -> void:
-	assert_eq(StreetSkyLook.FOG_BEGIN_M, 25.0)
-	assert_eq(StreetSkyLook.FOG_END_M, 85.0)
-
-
 func test_the_reach_is_the_farthest_corner_at_every_yaw() -> void:
 	# A 150 ft (45.72 m) map centred on the origin, the eye at (10, 10): the far corner is
 	# 32.86 m away on each axis.
@@ -159,6 +154,10 @@ func test_the_fog_keeps_a_small_valley_clear_and_scales_with_the_map() -> void:
 	var big := StreetSkyLook.fog_range(215.0)
 	assert_gt(big.x, small.x)
 	assert_gt(big.y, 215.0)
+	assert_almost_eq(big.x, 215.0 * StreetSkyLook.FOG_BEGIN_REACH, 0.001, "begin follows the reach")
+	assert_almost_eq(big.y, 215.0 * StreetSkyLook.FOG_END_REACH, 0.001, "end follows the reach")
+	# A short reach changes nothing: the floors (25 and 85 m) stand until the map outgrows them.
+	assert_eq(StreetSkyLook.fog_range(10.0), StreetSkyLook.fog_range(0.0))
 	# Never nearer than the verdict, and the ramp never shorter than its 60 m.
 	for reach in [0.0, 5.0, 20.0, 46.0, 80.0, 300.0]:
 		var fog := StreetSkyLook.fog_range(reach)

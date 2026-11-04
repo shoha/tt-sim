@@ -271,6 +271,19 @@ func _ready() -> void:
 	process_priority = 1
 
 
+func _exit_tree() -> void:
+	# The canopy window and cut are static, so a map unloaded under an active brush would leave
+	# them open (the shader keeps cutting a bush in the next map); no gesture is finished here.
+	if _active:
+		_release_canopy()
+
+
+## Lets go of the canopy fade's brush window and the Village tool's cut (they close over time).
+func _release_canopy() -> void:
+	CanopyFade.clear_brush()
+	CanopyFade.clear_cut()
+
+
 func setup(cam: Camera3D, viewport: SubViewport, overlay_parent: Node, over_gui: Callable) -> void:
 	_camera = cam
 	_world_viewport = viewport
@@ -303,8 +316,7 @@ func deactivate() -> void:
 	finish_gesture()
 	_active = false
 	mode.leave(self)
-	CanopyFade.clear_brush()
-	CanopyFade.clear_cut()
+	_release_canopy()
 	cursor.set_visible(false)
 	set_process(false)
 	toggled.emit(false)

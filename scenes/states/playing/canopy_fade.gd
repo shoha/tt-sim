@@ -49,6 +49,13 @@ const GLOBAL_EYE_GRASS := &"eye_grass"
 ## How long the brush window takes to open and to close, in seconds.
 const BRUSH_OPEN_S := 0.15
 const BRUSH_CLOSE_S := 0.4
+## The cut's shape, as the shader's CANOPY_CUT_* (tests pin the pair): leaf cards are full inside
+## CUT_INNER of the radius, bark is full out to the radius and gone by CUT_BARK times it, and the
+## column to the camera starts CUT_BEHIND_M behind the piece (docs/systems/villages.md quotes
+## 0.6 and 1.5).
+const CUT_INNER := 0.6
+const CUT_BARK := 1.5
+const CUT_BEHIND_M := 0.5
 ## The ramp to the full close-zoom fade runs from the home zoom down to FULL_FRACTION of it.
 const FULL_FRACTION := 0.55
 ## The full close-zoom window, per unit of orthographic size: inner and outer radius on screen
