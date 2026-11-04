@@ -28,9 +28,42 @@ uniform float contact_amount : hint_range(0.0, 1.0) = 0.7;
 // How far a mossy vertex (a ruin's green foot, StructurePaint) is pulled to a painterly moss green.
 uniform float moss_amount : hint_range(0.0, 1.0) = 0.95;
 
+// Painted boards on a plank wall (card streetprops): when `board_m` (a board's width, metres) is above 0,
+// the walls' upright faces get broad boards of their own in the structure's frame, so a rotated
+// building keeps them: each board a little lighter or deeper and warmer or cooler than its
+// neighbours, a soft dark seam between, and a nail head on each board at every rail height
+// (`rail_m`). The texture's own grain and knots are kept only `board_tex_keep` of the way (its
+// evenly scattered dark ticks read as corduroy at the eye). 0 draws the texture alone.
+uniform float board_m = 0.0;
+uniform float board_tex_keep : hint_range(0.0, 1.0) = 1.0;
+uniform float rail_m = 1.1;
+
+vec3 board_paint(vec3 col, vec3 pos, vec3 normal) {
+	if (board_m <= 0.0 || abs(normal.y) > 0.5) {
+		return col;
+	}
+	vec3 tangent = normalize(vec3(-normal.z, 0.0, normal.x));
+	float x = dot(pos, tangent) / board_m;
+	float index = floor(x);
+	float across = fract(x);
+	float h = s_hash2(vec2(index, floor(dot(pos, normal) * 4.0) + normal.x * 3.1 + normal.z * 7.7));
+	col *= mix(0.82, 1.18, h) * s_lean(h, 0.6);
+	float seam = 1.0 - smoothstep(0.006, 0.026, min(across, 1.0 - across) * board_m);
+	col *= mix(1.0, 0.45, seam);
+	float dy = abs(fract(pos.y / rail_m + 0.37) - 0.5) * rail_m;
+	float dx = abs(across - 0.5) * board_m;
+	float nail = 1.0 - smoothstep(0.018, 0.03, length(vec2(dx, dy)));
+	return col * mix(1.0, 0.4, nail);
+}
+
 void fragment() {
 	vec2 uv = UV * uv_scale;
-	vec3 col = texture(albedo_tex, uv).rgb * albedo_tint * COLOR.rgb;
+	vec3 tex = texture(albedo_tex, uv).rgb;
+	if (board_tex_keep < 1.0) {
+		tex = mix(textureLod(albedo_tex, uv, 5.0).rgb, tex, board_tex_keep);
+	}
+	vec3 col = tex * albedo_tint * COLOR.rgb;
+	col = board_paint(col, s_pos, normalize(s_normal));
 	float luma = dot(col, vec3(0.299, 0.587, 0.114));
 	col = mix(vec3(luma), col, saturation);
 	// A grey rock turned to warm cream stone: the texture's light and dark kept, the hue replaced.

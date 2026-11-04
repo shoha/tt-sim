@@ -2132,6 +2132,13 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
   drawn lit with procgen's paint read as sRGB (`StructureMaterials.door`); in a street row the
   door meshes go to the row's extra parts with `door: true`. A door still in the glass kind (an
   older procgen) stays an opening, so no digest moves at the old pin.
+  Window shutters (card streetprops, 2026-11-03, procgen `ProcgenTrimShutters`): a painted louvred
+  leaf in the building's shutter paint (a base panel, two stiles and 4 to 8 slats, surface kind
+  `wood`, flat vertex colours, 56 to 88 triangles a shutter), tags `<trim id>/<opening path>/shutter0`
+  and `/shutter1`. A `facade_trim` path with a `shutter` segment is the door role (`role_of_slot`),
+  so a shutter is drawn lit with its own paint like a door leaf, never as the textured planks.
+  A plank wall (`building_timber`, kind `wood` in the wall role) draws broad painted boards with seams
+  and nail heads in the wall shader (`board_m`, `StructureMaterials.BOARD_M`); trim keeps the planks.
   The table is `StructureLook`; the painterly version is card S6.
 - **Round trip.** A structure change is done when a recipe from a library folder builds through
   tt-sim's `StructureGeometry` with its pinned digest, a token stands on its roof, and the map

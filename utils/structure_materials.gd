@@ -60,6 +60,10 @@ const TIMBER_WARM := Vector3(1.12, 1.08, 0.95)
 const TIMBER_CREAM := 0.6
 ## A lift on the planks' tint: the library's oak read a deep brown on a big barn (2026-10-28).
 const TIMBER_LIFT := Vector3(1.5, 1.5, 1.3)
+## A plank wall's painted boards (structure_wall `board_m`): a board's width in metres and how much
+## of the texture's own grain and knots is kept (0 flat, 1 all).
+const BOARD_M := 0.24
+const BOARD_TEX_KEEP := 0.45
 ## The plants' light model's balance for walls (structure_painterly.gdshaderinc defaults, tuned for
 ## roofs): shade leans a soft cream-lavender, lighter and warmer than the crowns' violet, so a
 ## shaded stone face stays a colour instead of a brown or a mauve grey (look integration and ink
@@ -384,6 +388,11 @@ static func _timber(style: String, root: String, role: String) -> ShaderMaterial
 	material.set_shader_parameter("saturation", TIMBER_SATURATION)
 	material.set_shader_parameter("warm_bias", TIMBER_WARM)
 	material.set_shader_parameter("cream_amount", TIMBER_CREAM)
+	if role == StructureLook.WALL:
+		# A plank wall is drawn as broad painted boards with seams and nail heads, the texture's
+		# fine grain and knots kept only partly (card streetprops).
+		material.set_shader_parameter("board_m", BOARD_M)
+		material.set_shader_parameter("board_tex_keep", BOARD_TEX_KEEP)
 	_balance_wall(material, TIMBER_LIT_GAIN)
 	return material
 
