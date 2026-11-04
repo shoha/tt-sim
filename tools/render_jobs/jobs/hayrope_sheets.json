@@ -1,0 +1,11 @@
+{
+ "out_dir": "render_jobs/hayrope_sheets",
+ "timeout_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs", "columns": 2, "tile": [960, 540], "out": "hayrope_sheet", "names": [
+    "hayrope_full/hay0_tele_y090", "hayrope_full/hay2_tele_y270",
+    "hayrope_full/ref_hay_tele", "hayrope_full/ref_p12_y225"
+  ]}
+ ]
+}
