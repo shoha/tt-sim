@@ -343,7 +343,7 @@ from 9 m, times the map scale):
 - thinning: a per-tuft key (a hash of the origin) drops most of the nearest tufts (at full
   nearness keys under 0.7 are gone, 0.7 to 0.85 shrinking; the threshold follows nearness to the
   power 0.7, so it bites earlier mid-range), which shrink into their foot across a band rather than
-  pop, so walking reveals the turf between them. Flowers share the grass pass and thin with it;
+  pop, so walking reveals the turf between them. Flowers are exempt (below);
 - colour, green blades: 18 percent toward their own grey, a cool dark foot (0.5 to 0.62 of its
   value) deepening to a tip at 0.88 of it. Warm blades (red over green in linear albedo: dry gold,
   straw; a smoothstep on (r - g) / r) keep their colour instead, gaining 5 percent saturation, a
@@ -361,6 +361,18 @@ camera within `CANOPY_EYE_PASS` of the eye), so the orbit and top-down views and
 are untouched. `EyeCanopy` mirrors the constants and maths (`GRASS_*`, `grass_near`, `grass_keep`,
 `grass_albedo`; `test_eye_canopy.gd` holds the two together). `CanopyFade.eye_grass_enabled` is the
 probe switch (`eye_perf.gd` variant key `grass`).
+
+Flowers stay (card eyeflowers, 2026-11-03). A library asset of category `flower` has the wind
+category `grass` (same sway and blade gradient), so the term first thinned and greyed it with the
+meadow, which removed the meadow's small bold accents (red tulips in the wetland, white lilies in
+the hamlet). The library catalog's `category` reaches the material as a flag: `BiomeCompiler` writes
+`flower: true` into the palette asset entry (only when true, kept by `PaletteValidator`),
+`PaletteLibrary.resolve` returns it, `AuthoredScatter` and `ScatterGlbUtils.build_scatter` pass it to
+`WindFoliage.apply_material(..., flower)`, which sets the material's `eye_flower` uniform. The
+shader's eye term requires `!eye_flower`, so a flower keeps every instance and its own colour
+(`EyeCanopy.grass_applies`, `tuft_keep`). Not covered: baked structure decor (flower boxes) and
+`AssetStore.instance` meshes, which carry no flag. `eye_perf.gd` variant key `flowers: false` puts
+the old behaviour back for an A/B, and its `flowers` action counts the near flowers.
 
 ### Curating a sky
 

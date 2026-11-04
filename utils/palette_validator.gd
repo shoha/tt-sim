@@ -72,6 +72,9 @@ static func _validate_assets(raw: Variant, warnings: Array[String]) -> Dictionar
 			"size_class": _text_or(entry.get("size_class"), MAX_TEXT_LENGTH, ""),
 			"dimensions_m": _vector3_or_zero(entry.get("dimensions_m")),
 		}
+		# Optional, written only when true (a library asset of category "flower").
+		if entry.get("flower") == true:
+			result[id]["flower"] = true
 	return result
 
 

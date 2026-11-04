@@ -347,7 +347,13 @@ static func _build_shader_material(
 ## default) for every other category, including "tree" -- trees still cast real shadows
 ## and must not be double-darkened. Every category also gets baked_ao_strength pinned
 ## to BAKED_AO_STRENGTH.
-static func apply_material(mesh: Mesh, category: String, overrides: Dictionary = {}) -> void:
+##
+## `flower` (the palette entry's "flower" flag, a library asset of category "flower") sets the
+## shader's `eye_flower` on a grass material: a flower shares grass's wind category and gradient
+## but is exempt from the eye view's near grass thinning and colour (EyeCanopy.grass_applies).
+static func apply_material(
+	mesh: Mesh, category: String, overrides: Dictionary = {}, flower: bool = false
+) -> void:
 	if category == "" or not PRESETS.has(category):
 		return
 	var preset := get_effective_preset(category, overrides)
@@ -373,6 +379,8 @@ static func apply_material(mesh: Mesh, category: String, overrides: Dictionary =
 		if category == "grass":
 			wind_material.set_shader_parameter("blade_height", blade_height)
 			wind_material.set_shader_parameter("base_darken", _GRASS_BASE_DARKEN)
+			if flower:
+				wind_material.set_shader_parameter("eye_flower", true)
 		mesh.surface_set_material(i, wind_material)
 
 

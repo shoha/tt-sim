@@ -154,6 +154,7 @@ static func build_scatter(
 					"key": key,
 					"mesh": template["mesh"],
 					"wind_category": category if category is String else "",
+					"flower": template.get("flower", false) == true,
 					"name": node_name.validate_node_name(),
 					"transforms": valid,
 				}
@@ -182,7 +183,7 @@ static func build_scatter(
 		# whose material is no longer a BaseMaterial3D -- its own first call replaces the
 		# surface material with a ShaderMaterial, so calls 2..N would be no-ops that keep
 		# the first material rather than the last.
-		WindFoliage.apply_material(mesh, wind_category, foliage_overrides)
+		WindFoliage.apply_material(mesh, wind_category, foliage_overrides, entry.flower)
 		var buckets := ScatterChunker.bucket_by_cell(all_transforms, chunk_size)
 		for cell in buckets.keys():
 			var suffix := "" if buckets.size() == 1 else ScatterChunker.cell_suffix(cell)

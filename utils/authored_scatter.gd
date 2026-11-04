@@ -904,7 +904,9 @@ func _species_for(asset_id: String) -> Dictionary:
 		return {}
 	var mesh: Mesh = template.mesh
 	var category: String = template.get("wind_category", "")
-	WindFoliage.apply_material(mesh, category, foliage_overrides)
+	WindFoliage.apply_material(
+		mesh, category, foliage_overrides, template.get("flower", false) == true
+	)
 	var materials: Array[ShaderMaterial] = []
 	var all_wind := mesh.get_surface_count() > 0
 	for i in mesh.get_surface_count():
