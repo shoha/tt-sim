@@ -1,0 +1,14 @@
+{
+ "out_dir": "render_jobs/haytop_sheet",
+ "timeout_s": 60,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/propstand.gd", "action": "sheet",
+   "names": ["user://render_jobs/haytop_before/hay_eye", "user://render_jobs/haytop_after/hay_eye",
+             "user://render_jobs/haytop_before/hay_eye_close", "user://render_jobs/haytop_after/hay_eye_close",
+             "user://render_jobs/haytop_before/hay_home", "user://render_jobs/haytop_after/hay_home"],
+   "cols": 2, "out": "D:/dev/tabletop/tt-sim/docs/plans/2026-11-02-camera/clips/haytop_hay.png"},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}
