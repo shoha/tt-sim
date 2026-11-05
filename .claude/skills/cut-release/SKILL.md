@@ -39,6 +39,22 @@ holds the version being worked *toward*, not the one last shipped.
    `v0.1.2.1`), merge back to `main` if applicable. `cut-release.ps1` doesn't
    cover this path -- it assumes a normal patch bump off `main`.
 
+## Before the script: the pre-tag checklist (2026-11-04)
+
+A push to `main` no longer publishes, so these are checked when a tag is asked for, not per
+merge. Report each as done or not, and stop at the first that is not:
+
+1. **The review board has no open look entry** (`D:/dev/tabletop/docs/review_board/`; commits
+   marked `look-pending` since the last tag each have one). An open entry blocks the tag until the
+   user answers it or says to ship it.
+2. **The pins have moved**: plantgen's and structgen's procgen pins and core-library's
+   `structures/pins.txt`, `prop_pins.txt` and tiles match the procgen commit tt-sim pins
+   (`D:/dev/tabletop/AGENTS.md` "Pins"), and plantgen's suite, structgen's suite and the library
+   check were run.
+3. **CI is green on `main`**: the latest verify run (`gh run list --workflow build.yml --branch
+   main`), the latest nightly `full` run (exports, macOS parity, signing and notarization), and
+   the Determinism run including macOS (a nightly, or `gh workflow run Determinism`).
+
 ## What to do when asked to cut a release
 
 1. Run `scripts/cut-release.ps1` (no `-Push`) via the PowerShell tool. It stops

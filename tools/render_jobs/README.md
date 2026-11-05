@@ -39,7 +39,10 @@ in the job's own `log.txt`.
 Arguments after `--`:
 
 - `<job>`: a path to a JSON job file, or the name of one under `res://tools/render_jobs/jobs/`
-  (the `.json` is optional).
+  (the `.json` is optional). A card's one-use jobs (before, build, look, sheet, cleanup) live in
+  the gitignored `res://tools/render_jobs/local/<topic>/` and run by that path; copy a job into
+  `jobs/` (and `JOBS.md`) only when it becomes a repeatable regression check (2026-11-04). The
+  topic's closing deletes the folder, so a job its note cites is copied beside the note first.
 - `--full`: captures at the window's size (1920x1080), for a final verdict. Without it every
   capture, window and `_sub`, is saved at half size (960x540), about a quarter of the tokens
   to read. A capture step's own `scale` wins over both (perf jobs pin 0.5;

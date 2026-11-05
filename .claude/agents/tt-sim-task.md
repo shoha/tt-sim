@@ -21,7 +21,10 @@ A command off the allowlist costs a classifier check, or a user prompt outside a
   D:/dev/tabletop/tt-sim/utils/x.gd`.
 - Scripts are written with the Write tool and run by path. Render jobs use the one fixed
   command form in `tools/render_jobs/README.md` (job name after `--`, flags `--saved`,
-  `--only`, and `--full` for verdict captures) so the user approves it once.
+  `--only`, and `--full` for verdict captures) so the user approves it once. Your card's one-use
+  jobs (before, build, look, sheet, cleanup) go in the gitignored
+  `tools/render_jobs/local/<topic>/` and run by that path; add a job to `jobs/` only if the card
+  says it becomes a regression check.
 - Wait for a long run (the sharded GUT runner is about 1.5 minutes; render jobs) with a foreground
   `timeout` up to 600000, or in the background with Monitor or the completion
   notification. Never poll an output file with `tail`.
@@ -76,7 +79,8 @@ main checkout. Set it up once, in this order:
    unrelated pre-existing failure; do not fix it.
 4. Commit in tt-sim with `git -C D:/dev/tabletop/tt-sim`, only the files of this task, a message
    in the repo's style (`git -C D:/dev/tabletop/tt-sim log --oneline -10` shows it), ending with
-   the attribution line the card gives. Never push.
+   the attribution line the card gives. A commit that changes a look says `look-pending` in its
+   message (`D:/dev/tabletop/docs/coordinating.md` "Look cards"). Never push.
 
 ## The Godot lane
 

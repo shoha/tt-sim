@@ -2,6 +2,9 @@
 /docs/plans/
 /docs/superpowers/
 
+# One-use render jobs of a card (before, build, look, sheet, cleanup), run by path
+/tools/render_jobs/local/
+
 # Git worktrees
 .worktrees/
 
