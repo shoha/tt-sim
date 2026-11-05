@@ -16,6 +16,15 @@ name: Determinism
 # signing or the Steam upload. A mismatch shows as a red run of this workflow on its own. Promote
 # it (add it to build.yml as a job that sign-* wait for) once it is green on every platform.
 #
+# Which platforms run when (user, 2026-11-04: the macOS legs are the slow, queue-prone ones, one
+# waited 79 minutes for a runner and was cancelled): a push to main that touches the paths below
+# runs Linux and Windows only. macOS (arm64 and Rosetta) runs at night, when a push-triggered run
+# of this workflow happened in the last 25 hours (a night after no determinism-relevant change is
+# skipped), on a v* tag, and on a manual dispatch. So a macOS-only difference shows within a day,
+# and a tag always has all three. The tag run does not gate the release (above); check it before
+# pushing a tag, or promote it as described above. The platform list is built by the plan job
+# below, because a job-level `if` cannot read the matrix.
+#
 # It needs the private procgen submodule (github.com/shoha/procgen). The default GITHUB_TOKEN
 # cannot read another private repository, so the repository secret PROCGEN_READ_TOKEN must hold
 # a fine-grained token with read access to the contents of shoha/procgen (see the step that uses
@@ -24,10 +33,16 @@ name: Determinism
 
 on:
   workflow_dispatch:
+  schedule:
+    # 10:30 UTC, after build.yml's nightly.
+    - cron: "30 10 * * *"
   push:
     # Only main (and workflow_dispatch on any branch, for a ci/<topic> test run: `gh workflow run
     # Determinism --ref ci/<topic>`): a macOS leg is about 9 minutes of a metered runner.
     branches: [main]
+    # Tags run every platform; path filters are not applied to a tag push.
+    tags:
+      - "v*"
     paths:
       - "procgen"
       - "libraries/core/structures/**"
@@ -46,8 +61,66 @@ env:
   GODOT_VERSION: "4.7.2"
 
 jobs:
+  # The platform list for this event (see the header). Always a valid matrix, so the digests job
+  # expands even when it is then skipped (run=false).
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      run: ${{ steps.pick.outputs.run }}
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - name: Choose the platforms
+        id: pick
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REPO: ${{ github.repository }}
+        run: |
+          # The platforms and their Godot downloads; a Godot version bump edits this table.
+          cat > platforms.json <<'EOF'
+          [
+            {"name": "Linux", "runner": "ubuntu-latest",
+             "zip": "Godot_v4.7.2-stable_linux.x86_64.zip",
+             "sha256": "cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4",
+             "godot": ".ci-godot/Godot_v4.7.2-stable_linux.x86_64"},
+            {"name": "Windows", "runner": "windows-latest",
+             "zip": "Godot_v4.7.2-stable_win64.exe.zip",
+             "sha256": "731980f9608d61333e5baf54a2ef17210acc7a538446c0cb9969f002aca1e953",
+             "godot": ".ci-godot/Godot_v4.7.2-stable_win64_console.exe"},
+            {"name": "macOS", "runner": "macos-latest",
+             "zip": "Godot_v4.7.2-stable_macos.universal.zip",
+             "sha256": "c58a24e31d720be9d62f60cb5627c4e695fb72f21b0cfe1bc9ccaa9a3b3ba63e",
+             "godot": ".ci-godot/Godot.app/Contents/MacOS/Godot"}
+          ]
+          EOF
+          run=true
+          filter='.'
+          if [[ "$EVENT" == push && "$REF" != refs/tags/* ]]; then
+            filter='map(select(.name != "macOS"))'
+          elif [[ "$EVENT" == schedule ]]; then
+            since=$(date -u -d '25 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+            pushed=$(gh run list --repo "$REPO" --workflow determinism.yml --event push \
+              --created ">=$since" --limit 1 --json databaseId --jq length)
+            if [[ "$pushed" == "0" ]]; then run=false; fi
+            filter='map(select(.name == "macOS"))'
+          fi
+          matrix=$(jq -c "$filter" platforms.json)
+          # A skipped run still needs a valid matrix to expand.
+          if [[ "$run" == false ]]; then matrix=$(jq -c 'map(select(.name == "Linux"))' platforms.json); fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "run=$run, matrix=$(jq -c 'map(.name)' <<< "$matrix")"
+
   digests:
     name: Digests ${{ matrix.name }}
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
     defaults:
@@ -56,22 +129,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: Linux
-            runner: ubuntu-latest
-            zip: Godot_v4.7.2-stable_linux.x86_64.zip
-            sha256: cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4
-            godot: .ci-godot/Godot_v4.7.2-stable_linux.x86_64
-          - name: Windows
-            runner: windows-latest
-            zip: Godot_v4.7.2-stable_win64.exe.zip
-            sha256: 731980f9608d61333e5baf54a2ef17210acc7a538446c0cb9969f002aca1e953
-            godot: .ci-godot/Godot_v4.7.2-stable_win64_console.exe
-          - name: macOS
-            runner: macos-latest
-            zip: Godot_v4.7.2-stable_macos.universal.zip
-            sha256: c58a24e31d720be9d62f60cb5627c4e695fb72f21b0cfe1bc9ccaa9a3b3ba63e
-            godot: .ci-godot/Godot.app/Contents/MacOS/Godot
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     env:
       GODOT: ${{ matrix.godot }}
     steps:

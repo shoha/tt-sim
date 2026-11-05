@@ -20,6 +20,12 @@ name: Native scatter parity
 
 on:
   workflow_call:
+    inputs:
+      # 'true' leaves out the macOS job (build.yml's verify tier). A string for the reason
+      # native.yml gives; the default runs both.
+      skip_macos:
+        type: string
+        default: "false"
 
 env:
   GODOT_VERSION: "4.7.2"
@@ -96,6 +102,7 @@ jobs:
 
   macos:
     name: Parity macOS
+    if: inputs.skip_macos != 'true'
     runs-on: macos-latest
     defaults:
       run:

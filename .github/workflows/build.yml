@@ -5,7 +5,24 @@ on:
     branches: [main]
     tags:
       - "v*"
+  schedule:
+    # Nightly at 10:00 UTC: the full tier below (the plan job skips the night when main has not
+    # moved in 25 hours).
+    - cron: "0 10 * * *"
   workflow_dispatch:
+    inputs:
+      tier:
+        description: "verify (tests and lint), full (also exports, macOS and signing), publish (also release and Steam)"
+        type: choice
+        options: [verify, full, publish]
+        default: full
+
+# A newer push to main supersedes a verify run still going, so a burst of merges builds the last
+# one only. Every other run (a tag, the nightly, a manual dispatch) queues and is never cancelled:
+# a cancelled publish could stop between the Steam depots.
+concurrency:
+  group: build-${{ github.ref }}-${{ (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')) && 'verify' || 'other' }}
+  cancel-in-progress: ${{ github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') }}
 
 env:
   # The newest Godot build, matching local testing. The two container images below must name
@@ -13,24 +30,88 @@ env:
   GODOT_VERSION: "4.7.2"
   PROJECT_NAME: "TTSim"
 
-# The job graph: native builds the libraries; then the test job, the Windows and macOS parity
-# jobs and the three exports all run side by side. Signing waits for the exports and for the
-# tests and every parity job to pass, and the release and the Steam upload wait for signing, so
-# nothing is signed, released or uploaded from a build whose tests or parity failed (the export
-# artifacts of such a run just expire after a day). Every job that imports the project restores
-# Godot's import from the Actions cache first (.github/actions/import-cache explains the key).
+# Three tiers (user, 2026-11-04: a push to main used to run the whole release chain, 18 to 38
+# minutes, and publish a Steam testing build every time). The plan job picks one:
+#
+#   verify   a push to main. The native Linux and Windows libraries, the test job (tests, lint,
+#            Linux parity) and Windows parity. No macOS, no exports, no signing, no release.
+#   full     the nightly, and a manual dispatch (the default). Verify plus the macOS library and
+#            parity, the three exports, and signing and notarization (so an expired certificate
+#            or Apple agreement shows up at night, not on release day). Nothing is published.
+#   publish  a v* tag, and a manual dispatch with tier publish. Full plus the GitHub release and
+#            the Steam upload (testing branch).
+#
+# The job graph of a full run: native builds the libraries; then the test job, the Windows and
+# macOS parity jobs and the three exports all run side by side. Signing waits for the exports and
+# for the tests and every parity job to pass, and the release and the Steam upload wait for
+# signing, so nothing is signed, released or uploaded from a build whose tests or parity failed
+# (the export artifacts of such a run just expire after a day). Every job that imports the
+# project restores Godot's import from the Actions cache first (.github/actions/import-cache
+# explains the key). A job outside the tier is skipped, and so is everything that needs it.
 jobs:
-  # The native scatter library for every platform, debug and release (native.yml), then its
-  # parity with GDScript on Windows and macOS (native-parity.yml) beside the test job, which
-  # checks Linux's. The exports ship the release libraries.
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tier: ${{ steps.tier.outputs.tier }}
+      full: ${{ steps.tier.outputs.full }}
+      publish: ${{ steps.tier.outputs.publish }}
+      skip_macos: ${{ steps.tier.outputs.skip_macos }}
+    steps:
+      - name: Choose the tier
+        id: tier
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REPO: ${{ github.repository }}
+          INPUT_TIER: ${{ inputs.tier }}
+        run: |
+          tier=verify
+          if [[ "$REF" == refs/tags/v* ]]; then
+            tier=publish
+          elif [[ "$EVENT" == workflow_dispatch ]]; then
+            tier="${INPUT_TIER:-full}"
+          elif [[ "$EVENT" == schedule ]]; then
+            # A night with no new commit on main has nothing to find.
+            since=$(date -u -d '25 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+            moved=$(gh api "repos/$REPO/commits?sha=main&since=$since&per_page=1" --jq length)
+            if [[ "$moved" == "0" ]]; then tier=none; else tier=full; fi
+          fi
+          full=false
+          publish=false
+          case "$tier" in
+            full) full=true ;;
+            publish) full=true; publish=true ;;
+          esac
+          {
+            echo "tier=$tier"
+            echo "full=$full"
+            echo "publish=$publish"
+            echo "skip_macos=$([[ $full == true ]] && echo false || echo true)"
+          } >> "$GITHUB_OUTPUT"
+          echo "tier: $tier (event $EVENT, ref $REF)"
+
+  # The native scatter library for every platform, debug and release (native.yml; no macOS in
+  # the verify tier), then its parity with GDScript on Windows and macOS (native-parity.yml)
+  # beside the test job, which checks Linux's. The exports ship the release libraries.
   native:
     name: Native
+    needs: plan
+    if: needs.plan.outputs.tier != 'none'
     uses: ./.github/workflows/native.yml
+    with:
+      skip_macos: ${{ needs.plan.outputs.skip_macos }}
 
   native-parity:
     name: Native parity
-    needs: native
+    needs: [plan, native]
     uses: ./.github/workflows/native-parity.yml
+    with:
+      skip_macos: ${{ needs.plan.outputs.skip_macos }}
     secrets: inherit
 
   test:
@@ -134,7 +215,8 @@ jobs:
   # Beside the tests, not after them: signing is what waits for the tests and parity.
   export:
     name: Export ${{ matrix.preset }}
-    needs: native
+    needs: [plan, native]
+    if: needs.plan.outputs.full == 'true'
     runs-on: ubuntu-latest
     container:
       image: barichello/godot-ci:4.7.2
@@ -259,7 +341,8 @@ jobs:
   # Signing is the gate: nothing past this point runs unless the tests and parity passed.
   sign-windows:
     name: Sign Windows executable
-    needs: [export, test, native-parity]
+    needs: [plan, export, test, native-parity]
+    if: needs.plan.outputs.full == 'true'
     runs-on: windows-latest
     steps:
       - name: Download Windows artifact
@@ -299,7 +382,8 @@ jobs:
 
   sign-macos:
     name: Sign and Notarize macOS
-    needs: [export, test, native-parity]
+    needs: [plan, export, test, native-parity]
+    if: needs.plan.outputs.full == 'true'
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -448,9 +532,11 @@ jobs:
           path: artifacts/macos/TTSim.zip
           retention-days: 1
 
+  # The publish tier only (a v* tag, or a manual dispatch with tier publish).
   release:
     name: Create Release
-    needs: [export, sign-windows, sign-macos]
+    needs: [plan, export, sign-windows, sign-macos]
+    if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -536,7 +622,8 @@ jobs:
 
   deploy-steam:
     name: Deploy to Steam
-    needs: [export, sign-windows, sign-macos]
+    needs: [plan, export, sign-windows, sign-macos]
+    if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -594,7 +681,8 @@ jobs:
   # Artifacts only hand builds between jobs of this run; the release and Steam
   # depots are the durable copies. Delete them once everything succeeded so they
   # do not count against Actions storage. Failed runs keep theirs (1-day
-  # retention) so "Re-run failed jobs" still works.
+  # retention) so "Re-run failed jobs" still works. It runs in the publish tier only (it needs
+  # both publishing jobs); the artifacts of a full run expire after their one day.
   cleanup-artifacts:
     name: Delete run artifacts
     needs: [release, deploy-steam]

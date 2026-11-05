@@ -21,6 +21,13 @@ name: Native scatter library
 
 on:
   workflow_call:
+    inputs:
+      # A string, not a boolean: on this workflow's own push trigger the input is absent (empty),
+      # and `!= 'true'` then reads as "do not skip", which a boolean comparison would not.
+      # build.yml passes 'true' on a push to main (the verify tier builds no macOS library).
+      skip_macos:
+        type: string
+        default: "false"
   push:
     branches: ["ci/**"]
 
@@ -150,6 +157,7 @@ jobs:
   # many minutes), and each build takes under a minute.
   macos:
     name: Native macOS
+    if: inputs.skip_macos != 'true'
     runs-on: macos-latest
     env:
       PYTHON: python3
