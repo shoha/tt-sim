@@ -24,10 +24,13 @@ holds the version being worked *toward*, not the one last shipped.
      without it) -- that's the whole reason this script exists instead of
      doing it manually again.
 2. Pushing the tag (`-Push`, or manually: `git push origin main && git push origin vX.Y.Z`)
-   triggers `.github/workflows/build.yml` automatically: tests, parity and the
-   Windows/macOS/Linux exports side by side → code-sign (Azure) + notarize
-   (Apple), once the tests and parity passed → create a GitHub Release →
-   deploy to Steam's `testing` branch. All credentials
+   starts two runs of `.github/workflows/build.yml` (since 2026-11-04 a push to
+   `main` runs only the verify tier and publishes nothing): the `main` push's
+   verify run, and the tag's publish run, which does the release: tests, parity
+   and the Windows/macOS/Linux exports side by side → code-sign (Azure) +
+   notarize (Apple), once the tests and parity passed → create a GitHub Release →
+   deploy to Steam's `testing` branch. Only the tag (or a manual dispatch with
+   `tier=publish`) publishes. All credentials
    already exist as GitHub Actions secrets -- nothing to supply.
 3. **Promoting the Steam build from `testing` to live (`default`) is a manual
    step in the Steamworks partner web UI.** Neither CI nor the script does
@@ -50,7 +53,10 @@ holds the version being worked *toward*, not the one last shipped.
    go-ahead.
 4. If confirmed, either re-run with `-Push`, or run the two `git push`
    commands the script printed.
-5. After pushing, check the workflow run (`gh run list` / `gh run view`) and
+5. After pushing, check the tag's workflow run (`gh run list` / `gh run view`;
+   the `main` push's verify run is the other one) and also look at the
+   Determinism run for the tag (all three platforms; it does not gate the
+   release) and
    report status back once it completes -- the pipeline (build, sign,
    notarize, release, Steam deploy) typically takes several minutes.
 6. Remind the user that the Steam `testing` → live promotion is still a
