@@ -42,13 +42,35 @@ A command off the allowlist costs a classifier check, or a user prompt outside a
 - Soft target of about 400 lines per file; split along natural seams rather than pass
   the 1000-line lint cap.
 
+## Your worktree
+
+When the card names a branch, you work in `D:/dev/tabletop/worktrees/tt-sim-<topic>`, never in the
+main checkout. Set it up once, in this order:
+
+1. `git -C D:/dev/tabletop/tt-sim worktree add D:/dev/tabletop/worktrees/tt-sim-<topic> -b <topic>`
+2. The procgen junction (the submodule path is empty): PowerShell `New-Item -ItemType Junction
+   -Path D:/dev/tabletop/worktrees/tt-sim-<topic>/procgen -Target D:/dev/tabletop/procgen` (or the
+   procgen worktree the card names). Remove it ONLY with `(Get-Item <link>).Delete()`, before any
+   git command that touches the worktree and before removing it; never `rm -rf`,
+   `Remove-Item -Recurse` or `git clean` (2026-11-03: a recursive delete followed the link and
+   emptied the real procgen repo).
+3. Copy `native/bin` and `native/tt_scatter.gdextension` from the main checkout (ignored files).
+4. Its own user folder: add BOTH lines to the `[application]` section of the worktree's
+   `project.godot`, uncommitted and never committed: `config/use_custom_user_dir=true` and
+   `config/custom_user_dir_name="TTSim_<topic>"`. The name alone does nothing.
+5. `godot --headless --import --path D:/dev/tabletop/worktrees/tt-sim-<topic>` (cold, about 2
+   minutes; a burst of font and theme load errors on the first pass is expected, a second
+   `--quit-after 1` run is clean).
+6. Check: `%APPDATA%/TTSim_<topic>` now exists (PowerShell `Test-Path`). If it does not, step 4 is
+   wrong and you are on the shared `TTSim` folder: fix it, or take the lane for every run.
+
 ## Gate, before the commit
 
 1. `gdlint` each touched `.gd` by absolute path. Do not run `gdformat`: a hook formats
    every `.gd` edit.
 2. `godot --headless --path D:/dev/tabletop/tt-sim --quit-after 1` (compile and shader errors).
 3. Full GUT, sharded: `godot --headless --path D:/dev/tabletop/tt-sim --script
-   res://tools/gut_shards.gd` (the serial `gut_cmdln.gd` run is only for debugging an
+   res://tools/gut_shards.gd` (in your own worktree, no lane; the serial `gut_cmdln.gd` run is only for debugging an
    order-dependent failure). If you stop it early, its shards keep running: stop them by id
    after the process check. Report the totals verbatim. The `gut_loader.gd:35` startup SCRIPT ERROR is known GUT noise. Name any
    unrelated pre-existing failure; do not fix it.
@@ -58,9 +80,18 @@ A command off the allowlist costs a classifier check, or a user prompt outside a
 
 ## The Godot lane
 
-Every Godot run against tt-sim (the gate, a render job, a net scenario, a bridge session, a
-headless test run) happens while you hold the lane, because every worktree shares the `TTSim`
-user folder and two runs at once look like code failures. Edit, think and lint without it.
+The lane serializes Godot runs that share one machine resource: the GPU, fixed ports, or a user
+folder. Edit, think and lint without it. Since 2026-11-04 (gateprobe) headless runs in your own
+worktree do not need it:
+
+- **No lane:** the compile check, the sharded gate, single-test GUT, `--import`, and a headless
+  probe that opens no window and no sockets, in YOUR worktree, once you have checked that its own
+  user folder exists (see "Your worktree"). One Godot run at a time in your worktree.
+- **Lane:** render jobs and captures, the validation bridge, net scenarios, any run that takes
+  timings, and every Godot run in the main checkout `D:/dev/tabletop/tt-sim` or in any checkout
+  without its own user folder (it uses the shared `TTSim` folder).
+
+How to take it:
 
 - Take it with ONE foreground call, tool timeout 600000: `pwsh -NoProfile -File
   D:/dev/tabletop/tools/lane.ps1 acquire <your card name>`. It queues first come first served

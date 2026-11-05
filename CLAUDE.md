@@ -87,19 +87,24 @@ past 900 s, and keeps each shard's log under `user://gut_shards/`. If you stop i
 shards keep running: run the process check and stop them by id. The serial command (Godot CLI
 below) is for running one ordered process, for example when debugging an order-dependent failure.
 
-Never run two sharded gates at once, and never run one while a render job is using the same user
-folder (2026-10-30): every worktree without its own `config/custom_user_dir_name` shares
-`user://gut_shards/` and the rest of the `TTSim` user data, so overlapping runs overwrite each
-other's shard files. It looked like a code failure twice in one day: a cluster of unrelated
+Two runs must never share a user folder (2026-10-30): a worktree on the shared `TTSim` folder
+shares `user://gut_shards/` and the rest of the `TTSim` user data, so overlapping runs overwrite
+each other's shard files. It looked like a code failure twice in one day: a cluster of unrelated
 `test_surface_store` failures, then a run that reported FAILED after half the tests. The
-affected files passed alone. With agents in several worktrees, run the gate one at a time, and
-treat a cluster of failures in files nobody touched as a collision until the rerun in quiet.
-Since 2026-11-02 the runner guards the sharded case itself: it writes `user://gut_shards/runner.lock`
-(refreshed every 5 s) and a second runner that finds it younger than 20 s exits 2 with a message
-naming the file, instead of overwriting the first one's files. A render job or a serial run is not
-detected, so the lane lock still applies: take it with
-`pwsh -NoProfile -File D:/dev/tabletop/tools/lane.ps1 acquire <name>` and `release` it after the run
-(`D:/dev/tabletop/docs/coordinating.md` "The lane lock").
+affected files passed alone. Treat a cluster of failures in files nobody touched as a collision
+until the rerun in quiet. Since 2026-11-02 the runner guards the sharded case itself: it writes
+`user://gut_shards/runner.lock` (refreshed every 5 s) and a second runner that finds it younger than
+20 s exits 2 with a message naming the file, instead of overwriting the first one's files.
+
+A worktree gets its own user folder from TWO uncommitted keys in its `project.godot`:
+`config/use_custom_user_dir=true` and `config/custom_user_dir_name="TTSim_<topic>"` (the name alone
+does nothing; measured 2026-11-04, `D:/dev/tabletop/docs/handoffs/2026-11-04-gateprobe.md`). Check that
+`%APPDATA%/TTSim_<topic>` appears after the first Godot run. Then headless runs there (this gate, the
+compile check, single-test GUT) need no lane, and two sharded gates in two such worktrees ran at once
+four times with 0 failures (a pair takes 1.13 to 1.18 times a solo run). The lane
+(`pwsh -NoProfile -File D:/dev/tabletop/tools/lane.ps1 acquire <name>`, `release` after the run;
+`D:/dev/tabletop/docs/coordinating.md` "The Godot lane") is still taken for render jobs, the bridge,
+net scenarios, timing runs, and every run in this main checkout or any checkout without its own folder.
 
 Run the `gdlint` line with `D:/dev/tabletop/tt-sim` as the working directory: gdlint reads `.gdlintrc`
 only from the current directory, and run from `D:/dev/tabletop` it reports false max-public-methods and
