@@ -328,7 +328,16 @@ doc is [systems/eye_view.md](systems/eye_view.md).
   draw over the cloudlets, so only the strip between the two bases showed, a hard straight
   ribbon. The cloudlets' bases now start at the banks' highest base (`cloud2_min_deg` 26,
   `cloud2_span_deg` 16; `StreetSkyLook.CLOUD2_MIN_DEG` mirrors it, a test keeps the shader in step).
-  Cloudlets elsewhere keep their shapes and move up by at most 2 degrees.
+  Cloudlets elsewhere keep their shapes and move up by at most 2 degrees. Card cloudstreak re-measured
+  it on 2026-11-07 (savanna, eye [10, 10], pitch -15, yaws 225 and 315): with the old 24 and 18
+  the ribbon returns at the same pixels, with 26 and 16 it is gone.
+- Fixed (card cloudstreak): a short hard white dash where two banks overlap (savanna pitch -15, yaws
+  45 and 90). The lower bank's thin body tip, tucked just under the higher bank's flat base, was lit:
+  the light test (a step up and toward the sun leaving every bank) found open sky under the higher
+  bank's flat base. That test now ignores the flat bases (`cloud_s(..., flat_base = false)`), so
+  the space just under a bank is its shadow and the tip stays the cool underside colour. The other
+  checked views (savanna, temperate forest and alpine meadow, yaws 225 and 315, pitch 0 and -15)
+  are pixel-identical.
 - `EyeView` also owns `sky_custom_fov` 0 at the eye; it reads the Environment from
   `world_viewport.find_world_3d()` (the SubViewport's own `world_3d` is null).
 - Godot 4.7 resets `Environment.fog_density` when `fog_mode` is assigned: set the mode first.

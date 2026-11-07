@@ -177,9 +177,11 @@ float ridge_top(float t, int i, float tt) {
 // the layer's hash offset. Every bank draws its own shape from a few continuous numbers (how long
 // it is against how tall, how its four lobes are spread and heaped, which side leans higher), so a
 // sky of them is a family of shapes, not one shape repeated: long flat banks, heaped cumulus,
-// lopsided domes and small puffs.
+// lopsided domes and small puffs. `flat_base` false leaves the flat-base cut off: the banks' light
+// test reads the space just under a bank's base as the bank's shadow, not open sky.
 float cloud_s(
-	float az, float el, vec4 layer, float size_deg, float off, int lobes, out float base_out, out float h_out
+	float az, float el, vec4 layer, float size_deg, float off, int lobes, bool flat_base, out float base_out,
+	out float h_out
 ) {
 	float cells = layer.x;
 	float x = az / TURN * cells;
@@ -224,7 +226,9 @@ float cloud_s(
 		float body = length(vec2(dx / body_w, (el - base - 0.2 * h) / (0.55 * h))) - 1.0;
 		s_cell = min(s_cell, body * 2.0);
 		// Flat base.
-		s_cell = max(s_cell, (base - el) / (0.25 * h));
+		if (flat_base) {
+			s_cell = max(s_cell, (base - el) / (0.25 * h));
+		}
 		if (s_cell < s_best) {
 			s_best = s_cell;
 			base_out = base;
@@ -243,16 +247,27 @@ vec4 cloud_layer(float az, float el, float side) {
 	vec4 layer = vec4(cloud_cells, cloud_cover, cloud_min_deg, cloud_span_deg);
 	float base;
 	float h;
-	float s = cloud_s(az, el, layer, cloud_size_deg, 0.0, 5, base, h);
+	float s = cloud_s(az, el, layer, cloud_size_deg, 0.0, 5, true, base, h);
 	float m = 1.0 - smoothstep(-0.02, 0.1, s);
 	if (m <= 0.0) {
 		return vec4(0.0);
 	}
+	// Lit where a step up and toward the sun leaves every bank. That test ignores the flat bases, so
+	// the part of a lower bank tucked just under a higher bank's base stays in the higher bank's
+	// shadow: lit there, a thin body tip between the two flat bases showed as a hard white dash.
 	float b2;
 	float h2;
 	float off = 0.2 * h;
 	float s2 = cloud_s(
-		az + radians(off) * side / max(cos(radians(el)), 0.3), el + off * 0.7, layer, cloud_size_deg, 0.0, 5, b2, h2
+		az + radians(off) * side / max(cos(radians(el)), 0.3),
+		el + off * 0.7,
+		layer,
+		cloud_size_deg,
+		0.0,
+		5,
+		false,
+		b2,
+		h2
 	);
 	float lit = smoothstep(-0.4, 0.0, s2);
 	float t = clamp((el - base) / (h * 1.5), 0.0, 1.0);
@@ -272,7 +287,7 @@ vec4 high_cloud_layer(float az, float el) {
 	vec4 layer = vec4(cloud_cells * 2.0 + 1.0, cloud2_cover, cloud2_min_deg, cloud2_span_deg);
 	float base;
 	float h;
-	float s = cloud_s(az, el, layer, cloud_size_deg * cloud2_scale, 100.0, 3, base, h);
+	float s = cloud_s(az, el, layer, cloud_size_deg * cloud2_scale, 100.0, 3, true, base, h);
 	float m = 1.0 - smoothstep(-0.03, 0.12, s);
 	if (m <= 0.0) {
 		return vec4(0.0);
