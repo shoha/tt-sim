@@ -740,14 +740,15 @@ Follow-ups:
   painted door leaves and dressed windows, the street hint row, and the entry: V, F9 or a tilt
   past home glide down in 1.3 s (a dolly zoom) and back up. Authoring stays orbit-only. The shadow
   sweep and the full-size look round are done (the sun's shadow distance is fitted from the eye,
-  `EyeShadow`; the `el_*` look round was judged on the board). Still queued from the look notes
-  (owner EL1): edge props and street props.
-  Also queued: a right-click and double-click route for the token pin, and a real-mouse check of
-  pin hover and click. (Pack-token collision shapes were fixed in the `collshapes` card,
-  `docs/CONVENTIONS.md` "Camera System".)
-- Future ideas: player avatar tokens in the house style (Future ideas, below).
-- Crossings over a dressed Blender map's own water, in the terrain-paint integration sprint
-  (Open work, "Crossing follow-ups").
+  `EyeShadow`; the `el_*` look round was judged on the board). The owner's EL1 verdict ("all") is
+  built: edge props landed as the eye rim (`EyeRim`, e4c6f164) and street props as painted
+  shutters, plank walls, braced crates, strapped hay and a spoked wheel (dfe272fe). Nothing is
+  queued by name. Still unverified from the eyeedge card: the rim in biomes other than the
+  grassland hamlet, and a thin white streak in the savanna's high cloud layer at pitch -15.
+  The other items that sat here (a right-click and double-click route for the token pin with a
+  real-mouse check, avatar tokens, crossings over a Blender map's own water) were cleared on
+  2026-11-07 as not important (user); avatars stay in Future ideas and the crossing work in
+  Open work, "Crossing follow-ups".
 
 - **Phase 3 (done, 2026-09-27):** Sculpt (Raise, Smooth, Flatten, Tier with rock-cliff
   edges snapping to 5 ft tiers), Paint (ground, rock and built surfaces; paint yields to
