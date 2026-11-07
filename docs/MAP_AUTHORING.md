@@ -743,8 +743,9 @@ Follow-ups:
   `EyeShadow`; the `el_*` look round was judged on the board). The owner's EL1 verdict ("all") is
   built: edge props landed as the eye rim (`EyeRim`, e4c6f164) and street props as painted
   shutters, plank walls, braced crates, strapped hay and a spoked wheel (dfe272fe). Nothing is
-  queued by name. Still unverified from the eyeedge card: the rim in biomes other than the
-  grassland hamlet, and a thin white streak in the savanna's high cloud layer at pitch -15.
+  queued by name. The rim was checked in all eight biomes on 2026-11-07 (card `rimbiomes`: only
+  bushes make hedges, saplings and snags go to copses; look-pending). Still open from the
+  eyeedge card: a thin white streak in the savanna's high cloud layer at pitch -15.
   The other items that sat here (a right-click and double-click route for the token pin with a
   real-mouse check, avatar tokens, crossings over a Blender map's own water) were cleared on
   2026-11-07 as not important (user); avatars stay in Future ideas and the crossing work in
