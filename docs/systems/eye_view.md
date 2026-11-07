@@ -100,8 +100,11 @@ gives it a middle ground (CQ3, ED1) without touching the orbit view: past the ed
 orbit view. The plan is pure (`EyeRim.plan`): each side is cut into 10 m slots (`SLOT_M`); the map seed picks per
 slot a gap (30 percent), a hedge (35 percent, a loose row of shrubs 2 to 5 m out, 1.8 m apart) or a copse (the
 rest: 2 to 5 trees 4 to 10 m out within 3.5 m of a centre, with 1 to 3 shrubs at their feet). Species come from the
-dominant biome by kind and size (large trees, medium shrubs and understory), so a biome with no large trees makes
-shrub clumps, one with no shrubs makes hedges of trees, one with neither none. Slots by a river that runs out past
+dominant biome by kind, size and role (`EyeRim.species`: large trees; medium bushes; medium tree-form understory,
+the roles in `TREE_FORM_ROLES`). Only bushes make hedges: a row of saplings read as a planted avenue in the taiga and
+the savanna, and a row of snags as fence posts in the burnt forest (card rimbiomes), so a biome without bushes plants
+copses in its hedge slots (`EyeRim.slot_kind`), with its understory at their feet. A biome with no large trees makes
+clumps of its smaller plants, one with no tree rules none. Slots by a river that runs out past
 the edge stay open (`RiverExits.exits`, `RIVER_CLEAR_M` 5 plus the half width). Heights follow the skirt's fall
 (`TerrainMeshBuilder.skirt_height`). The node is an `AuthoredScatter` named `EyeRim` under `LevelMap`, made the first
 time the eye opens on a map and only hidden after; the plan is rebuilt from the document on each opening, so an edit
@@ -178,7 +181,7 @@ in authoring, F9 does not. Nothing in the document records the eye. The look is 
 
 Unit tests: `tests/unit/test_eye_view.gd` (rig, walk, bounds, hint row, F9), `test_eye_collider.gd`,
 `test_eye_glide.gd` (21 tests, the glide, V and the tilt), `test_eye_sky.gd`, `test_street_sky_look.gd`,
-`test_eye_canopy.gd`, `test_canopy_fade.gd`, `test_eye_rim.gd` (species, plan, `near_line`; `EyeRim.show` and `plan_for`
+`test_eye_canopy.gd`, `test_canopy_fade.gd`, `test_eye_rim.gd` (species, `slot_kind`, plan, `near_line`; `EyeRim.show` and `plan_for`
 have no test), `test_eye_pick.gd`, `test_view_ground.gd`, `test_eye_shadow.gd`, `test_input_hints.gd`.
 
 Render jobs (`tools/render_jobs/JOBS.md`): the `el_*` eye-level look round, `eyeedge_*`, `eyefoliage_*`, `eyegrass_*`,

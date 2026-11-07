@@ -46,12 +46,48 @@ func test_species_by_kind_and_size() -> void:
 	var kinds := EyeRim.species(biome)
 	assert_eq(kinds.trees, PackedStringArray(["oak"]))
 	assert_eq(kinds.shrubs, PackedStringArray(["bush", "rose"]))
+	assert_eq(kinds.understory, PackedStringArray())
+
+
+func test_species_puts_tree_form_medium_rules_in_the_understory() -> void:
+	var biome := {
+		"species":
+		[
+			{"kind": "tree", "size_class": "large", "role": "snag", "assets": ["snag"]},
+			{"kind": "tree", "size_class": "medium", "role": "understory_tree", "assets": ["sap"]},
+			{"kind": "tree", "size_class": "medium", "role": "shrub", "assets": ["bush"]},
+		]
+	}
+	var kinds := EyeRim.species(biome)
+	assert_eq(kinds.trees, PackedStringArray(["snag"]))
+	assert_eq(kinds.shrubs, PackedStringArray(["bush"]), "bushes alone make hedges")
+	assert_eq(kinds.understory, PackedStringArray(["sap"]), "saplings stand at copse feet")
 
 
 func test_the_core_grassland_has_rim_species() -> void:
 	var kinds := EyeRim.species(PaletteLibrary.biome("grassland_meadow_summer_s1"))
 	assert_false((kinds.trees as PackedStringArray).is_empty(), "the meadow's oaks")
 	assert_false((kinds.shrubs as PackedStringArray).is_empty(), "its bushes")
+
+
+func test_the_core_taiga_and_burnt_forest_have_no_hedge_shrubs() -> void:
+	var taiga := EyeRim.species(PaletteLibrary.biome("boreal_taiga_summer_s1"))
+	assert_true((taiga.shrubs as PackedStringArray).is_empty(), "the taiga's saplings are no hedge")
+	assert_false((taiga.understory as PackedStringArray).is_empty(), "they stand at copse feet")
+	var burnt := EyeRim.species(PaletteLibrary.biome("burnt_forest_summer_s1"))
+	assert_true((burnt.shrubs as PackedStringArray).is_empty(), "no row of snags")
+	assert_false((burnt.trees as PackedStringArray).is_empty(), "snag copses")
+
+
+func test_slot_kind_hedges_only_with_bushes() -> void:
+	var bushes := {"trees": PackedStringArray(["t"]), "shrubs": PackedStringArray(["b"])}
+	var no_bushes := {"trees": PackedStringArray(["t"]), "understory": PackedStringArray(["s"])}
+	var hedge_pick := EyeRim.GAP_SHARE + EyeRim.HEDGE_SHARE * 0.5
+	assert_eq(EyeRim.slot_kind(EyeRim.GAP_SHARE * 0.5, bushes), "gap")
+	assert_eq(EyeRim.slot_kind(hedge_pick, bushes), "hedge")
+	assert_eq(EyeRim.slot_kind(0.99, bushes), "copse")
+	assert_eq(EyeRim.slot_kind(EyeRim.GAP_SHARE * 0.5, no_bushes), "gap", "gaps stay")
+	assert_eq(EyeRim.slot_kind(hedge_pick, no_bushes), "copse", "no hedge of trees or saplings")
 
 
 func test_every_plant_stands_past_the_edge_and_near_it() -> void:
@@ -93,6 +129,23 @@ func test_shrubs_only_still_plants() -> void:
 	var shrubs := {"trees": PackedStringArray(), "shrubs": PackedStringArray(["bush_a"])}
 	var rows := _rows(5, shrubs)
 	assert_eq(rows.keys(), ["bush_a"])
+
+
+func test_without_bushes_every_slot_is_a_gap_or_a_copse() -> void:
+	var no_bushes := {
+		"trees": PackedStringArray(["pine"]),
+		"shrubs": PackedStringArray(),
+		"understory": PackedStringArray(["sapling"]),
+	}
+	var rows := _rows(7, no_bushes)
+	assert_true(rows.has("pine"), "copses of the trees")
+	assert_true(rows.has("sapling"), "with saplings at their feet")
+	var with_bushes := no_bushes.duplicate()
+	with_bushes.shrubs = PackedStringArray(["bush_a"])
+	var pines := func(r: Dictionary) -> int: return (r.pine as PackedFloat32Array).size()
+	assert_gt(pines.call(rows), pines.call(_rows(7, with_bushes)), "hedge slots became copses")
+	var saplings_only := {"understory": PackedStringArray(["sapling"])}
+	assert_eq(_rows(5, saplings_only).keys(), ["sapling"], "clumps of the understory alone")
 
 
 func test_plants_stand_on_the_skirt_falling_from_a_raised_edge() -> void:

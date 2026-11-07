@@ -16,9 +16,11 @@ extends RefCounted
 ## The plan is pure (plan()): the perimeter is cut into SLOT_M slots, and the map seed picks per
 ## slot a gap, a hedge (a loose row of shrubs along the edge, HEDGE_OUT_M out) or a copse (a few
 ## trees with shrubs at their feet, COPSE_OUT_M out). Species come from the dominant biome's rules
-## by kind and size (species()): large trees, and medium ones (shrubs, understory trees); a
-## biome with no large trees makes shrub clumps, one with no shrubs hedges of trees, one with
-## neither none.
+## by kind, size and role (species()): large trees, medium bush-form shrubs, and medium
+## tree-form understory (saplings). Only bushes make hedges: saplings or snags lined up read as a
+## planted avenue or a fence (card rimbiomes, the taiga, savanna and burnt forest rims), so a
+## biome without bushes makes copses in its hedge slots, and understory stands at copse feet. A
+## biome with no large trees makes clumps of its smaller plants, one with no tree rules none.
 ## Slots by a river running out past the edge are left open (RiverExits.exits). Heights follow
 ## the skirt's own fall (TerrainMeshBuilder.skirt_height), so the plants stand on it.
 ##
@@ -27,6 +29,9 @@ extends RefCounted
 
 const NODE_NAME := "EyeRim"
 const TREE_KIND := "tree"
+## Roles (LibraryContracts) of a medium rule whose plants are tree-shaped: never lined up in a
+## hedge. A medium rule of any other role, or none, is a bush.
+const TREE_FORM_ROLES: Array[String] = ["understory_tree", "snag", "canopy_tree"]
 ## The length of perimeter one hedge, copse or gap takes.
 const SLOT_M := 10.0
 ## Of the slots: this share is open, this share hedges, the rest copses.
@@ -50,13 +55,15 @@ const RIVER_CLEAR_M := 5.0
 const SCALE_RANGE := Vector2(0.85, 1.25)
 
 
-## The rim's species of a palette biome (PaletteLibrary.biome): {"trees": PackedStringArray,
-## "shrubs": PackedStringArray} of asset ids, each species rule's assets in order. A rule of kind
-## "tree" (LibraryContracts: canopy and understory trees, shrubs, snags) is a tree when large and
-## a shrub when medium. Pure.
+## The rim's species of a palette biome (PaletteLibrary.biome): {"trees", "shrubs",
+## "understory"}, each a PackedStringArray of asset ids, each species rule's assets in order. A
+## rule of kind "tree" (LibraryContracts: canopy and understory trees, shrubs, snags) is a tree
+## when large; when medium it is understory if its role is one of TREE_FORM_ROLES, else a shrub.
+## Pure.
 static func species(biome: Dictionary) -> Dictionary:
 	var trees := PackedStringArray()
 	var shrubs := PackedStringArray()
+	var understory := PackedStringArray()
 	for rule: Dictionary in biome.get("species", []):
 		if String(rule.get("kind", "")) != TREE_KIND:
 			continue
@@ -65,8 +72,22 @@ static func species(biome: Dictionary) -> Dictionary:
 			"large":
 				trees.append_array(assets)
 			"medium":
-				shrubs.append_array(assets)
-	return {"trees": trees, "shrubs": shrubs}
+				if String(rule.get("role", "")) in TREE_FORM_ROLES:
+					understory.append_array(assets)
+				else:
+					shrubs.append_array(assets)
+	return {"trees": trees, "shrubs": shrubs, "understory": understory}
+
+
+## What a slot whose seed draw is `pick` (0 to 1) plants for `kinds` (species()): "gap" (the
+## first GAP_SHARE), "hedge" (the next HEDGE_SHARE, only when there are shrubs) or "copse". Pure.
+static func slot_kind(pick: float, kinds: Dictionary) -> String:
+	if pick < GAP_SHARE:
+		return "gap"
+	var shrubs: PackedStringArray = kinds.get("shrubs", PackedStringArray())
+	if pick < GAP_SHARE + HEDGE_SHARE and not shrubs.is_empty():
+		return "hedge"
+	return "copse"
 
 
 ## The rim's rows (asset id -> PackedFloat32Array, MapDocument.ROW_STRIDE floats each, map frame)
@@ -78,9 +99,12 @@ static func plan(
 ) -> Dictionary:
 	var trees: PackedStringArray = kinds.get("trees", PackedStringArray())
 	var shrubs: PackedStringArray = kinds.get("shrubs", PackedStringArray())
+	var feet := shrubs + PackedStringArray(kinds.get("understory", PackedStringArray()))
 	var rows := {}
-	if trees.is_empty() and shrubs.is_empty():
+	if trees.is_empty() and feet.is_empty():
 		return rows
+	# A copse's trees: the large ones, else clumps of the smaller plants.
+	var copse_trees := trees if not trees.is_empty() else feet
 	for side in 4:
 		var frame := _side(side, half)
 		var length: float = frame.length
@@ -91,14 +115,14 @@ static func plan(
 			rng.seed = hash([seed_value, side, k, 7919])
 			var along := -length * 0.5 + (k + 0.5) * step
 			var edge_point: Vector2 = frame.origin + frame.tangent * along
-			var pick := rng.randf()
-			if pick < GAP_SHARE or blocked.call(edge_point):
+			var kind := slot_kind(rng.randf(), kinds)
+			if kind == "gap" or blocked.call(edge_point):
 				continue
 			var plant := {"rows": rows, "rng": rng, "frame": frame, "edge_y": edge_y}
-			if pick < GAP_SHARE + HEDGE_SHARE:
-				_hedge(plant, along, step, shrubs if not shrubs.is_empty() else trees)
+			if kind == "hedge":
+				_hedge(plant, along, step, shrubs)
 			else:
-				_copse(plant, along, trees if not trees.is_empty() else shrubs, shrubs)
+				_copse(plant, along, copse_trees, feet)
 	return rows
 
 
