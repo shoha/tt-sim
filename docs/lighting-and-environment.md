@@ -786,7 +786,14 @@ independent layers.
   project's small object scale (tokens are well under 1 unit tall) to avoid
   "peter-panning" (shadows detaching from small objects). They are correctness
   tuning for this game's geometry, not artistic dials, so they are not exposed
-  on `SunSettings` or in the panel.
+  on `SunSettings` or in the panel. `SUN_SHADOW_BIAS` (0.05) has a floor too:
+  at 0.02 the soft-shadow filter's outer taps (widened by `shadow_blur` 2.0)
+  fell behind flat lit ground, which darkened it by a few levels and drew a
+  fine world-fixed grid of stripes (about 7 cm, along the sun's azimuth) over
+  every lit flat area, strongest at the player's shadow quality 2 and gone with
+  hard shadows (groundband, 2026-11-08). The normal bias does not clear it (1.0
+  removed 13 %); the bias does, at 0.05 and 0.1. The small log and pebble keep
+  their contact shadows at 0.05 (zoom 4 capture).
 
 The sun blends its shadow cascades (`directional_shadow_blend_splits`, `SUN_SHADOW_BLEND_SPLITS` in
 `level_environment_manager.gd`, 2026-11-02). Without it, far trees' shadows were missing at the

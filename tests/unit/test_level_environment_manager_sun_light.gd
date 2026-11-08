@@ -111,6 +111,23 @@ func test_apply_level_environment_uses_small_shadow_biases_so_small_tokens_keep_
 	root.free()
 
 
+func test_apply_level_environment_biases_the_sun_past_the_soft_shadow_stripes() -> void:
+	# Regression test (groundband, 2026-11-08): at shadow_bias 0.02 the soft-shadow filter's
+	# outer taps fell behind flat lit ground and drew a fine world-fixed stripe (about 7 cm,
+	# along the sun's azimuth) over every lit flat area; 0.05 cleared it in captures, and the
+	# normal bias does not (1.0 removed 13 %), so the floor is on shadow_bias.
+	var manager := LevelEnvironmentManager.new()
+	var root := Node3D.new()
+	manager.apply_level_environment(LevelData.new(), root)
+
+	var sun := root.get_node_or_null("LevelSunLight") as DirectionalLight3D
+	assert_gte(sun.shadow_bias, 0.05)
+	# The light stores its biases as 32-bit floats.
+	assert_almost_eq(sun.shadow_bias, LevelEnvironmentManager.SUN_SHADOW_BIAS, 1e-6)
+	assert_almost_eq(sun.shadow_normal_bias, LevelEnvironmentManager.SUN_SHADOW_NORMAL_BIAS, 1e-6)
+	root.free()
+
+
 func test_apply_sun_settings_updates_the_existing_light_without_recreating_it() -> void:
 	var manager := LevelEnvironmentManager.new()
 	var root := Node3D.new()

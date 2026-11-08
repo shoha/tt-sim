@@ -36,6 +36,17 @@ const SUN_SHADOW_VIEW_MARGIN: float = 5.0
 ## with block changes 3 to 5 times a pan step's; with blending it is 9.3 to 9.8 % and smooth).
 ## Costs about 0.1 ms of GPU at 1920x1080 (indicative, in-run A/B).
 const SUN_SHADOW_BLEND_SPLITS: bool = true
+## DirectionalLight3D.shadow_bias. Godot's default (0.1) is tuned for building-scale geometry;
+## 0.02 kept small props' shadows attached but let the soft-shadow filter's outer taps (the
+## kernel shadow_blur 2.0 widens) fall behind flat lit ground, which drew a fine stripe across
+## every lit flat area: period about 7 cm, along the sun's azimuth, fixed to the world
+## (groundband, 2026-11-08: 1 to 2 levels at shadow quality 2, gone with hard shadows, with
+## shadows off and at bias 0.05 or 0.1; normal bias up to 1.0 removed only 13 %).
+const SUN_SHADOW_BIAS: float = 0.05
+## DirectionalLight3D.shadow_normal_bias. Godot's default (2.0) pushes the lookup far enough off
+## a small token that its shadow detaches ("peter-panning"); raising this does not clear the
+## stripe above (SUN_SHADOW_BIAS does).
+const SUN_SHADOW_NORMAL_BIAS: float = 0.1
 
 ## Field of view Godot uses to draw the sky behind the map. The map camera is
 ## orthographic, and Godot draws any sky behind an orthographic camera as if the
@@ -422,15 +433,15 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		# Tokens are small (well under 1 unit tall), so the default
 		# normal_bias pushes the shadow-map lookup far enough off the surface
 		# that small props can lose their shadow entirely ("peter-panning").
-		# These smaller values keep shadows attached to small objects while
-		# still avoiding shadow acne on the terrain.
+		# SUN_SHADOW_BIAS and SUN_SHADOW_NORMAL_BIAS keep shadows attached to
+		# small objects while keeping the soft-shadow stripes off the terrain.
 		#
 		# shadow_enabled, light_angular_distance, and shadow_opacity are NOT set
 		# here -- they are per-level artistic settings written by
 		# DefaultSun.apply() on every _configure_sun_light() call. The biases
 		# below are engine tuning for this project's object scale and stay fixed.
-		_sun_light.shadow_bias = 0.02
-		_sun_light.shadow_normal_bias = 0.1
+		_sun_light.shadow_bias = SUN_SHADOW_BIAS
+		_sun_light.shadow_normal_bias = SUN_SHADOW_NORMAL_BIAS
 		_sun_light.directional_shadow_max_distance = SUN_SHADOW_MAX_DISTANCE
 		_sun_light.directional_shadow_blend_splits = SUN_SHADOW_BLEND_SPLITS
 		world_viewport.add_child(_sun_light)
