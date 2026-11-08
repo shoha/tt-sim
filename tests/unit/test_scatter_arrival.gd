@@ -180,7 +180,14 @@ func test_every_real_wind_variant_reads_the_arrival_uniforms() -> void:
 		var code := _expanded(path)
 		assert_string_contains(code, "instance uniform vec4 grow_wave", false)
 		assert_string_contains(code, "instance uniform vec2 grow_clock", false)
-		assert_string_contains(code, "VERTEX *= grow_scale(MODEL_MATRIX[3].xyz);", false)
+		# Directly, or through one local the variant also scales its rest position by
+		# (rest_view, treewind).
+		var direct := code.contains("VERTEX *= grow_scale(MODEL_MATRIX[3].xyz);")
+		var shared := (
+			code.contains("float grown = grow_scale(MODEL_MATRIX[3].xyz);")
+			and code.contains("VERTEX *= grown;")
+		)
+		assert_true(direct or shared, "%s scales the swayed vertex by grow_scale" % path)
 
 
 func test_the_burn_variant_gains_nothing() -> void:

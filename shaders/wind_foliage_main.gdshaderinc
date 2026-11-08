@@ -93,8 +93,11 @@ vec3 eye_grass_albedo(vec3 a, float h, float key, float near) {
 
 void vertex() {
 	local_vertex_y = VERTEX.y;
+	vec3 rest = VERTEX;
 	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
-	VERTEX *= grow_scale(MODEL_MATRIX[3].xyz);
+	float grown = grow_scale(MODEL_MATRIX[3].xyz);
+	VERTEX *= grown;
+	rest *= grown;
 	eye_grass_near = 0.0;
 	eye_grass_key = 0.0;
 	if (eye_grass > 0.0 && blade_height > 0.0 && !eye_flower
@@ -103,8 +106,11 @@ void vertex() {
 		eye_grass_near = 1.0 - smoothstep(
 			EYE_GRASS_FULL * eye_grass, EYE_GRASS_NONE * eye_grass, distance(origin, canopy_eye.xz));
 		eye_grass_key = eye_grass_hash(origin);
-		VERTEX *= eye_grass_keep(eye_grass_key, eye_grass_near);
+		float keep = eye_grass_keep(eye_grass_key, eye_grass_near);
+		VERTEX *= keep;
+		rest *= keep;
 	}
+	rest_view = (MODELVIEW_MATRIX * vec4(rest, 1.0)).xyz;
 	zone_tuft = vec4(1.0);
 	zone_mass = vec2(0.0);
 	zone_mass_h = 0.0;
@@ -129,7 +135,7 @@ void fragment() {
 	float pbr_metallic;
 	vec3 pbr_normal_map;
 
-	apply_wind_foliage_pbr(UV, INV_VIEW_MATRIX, NORMAL, VERTEX, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE, local_vertex_y, COLOR.gb,
+	apply_wind_foliage_pbr(UV, INV_VIEW_MATRIX, NORMAL, VERTEX, rest_view, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE, local_vertex_y, COLOR.gb,
 		pbr_albedo, pbr_alpha, pbr_ao, pbr_roughness, pbr_metallic, pbr_normal_map);
 	if (zone_tuft_strength > 0.0) {
 		pbr_albedo = zone_tuft_albedo(pbr_albedo, zone_tuft, vec3(zone_mass, zone_mass_h));

@@ -3,7 +3,17 @@ extends GutTest
 ## Tests for the painted foliage light (FoliageLight, utils/foliage_light.gd): a leaf material
 ## carrying the glTF extra tt_foliage_light "painted" gets the painted wind shader variant and
 ## one without keeps today's shader; the antialiasing swap keeps each in its form; both
-## painted variants are warmed; and the foliage_sun global follows the level's sun.
+## painted variants are warmed; the edge-on cut reads the card's rest pose and the camera's own
+## view ray; and the foliage_sun global follows the level's sun.
+
+const INCLUDE_PATH := "res://shaders/wind_foliage_include.gdshaderinc"
+## Every shader that calls apply_wind_foliage_pbr, so each must write the rest_view varying.
+const REST_VIEW_WRITERS: Array[String] = [
+	"res://shaders/wind_foliage_main.gdshaderinc",
+	"res://shaders/wind_foliage_burn.gdshader",
+	"res://shaders/wind_foliage_debug_cheap_lighting.gdshader",
+	"res://shaders/wind_foliage_debug_unshaded.gdshader",
+]
 
 
 class FakeGameMap:
@@ -259,6 +269,41 @@ func test_the_antialiasing_swap_keeps_painted_and_plain_apart() -> void:
 func test_both_painted_variants_are_warmed() -> void:
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/wind_foliage_painted.gdshader")
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/wind_foliage_painted_no_aa.gdshader")
+
+
+## The text of the function in `text` that starts with `signature`, up to its closing brace at
+## the start of a line.
+func _function_body(text: String, signature: String) -> String:
+	var start := text.find(signature)
+	assert_gt(start, -1, "%s is in the shader" % signature)
+	var end := text.find("\n}", start)
+	return text.substr(start, end - start) if start >= 0 and end > start else ""
+
+
+# The edge-on cut (treewind, 2026-11-08): taken from the swayed position, a card whose facing sat at
+# the band popped in and out with the wind; taken with the perspective ray under the orthographic
+# orbit camera, whose origin moves in with the zoom, it cut whole pine wedges when zoomed in.
+func test_the_edge_on_cut_reads_the_rest_pose_and_the_projections_own_ray() -> void:
+	var text := FileAccess.get_file_as_string(INCLUDE_PATH)
+	var facing := _function_body(text, "float card_facing(")
+	assert_string_contains(facing, "dFdx(rest_vertex_view)", "the card's face at rest")
+	assert_string_contains(facing, "projection_matrix[3][3] < 0.5", "the eye's ray in perspective")
+	assert_string_contains(facing, "vec3(0.0, 0.0, 1.0)", "an orthographic camera's ray is its axis")
+	var painted := _function_body(text, "void apply_painted_albedo(")
+	assert_string_contains(painted, "card_facing(rest_vertex_view, projection_matrix)")
+	assert_false(painted.contains("dFdx(vertex_view)"), "never the swayed position")
+
+
+func test_every_variant_hands_its_rest_position_to_the_cut_and_the_canopy_fade() -> void:
+	var pbr := _function_body(
+		FileAccess.get_file_as_string(INCLUDE_PATH), "void apply_wind_foliage_pbr("
+	)
+	assert_string_contains(pbr, "apply_canopy_fade(rest_vertex_view,", "the fade holds still too")
+	for path in REST_VIEW_WRITERS:
+		var text := FileAccess.get_file_as_string(path)
+		var vertex := _function_body(text, "void vertex()")
+		assert_string_contains(vertex, "rest_view = (MODELVIEW_MATRIX * vec4(", path)
+		assert_string_contains(text, "VERTEX, rest_view, VIEW_MATRIX", path)
 
 
 func test_sun_value_points_toward_the_sun_and_weighs_its_energy() -> void:

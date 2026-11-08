@@ -101,6 +101,7 @@ void vertex() {
 	burn_s = INSTANCE_CUSTOM.x;
 	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
 	VERTEX *= grow;
+	rest_view = (MODELVIEW_MATRIX * vec4(burn_local * grow, 1.0)).xyz;
 	VERTEX += shadow_caster_offset(MODEL_MATRIX, INV_VIEW_MATRIX, IN_SHADOW_PASS);
 }
 
@@ -114,7 +115,7 @@ void fragment() {
 	float pbr_metallic;
 	vec3 pbr_normal_map;
 
-	apply_wind_foliage_pbr(UV, INV_VIEW_MATRIX, NORMAL, VERTEX, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE, local_vertex_y, COLOR.gb,
+	apply_wind_foliage_pbr(UV, INV_VIEW_MATRIX, NORMAL, VERTEX, rest_view, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE, local_vertex_y, COLOR.gb,
 		pbr_albedo, pbr_alpha, pbr_ao, pbr_roughness, pbr_metallic, pbr_normal_map);
 
 	vec3 albedo = pbr_albedo;

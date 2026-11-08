@@ -33,8 +33,10 @@ render_mode cull_disabled, diffuse_lambert, specular_disabled;
 
 void vertex() {
 	local_vertex_y = VERTEX.y;
+	float grown = grow_scale(MODEL_MATRIX[3].xyz);
+	rest_view = (MODELVIEW_MATRIX * vec4(VERTEX * grown, 1.0)).xyz;
 	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
-	VERTEX *= grow_scale(MODEL_MATRIX[3].xyz);
+	VERTEX *= grown;
 }
 
 
@@ -47,7 +49,7 @@ void fragment() {
 	float pbr_metallic;
 	vec3 pbr_normal_map;
 
-	apply_wind_foliage_pbr(UV, INV_VIEW_MATRIX, NORMAL, VERTEX, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE, local_vertex_y, COLOR.gb,
+	apply_wind_foliage_pbr(UV, INV_VIEW_MATRIX, NORMAL, VERTEX, rest_view, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE, local_vertex_y, COLOR.gb,
 		pbr_albedo, pbr_alpha, pbr_ao, pbr_roughness, pbr_metallic, pbr_normal_map);
 
 	ALBEDO = pbr_albedo;

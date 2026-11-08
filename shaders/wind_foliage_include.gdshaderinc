@@ -124,6 +124,15 @@ instance uniform float grow : hint_range(0.0, 1.0) = 1.0;
 // see that function's comment): do not conflate the two or reuse one for the other.
 varying float local_vertex_y;
 
+// The vertex's REST position in view space: where it stands before the wind (sway, gust lean,
+// flutter) moves it, with the same grow-in scale, written by each variant's vertex() from
+// MODELVIEW_MATRIX. The tests that decide whether a fragment is drawn at all (the edge-on cut,
+// card_facing, and the canopy fade's position, apply_canopy_fade) read it, so a card keeps
+// one answer while its crown sways; taken from the swayed VERTEX, a card whose facing or
+// position sat at a threshold crossed it back and forth with the wind and popped in and out
+// (treewind, 2026-11-08). Lighting and the occlusion fade keep the swayed VERTEX.
+varying vec3 rest_view;
+
 // Occlusion fade: lets a token show through tree foliage the same way it shows
 // through map geometry. See occlusion_fade_include.gdshaderinc.
 #include "res://shaders/occlusion_fade_include.gdshaderinc"
@@ -376,6 +385,9 @@ vec3 two_sided_foliage_normal(vec3 normal, bool front_facing) {
 // authoring piece stands clear of a bush's bare stems.
 // The eye view adds the near fade (canopy_eye) by the same key, tested against the eye
 // itself (the camera's origin), so it needs neither the window nor the published axis.
+// `vertex_view` is the fragment's REST position in view space (the rest_view varying; the burn
+// variant's too), so a card at a window's edge keeps its cut line while it sways rather than
+// flickering across it.
 void apply_canopy_fade(
 	vec3 vertex_view, mat4 inv_view_matrix, vec2 wind, vec2 frag_coord
 ) {
@@ -459,19 +471,36 @@ float eye_light_weight(mat4 inv_view_matrix) {
 
 
 #ifdef FOLIAGE_PAINTED_LIGHT
+// How squarely a card faces the camera for the edge-on cut: |dot(face, view ray)|, 0 edge-on to 1
+// face-on. The face is the card's own (screen derivatives) at its rest position (`rest_vertex_view`,
+// the rest_view varying), so the answer holds still while the crown sways and flutters. The view
+// ray is the projection's: the camera axis for an orthographic camera, the ray to the eye for a
+// perspective one (PROJECTION_MATRIX[3][3] < 0.5, the eye view). normalize(-VERTEX), the
+// perspective ray, was used for both until treewind (2026-11-08): the orbit camera is
+// orthographic and its origin moves in with the zoom (OrbitView.update_camera_offset) to a few
+// metres from a tall crown or behind it, where that ray points far off the axis, so at zoom 5 the
+// cut took 4.1% of the frame (whole pine wedges) against 0.25% for the same frame with the camera
+// 60 m back.
+float card_facing(vec3 rest_vertex_view, mat4 projection_matrix) {
+	vec3 face = normalize(cross(dFdx(rest_vertex_view), dFdy(rest_vertex_view)));
+	vec3 ray = projection_matrix[3][3] < 0.5 ? normalize(-rest_vertex_view) : vec3(0.0, 0.0, 1.0);
+	return abs(dot(face, ray));
+}
+
+
 // The painted light's fragment terms (see the uniforms above): the sun-ward albedo ramp, the
-// edge-on cut in the camera's pass, and the silhouette ink. `normal` is the view-space
-// shading normal, `vertex_view` the view-space position.
+// edge-on cut in the camera's pass (card_facing), and the silhouette ink. `normal` is the
+// view-space shading normal, `rest_vertex_view` the view-space rest position (rest_view).
 void apply_painted_albedo(
-	mat4 inv_view_matrix, vec3 normal, vec3 vertex_view, inout vec3 albedo, inout float alpha
+	mat4 inv_view_matrix, mat4 projection_matrix, vec3 normal, vec3 rest_vertex_view,
+	inout vec3 albedo, inout float alpha
 ) {
 	vec3 ramp_dir = normalize(foliage_sun.xyz + vec3(0.0, FOLIAGE_RAMP_UP, 0.0));
 	float t = smoothstep(-0.5, 0.8, dot(normalize(mat3(inv_view_matrix) * normal), ramp_dir));
 	albedo *= mix(foliage_shade_tint, foliage_lit_tint, t);
 	albedo += foliage_shade_add * (1.0 - t);
 	if (dot(inv_view_matrix[2].xyz, canopy_fade_view.xyz) >= 0.999) {
-		vec3 face = normalize(cross(dFdx(vertex_view), dFdy(vertex_view)));
-		float facing = abs(dot(face, normalize(-vertex_view)));
+		float facing = card_facing(rest_vertex_view, projection_matrix);
 		alpha *= smoothstep(foliage_edge_on_band.x, foliage_edge_on_band.y, facing);
 	}
 	float edge = 1.0 - smoothstep(alpha_scissor_threshold, min(1.0, alpha_scissor_threshold + 0.4), alpha);
@@ -486,7 +515,9 @@ void apply_painted_albedo(
 // for Godot's limitation that output built-ins can only be assigned directly inside
 // fragment(), not from a called function. Samples textures, unpacks ORM, applies
 // normal mapping, and calls apply_canopy_fade() (wind: the fragment's COLOR.gb) and
-// apply_occlusion_fade() to determine final alpha values.
+// apply_occlusion_fade() to determine final alpha values. `vertex_view` is the swayed
+// view-space position (VERTEX), `rest_vertex_view` the rest one (the rest_view varying), which
+// the canopy fade and the edge-on cut read.
 // Caller is responsible for assigning the out-parameters to their corresponding
 // built-ins and setting variant-specific ALPHA_SCISSOR_THRESHOLD/antialiasing values.
 void apply_wind_foliage_pbr(
@@ -494,6 +525,7 @@ void apply_wind_foliage_pbr(
 	mat4 inv_view_matrix,
 	vec3 normal,
 	vec3 vertex_view,
+	vec3 rest_vertex_view,
 	mat4 view_matrix,
 	mat4 projection_matrix,
 	vec2 frag_coord,
@@ -507,7 +539,7 @@ void apply_wind_foliage_pbr(
 	out float out_metallic,
 	out vec3 out_normal_map
 ) {
-	apply_canopy_fade(vertex_view, inv_view_matrix, wind, frag_coord);
+	apply_canopy_fade(rest_vertex_view, inv_view_matrix, wind, frag_coord);
 	vec4 albedo_sample = texture(albedo_texture, uv);
 	out_albedo = albedo_sample.rgb;
 	out_alpha = albedo_sample.a;
@@ -519,7 +551,8 @@ void apply_wind_foliage_pbr(
 	float h = blade_height > 0.0 ? clamp(vertex_local_y / blade_height, 0.0, 1.0) : 1.0;
 	out_albedo *= mix(base_darken, 1.0, h);
 #ifdef FOLIAGE_PAINTED_LIGHT
-	apply_painted_albedo(inv_view_matrix, normal, vertex_view, out_albedo, out_alpha);
+	apply_painted_albedo(
+		inv_view_matrix, projection_matrix, normal, rest_vertex_view, out_albedo, out_alpha);
 #endif
 
 	vec3 orm = texture(orm_texture, uv).rgb;

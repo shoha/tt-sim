@@ -3121,6 +3121,21 @@ again (p95 2.838 / 2.796 / 2.913). Foliage over the hidden reference is 0.06 / 0
 grass-variety sample's 0.15 / 0.35 and within its 0.2 ms run-to-run spread: the carpets add no
 measurable cost at this frame time.
 
+**The edge-on cut and the canopy fade from the rest pose (treewind, 2026-11-08): not measured.**
+Leaf cards popped in and out as the crowns swayed, and zooming in on a pine cut whole wedges out
+of it. Both came from the edge-on cut: it took the card's face from the swayed position, so a
+card whose facing sat at `foliage_edge_on_band` crossed it with the flutter, and it used the
+perspective ray `normalize(-VERTEX)` under the orthographic orbit camera, whose origin moves in
+with the zoom to a few metres from a tall crown (or behind it, past the canopy near-plane hold).
+Measured on a 100 ft temperate forest new map, wind frozen, share of the half-size frame the cut
+removes: home 1.95%, zoom 5 4.10% (0.25% for the same frame with the camera 60 m back along its
+axis), zoom 3 0.99%. Now every wind variant writes a `rest_view` varying (the vertex's view-space
+position before the wind, one `MODELVIEW_MATRIX` multiply in `vertex()`, for grass too); the cut
+(`card_facing`) and the canopy fade read it, and the cut's ray is the camera axis for an
+orthographic camera: home 0.44%, zoom 5 0.25% (the same with the camera 60 m back), zoom 3
+0.23%, and the cut set no longer moves with the wind. The extra vec3 varying and multiply were
+not timed with the pinned procedure; time them before calling the change free.
+
 ## Ground look and grass masses (ground ship, 2026-10-15)
 
 The round 20 ground look (`GroundLookBake`, the zoned ground and the tuft shading) and the grass
