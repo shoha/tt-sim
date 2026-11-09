@@ -69,7 +69,7 @@ static func document(ref: String) -> PlantGraphDocument:
 	var text := text_of(ref)
 	if text == "":
 		return null
-	var registry := ProcgenStructureRegistry.new()
+	var registry := StructureProcgen.new_registry()
 	if LibraryStructures.recipe_problem(text, registry) != "":
 		return null
 	return PlantGraphDocument.from_json(text, registry)

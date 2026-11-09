@@ -90,8 +90,25 @@ func _fence(roots: Array[String], prefixes: PackedStringArray) -> void:
 			elif not seen.has(d):
 				stack.append(d)
 	var n_edges := 0
+	var targets: Dictionary = {}
 	for p: String in crossings:
 		n_edges += (crossings[p] as Array).size()
+		for d: String in _edges[p]:
+			if fenced.call(d):
+				targets[d] = true
+	# Each fenced script the boot code names, with how much it brings in on its own: a light one
+	# (a data type) can stay named, a heavy one wants a facade.
+	print("\n-- fenced entry points (scripts its closure holds inside the fence) --")
+	var rows: Array = []
+	for t: String in targets:
+		var inside := 0
+		for p: String in _reach([t], ""):
+			if fenced.call(p) and p.ends_with(".gd"):
+				inside += 1
+		rows.append([inside, t])
+	rows.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+	for row: Array in rows:
+		print("  %4d  %s" % [row[0], row[1]])
 	print("\n-- fenced: %d scripts (%.0f KB) left, %d edges from %d scripts cross --" % [
 		_scripts(seen), _kb(seen), n_edges, crossings.size()])
 	var keys: Array = crossings.keys()
@@ -108,11 +125,11 @@ func _apply_cuts(spec: String) -> void:
 		if ends.size() != 2:
 			continue
 		for p: String in _edges:
-			if p.get_file() != ends[0]:
+			if p != ends[0] and p.get_file() != ends[0]:
 				continue
 			var kept: Array[String] = []
 			for d: String in _edges[p]:
-				if ends[1] != "*" and d.get_file() != ends[1]:
+				if ends[1] != "*" and d != ends[1] and d.get_file() != ends[1]:
 					kept.append(d)
 			_edges[p] = kept
 

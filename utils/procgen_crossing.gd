@@ -83,7 +83,7 @@ static func load_recipe(path: String = PLANK_RECIPE) -> PlantGraphDocument:
 	if not FileAccess.file_exists(path):
 		return null
 	return PlantGraphDocument.from_json(
-		FileAccess.get_file_as_string(path), ProcgenStructureRegistry.new()
+		FileAccess.get_file_as_string(path), StructureProcgen.new_registry()
 	)
 
 
