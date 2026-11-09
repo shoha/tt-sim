@@ -145,8 +145,8 @@ From the register's rows that are not merged, with their measured size:
   map still takes 11.7 s and a cold play load 3.4 s, both waiting on the lane's serial bakes:
   decoding, hashing and cache writes could move off the serial lane, unmeasured); about 620 MB of texture memory stays at the title after a map (526 MB
   unattributed, engine-side); the first-launch warm-up; about 80 pipeline compiles per load;
-  surface PNGs 54 % of the download; process memory creeps 2.7 MB per map cycle; idle runs at full
-  rate (board perf-idle-throttle).
+  surface PNGs 54 % of the download; process memory creeps 2.7 MB per map cycle; the idle throttle (15 fps unfocused, 5 minimised, sysidle) is built:
+  see "Idle throttle".
 - **Look-pending** (the user's look is the gate): the occlusion fade tiles, render scale, ground-
   cover light and skirt commits; the gpuoptions defaults.
 - **Test hygiene found on the way.** GUT silently dropped two test scripts that did not parse
@@ -5668,3 +5668,44 @@ run. Not moved to workers: the remaining main-thread time is mostly node creatio
 insertion (165 ms of load at 320 ft against a 25 ms native call and about 15 ms of buffer
 assignment), so threading the call would save at most about 25 ms. Grow-ins, shrinks and the GLB
 path still use the per-instance path (they hold transforms for their animation).
+
+## Idle throttle (topic sysidle, card sysidle, 2026-11-09)
+
+Register S4 (board perf-idle-throttle, answered "cap"). An idle game ran at full rate and a
+minimised one drew nothing but still spun its main loop at 145 iterations a second (the 6.9 ms
+low-processor sleep), 0.20-0.22 of a core. `IdleThrottle` (`utils/idle_throttle.gd`, a Node Root
+adds once the title is up) caps `Engine.max_fps` at 15 while the window has lost the focus and at
+5 while it is minimised; Settings > Graphics > "Idle throttle" (`graphics/idle_throttle`, default
+on) turns it off for second-monitor use. Details in the class header; the rules that matter:
+
+- A load behind the sheet is never slowed: `LoadPacing.cover` calls `IdleThrottle.release()` before
+  it saves `Engine.max_fps` (so the player's cap is the one saved, not the throttled one) and
+  `uncover` calls `reapply()` after it restores. The throttle never touches vsync.
+- A host with a connected peer keeps 30 fps in either state (the network poll and the physics steps
+  run once a frame; the engine catches up at most 8 physics steps a frame, so 5 fps would run a
+  host's physics at two thirds speed). Not driven by a net scenario here: the peer test is the
+  tree's `SceneMultiplayer` (`is_server()` with a non-empty peer list), covered by the policy test
+  only.
+- Headless, scripted (render jobs, probes, GUT) and `--validation-bridge` runs get no node
+  (`IdleThrottle.runs_here()`): an agent's window is rarely focused and its timings must not
+  change. A probe that wants the real throttle sets `IdleThrottle.allow_scripted` (the
+  `perfaudit_system.gd` `throttle` action).
+- A window minimised by a script reported `focused true` throughout (measured), so the node reads
+  the window mode every frame (a few microseconds) and the minimised cap does not wait for a focus
+  loss.
+
+Measured 2026-11-09, the title screen of a dev run, a real 1280x720 or 1920x1080 window, process
+CPU time over 10 s (render job `cpu` action and a PowerShell driver that took the foreground away
+with a second window and minimised with `ShowWindow`; another agent's headless shards ran on the
+machine for part of the session, so absolute CPU is pessimistic, the ratios are the point):
+
+| State | Throttle off | Throttle on |
+|---|---|---|
+| Focused (title, vsync) | 0.058-0.092 cores, 60 fps | unchanged (0.058-0.069, 60 fps) |
+| Unfocused, visible | 0.053 cores, 60 fps | 0.030 cores, 15 fps |
+| Minimised | 0.200-0.217 cores, loop 145/s | 0.005-0.016 cores, loop 5.1/s |
+
+The title is cheap to draw, so the unfocused saving here is the small end: a loaded map costs a
+frame several times more (the audit's 3-4 ms GPU frame at home), and the 15 fps cap removes three
+quarters of those frames. The perf budget holds the two caps (`idle_unfocused_fps`,
+`idle_minimized_fps`). The boot graph limit rose by one script (343).

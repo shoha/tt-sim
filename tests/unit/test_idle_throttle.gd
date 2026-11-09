@@ -30,6 +30,11 @@ func test_the_policy_caps_only_a_window_in_the_background() -> void:
 	assert_eq(IdleThrottle.cap_for(true, false, false, false), IdleThrottle.UNFOCUSED_FPS)
 	assert_eq(IdleThrottle.cap_for(true, false, true, false), IdleThrottle.MINIMIZED_FPS)
 	assert_eq(IdleThrottle.cap_for(false, false, true, false), 0, "switched off: no cap")
+	assert_eq(
+		IdleThrottle.cap_for(true, true, true, false),
+		IdleThrottle.MINIMIZED_FPS,
+		"minimised without a focus change (a script minimise) still gets the minimised cap"
+	)
 	assert_eq(IdleThrottle.UNFOCUSED_FPS, 15)
 	assert_eq(IdleThrottle.MINIMIZED_FPS, 5)
 
@@ -56,10 +61,8 @@ func test_focus_out_caps_and_focus_in_restores_the_cap_that_stood() -> void:
 	var node := IdleThrottle.new()
 	add_child_autofree(node)
 	IdleThrottle.focused = true
-	# A headless display reports its window minimised, so the expected cap follows that state.
 	node.notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
-	var expected := IdleThrottle.cap_for(true, false, IdleThrottle.minimized, false)
-	assert_gt(expected, 0)
+	var expected := IdleThrottle.UNFOCUSED_FPS
 	assert_eq(Engine.max_fps, expected)
 	node.notification(Node.NOTIFICATION_APPLICATION_FOCUS_IN)
 	assert_eq(Engine.max_fps, 0, "the uncapped state stood before")

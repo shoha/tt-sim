@@ -23,8 +23,10 @@ extends Node
 ##
 ## Root installs the node after the title is up. The cap policy is a pure function (cap_for) over
 ## the focus, the minimised state and whether a host has peers; the node feeds it from the
-## application focus notifications, and polls the window mode (there is no notification for a
-## minimise) and the peer list only while the window is in the background.
+## application focus notifications and, once a frame, the window's focus and mode and the peer
+## list (a few microseconds: there is no notification for a minimise, and a window minimised by
+## a script reports no focus change, measured 2026-11-09: focused stayed true while minimised, so
+## the minimised cap does not wait for the focus to go).
 
 ## The frame cap while the window is unfocused but visible.
 const UNFOCUSED_FPS := 15
@@ -41,7 +43,7 @@ const DEFAULT := true
 static var enabled := DEFAULT
 ## Whether the window has the focus. Starts true; the node reads the real state when it enters.
 static var focused := true
-## Whether the window is minimised (only tracked while unfocused).
+## Whether the window is minimised (read each frame by the node).
 static var minimized := false
 ## A probe that runs as a script and wants the real throttle sets this before install().
 static var allow_scripted := false
@@ -76,11 +78,13 @@ static func stored(config: ConfigFile) -> bool:
 	return bool(value) if value is bool else DEFAULT
 
 
-## The cap for a window in the given state, 0 for none. A host with a peer keeps HOSTING_FPS.
+## The cap for a window in the given state, 0 for none: a minimised window gets MINIMIZED_FPS
+## whether or not it reports the focus, an unfocused one UNFOCUSED_FPS. A host with a peer keeps
+## HOSTING_FPS.
 static func cap_for(
 	is_enabled: bool, has_focus: bool, is_minimized: bool, hosting_peers: bool
 ) -> int:
-	if not is_enabled or has_focus:
+	if not is_enabled or (has_focus and not is_minimized):
 		return 0
 	var cap := MINIMIZED_FPS if is_minimized else UNFOCUSED_FPS
 	return maxi(cap, HOSTING_FPS) if hosting_peers else cap
@@ -133,9 +137,7 @@ static func _hosting_peers() -> bool:
 
 func _enter_tree() -> void:
 	focused = DisplayServer.window_is_focused()
-	minimized = false
-	set_process(not focused)
-	reapply()
+	_refresh()
 
 
 func _exit_tree() -> void:
@@ -147,20 +149,22 @@ func _exit_tree() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
 		focused = false
-		set_process(true)
 		_refresh()
 	elif what == NOTIFICATION_APPLICATION_FOCUS_IN:
 		focused = true
-		minimized = false
-		set_process(false)
-		reapply()
+		_refresh()
 
 
 func _process(_delta: float) -> void:
 	_refresh()
 
 
-## Reads the minimised state and re-applies the cap when it, or the host's peers, changed.
+## Reads the window mode (a minimise sends no notification) and re-applies the cap for the focus,
+## the mode and the host's peers.
 func _refresh() -> void:
-	minimized = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_MINIMIZED
+	# A headless display reports its window minimised, so it is never read there.
+	minimized = (
+		DisplayServer.get_name() != "headless"
+		and DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_MINIMIZED
+	)
 	reapply()
