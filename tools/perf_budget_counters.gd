@@ -34,6 +34,7 @@ const LIMITS := {
 	"covered_max_fps": 240.0,
 	"stroke_tiles": 12.0,
 	"dab_tiles": 6.0,
+	"doc_row_bytes": 11.0,
 	"ground_prepass_writes": 0.0,
 	"ground_blend_roughness": 0.0,
 	"skirt_shadowed": 0.0,
@@ -86,6 +87,7 @@ static func rows(parent: Node) -> Array[Dictionary]:
 	out.append_array(net_rows())
 	out.append_array(token_rows(parent))
 	out.append_array(authoring_rows())
+	out.append_array(document_rows())
 	out.append_array(render_rows())
 	return out
 
@@ -323,6 +325,47 @@ static func authoring_rows() -> Array[Dictionary]:
 			"",
 			"set at 4 of %d" % total,
 			"F-authoring-4, 0ebb674c"
+		),
+	]
+
+
+## Bytes per scatter row of the map document (topic mapformat): a fixed 19600-row field of
+## plants, laid cell by cell as the generator emits them (a jittered 1.4 m lattice per 10 m cell,
+## yaw about +Y, uniform scale, a smooth hill), encoded by MapRowsCodec and deflated as the ZIP
+## stores it. JSON rows cost about 34 bytes deflated (93 raw); a regression of the column coding
+## shows here.
+@warning_ignore("integer_division")
+static func document_rows() -> Array[Dictionary]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var flat := PackedFloat32Array()
+	for cell_z in 20:
+		for cell_x in 20:
+			for i in 49:
+				var x := cell_x * 10.0 + (i % 7) * 1.4 + rng.randf() * 0.6
+				var z := cell_z * 10.0 + (i / 7) * 1.4 + rng.randf() * 0.6
+				var scale := rng.randf_range(0.85, 1.15)
+				var q := Quaternion(Vector3.UP, rng.randf() * TAU)
+				flat.append_array(
+					PackedFloat32Array(
+						[x, sin(x * 0.05) * cos(z * 0.04) * 3.0, z, q.x, q.y, q.z, q.w, scale, scale, scale]
+					)
+				)
+	MapDocumentIO.snap_rows(flat)
+	var codec: Variant = MapDocumentIO.codec()
+	var by_asset: Dictionary[String, PackedFloat32Array] = {"perf_budget/plant": flat}
+	var packed: PackedByteArray = codec.encode_rows(by_asset)
+	var deflated := packed.compress(FileAccess.COMPRESSION_DEFLATE).size()
+	var rows_count := flat.size() / MapDocument.ROW_STRIDE
+	var measured := "set at 1.5 times the value read (%d rows, %d B raw, %d B deflated)"
+	return [
+		_row(
+			"doc_row_bytes",
+			"Deflated bytes per scatter row in map.ttmap",
+			float(deflated) / rows_count,
+			"B",
+			measured % [rows_count, packed.size(), deflated],
+			"mapformat"
 		),
 	]
 

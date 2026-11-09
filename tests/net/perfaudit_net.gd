@@ -484,7 +484,7 @@ func _log_document(doc: MapDocument, path: String) -> void:
 	for entry_name: String in entries:
 		var bytes: PackedByteArray = entries[entry_name]
 		raw_all.append_array(bytes)
-		if entry_name not in ["scatter.json", "mass_anchors.json"]:
+		if entry_name not in [MapDocumentIO.SCATTER_ENTRY, MapAnchorsIO.ENTRY]:
 			recipe.append_array(bytes)
 		_log(
 			(

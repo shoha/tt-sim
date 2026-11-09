@@ -1150,28 +1150,29 @@ rather than in `ASSET_PIPELINE.md`.
   the geometry and domain limits; `MapDocumentIO` (`utils/map_document_io.gd`) reads and
   writes the file: `write(doc, path) -> Error`, `read(path) -> {document, warnings}`,
   and the pure `parse(entries)` / `serialize(doc)` pair the tests drive.
-- **Container:** one ZIP (`ZIPPacker`/`ZIPReader`), format 1. Entries: `manifest.json`
+- **Container:** one ZIP (`ZIPPacker`/`ZIPReader`), format 4 or 5 (since 2026-11-09; formats
+  1 to 3 had JSON rows and are refused). Entries: `manifest.json`
   (format, palette version, map seed, size in cells, cell size, sample spacing, tier
-  height, base surface, `has_base_map`), `height.bin` (float32 LE heights), `scatter.json`
-  and `props.json` (palette asset id -> `[lx, ly, lz, qx, qy, qz, qw, sx, sy, sz]` Y-up
-  rows, the `tt_scatter_instances` format), optional `erase.png` (L8, > 127 = erased),
+  height, base surface, `has_base_map`), `height.bin` (float32 LE heights), `scatter.bin`
+  and `props.bin` (palette asset id -> `[lx, ly, lz, qx, qy, qz, qw, sx, sy, sz]` Y-up
+  rows, the `tt_scatter_instances` format, stored as integer byte-plane columns on the
+  2^-10 m grid by `MapRowsCodec`; layout in `docs/systems/map_document.md` "Rows as binary"),
+  optional `erase.png` (L8, > 127 = erased),
   optional `authoring/biomes.png` (R = biome slot, 0 none / index + 1; G = density) with
   `authoring/biomes.json` (`{"biomes": [palette biome id, ...]}`), optional painted
   surfaces (below), optional water (below), and optional `fire.png` (L8 persistent ground
   fire intensity, 0 none, never all zero; drawn by `FireField`, painted by the Fire tool;
   `docs/systems/map_document.md`, and "Persistent fire" below). Unknown entries are ignored, so later
   phases add entries without a format bump.
-- **Size (measured 2026-10-09, 200 ft maps):** a fresh starting-cover map is 0.2-0.26 MB
-  (about 3.7K scatter rows); a full-density grassland map is 1.37-1.48 MB (43K rows),
+- **Size (measured 2026-10-09 with JSON rows, 200 ft maps):** a fresh starting-cover map was
+  0.2-0.26 MB (about 3.7K scatter rows); a full-density grassland map 1.37-1.48 MB (43K rows),
   93-99% of it `scatter.json` at about 93 B per row. `height.bin` is 100 KB zipped on a
   sculpted map, 250 B on a flat one. The file is sent zstd-compressed, which gains nothing
   over the ZIP's deflate. For comparison a painted Blender `map.glb` of a small interior sent 12.9 MB.
-  An offline prototype (packed binary scatter: uint16 positions, y as an int16 mm offset
-  from the ground, smallest-three quaternion, uint16 log scale, column-wise per asset)
-  cut scatter 3.6-4x at under 1 mm and 0.16 deg error; uint16 row-delta heights cut
-  `height.bin` from 100 KB to 18 KB. Both are candidates for the next format bump, not
-  worth one on their own. The measurement jobs and the encoder prototype are kept in
-  `tools/map_size/` (README there).
+  Format 4 (2026-11-09) stores the rows binary; the before and after numbers at 100, 200 and
+  320 ft are in `docs/PERFORMANCE.md` "Map document format". uint16 row-delta heights
+  (100 KB to 18 KB) remain a candidate for a later bump. The measurement jobs and the
+  encoder prototype are kept in `tools/map_size/` (README there).
 - **Water (phase 4):** `splines.json` (`{"version": 1, "bodies": [...], "flow": {...}}`):
   each body has a stable `id` (1..255, unique), `kind` `river` or `pond`, `depth`
   (`ankle`, `waist`, `deep`) and `level_m`; a river adds `speed` (0..2) and its control

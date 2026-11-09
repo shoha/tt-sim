@@ -10,8 +10,9 @@ extends GutTest
 const HALF_200FT := 30.48
 const BOREAL := "boreal_taiga_summer_s1"
 const ALPINE := "alpine_meadow_summer_s1"
-## Float32 rows: distances recomputed from them are good to about a micrometre.
-const EPSILON := 1e-4
+## Rows are on the saved grid (MapDocumentIO.ROW_STEP, 2^-10 m): distances recomputed from
+## them are good to about a step.
+const EPSILON := MapDocumentIO.ROW_STEP
 
 
 func before_all() -> void:

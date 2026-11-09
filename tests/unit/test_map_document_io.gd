@@ -65,7 +65,7 @@ func _remove_tree(path: String) -> void:
 func _assert_rows_close(actual: PackedFloat32Array, expected: PackedFloat32Array) -> void:
 	assert_eq(actual.size(), expected.size())
 	for i in mini(actual.size(), expected.size()):
-		assert_almost_eq(actual[i], expected[i], 1e-6)
+		assert_eq(actual[i], expected[i], "row value %d is bit-exact" % i)
 
 
 func _assert_same_document(actual: MapDocument, expected: MapDocument) -> void:
@@ -292,15 +292,15 @@ func _manifest_of(doc: MapDocument) -> Dictionary:
 	return JSON.parse_string(bytes.get_string_from_utf8())
 
 
-func test_a_core_only_map_stays_format_2_and_names_core() -> void:
-	assert_eq(MapDocument.FORMAT, 2)
-	assert_eq(MapDocument.FORMAT_LIBRARIES, 3)
+func test_a_core_only_map_is_format_4_and_names_core() -> void:
+	assert_eq(MapDocument.FORMAT, 4)
+	assert_eq(MapDocument.FORMAT_LIBRARIES, 5)
 	# The game serves the shipped core (res://libraries/core), whose version a map records.
 	PaletteLibrary.clear_cache()
 	LibraryRegistry.clear()
 	FoliageLibrary.apply()
 	var manifest := _manifest_of(Fixtures.full_doc())
-	assert_eq(int(manifest["format"]), 2, "an older build still opens a core-only map")
+	assert_eq(int(manifest["format"]), 4, "binary rows: a build before format 4 refuses it")
 	assert_eq(manifest["libraries"].size(), 1)
 	assert_eq(manifest["libraries"][0]["id"], "core")
 	assert_eq(manifest["libraries"][0]["version"], LibraryRegistry.record_of("core")["version"])
@@ -311,23 +311,23 @@ func test_a_core_only_map_stays_format_2_and_names_core() -> void:
 func test_a_map_with_nothing_in_it_names_no_library() -> void:
 	var doc := MapDocument.create_flat(Vector2i(30, 30), "", "v1", 1)
 	var manifest := _manifest_of(doc)
-	assert_eq(int(manifest["format"]), 2)
+	assert_eq(int(manifest["format"]), 4)
 	assert_false(manifest.has("libraries"))
 
 
-func test_a_map_using_another_library_is_written_as_format_3() -> void:
+func test_a_map_using_another_library_is_written_as_format_5() -> void:
 	var doc := Fixtures.full_doc()
 	var rows := PackedFloat32Array([0, 0, 0, 0, 0, 0, 1, 1, 1, 1])
 	doc.scatter["alienworld__crystal_basin_summer_s1/Crystal_Spire_v0"] = rows
 	doc.libraries = [{"id": "alienworld", "version": "0.3.1", "hash": "ab12cd34"}]
 	var manifest := _manifest_of(doc)
-	assert_eq(int(manifest["format"]), 3, "an older build refuses it instead of dropping plants")
+	assert_eq(int(manifest["format"]), 5, "an older build refuses it instead of dropping plants")
 	var ids: Array = manifest["libraries"].map(func(item: Dictionary) -> String: return item["id"])
 	assert_eq(ids, ["alienworld", "core"], "sorted, every library the map uses")
 	assert_eq(manifest["libraries"][0]["version"], "0.3.1", "what the file claimed is kept")
 
 
-func test_the_libraries_record_round_trips_and_a_format_3_document_reads() -> void:
+func test_the_libraries_record_round_trips_and_a_format_5_document_reads() -> void:
 	var doc := Fixtures.full_doc()
 	doc.biome_ids = PackedStringArray(["alienworld__crystal_basin_summer_s1"])
 	doc.biome_slots.fill(1)  # one biome now: every painted slot names it
@@ -364,7 +364,7 @@ func test_malformed_libraries_entries_are_skipped_with_warnings() -> void:
 		{"id": "longversion", "version": "1".repeat(200), "hash": ""},
 	]
 	var entries := Fixtures.minimal_entries(
-		{"manifest.json": Fixtures.manifest({"format": 3, "libraries": libraries})}
+		{"manifest.json": Fixtures.manifest({"format": 5, "libraries": libraries})}
 	)
 	var result := MapDocumentIO.parse(entries)
 	assert_eq(result["document"].libraries.size(), 1)
@@ -382,7 +382,7 @@ func test_at_most_sixteen_libraries_are_read() -> void:
 	for i in 20:
 		libraries.append({"id": "lib%02d" % i, "version": "1.0.0", "hash": ""})
 	var entries := Fixtures.minimal_entries(
-		{"manifest.json": Fixtures.manifest({"format": 3, "libraries": libraries})}
+		{"manifest.json": Fixtures.manifest({"format": 5, "libraries": libraries})}
 	)
 	var result := MapDocumentIO.parse(entries)
 	assert_eq(result["document"].libraries.size(), MapDocument.MAX_LIBRARIES)

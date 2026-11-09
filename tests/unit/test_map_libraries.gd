@@ -93,9 +93,9 @@ func test_the_record_carries_the_version_and_hash_the_registry_serves() -> void:
 	assert_eq(record[0]["hash"], LibraryRegistry.info("alienworld", _paths["base"])["hash"])
 	assert_eq(record[1]["id"], "core")
 	assert_eq(record[1]["version"], "1.2.0")
-	assert_eq(MapLibraries.format_for(record), 3)
-	assert_eq(MapLibraries.format_for([record[1]]), 2)
-	assert_eq(MapLibraries.format_for([] as Array[Dictionary]), 2)
+	assert_eq(MapLibraries.format_for(record), MapDocument.FORMAT_LIBRARIES)
+	assert_eq(MapLibraries.format_for([record[1]]), MapDocument.FORMAT)
+	assert_eq(MapLibraries.format_for([] as Array[Dictionary]), MapDocument.FORMAT)
 
 
 func test_a_saved_map_records_its_libraries_in_the_manifest() -> void:

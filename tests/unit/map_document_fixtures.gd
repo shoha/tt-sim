@@ -9,7 +9,7 @@ const BIOME_A := "birch_woodland_summer_s1"
 const BIOME_B := "boreal_taiga_summer_s2"
 ## Samples per axis of a 20 x 20 cell map at the defaults.
 const GRID := 123
-const IDENTITY_ROW := "[0,0,0,0,0,0,1,1,1,1]"
+const IDENTITY_ROW: Array[float] = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1]
 const RIVER_ID := 3
 const POND_ID := 7
 
@@ -28,8 +28,11 @@ static func full_doc() -> MapDocument:
 	var rocks := PackedFloat32Array([-10.125, 0.1, 5.0, 0.0, 0.0, 0.0, 1.0, 0.5, 0.25, 0.5])
 	rocks.append_array(PackedFloat32Array([12.0, -0.05, -14.9, 0.1, 0.2, 0.3, 0.9273618]))
 	rocks.append_array(PackedFloat32Array([2.0, 2.0, 2.0]))
+	# On the row grid, as every generated row is, so a save and a read return them unchanged.
+	MapDocumentIO.snap_rows(tree)
+	MapDocumentIO.snap_rows(rocks)
 	doc.scatter = {TREE_ID: tree, ROCK_ID: rocks}
-	doc.props = {"unknown_pkg/Hero_Statue": PackedFloat32Array([0, 0, 0, 0, 0, 0, 1, 1, 1, 1])}
+	doc.props = {"unknown_pkg/Hero_Statue": PackedFloat32Array(IDENTITY_ROW)}
 	var count := doc.sample_count()
 	var erase := PackedByteArray()
 	erase.resize(count)
@@ -96,7 +99,7 @@ static func add_water(doc: MapDocument) -> void:
 ## A manifest for a 20 x 20 map at the defaults, with `overrides` merged in.
 static func manifest(overrides: Dictionary) -> PackedByteArray:
 	var fields := {
-		"format": 1,
+		"format": MapDocument.FORMAT,
 		"palette_version": "v",
 		"map_seed": 1,
 		"size_cells": [20, 20],
@@ -119,8 +122,11 @@ static func minimal_entries(extra: Dictionary = {}) -> Dictionary:
 	return entries
 
 
-static func rows_entry(text: String) -> Dictionary:
-	return minimal_entries({"scatter.json": text.to_utf8_buffer()})
+## Minimal entries with `rows_by_asset` (asset id -> flat rows) as the scatter entry.
+static func rows_entry(rows_by_asset: Dictionary) -> Dictionary:
+	var typed: Dictionary[String, PackedFloat32Array] = {}
+	typed.assign(rows_by_asset)
+	return minimal_entries({MapDocumentIO.SCATTER_ENTRY: MapRowsCodec.encode_rows(typed)})
 
 
 static func mask_png(size: Vector2i, format: Image.Format) -> PackedByteArray:

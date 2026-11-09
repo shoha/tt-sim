@@ -73,11 +73,13 @@ extends RefCounted
 ## refuses a format 2 document instead of reading it as unpainted. 3 (FORMAT_LIBRARIES) is
 ## written when the map uses a library other than core: its ids are prefixed
 ## `<library>__...`, which a build that does not know libraries would take for unknown plants
-## and drop on its next save, so an older build refuses the document instead.
-const FORMAT := 2
-const FORMAT_LIBRARIES := 3
-const MAX_FORMAT := 3
-const MIN_FORMAT := 1
+## and drop on its next save, so an older build refuses the document instead. 4 and 5 are 2 and 3
+## with the rows in binary (MapRowsCodec, topic mapformat): the reader accepts only MIN_FORMAT = 4
+## up (MapDocumentIO.read refuses an older document with a warning), the old builds refuse 4.
+const FORMAT := 4
+const FORMAT_LIBRARIES := 5
+const MAX_FORMAT := 5
+const MIN_FORMAT := 4
 ## Libraries a manifest may name (the registry serves at most this many).
 const MAX_LIBRARIES := 16
 const ROW_STRIDE := 10
@@ -112,8 +114,6 @@ const SURFACE_BYTES := SURFACE_CHANNELS * 2
 ## Slots the authoring tools claim (ensure_surface): every surface a document can list, since
 ## the index ground shader (ground layers G3) draws them all.
 const PAINT_SURFACE_LIMIT := MAX_SURFACES
-## Painted slots a format 1 document stored, one weight channel each.
-const FORMAT_1_SLOTS := 8
 ## Water bodies per document, rivers among them, and control points per river. The flow
 ## bake's cost grows with the rivers and their length.
 const MAX_WATER_BODIES := 64

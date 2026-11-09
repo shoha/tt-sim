@@ -943,8 +943,11 @@ treecube `docs/looks/ground20/refs8.py` measured it). The consumer computes it f
 imported texture when absent. It is read as a biome's light reference through
 `ground_look.ref_surface`.
 
-**Saved levels: mass anchors.** A level gains one optional entry (like the erase and fire
-entries): per asset id, one (dx, dz) offset in metres per instance row of that asset, in row
+**Saved levels: mass anchors.** A level gains one optional entry, `mass_anchors.bin` (like the
+erase and fire entries; binary `TTAN` columns since map format 4, `docs/systems/map_document.md`
+"Rows as binary"; the scatter and props rows are `scatter.bin` and `props.bin`, snapped to
+2^-10 m): per asset id, one (dx, dz) offset in metres per instance row of that asset, on a 0.1
+mm grid, in row
 order, from the row to its mass anchor; a row with no anchor in an anchored asset is
 written (0, 0), its own anchor. It is validated on load: the count must equal the asset's
 rows and every offset must lie within the rule's reach (checked where the palette is known,

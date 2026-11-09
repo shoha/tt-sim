@@ -5,19 +5,21 @@ extends GutTest
 ## the recipe's whole-map loops read the sample grid once instead of per sample (perfaudit
 ## sysopen, 2026-11-09), so it proves that hoist changed no byte, and it catches any later change
 ## that moves a new map's bytes by accident. A change meant to move them (the recipe, the core
-## library's biome or surfaces) refreshes the digests: run each case and paste what it prints.
+## library's biome or surfaces, the document format: re-pinned for format 4 on 2026-11-09, the
+## manifest's number and the row entries' names) refreshes the digests: run each case and paste
+## what it prints.
 
 const BIOME := "temperate_forest_summer_s1"
 const SEED := 1234
 ## [size_ft, landform, the first 16 hex digits of the digest].
 const CASES: Array = [
-	[100, "flat", "8e9fbb723cb876e1"],
-	[100, "valley", "11b5d3e418af9dae"],
-	[100, "hilltop", "b4926c3d0f4984e2"],
-	[100, "terraces", "2d03b60f62e63c76"],
-	[100, "lakeshore", "00314e58bf49e710"],
-	[100, "gorge", "6cc6aa47e4206fac"],
-	[200, "valley", "0d35b2251c02c07e"],
+	[100, "flat", "b8c9242bc0a23619"],
+	[100, "valley", "64b2918b873c57b7"],
+	[100, "hilltop", "45b7ff3e73496b83"],
+	[100, "terraces", "7afd0a07e43bac9f"],
+	[100, "lakeshore", "2ac8c91dff3f0bd2"],
+	[100, "gorge", "0f05f9f810f85592"],
+	[200, "valley", "30411ef3e06b25e1"],
 ]
 
 
