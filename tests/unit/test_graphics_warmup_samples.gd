@@ -134,8 +134,11 @@ func test_foliage_samples_cover_both_wind_shaders_with_the_real_layouts() -> voi
 	assert_true(shaders.has(WindFoliage.get_shader_no_aa()), "the no-AA shader")
 	assert_true(shaders.has(FoliageLight.get_shader()), "the painted AA shader")
 	assert_true(shaders.has(FoliageLight.get_shader_no_aa()), "the painted no-AA shader")
+	assert_true(shaders.has(WindFoliage.get_shader_ground()), "the ground-cover AA shader")
+	assert_true(shaders.has(WindFoliage.get_shader_ground_no_aa()), "the ground-cover no-AA shader")
+	var count := WindFoliage.wind_shaders().size()
 	for format in layouts:
-		assert_eq(layouts[format].size(), 4, "layout %d is warmed on all four shaders" % format)
+		assert_eq(layouts[format].size(), count, "layout %d is warmed on every wind shader" % format)
 
 
 func test_unwarmed_formats_names_only_new_layouts() -> void:

@@ -1,6 +1,6 @@
 ---
 description: Occlusion fade system — how map geometry fades to reveal tokens behind it
-globs: ["shaders/occlusion_fade.gdshader", "scenes/states/playing/occlusion_fade_manager.gd", "scenes/states/playing/game_map.gd", "scenes/states/playing/game_map.tscn", "utils/glb_utils.gd"]
+globs: ["shaders/occlusion_fade.gdshader", "shaders/occlusion_fade_include.gdshaderinc", "utils/occlusion_tiles.gd", "scenes/states/playing/occlusion_fade_manager.gd", "scenes/states/playing/game_map.gd", "scenes/states/playing/game_map.tscn", "utils/glb_utils.gd"]
 alwaysApply: false
 ---
 
@@ -19,12 +19,17 @@ GameMap (game_map.gd)
 │
 OcclusionFadeManager (occlusion_fade_manager.gd)
 ├── Converts map StandardMaterial3D → ShaderMaterial (occlusion_fade.gdshader)
-├── Every N physics frames, collects token positions + radii → packs into the shared `occlusion_tokens` texture + `occlusion_token_count` global
+├── Every N physics frames, collects token positions + radii (every visible token, no cap)
+├── Before each frame whose tokens or camera changed (RenderingServer.frame_pre_draw): bins them into
+│   32x18 screen tiles for the viewport's camera (OcclusionTiles) → packs tokens, tile headers and
+│   tile lists into the shared `occlusion_tokens` texture + the `occlusion_token_count`,
+│   `occlusion_tile_view`, `occlusion_tile_grid` globals
 ├── Restores original materials on clear() or when disabled
 │
-occlusion_fade.gdshader
+occlusion_fade.gdshader / wind_foliage (via occlusion_fade_include.gdshaderinc)
 ├── Replicates PBR appearance from original material
-├── Per-pixel: checks if fragment is between camera and any token
+├── Per-pixel: checks if fragment is between camera and any token of its screen tile (the camera's
+│   passes); other views (the sun's shadow pass) loop over the first 32 tokens as before
 ├── Discards occluding fragments via 16x16 Bayer dithered transparency
 │
 GlbUtils (glb_utils.gd)
@@ -73,7 +78,9 @@ Token positions are derived from the CollisionShape3D's AABB center, not the Rig
 | File | Role |
 |------|------|
 | `shaders/occlusion_fade.gdshader` | Spatial shader — PBR replication + per-pixel fade logic |
-| `scenes/states/playing/occlusion_fade_manager.gd` | Material conversion, token uniform updates, lifecycle |
+| `shaders/occlusion_fade_include.gdshaderinc` | The shared fade: tile lookup, per-token test, dither |
+| `scenes/states/playing/occlusion_fade_manager.gd` | Material conversion, token collection, the per-frame publish, lifecycle |
+| `utils/occlusion_tiles.gd` | Pure screen-tile binning and texture packing (tested in `test_occlusion_tiles.gd`) |
 | `scenes/states/playing/game_map.gd` | Integration: setup, lo-fi sync, settings, map lifecycle hooks |
 | `scenes/states/playing/game_map.tscn` | OcclusionFadeManager node under SubViewport |
 | `utils/glb_utils.gd` | `disable_static_body_picking()` for click-through |
@@ -82,7 +89,8 @@ Token positions are derived from the CollisionShape3D's AABB center, not the Rig
 ## Gotchas
 
 - **Godot shader language:** `return` is not allowed in `fragment()` / `vertex()` processor functions. Wrap early-exit logic in `if` blocks instead.
-- **Token texture:** Token data lives in one 32x1 RGBAF `ImageTexture` (xyz = world centre, w = radius) bound once per material; update it with `ImageTexture.update()` (same size and format) rather than re-binding. Godot global shader parameters have no array types, which is why the count is a global int and the data is a texture.
+- **Token texture:** Token data lives in one RGBAF `ImageTexture`, 256 texels a row, read by texel index (`OcclusionTiles` class header has the layout: the plain loop's first 32 tokens, one header per screen tile, then the tile lists as copies of token texels), bound once per material; update it with `ImageTexture.update()` when the size is unchanged and `set_image()` when the lists outgrow it (the texture RID stays, so bindings hold). Godot global shader parameters have no array types, which is why the data is a texture.
+- **Screen tiles (perfaudit occfade, 2026-11-08):** the per-fragment loop over every token cost 1.3 ms GPU at 10 tokens and 4-5 ms at 32 on an RTX 3080; the tiles make it O(tokens in the fragment's tile). The tiles are built at `frame_pre_draw` with the camera that draws, never at physics time: tiles a frame old would clip a moving hole. A pass whose `VIEW_MATRIX` translation or `PROJECTION_MATRIX[0][0]` differs from `occlusion_tile_view` (the shadow pass, another viewport) takes the plain loop over the first 32 tokens (on-screen ones first). The shadow pass's fade is visible (sunlit patches at tokens under canopies), so it stays. Numbers: `docs/PERFORMANCE.md` "Occlusion fade tiles".
 - **Lo-fi aspect ratio:** The lo-fi shader hardcodes `aspect = 16.0 / 9.0`. The occlusion shader must use the same value for grid alignment.
 - **Material restoration:** `clear()` restores original materials via surface overrides. If the original material was the mesh's own (not an override), the override is set to `null` to remove it cleanly.
 - **`lofi_dither_scale > 1` causes blurring:** The lo-fi post-process point-samples one pixel per block. If multiple dither values exist within a block, the result is inconsistent. Keep at 1 for production.

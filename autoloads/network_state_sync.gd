@@ -13,7 +13,7 @@ extends Node
 ## Usage:
 ##   NetworkStateSync.broadcast_token_transform(token)  # Host sends position
 ##   NetworkStateSync.broadcast_token_properties(token)  # Host sends health/visibility
-##   NetworkManager.game_sync.token_transform_received.connect(_on_transform)  # Client
+##   NetworkManager.game_sync.transform_batch_received.connect(_on_transforms)  # Client
 ##
 ## Note: Client-side receive signals live on NetworkManager.game_sync (NetworkGameSync),
 ## which also carries the RPCs; this autoload only decides what to send and when
@@ -21,6 +21,8 @@ extends Node
 
 ## Emitted when full game state is received (clients only, for initial sync)
 signal full_state_received(state_dict: Dictionary)
+## Emitted on clients once a token add is in GameState (broadcast_token_added): the ids
+signal tokens_added(network_ids: Array[String])
 
 ## Rate limiting for transform updates
 const TRANSFORM_SEND_INTERVAL := 0.05  # 20 updates/sec max per token
@@ -31,13 +33,14 @@ const TRANSFORM_BATCH_INTERVAL := 0.033  # ~30fps batch rate
 var _transform_throttle: Dictionary = {}  # network_id -> last_send_time (float)
 
 ## Pending transform updates (for batching)
-var _pending_transforms: Dictionary = {}  # network_id -> {position, rotation, scale}
+var _pending_transforms: Dictionary = {}  # network_id -> TokenTransformPack.floats_of()
 var _transform_batch_timer: Timer = null
 
 
 func _ready() -> void:
 	# Connect to NetworkManager signals for receiving data
 	NetworkManager.game_state_received.connect(_on_game_state_received)
+	NetworkManager.tokens_added_received.connect(_on_tokens_added_received)
 	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
 
 	# Setup batch timer for transform updates (starts when hosting)
@@ -95,11 +98,9 @@ func _queue_transform_update(token: BoardToken) -> void:
 	# Keep GameState in step with the wire, exactly as _send_transform_update does.
 	GameState.sync_from_board_token(token)
 
-	_pending_transforms[token.network_id] = {
-		"position": _vector3_to_array(state.position),
-		"rotation": _vector3_to_array(state.rotation),
-		"scale": _vector3_to_array(state.scale),
-	}
+	_pending_transforms[token.network_id] = TokenTransformPack.floats_of(
+		state.position, state.rotation, state.scale
+	)
 
 
 ## Send a single token's transform immediately
@@ -183,7 +184,18 @@ func broadcast_token_removed(network_id: String) -> void:
 	NetworkManager.game_sync.broadcast_token_removed(network_id)
 
 
-## Broadcast the full game state to all clients (for initial sync or reconciliation)
+## Broadcast a token the host just added (placed, or re-created by an undo) to all clients:
+## that token's state and permissions alone (GameState.get_tokens_state_dict), not the
+## table's, so a placement costs one token's bytes whatever is on the board. Clients apply
+## it by network_id (GameState.upsert_state_dict), so an add that crosses a full state
+## carrying the same token changes nothing twice.
+func broadcast_token_added(network_id: String) -> void:
+	if not NetworkManager.is_host() or not GameState.has_token(network_id):
+		return
+	NetworkManager.broadcast_tokens_added(GameState.get_tokens_state_dict([network_id]))
+
+
+## Broadcast the full game state to all clients (a table set out, the heartbeat)
 func broadcast_full_state() -> void:
 	if not NetworkManager.is_host():
 		return
@@ -216,14 +228,13 @@ func _on_game_state_received(state_dict: Dictionary) -> void:
 	full_state_received.emit(state_dict)
 
 
+func _on_tokens_added_received(state_dict: Dictionary) -> void:
+	tokens_added.emit(GameState.upsert_state_dict(state_dict))
+
+
 # =============================================================================
 # HELPERS
 # =============================================================================
-
-
-## Convert Vector3 to array for network transmission (more compact than dict)
-func _vector3_to_array(v: Vector3) -> Array:
-	return [v.x, v.y, v.z]
 
 
 ## Clear rate limiting state (call when level changes)

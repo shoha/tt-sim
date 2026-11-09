@@ -6,8 +6,9 @@ extends Node
 ##
 ##   godot --headless --path D:/dev/tabletop/tt-sim res://tests/net/net_launcher.tscn --
 ##     --data-root=net_launcher --scenario=<name> [--peers=2] [--timeout-s=180] [--port=28471]
-##     [--windowed=<role>]
+##     [--windowed=<role>] [--opts=<scenario options>]
 ##
+## --opts is handed to every peer as it is (perfaudit_net: size=200,fill=1,sim=50:5000).
 ## --windowed=<role> starts that one peer in a real window (WINDOW_ARGS) instead of headless,
 ## for a scenario that films its own board (enet_live_edits' client: client_fire.png in the
 ## logs folder). It uses the GPU, so it is for a look, not for every run.
@@ -128,6 +129,9 @@ func _run() -> bool:
 		"--timeout-s=%d" % timeout_s,
 		"--port=%d" % int(_args.get("port", DEFAULT_PORT)),
 	]
+	# Scenario options, passed to every peer verbatim (perfaudit_net reads size, fill, sim...).
+	if _args.has("opts"):
+		common.append("--opts=" + str(_args.opts))
 	var started := true
 	for peer in peers:
 		if peer.role != "host":

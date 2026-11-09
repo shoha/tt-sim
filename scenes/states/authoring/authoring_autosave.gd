@@ -2,7 +2,7 @@ class_name AuthoringAutosave
 extends RefCounted
 
 ## The authoring crash-recovery slot: the map document and its level, written every
-## AuthoringController.AUTOSAVE_INTERVAL seconds while the session has unsaved edits, and
+## AuthoringSaving.AUTOSAVE_INTERVAL seconds while the session has unsaved edits, and
 ## offered back the next time authoring opens (the Level Editor's LevelEditorHistory
 ## pattern, with its own storage).
 ##
@@ -11,6 +11,10 @@ extends RefCounted
 ## `map_level.json`, and neither recovery prompt ever offers the other's work. The level is
 ## a full LevelData.to_dict() (a few kB); keeping its level_folder means a recovered map
 ## saves back into the level it came from, and a dressing map finds its map.glb there.
+##
+## Both files are replaced atomically (a temp file renamed over each), the document first, so a
+## crash during an autosave leaves the previous autosave whole; the session writes them on a
+## worker (AuthoringSaving), and a discard waits for a write in flight before it deletes.
 
 const DOCUMENT_NAME := "map.ttmap"
 const LEVEL_NAME := "map_level.json"
@@ -32,21 +36,35 @@ static func exists() -> bool:
 	return FileAccess.file_exists(document_path()) and FileAccess.file_exists(level_path())
 
 
-## Writes `doc` (atomically, through MapDocumentIO) and `level` into the slot.
+## Writes `doc` and `level` into the slot on the calling thread (the session writes it on a
+## worker: AuthoringSaving starts job() on a MapDocumentWriter).
 static func write(doc: MapDocument, level: LevelData) -> Error:
-	if not DirAccess.dir_exists_absolute(directory):
-		var made := DirAccess.make_dir_recursive_absolute(directory)
-		if made != OK:
-			return made
-	var err := MapDocumentIO.write(doc, document_path())
-	if err != OK:
-		return err
-	var file := FileAccess.open(level_path(), FileAccess.WRITE)
-	if file == null:
-		return FileAccess.get_open_error()
-	file.store_string(JSON.stringify(level.to_dict(), "\t"))
-	file.close()
-	return OK
+	var made := ensure_directory()
+	if made != OK:
+		return made
+	var autosave := job(doc, level)
+	MapDocumentWriter.run(autosave)
+	if autosave.error == OK:
+		MapFileHash.invalidate(autosave.path)
+	return autosave.error
+
+
+## The slot's write as a MapDocumentWriter job: `doc` frozen now (MapDocumentSnapshot) and the
+## level's JSON as a side file, each written atomically, the level only after the document.
+## Main thread (the capture and LevelData.to_dict read live state); the job runs anywhere.
+static func job(doc: MapDocument, level: LevelData) -> MapDocumentWriter.Job:
+	var out := MapDocumentWriter.Job.new()
+	out.snapshot = MapDocumentSnapshot.capture(doc)
+	out.path = document_path()
+	out.side_files = {level_path(): JSON.stringify(level.to_dict(), "\t").to_utf8_buffer()}
+	return out
+
+
+## Makes the slot's directory when it is missing.
+static func ensure_directory() -> Error:
+	if DirAccess.dir_exists_absolute(directory):
+		return OK
+	return DirAccess.make_dir_recursive_absolute(directory)
 
 
 ## The autosaved level, or null when it is missing or unreadable. Its map_document names

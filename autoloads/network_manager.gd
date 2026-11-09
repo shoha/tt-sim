@@ -30,6 +30,8 @@ signal game_starting
 signal level_data_received(level_dict: Dictionary)
 signal late_joiner_connected(peer_id: int)  ## Emitted when a player joins mid-game
 signal game_state_received(state_dict: Dictionary)
+## Client: the host added (or re-sent) some tokens, in GameState.get_tokens_state_dict()'s shape
+signal tokens_added_received(state_dict: Dictionary)
 signal table_loaded(peer_id: int)  ## Host: a client's level load completed (LateJoinerSync)
 
 ## Connection states
@@ -98,12 +100,13 @@ var _players: Dictionary = {}
 ## "info"} (see _on_peer_disconnected())
 var _leaves: Array[Dictionary] = []
 
-## Local player info. "version" is what the host checks against its own version
+## Local player info. "version" and "protocol" are what the host checks against its own
 ## (VersionGate.is_player_info_accepted) when this client's info arrives.
 var _local_player_info: Dictionary = {
 	"name": "Player",
 	"role": PlayerRole.PLAYER,
 	VersionGate.PLAYER_INFO_KEY: UpdateVersion.get_current(),
+	VersionGate.PLAYER_INFO_PROTOCOL_KEY: VersionGate.PROTOCOL,
 }
 
 ## The level snapshot served to late joiners (host side). Opaque here: it is whatever
@@ -115,6 +118,10 @@ var _connection_timer: Timer = null
 
 ## Game state tracking (for late joiner detection)
 var _game_in_progress: bool = false
+
+## Host: serial of the last token state message sent (TokenStateWire); client: its reassembly
+var _state_serial: int = 0
+var _state_assembler := TokenStateWire.Assembler.new()
 
 ## Steam initialization state
 var _steam_initialized: bool = false
@@ -321,6 +328,7 @@ func _on_lobby_created(result: int, lobby_id: int) -> void:
 	# Publish our version so a joining client can refuse a mismatch before it connects
 	# (see VersionGate). The host still re-checks each client's reported version.
 	Steam.setLobbyData(lobby_id, VersionGate.LOBBY_DATA_KEY, UpdateVersion.get_current())
+	Steam.setLobbyData(lobby_id, VersionGate.LOBBY_PROTOCOL_KEY, str(VersionGate.PROTOCOL))
 
 	# Create SteamMultiplayerPeer as host
 	var peer := SteamMultiplayerPeer.new()
@@ -384,7 +392,12 @@ func _on_lobby_joined(lobby_id: int, _lobby_permissions: int, _locked: bool, res
 	# the version gate publishes no version and reads as "", which is a mismatch.
 	# _handle_connection_error() leaves the lobby through disconnect_game().
 	var host_version: String = Steam.getLobbyData(lobby_id, VersionGate.LOBBY_DATA_KEY)
-	var mismatch := VersionGate.mismatch_message(host_version, UpdateVersion.get_current())
+	var host_protocol := VersionGate.lobby_protocol(
+		Steam.getLobbyData(lobby_id, VersionGate.LOBBY_PROTOCOL_KEY)
+	)
+	var mismatch := VersionGate.mismatch_message(
+		host_version, UpdateVersion.get_current(), host_protocol
+	)
 	if not mismatch.is_empty():
 		_handle_connection_error(mismatch)
 		return
@@ -426,6 +439,7 @@ func disconnect_game() -> void:
 	_lobby_id = 0
 	_game_in_progress = false
 	_current_level_dict.clear()
+	_state_assembler = TokenStateWire.Assembler.new()
 	game_sync.reset()
 	_stop_connection_timeout()
 
@@ -516,7 +530,9 @@ func _rpc_send_player_info(info: Dictionary) -> void:
 		# published version, but lobby data is advisory, so the host re-checks the version
 		# the client reports and never admits a mismatch (see VersionGate).
 		if not VersionGate.is_player_info_accepted(info, UpdateVersion.get_current()):
-			_reject_peer_version(sender_id, VersionGate.reported_version(info))
+			_reject_peer_version(
+				sender_id, VersionGate.reported_version(info), VersionGate.reported_protocol(info)
+			)
 			return
 		# Only the host receives this RPC from an untrusted remote peer (when a
 		# client receives it, the sender is the host, which is already
@@ -546,11 +562,20 @@ func _rpc_send_player_info(info: Dictionary) -> void:
 ## Host side of a version rejection: tell the client why, then drop it after
 ## VERSION_REJECT_DISCONNECT_DELAY. The peer is never added to _players, so no
 ## player_joined/player_left fires for it.
-func _reject_peer_version(peer_id: int, reported_version: String) -> void:
+func _reject_peer_version(peer_id: int, reported_version: String, reported_protocol := 0) -> void:
 	push_warning(
 		(
-			"NetworkManager: Peer %d reported version '%s', host is '%s' -- rejected"
-			% [peer_id, reported_version, UpdateVersion.get_current()]
+			(
+				"NetworkManager: Peer %d reported version '%s' protocol %d, "
+				+ "host is '%s' protocol %d -- rejected"
+			)
+			% [
+				peer_id,
+				reported_version,
+				reported_protocol,
+				UpdateVersion.get_current(),
+				VersionGate.PROTOCOL,
+			]
 		)
 	)
 	# Peer ids 0 (a direct call outside a real RPC, as in tests) and 1 (ourselves) are
@@ -577,11 +602,9 @@ func _disconnect_rejected_peer(peer_id: int) -> void:
 ## this RPC.
 @rpc("authority", "reliable")
 func _rpc_version_rejected(host_version: String) -> void:
-	var message := VersionGate.mismatch_message(host_version, UpdateVersion.get_current())
-	if message.is_empty():
-		# The host only sends this on a mismatch; if the strings somehow agree, still
-		# leave with an honest reason rather than an empty one.
-		message = "The host rejected this game version."
+	# Equal versions mean the protocol differed (VersionGate.rejection_message). The RPC keeps
+	# its one argument so a rejected build of the same version still reads it.
+	var message := VersionGate.rejection_message(host_version, UpdateVersion.get_current())
 	_handle_connection_error.call_deferred(message)
 
 
@@ -638,9 +661,27 @@ func _rpc_table_loaded() -> void:
 	table_loaded.emit(peer_id)
 
 
+## RPC: one chunk of a token state message (TokenStateWire, host -> clients). The whole
+## message is decoded once its last chunk is in: a FULL state emits game_state_received, an
+## ADD tokens_added_received. A refused chunk or message is dropped with a warning; the next
+## full state (the heartbeat, NetworkTokenSync) brings the table back.
 @rpc("authority", "reliable")
-func _rpc_receive_game_state(state_dict: Dictionary) -> void:
-	game_state_received.emit(state_dict)
+func _rpc_receive_state_chunk(serial: int, part: int, parts: int, data: PackedByteArray) -> void:
+	if is_host():
+		return
+	var whole := _state_assembler.add(serial, part, parts, data)
+	if _state_assembler.problem != "":
+		push_warning("NetworkManager: token state refused: %s" % _state_assembler.problem)
+		return
+	if whole.is_empty():
+		return
+	var message := TokenStateWire.decode(whole)
+	if message.problem != "":
+		push_warning("NetworkManager: token state refused: %s" % message.problem)
+	elif message.kind == TokenStateWire.Kind.ADD:
+		tokens_added_received.emit(message.state)
+	else:
+		game_state_received.emit(message.state)
 
 
 # =============================================================================
@@ -709,16 +750,43 @@ static func with_map_hashes(level_dict: Dictionary) -> Dictionary:
 func broadcast_game_state(state_dict: Dictionary) -> void:
 	if not is_host():
 		return
-
-	_rpc_receive_game_state.rpc(state_dict)
+	_send_state(0, state_dict, TokenStateWire.Kind.FULL)
 
 
 ## Called by host to send game state to a specific client
 func send_game_state_to_peer(peer_id: int, state_dict: Dictionary) -> void:
 	if not is_host():
 		return
+	_send_state(peer_id, state_dict, TokenStateWire.Kind.FULL)
 
-	_rpc_receive_game_state.rpc_id(peer_id, state_dict)
+
+## Host: send some tokens (GameState.get_tokens_state_dict()) to every client, added to or
+## updated in what each holds (TokenStateWire.Kind.ADD).
+func broadcast_tokens_added(state_dict: Dictionary) -> void:
+	if not is_host():
+		return
+	_send_state(0, state_dict, TokenStateWire.Kind.ADD)
+
+
+## Host: `state_dict` as one TokenStateWire message of `kind` to `peer_id` (0: every client),
+## every chunk in this call so no other message comes between them (TokenStateWire header).
+func _send_state(peer_id: int, state_dict: Dictionary, kind: int) -> void:
+	var bytes := TokenStateWire.encode(state_dict, kind)
+	if bytes.size() > TokenStateWire.SEND_BUDGET_BYTES:
+		var count: int = (state_dict.get("tokens", {}) as Dictionary).size()
+		push_warning(
+			(
+				"NetworkManager: a token state of %d B (%d tokens) is past the %d B send budget"
+				% [bytes.size(), count, TokenStateWire.SEND_BUDGET_BYTES]
+			)
+		)
+	var parts := TokenStateWire.chunks(bytes)
+	_state_serial += 1
+	for part in parts.size():
+		if peer_id == 0:
+			_rpc_receive_state_chunk.rpc(_state_serial, part, parts.size(), parts[part])
+		else:
+			_rpc_receive_state_chunk.rpc_id(peer_id, _state_serial, part, parts.size(), parts[part])
 
 
 ## Host: replace the level snapshot served to late joiners with `patch` applied to it, so

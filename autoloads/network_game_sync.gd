@@ -4,7 +4,8 @@ extends Node
 ## Table-play sub-component of NetworkManager: the RPCs that move tokens, hand out drag
 ## locks and carry live visual settings and live map edits once a level is loaded.
 ##
-## Host -> clients: token transforms (one token, or a batch; unreliable), a token's full
+## Host -> clients: token transforms (one token, or a TokenTransformPack batch: a drag's,
+## unreliable, or the reconciliation's moved tokens, reliable), a token's full
 ## state and its removal (reliable), drag-lock grants, denials and releases, live visual
 ## settings, live map edits (LiveEdits; reliable) and the terrain events the GM starts
 ## (TerrainEvents, through the same outbox; reliable). Client -> host: a controlled token's
@@ -26,10 +27,6 @@ extends Node
 ## live at /root/NetworkManager/GameSync, the same path on every peer of one build (the
 ## version gate keeps builds from mixing).
 
-## Emitted on clients for a host transform update (unreliable channel)
-signal token_transform_received(
-	network_id: String, position: Vector3, rotation: Vector3, scale: Vector3
-)
 ## Emitted on clients when a token's full state arrives (reliable channel)
 signal token_state_received(network_id: String, token_dict: Dictionary)
 ## Emitted on clients when the host removed a token
@@ -108,27 +105,52 @@ func _process(delta: float) -> void:
 # =============================================================================
 
 
-## Host: send a token's transform to every client (unreliable).
+## Host: send a token's transform to every client (unreliable), packed as a one-token batch
+## (pack_one: about 63 B on the wire against 128 B as the Variant transform RPC, perfaudit
+## F-net-7). Clients get transform_batch_received, as for a batch.
 func broadcast_token_transform(
 	network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
 ) -> void:
-	_rpc_receive_token_transform.rpc(network_id, _to_array(pos), _to_array(rot), _to_array(scl))
+	var bytes := pack_one(network_id, pos, rot, scl)
+	if not bytes.is_empty():
+		_rpc_receive_transform_batch.rpc(bytes)
 
 
-## Host: send a token's transform to one client (unreliable). Relays a client's drag to
-## the other clients.
+## Host: send a token's transform to one client (unreliable, packed as broadcast_token_transform
+## does). Relays a client's drag to the other clients.
 func send_token_transform_to_peer(
 	peer_id: int, network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
 ) -> void:
-	_rpc_receive_token_transform.rpc_id(
-		peer_id, network_id, _to_array(pos), _to_array(rot), _to_array(scl)
+	var bytes := pack_one(network_id, pos, rot, scl)
+	if not bytes.is_empty():
+		_rpc_receive_transform_batch.rpc_id(peer_id, bytes)
+
+
+## One token's transform as a TokenTransformPack message, or empty for an id no message
+## carries (empty, or past TokenTransformPack.MAX_ID_BYTES).
+static func pack_one(
+	network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
+) -> PackedByteArray:
+	var messages := TokenTransformPack.encode(
+		{network_id: TokenTransformPack.floats_of(pos, rot, scl)}
 	)
+	return messages[0] if not messages.is_empty() else PackedByteArray()
 
 
-## Host: send a batch of queued transforms to every client (unreliable), in the shape
-## transform_batch_received documents.
-func broadcast_transform_batch(batch: Dictionary) -> void:
-	_rpc_receive_transform_batch.rpc(batch)
+## Host: send a batch of queued transforms (network_id -> TokenTransformPack.floats_of) to
+## every client, packed, in messages under the MTU (unreliable). Clients get
+## transform_batch_received.
+func broadcast_transform_batch(transforms: Dictionary) -> void:
+	for bytes in TokenTransformPack.encode(transforms, TokenTransformPack.UNRELIABLE_BYTES):
+		_rpc_receive_transform_batch.rpc(bytes)
+
+
+## Host: send the reconciliation's moved tokens (network_id -> TokenTransformPack.floats_of)
+## to every client, packed (reliable: a token at rest is sent once, so the message must
+## arrive). Clients get transform_batch_received, the same as a drag's batch.
+func broadcast_reconcile(transforms: Dictionary) -> void:
+	for bytes in TokenTransformPack.encode(transforms):
+		_rpc_receive_reconcile.rpc(bytes)
 
 
 ## Host: send a token's full state (TokenState.to_dict()) to every client (reliable).
@@ -315,18 +337,51 @@ func request_live_edit_log() -> void:
 
 
 @rpc("authority", "unreliable")
-func _rpc_receive_token_transform(
-	network_id: String, pos_arr: Array, rot_arr: Array, scale_arr: Array
-) -> void:
-	var pos := SerializationUtils.array_to_vec3(pos_arr)
-	var rot := SerializationUtils.array_to_vec3(rot_arr)
-	var scl := SerializationUtils.array_to_vec3(scale_arr, Vector3.ONE)
-	token_transform_received.emit(network_id, pos, rot, scl)
+func _rpc_receive_transform_batch(bytes: PackedByteArray) -> void:
+	_emit_transform_pack(bytes)
 
 
-@rpc("authority", "unreliable")
-func _rpc_receive_transform_batch(batch: Dictionary) -> void:
-	transform_batch_received.emit(batch)
+@rpc("authority", "reliable")
+func _rpc_receive_reconcile(bytes: PackedByteArray) -> void:
+	_emit_transform_pack(bytes)
+
+
+## Takes a transform the host sent (a drag's update, a batch, a reconciliation, every one a
+## TokenTransformPack message since the Variant transform RPC went) into this
+## client's GameState copy of the token, quietly: the board token takes it as its interpolation
+## target, so no token_state_changed. Without it a client's GameState kept each token where its
+## add or the last full state left it until the next heartbeat (netverify: 41 of 100 tokens
+## placed in a burst, up to 30 s), and anything built from GameState meanwhile (a table load's
+## apply_game_state_to_tokens) used those positions. A token GameState does not hold is ignored.
+func _mirror_transform(network_id: String, pos: Vector3, rot: Vector3, scl: Vector3) -> void:
+	var state := GameState.get_token_state(network_id)
+	if state == null:
+		return
+	state.position = pos
+	state.rotation = rot
+	state.scale = scl
+
+
+## Decodes a TokenTransformPack message, takes it into GameState (_mirror_transform, so a token
+## not yet on this board, or built later from GameState, is where the host has it) and emits it
+## as transform_batch_received; a refused one is dropped with a warning (the next
+## reconciliation or heartbeat brings the tokens).
+func _emit_transform_pack(bytes: PackedByteArray) -> void:
+	if NetworkManager.is_host():
+		return
+	var decoded := TokenTransformPack.decode(bytes)
+	if decoded.problem != "":
+		push_warning("NetworkGameSync: transforms refused: %s" % decoded.problem)
+		return
+	for network_id: String in decoded.transforms:
+		var f: PackedFloat32Array = decoded.transforms[network_id]
+		_mirror_transform(
+			network_id,
+			Vector3(f[0], f[1], f[2]),
+			Vector3(f[3], f[4], f[5]),
+			Vector3(f[6], f[7], f[8]),
+		)
+	transform_batch_received.emit(TokenTransformPack.to_batch(decoded.transforms))
 
 
 @rpc("authority", "reliable")
@@ -464,8 +519,3 @@ func _take_log_request(sender_id: int) -> bool:
 	_live_log_requests[sender_id] = now
 	live_edit_log_requested.emit(sender_id)
 	return true
-
-
-## Vector3 as the compact [x, y, z] array the transform RPCs carry.
-static func _to_array(v: Vector3) -> Array:
-	return [v.x, v.y, v.z]

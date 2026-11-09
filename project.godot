@@ -131,6 +131,7 @@ help_toggle={
 textures/vram_compression/import_etc2_astc=true
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=4
 lights_and_shadows/positional_shadow/soft_shadow_filter_quality=5
+limits/global_shader_variables/buffer_size=262144
 renderer/rendering_method.macos="mobile"
 
 [shader_globals]
@@ -150,6 +151,14 @@ water_ambient_reflection_color={
 occlusion_token_count={
 "type": "int",
 "value": 0
+}
+occlusion_tile_view={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+occlusion_tile_grid={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
 }
 wind_dir={
 "type": "vec4",

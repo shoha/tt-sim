@@ -65,12 +65,16 @@ static var enabled := DEFAULT_ENABLED
 ## The budget in force (BUDGET_TOKENS; a render probe changes it to measure the cost without it).
 static var budget := BUDGET_TOKENS
 static var _trimmed := false
+## What the last budget pass saw (_seen_by_budget): a pass that would see the same is skipped,
+## since it would trim the same tokens (it cost 2 ms every BUDGET_PERIOD_S at 500 tokens).
+static var _last_seen := PackedFloat64Array()
 
 
 ## Turns the ghost on or off for every token under `tree` and for the tokens made later.
 static func set_enabled(on: bool, tree: SceneTree) -> void:
 	enabled = on
 	_trimmed = false
+	_last_seen = PackedFloat64Array()
 	if tree != null:
 		for node in tree.get_nodes_in_group(BoardToken.GROUP_NAME):
 			if node.has_meta(TRIMMED_META):
@@ -284,13 +288,18 @@ static func allowed(candidates: Array[Dictionary], limit: int) -> Dictionary:
 
 ## Keeps the on-screen dressed tokens within BUDGET_TOKENS (the off-screen ones cost nothing:
 ## the frustum culls their overlays). Does nothing, and costs one group read, while the count
-## is within the budget. Run every BUDGET_PERIOD_S by VisualEffectsController.
+## is within the budget, or when the camera and every token are where the last pass saw them.
+## Run every BUDGET_PERIOD_S by VisualEffectsController.
 static func apply_budget(tree: SceneTree, camera: Camera3D) -> void:
 	if not enabled or tree == null or camera == null:
 		return
 	var tokens := tree.get_nodes_in_group(BoardToken.GROUP_NAME)
 	if tokens.size() <= budget and not _trimmed:
 		return
+	var seen := _seen_by_budget(tokens, camera)
+	if seen == _last_seen:
+		return
+	_last_seen = seen
 	var centre := camera.get_viewport().get_visible_rect().size * 0.5
 	var candidates: Array[Dictionary] = []
 	var by_id := {}
@@ -325,3 +334,27 @@ static func apply_budget(tree: SceneTree, camera: Camera3D) -> void:
 			else:
 				token.remove_meta(TRIMMED_META)
 			dress(token)
+
+
+## What a budget pass depends on, as numbers: the camera's transform and lens, the view's size,
+## the budget, and per token its id (the low 32 bits), its body's place and its highlight.
+static func _seen_by_budget(tokens: Array[Node], camera: Camera3D) -> PackedFloat64Array:
+	var xf := camera.global_transform
+	var view := camera.get_viewport().get_visible_rect().size
+	var b := xf.basis
+	var head := [xf.origin.x, xf.origin.y, xf.origin.z, b.x.x, b.x.y, b.x.z, b.y.x, b.y.y]
+	head.append_array([b.y.z, b.z.x, b.z.y, b.z.z, camera.fov, camera.size, view.x, view.y])
+	head.append(budget)
+	var out := PackedFloat64Array(head)
+	var i := out.size()
+	out.resize(i + tokens.size() * 5)
+	for node in tokens:
+		var token := node as BoardToken
+		var at := token.rigid_body.global_position if token.rigid_body else Vector3.INF
+		out[i] = token.get_instance_id() & 0xFFFFFFFF
+		out[i + 1] = at.x
+		out[i + 2] = at.y
+		out[i + 3] = at.z
+		out[i + 4] = 1.0 if token.is_highlighted else 0.0
+		i += 5
+	return out

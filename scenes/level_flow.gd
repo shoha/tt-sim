@@ -145,16 +145,14 @@ func _on_full_state_received(_state_dict: Dictionary) -> void:
 	RootNetworkHandler.apply_game_state_to_tokens(_controller, _root.get_game_map())
 
 
-## Handle individual token transform update (unreliable channel, high frequency)
-func _on_token_transform_received(
-	network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
-) -> void:
+## Handle a token add (NetworkStateSync.tokens_added): only those tokens, created or updated
+func _on_tokens_added(network_ids: Array[String]) -> void:
 	if not _controller or not _root.get_game_map():
 		return
-	RootNetworkHandler.on_token_transform_received(_controller, network_id, pos, rot, scl)
+	RootNetworkHandler.apply_tokens_to_board(_controller, _root.get_game_map(), network_ids)
 
 
-## Handle batch transform update (unreliable channel)
+## Handle a transform message (a drag's single update or batch, or a reconciliation)
 func _on_transform_batch_received(batch: Dictionary) -> void:
 	if not _controller or not _root.get_game_map():
 		return
