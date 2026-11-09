@@ -45,11 +45,6 @@ static func apply(menu: SettingsMenu) -> void:
 		"Which Godot rendering backend to use (Default follows the platform's "
 		+ "normal choice). Changing this requires a restart."
 	)
-	menu.foliage_density_slider.tooltip_text = (
-		"Maximum scattered foliage detail, in millions of triangles. Lower this if maps "
-		+ "with heavy foliage run poorly; raise it if your machine has headroom. Applies "
-		+ "without a map reload, and each player chooses their own."
-	)
 	menu.cell_tint_opacity_slider.tooltip_text = "Opacity of the cell fill shading on the grid"
 	menu.line_thickness_slider.tooltip_text = "Thickness of the grid lines"
 	menu.fade_distance_slider.tooltip_text = "How far the grid extends from the camera center"

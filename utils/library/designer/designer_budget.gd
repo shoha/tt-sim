@@ -2,11 +2,16 @@ class_name DesignerBudget
 extends RefCounted
 
 ## The designer's budget meter (design doc 4.4): what the biome on the proving ground costs, as
-## instances and triangles per 100 ft tile and for a whole map, against the player's foliage
-## primitive budget (FoliageBudget, 2M to 24M, default 8M), plus an estimate of draw calls (one
-## per species per occupied 10 m cell). Pure: it is handed the instance counts the scatter
-## holds and the catalog's LOD0 triangles per asset; the live frame cost and the real draw calls
-## come from the renderer (RenderingServer viewport info) in the meter's UI.
+## instances and triangles per 100 ft tile and for a whole map, against a reference budget of
+## MAP_TRIANGLE_BUDGET triangles (the default of the player's foliage budget setting, which was
+## retired when the game stopped capping triangles: the meter stays a guide to how heavy a biome
+## is, not a limit), plus an estimate of draw calls (one per species per occupied 10 m cell).
+## Pure: it is handed the instance counts the scatter holds and the catalog's LOD0 triangles per
+## asset; the live frame cost and the real draw calls come from the renderer (RenderingServer
+## viewport info) in the meter's UI.
+
+## The triangles a 200 ft map may hold before the meter turns red.
+const MAP_TRIANGLE_BUDGET: int = 8_000_000
 
 ## A 100 ft tile, the unit the project counts density in (the default map is one).
 const TILE_M2 := 929.03
@@ -36,7 +41,7 @@ static func estimate(
 	triangles: Dictionary,
 	rules: Array,
 	area_m2: float,
-	budget: int = FoliageBudget.PRIMITIVE_BUDGET
+	budget: int = MAP_TRIANGLE_BUDGET
 ) -> Dictionary:
 	var total_instances := 0
 	var total_triangles := 0

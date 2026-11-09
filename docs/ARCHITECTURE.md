@@ -1848,11 +1848,11 @@ brush scheduler, so both build identical nodes.
   cached instance order; a growing node is rebuilt, it is small). No regrowth, no shrink, no
   density-budget work; false when the rows do not match, so the caller can fall back to
   `set_cells(..., false)`. Sculpting snaps plants and props with it every frame.
-- **Density budget:** re-applied after every rebuild. The budget is map-wide
-  (`FoliageBudget.plan` thins all species by one ratio), so the general case re-plans the
-  whole budget root (default the parent); while the map is under budget only the rebuilt
-  nodes are touched. `GameMap.apply_foliage_density()` hands a changed setting to every
-  instance through the `authored_scatter` group (`set_budget`).
+- **Ground thinning:** every node a rebuild builds gets its visible count at `finish_cells()`
+  (`FoliageDensityController.visible_count`: all of it, except a ground-cover node at the
+  current zoom's fraction); `GroundThinner` re-sizes the ground nodes (group
+  `ground_cover_chunk`) when the camera's zoom moves the fraction a step. The triangle budget
+  (`FoliageBudget.plan`, the Settings slider) was retired on 2026-11-09.
 - **Grow-in:** rows already in a cell stay in its node; new rows go to a temporary
   `..._grow<n>` node that grows in over `GROW_SECONDS` (0.35 s, cubic ease-out) and is
   merged back when its tween ends, carrying its visible count so the budget totals do not

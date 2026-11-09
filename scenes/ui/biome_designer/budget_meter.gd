@@ -3,7 +3,7 @@ extends HBoxContainer
 
 ## The designer's budget meter (design doc 4.4): "1.9M / 8M tris | 142 draw | 4.1 ms". The
 ## triangles are the proving ground's instances times the catalog's LOD0 triangles, scaled to a
-## 200 ft map (four 100 ft tiles) against the player's foliage primitive budget; the bar turns
+## 200 ft map (four 100 ft tiles) against a reference budget (8M); the bar turns
 ## amber at 60 percent of it and red at the budget (DesignerBudget). The draw calls and the render
 ## time are the world viewport's own, read from the renderer once a second. Over budget is also
 ## said in words, never by colour alone.
@@ -106,7 +106,7 @@ func _show() -> void:
 
 
 func _budget() -> int:
-	return FoliageDensityController.budget_from_settings()
+	return DesignerBudget.MAP_TRIANGLE_BUDGET
 
 
 func _draw_bar() -> void:

@@ -32,7 +32,7 @@ treecube presets + biomes/*.json
   -> map.glb
   -> tt-sim  %APPDATA%/Godot/app_userdata/TTSim/levels/<level>/map.glb
   -> GlbUtils.load_map_async  ->  collision, water, scatter MultiMeshes + wind, lighting extras, duplicate instancing
-  -> FoliageDensityController applies the per-user primitive budget at runtime
+  -> FoliageDensityController sizes the chunks; GroundThinner thins ground cover with the zoom
 ```
 
 Tokens (asset packs) take a separate path through `AssetManager` and only share the
@@ -311,9 +311,10 @@ Scatter instances contract in full:
 
 ## 7. Budgets and scale
 
-- **Foliage primitive budget:** per-user setting `graphics/foliage_budget`, default
-  8,000,000, range 2M to 24M, applied at runtime per chunk. Not overridable per map.
-  Measured reference map: 52,154 instances across 57 species.
+- **Ground-cover thinning:** no triangle budget is applied any more; ground cover (the lean
+  ground-cover material) is drawn at 1.0 up to camera size 14 and thins to 0.5 by 20
+  (`FoliageDensityController`), at runtime per chunk, not overridable per map. Measured reference
+  map: 52,154 instances across 57 species.
 - **Triangle targets:** treecube trees are 4k to 5k triangles by construction (pine about
   10k, the heaviest preset); grass clumps 6; rocks 80 to 1,280. terrain-paint's catalog
   decimation for legacy FloraPaint assets targets 3,000 for wood surfaces and 300 for

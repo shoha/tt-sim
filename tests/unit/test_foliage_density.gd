@@ -1,12 +1,22 @@
 extends GutTest
 
-## Unit tests for FoliageDensityController -- the runtime half of the foliage density
-## setting. Import builds every scatter instance; this applies the user's budget by
-## writing MultiMesh.visible_instance_count per chunk. See docs/PERFORMANCE.md.
+## Unit tests for FoliageDensityController -- zoom-keyed thinning of ground cover: the ramp from
+## camera size to the share drawn, the visible count of a chunk, and the pass that writes
+## MultiMesh.visible_instance_count. See docs/PERFORMANCE.md "Zoom-keyed ground thinning".
 
 
-func _chunk(parent: Node3D, node_name: String, instances: int, category: String) -> void:
+func after_each() -> void:
+	FoliageDensityController.fraction = 1.0
+
+
+func _chunk(
+	parent: Node3D, node_name: String, instances: int, category: String, ground: bool
+) -> MultiMeshInstance3D:
 	var mesh := BoxMesh.new()
+	if ground:
+		var material := ShaderMaterial.new()
+		material.set_meta(WindFoliage.META_GROUND, true)
+		mesh.material = material
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.mesh = mesh
@@ -16,30 +26,9 @@ func _chunk(parent: Node3D, node_name: String, instances: int, category: String)
 	node.multimesh = multimesh
 	node.set_meta("wind_foliage_category", category)
 	parent.add_child(node)
+	return node
 
 
-func _scene_with(species: Dictionary) -> Node3D:
-	# species maps a species name to an array of per-chunk instance counts.
-	var root := Node3D.new()
-	for species_name in species.keys():
-		var counts: Array = species[species_name]
-		for i in counts.size():
-			var suffix := "" if counts.size() == 1 else "_c%d_0" % i
-			_chunk(root, "%s_MultiMesh%s" % [species_name, suffix], counts[i], "grass")
-	return root
-
-
-func _visible_total(root: Node3D) -> int:
-	var total := 0
-	for child in root.get_children():
-		if child is MultiMeshInstance3D:
-			total += (child as MultiMeshInstance3D).multimesh.visible_instance_count
-	return total
-
-
-## Recurses, unlike _visible_total -- used only by the nested-chunk test below, so a future
-## regression in recursion still fails loudly on every flat-fixture test rather than being
-## silently masked by a helper that always recurses.
 func _visible_total_recursive(node: Node) -> int:
 	var total := 0
 	for child in node.get_children():
@@ -49,107 +38,133 @@ func _visible_total_recursive(node: Node) -> int:
 	return total
 
 
-func test_a_map_under_budget_shows_every_instance() -> void:
-	# 100 instances of a 12-primitive BoxMesh is 1,200 -- far inside any real budget.
-	var root := _scene_with({"GrassBlade": [50, 50]})
-	var report := FoliageDensityController.apply(root, 1000000)
-	assert_false(report.thinned)
-	assert_eq(_visible_total(root), 100)
+func test_every_instance_is_drawn_up_to_the_full_size() -> void:
+	assert_eq(FoliageDensityController.keep_fraction(2.0), 1.0)
+	assert_eq(FoliageDensityController.keep_fraction(4.0), 1.0)
+	assert_eq(FoliageDensityController.keep_fraction(10.0), 1.0)
+	assert_eq(FoliageDensityController.keep_fraction(13.85), 1.0)
+	assert_eq(FoliageDensityController.keep_fraction(14.0), 1.0)
+
+
+func test_half_is_drawn_from_zoom_20_out() -> void:
+	assert_eq(FoliageDensityController.keep_fraction(20.0), 0.5)
+	assert_eq(FoliageDensityController.keep_fraction(30.0), 0.5)
+	assert_eq(FoliageDensityController.keep_fraction(400.0), 0.5)
+
+
+func test_the_ramp_between_is_monotone_and_stepped() -> void:
+	var last := 1.0
+	var distinct := {}
+	var size := 14.0
+	while size <= 20.0:
+		var keep := FoliageDensityController.keep_fraction(size)
+		assert_lte(keep, last, "size %.2f" % size)
+		assert_almost_eq(
+			keep * FoliageDensityController.STEPS, roundf(keep * FoliageDensityController.STEPS), 1e-4
+		)
+		distinct[keep] = true
+		last = keep
+		size += 0.05
+	assert_gt(distinct.size(), 8, "the ramp is a run of small steps, not one jump")
+
+
+func test_a_map_whose_home_is_further_out_keeps_all_of_it_at_home() -> void:
+	# Home 25: the ramp starts there, and spans 25 * (20 / 14 - 1) = 10.7 m of camera size.
+	assert_eq(FoliageDensityController.keep_fraction(25.0, 25.0), 1.0)
+	assert_eq(FoliageDensityController.keep_fraction(25.0 * 20.0 / 14.0, 25.0), 0.5)
+	assert_lt(FoliageDensityController.keep_fraction(30.0, 25.0), 1.0)
+
+
+func test_a_home_closer_in_than_the_full_size_does_not_pull_the_ramp_in() -> void:
+	# A tiny map's home at 8 still draws everything up to 14: zoomed in, a card is large on screen.
+	assert_eq(FoliageDensityController.keep_fraction(12.0, 8.0), 1.0)
+	assert_eq(FoliageDensityController.keep_fraction(20.0, 8.0), 0.5)
+
+
+func test_a_chunk_is_never_emptied() -> void:
+	assert_eq(FoliageDensityController.thinned_count(1, 0.5), 1)
+	assert_eq(FoliageDensityController.thinned_count(3, 0.5), 2)
+	assert_eq(FoliageDensityController.thinned_count(100, 0.5), 50)
+	assert_eq(FoliageDensityController.thinned_count(100, 1.0), 100)
+	assert_eq(FoliageDensityController.thinned_count(0, 0.5), 0)
+
+
+func test_thinning_keeps_a_prefix_so_a_thinner_draw_is_inside_a_fuller_one() -> void:
+	# Drawing the first k of the shuffled order: every k' < k is a subset of it, so the same
+	# instances stay while the zoom moves.
+	var low := FoliageDensityController.thinned_count(200, 0.5)
+	var high := FoliageDensityController.thinned_count(200, 0.75)
+	assert_lt(low, high)
+	assert_eq(low, 100)
+	assert_eq(high, 150)
+
+
+func test_only_ground_cover_chunks_are_thinned() -> void:
+	var root := Node3D.new()
+	var grass := _chunk(root, "Grass_MultiMesh_c0_0", 100, "grass", true)
+	var tree := _chunk(root, "Oak_MultiMesh_c0_0", 100, "tree", false)
+	var rock := _chunk(root, "Rock_MultiMesh", 100, "", false)
+	var flower := _chunk(root, "Poppy_MultiMesh_c0_0", 100, "grass", false)
+	FoliageDensityController.fraction = 0.5
+	assert_eq(FoliageDensityController.visible_count(grass), 50)
+	assert_eq(FoliageDensityController.visible_count(tree), 100)
+	assert_eq(FoliageDensityController.visible_count(rock), 100)
+	assert_eq(FoliageDensityController.visible_count(flower), 50, "a flower is ground cover")
 	root.free()
 
 
-func test_a_map_over_budget_is_reduced_to_fit() -> void:
-	# 100 instances x 12 primitives = 1,200 against a 600 budget -> half visible.
-	var root := _scene_with({"GrassBlade": [50, 50]})
-	var report := FoliageDensityController.apply(root, 600)
-	assert_true(report.thinned)
-	assert_eq(_visible_total(root), 50)
+func test_a_structure_decor_node_is_not_a_scatter_chunk() -> void:
+	# Decor multimeshes carry the category meta but are not shuffled, and are named decor_*.
+	var root := Node3D.new()
+	var decor := _chunk(root, "decor_ivy", 40, "grass", true)
+	FoliageDensityController.fraction = 0.5
+	assert_eq(FoliageDensityController.visible_count(decor), 40)
 	root.free()
 
 
-func test_chunks_nested_below_the_root_are_still_applied() -> void:
-	# The production topology: ScatterGlbUtils parents chunks under the GLB scene root,
-	# level_loader parents that root under map_container as "LevelMap", and
-	# GameMap.apply_foliage_density passes map_container. So every chunk sits two levels
-	# down. A write-back that only resolved direct children would leave them untouched at
-	# -1 here while still counting them into the plan -- which is exactly the bug this
-	# test exists to prevent, and which a flat fixture cannot see.
-	#
-	# 100 instances of a 12-primitive BoxMesh is 1,200 primitives against a 600 budget:
-	# ratio 600/1200 = 0.5, so 50 of the 100 instances stay visible.
+func test_apply_sizes_nested_chunks_at_the_current_fraction() -> void:
+	# The production topology: chunks sit under the GLB scene root under "LevelMap", two levels
+	# below what the loader hands apply().
 	var root := Node3D.new()
 	var level_map := Node3D.new()
 	level_map.name = "LevelMap"
 	root.add_child(level_map)
-	_chunk(level_map, "GrassBlade_MultiMesh_c0_0", 50, "grass")
-	_chunk(level_map, "GrassBlade_MultiMesh_c1_0", 50, "grass")
-	var report := FoliageDensityController.apply(root, 600)
-	assert_true(report.thinned)
-	assert_eq(_visible_total_recursive(root), 50)
+	_chunk(level_map, "Grass_MultiMesh_c0_0", 50, "grass", true)
+	_chunk(level_map, "Grass_MultiMesh_c1_0", 50, "grass", true)
+	_chunk(level_map, "Oak_MultiMesh_c0_0", 10, "tree", false)
+	FoliageDensityController.fraction = 0.5
+	assert_eq(FoliageDensityController.apply(root), 2, "two ground chunks")
+	assert_eq(_visible_total_recursive(root), 25 + 25 + 10)
 	root.free()
 
 
-func test_instance_count_is_never_changed_only_visible_count() -> void:
-	# The full set must stay built so the slider can raise again without a reload.
-	var root := _scene_with({"GrassBlade": [50, 50]})
-	FoliageDensityController.apply(root, 600)
-	for child in root.get_children():
-		var mmi := child as MultiMeshInstance3D
-		assert_eq(mmi.multimesh.instance_count, 50)
-	root.free()
-
-
-func test_raising_the_budget_raises_visible_counts_without_rebuilding() -> void:
-	var root := _scene_with({"GrassBlade": [50, 50]})
-	FoliageDensityController.apply(root, 600)
-	assert_eq(_visible_total(root), 50)
-	FoliageDensityController.apply(root, 1000000)
-	assert_eq(_visible_total(root), 100)
-	root.free()
-
-
-func test_a_deny_listed_rock_species_is_budgeted_too() -> void:
-	# classify_category returns "" for rock/stone/boulder names, which decides what sways
-	# in the wind, not what costs primitives. Budgeting only tree and grass would let a map
-	# escape the cap by naming a species rock_grass.
+func test_the_fraction_moves_the_visible_counts_both_ways_without_rebuilding() -> void:
 	var root := Node3D.new()
-	_chunk(root, "RockCluster_MultiMesh", 100, "")
-	var report := FoliageDensityController.apply(root, 600)
-	assert_true(report.thinned)
-	assert_eq(_visible_total(root), 50)
-	root.free()
+	var grass := _chunk(root, "Grass_MultiMesh_c0_0", 64, "grass", true)
+	add_child(root)
+	FoliageDensityController.apply(root)
+	assert_eq(grass.multimesh.visible_instance_count, 64)
+	assert_eq(FoliageDensityController.set_fraction(get_tree(), 0.5), 1)
+	assert_eq(grass.multimesh.visible_instance_count, 32)
+	assert_eq(grass.multimesh.instance_count, 64, "the full set stays built")
+	assert_eq(FoliageDensityController.set_fraction(get_tree(), 1.0), 1)
+	assert_eq(grass.multimesh.visible_instance_count, 64)
+	root.queue_free()
 
 
-func test_a_species_is_never_reduced_to_zero_instances() -> void:
-	# plan()'s floor of one applies here too: a hero species must not vanish entirely, even
-	# once its allocation has to be split across several chunks. Three chunks of 1 instance
-	# each, not one chunk of 1: with a single chunk, visible_counts_for_chunks' fraction is
-	# 1.0 and returns 1 unconditionally regardless of rounding, so that fixture could never
-	# have caught independent-per-chunk rounding losing the species. Here, kept=1 against
-	# total=3 gives each chunk an exact share of 1/3 -- round(1 * 0.333) = 0 on every chunk
-	# under the old arithmetic, losing HeroTree entirely; largest-remainder apportionment
-	# must instead hand the one allocated instance to one of the three chunks.
-	var root := _scene_with({"GrassBlade": [1000], "HeroTree": [1, 1, 1]})
-	FoliageDensityController.apply(root, 3000)
-	var hero_visible := 0
-	for child in root.get_children():
-		var mmi := child as MultiMeshInstance3D
-		if mmi and String(mmi.name).begins_with("HeroTree"):
-			hero_visible += mmi.multimesh.visible_instance_count
-	assert_eq(hero_visible, 1)
-	root.free()
+func test_setting_the_same_fraction_writes_nothing() -> void:
+	var root := Node3D.new()
+	_chunk(root, "Grass_MultiMesh_c0_0", 64, "grass", true)
+	add_child(root)
+	FoliageDensityController.apply(root)
+	assert_eq(FoliageDensityController.set_fraction(get_tree(), 1.0), 0)
+	root.queue_free()
 
 
 func test_nodes_without_the_foliage_meta_are_ignored() -> void:
-	# Asserting "unchanged from whatever it was before apply() ran" states the real
-	# invariant directly -- this node was never touched at all -- rather than via an
-	# engine default constant that could shift across Godot versions.
-	#
-	# This matters beyond tidiness: MeshInstancingUtils collapses duplicate static map
-	# meshes into MultiMeshInstance3D nodes under the same map_container this controller
-	# scans. If the controller zeroed every MultiMesh it found and then raised only the
-	# foliage ones, applying any density setting would hide collapsed walls, props and
-	# terrain detail. Only nodes carrying wind_foliage_category may be written to.
+	# MeshInstancingUtils collapses duplicate static map meshes into MultiMeshInstance3D nodes
+	# under the same map_container apply() scans; only nodes carrying wind_foliage_category may
+	# be written to.
 	var root := Node3D.new()
 	var other := MultiMeshInstance3D.new()
 	other.name = "SomethingElse_MultiMesh"
@@ -160,55 +175,21 @@ func test_nodes_without_the_foliage_meta_are_ignored() -> void:
 	other.multimesh = mm
 	root.add_child(other)
 	var baseline := mm.visible_instance_count
-	var report := FoliageDensityController.apply(root, 600)
-	assert_false(report.thinned)
+	FoliageDensityController.fraction = 0.5
+	FoliageDensityController.apply(root)
 	assert_eq(mm.visible_instance_count, baseline)
 	root.free()
 
 
-func test_applying_a_budget_never_exceeds_it_in_primitives() -> void:
-	# Closes the loop Fix 1 fixed: nothing else multiplies visible counts by
-	# primitives_per_instance and checks the result against the budget, which is the actual
-	# quantity the budget promises to bound -- the per-species report alone doesn't prove it,
-	# since visible_counts_for_chunks could still over-allocate a chunk.
-	#
-	# Five chunks of 7 BoxMesh (12-primitive) instances each: 35 instances, 420 primitives
-	# before thinning. Against a 200-primitive budget, plan()'s ratio is 200/420 = 0.47619,
-	# so it allocates floor(35 * 0.47619) = floor(16.667) = 16 instances to the species.
-	# Splitting 16 across 5 equal chunks of 7 gives each an exact share of 7 * 16 / 35 = 3.2 --
-	# not an integer, so this genuinely exercises rounding rather than dividing evenly.
-	# 16 instances * 12 primitives = 192, which must land at or under the 200 budget.
-	var root := _scene_with({"GrassBlade": [7, 7, 7, 7, 7]})
-	var report := FoliageDensityController.apply(root, 200)
-	assert_true(report.thinned)
-	var total_primitives := 0
-	for child in root.get_children():
-		var mmi := child as MultiMeshInstance3D
-		if mmi and mmi.multimesh:
-			total_primitives += (
-				mmi.multimesh.visible_instance_count
-				* FoliageBudget.primitives_per_instance(mmi.multimesh.mesh)
-			)
-	assert_eq(total_primitives, 192)
-	assert_lte(total_primitives, 200)
-	root.free()
-
-
-func test_budget_from_settings_round_trips_a_saved_value() -> void:
-	var path := "user://test_foliage_budget_from_settings_round_trip.cfg"
-	var config := ConfigFile.new()
-	config.set_value(
-		FoliageDensityController.SETTINGS_SECTION, FoliageDensityController.SETTINGS_KEY, 5_000_000
-	)
-	config.save(path)
-	assert_eq(FoliageDensityController.budget_from_settings(path), 5_000_000)
-	DirAccess.remove_absolute(path)
-
-
-func test_budget_from_settings_defaults_when_the_key_is_absent() -> void:
-	var path := "user://test_foliage_budget_from_settings_missing_key.cfg"
-	var config := ConfigFile.new()
-	config.set_value(FoliageDensityController.SETTINGS_SECTION, "some_other_key", 1)
-	config.save(path)
-	assert_eq(FoliageDensityController.budget_from_settings(path), FoliageBudget.PRIMITIVE_BUDGET)
-	DirAccess.remove_absolute(path)
+func test_the_eye_view_draws_everything() -> void:
+	var camera := Camera3D.new()
+	camera.projection = Camera3D.PROJECTION_PERSPECTIVE
+	camera.size = 30.0
+	var thinner := GroundThinner.new()
+	var map := GameMap.new()
+	map.camera_node = camera
+	thinner.setup(map)
+	assert_eq(thinner.target_fraction(), 1.0)
+	thinner.free()
+	map.free()
+	camera.free()

@@ -43,6 +43,8 @@ const LIMITS := {
 	"default_shadow_tier": float(RenderingServer.SHADOW_QUALITY_SOFT_HIGH),
 	"default_shadow_cascades": float(ShadowCascades.BLENDED),
 	"default_foliage_edges": float(FoliageEdges.SMOOTH),
+	"ground_keep_far": 0.5,
+	"ground_keep_home": 1.0,
 }
 
 ## Tokens on the table for the net counters, laid out on the perfaudit net harness's 1.25 m grid.
@@ -428,6 +430,23 @@ static func render_rows() -> Array[Dictionary]:
 			"",
 			"Smooth, the shipped look; Fast saves about 0.6 ms with MSAA on, board first",
 			"gpuoptions"
+		),
+		_row(
+			"ground_keep_far",
+			"Share of ground cover drawn at camera size 20 (zoomed out)",
+			FoliageDensityController.keep_fraction(20.0),
+			"",
+			"0.5; the canopy hides most of the ground there: about 0.5 ms",
+			"F-foliage-4, foliagelod"
+		),
+		_row(
+			"ground_keep_home",
+			"Share of ground cover drawn at the 100 ft map's home zoom (13.85)",
+			FoliageDensityController.keep_fraction(13.85),
+			"",
+			"1.0; half of it missing is visible at 1:1 there",
+			"F-foliage-4, foliagelod",
+			"min"
 		),
 	]
 

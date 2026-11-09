@@ -445,7 +445,7 @@ func _finalize_map_loading(map: Node3D) -> void:
 		_level_play_controller.active_level_data
 	)
 	_level_play_controller._view_fit.fit(map, _level_play_controller.loaded_map_document)
-	_apply_foliage_density_and_notify(map)
+	_apply_foliage_density(map)
 	var generation := _load_generation
 	# The structures' nodes come a few a frame; play starts (and tokens are set down) only once
 	# every one stands, and the ground fit below sees their collision.
@@ -490,24 +490,11 @@ func _report_structure_progress(done: int, total: int) -> void:
 	)
 
 
-## Applies the player's foliage density setting to a freshly loaded map, and tells them
-## once if the map exceeded their budget. FoliageBudget.describe() names the density
-## percentage and the setting as the cause; this function's only addition is appending a
-## pointer to where the setting lives. Shown as an informational toast, not a warning --
-## a user-configured setting behaving exactly as configured isn't a warning, and nothing
-## here is a one-time, unrecoverable loss any more: the player can raise the dial back up
-## without a reload.
-func _apply_foliage_density_and_notify(map: Node3D) -> void:
-	if not map:
-		return
-	var budget := FoliageDensityController.budget_from_settings()
-	var report := FoliageDensityController.apply(map, budget)
-	if report.thinned:
-		UIManager.show_toast(
-			"%s Adjust Foliage Density in Settings > Graphics." % FoliageBudget.describe(report),
-			UIManager.TOAST_INFO,
-			6.0
-		)
+## Sizes a freshly loaded map's scatter chunks (the ground cover at the current zoom's thinning,
+## FoliageDensityController); GroundThinner keeps them current as the camera zooms.
+func _apply_foliage_density(map: Node3D) -> void:
+	if map:
+		FoliageDensityController.apply(map)
 
 
 ## Get the light intensity scale from the active level data (or 1.0 if none)

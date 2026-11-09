@@ -6,7 +6,6 @@
  "steps": [
   {"op": "wait_title"},
   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "play start"},
-  {"op": "eval", "expr": "FoliageDensityController.budget_from_settings()"},
 
   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "play", "folder": "_psize_200x200"},
   {"op": "wait", "s": 2.0},
