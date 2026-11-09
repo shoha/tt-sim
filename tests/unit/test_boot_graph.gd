@@ -16,7 +16,9 @@ extends GutTest
 ## (Root._ensure_table), and StructureProcgen loads the procgen parts on the first build.
 ## 343 with IdleThrottle (sysidle): a 130-line Node Root adds after the title is up; LoadPacing and
 ## the Settings graphics helper name it, so it is in the graph (one script, no web behind it).
-const LIMIT_SCRIPTS := 343
+## 344 with GroundClipmapSetting (clipmap1): a 40-line constants class the Settings graphics helper
+## names, kept apart so the clipmap's own scripts are not in the start-up graph.
+const LIMIT_SCRIPTS := 344
 
 var _classes: Dictionary = {}
 var _strings := RegEx.create_from_string(

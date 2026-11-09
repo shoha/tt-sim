@@ -124,3 +124,50 @@ func test_valid_rect_in_metres_is_cut_to_the_map() -> void:
 	assert_eq(v, Vector4(-15.0, -15.0, 15.0, 15.0), "a static level's block is cut to the map")
 	var free := Plan.valid_rect_m(2, Rect2i(-4, -4, 8, 8), Rect2())
 	assert_eq(free, Vector4(-4.0 * ts, -4.0 * ts, 4.0 * ts, 4.0 * ts))
+
+
+func test_patch_jobs_cover_the_edited_tiles_with_the_fewer_strips() -> void:
+	var block := Rect2i(-4, -4, 8, 8)
+	var ts := Plan.tile_m(1)
+	# A thin tall edit (one tile wide, three tall): columns.
+	var tall := Rect2(0.2 * ts, -1.5 * ts, 0.5 * ts, 2.5 * ts)
+	var jobs := Plan.patch_jobs(1, block, block, tall)
+	assert_eq(jobs.size(), 1)
+	assert_eq(jobs[0].kind, Plan.Kind.COLUMN)
+	assert_eq(jobs[0].tile, 0)
+	assert_eq(jobs[0].span, -4, "as long as the block")
+	# A wide short one: rows.
+	var wide := Rect2(-2.5 * ts, 0.2 * ts, 4.0 * ts, 0.4 * ts)
+	var rows := Plan.patch_jobs(1, block, block, wide)
+	assert_eq(rows.size(), 1)
+	assert_eq(rows[0].kind, Plan.Kind.ROW)
+	assert_eq(rows[0].tile, 0)
+	# Two tiles each way: two strips, the columns on a tie.
+	var square := Rect2(-0.5 * ts, -0.5 * ts, 1.0 * ts, 1.0 * ts)
+	var pair := Plan.patch_jobs(1, block, block, square)
+	assert_eq(pair.size(), 2)
+	assert_eq(pair[0].kind, Plan.Kind.COLUMN)
+
+
+func test_the_clipmap_follows_its_default_and_the_ground_detail_setting() -> void:
+	var saved := GroundClipmapSetting.current
+	GroundClipmapSetting.current = GroundClipmapSetting.DEFAULT
+	assert_eq(GroundClipmap.flag_on(), GroundClipmap.ON_BY_DEFAULT, "no flag: the default")
+	GroundClipmapSetting.current = GroundClipmapSetting.OFF
+	assert_false(GroundClipmap.flag_on(), "Ground detail off: never")
+	GroundClipmapSetting.current = saved
+	var terrain := AuthoredTerrain.new()
+	add_child_autofree(terrain)
+	assert_null(GroundClipmap.attach(terrain), "a headless run has no renderer to bake with")
+
+
+func test_patch_jobs_skip_what_is_not_baked_or_not_in_the_block() -> void:
+	var block := Rect2i(-4, -4, 8, 8)
+	var ts := Plan.tile_m(2)
+	var far := Rect2(40.0 * ts, 40.0 * ts, ts, ts)
+	assert_true(Plan.patch_jobs(2, block, block, far).is_empty(), "outside the block")
+	var half := Rect2i(-4, -4, 4, 8)
+	var right := Rect2(2.0 * ts, 0.0, ts, ts)
+	assert_true(Plan.patch_jobs(2, block, half, right).is_empty(), "inside the block, not baked")
+	var left := Rect2(-2.0 * ts, 0.0, 0.5 * ts, 0.5 * ts)
+	assert_eq(Plan.patch_jobs(2, block, half, left).size(), 1)

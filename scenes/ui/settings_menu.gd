@@ -100,6 +100,7 @@ var _reset_tween: Tween
 @onready var foliage_edges_option: OptionButton = %FoliageEdgesOption
 @onready var shadow_quality_option: OptionButton = %ShadowQualityOption
 @onready var shadow_cascades_option: OptionButton = %ShadowCascadesOption
+@onready var ground_detail_option: OptionButton = %GroundDetailOption
 @onready var render_scale_option: OptionButton = %RenderScaleOption
 @onready var water_quality_option: OptionButton = %WaterQualityOption
 @onready var ssao_check: CheckButton = %SSAOCheck

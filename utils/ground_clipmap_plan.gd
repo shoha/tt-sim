@@ -134,6 +134,28 @@ static func next_job(valid: Rect2i, target: Rect2i) -> Dictionary:
 	return {}
 
 
+## The strips that rebake what `world` (a rectangle in map-frame metres, an edit) changed in
+## level `l`: the columns (or the rows, whichever are fewer) of tiles over the part of `valid`
+## it touches, each as long as `block` (the level's target block), so the strip machinery bakes
+## them as it does a pan's. Each job is {kind, tile, span, after: valid}; [] when the edit
+## touches no baked tile of the level.
+static func patch_jobs(l: int, block: Rect2i, valid: Rect2i, world: Rect2) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var ts := tile_m(l)
+	var lo := Vector2i((world.position / ts).floor())
+	var hi := Vector2i((world.end / ts).floor())
+	var touched := Rect2i(lo, hi - lo + Vector2i.ONE).intersection(valid.intersection(block))
+	if touched.size.x <= 0 or touched.size.y <= 0:
+		return out
+	if touched.size.x <= touched.size.y:
+		for tx in range(touched.position.x, touched.end.x):
+			out.append({"kind": Kind.COLUMN, "tile": tx, "span": block.position.y, "after": valid})
+	else:
+		for ty in range(touched.position.y, touched.end.y):
+			out.append({"kind": Kind.ROW, "tile": ty, "span": block.position.x, "after": valid})
+	return out
+
+
 ## Where a strip lands in the window, as 1 or 2 pieces (a strip that wraps the torus splits):
 ## each {src: Rect2i in strip texels, dst: Vector2i in window texels}. `kind`, the strip's
 ## `tile` index along its short axis and `span` (its first tile along the long one).

@@ -62,6 +62,9 @@ Documents here:
 - [biome_designer.md](biome_designer.md): the biome designer (step S8a): the draft model with undo, the
   asset query, the proving ground, partial scatter regeneration, the panels, the title entry and the
   render jobs.
+- [ground_clipmap.md](ground_clipmap.md): the camera-following bake of the composited ground
+  (`GroundClipmap`, `GroundClipmapPlan`): levels, windows, strips, edits, fallbacks, the Ground
+  detail setting and what it costs.
 - [map_document.md](map_document.md): `map.ttmap` (`MapDocument`, `MapDocumentIO`), levels
   with `map.glb`, `map.ttmap` or both, the play-time load and map downloads.
 - [scatter.md](scatter.md): the scatter generator (region independence, thinning, density

@@ -58,6 +58,11 @@ extends Node3D
 ## The ground and the skirt draw the plain shaders (no look code at all) until the bake binds a
 ## look, which swaps in the looked twins (set_looked); losing the last looked biome swaps back.
 
+## The ground a brush or zone edit changed, in grid samples (the rectangle the edit passed;
+## queue_heights and settle_heights add the rule fields' reach; a whole-grid rect for an edit
+## with none). The ground clipmap (GroundClipmap) rebakes just that part.
+signal ground_edited(sample_rect: Rect2i)
+
 const CHUNK_NAME_PREFIX := "TerrainChunk"
 const COLLISION_NAME := "TerrainCollision"
 const SKIRT_NAME := "TerrainSkirt"
@@ -126,10 +131,8 @@ var _fields: Dictionary = {}
 var _prepared_chunks: Dictionary = {}
 ## Samples whose rule fields height edits have made stale, recomputed by settle_heights().
 var _fields_dirty: Rect2i = Rect2i()
-## Ground texture paths loading on background threads (warm_biome_surface), and the loaded
-## textures held so the cache keeps them.
-var _warming: Dictionary = {}
-var _warm_held: Array[Resource] = []
+## Ground textures loading on background threads (warm_biome_surface), held once loaded.
+var _warmer := TerrainSurfaceWarmer.new()
 ## cell -> TerrainMeshBuilder.chunk_vertex_mirror() of chunks edited in place.
 var _mirrors: Dictionary = {}
 ## cell -> Rect2i of samples waiting for an in-place update, in queue order.
@@ -212,28 +215,7 @@ static func layer_surfaces(
 ## textures from disk and back from the GPU in one frame (78 ms on a fresh 200 ft map, 55 ms
 ## of it the layer arrays' sync, 27 to 36 ms with the textures already loaded; card F4b-2).
 static func fire_surfaces(doc: MapDocument, root: String, water: bool) -> PackedStringArray:
-	var available := func(surface: String) -> bool:
-		return surface != "" and GroundPalette.surface_available(surface, root)
-	var plan := FireSweep.plan_for(
-		PaletteLibrary.get_palette(root)["biomes"], PaletteLibrary.surfaces(root)
-	)
-	var names: Array = []
-	if String(plan.biome) != "":
-		var biome := PaletteLibrary.biome(String(plan.biome), root)
-		var ground := String(biome.get("ground_surface", ""))
-		if available.call(ground) and ground != doc.base_surface:
-			var keys := ["ground_surface", "cliff_surface", "scree_surface"]
-			if water:
-				keys.append_array(["water_bed_surface", "shore_surface"])
-			for key in keys:
-				names.append(String(biome.get(key, "")))
-			names.append_array(GroundAccents.surface_names(biome.get("ground_accents", [])))
-	names.append(String(plan.surface))
-	var out := PackedStringArray()
-	for surface: String in names:
-		if available.call(surface) and surface != doc.base_surface and not surface in out:
-			out.append(surface)
-	return out
+	return GroundPalette.fire_surfaces(doc, root, water)
 
 
 ## Builds (or rebuilds from scratch) everything for `doc`; the chunk meshes only with
@@ -503,6 +485,7 @@ func update_ground_region(sample_rect: Rect2i) -> void:
 		_sync_ground_look(false)
 	last_broad_update_usec = _layers.last_broad_usec
 	last_biome_update_usec = Time.get_ticks_usec() - start
+	ground_edited.emit(sample_rect.intersection(grid) if sample_rect.has_area() else grid)
 
 
 ## Brings the ground's wet dressing up to the document's water_dressing (WaterDressing
@@ -514,6 +497,7 @@ func refresh_water_dressing() -> void:
 		update_ground_region(Rect2i())
 	_bind_water_dressing()
 	_sync_skirt_water()
+	ground_edited.emit(Rect2i(0, 0, document.samples_x(), document.samples_z()))
 
 
 ## The skirt follows the ground's layer arrays and its edge surface after a re-table.
@@ -572,18 +556,8 @@ func warm_biome_surface(biome_id: String) -> void:
 ## Starts loading the textures of palette surface `surface_name` on background threads
 ## (see warm_biome_surface; the Paint tool warms a surface when its tile is picked).
 func warm_surface(surface_name: String) -> void:
-	var surface: Dictionary = PaletteLibrary.surfaces(palette_root).get(surface_name, {})
-	# None under the headless dummy renderer (GlbUtils.threaded_loads_safe): loaded when bound.
-	for key in LAYER_MAPS if GlbUtils.threaded_loads_safe() else {}:
-		var relative: Variant = surface.get(key, "")
-		if not relative is String or relative == "":
-			continue
-		var path := palette_root.path_join(relative)
-		if ResourceLoader.has_cached(path) or _warming.has(path) or not ResourceLoader.exists(path):
-			continue
-		if ResourceLoader.load_threaded_request(path) == OK:
-			_warming[path] = true
-	if not _warming.is_empty():
+	_warmer.request(palette_root, surface_name)
+	if not _warmer.is_idle():
 		set_process(true)
 
 
@@ -630,26 +604,17 @@ func _prepare_wanted(inputs: Dictionary) -> void:
 ## resource cache keeps it for the layer bind; uploads prepared layers within PREP_BUDGET_USEC
 ## a frame (at least one map).
 func _process(_delta: float) -> void:
-	for path in _warming.keys():
-		var status := ResourceLoader.load_threaded_get_status(path)
-		if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
-			continue
-		_warming.erase(path)
-		if status == ResourceLoader.THREAD_LOAD_LOADED:
-			_warm_held.append(ResourceLoader.load_threaded_get(path))
+	_warmer.collect()
 	var started := Time.get_ticks_usec()
 	while _layers != null and _layers.prepare_step():
 		if Time.get_ticks_usec() - started >= PREP_BUDGET_USEC:
 			break
-	if _warming.is_empty() and (_layers == null or not _layers.is_preparing()):
+	if _warmer.is_idle() and (_layers == null or not _layers.is_preparing()):
 		set_process(false)
 
 
 func _exit_tree() -> void:
-	for path in _warming.keys():
-		ResourceLoader.load_threaded_get(path)
-	_warming.clear()
-	_warm_held.clear()
+	_warmer.release()
 
 
 ## Rebuilds the ground layers from scratch, as every load does, when the session's list ran
@@ -737,6 +702,7 @@ func queue_heights(sample_rect: Rect2i) -> void:
 	var fields_rect := sample_rect.grow(reach).intersection(grid)
 	if fields_rect.has_area():
 		_fields_dirty = MaskBrush.merge_rect(_fields_dirty, fields_rect)
+		ground_edited.emit(fields_rect)
 	var grown := sample_rect.grow(1).intersection(grid)
 	if not grown.has_area():
 		return
@@ -839,6 +805,7 @@ func settle_heights() -> void:
 		):
 			if _chunks.has(cell):
 				_settling[cell] = true
+		ground_edited.emit(_fields_dirty)  # The settling rebuild carries the new fields.
 		_fields_dirty = Rect2i()
 		last_fields_usec = Time.get_ticks_usec() - started
 	for cell in _edited:

@@ -498,6 +498,9 @@ uniform sampler2D clip_b4 : hint_default_black, CLIP_FILTER, repeat_enable;
 // is under min), and (1 / window extent in metres, fade width in metres, guard in metres, 0).
 uniform vec4 clip_valid[5];
 uniform vec4 clip_info[5];
+// The map-frame rectangle (min x, min z, max x, max z, metres) an edit changed and the windows
+// have not rebaked yet: inside it every pixel keeps the layer blend, which reads the live ground.
+uniform vec4 clip_hole = vec4(1.0e9, 1.0e9, -1.0e9, -1.0e9);
 // Texels per metre of level 0, the lod bias (negative: sharper), the lod fraction above which a
 // level cross-fades into the next, and the cosine of the slope above which a pixel keeps the
 // layer blend. clip_top is the coarsest level; a footprint coarser than it still reads it.
@@ -1485,6 +1488,9 @@ float clip_fetch(vec2 xz, vec2 dx, vec2 dy, float slope_cos, out vec4 a, out vec
 	if (slope_cos < clip_steep_cos) {
 		return 0.0;
 	}
+	if (all(greaterThanEqual(xz, clip_hole.xy)) && all(lessThanEqual(xz, clip_hole.zw))) {
+		return 0.0;  // edited and not rebaked yet: the live ground
+	}
 	float fp = min(length(dx), length(dy));
 	if (fp * clip_d0 < clip_near) {
 		// Finer than level 0 can show (the eye view's ground at the feet): the blend draws it.
@@ -1496,12 +1502,27 @@ float clip_fetch(vec2 xz, vec2 dx, vec2 dy, float slope_cos, out vec4 a, out vec
 #ifdef CLIP_NO_BLEND
 	up = 0.0;  // measurement define: one level per pixel
 #endif
+	// A footprint well past the coarsest level's texel (zoomed far out, the windows have no mips)
+	// would alias, so the top level fades out there and the layer blend, which filters, takes over.
+	float far_keep = 1.0 - smoothstep(0.35, 0.9, lod - float(clip_top));
+#ifdef CLIP_NO_FAR
+	far_keep = 1.0;  // measurement define
+#endif
+	// A level more than one octave coarser than the pixel wants would show as blur (a window that
+	// is not held or not baked here, the eye view, a level cap): the layer blend draws it instead.
+	int last = min(clip_top, first + 1);
+#ifdef CLIP_NO_OCTAVE
+	last = clip_top;  // measurement define
+#endif
 	float rem = 1.0;
-	for (int l = first; l <= clip_top; l++) {
+	for (int l = first; l <= last; l++) {
 		vec4 valid = clip_valid[l];
 		vec4 info = clip_info[l];
 		vec2 inside = min(xz - valid.xy, valid.zw - xz) - info.z;
 		float c = clamp(min(inside.x, inside.y) / info.y, 0.0, 1.0);
+		if (l == clip_top) {
+			c *= far_keep;
+		}
 		if (l == first) {
 			c *= 1.0 - up;
 		}
