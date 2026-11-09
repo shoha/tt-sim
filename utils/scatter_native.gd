@@ -31,11 +31,16 @@ const CAPABILITY_CURVES := "curves"
 const CAPABILITY_WATER := "water"
 ## ... and builds a chunk's settled-node data, its instance buffer included (card scatterload).
 const CAPABILITY_CHUNK := "chunk"
+## ... and TerrainRules.sample_fields (rule_fields; card terrainrules).
+const CAPABILITY_FIELDS := "fields"
 
 ## True: every job runs in GDScript (A/B measurements, tests of the GDScript path).
 static var force_gdscript := false
 ## True: chunk_active() is false, so ScatterRows.chunk builds in GDScript (A/B runs, tests).
 static var force_gdscript_chunks := false
+## True: TerrainRules.sample_fields runs in GDScript while scatter jobs stay native (the stroke-end
+## A/B of card terrainrules).
+static var force_gdscript_fields := false
 
 static var _mutex := Mutex.new()
 static var _native: Object = null
@@ -43,6 +48,9 @@ static var _consts: Dictionary = {}
 static var _counts: Dictionary = {}
 ## Whether the loaded library reports CAPABILITY_CHUNK: -1 not asked yet, 0 no, 1 yes.
 static var _chunk_capable: int = -1
+## Whether the loaded library has rule_fields: 0 not checked yet, 1 yes, -1 no. A benign race:
+## two first callers both check and write the same answer.
+static var _fields_state := 0
 
 
 ## Whether the native library is loaded (the class exists).
@@ -473,6 +481,38 @@ static func noise_2d(
 	if native == null:
 		return PackedFloat32Array()
 	return native.call("noise_2d", seed_value, frequency, octaves, xz)
+
+
+## TerrainRules.sample_fields as the library computes it (TTScatterNative.rule_fields: the same
+## Dictionary, bit for bit), or {} when the library is missing or predates it (no
+## CAPABILITY_FIELDS), or when force_gdscript or force_gdscript_fields is set. Any thread.
+static func rule_fields(
+	heights: PackedFloat32Array,
+	columns: int,
+	rows: int,
+	step: Vector2,
+	rect: Rect2i,
+	radius: int,
+	start_cos: float,
+	end_cos: float
+) -> Dictionary:
+	if force_gdscript or force_gdscript_fields:
+		return {}
+	var native := _fields_instance()
+	if native == null:
+		return {}
+	return native.call(
+		"rule_fields", heights, columns, rows, step, rect, radius, start_cos, end_cos
+	)
+
+
+## The library's instance when it has rule_fields (checked once), else null.
+static func _fields_instance() -> Object:
+	var native := _instance()
+	if _fields_state == 0:
+		var ok := native != null and String(native.call("version")).contains(CAPABILITY_FIELDS)
+		_fields_state = 1 if ok else -1
+	return native if _fields_state > 0 else null
 
 
 ## Whether ScatterRows.chunk runs natively: the library is loaded, reports CAPABILITY_CHUNK (an
