@@ -59,7 +59,24 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _save(base, step)
 		"cleanup":
 			return _cleanup()
+		"bake":
+			return _bake(gm, bool(step.get("on", true)))
+		"anim_lod":
+			TokenAnimationLod.set_enabled(bool(step.get("on", true)), base.get_tree())
+			return "token animation lod %s" % ("on" if TokenAnimationLod.enabled else "off")
 	return "unknown action %s" % step.get("action", "")
+
+
+## Draws every avatar baked (AvatarFigureBake) or as its skinned figure, for a look pair.
+static func _bake(gm: GameMap, on: bool) -> String:
+	AvatarTokenView.bake_figures = on
+	var count := 0
+	for token in _avatars(gm):
+		var view := AvatarTokenFactory.view_of(token)
+		if view != null:
+			view.refresh_mesh()
+			count += 1
+	return "%d avatars drawn %s" % [count, "baked" if on else "skinned"]
 
 
 static func _avatars(gm: GameMap) -> Array[BoardToken]:
@@ -332,7 +349,8 @@ static func _timing(gm: GameMap, lpc: LevelPlayController, step: Dictionary) -> 
 		var t0 := Time.get_ticks_usec()
 		var token := _spawn(gm, lpc, k, _ground(gm, xz), 0.0)
 		var t1 := Time.get_ticks_usec()
-		var figure := AvatarTokenFactory.view_of(token).figure
+		# The view (in the tree, where the figure stands) holds the baked figure's mesh.
+		var figure := AvatarTokenFactory.view_of(token) as Node3D
 		var a := AvatarKit.update_shade(figure, gm.map_container, sun)
 		var t2 := Time.get_ticks_usec()
 		var b := AvatarKit.update_shade(figure, gm.map_container, sun, cache)

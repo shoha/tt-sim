@@ -724,6 +724,17 @@ The animation tree uses an `AnimationNodeStateMachinePlayback` with these states
 
 The `AnimationTree` is added as a child of the `RigidBody3D`. Its `tree_root` node path must point to the model root (parent of `AnimationPlayer`) so bone paths resolve correctly. The factory handles this wiring.
 
+### Update rate (TokenAnimationLod)
+
+The tree does not process itself: on `_ready` it registers with its viewport's `TokenAnimationLod`
+(`scenes/board_token/token_animation_lod.gd`), which puts it and the players it reads in the manual
+callback mode and calls `advance()` with the time since the last step: every frame while the token is
+highlighted (selected or hovered), dragged, or within 2 s of a health reaction (`touch`); at 30 Hz,
+staggered, while it is idle and on screen; never while it is off screen (perf audit F-tokens-3,
+2026-11-09: 15-20 us per token per frame before). Code that plays a clip on a token outside the state
+machine must `touch` the tree, or it will step at the idle rate. `TokenAnimationLod.set_enabled(false,
+tree)` hands every mixer back its own per-frame processing.
+
 ### Adding New Animations
 
 1. Add the animation state to the `AnimationNodeStateMachine` in `board_token_animation_tree.tscn`

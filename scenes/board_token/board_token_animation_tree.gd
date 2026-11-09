@@ -15,6 +15,8 @@ const IDLE := &"battlewait01"
 var _factory_created: bool = false
 var _board_token: BoardToken
 var _state_machine: AnimationNodeStateMachinePlayback
+## The viewport's TokenAnimationLod, which steps the tree while it is in the tree.
+var _lod: TokenAnimationLod = null
 
 @onready var tree: AnimationTree = $AnimationTree
 
@@ -24,6 +26,9 @@ func _enter_tree() -> void:
 		push_error(
 			"BoardTokenAnimationTree: Use BoardTokenAnimationTreeFactory.create(), not .new()"
 		)
+	# _ready registers the first time; a token moved to a new parent registers again here.
+	if is_node_ready():
+		_register_lod()
 
 
 func _ready() -> void:
@@ -49,6 +54,20 @@ func _ready() -> void:
 	else:
 		push_warning("BoardTokenAnimationTree: anim_player not set")
 	_connect_to_board_token()
+	_register_lod()
+
+
+## Hands the tree (and the players it reads, which play nothing themselves) to the viewport's
+## animation level of detail (TokenAnimationLod).
+func _register_lod() -> void:
+	if anim_player == null or tree == null:
+		return
+	_lod = TokenAnimationLod.for_viewport(get_viewport())
+	var sources: Array = [anim_player]
+	var dummy := tree.get_node_or_null("Dummy")
+	if dummy is AnimationMixer:
+		sources.append(dummy)
+	_lod.register(tree, _board_token, sources)
 
 
 func _init_state_machine() -> void:
@@ -60,6 +79,9 @@ func _init_state_machine() -> void:
 
 
 func _exit_tree() -> void:
+	if is_instance_valid(_lod):
+		_lod.unregister(tree)
+	_lod = null
 	if _board_token and is_instance_valid(_board_token):
 		if _board_token.health_changed.is_connected(_on_health_changed):
 			_board_token.health_changed.disconnect(_on_health_changed)
@@ -88,6 +110,9 @@ func _on_health_changed(new_health: int, _max_health: int, previous_health: int)
 		push_warning("BoardTokenAnimationTree: No state machine found.")
 		return
 
+	# A reaction plays at the full frame rate, however idle the token was.
+	if is_instance_valid(_lod):
+		_lod.touch(tree)
 	if new_health == 0:
 		_state_machine.travel("down01")
 	elif previous_health > new_health:

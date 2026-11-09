@@ -22,6 +22,11 @@ extends RefCounted
 ##   no_proc       per-token frame work off: AnimationTree inactive (pack), AvatarTokenView process
 ##   frozen        token rigid bodies frozen (static): the physics engine's share
 ##   orig_shading  pack tokens in their original materials instead of TokenToon
+##   skinned       avatars drawn as their skinned figures, not baked (AvatarFigureBake; tokenmesh)
+##   anim_full     pack animations stepped every frame by their own mixers, not by
+##                 TokenAnimationLod (tokenmesh)
+##   (a step's `variants` list replaces the default sets; skinned only applies to avatars,
+##   orig_shading and anim_full only to pack tokens)
 ##   ceiling       tokens hidden, one MultiMesh per distinct token mesh at the same transforms (the
 ##                 cheapest draw of the same meshes, bind pose, first material, shadows as shipped)
 ## Table columns: frame, fmean, fp90 (the window's median, mean and p90 of the wall ms between
@@ -86,6 +91,9 @@ class Runner:
 		"orig_shading",
 		"ceiling",
 	]
+	## Variants that only mean something for one kind (dropped from the other's list).
+	const PACK_ONLY := ["orig_shading", "anim_full"]
+	const AVATAR_ONLY := ["skinned"]
 	const SERIES := ["frame", "fmean", "fp90", "gpu", "rcpu"]
 	const MB := 1048576.0
 	const DONE_KEY := "perfaudit_tokens_done"
@@ -133,8 +141,10 @@ class Runner:
 			for n in step.get("counts", [10, 50, 100, 250, 500]):
 				var label := "%s %d" % [kind, int(n)]
 				var variants: Array = FULL_VARIANTS if full_at.has(int(n)) else SCALE_VARIANTS
-				if kind != "pack":
-					variants = variants.filter(func(v: String) -> bool: return v != "orig_shading")
+				if step.has("variants"):
+					variants = step.variants
+				var only: Array = PACK_ONLY if kind != "pack" else AVATAR_ONLY
+				variants = variants.filter(func(v: String) -> bool: return not only.has(v))
 				tasks.append({"do": "spawn", "kind": kind, "n": int(n)})
 				tasks.append({"do": "watch", "frames": 40, "label": "after spawn " + label})
 				tasks.append({"do": "mem", "label": label})
@@ -481,17 +491,17 @@ class Runner:
 		out.append("ghost budget %.1f us" % ((Time.get_ticks_usec() - t4) / 20.0))
 		var views: Array[AvatarTokenView] = []
 		for token in _tokens():
-			var view := AvatarTokenFactory.view_of(token)
-			if view != null:
-				views.append(view)
+			var avatar_view := AvatarTokenFactory.view_of(token)
+			if avatar_view != null:
+				views.append(avatar_view)
 		if not views.is_empty():
 			var t5 := Time.get_ticks_usec()
-			for view in views:
-				view.refresh_shade()
+			for avatar_view in views:
+				avatar_view.refresh_shade()
 			var t6 := Time.get_ticks_usec()
 			for k in 10:
-				for view in views:
-					view._process(0.016)
+				for avatar_view in views:
+					avatar_view._process(0.016)
 			var t7 := Time.get_ticks_usec()
 			out.append(
 				(
@@ -696,6 +706,10 @@ class Runner:
 			"orig_shading":
 				TokenToon.painted = true
 				TokenToon.refresh_all(tree)
+			"skinned":
+				_set_baked(tokens, true)
+			"anim_full":
+				TokenAnimationLod.set_enabled(true, tree)
 			"ceiling":
 				for mmi in _ceiling:
 					mmi.queue_free()
@@ -725,8 +739,21 @@ class Runner:
 			"orig_shading":
 				TokenToon.painted = false
 				TokenToon.refresh_all(tree)
+			"skinned":
+				_set_baked(tokens, false)
+			"anim_full":
+				TokenAnimationLod.set_enabled(false, tree)
 			"ceiling":
 				_build_ceiling(tokens)
+
+	## Avatars drawn baked (AvatarFigureBake, the default) or as their skinned figures (before the
+	## bake, the tokenmesh card's A/B).
+	func _set_baked(tokens: Array[BoardToken], on: bool) -> void:
+		AvatarTokenView.bake_figures = on
+		for t in tokens:
+			var view := AvatarTokenFactory.view_of(t)
+			if view != null:
+				view.refresh_mesh()
 
 	func _set_token_processing(tokens: Array[BoardToken], on: bool) -> void:
 		for t in tokens:
