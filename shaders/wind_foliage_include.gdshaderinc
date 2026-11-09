@@ -452,7 +452,7 @@ void apply_canopy_fade(
 	if (fade <= 0.0) {
 		return;
 	}
-	float key = use_vertex_wind ? fract(wind.y * 13.37 + 0.31) : bayer16(frag_coord);
+	float key = use_vertex_wind ? fract(wind.y * 13.37 + 0.31) : bayer16(frag_coord / world_px_cell());
 	if (key < fade) {
 		discard;
 	}

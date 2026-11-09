@@ -74,10 +74,12 @@ reader holding its file (4c56da38); the title leaked six orphan nodes per visit 
 
 ### Found false
 
-- **Render scale's premise.** The world viewport is 1920x1080 on every 16:9 window (a stretched
-  SubViewportContainer on a 1920x1080 canvas), so a 4K player pays about 4 ms and sees a softer
+- **Render scale's premise.** The world viewport was 1920x1080 on every 16:9 window (a stretched
+  SubViewportContainer on a 1920x1080 canvas), so a 4K player paid about 4 ms and saw a softer
   upscaled board. The register's "4K 14.1 ms" and "FSR 0.5 at 4K: 14.1 -> 4.7 ms" were
-  output-sized renders the game never draws ("Render scale").
+  output-sized renders the game did not draw. Card rendersize (2026-11-09, board
+  perf-render-scale: output-sized) made them real: the viewport is now output-sized, so a 4K
+  window pays about 11.7 ms at home and Render scale is the player's lever ("Render scale").
 - **The ground's half of the frame.** The flat-material floor (2.0 of 4.0 ms) shrank after the
   pre-pass change (`ground_flat` saves 0.23 ms at home now); a full bake of the composited ground
   saves 0.85-1.12 ms at 1080p on the near views (home 3.18 -> 2.27) and 0.45 at full zoom-out,
@@ -5517,23 +5519,18 @@ Settings > Graphics > Render scale (`RenderScale`, `utils/render_scale.gd`): Aut
 default), 85, 75, 67 or 50 % of the board's full render, upscaled with FSR 1.0. Added because the
 frame is fill-bound (1440p-sized render 1.72 times, 4K-sized 3.5 times the 1080p time).
 
-**The board already renders at 1920x1080 on every screen.** The world SubViewport sits in a
-stretched SubViewportContainer and the project stretches canvas_items on a 1920x1080 base canvas, so
-the viewport is sized in canvas units: 1920x1080 at every 16:9 window from 720p to 4K (headless probe
-of a stretched container, 2026-11-08; at Interface size 1.4 it is 1371x771 and GameMap's
-`scaling_3d_scale` 1.4 brings the render back to 1920x1080). On a 1440p or 4K screen the canvas
-enlarges that render bilinearly, which is the pixel count of FSR 0.75 and 0.5 of the output; below
-1080p the render is supersampled (2.25 times the shown pixels at 720p). The 2D layer always draws at
-the window's resolution. So a 4K player pays about 4 ms here, not 14, and sees a softer board: native
-output rendering would need an output-sized world viewport (overlays, pixel-sized grid widths and
-unproject call sites change with it), a board decision rather than this card.
+**Before rendersize the board rendered at 1920x1080 on every screen.** The world SubViewport sat in
+a stretched SubViewportContainer on the 1920x1080 base canvas, so the viewport was sized in canvas
+units: 1920x1080 at every 16:9 window from 720p to 4K (headless probe, 2026-11-08), enlarged
+bilinearly on 1440p and 4K screens (the pixel count of FSR 0.75 and 0.5 of the output) and
+supersampled below 1080p. Card rendersize replaced that (next section); the numbers and look notes
+below were measured with the old sizing, and their "output-sized" rows are now the real cost.
 
-**The setting.** A percent scales the full render (`scaling_3d_scale` = Interface size factor x
-percent), FSR 1.0 under 1 and bilinear at or above (FSR cannot downsample). 100 % is the game before
-the setting. Auto draws no more pixels than the screen shows: the full render at 1080p and up (the
-same pixels as FSR 0.75 at 1440p and 0.5 at 4K) and the window's own size below 1080p, snapped to the
-viewport's size within 0.9 to 1 (an upscale pass over a nearly equal size costs more than it saves).
-GameMap re-applies it on every window resize. FSR sharpness stays at the engine's 0.2; the texture mip
+**The setting.** A percent scales the full render (`scaling_3d_scale` = percent / 100; the viewport
+is already output-sized), FSR 1.0 under 1 and bilinear at 1 (FSR cannot downsample). 100 % is the
+full render. Auto draws no more pixels than the screen shows: the full render at 1080p and up and the
+window's own size below 1080p, snapped to the viewport's size within 0.9 to 1 (an upscale pass over a
+nearly equal size costs more than it saves). GameMap re-applies it on every window resize. FSR sharpness stays at the engine's 0.2; the texture mip
 bias stays 0, since the engine already lowers it by log2(scale) for a scaled render.
 
 **Cost.** `perfaudit_gpu.gd` `perf` (renderscale job), `--gpu-profile`, RTX 3080 idle before (3 %,
@@ -5576,6 +5573,73 @@ what native rendering at that output would cost; the game does not run them.
   same hits every time. The occlusion fade works in view space; its Bayer dither (and the ground
   skirt's and the avatar fade's) is in render pixels, so at 50 % its cells are twice as large.
   Grid line widths are in render pixels too and enlarge with the render.
+
+## Output-sized world viewport (topic rendersize, 2026-11-09)
+
+Board perf-render-scale, user: "it is expected that moving up to higher resolutions would have a
+performance hit; if someone is at 4k but can't hit the framerate they want, they can adjust the
+render scale themselves." So the world viewport follows the window's pixels, Render scale stays
+the lever, the default stays 100 % and there is no Auto default.
+
+**The rule** (`WorldView`, `utils/world_view.gd`, tests `test_world_view.gd`): the canvas is
+V = window / (window_scale x Interface size factor) units (1920x1080 on any 16:9 window at factor
+1). The viewport is P = V x density pixels, density = factor x clamp(window_scale, 1, 2): the
+window's own pixels from 1080p up to 4K (1440p 2560x1440, 4K 3840x2160, a 3440x1440 ultrawide
+3440x1440), clamped at 4K (5K and 8K windows render 3840x2160 and the canvas upscales), and the
+old 1080p-class size below 1080p (supersample kept; Auto covers it). Render scale is a share of P
+(FSR 50 % at 4K draws 1920x1080: the cost the game had before).
+
+**Coordinates stay in canvas units.** The viewport's `size_2d_override` (with the stretch flag) is
+V, and the container is P wide, scaled by V / P, not stretched. Viewport.get_visible_rect(), the
+mouse position, `Camera3D.unproject_position` and `project_ray_*`, physics picking and forwarded
+events then all stay in canvas units whatever P is (probe on a 2560x1440 window, then in the game at
+1440p and 4K: viewport mouse and ground ray exact to 0.003 m, the pixel rounding of the cursor warp).
+So camera picking, the occlusion tiles (view space), token markers and edge arrows, drags and the
+authoring brush needed no change. Only reads of `world_viewport.size` as a screen extent did: they
+now read `WorldView.canvas_size()` (session_party, drag place, gameplay menu, eye view, orbit view,
+map view fit, sun gizmo, view ground, weather, token markers, edge arrows, biome designer compare).
+`world_viewport.size` is output pixels (the performance overlay shows it). Render-job probes under
+`tools/render_jobs/probes` still read it as a screen extent: they run at 1080p, where the two are
+equal.
+
+**Pixel-authored effects** multiply by the `world_px_scale` global (P.y / 1080, set by
+`WorldView.apply_layout`): the grid line width, the submerged marker's pixel floors, and the Bayer
+dither cells of the occlusion fade, the canopy fade and the avatar hidden fade (whole cells,
+max(1, round(scale)) render pixels: 1 at 1080p and 1440p, 2 at 4K). At 1080p the factor is 1 and the
+maths is unchanged. Derivative-based edge widths (fwidth anti-aliasing, detail fades) follow the
+pixels on their own; the lo-fi pass, grain and its dither run on the window's pixels as before.
+Left alone: the ground skirt's per-pixel hash dither (noise, finer at 4K) and SSAO (world-space
+radius).
+
+**1080p check** (`rs_pixels` job: temperate forest 100 ft, valley, seed 1234, wind frozen,
+`--full`; raw `_sub` captures, the composited ones carry time-varying lo-fi grain): before (base
+commit 92f6a036) against after, home 0.044 % of pixels differ (max 22 levels), zoom 5 with three
+tokens under the canopy 1.5 % (max 85); two runs of the base against each other differ by 0.064 %
+(max 20) and 1.4 % (max 175). The differences are the run-to-run noise of the harness (README
+"Repeatable captures"), not a pass-by-pass zero; no systematic change.
+
+**Cost** (`perfaudit_gpu.gd perf`, in-run A/B, RTX 3080 at 30 % utilisation before the runs, real
+windows, vsync off, SSAO on, MSAA off, lo-fi on, shadow High, temperate forest 100 ft, valley,
+home, 6 rounds, first discarded, 20 settle and 60 frames; GPU ms median [range]; drift 0.995-1.035
+except one 4K round 1.098):
+
+| Window | 100 % | FSR 75 % | FSR 50 % |
+|---|---|---|---|
+| 1920x1080 | 2.70 [2.67-2.74] | 1.83 [1.82-1.85] | 1.09 [1.09-1.12] |
+| 2560x1440 | 4.68 [4.50-4.87] | 3.07 [2.97-3.16] | 1.72 [1.66-1.77] |
+| 3840x2160 | 11.65 [10.60-11.84] | 7.05 [6.47-7.40] | 3.81 [3.67-3.93] |
+
+The 100 % row is 1.73 times (1440p) and 4.3 times (4K) the 1080p cost. FSR 50 % at 4K (3.8 ms)
+draws the 1920x1080 render the game drew before this card at 4K, plus the FSR pass. These are not
+comparable with the renderscale table above (a different run, session and GPU clock state: its
+1080p 100 % row read 3.93 ms).
+
+**Picking** (render job with events through `Input.parse_input_event` at window pixels, the real
+cursor warped there, the real drag path): at 1920x1080, 2560x1440 and 3840x2160 a token is picked
+and dragged by the same amount (-0.786, -0.534 m in all three), and the viewport mouse position
+and ground ray under 2 points are exact (0.000 m at 1080p and 4K, 0.003 m at 1440p from the
+cursor's whole-pixel warp). A window larger than the screen (4K on this 1440p monitor) needs the
+cursor inside the screen: the probe centres the window on it.
 
 ## Token sync bytes (topic perfaudit, card netspawn, 2026-11-08)
 

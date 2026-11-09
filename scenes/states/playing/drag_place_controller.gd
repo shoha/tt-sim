@@ -257,7 +257,7 @@ func _get_camera_ground_position() -> Vector3:
 	var eye: Variant = ViewGround.eye_centre(_game_map)
 	if eye != null:
 		return eye
-	var center := Vector2(_game_map.world_viewport.size) / 2.0
+	var center := WorldView.canvas_size(_game_map.world_viewport) / 2.0
 	var pos := _get_ground_position(center)
 	if pos == Vector3.INF:
 		pos = Vector3(

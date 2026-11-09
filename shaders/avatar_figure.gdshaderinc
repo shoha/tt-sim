@@ -102,7 +102,12 @@ vec3 ambient_tint() {
 	return mix(vec3(1.0), hue, ambient_hue_mix) * mix(1.0, level, ambient_mix);
 }
 
+// The world viewport's pixel height over 1080 (WorldView): the hidden-fade cells keep their share
+// of the screen, whole render pixels across (1 at 1080p and 1440p, 2 at 4K).
+global uniform float world_px_scale;
+
 float bayer4(vec2 p) {
+	p /= max(1.0, floor(world_px_scale + 0.5));
 	ivec2 q = ivec2(mod(p, 4.0));
 	int i = q.x + q.y * 4;
 	int m[16] = int[](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);

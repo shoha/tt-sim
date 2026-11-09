@@ -176,7 +176,7 @@ func viewport_x() -> float:
 ## The ground position along `right` under world-viewport pixel column `x`.
 func t_at_viewport_x(x: float) -> float:
 	var camera := session.game_map.camera_node
-	var at := Vector2(x, session.game_map.world_viewport.size.y * 0.5)
+	var at := Vector2(x, WorldView.canvas_size(session.game_map.world_viewport).y * 0.5)
 	var origin := camera.project_ray_origin(at)
 	var direction := camera.project_ray_normal(at)
 	var plane_y := _ground_y()

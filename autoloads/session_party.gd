@@ -275,7 +275,8 @@ static func camera_ground_point(game_map: Node) -> Vector3:
 	var eye: Variant = ViewGround.eye_centre(game_map)
 	if eye != null:
 		return eye
-	var centre := Vector2(game_map.world_viewport.size) / 2.0
+	# Canvas units (the visible rect), not the viewport's output pixels (WorldView.canvas_size).
+	var centre: Vector2 = game_map.world_viewport.get_visible_rect().size / 2.0
 	var origin: Vector3 = game_map.camera_node.project_ray_origin(centre)
 	var direction: Vector3 = game_map.camera_node.project_ray_normal(centre)
 	if absf(direction.y) < 0.0001 or -origin.y / direction.y < 0.0:
