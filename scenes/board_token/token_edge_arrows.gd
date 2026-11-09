@@ -276,7 +276,7 @@ func _process(_delta: float) -> void:
 	_arrows.clear()
 	_hovered = -1
 	if camera != null and is_instance_valid(camera):
-		var size := Vector2(camera.get_viewport().size)
+		var size := WorldView.canvas_size(camera.get_viewport())
 		var root := get_tree().root
 		unit = ui_unit(Vector2(root.size), Vector2(root.content_scale_size))
 		var raw := _raw_arrows(size)

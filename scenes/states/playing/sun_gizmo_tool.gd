@@ -234,7 +234,7 @@ func _ground_point_at(screen_pos: Vector2, plane_y: float = 0.0) -> Vector3:
 func _viewport_centre_ground_point() -> Vector3:
 	if not _camera or not _world_viewport:
 		return Vector3.INF
-	var centre_px := Vector2(_world_viewport.size) * 0.5
+	var centre_px := WorldView.canvas_size(_world_viewport) * 0.5
 	if _camera.projection == Camera3D.PROJECTION_PERSPECTIVE:
 		return ViewGround.eye_point(
 			_camera.project_ray_origin(centre_px),
