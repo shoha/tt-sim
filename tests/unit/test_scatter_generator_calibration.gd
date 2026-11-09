@@ -19,7 +19,9 @@ const RANDOM_BAND := Vector2(0.8, 1.3)
 const CLUMP_BAND := Vector2(0.55, 1.45)
 const MIN_EXPECTED := 150.0
 const MAX_TIER_AREA := 160000.0
-const EPSILON := 1e-4
+## Spacing slack: the rows sit on MapDocumentIO.ROW_STEP's grid (up to 0.7 mm of drift between a
+## pair), so a pair the generator placed exactly a spacing apart may measure that much under.
+const EPSILON := MapDocumentIO.ROW_STEP
 ## The ship palette (treecube 020bbdc, ground ship card 4): in the grassland and the savanna the
 ## massed grass delivers about a third to a half of its palette density, because the zones drop
 ## whole swathes of it (zone_keep) and the bare openings keep none, and the sprig and short

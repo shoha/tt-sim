@@ -68,7 +68,6 @@ func _sliders(menu: SettingsMenu) -> Array[HSlider]:
 		menu.cell_tint_opacity_slider,
 		menu.line_thickness_slider,
 		menu.fade_distance_slider,
-		menu.foliage_density_slider,
 	]
 
 

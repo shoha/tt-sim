@@ -12,7 +12,7 @@ extends RefCounted
 ## ground newly allows follows the normal rules, and only survivors are kept.
 ##
 ## Why props. Generation is a pure function of the document, so a kept rock has to be stored
-## somewhere, and the props rows (AuthoredProps, props.json) already save, load, undo, redo
+## somewhere, and the props rows (AuthoredProps, props.bin) already save, load, undo, redo
 ## and reach peers with the map. A kept rock is then just a placed rock.
 ##
 ## Which instances. removed_keys() generates the rock species of the cells in question
@@ -132,8 +132,13 @@ static func kept_row(
 		out[4] = q.y
 		out[5] = q.z
 		out[6] = q.w
-		up = q.normalized() * Vector3.UP
-	out[1] = GroundSnap.bed_under(heights, grid, p, radius * absf(row[7]), up)
+		# Snap the rotation first: the base plane it beds on is the one the saved row stands on.
+		var unit := MapDocumentIO.ROW_STEP
+		for k in range(3, 7):
+			out[k] = snappedf(out[k], unit)
+		up = Quaternion(out[3], out[4], out[5], out[6]).normalized() * Vector3.UP
+	var bed := GroundSnap.bed_under(heights, grid, p, radius * absf(row[7]), up)
+	out[1] = snappedf(bed, MapDocumentIO.ROW_STEP)
 	return out
 
 

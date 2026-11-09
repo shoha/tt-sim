@@ -11,10 +11,47 @@ extends RefCounted
 ## (2026-10-09). The choice is made when the ground's tables are bound (a build, a new biome or
 ## surface); a later stroke that paints the edge without changing them shows on the skirt at
 ## the next.
+##
+## Two surfaces (card skirtring): the skirt receives no shadows (its shaders declare
+## shadows_disabled; PERFORMANCE.md "Ground skirt shadows"), except an INNER RING, the first
+## TerrainMeshBuilder.SKIRT_SHADOW_RINGS ring steps past the map edge, drawn with the ring shaders
+## (the same without the render mode) as the mesh's second surface, so a tall caster at the edge
+## still shadows the ground just beyond it. The ring material is a copy of the skirt's, mirrored
+## uniform for uniform (sync_ring); the shader fades the shadow out over the ring's width, so the
+## surfaces meet without a seam.
 
 ## The mean weight over the map's edge samples a painted surface must reach for the skirt to
 ## continue it instead of the base.
 const EDGE_SURFACE_SHARE := 0.6
+## The ring material's own uniform, which sync_ring leaves alone.
+const RING_OWN_UNIFORM := "skirt_shadow_m"
+
+
+## How far past the map edge the ring surface reaches on a skirt `width_m` wide, in metres (the
+## distance of ring TerrainMeshBuilder.SKIRT_SHADOW_RINGS along the edges): the shaders' shadow
+## reception has faded to nothing there. Pure.
+static func ring_edge_m(width_m: float) -> float:
+	return RiverExitMesh.skirt_distance(width_m, TerrainMeshBuilder.SKIRT_SHADOW_RINGS)
+
+
+## The inner ring's material: a copy of `skirt` on the ring shader (the looked one when `looked`)
+## whose shadow reception ends `edge_m` past the map edge. Keep it in step with sync_ring().
+static func ring_material(skirt: ShaderMaterial, looked: bool, edge_m: float) -> ShaderMaterial:
+	var ring := skirt.duplicate() as ShaderMaterial
+	ring.shader = AuthoredTerrain.ring_shader(looked)
+	ring.set_shader_parameter(RING_OWN_UNIFORM, edge_m)
+	return ring
+
+
+## Copies every uniform of `skirt` that the ring shader declares onto `ring`, so the two surfaces
+## draw the same ground, fade, backdrop and fog. Cheap enough for the rare syncs (a re-table, a
+## bake); SkirtBackdrop keeps both in step each frame by listing both.
+static func sync_ring(skirt: ShaderMaterial, ring: ShaderMaterial) -> void:
+	ring.render_priority = skirt.render_priority
+	for uniform: Dictionary in ring.shader.get_shader_uniform_list():
+		var uniform_name := String(uniform.name)
+		if uniform_name != RING_OWN_UNIFORM:
+			ring.set_shader_parameter(uniform_name, skirt.get_shader_parameter(uniform_name))
 
 
 ## The skirt's material for ground material `ground` (its layers bound by `layers`) on map
@@ -93,10 +130,30 @@ static func edge_surface(doc: MapDocument) -> int:
 
 
 ## The skirt's mesh from `arrays` (RiverExitMesh.skirt_parts() "skirt") drawn with `skirt_material`.
-static func mesh(arrays: Array, skirt_material: ShaderMaterial) -> ArrayMesh:
+## With a `ring_material` and a `ring_split` (the parts' "ring_split": how many of the indices,
+## from the front, are the inner rings'), the inner rings are the second surface drawn with
+## `ring_material` and surface 0 holds the rest; both share the one vertex layout, so an in-place
+## edge update writes both.
+static func mesh(
+	arrays: Array,
+	skirt_material: ShaderMaterial,
+	ring_material: ShaderMaterial = null,
+	ring_split: int = 0
+) -> ArrayMesh:
 	var built := ArrayMesh.new()
-	built.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	built.surface_set_material(0, skirt_material)
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	if ring_material == null or ring_split <= 0 or ring_split >= indices.size():
+		built.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		built.surface_set_material(0, skirt_material)
+	else:
+		var outer := arrays.duplicate()
+		outer[Mesh.ARRAY_INDEX] = indices.slice(ring_split)
+		built.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, outer)
+		built.surface_set_material(0, skirt_material)
+		var inner := arrays.duplicate()
+		inner[Mesh.ARRAY_INDEX] = indices.slice(0, ring_split)
+		built.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, inner)
+		built.surface_set_material(1, ring_material)
 	# In-place edge edits move vertices the build-time AABB does not know about; the skirt is
 	# decoration outside every bounds walk, so a generous box costs nothing.
 	var box := built.get_aabb()
@@ -128,9 +185,10 @@ static func update_in_place(
 		for r in TerrainMeshBuilder.SKIRT_RINGS + 1:
 			var first := r * count + indices.x
 			var end := r * count + indices.y
-			skirt_mesh.surface_update_vertex_region(
-				0, first * 12, positions.slice(first * 3, end * 3).to_byte_array()
-			)
-			skirt_mesh.surface_update_vertex_region(
-				0, total * 12 + first * 8, normals.slice(first * 2, end * 2).to_byte_array()
-			)
+			var position_bytes := positions.slice(first * 3, end * 3).to_byte_array()
+			var normal_bytes := normals.slice(first * 2, end * 2).to_byte_array()
+			for surface in skirt_mesh.get_surface_count():
+				skirt_mesh.surface_update_vertex_region(surface, first * 12, position_bytes)
+				skirt_mesh.surface_update_vertex_region(
+					surface, total * 12 + first * 8, normal_bytes
+				)

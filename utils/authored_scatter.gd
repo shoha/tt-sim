@@ -26,10 +26,10 @@ extends Node3D
 ##
 ## Cells. One MultiMeshInstance3D per (asset id, cell), named
 ## `<asset stem>_MultiMesh_c<x>_<z>` (always suffixed, unlike the GLB path's single-cell
-## species), so FoliageDensityController groups them by species and a rebuild never
-## renames a neighbour. Instances are ordered by a hash of the instance itself seeded by
-## that name (ScatterRows.instance_order), not by their index, so the prefix the density
-## budget draws keeps the same instances when others are added or removed. A row's identity
+## species), so a rebuild never renames a neighbour. Instances are ordered by a hash of the
+## instance itself seeded by that name (ScatterRows.instance_order), not by their index, so the
+## prefix the zoom-keyed ground thinning draws (FoliageDensityController) keeps the same
+## instances when others are added or removed. A row's identity
 ## is its X, Z and scale (ScatterRows.row_keys), so a height edit that moves Y keeps it the
 ## same instance; move_rows() rewrites moved instances in place.
 ##
@@ -78,7 +78,7 @@ const SPECIES_PER_FRAME := 1
 ## Finished grow-ins of one asset in one cell that wait to be merged into its settled node
 ## together while others are still growing (each merge rebuilds the node; native-cover round 2).
 const MERGE_BATCH := 3
-## Every instance joins it: GameMap.apply_foliage_density() reaches set_budget() through it.
+## Every instance joins it.
 const GROUP := &"authored_scatter"
 
 ## Palette root species are resolved from.
@@ -86,10 +86,8 @@ var palette_root: String = PaletteLibrary.DEFAULT_ROOT
 ## The level's foliage overrides ("<category>_sway_speed" ...), baked into each species'
 ## wind material when it is resolved.
 var foliage_overrides: Dictionary = {}
-## Where FoliageDensityController applies the budget after a rebuild; null means the parent
-## (LevelMap), which holds a dressed GLB's own scatter too, so the budget stays map-wide.
-var budget_root: Node3D = null
-## The foliage primitive budget; negative reads the player's setting on first use (set_budget).
+## Retired with the primitive budget (zoom-keyed ground thinning replaced it): nothing reads it.
+## Kept only so the many tests that still assign it compile.
 var budget: int = -1
 ## Classic grow-in duration (ScatterArrival.classic); 0 builds new instances in place.
 var grow_seconds: float = GROW_SECONDS
@@ -138,16 +136,10 @@ var _jobs: Array[Dictionary] = []
 var _finished: Array[Dictionary] = []
 ## asset id -> resource path of a threaded load started by prepare_biome().
 var _loading: Dictionary = {}
-## Scatter primitives under the budget root after the last full budget apply, kept current
-## by each rebuild's delta; -1 when unknown or when the map was over budget (see
-## _apply_budget). Valid because nothing else changes scatter under the root between
-## rebuilds: a GLB's scatter is static, and a density change re-plans the whole map
-## (GameMap.apply_foliage_density) and comes back through set_budget().
-var _known_total: int = -1
-## Nodes whose MultiMesh the current set_cells() built, for the budget fast path. Untyped:
-## a node freed later in the same rebuild must not break the loop that skips it.
+## Nodes whose MultiMesh the current set_cells() built, which get their visible count when it
+## finishes. Untyped: a node freed later in the same rebuild must not break the loop that skips it.
 var _touched: Array = []
-## True between begin_build() and end_build(): set_cells() skips the budget apply.
+## True between begin_build() and end_build(): set_cells() skips the visible-count pass.
 var _budget_deferred: bool = false
 ## Created on first use (never in a headless run, so tests see no extra child).
 var _warmer: PipelineWarmer = null
@@ -211,12 +203,6 @@ func _warm(species: Dictionary) -> void:
 	_warmer.warm(species.mesh, String(species.stem), String(species.wind_category))
 
 
-## A new foliage density budget (the player moved the setting). The nodes themselves were
-## already re-thinned by whoever applied it map-wide; this only keeps later rebuilds on it.
-func set_budget(value: int) -> void:
-	budget = value
-
-
 func _exit_tree() -> void:
 	# A task handed to WorkerThreadPool must be waited on; the results are dropped (stop them).
 	for entry in _jobs:
@@ -252,29 +238,29 @@ func build_all(asset_rows: Dictionary) -> void:
 
 ## Replaces the instances of exactly the given cells (cell -> {asset id ->
 ## PackedFloat32Array}; an asset missing from a cell's dictionary, or a cell with an empty
-## one, is removed) and leaves every other cell's nodes untouched, then re-applies the
-## foliage density budget. With `animate`, instances new to a cell grow in and the rest
-## stay put; without, the cell is rebuilt in place.
+## one, is removed) and leaves every other cell's nodes untouched, then sets the visible
+## counts of the nodes it built (ground thinning). With `animate`, instances new to a cell grow
+## in and the rest stay put; without, the cell is rebuilt in place.
 func set_cells(rows_by_cell: Dictionary, animate: bool = true) -> void:
 	var started := Time.get_ticks_usec()
 	var cells: Array[Vector2i] = []
 	cells.assign(rows_by_cell.keys())
-	finish_cells(cells, rebuild_cells(rows_by_cell, animate), started)
+	rebuild_cells(rows_by_cell, animate)
+	finish_cells(cells, started)
 
 
-## set_cells() without the density budget or the signal, for ScatterApply, which lands one
-## result at a time against its frame budget. Returns the primitive delta for finish_cells().
+## set_cells() without the visible-count pass or the signal, for ScatterApply, which lands one
+## result at a time against its frame budget; finish_cells() ends it.
 ## `centres`: the job's brush centre per cell (ScatterRegen "Brush centres"), which stages the
 ## arrival and ripples it from there (ScatterArrival).
-func rebuild_cells(rows_by_cell: Dictionary, animate: bool = true, centres: Dictionary = {}) -> int:
+func rebuild_cells(
+	rows_by_cell: Dictionary, animate: bool = true, centres: Dictionary = {}
+) -> void:
 	var grow := animate and grow_seconds > 0.0 and is_inside_tree()
-	var delta := 0
 	_centres = centres
 	for cell in rows_by_cell:
-		delta += _primitive_delta(_cells.get(cell, {}), rows_by_cell[cell])
 		_rebuild_cell(cell, rows_by_cell[cell], grow)
 	_centres = {}
-	return delta
 
 
 ## The brush centre of `cell` in the landing being applied (Vector2, map XZ), or null.
@@ -282,10 +268,10 @@ func landing_centre(cell: Vector2i) -> Variant:
 	return _centres.get(cell)
 
 
-## Ends rebuild_cells() of `cells`: applies the density budget for `delta`, records the time
-## since `started_usec` as last_apply_usec and emits cells_applied.
-func finish_cells(cells: Array[Vector2i], delta: int, started_usec: int) -> void:
-	_apply_budget(delta)
+## Ends rebuild_cells() of `cells`: sets the visible counts of the nodes it built, records the
+## time since `started_usec` as last_apply_usec and emits cells_applied.
+func finish_cells(cells: Array[Vector2i], started_usec: int) -> void:
+	_apply_density()
 	last_apply_usec = Time.get_ticks_usec() - started_usec
 	cells_applied.emit(cells)
 
@@ -362,7 +348,6 @@ func clear() -> void:
 	_cells.clear()
 	_keys.clear()
 	mass_anchors.clear()
-	_known_total = -1
 
 
 ## Finishes every grow-in now (tests, and before anything reads the settled nodes).
@@ -527,9 +512,9 @@ func release_prepared() -> void:
 
 
 ## Starts a build spread over several calls: clears everything, then build_cells() adds
-## cells without re-applying the density budget each time (a full re-plan walks the whole
-## map), and end_build() applies it once. The play-time load builds this way so a painted
-## 200 ft map (about 100 ms of MultiMesh building) does not stall one frame.
+## cells without a visible-count pass each time, and end_build() does it once. The play-time
+## load builds this way so a painted 200 ft map (about 100 ms of MultiMesh building) does not
+## stall one frame.
 func begin_build() -> void:
 	clear()
 	_budget_deferred = true
@@ -541,11 +526,13 @@ func build_cells(rows_by_cell: Dictionary) -> void:
 	set_cells(rows_by_cell, false)
 
 
-## Ends a begin_build() build: applies the density budget across the budget root once.
+## Ends a begin_build() build: sets the visible count of every settled node once.
 func end_build() -> void:
 	_budget_deferred = false
-	_known_total = -1
-	_apply_budget(0)
+	_touched.clear()
+	for per_asset: Dictionary in _nodes.values():
+		for node in per_asset.values():
+			_size_node(node)
 
 
 func _register_biomes() -> void:
@@ -653,7 +640,7 @@ func _rebuild_asset(
 		# Nothing grows or shrinks (the load): keys, order and buffer in one call, native or not.
 		var built := ScatterRows.chunk(rows, null, node_name_for(asset_id, cell), mass_anchors)
 		_keys[cell][asset_id] = built.keys
-		_place_settled(cell, asset_id, built, -1)
+		_place_settled(cell, asset_id, built)
 		return
 	var keys := row_keys(rows.to_byte_array().to_int32_array())
 	if not rows.is_empty():
@@ -696,7 +683,7 @@ func _rebuild_asset(
 	# until the merge) rather than freeing it and naming a new one.
 	if not fresh.is_empty():
 		_start_growth(cell, asset_id, rows, keys, fresh)
-	_set_settled(cell, asset_id, rows, keys, settled, -1)
+	_set_settled(cell, asset_id, rows, keys, settled)
 
 
 ## Drops rows that left the cell from its growing nodes (freeing a node left empty and
@@ -739,15 +726,13 @@ func _refresh_growing(
 
 
 ## Builds (or rebuilds, or frees) the settled node of an asset in a cell from the rows at
-## `indices`. `visible_count` >= 0 sets its visible_instance_count directly (a grow-in merge,
-## which moves instances between nodes without changing the species' total).
+## `indices`; its visible count follows at finish_cells() (or, for a grow-in merge, at once).
 func _set_settled(
 	cell: Vector2i,
 	asset_id: String,
 	rows: PackedFloat32Array,
 	keys: PackedInt64Array,
-	indices: PackedInt32Array,
-	visible_count: int
+	indices: PackedInt32Array
 ) -> void:
 	var node: MultiMeshInstance3D = _nodes.get(cell, {}).get(asset_id)
 	var growing: bool = _growing.get(cell, {}).has(asset_id)
@@ -760,12 +745,12 @@ func _set_settled(
 			_orders.get(cell, {}).erase(asset_id)
 		return
 	var built := ScatterRows.chunk(rows, indices, node_name_for(asset_id, cell), mass_anchors, keys)
-	_place_settled(cell, asset_id, built, visible_count)
+	_place_settled(cell, asset_id, built)
 
 
 ## Builds (or rebuilds) a settled node from chunk data (ScatterRows.chunk), keeping the order
-## for move_rows(); `visible` as _set_settled's `visible_count`.
-func _place_settled(cell: Vector2i, asset_id: String, built: Dictionary, visible: int) -> void:
+## for move_rows().
+func _place_settled(cell: Vector2i, asset_id: String, built: Dictionary) -> void:
 	var node: MultiMeshInstance3D = _nodes.get(cell, {}).get(asset_id)
 	if not _orders.has(cell):
 		_orders[cell] = {}
@@ -782,8 +767,6 @@ func _place_settled(cell: Vector2i, asset_id: String, built: Dictionary, visible
 	else:
 		node.multimesh = multimesh
 	_touched.append(node)
-	if visible >= 0:
-		node.multimesh.visible_instance_count = mini(visible, node.multimesh.instance_count)
 
 
 func _start_growth(
@@ -813,8 +796,7 @@ func _start_growth(
 
 ## Merges finished grow-ins into the cell's settled node: this one, with the asset's others
 ## that finished before it, once MERGE_BATCH have finished or none is still growing (lean). The
-## merged node draws as many instances as they did together, so the density budget's totals do
-## not move and no global re-plan is needed.
+## merged node's visible count is set from its own instance count, as any rebuilt node's.
 func _finish_growth(cell: Vector2i, asset_id: String, entry: Dictionary) -> void:
 	var entries: Array = _growing.get(cell, {}).get(asset_id, [])
 	if not entry in entries:
@@ -825,13 +807,7 @@ func _finish_growth(cell: Vector2i, asset_id: String, entry: Dictionary) -> void
 		return  # stays at full size in its own node until the batch merges
 	if not lean_rebuild:
 		done = [entry]
-	var settled: MultiMeshInstance3D = _nodes.get(cell, {}).get(asset_id)
-	var visible_count := settled.multimesh.visible_instance_count if settled else 0
 	for other: Dictionary in done:
-		var grown_visible := (other.node as MultiMeshInstance3D).multimesh.visible_instance_count
-		visible_count = (
-			-1 if visible_count < 0 or grown_visible < 0 else visible_count + grown_visible
-		)
 		entries.erase(other)
 		_free_growing(other)
 	if entries.is_empty():
@@ -847,7 +823,8 @@ func _finish_growth(cell: Vector2i, asset_id: String, entry: Dictionary) -> void
 	for i in keys.size():
 		if not still.has(keys[i]):
 			indices.append(i)
-	_set_settled(cell, asset_id, rows, keys, indices, visible_count)
+	_set_settled(cell, asset_id, rows, keys, indices)
+	_apply_density()
 
 
 ## A chunk node of this asset in this cell (ScatterGlbUtils.build_chunk, so it matches the
@@ -939,7 +916,6 @@ func _species_for(asset_id: String) -> Dictionary:
 		"materials": materials,
 		"by_shader": all_wind,
 		"height": maxf(aabb.end.y, 0.0),
-		"primitives": FoliageBudget.primitives_per_instance(mesh),
 		"stage": ScatterArrival.stage_for(asset_id, palette_root),
 	}
 	if not materials.is_empty():
@@ -950,49 +926,19 @@ func _species_for(asset_id: String) -> Dictionary:
 	return _species[asset_id]
 
 
-## Re-applies the density budget after a rebuild that changed the scatter's primitives by
-## `delta`. The budget is global (FoliageBudget.plan thins every species by one ratio), so
-## in general the whole map is re-planned: about 5 ms on a fully painted 200 ft map (999
-## nodes). When the last full apply found the map under budget and it still is with the
-## delta, nothing anywhere is thinned, so only the nodes this rebuild built need their
-## visible count set, which is the common case while painting.
-func _apply_budget(delta: int) -> void:
+## Sets the visible count of every node a rebuild built (FoliageDensityController.visible_count:
+## all of it, except ground cover under the zoom-keyed thinning). Nothing else needs touching:
+## the thinning is a function of one node's instance count and the current fraction, and the
+## ground thinner re-sizes every ground chunk when the fraction moves.
+func _apply_density() -> void:
 	if _budget_deferred:
 		_touched.clear()
 		return
-	if budget < 0:
-		budget = load(DENSITY_CONTROLLER).budget_from_settings()
-	if _known_total >= 0 and _known_total + delta <= budget:
-		_known_total += delta
-		for node in _touched:
-			if is_instance_valid(node) and node.multimesh:
-				node.multimesh.visible_instance_count = node.multimesh.instance_count
-	else:
-		var root: Node3D = budget_root
-		if root == null:
-			root = get_parent() as Node3D
-		if root == null:
-			root = self
-		var report: Dictionary = load(DENSITY_CONTROLLER).apply(root, budget)
-		var total: int = report.get("total_before", 0)
-		_known_total = total if total <= budget else -1
+	for node in _touched:
+		_size_node(node)
 	_touched.clear()
 
 
-
-## Primitives a cell gains going from `old` to `fresh` rows (negative when it loses some).
-@warning_ignore("integer_division")
-func _primitive_delta(old: Dictionary, fresh: Dictionary) -> int:
-	var assets := {}
-	assets.merge(old)
-	assets.merge(fresh)
-	var stride := MapDocument.ROW_STRIDE
-	var delta := 0
-	for asset_id in assets:
-		var species := _species_for(asset_id)
-		if species.is_empty():
-			continue
-		var before: int = (old.get(asset_id, PackedFloat32Array()) as PackedFloat32Array).size()
-		var after: int = (fresh.get(asset_id, PackedFloat32Array()) as PackedFloat32Array).size()
-		delta += (after / stride - before / stride) * int(species.primitives)
-	return delta
+func _size_node(node: Variant) -> void:
+	if is_instance_valid(node) and node.multimesh:
+		node.multimesh.visible_instance_count = load(DENSITY_CONTROLLER).visible_count(node)

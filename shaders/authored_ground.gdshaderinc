@@ -61,8 +61,16 @@
  * PERFORMANCE.md "Ground skirt shadows"): the directional shadow filter was about half of the
  * skirt's cost at full zoom-out (0.58 of 1.19 ms at 1080p on an RTX 3080), while the layer
  * blend was under a tenth of it, and on the measured map no shadow reached the skirt (home, full
- * zoom-out and eye views within 3 levels, mean 0). A shadow cast across the map edge now stops
- * at the edge line.
+ * zoom-out and eye views within 3 levels, mean 0).
+ *   SKIRT RING (GROUND_SKIRT_RING; card skirtring): the one place a shadow does reach the skirt
+ * is just past the map edge, where a tall caster near the edge with a low sun throws its shadow
+ * on, so the skirt's inner rings (TerrainSkirt, the mesh's second surface, up to
+ * TerrainMeshBuilder.SKIRT_SHADOW_RINGS rings out) draw with authored_ground_skirt_ring*.gdshader: the same
+ * shader without shadows_disabled. The shadow term is faded out over the ring (light(): the
+ * directional light's ATTENUATION mixed toward 1 by v_ring_fade, 0 at the edge to 1 at
+ * skirt_shadow_m), so the shadow thins to nothing exactly where the shadowless outer skirt takes
+ * over and no seam shows. The fade runs on the distance to the map rectangle, not the wobbled
+ * one of the colour fade, because the surfaces split on geometry.
  *
  * ANTI-TILING (the live port of terrain-paint's Mosaic tiling breakup):
  * terrain-paint breaks a repeating texture by cutting UV space into a grid of cells, giving
@@ -445,6 +453,14 @@ const float SKIRT_EDGE_DRESSING_M = 2.0;
 uniform int skirt_ground_layer = 0;
 uniform int skirt_bed_layer = -1;
 uniform int skirt_shore_layer = -1;
+#ifdef GROUND_SKIRT_RING
+// The ring's outer edge: this far past the map edge shadows are no longer received (see SKIRT
+// RING), and they fade in strength from SKIRT_RING_FADE_FROM of it. TerrainSkirt sets it to the
+// distance of the ring surface's outer vertices.
+uniform float skirt_shadow_m : hint_range(1.0, 100.0) = 16.0;
+const float SKIRT_RING_FADE_FROM = 0.3;
+varying float v_ring_fade;
+#endif
 #endif
 
 // Map-frame normal, position and the per-vertex rule fields (UV2: curvature, steepness).
@@ -1807,6 +1823,12 @@ void fragment() {
 	v_lit_normal = n_view;
 	v_lit_roughness = limited_roughness(roughness, n_view);
 	v_lit_specular = specular;
+#ifdef GROUND_SKIRT_RING
+	// SKIRT RING: how much of the sun's shadow term light() gives back (0 at the edge, 1 at the
+	// ring's outer edge, where the shadowless skirt begins).
+	float ring_d = length(max(abs(world_xz) - skirt_half_extent, vec2(0.0)));
+	v_ring_fade = smoothstep(skirt_shadow_m * SKIRT_RING_FADE_FROM, skirt_shadow_m, ring_d);
+#endif
 	ROUGHNESS = mix(AMBIENT_ROUGHNESS, WET_ROUGHNESS, WET_GLOSS * wet_line);
 #ifdef GROUND_LIT_KEEP_NORMAL
 	// Probe only: the full normal and roughness written as before, so a diff against
@@ -1831,11 +1853,18 @@ void light() {
 	float cndl = max(ndl, 0.0);
 	vec3 h = normalize(VIEW + LIGHT);
 	float cldh = clamp(dot(LIGHT, h), 0.0, 1.0);
+	float att = ATTENUATION;
+#ifdef GROUND_SKIRT_RING
+	// The sun's shadow fades out over the ring (see SKIRT RING); a lamp's falloff is left alone.
+	if (LIGHT_IS_DIRECTIONAL) {
+		att = mix(att, 1.0, v_ring_fade);
+	}
+#endif
 	if (METALLIC < 1.0) {
 		float fd90m1 = 2.0 * cldh * cldh * rough - 0.5;
 		float fdv = 1.0 + fd90m1 * lit_schlick(cndv);
 		float fdl = 1.0 + fd90m1 * lit_schlick(cndl);
-		DIFFUSE_LIGHT += LIGHT_COLOR * ((1.0 / PI) * fdv * fdl * cndl) * ATTENUATION;
+		DIFFUSE_LIGHT += LIGHT_COLOR * ((1.0 / PI) * fdv * fdl * cndl) * att;
 	}
 	if (rough > 0.0) {
 		float cndh = clamp(dot(n, h), 0.0, 1.0);
@@ -1851,7 +1880,7 @@ void light() {
 		float a004 = min(r4.x * r4.x, exp2(-9.28 * cndv)) * r4.x + r4.y;
 		vec2 dfg = vec2(-1.04, 1.04) * a004 + r4.zw;
 		vec3 ec = 1.0 + f0 * (1.0 / max(dfg.x + dfg.y, 1e-3) - 1.0);
-		SPECULAR_LIGHT += ec * (cndl * d * g) * f * LIGHT_COLOR * ATTENUATION * SPECULAR_AMOUNT;
+		SPECULAR_LIGHT += ec * (cndl * d * g) * f * LIGHT_COLOR * att * SPECULAR_AMOUNT;
 	}
 }
 #endif

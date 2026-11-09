@@ -1,9 +1,9 @@
 extends GutTest
 
-## Unit tests for FoliageBudget -- the fixed global cap on scattered-foliage primitives
-## in user-imported maps (see docs/PERFORMANCE.md). Every function under test is a pure
-## static with no node access, which is the whole reason the allocator lives in its own
-## class: headless runs cannot verify real rendering, but they can verify all of this.
+## Unit tests for FoliageBudget -- the triangle count of a mesh and the deterministic shuffled
+## order a chunk's instances are written in (the order zoom-keyed ground thinning draws a prefix
+## of; see FoliageDensityController and docs/PERFORMANCE.md). Both are pure statics with no node
+## access: headless runs cannot verify real rendering, but they can verify all of this.
 
 
 func _indexed_array_mesh() -> ArrayMesh:
@@ -49,8 +49,7 @@ func test_returns_zero_for_a_surfaceless_array_mesh() -> void:
 
 
 func test_ignores_non_triangle_surfaces() -> void:
-	# A line surface contributes no triangles. Counting its indices as triangles would
-	# inflate the species' cost and thin the map more than it needs to be.
+	# A line surface contributes no triangles.
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3.ZERO, Vector3.RIGHT])
@@ -98,7 +97,7 @@ func test_shuffled_order_is_a_full_permutation() -> void:
 
 func test_shuffled_order_is_deterministic_for_the_same_seed_source() -> void:
 	# A map must look the same across loads on one machine, and instances must appear and
-	# disappear predictably as the density slider moves rather than reshuffling.
+	# disappear predictably as the thinning moves rather than reshuffling.
 	var first := FoliageBudget.shuffled_order(500, "GrassBlade")
 	var second := FoliageBudget.shuffled_order(500, "GrassBlade")
 	assert_eq(Array(first), Array(second))
@@ -128,7 +127,7 @@ func test_shuffled_order_is_empty_for_a_nonpositive_count() -> void:
 
 func test_shuffled_order_pins_the_current_algorithm() -> void:
 	# Golden values, intentionally brittle. This order decides which instances a user sees
-	# at any density below 100%, so it must not drift as an accident of refactoring -- and
+	# under any thinning, so it must not drift as an accident of refactoring -- and
 	# an engine RNG change on a Godot upgrade has the same effect as a deliberate edit.
 	var order := FoliageBudget.shuffled_order(8, "GrassBlade")
 	assert_eq(Array(order), [5, 6, 7, 3, 1, 4, 2, 0])
@@ -140,191 +139,3 @@ func test_stable_hash_is_fnv1a_and_not_the_engines_hash() -> void:
 	# that would tie every map's appearance to an engine version.
 	assert_eq(FoliageBudget._stable_hash(""), 2166136261)
 	assert_eq(FoliageBudget._stable_hash("GrassBlade"), 445990121)
-
-
-func test_visible_counts_distribute_proportionally() -> void:
-	var counts := FoliageBudget.visible_counts_for_chunks(
-		{Vector2i(0, 0): 100, Vector2i(1, 0): 100}, 100, 200
-	)
-	assert_eq(counts[Vector2i(0, 0)], 50)
-	assert_eq(counts[Vector2i(1, 0)], 50)
-
-
-func test_visible_counts_respect_uneven_chunks() -> void:
-	var counts := FoliageBudget.visible_counts_for_chunks(
-		{Vector2i(0, 0): 80, Vector2i(1, 0): 20}, 50, 100
-	)
-	assert_eq(counts[Vector2i(0, 0)], 40)
-	assert_eq(counts[Vector2i(1, 0)], 10)
-
-
-func test_visible_counts_show_everything_when_kept_equals_total() -> void:
-	var counts := FoliageBudget.visible_counts_for_chunks(
-		{Vector2i(0, 0): 30, Vector2i(1, 0): 70}, 100, 100
-	)
-	assert_eq(counts[Vector2i(0, 0)], 30)
-	assert_eq(counts[Vector2i(1, 0)], 70)
-
-
-func test_visible_counts_never_exceed_a_chunks_instance_count() -> void:
-	# Writing a visible_instance_count above instance_count is invalid in Godot.
-	var counts := FoliageBudget.visible_counts_for_chunks(
-		{Vector2i(0, 0): 10, Vector2i(1, 0): 10}, 500, 20
-	)
-	assert_eq(counts[Vector2i(0, 0)], 10)
-	assert_eq(counts[Vector2i(1, 0)], 10)
-
-
-func test_visible_counts_are_zero_for_a_zero_allocation() -> void:
-	var counts := FoliageBudget.visible_counts_for_chunks({Vector2i(0, 0): 40}, 0, 40)
-	assert_eq(counts[Vector2i(0, 0)], 0)
-
-
-func test_visible_counts_handle_empty_and_degenerate_input() -> void:
-	assert_eq(FoliageBudget.visible_counts_for_chunks({}, 10, 10).size(), 0)
-	var counts := FoliageBudget.visible_counts_for_chunks({Vector2i(0, 0): 10}, 5, 0)
-	assert_eq(counts[Vector2i(0, 0)], 0)
-
-
-func test_visible_counts_never_lose_a_species_to_rounding() -> void:
-	# Independent per-chunk rounding returns 0 for all three here (round(1/3) = 0), losing
-	# the species entirely. Largest-remainder apportionment must hand the whole allocation
-	# to one chunk instead.
-	var counts := FoliageBudget.visible_counts_for_chunks(
-		{Vector2i(0, 0): 1, Vector2i(1, 0): 1, Vector2i(2, 0): 1}, 1, 3
-	)
-	var total := 0
-	for key in counts.keys():
-		total += counts[key]
-	assert_eq(total, 1)
-
-
-func test_visible_counts_never_exceed_the_allocation_through_rounding() -> void:
-	# Independent rounding gives round(0.5) = 1 on every chunk here, doubling the
-	# allocation and blowing the budget the user set.
-	var chunk_counts := {}
-	for i in 100:
-		chunk_counts[Vector2i(i, 0)] = 1
-	var counts := FoliageBudget.visible_counts_for_chunks(chunk_counts, 50, 100)
-	var total := 0
-	for key in counts.keys():
-		total += counts[key]
-	assert_eq(total, 50)
-
-
-func _species(count: int, per_instance: int) -> Dictionary:
-	return {"count": count, "primitives_per_instance": per_instance}
-
-
-func test_a_map_under_budget_is_left_alone() -> void:
-	var report := FoliageBudget.plan({"Grass": _species(1000, 10)}, 100000)
-	assert_false(report.thinned)
-	assert_eq(report.kept["Grass"], 1000)
-	assert_eq(report.total_before, 10000)
-	assert_eq(report.total_after, 10000)
-
-
-func test_a_map_exactly_on_budget_is_left_alone() -> void:
-	var report := FoliageBudget.plan({"Grass": _species(100, 10)}, 1000)
-	assert_false(report.thinned)
-	assert_eq(report.kept["Grass"], 100)
-
-
-func test_a_map_over_budget_is_thinned_to_within_budget() -> void:
-	var report := FoliageBudget.plan({"Grass": _species(1000, 10)}, 4000)
-	assert_true(report.thinned)
-	assert_lte(report.total_after, 4000)
-	assert_eq(report.kept["Grass"], 400)
-
-
-func test_allocation_is_proportional_across_equal_species() -> void:
-	# Same primitive load each, so each keeps the same fraction -- the map's composition
-	# is preserved rather than one species being sacrificed to save another.
-	var report := FoliageBudget.plan(
-		{"Grass": _species(1000, 10), "Fern": _species(1000, 10)}, 10000
-	)
-	assert_true(report.thinned)
-	assert_eq(report.kept["Grass"], 500)
-	assert_eq(report.kept["Fern"], 500)
-
-
-func test_allocation_scales_a_heavier_species_by_the_same_fraction() -> void:
-	# Trees cost 10x per instance here. Both keep half their instances; the tree species
-	# still surrenders 10x as many primitives, which is the point.
-	var report := FoliageBudget.plan(
-		{"Grass": _species(1000, 10), "Tree": _species(1000, 100)}, 55000
-	)
-	assert_true(report.thinned)
-	assert_eq(report.kept["Grass"], 500)
-	assert_eq(report.kept["Tree"], 500)
-
-
-func test_a_species_with_no_countable_primitives_is_never_thinned() -> void:
-	# primitives_per_instance of 0 means the mesh's cost could not be determined. Thinning
-	# it would be silent content loss for no measurable saving.
-	var report := FoliageBudget.plan(
-		{"Grass": _species(1000, 10), "Unknown": _species(50, 0)}, 4000
-	)
-	assert_true(report.thinned)
-	assert_eq(report.kept["Unknown"], 50)
-	assert_eq(report.kept["Grass"], 400)
-
-
-func test_an_empty_species_set_is_not_thinned() -> void:
-	var report := FoliageBudget.plan({}, 4000)
-	assert_false(report.thinned)
-	assert_eq(report.total_before, 0)
-	assert_eq(report.instances_before, 0)
-
-
-func test_reports_instance_counts_before_and_after() -> void:
-	var report := FoliageBudget.plan({"Grass": _species(1000, 10), "Fern": _species(500, 10)}, 7500)
-	assert_eq(report.instances_before, 1500)
-	assert_eq(report.instances_after, 750)
-
-
-func test_defaults_to_the_shipped_budget() -> void:
-	# Called without an explicit budget, a map far under PRIMITIVE_BUDGET is untouched.
-	var report := FoliageBudget.plan({"Grass": _species(10, 10)})
-	assert_false(report.thinned)
-
-
-func test_describe_names_the_density_percentage_and_the_reason() -> void:
-	# 400 kept of 1,000 before is 40%. Present tense and names the setting (not the map) as
-	# the cause, since this is a live dial the player can raise back up, not a one-time loss.
-	var report := FoliageBudget.plan({"Grass": _species(1000, 10)}, 4000)
-	var message := FoliageBudget.describe(report)
-	assert_string_contains(message, "40%")
-	assert_string_contains(message, "Foliage Density")
-
-
-func test_describe_formats_the_percentage_as_a_whole_number() -> void:
-	# 250 of 749 is 33.377...%, which must read as a clean "33%" -- not "33.4%" and not
-	# "33.0%" -- since the wording is meant to be skimmed in a toast, not read precisely.
-	var report := {"instances_before": 749, "instances_after": 250}
-	var message := FoliageBudget.describe(report)
-	assert_string_contains(message, "33%")
-	# Isolate the number itself rather than the whole sentence, which legitimately ends in
-	# its own, unrelated period.
-	var percent_text := message.split("%")[0]
-	assert_false(percent_text.contains("."), "percentage must not include a decimal point")
-
-
-func test_a_species_is_never_allocated_zero_instances() -> void:
-	# A zero allocation would leave ScatterGlbUtils' template node unfreed and rendering at
-	# a stray transform, so a species with instances always keeps at least one even when its
-	# proportional share rounds to nothing.
-	var report := FoliageBudget.plan(
-		{"Grass": _species(1000, 10), "HeroTree": _species(1, 100)}, 3000
-	)
-	assert_true(report.thinned)
-	assert_eq(report.kept["HeroTree"], 1)
-	assert_gt(report.kept["Grass"], 0)
-
-
-func test_an_empty_species_is_never_allocated_a_phantom_instance() -> void:
-	# The floor-to-1 must not invent an instance for a species that has none, or the report
-	# would count a phantom and a caller could index an empty transform array.
-	var report := FoliageBudget.plan({"Grass": _species(1000, 10), "Empty": _species(0, 50)}, 3000)
-	assert_true(report.thinned)
-	assert_eq(report.kept["Empty"], 0)

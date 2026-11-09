@@ -71,7 +71,9 @@ func test_a_sculpt_stroke_moves_plants_and_props_and_undoes_as_one() -> void:
 	var raised_heights := _doc.heights.duplicate()
 	var rows: PackedFloat32Array = editor.scatter.cell_rows(Vector2i.ZERO)[GRASS]
 	assert_gt(rows[1], 1.0, "the plant on the hill rose with it")
-	assert_almost_eq(rows[1], _ground(near), 1e-5, "onto the ground")
+	# Rows are on the saved grid (MapDocumentIO.ROW_STEP).
+	var step := MapDocumentIO.ROW_STEP
+	assert_almost_eq(rows[1], _ground(near), step, "onto the ground")
 	assert_almost_eq(rows[11], 0.0, 1e-6, "the plant off the hill did not move")
 	var prop: PackedFloat32Array = editor.props.rows_by_asset()[handle.asset_id]
 	# A rock prop stands on the flank's normal and is re-bedded on its tilted base
@@ -82,7 +84,7 @@ func test_a_sculpt_stroke_moves_plants_and_props_and_undoes_as_one() -> void:
 	)
 	assert_gt(base, 0.0)
 	assert_gt(PropRows.row_up(prop).angle_to(Vector3.UP), 0.1, "tilted with the flank")
-	assert_almost_eq(prop[1], bed, 1e-5, "the prop is re-bedded")
+	assert_almost_eq(prop[1], bed, step, "the prop is re-bedded")
 	assert_lt(prop[1], _ground(Vector2(1, 1)), "below its origin's ground on the slope")
 	var raised_props := editor.props.rows_by_asset()
 	editor.finish_height_work()
@@ -96,7 +98,7 @@ func test_a_sculpt_stroke_moves_plants_and_props_and_undoes_as_one() -> void:
 	assert_eq(_doc.heights, raised_heights, "redo")
 	assert_eq(editor.props.rows_by_asset(), raised_props)
 	rows = editor.scatter.cell_rows(Vector2i.ZERO)[GRASS]
-	assert_almost_eq(rows[1], _ground(near), 1e-5)
+	assert_almost_eq(rows[1], _ground(near), step)
 
 
 func test_a_cancelled_sculpt_leaves_no_trace() -> void:

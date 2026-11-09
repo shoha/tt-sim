@@ -6,15 +6,16 @@ extends RefCounted
 ## format is tt-sim-internal, not a producer contract; it is summarised in
 ## docs/ARCHITECTURE.md "Map document (map.ttmap)".
 ##
-## Format 2 entries (format 1 differs only in its painted surfaces, below):
-##   manifest.json          {"format": 2 (3 with a non-core library), "palette_version",
+## Format 4 entries:
+##   manifest.json          {"format": 4 (5 with a non-core library), "palette_version",
 ##                          "map_seed", "size_cells": [w, h], "cell_size_m",
 ##                          "sample_spacing_m", "tier_height_m", "base_surface",
 ##                          "has_base_map", "libraries": [{id, version, hash}]
 ##                          (optional, MapLibraries)}                              required
 ##   height.bin             float32 little-endian heights on the sample grid        required
-##   scatter.json           {asset id: [[lx, ly, lz, qx, qy, qz, qw, sx, sy, sz], ...]}
-##   props.json             same shape, hand-placed assets
+##   scatter.bin            per asset id the rows [lx, ly, lz, qx, qy, qz, qw, sx, sy, sz] on
+##                          the ROW_STEP grid, column-wise binary (MapRowsCodec)
+##   props.bin              same form, hand-placed assets
 ##   erase.png              8-bit greyscale on the sample grid, > 127 = erased
 ##   authoring/biomes.png   R = biome slot (0 none, else index + 1), G = density
 ##   authoring/biomes.json  {"biomes": [palette biome id, ...]}; required with biomes.png
@@ -31,16 +32,23 @@ extends RefCounted
 ##   settlements.json       dressed streets: kit, seed, overrides       (MapSettlementIO)
 ##   fire.png               8-bit greyscale fire intensity on the sample grid, 0 = no fire;
 ##                          never written all zero, and an all-zero one reads as none
-##   mass_anchors.json      grass-mass anchors, (dx, dz) per scatter row   (MapAnchorsIO)
+##   mass_anchors.bin       grass-mass anchors, (dx, dz) per scatter row   (MapAnchorsIO)
 ## Unknown entries are ignored (_known_entries and _extract_entries only look at
 ## KNOWN_ENTRIES), so the surfaces, water, crossings, fire and anchors entries needed no
 ## format bump: an older build reads a document with water as if it had none, and one with
 ## crossings, fire or anchors as if it had none. Format 2 replaced format 1's surfaces.png
 ## (slots 0-3 in R, G, B, A) and surfaces_b.png (slots 4-7, at most 8 surfaces) with the
 ## entry pair, so it is a bump: a format 1 build refuses a format 2 document rather than
-## read it as unpainted and lose the paint on its next save. The reader accepts both and
-## migrates format 1 (MapSurfacesIO, which reads and writes the surface entries); it never
-## writes format 1.
+## read it as unpainted and lose the paint on its next save. The reader migrated format 1
+## (MapSurfacesIO, which reads and writes the surface entries).
+##
+## Format 4 (topic mapformat, 2026-11-09) stores the rows in binary instead of JSON
+## (`scatter.json`, `props.json` and `mass_anchors.json` of formats 1 to 3), 3.4 times smaller
+## at 320 ft; MapRowsCodec holds the layout and the quantisation. It is a hard bump: this build
+## reads 4 and 5 only, and refuses a document of an older format with a warning that names the
+## format and the remedy (read() returns a null document), while a build older than this one
+## refuses 4 and 5 the same way. No migration: the suite has no users to carry old maps (rule
+## "Nothing is off limits").
 ##
 ## Documents arrive from a host peer, so everything read is untrusted input, validated in
 ## the style of PaletteLibrary.validate_palette(): caps are checked before anything is
@@ -67,17 +75,14 @@ extends RefCounted
 
 const MANIFEST_ENTRY := "manifest.json"
 const HEIGHT_ENTRY := "height.bin"
-const SCATTER_ENTRY := "scatter.json"
-const PROPS_ENTRY := "props.json"
+const SCATTER_ENTRY := "scatter.bin"
+const PROPS_ENTRY := "props.bin"
 const ERASE_ENTRY := "erase.png"
 const BIOMES_PNG_ENTRY := "authoring/biomes.png"
 const BIOMES_JSON_ENTRY := "authoring/biomes.json"
 const SURFACES_JSON_ENTRY := "surfaces.json"
 const SURFACES_INDEX_ENTRY := "surfaces_index.png"
 const SURFACES_WEIGHT_ENTRY := "surfaces_weight.png"
-## Format 1's painted surfaces, read (and migrated) only from a format 1 document.
-const SURFACES_PNG_ENTRY := "surfaces.png"
-const SURFACES_B_PNG_ENTRY := "surfaces_b.png"
 const FIRE_ENTRY := "fire.png"
 ## Every entry this format reads, in the order they are written and read.
 const KNOWN_ENTRIES: Array[String] = [
@@ -91,8 +96,6 @@ const KNOWN_ENTRIES: Array[String] = [
 	SURFACES_JSON_ENTRY,
 	SURFACES_INDEX_ENTRY,
 	SURFACES_WEIGHT_ENTRY,
-	SURFACES_PNG_ENTRY,
-	SURFACES_B_PNG_ENTRY,
 	MapWaterIO.SPLINES_ENTRY,
 	MapWaterIO.PONDS_ENTRY,
 	MapWaterIO.FLOW_ENTRY,
@@ -109,10 +112,10 @@ const RENAME_TRIES := 20
 const RENAME_RETRY_MS := 5
 
 ## Uncompressed bytes per entry. height.bin is exact at the sample cap. A PNG of the
-## largest grid is under 2 MB even incompressible (641 x 641 x 4 for RGBA). The row entries
-## bound JSON.parse, which builds its whole Variant tree before any row cap can apply, so
-## their byte caps are the real bound on parse memory; at about 90 bytes per written row,
-## 32 MB is ~350,000 scatter rows. splines.json at its caps (32 rivers of 512 points) is
+## largest grid is under 2 MB even incompressible (641 x 641 x 4 for RGBA). The binary row
+## entries cost 5 to 12 bytes a row as written (44 at the very worst: 11 columns of 4 bytes), so
+## 32 MB holds the row cap in practice; MapRowsCodec checks every length against the buffer and
+## decodes at most the row budget. splines.json at its caps (32 rivers of 512 points) is
 ## about 0.8 MB of JSON; a 1024 x 1024 flow map is 3 MB even incompressible. crossings.json at
 ## its cap (64 crossings) is about 16 KB.
 const ENTRY_CAPS := {
@@ -126,8 +129,6 @@ const ENTRY_CAPS := {
 	SURFACES_JSON_ENTRY: 64 * 1024,
 	SURFACES_INDEX_ENTRY: 4 * 1024 * 1024,
 	SURFACES_WEIGHT_ENTRY: 4 * 1024 * 1024,
-	SURFACES_PNG_ENTRY: 4 * 1024 * 1024,
-	SURFACES_B_PNG_ENTRY: 4 * 1024 * 1024,
 	MapWaterIO.SPLINES_ENTRY: 2 * 1024 * 1024,
 	MapWaterIO.PONDS_ENTRY: 4 * 1024 * 1024,
 	MapWaterIO.FLOW_ENTRY: 4 * 1024 * 1024,
@@ -154,11 +155,15 @@ const MAX_ROW_COMPONENT := 100000.0
 const MAX_SEED := 9007199254740992
 ## At most this many warnings are kept; the rest are counted in one closing line.
 const MAX_WARNINGS := 50
-## Decimals written per row component: 1 um in position, far below float32 noise in the
-## quaternion, and the reason a row costs ~90 bytes of JSON instead of ~170.
-const ROW_DECIMALS := 6
-## The step ROW_DECIMALS rounds to (snap_rows).
-const ROW_STEP := 0.000001
+## Row components per metre-or-unit the rows are snapped to: 1024 steps, so a snapped value is
+## an exact float32 multiple of ROW_STEP and MapRowsCodec's integer codes are exact. 0.98 mm in
+## position, about 0.1 degree in a rotation, 0.1 % in a scale: not visible at tabletop zoom
+## (2026-11-09, topic mapformat; the 1 um grid of formats 1 to 3 cost 3.4 times the bytes). The
+## native scatter generator snaps with the same step (`row_step` in ScatterNative.consts), so a
+## regenerated cell and the same cell read back are bit-equal.
+const ROW_UNIT := 1024
+## The step the rows are snapped to (snap_rows).
+const ROW_STEP := 1.0 / 1024.0
 
 const _PNG_SIGNATURE := [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
 
@@ -360,33 +365,14 @@ static func _parse_libraries(raw: Variant, warn_log: _WarningLog) -> Array[Dicti
 	return out
 
 
-## Rounds every value of `rows`, in place, to ROW_DECIMALS decimals, as writing and reading
-## map.ttmap does: ScatterGenerator snaps the rows it generates, so a cell regenerated in a
-## session and the same cell loaded from the saved file are equal bit for bit (no 1 um
-## difference to flip MapFingerprint's 1 mm rounding). Each value is the float32 the array
-## holds, as when it is written.
+## Rounds every value of `rows`, in place, to the ROW_STEP grid, as writing and reading
+## map.ttmap does (MapRowsCodec): ScatterGenerator snaps the rows it generates, so a cell
+## regenerated in a session and the same cell loaded from the saved file are equal bit for bit
+## (no difference to flip MapFingerprint's 1 mm rounding). Each value is the float32 the array
+## holds, as when it is written. Idempotent.
 static func snap_rows(rows: PackedFloat32Array) -> void:
 	for i in rows.size():
 		rows[i] = snappedf(rows[i], ROW_STEP)
-
-
-## Rows as compact JSON, built as text rather than through JSON.stringify so a large
-## document never exists as a tree of boxed Arrays, and so each number carries only
-## ROW_DECIMALS decimals. Asset ids are sorted for a stable file.
-static func _rows_json(rows_by_asset: Dictionary[String, PackedFloat32Array]) -> String:
-	var assets := PackedStringArray()
-	var ids := rows_by_asset.keys()
-	ids.sort()
-	for asset_id in ids:
-		var flat: PackedFloat32Array = rows_by_asset[asset_id]
-		var rows := PackedStringArray()
-		for start in range(0, flat.size(), MapDocument.ROW_STRIDE):
-			var numbers := PackedStringArray()
-			for k in MapDocument.ROW_STRIDE:
-				numbers.append(String.num(flat[start + k], ROW_DECIMALS))
-			rows.append("[" + ",".join(numbers) + "]")
-		assets.append(JSON.stringify(asset_id) + ":[" + ",".join(rows) + "]")
-	return "{" + ",".join(assets) + "}"
 
 
 ## A PNG of one grid-sized byte buffer. FORMAT_RG8 is stored as an RGB PNG with B = 0
@@ -587,15 +573,15 @@ static func _parse_document(entries: Dictionary, warn_log: _WarningLog) -> MapDo
 		return null
 	doc.heights = heights
 	# Props first: hand-placed assets are the scarcer work if the row budget runs out.
-	doc.props = _parse_rows(blobs.get(PROPS_ENTRY), PROPS_ENTRY, MAX_TOTAL_ROWS, warn_log)
+	doc.props = _rows_of(blobs, PROPS_ENTRY, MAX_TOTAL_ROWS, warn_log)
 	var remaining := MAX_TOTAL_ROWS - MapDocument.row_count(doc.props)
-	doc.scatter = _parse_rows(blobs.get(SCATTER_ENTRY), SCATTER_ENTRY, remaining, warn_log)
+	doc.scatter = _rows_of(blobs, SCATTER_ENTRY, remaining, warn_log)
 	if blobs.has(ERASE_ENTRY):
 		doc.erase_mask = _parse_mask(
 			blobs[ERASE_ENTRY], doc, Image.FORMAT_L8, ERASE_ENTRY, warn_log
 		)
 	_parse_biomes(blobs, doc, warn_log)
-	MapSurfacesIO.parse(blobs, doc, warn_log, meta["format"])
+	MapSurfacesIO.parse(blobs, doc, warn_log)
 	MapWaterIO.parse(blobs, doc, warn_log)
 	MapCrossingIO.parse(blobs, doc, warn_log)
 	MapWallIO.parse(blobs, doc, warn_log)
@@ -646,7 +632,20 @@ static func _parse_manifest(
 		data.get("format"), MapDocument.MIN_FORMAT, MapDocument.MAX_FORMAT
 	)
 	if format == null:
-		warn_log.add("unsupported map document format %s" % _label(data.get("format")))
+		var older: Variant = _integer(data.get("format"), 1, MapDocument.MIN_FORMAT - 1)
+		if older != null:
+			warn_log.add(
+				(
+					(
+						"map document format %d is from an older version: its scatter rows are JSON,"
+						+ " which this version (formats %d to %d) no longer reads. Open it in the"
+						+ " older version or build the map again."
+					)
+					% [older, MapDocument.MIN_FORMAT, MapDocument.MAX_FORMAT]
+				)
+			)
+		else:
+			warn_log.add("unsupported map document format %s" % _label(data.get("format")))
 		return null
 	meta["format"] = format
 	var cells: Variant = data.get("size_cells")
@@ -746,80 +745,23 @@ static func _first_bad_height(heights: PackedFloat32Array) -> int:
 	return -1
 
 
-## Asset id -> flat rows from one rows entry, keeping at most `budget` rows. Malformed
-## assets are skipped and malformed rows dropped, each with one warning per asset.
-@warning_ignore("integer_division")
-static func _parse_rows(
-	bytes: Variant, label: String, budget: int, warn_log: _WarningLog
+## Asset id -> flat rows from the rows entry `entry_name` of `blobs`, keeping at most `budget`
+## rows (none when the entry is absent). Malformed assets are skipped and malformed rows
+## dropped, each with a warning (MapRowsCodec.decode_rows).
+static func _rows_of(
+	blobs: Dictionary, entry_name: String, budget: int, warn_log: _WarningLog
 ) -> Dictionary[String, PackedFloat32Array]:
-	var result: Dictionary[String, PackedFloat32Array] = {}
-	if bytes == null:
-		return result
-	var data: Variant = _json(bytes, label, warn_log)
-	if data == null:
-		return result
-	if not data is Dictionary:
-		warn_log.add("%s is not a JSON object; ignored" % label)
-		return result
-	var ids: Array = data.keys()
-	if ids.size() > MAX_ASSETS:
-		warn_log.add(
-			(
-				"%s: %d asset ids over the cap of %d ignored"
-				% [label, ids.size() - MAX_ASSETS, MAX_ASSETS]
-			)
-		)
-		ids = ids.slice(0, MAX_ASSETS)
-	var remaining := budget
-	for asset_id in ids:
-		var rows: Variant = data[asset_id]
-		if not _is_id(asset_id) or not rows is Array:
-			warn_log.add("%s: asset '%s' skipped: malformed id or rows" % [label, _label(asset_id)])
-			continue
-		var take := mini(rows.size(), MAX_ROWS_PER_ASSET)
-		if rows.size() > MAX_ROWS_PER_ASSET:
-			warn_log.add(
-				"%s: asset '%s' keeps its first %d rows" % [label, asset_id, MAX_ROWS_PER_ASSET]
-			)
-		if take > remaining:
-			warn_log.add(
-				"%s: total row cap of %d reached at '%s'" % [label, MAX_TOTAL_ROWS, asset_id]
-			)
-			take = remaining
-		var flat := _collect_rows(rows, take)
-		var kept := flat.size() / MapDocument.ROW_STRIDE
-		if kept < take:
-			warn_log.add(
-				"%s: asset '%s': %d malformed rows skipped" % [label, asset_id, take - kept]
-			)
-		if kept > 0:
-			result[asset_id] = flat
-			remaining -= kept
-	return result
+	var rows: Dictionary[String, PackedFloat32Array] = {}
+	if blobs.has(entry_name):
+		rows.assign(codec().decode_rows(blobs[entry_name], budget, entry_name, warn_log))
+	return rows
 
 
-## The well-formed rows among the first `take` of `rows`, flattened. Allocates the
-## capped size up front and writes in place; a rejected row is simply overwritten.
-static func _collect_rows(rows: Array, take: int) -> PackedFloat32Array:
-	var stride := MapDocument.ROW_STRIDE
-	var flat := PackedFloat32Array()
-	flat.resize(take * stride)
-	var kept := 0
-	for i in take:
-		var row: Variant = rows[i]
-		if not row is Array or row.size() != stride:
-			continue
-		var numeric := true
-		for k in stride:
-			var value: Variant = row[k]
-			if value is bool or not (value is float or value is int):
-				numeric = false
-				break
-			flat[kept * stride + k] = value
-		if numeric and row_ok(flat, kept * stride):
-			kept += 1
-	flat.resize(kept * stride)
-	return flat
+## MapRowsCodec (the binary rows, MapAnchorsIO's offsets), loaded on first use and named by path
+## so the start-up script graph (test_boot_graph.gd) does not compile it: MapDocumentIO is
+## reached at start-up, the first map read or written is not. Call its statics on the result.
+static func codec() -> Variant:
+	return load("res://utils/map_rows_codec.gd")
 
 
 ## True when the row at `start` is finite, within MAX_ROW_COMPONENT, and has a rotation

@@ -69,7 +69,40 @@ func test_a_freed_objects_job_is_skipped_and_drained_fires() -> void:
 	assert_signal_emitted(_queue, "drained")
 
 
+func test_the_doubling_beats_are_1_2_4_8_and_fit_the_span() -> void:
+	assert_true(TokenSpawnQueue.pop_in_doubling, "the doubling beats are the default")
+	assert_eq(TokenSpawnQueue.pop_in_batch(0, 100), Vector2i(0, 1))
+	assert_eq(TokenSpawnQueue.pop_in_batch(1, 100), Vector2i(1, 2))
+	assert_eq(TokenSpawnQueue.pop_in_batch(2, 100), Vector2i(3, 4))
+	assert_eq(TokenSpawnQueue.pop_in_batch(3, 100), Vector2i(7, 8))
+	assert_eq(TokenSpawnQueue.pop_in_batch(6, 100), Vector2i(63, 37), "the last beat is the rest")
+	assert_eq(TokenSpawnQueue.pop_in_beat_count(1), 1)
+	assert_eq(TokenSpawnQueue.pop_in_beat_count(10), 4)
+	assert_eq(TokenSpawnQueue.pop_in_beat_count(100), 7)
+	assert_eq(TokenSpawnQueue.pop_in_beat_count(500), 9)
+	assert_eq(TokenSpawnQueue.pop_in_delay(0, 1), 0.0)
+	assert_eq(TokenSpawnQueue.pop_in_delay(0, 500), 0.0, "the first token pops at once")
+	for total in [2, 3, 10, 31, 100, 500, 2000]:
+		var covered := 0
+		var beats := TokenSpawnQueue.pop_in_beat_count(total)
+		for beat in beats:
+			var batch := TokenSpawnQueue.pop_in_batch(beat, total)
+			assert_eq(batch.x, covered, "%d tokens: beat %d starts where the last ended" % [total, beat])
+			assert_eq(
+				TokenSpawnQueue.pop_in_delay(batch.x, total),
+				TokenSpawnQueue.pop_in_delay(batch.x + batch.y - 1, total),
+				"a beat's tokens pop together"
+			)
+			covered += batch.y
+		assert_eq(covered, total, "every token is in a beat (%d)" % total)
+		assert_lte(TokenSpawnQueue.pop_in_delay(total - 1, total), TokenSpawnQueue.POP_IN_SPAN_S + 1e-6)
+	assert_almost_eq(TokenSpawnQueue.pop_in_delay(9, 10), 0.6, 1e-6)
+	assert_almost_eq(TokenSpawnQueue.pop_in_delay(99, 100), 1.2, 1e-6)
+	assert_almost_eq(TokenSpawnQueue.pop_in_delay(499, 500), 1.5, 1e-6)
+
+
 func test_the_pop_in_cascade_fits_its_span_whatever_the_count() -> void:
+	TokenSpawnQueue.pop_in_doubling = false
 	assert_eq(TokenSpawnQueue.pop_in_delay(0, 1), 0.0)
 	assert_almost_eq(TokenSpawnQueue.pop_in_delay(9, 10), 9 * TokenSpawnQueue.POP_IN_STEP_S, 1e-6)
 	for total in [31, 100, 500, 2000]:
@@ -78,6 +111,7 @@ func test_the_pop_in_cascade_fits_its_span_whatever_the_count() -> void:
 		assert_lt(
 			TokenSpawnQueue.pop_in_delay(total / 2, total), last, "still a cascade at %d" % total
 		)
+	TokenSpawnQueue.pop_in_doubling = true
 
 
 func test_a_removed_token_leaves_the_board_then_is_freed_by_the_queue() -> void:

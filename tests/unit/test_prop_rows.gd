@@ -13,25 +13,27 @@ func test_upright_row_stands_on_y_at_the_point() -> void:
 	)
 	assert_eq(row.size(), MapDocument.ROW_STRIDE)
 	var xform := _row_transform(row)
-	assert_almost_eq(xform.origin, Vector3(1, 0.2, -3), Vector3.ONE * 1e-5)
+	# Rows are on the saved grid (MapDocumentIO.ROW_STEP), so values hold to about a step.
+	var step := MapDocumentIO.ROW_STEP
+	assert_almost_eq(xform.origin, Vector3(1, 0.2, -3), Vector3.ONE * step)
 	assert_almost_eq(PropRows.row_up(row), Vector3.UP, Vector3.ONE * 1e-5, "upright ignores slope")
-	assert_almost_eq(xform.basis.get_scale(), Vector3.ONE * 1.1, Vector3.ONE * 1e-4)
-	assert_almost_eq(PropRows.row_yaw(row), 0.7, 1e-4)
+	assert_almost_eq(xform.basis.get_scale(), Vector3.ONE * 1.1, Vector3.ONE * step)
+	assert_almost_eq(PropRows.row_yaw(row), 0.7, 3e-3)
 
 
 func test_normal_aligned_row_follows_the_ground() -> void:
 	var normal := Vector3(0.3, 0.9, 0.1).normalized()
 	var row := PropRows.make_row(Vector3.ZERO, normal, true, -1.2, 1.0)
-	assert_almost_eq(PropRows.row_up(row), normal, Vector3.ONE * 1e-4)
-	assert_almost_eq(PropRows.row_yaw(row), -1.2, 1e-4)
+	assert_almost_eq(PropRows.row_up(row), normal, Vector3.ONE * 2e-3)
+	assert_almost_eq(PropRows.row_yaw(row), -1.2, 3e-3)
 
 
 func test_with_yaw_turns_about_the_row_up_axis_only() -> void:
 	var normal := Vector3(-0.2, 0.95, 0.2).normalized()
 	var row := PropRows.make_row(Vector3(2, 0, 2), normal, true, 0.1, 0.9)
 	var turned := PropRows.with_yaw(row, 2.5)
-	assert_almost_eq(PropRows.row_up(turned), normal, Vector3.ONE * 1e-4, "tilt kept")
-	assert_almost_eq(PropRows.row_yaw(turned), 2.5, 1e-4)
+	assert_almost_eq(PropRows.row_up(turned), normal, Vector3.ONE * 2e-3, "tilt kept")
+	assert_almost_eq(PropRows.row_yaw(turned), 2.5, 3e-3)
 	assert_eq(turned[0], row[0])
 	assert_eq(turned[7], row[7], "scale kept")
 

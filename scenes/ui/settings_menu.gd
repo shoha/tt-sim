@@ -81,7 +81,6 @@ var _reset_tween: Tween
 @onready var ui_slider: HSlider = %UIVolumeSlider
 @onready var ui_label: Label = %UIVolumeLabel
 
-# Tab container for cross-fade transitions
 @onready var tab_container: TabContainer = %TabContainer
 @onready var section_rail: IconRail = %SectionRail
 
@@ -89,6 +88,7 @@ var _reset_tween: Tween
 @onready var fullscreen_check: CheckButton = %FullscreenCheck
 @onready var interface_size_option: OptionButton = %InterfaceSizeOption
 @onready var vsync_check: CheckButton = %VSyncCheck
+@onready var idle_throttle_check: CheckButton = %IdleThrottleCheck
 @onready var lofi_check: CheckButton = %LofiCheck
 @onready var token_shading_option: OptionButton = %TokenShadingOption
 @onready var token_ghost_check: CheckButton = %TokenGhostCheck
@@ -106,8 +106,6 @@ var _reset_tween: Tween
 @onready var ssr_check: CheckButton = %SSRCheck
 @onready var sdfgi_check: CheckButton = %SDFGICheck
 @onready var renderer_method_option: OptionButton = %RendererMethodOption
-@onready var foliage_density_slider: HSlider = %FoliageDensitySlider
-@onready var foliage_density_label: Label = %FoliageDensityLabel
 
 # Grid visual controls
 @onready var cell_tint_opacity_slider: HSlider = %CellTintOpacitySlider
@@ -325,7 +323,6 @@ func _on_panel_ready() -> void:
 	# Graphics. The toggles and option buttons here and the P2P toggle have no live handler:
 	# Apply reads and applies them (_apply_settings). Interface size is the exception: it saves
 	# and applies the moment it is picked, so the menu itself shows the new size.
-	foliage_density_slider.value_changed.connect(_on_foliage_density_changed)
 	wind_motion_slider.value_changed.connect(SettingsWindMotion.on_changed.bind(self))
 	InterfaceSize.fill_option(
 		interface_size_option, get_tree().root, UIManager.get_interface_size()
@@ -522,16 +519,6 @@ func _show_saved_values(config: ConfigFile) -> void:
 			"graphics", "sdfgi_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["sdfgi_enabled"]
 		)
 	)
-	foliage_density_slider.set_value_no_signal(
-		(
-			config.get_value(
-				_foliage_density_settings().SETTINGS_SECTION,
-				_foliage_density_settings().SETTINGS_KEY,
-				FoliageBudget.PRIMITIVE_BUDGET
-			)
-			/ 1000000.0
-		)
-	)
 	p2p_enabled_check.set_pressed_no_signal(config.get_value("network", "p2p_enabled", true))
 	prereleases_check.set_pressed_no_signal(config.get_value("updates", "check_prereleases", false))
 	cell_tint_opacity_slider.set_value_no_signal(
@@ -579,11 +566,9 @@ func _save_settings(path: String = Paths.SETTINGS_PATH) -> void:
 			_RENDERING_METHOD_VALUES[renderer_method_option.get_selected_id()],
 		)
 	)
-	config.set_value(
-		_foliage_density_settings().SETTINGS_SECTION,
-		_foliage_density_settings().SETTINGS_KEY,
-		int(foliage_density_slider.value * 1000000)
-	)
+	# The foliage triangle budget was retired; a file written by an older build still holds its key.
+	if config.has_section_key("graphics", "foliage_budget"):
+		config.erase_section_key("graphics", "foliage_budget")
 	config.set_value("network", "p2p_enabled", p2p_enabled_check.button_pressed)
 	config.set_value("updates", "check_prereleases", prereleases_check.button_pressed)
 	config.set_value("grid_visuals", "cell_tint_opacity", cell_tint_opacity_slider.value / 100.0)
@@ -632,9 +617,6 @@ func _apply_settings() -> void:
 
 	# Apply grid visual settings
 	_apply_grid_visual_settings()
-
-	# Apply foliage density setting
-	_apply_foliage_density()
 
 	# Apply network settings
 	_apply_network_settings()
@@ -753,17 +735,6 @@ func _apply_grid_visual_settings() -> void:
 		)
 
 
-func _on_foliage_density_changed(value: float) -> void:
-	foliage_density_label.text = "%.1fM" % value
-	_slider_tick()
-
-
-func _apply_foliage_density() -> void:
-	var game_map = _find_game_map()
-	if game_map:
-		game_map.apply_foliage_density(int(foliage_density_slider.value * 1000000))
-
-
 func _on_cell_tint_opacity_changed(value: float) -> void:
 	cell_tint_opacity_label.text = "%d%%" % int(value)
 	_slider_tick()
@@ -783,7 +754,6 @@ func _update_grid_labels() -> void:
 	cell_tint_opacity_label.text = "%d%%" % int(cell_tint_opacity_slider.value)
 	line_thickness_label.text = "%.1f" % line_thickness_slider.value
 	fade_distance_label.text = "%d" % int(fade_distance_slider.value)
-	foliage_density_label.text = "%.1fM" % foliage_density_slider.value
 
 
 ## The open GameMap, found by method, not class (keeps the map off the start-up graph, boot2).
@@ -802,11 +772,6 @@ func _find_level_play_controller() -> Node:
 	if game_map:
 		return game_map.get_level_play_controller()
 	return null
-
-
-## FoliageDensityController's script, by path (boot2).
-func _foliage_density_settings() -> Variant:
-	return load("res://scenes/states/playing/foliage_density_controller.gd")
 
 
 func _on_close_pressed() -> void:
@@ -859,7 +824,6 @@ func _show_defaults() -> void:
 	tw.tween_property(cell_tint_opacity_slider, "value", 65.0, 0.3)
 	tw.tween_property(line_thickness_slider, "value", 2.0, 0.3)
 	tw.tween_property(fade_distance_slider, "value", 30.0, 0.3)
-	tw.tween_property(foliage_density_slider, "value", 8.0, 0.3)
 	tw.tween_property(wind_motion_slider, "value", 100.0, 0.3)
 
 	# Snap toggles immediately (no meaningful tween for booleans)

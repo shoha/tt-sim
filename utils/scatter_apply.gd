@@ -98,7 +98,6 @@ func land(scatter: AuthoredScatter, finished: Array[Dictionary], regen: ScatterR
 		)
 	var started := Time.get_ticks_usec()
 	var spent := 0.0
-	var delta := 0
 	var leads := 0
 	var cells: Array[Vector2i] = []
 	for entry in ready:
@@ -131,7 +130,7 @@ func land(scatter: AuthoredScatter, finished: Array[Dictionary], regen: ScatterR
 		if by_cell.is_empty():
 			continue
 		var t := Time.get_ticks_usec()
-		delta += scatter.rebuild_cells(by_cell, true, job.get("centres", {}))
+		scatter.rebuild_cells(by_cell, true, job.get("centres", {}))
 		var cost := float(Time.get_ticks_usec() - t)
 		spent += cost
 		counts.landed += 1
@@ -140,7 +139,7 @@ func land(scatter: AuthoredScatter, finished: Array[Dictionary], regen: ScatterR
 		for cell in by_cell:
 			cells.append(cell)
 	if not cells.is_empty():
-		scatter.finish_cells(cells, delta, started)
+		scatter.finish_cells(cells, started)
 
 
 ## `ready` without the results a newer ready one supersedes in every cell (dropped from

@@ -64,8 +64,9 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   surface (`PropStand`, villages.md 3f), so a token on one stays on it; the other props have no
   collision, and a token inside one stays there (authoring shows it).
 - Save equals reload. `ScatterGenerator` snaps the rows it generates to the saved precision
-  (`MapDocumentIO.snap_rows`, `ROW_DECIMALS` 6), so a regenerated cell and the same cell
-  read back are bit-equal. A save replans the ground layers from scratch when the session's
+  (`MapDocumentIO.snap_rows`, `ROW_STEP` 2^-10 m, an exact float32 grid since format 4), as
+  do the hand-placed prop producers (`PropRows`, `GroundSnap`, `RockKeep.kept_row`), so a
+  regenerated cell and the same cell read back are bit-equal. A save replans the ground layers from scratch when the session's
   plan ran out of slots (`AuthoredTerrain.replan_ground_layers`), as every load plans.
   `test_authoring_save_reload.gd` edits through `AuthoringEditor` (sculpt, Paint, a biome
   stroke, a prop), saves, reloads through `MapSourceLoader` and compares every

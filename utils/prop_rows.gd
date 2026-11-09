@@ -32,7 +32,7 @@ static func make_row(
 ) -> PackedFloat32Array:
 	var up := normal.normalized() if align_normal and normal.length_squared() > 0.0 else Vector3.UP
 	var rotation := Quaternion(Vector3.UP, up) * Quaternion(Vector3.UP, yaw)
-	return PackedFloat32Array(
+	var row := PackedFloat32Array(
 		[
 			position.x,
 			position.y,
@@ -46,6 +46,9 @@ static func make_row(
 			scale
 		]
 	)
+	# On the saved grid (MapDocumentIO.ROW_STEP), so a save and a reload return the prop as drawn.
+	MapDocumentIO.snap_rows(row)
+	return row
 
 
 ## The up axis a row stands on (its rotation applied to +Y).
@@ -62,6 +65,7 @@ static func with_yaw(row: PackedFloat32Array, yaw: float) -> PackedFloat32Array:
 	out[4] = rotation.y
 	out[5] = rotation.z
 	out[6] = rotation.w
+	MapDocumentIO.snap_rows(out)
 	return out
 
 
@@ -79,6 +83,7 @@ static func with_scale(row: PackedFloat32Array, scale: float) -> PackedFloat32Ar
 	out[7] = scale
 	out[8] = scale
 	out[9] = scale
+	MapDocumentIO.snap_rows(out)
 	return out
 
 

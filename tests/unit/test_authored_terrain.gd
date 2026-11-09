@@ -298,6 +298,56 @@ func test_skirt_receives_no_shadows_and_the_ground_does() -> void:
 		assert_true(_render_mode(skirt_mat.shader).has("shadows_disabled"), "the bound skirt")
 
 
+## Card skirtring: the skirt's inner rings are a second surface on the ring shaders, which receive
+## shadows (an edge caster shadows the ground just beyond the edge); the rest of the skirt does not.
+func test_skirt_has_a_shadow_receiving_inner_ring_surface() -> void:
+	for shader: Shader in [
+		AuthoredTerrain.SKIRT_RING_SHADER, AuthoredTerrain.SKIRT_RING_LOOKED_SHADER
+	]:
+		assert_false(_render_mode(shader).has("shadows_disabled"), shader.resource_path)
+	var terrain := AuthoredTerrain.create(_flat(20))
+	add_child_autofree(terrain)
+	var mesh := terrain.get_skirt().mesh as ArrayMesh
+	assert_eq(mesh.get_surface_count(), 2, "outer skirt, then the inner ring")
+	var ring := terrain.get_skirt_ring_material()
+	assert_not_null(ring, "the ring material exists")
+	assert_eq(mesh.surface_get_material(1), ring)
+	assert_eq(mesh.surface_get_material(0), terrain.get_skirt_material())
+	assert_eq(ring.shader, AuthoredTerrain.SKIRT_RING_SHADER)
+	var count := TerrainMeshBuilder.boundary_samples(terrain.document).size()
+	var ring_indices := TerrainMeshBuilder.SKIRT_SHADOW_RINGS * count * 6
+	assert_eq(mesh.surface_get_array_index_len(1), ring_indices, "the first rings' triangles")
+	var all := TerrainMeshBuilder.SKIRT_RINGS * count * 6
+	assert_eq(mesh.surface_get_array_index_len(0), all - ring_indices, "and the rest")
+	var edge := TerrainSkirt.ring_edge_m(AuthoredTerrain.skirt_width_m())
+	assert_almost_eq(float(ring.get_shader_parameter("skirt_shadow_m")), edge, 1e-4)
+	assert_between(edge, 8.0, 24.0, "a few metres to tens of metres, inside the fade")
+
+
+## The ring material follows the skirt's: the looked shader with a look, every uniform copied.
+func test_ring_material_follows_the_skirt_material() -> void:
+	var terrain := AuthoredTerrain.create(_flat(20))
+	add_child_autofree(terrain)
+	var skirt := terrain.get_skirt_material()
+	var ring := terrain.get_skirt_ring_material()
+	skirt.set_shader_parameter("skirt_wobble", 0.123)
+	skirt.set_shader_parameter("skirt_backdrop", Vector3(0.1, 0.2, 0.3))
+	terrain.sync_skirt_ring()
+	assert_almost_eq(float(ring.get_shader_parameter("skirt_wobble")), 0.123, 1e-5)
+	assert_eq(ring.get_shader_parameter("skirt_backdrop"), Vector3(0.1, 0.2, 0.3))
+	assert_almost_eq(
+		float(ring.get_shader_parameter("skirt_shadow_m")),
+		TerrainSkirt.ring_edge_m(AuthoredTerrain.skirt_width_m()),
+		1e-4,
+		"the ring's own uniform stays"
+	)
+	terrain.set_looked(true)
+	assert_eq(ring.shader, AuthoredTerrain.SKIRT_RING_LOOKED_SHADER)
+	assert_eq(skirt.shader, AuthoredTerrain.SKIRT_LOOKED_SHADER)
+	terrain.set_looked(false)
+	assert_eq(ring.shader, AuthoredTerrain.SKIRT_RING_SHADER)
+
+
 ## The render modes a shader's code declares, trimmed.
 func _render_mode(shader: Shader) -> PackedStringArray:
 	var out := PackedStringArray()

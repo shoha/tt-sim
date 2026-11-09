@@ -37,8 +37,6 @@ func test_rail_underline_sits_under_the_selected_section() -> void:
 
 
 func test_advanced_graphics_rows_keep_unique_names() -> void:
-	assert_not_null(_menu.foliage_density_slider)
+	assert_not_null(_menu.ssao_check)
 	assert_not_null(_menu.renderer_method_option)
-	assert_true(
-		_menu.foliage_density_slider.get_parent().get_parent().get_parent().get_parent() is Foldout
-	)
+	assert_true(_menu.ssao_check.get_parent().get_parent().get_parent().get_parent() is Foldout)

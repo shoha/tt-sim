@@ -415,7 +415,25 @@ static func apply_material(
 			wind_material.set_shader_parameter("base_darken", _GRASS_BASE_DARKEN)
 			if flower:
 				wind_material.set_shader_parameter("eye_flower", true)
+				_cap_flower_shade(wind_material)
 		mesh.surface_set_material(i, wind_material)
+
+
+## A painted flower's authored shade floor, eased toward the painted shade's own luminance
+## (FoliageLight.flower_shade at FoliageLight.FLOWER_SHADE_STRENGTH), so a flower in a cast shadow
+## darkens like the ground around it. A flower without an authored floor, or not painted, is left.
+static func _cap_flower_shade(material: ShaderMaterial) -> void:
+	if not material.has_meta(FoliageLight.META_PAINTED):
+		return
+	material.set_shader_parameter(
+		"foliage_paint_shadow", FoliageLight.flower_shadow_pull(FoliageLight.FLOWER_SHADE_STRENGTH)
+	)
+	var authored: Variant = material.get_shader_parameter(FoliageLight.SHADE_UNIFORM)
+	if authored is Vector3:
+		material.set_shader_parameter(
+			FoliageLight.SHADE_UNIFORM,
+			FoliageLight.flower_shade(authored, FoliageLight.FLOWER_SHADE_STRENGTH)
+		)
 
 
 ## The close-zoom canopy fade's part (the shader's canopy_part, CanopyFade) for a tree

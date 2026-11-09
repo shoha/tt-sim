@@ -54,6 +54,22 @@ const LEAF_SHADOW_PUSH := 2.0
 ## nothing at the horizon so a dusk crown keeps the ambient that carries it (2026-10-12 dusk
 ## capture: at weight 0.47 and 4 degrees up the crowns read dark olive and muddy).
 const SUN_HIGH := 0.5
+## How far a painted flower's authored shade floor is pulled down to the painted shade's own
+## luminance (SHADE_DEFAULT): 0 keeps the authored floor, 1 caps it there. Change this one number
+## to retune. The core library's flowers author floors of luminance 0.3 to 0.45, against the
+## shader's 0.15, so a flower in a cast shadow barely darkened (card foliagefix, PERFORMANCE.md).
+const FLOWER_SHADE_STRENGTH := 0.65
+## The shader's default foliage_paint_shade (wind_foliage_include.gdshaderinc), the deep green.
+const SHADE_DEFAULT := Vector3(0.065, 0.19, 0.1)
+## The shader's default foliage_paint_shadow: how far a cast shadow pulls the lit tone down toward
+## the shade floor. At 0.7 a shadowed flower keeps 30 % of its sun tone, which a flower's pale
+## petals tone-map back to near white whatever the floor, so a flower's pull rises toward 1 with
+## FLOWER_SHADE_STRENGTH too (flower_shadow_pull).
+const PAINT_SHADOW_DEFAULT := 0.7
+## The chroma a capped flower floor gains over its authored relative saturation at full strength:
+## a darker tone of the same hue reads grey unless its saturation is pushed, so a shaded bluebell
+## stays a cool deep blue instead of going slate.
+const FLOWER_SHADE_SATURATION := 1.8
 
 static var _shader: Shader = null
 static var _shader_no_aa: Shader = null
@@ -118,6 +134,34 @@ static func shade_floor(source: Material) -> Variant:
 	if clamped != shade:
 		push_warning("FoliageLight: %s on %s clamped to 0..1" % [SHADE_KEY, where])
 	return clamped
+
+
+## A flower's painted shade floor for the authored floor `authored` at `strength` (0 to 1):
+## the luminance eased from the authored one toward SHADE_DEFAULT's, the authored hue kept, its
+## relative saturation pushed up to FLOWER_SHADE_SATURATION at full strength. A floor already at or
+## below the default's luminance is returned as authored (a cap never lightens). Pure.
+static func flower_shade(authored: Vector3, strength: float) -> Vector3:
+	var lum_a := _luminance(authored)
+	var lum_t := _luminance(SHADE_DEFAULT)
+	var s := clampf(strength, 0.0, 1.0)
+	if lum_a <= lum_t or s <= 0.0:
+		return authored
+	var lum := lerpf(lum_a, lum_t, s)
+	var grey := Vector3(lum_a, lum_a, lum_a)
+	var chroma := (authored - grey) / lum_a
+	var out := Vector3(lum, lum, lum) + chroma * lum * lerpf(1.0, FLOWER_SHADE_SATURATION, s)
+	return out.clamp(Vector3.ZERO, Vector3.ONE)
+
+
+## A flower's foliage_paint_shadow at `strength` (0 to 1): the shader's 0.7 eased up to 1, where
+## a cast shadow takes the whole sun tone and leaves the shade floor. Pure.
+static func flower_shadow_pull(strength: float) -> float:
+	return lerpf(PAINT_SHADOW_DEFAULT, 1.0, clampf(strength, 0.0, 1.0))
+
+
+## Rec. 709 luminance of a linear colour held in a Vector3.
+static func _luminance(c: Vector3) -> float:
+	return c.dot(Vector3(0.2126, 0.7152, 0.0722))
 
 
 ## The foliage_sun value for `light`: the unit direction toward it (its +Z axis in world

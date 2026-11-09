@@ -203,7 +203,7 @@ func _play_level_async(level_data: LevelData) -> void:
 	# frame (a pack token costs about 4.4 ms): the jobs run in placement order, so GameState
 	# and every peer register the tokens in that order. This coroutine reports progress once a
 	# frame until they have all run.
-	var spawn := {"done": 0, "cascade_start": -1.0}
+	var spawn := {"done": 0, "cascade_start": -1.0, "held": []}
 	var queue := TokenSpawnQueue.shared()
 	for index in total_tokens:
 		queue.enqueue(
@@ -234,6 +234,9 @@ func _play_level_async(level_data: LevelData) -> void:
 	_is_loading = false
 	level_loading_completed.emit()
 	level_loaded.emit(level_data)
+	# The tokens built held at near-zero scale land on the revealed table, in doubling beats.
+	if not (spawn.held as Array).is_empty():
+		_pop_in_beats(spawn.held, _level_play_controller.get_tree())
 
 	# Start reconciliation timer for networked games
 	_level_play_controller._network_token_sync.start_reconciliation_timer()
@@ -268,12 +271,38 @@ func _spawn_placement(
 	TokenGrounding.reground(token, cast_top)
 	_level_play_controller._token_spawner._track_token(token, placement)
 	_level_play_controller._connect_token_context_menu(token)
-	var now := Time.get_ticks_msec() / 1000.0
-	if float(spawn.cascade_start) < 0.0:
-		spawn.cascade_start = now
-	var due := float(spawn.cascade_start) + TokenSpawnQueue.pop_in_delay(index, total)
-	token.play_spawn_animation(maxf(0.0, due - now))
+	if TokenSpawnQueue.pop_in_doubling:
+		token.hold_for_pop_in()
+		(spawn.held as Array).append(token)
+	else:
+		var now := Time.get_ticks_msec() / 1000.0
+		if float(spawn.cascade_start) < 0.0:
+			spawn.cascade_start = now
+		var due := float(spawn.cascade_start) + TokenSpawnQueue.pop_in_delay(index, total)
+		token.play_spawn_animation(maxf(0.0, due - now))
 	token_spawned.emit(token, placement)
+
+
+## Pops the `held` tokens in on the doubling beats (TokenSpawnQueue.pop_in_batch): the first beat
+## now, the next ones at pop_in_delay, each pop a job on the shared spawn queue so a beat of
+## hundreds of tokens spends at most the frame budget a frame. A token freed meanwhile is skipped.
+func _pop_in_beats(held: Array, tree: SceneTree) -> void:
+	var total := held.size()
+	var start := Time.get_ticks_msec() / 1000.0
+	var queue := TokenSpawnQueue.shared()
+	for beat in TokenSpawnQueue.pop_in_beat_count(total):
+		var batch := TokenSpawnQueue.pop_in_batch(beat, total)
+		var wait := start + TokenSpawnQueue.pop_in_delay(batch.x, total) - Time.get_ticks_msec() / 1000.0
+		if wait > 0.0:
+			await tree.create_timer(wait).timeout
+		for i in range(batch.x, batch.x + batch.y):
+			queue.enqueue(_pop_token.bind(held[i]))
+
+
+## One pop-in job: starts the held token's pop-in animation if it is still on the table.
+static func _pop_token(token: Variant) -> void:
+	if is_instance_valid(token) and (token as BoardToken).is_inside_tree():
+		(token as BoardToken).play_spawn_animation()
 
 
 ## Load the map from level data (async: file reads, GLB parsing and the document read run
@@ -445,7 +474,7 @@ func _finalize_map_loading(map: Node3D) -> void:
 		_level_play_controller.active_level_data
 	)
 	_level_play_controller._view_fit.fit(map, _level_play_controller.loaded_map_document)
-	_apply_foliage_density_and_notify(map)
+	_apply_foliage_density(map)
 	var generation := _load_generation
 	# The structures' nodes come a few a frame; play starts (and tokens are set down) only once
 	# every one stands, and the ground fit below sees their collision.
@@ -490,24 +519,11 @@ func _report_structure_progress(done: int, total: int) -> void:
 	)
 
 
-## Applies the player's foliage density setting to a freshly loaded map, and tells them
-## once if the map exceeded their budget. FoliageBudget.describe() names the density
-## percentage and the setting as the cause; this function's only addition is appending a
-## pointer to where the setting lives. Shown as an informational toast, not a warning --
-## a user-configured setting behaving exactly as configured isn't a warning, and nothing
-## here is a one-time, unrecoverable loss any more: the player can raise the dial back up
-## without a reload.
-func _apply_foliage_density_and_notify(map: Node3D) -> void:
-	if not map:
-		return
-	var budget := FoliageDensityController.budget_from_settings()
-	var report := FoliageDensityController.apply(map, budget)
-	if report.thinned:
-		UIManager.show_toast(
-			"%s Adjust Foliage Density in Settings > Graphics." % FoliageBudget.describe(report),
-			UIManager.TOAST_INFO,
-			6.0
-		)
+## Sizes a freshly loaded map's scatter chunks (the ground cover at the current zoom's thinning,
+## FoliageDensityController); GroundThinner keeps them current as the camera zooms.
+func _apply_foliage_density(map: Node3D) -> void:
+	if map:
+		FoliageDensityController.apply(map)
 
 
 ## Get the light intensity scale from the active level data (or 1.0 if none)

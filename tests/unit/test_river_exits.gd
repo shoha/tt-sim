@@ -512,7 +512,7 @@ func test_a_terrain_draws_the_exit_and_drops_it_when_the_river_goes() -> void:
 	var ribbon := skirt.get_node_or_null(NodePath(SkirtExits.RIBBON_NAME)) as MeshInstance3D
 	assert_not_null(channel)
 	assert_not_null(ribbon)
-	assert_eq(channel.mesh.surface_get_material(0), skirt.mesh.surface_get_material(0))
+	assert_eq(channel.mesh.surface_get_material(0), skirt.mesh.surface_get_material(1))
 	assert_true(channel.has_meta(Constants.BOUNDS_EXEMPT_META))
 	assert_eq(ribbon.material_override, WaterGlbUtils.water_material())
 	assert_true(ribbon.get_instance_shader_parameter(SkirtExits.WATER_SKIRT_FADE_PARAM))
@@ -521,9 +521,14 @@ func test_a_terrain_draws_the_exit_and_drops_it_when_the_river_goes() -> void:
 	var backdrop := skirt.get_node_or_null(NodePath(SkirtBackdrop.NODE_NAME)) as SkirtBackdrop
 	assert_not_null(backdrop)
 	assert_eq(
-		backdrop.materials.size(), 2, "the skirt's and the water's backdrops follow the environment"
+		backdrop.materials.size(),
+		3,
+		"the skirt's, the water's and the ring's backdrops follow the environment"
 	)
 	assert_eq(backdrop.materials[1], WaterGlbUtils.water_material())
+	assert_eq(backdrop.materials[2], terrain.get_skirt_ring_material())
+	assert_eq(channel.mesh.surface_get_material(0), terrain.get_skirt_ring_material(), "the patch")
+	assert_eq(skirt.mesh.get_surface_count(), 2, "the exits' columns are cut from both surfaces")
 	doc.water_bodies = [] as Array[WaterBody]
 	terrain.apply_river_exits({})
 	skirt = terrain.get_skirt()

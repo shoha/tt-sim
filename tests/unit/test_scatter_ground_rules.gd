@@ -175,7 +175,10 @@ func test_a_prop_at_a_rim_beds_on_the_lowest_ground_under_its_base() -> void:
 	var sunk := GroundSnap.rebed_props(row, row, flat, doc.heights, grid, false, window, r)
 	assert_almost_eq(sunk.rows[1], 0.0, 1e-5, "its base touches the low ground")
 	var origin := GroundSnap.rebed_props(row, row, flat, doc.heights, grid, false, window)
-	assert_almost_eq(origin.rows[1], 1.524, 1e-5, "without a footprint: the origin's height")
+	# Rows are on the saved grid (MapDocumentIO.ROW_STEP).
+	assert_almost_eq(
+		origin.rows[1], 1.524, MapDocumentIO.ROW_STEP, "without a footprint: the origin's height"
+	)
 
 
 func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> void:
