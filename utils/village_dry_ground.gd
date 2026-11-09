@@ -195,10 +195,10 @@ static func wet_flags(doc: MapDocument, points: PackedVector2Array, near: Rect2)
 static func dropped(plan: Array[Dictionary], kept: Array[Dictionary]) -> Dictionary:
 	var keep := {}
 	for lot in kept:
-		keep[ProcgenRow.lot_path(lot)] = true
+		keep[StructureProcgen.row_lot_path(lot)] = true
 	var out := {}
 	for lot in plan:
-		var path := ProcgenRow.lot_path(lot)
+		var path := StructureProcgen.row_lot_path(lot)
 		if keep.has(path):
 			continue
 		var plot: PackedVector3Array = lot.get("plot", PackedVector3Array())

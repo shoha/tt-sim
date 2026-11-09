@@ -206,7 +206,9 @@ static func read(raw: Variant, files: Array, have_files: bool, result: Dictionar
 		)
 		items = items.slice(0, cap)
 	var recipes: Dictionary = (raw as Dictionary).get("recipes", {}) as Dictionary
-	var registry := ProcgenStructureRegistry.new()
+	# The type ids only: checking a recipe builds no node (StructureProcgen keeps the registry out
+	# of the start-up, which reads every structure recipe of the served libraries).
+	var registry := StructureProcgen.type_names()
 	var seen := {}
 	var out: Array[Dictionary] = result["structures"]
 	for position in items.size():
@@ -509,7 +511,7 @@ static func recipe_problem(text: String, registry: ProcgenRegistry = null) -> St
 		return "has no nodes"
 	if (nodes as Array).size() > int(LibraryContracts.STRUCTURE_CAPS["recipe_nodes"]):
 		return "has more than %d nodes" % int(LibraryContracts.STRUCTURE_CAPS["recipe_nodes"])
-	var known: ProcgenRegistry = registry if registry != null else ProcgenStructureRegistry.new()
+	var known: ProcgenRegistry = registry if registry != null else StructureProcgen.type_names()
 	var ids := {}
 	for raw: Variant in nodes as Array:
 		var why := _node_problem(raw, known, ids)
