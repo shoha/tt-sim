@@ -167,6 +167,24 @@ func test_edge_scatter_and_vertex_totals() -> void:
 	root.free()
 
 
+## A windowed peer's ground clipmap holds copies of the chunk meshes in strip viewports with
+## their own world; a headless peer has none, so they must not count (clipmap3).
+func test_meshes_in_an_own_world_subviewport_are_left_out() -> void:
+	var root := _root()
+	var before := MapFingerprint.of(root, null)
+	var strip := SubViewport.new()
+	strip.own_world_3d = true
+	strip.add_child(_instance("Copy", _plain_mesh(30)))
+	root.add_child(strip)
+	var shared := SubViewport.new()
+	shared.add_child(_instance("Shown", _plain_mesh(4)))
+	root.add_child(shared)
+	var after := MapFingerprint.of(root, null)
+	assert_eq(after.mesh_vertices, int(before.mesh_vertices) + 4, "own-world copies left out")
+	assert_eq(after.edge, before.edge)
+	root.free()
+
+
 func test_identical_builds_match_after_a_json_round_trip() -> void:
 	var root_a := _root()
 	var root_b := _root()

@@ -63,14 +63,20 @@ What changes the composited ground at runtime, and how each reaches the clipmap 
 Verified with the real tools (clipmap3, 2026-11-09): biome, Paint, sculpt raise and lower, clear, a
 second looked biome and a river, with undo and redo, in authoring with the clipmap forced on, and the
 saved map played: after each the settled clipmap matched the per-pixel ground to 0.13-0.30 levels mean
-(0.44 with the river), no stale patch.
+(0.44 with the river), no stale patch. A joining client in a window (`enet_live_edits` with
+`--windowed=client`) builds its own clipmap from the host's map and patches each of the host's live
+edits and terrain events (sculpt, clear, forest fall, bridge collapse, fire, undo) with no stale patch.
+`MapFingerprint` leaves out a SubViewport with its own world, so the clipmap's strip copies of the chunk
+meshes do not count against a headless peer.
 
 ## Switches
 
 - `GroundClipmap.ON_BY_DEFAULT` (play mode only: a clipmap in a `GameMap` with `authoring_mode` frees
   itself on its first frame, before it binds its shader or makes a window), `--ground-clipmap` and
   `--no-ground-clipmap` on the command line (the first also keeps it in authoring), the Ground detail
-  setting (Settings > Graphics, `graphics/ground_detail_levels`).
+  setting (Settings > Graphics, `graphics/ground_detail_levels`). On Apply a cap and Off take effect at
+  once (a live clipmap frees itself within 30 frames and the plain shaders return); turning it back on
+  takes effect at the next map (checked through the Settings UI on the bridge, clipmap3).
 - The first-launch graphics warm-up covers the clip, bake and blit shaders, with chunk samples of the
   clip read (they were excluded while the clipmap was off by default).
 - Headless runs never attach one (no renderer).
