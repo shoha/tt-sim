@@ -51,6 +51,13 @@ const BEYOND_KEYS: Array[String] = ["beyond", "beyond_up"]
 ## Adds the water entries of `doc` to `entries` (nothing when it has no water). Assumes
 ## problem(doc) is "".
 static func serialize(doc: MapDocument, entries: Dictionary) -> void:
+	serialize_bodies(doc, entries)
+	serialize_grids(doc, entries)
+
+
+## The splines entry alone: the bodies and the flow map's frame (MapDocumentSnapshot writes it
+## at capture, since it reads the WaterBody objects).
+static func serialize_bodies(doc: MapDocument, entries: Dictionary) -> void:
 	if doc.water_bodies.is_empty() and doc.pond_mask.is_empty() and doc.water_flow.is_empty():
 		return
 	var bodies: Array = []
@@ -60,9 +67,14 @@ static func serialize(doc: MapDocument, entries: Dictionary) -> void:
 	if not doc.water_flow.is_empty():
 		var size := doc.water_flow_size
 		data["flow"] = {"frame": FLOW_FRAME, "size": [size.x, size.y]}
-		var image := WaterFlowBaker.to_image(doc.water_flow, size)
-		entries[FLOW_ENTRY] = image.save_png_to_buffer()
 	entries[SPLINES_ENTRY] = JSON.stringify(data, "", false, true).to_utf8_buffer()
+
+
+## The flow map and pond PNGs alone. Reads only packed fields, so it runs on any thread.
+static func serialize_grids(doc: MapDocument, entries: Dictionary) -> void:
+	if not doc.water_flow.is_empty():
+		var image := WaterFlowBaker.to_image(doc.water_flow, doc.water_flow_size)
+		entries[FLOW_ENTRY] = image.save_png_to_buffer()
 	if not doc.pond_mask.is_empty():
 		var mask := Image.create_from_data(
 			doc.samples_x(), doc.samples_z(), false, Image.FORMAT_L8, doc.pond_mask
@@ -72,11 +84,25 @@ static func serialize(doc: MapDocument, entries: Dictionary) -> void:
 
 ## The first water rule `doc` breaks, or "" (see the header).
 static func problem(doc: MapDocument) -> String:
+	var bodies := bodies_problem(doc)
+	return bodies if bodies != "" else grids_problem(doc, pond_ids(doc))
+
+
+## The ids of `doc`'s ponds (id -> true), for grids_problem.
+static func pond_ids(doc: MapDocument) -> Dictionary:
+	var ponds := {}
+	for body in doc.water_bodies:
+		if body != null and not body.is_river():
+			ponds[body.id] = true
+	return ponds
+
+
+## The first rule of the water bodies themselves `doc` breaks, or "".
+static func bodies_problem(doc: MapDocument) -> String:
 	if doc.water_bodies.size() > MapDocument.MAX_WATER_BODIES:
 		return "more than %d water bodies" % MapDocument.MAX_WATER_BODIES
 	var seen := {}
 	var rivers := 0
-	var ponds := {}
 	for body in doc.water_bodies:
 		if body == null:
 			return "a null water body"
@@ -88,10 +114,14 @@ static func problem(doc: MapDocument) -> String:
 		seen[body.id] = true
 		if body.is_river():
 			rivers += 1
-		else:
-			ponds[body.id] = true
 	if rivers > MapDocument.MAX_RIVERS:
 		return "more than %d rivers" % MapDocument.MAX_RIVERS
+	return ""
+
+
+## The first rule of the pond mask and the flow map `doc` breaks, or "". `ponds` is
+## pond_ids() of the bodies; reads only packed fields otherwise, so it runs on any thread.
+static func grids_problem(doc: MapDocument, ponds: Dictionary) -> String:
 	if not doc.pond_mask.is_empty():
 		if doc.pond_mask.size() != doc.sample_count():
 			return "pond_mask does not match the sample grid"
