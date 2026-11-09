@@ -83,14 +83,19 @@
  * edge. Anisotropic filtering matters here: the camera looks 22 degrees down, so the
  * ground is foreshortened about 2.7x and isotropic mips blur it.
  *
- * STEEP FACES (phase 3, P3-4): a top-down projection stretches a texture by 1 / n.y, so a
- * 70 degree tier face would show its rock smeared into vertical streaks. Where n.y falls
- * below SIDE_START_NY a side projection (the plane facing X or Z, whichever the face turns
- * to) takes over, fully below SIDE_FULL_NY; near 45 degree corners both side planes blend
- * (their weights sharpened by SIDE_SHARPNESS, and a plane under SIDE_MIN_WEIGHT dropped),
- * so most steep pixels sample two projections, not three (biplanar cost, triplanar
- * seams). Above SIDE_START_NY the side code is branched over entirely: flat ground costs
- * what it did. Side planes use no mosaic breakup: cells rotate a texture, and a cliff's
+ * STEEP FACES (phase 3, P3-4; slopesmear 2026-11-08): a planar projection along an axis
+ * stretches a texture by 1 / |n . axis| down the slope, so top-down alone smears a 50 degree
+ * valley wall 1.6 times along its dip (and a 70 degree tier face into vertical streaks).
+ * Each projection (top-down and the planes facing X and Z) is weighted by |n . axis| raised
+ * to PROJECTION_SHARPNESS, so the least stretched leads and its neighbours cross-fade only
+ * near the 45 degree crossovers; a share under PROJECTION_MIN_WEIGHT is dropped, so most
+ * steep pixels sample one or two projections, not three. Worst case is 1.73 on a face turned
+ * 45 degrees between X and Z at 55 degrees; a face turned to X or Z never passes 1.41. On
+ * ground gentler than about 34 degrees the weights are exactly top-down and the side code is
+ * branched over entirely: flat ground draws and costs what it did. Side planes of ground
+ * surfaces (grass, soil) take the same mosaic breakup as top-down, cells laid in the plane's
+ * own uv, or they would tile plainly and stand their painted strokes all down the slope;
+ * side planes of cliff-role surfaces take none: cells rotate a texture, and a cliff's
  * layered beds must stay level; they run horizontally around the map at fixed heights,
  * image up = map up. Each plane has its own tangent frame (+u along the face, +v down,
  * OpenGL green = up), orthogonalised against the geometric normal, so normal maps light
@@ -437,14 +442,14 @@ const float BROAD_OWN_END = 0.8;
 // comes within biome_blend_width of the top.
 const float ABSENT_SCORE = -1e6;
 
-// Steep faces (see STEEP FACES): side planes start below this n.y (about 44 degrees) and
-// take over fully below SIDE_FULL_NY (about 65 degrees). Projections meet by a height
-// blend (PROJECTION_CONTRAST, PROJECTION_BAND: the taller detail wins, as between
-// surfaces), not a cross-fade, which double-exposed two rock patterns into a smear.
-const float SIDE_START_NY = 0.72;
-const float SIDE_FULL_NY = 0.42;
-const float SIDE_SHARPNESS = 8.0;
-const float SIDE_MIN_WEIGHT = 0.04;
+// Slopes (see STEEP FACES): each projection is weighted by |n . axis| ^ PROJECTION_SHARPNESS,
+// so the least stretched one leads, and a share under PROJECTION_MIN_WEIGHT is dropped (flat
+// ground: top-down alone, exactly). TerrainRules.projection_weights is the CPU twin.
+// Projections meet by a height blend (PROJECTION_CONTRAST, PROJECTION_BAND: the taller detail
+// wins, as between surfaces), not a cross-fade, which double-exposed two rock patterns into a
+// smear.
+const float PROJECTION_SHARPNESS = 8.0;
+const float PROJECTION_MIN_WEIGHT = 0.04;
 const float PROJECTION_CONTRAST = 0.8;
 const float PROJECTION_BAND = 0.12;
 
@@ -671,18 +676,19 @@ SidePlane side_plane(int plane, vec3 n, vec3 p, vec3 dpx, vec3 dpy) {
 }
 
 // The projection weights of a pixel with map-frame normal `n` before any height blend (x:
-// the X-facing plane, y: top-down, z: the Z-facing plane); exactly (0, 1, 0) above
-// SIDE_START_NY, which is what lets flat ground skip the side code.
+// the X-facing plane, y: top-down, z: the Z-facing plane). A planar projection along an axis
+// stretches the texture by 1 / |n . axis|, so each is weighted by that dot product sharpened;
+// exactly (0, 1, 0) while both side shares are under PROJECTION_MIN_WEIGHT (gentler than
+// about 34 degrees on a face turned to X or Z, about 44 on one turned 45 degrees between),
+// which is what lets flat ground skip the side code.
 vec3 projection_weights(vec3 n) {
-	float side = 1.0 - smoothstep(SIDE_FULL_NY, SIDE_START_NY, n.y);
-	if (side <= 0.0) {
+	vec3 w = pow(abs(n) + 1e-4, vec3(PROJECTION_SHARPNESS));
+	w /= w.x + w.y + w.z;
+	if (max(w.x, w.z) <= PROJECTION_MIN_WEIGHT) {
 		return vec3(0.0, 1.0, 0.0);
 	}
-	vec2 planes = pow(abs(n.xz) + 1e-4, vec2(SIDE_SHARPNESS));
-	planes /= planes.x + planes.y;
-	planes = max(planes - SIDE_MIN_WEIGHT, vec2(0.0));
-	planes /= max(planes.x + planes.y, 1e-5);
-	return vec3(planes.x * side, 1.0 - side, planes.y * side);
+	w = max(w - PROJECTION_MIN_WEIGHT, vec3(0.0));
+	return w / (w.x + w.y + w.z);
 }
 
 // One layer's top-down height through the tile frame (sample_top's blend, height only).
@@ -698,6 +704,21 @@ float top_height(float layer, float tile, TileFrame f, vec2 world_xz, vec2 dx, v
 	vec3 w = pow(max(f.weights, vec3(0.0)), vec3(breakup_sharpness));
 	w *= mix(vec3(1.0), height + 0.05, breakup_contrast);
 	return dot(height, w / max(w.x + w.y + w.z, 1e-5));
+}
+
+// Whether `layer`'s side planes take the mosaic breakup: every surface but the cliff-role ones
+// (layer_flags bit 0), whose layered beds must stay level around the map. A grass or soil side
+// plane without it would tile plainly and stand its painted strokes all down the slope.
+bool side_mosaic(float layer) {
+	return breakup_enabled && (layer_flags[int(layer)] & 1) == 0;
+}
+
+// One layer's height on side plane `s` (through the mosaic where side_mosaic allows it).
+float side_height(float layer, float tile, SidePlane s) {
+	if (side_mosaic(layer)) {
+		return top_height(layer, tile, tile_frame(s.uv), s.uv, s.gx, s.gy);
+	}
+	return textureGrad(layer_height_array, vec3(s.uv / tile, layer), s.gx / tile, s.gy / tile).r;
 }
 
 // One surface's projection weights at a pixel after the projections' height blend (the
@@ -722,13 +743,11 @@ vec3 surface_projections(
 		score.y = proj.y + (h.y - 0.5) * PROJECTION_CONTRAST;
 	}
 	if (proj.x > 0.0) {
-		SidePlane s = side_plane(0, n, p, dpx, dpy);
-		h.x = textureGrad(layer_height_array, vec3(s.uv / tile, layer), s.gx / tile, s.gy / tile).r;
+		h.x = side_height(layer, tile, side_plane(0, n, p, dpx, dpy));
 		score.x = proj.x + (h.x - 0.5) * PROJECTION_CONTRAST;
 	}
 	if (proj.z > 0.0) {
-		SidePlane s = side_plane(1, n, p, dpx, dpy);
-		h.z = textureGrad(layer_height_array, vec3(s.uv / tile, layer), s.gx / tile, s.gy / tile).r;
+		h.z = side_height(layer, tile, side_plane(1, n, p, dpx, dpy));
 		score.z = proj.z + (h.z - 0.5) * PROJECTION_CONTRAST;
 	}
 	float best = max(score.x, max(score.y, score.z));
@@ -757,6 +776,15 @@ void accumulate(
 		float k = (plane == 0 ? pw.x : pw.z) * weight;
 		if (k > 0.0) {
 			SidePlane s = side_plane(plane, n, p, dpx, dpy);
+			if (side_mosaic(layer)) {
+				TopSample side = sample_top(layer, tile, tile_frame(s.uv), s.uv, s.gx, s.gy);
+				acc.albedo += side.albedo * k;
+				// sample_top's normal is along (+u, +v), +v down; the plane's b is image up.
+				acc.normal += perturb(vec2(side.normal_uv.x, -side.normal_uv.y), s.t, s.b, n) * k;
+				acc.orm += side.orm * k;
+				acc.height += side.height * k;
+				continue;
+			}
 			vec3 uv = vec3(s.uv / tile, layer);
 			vec2 gx = s.gx / tile;
 			vec2 gy = s.gy / tile;

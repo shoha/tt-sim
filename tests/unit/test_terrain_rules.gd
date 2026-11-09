@@ -27,6 +27,8 @@ const MIRRORED := [
 	"SCREE_BREAKUP_HIGH",
 	"RULE_NOISE_SCALE_M",
 	"RULE_NOISE_SHEAR",
+	"PROJECTION_SHARPNESS",
+	"PROJECTION_MIN_WEIGHT",
 	"CLIFF_NOISE_OFFSET",
 	"SCREE_NOISE_OFFSET",
 	"SCREE_BREAKUP_OFFSET",
@@ -273,6 +275,43 @@ func test_shader_constants_mirror_the_rules() -> void:
 	assert_almost_eq(shader.get("CLIFF_START_COS", 0.0), TerrainRules.cliff_start_cos(), 1e-6)
 	assert_almost_eq(shader.get("CLIFF_END_COS", 0.0), TerrainRules.cliff_end_cos(), 1e-6)
 	assert_almost_eq(shader.get("WATER_DEPTH_SCALE", 0.0), WaterDressing.DEPTH_SCALE, 1e-6)
+
+
+## A slope normal `deg` degrees from horizontal, facing `azimuth_deg` from +X toward +Z.
+func _slope_normal(deg: float, azimuth_deg: float) -> Vector3:
+	var t := deg_to_rad(deg)
+	var a := deg_to_rad(azimuth_deg)
+	return Vector3(sin(t) * cos(a), cos(t), sin(t) * sin(a))
+
+
+## The slope projection weights (slopesmear): a partition of unity everywhere; exactly
+## top-down on gentle ground in every facing, so flat ground draws as before and skips the
+## side code; the least stretched projection (1 / |n . axis|) leads on every slope.
+func test_projection_weights_partition_and_lead() -> void:
+	for deg in range(0, 91, 3):
+		for azimuth in range(0, 360, 15):
+			var n := _slope_normal(float(deg), float(azimuth))
+			var w := TerrainRules.projection_weights(n)
+			assert_almost_eq(w.x + w.y + w.z, 1.0, 1e-5, "sum at %d / %d" % [deg, azimuth])
+			assert_true(w.x >= 0.0 and w.y >= 0.0 and w.z >= 0.0, "non-negative")
+			var dots := Vector3(absf(n.x), absf(n.y), absf(n.z))
+			var lead := 0 if dots.x >= maxf(dots.y, dots.z) else (1 if dots.y >= dots.z else 2)
+			var heavy := 0 if w.x >= maxf(w.y, w.z) else (1 if w.y >= w.z else 2)
+			if dots[lead] - dots[(lead + 1) % 3] > 0.02 and dots[lead] - dots[(lead + 2) % 3] > 0.02:
+				assert_eq(heavy, lead, "least stretched leads at %d / %d" % [deg, azimuth])
+			if deg <= 33:
+				assert_eq(w, Vector3(0.0, 1.0, 0.0), "top-down alone at %d / %d" % [deg, azimuth])
+
+
+## The crossover a face turned to X or Z meets at 45 degrees (top and side equally stretched,
+## 1.41) shares the weight evenly; at 50 degrees (the valley wall) the side plane leads.
+func test_projection_weights_crossover() -> void:
+	var w45 := TerrainRules.projection_weights(_slope_normal(45.0, 0.0))
+	assert_almost_eq(w45.x, w45.y, 1e-5)
+	assert_eq(w45.z, 0.0)
+	var w50 := TerrainRules.projection_weights(_slope_normal(50.0, 180.0))
+	assert_gt(w50.x, 0.7)
+	assert_eq(TerrainRules.projection_weights(Vector3.UP), Vector3(0.0, 1.0, 0.0))
 
 
 ## The cliff-face and water rules are written the same way in the shader as in

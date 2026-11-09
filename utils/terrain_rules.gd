@@ -89,6 +89,12 @@ const SCREE_BREAKUP_HIGH := 0.45
 ## (RULE_NOISE_SHEAR) so it also varies up a vertical face.
 const RULE_NOISE_SCALE_M := 1.6
 const RULE_NOISE_SHEAR := 0.8
+## The ground's texture projections on slopes (the shader's STEEP FACES; slopesmear,
+## 2026-11-08): top-down and the planes facing X and Z, each weighted by |n . axis| raised to
+## PROJECTION_SHARPNESS, a share at or under PROJECTION_MIN_WEIGHT dropped
+## (projection_weights is the shader's twin).
+const PROJECTION_SHARPNESS := 8.0
+const PROJECTION_MIN_WEIGHT := 0.04
 ## Radius of the curvature and steepness box means, metres.
 const CURVATURE_RADIUS_M := 1.5
 ## Painted surfaces: the weight map is read through a small noise domain warp (a painted
@@ -121,6 +127,23 @@ const SCREE_BREAKUP_OFFSET := Vector2(61.3, 19.4)
 const PAINT_WARP_OFFSET_A := Vector2(-23.1, 57.7)
 const PAINT_WARP_OFFSET_B := Vector2(91.3, -12.9)
 const PAINT_NOISE_OFFSET := Vector2(7.9, 3.1)
+
+
+## The ground shader's projection weights for unit normal `n` (x: the plane facing X, y:
+## top-down, z: the plane facing Z), before the height blend. They sum to 1; exactly
+## (0, 1, 0) while both side shares are at or under PROJECTION_MIN_WEIGHT, which is what lets
+## the shader skip its side code on gentle ground.
+static func projection_weights(n: Vector3) -> Vector3:
+	var w := Vector3(
+		pow(absf(n.x) + 1e-4, PROJECTION_SHARPNESS),
+		pow(absf(n.y) + 1e-4, PROJECTION_SHARPNESS),
+		pow(absf(n.z) + 1e-4, PROJECTION_SHARPNESS)
+	)
+	w /= w.x + w.y + w.z
+	if maxf(w.x, w.z) <= PROJECTION_MIN_WEIGHT:
+		return Vector3(0.0, 1.0, 0.0)
+	w = (w - Vector3.ONE * PROJECTION_MIN_WEIGHT).max(Vector3.ZERO)
+	return w / (w.x + w.y + w.z)
 
 
 ## cos() of the cliff tail's start and end, the n.y values the tail runs between.

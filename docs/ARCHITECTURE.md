@@ -1539,13 +1539,18 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   Recomputing per dab cost 5-10 ms of every stroke frame; mid-stroke the cliff follows the
   live normals and scree and lip catch up at the settle, with the plants. Plants respect it:
   see "Scatter generator".
-- **Steep faces (P3-4):** below n.y 0.72 (44 degrees) side planes take over from the
-  top-down mosaic, fully below 0.42: the X- or Z-facing plane (sharpened by n^8, a plane
-  under 4 % dropped, so most pixels sample two projections), each with its own tangent
-  frame (+u along the face, image up = map up, orthogonalised against the normal), no
-  mosaic (it would rotate a cliff's level beds), and the projections height-blended
-  (taller detail wins) instead of cross-faded, which double-exposed two rock patterns into
-  a smear. Above 0.72 the side code is branched over. Every surface present uses the
+- **Steep faces (P3-4; slopesmear 2026-11-08):** a planar projection stretches a texture by
+  1 / |n . axis| down the slope, so top-down, X-facing and Z-facing are each weighted by
+  |n . axis|^8 (`TerrainRules.projection_weights` is the CPU twin), a share under 4 %
+  dropped: the least stretched leads (at most 1.41 on a face turned to X or Z, 1.73 turned
+  45 degrees between), most steep pixels sample one or two projections, and gentler than
+  about 34 degrees (44 on a diagonal face) the weights are exactly top-down and the side code
+  is branched over. Each plane has its own tangent frame (+u along the face, image up = map
+  up, orthogonalised against the normal). Ground surfaces take the mosaic on their side
+  planes too (cells in the plane's uv; without it a grass slope tiled plainly with its
+  painted strokes all down the dip); cliff-role surfaces take none (it would rotate a
+  cliff's level beds). The projections are height-blended (taller detail wins) instead of
+  cross-faded, which double-exposed two rock patterns into a smear. Every surface present uses the
   projections; since P3-6 a painted ground or built surface yields to the rock on a face
   (above), so only painted rock (or the mid-slope band where the cliff rule is partial) draws
   a painted surface on the side planes.
