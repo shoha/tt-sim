@@ -13,6 +13,8 @@ extends RefCounted
 ##                           `seconds` and logs the world viewport's GPU ms per frame (mean, p95,
 ##                           max) and the wall frame time; holds the job while it runs.
 ##   {action: "pan_ab", tag, dx, dz, seconds}  the same twice, clipmap read off then on.
+##   {action: "playsim"}     the open authoring map becomes a played one (authoring_mode off, the
+##                           terrain rebuilt): the default-on clipmap attaches on its own.
 ##   {action: "prepare", surface?}  binds a surface's ground layer ahead (before an edit).
 ##   {action: "edit", tag, size_m?, surface?, x?, z?, dir?}  one dab at the screen centre and the
 ##                           clipmap's reaction (see EditRig); `dir` saves the A-D crops.
@@ -79,6 +81,11 @@ static func run(base: Node, step: Dictionary) -> String:
 			return "edit started"
 		"cliff":
 			return _cliff(terrain, step)
+		"playsim":
+			# What a played map is: not authoring, its terrain built by the loader (no forced clipmap).
+			gm.authoring_mode = false
+			terrain.build(terrain.document, terrain.palette_root)
+			return note("playsim: authoring_mode off, terrain rebuilt")
 		"prepare":
 			terrain.prepare_surfaces(PackedStringArray([String(step.get("surface", "cobblestone"))]))
 			return "prepare started"
