@@ -9,10 +9,10 @@ extends RefCounted
 ## largest foliage cost per instance (a card is a lit fragment, and a filled map draws three or
 ## four layers of them per pixel), that its cost follows the drawn instances almost linearly, and
 ## that zoomed out the canopy hides most of the ground the cards lie on while each card is
-## smaller on screen. Thinning to half at the far end costs about half a millisecond of GPU less
-## there and nothing at the zoom the table is played at, where half the ground cover is visible
-## at 1:1. The triangle budget this replaced counted triangles, which are not what foliage costs,
-## and never engaged on a reference map.
+## smaller on screen. Thinning to two thirds at the far end (it was half; measured numbers in
+## PERFORMANCE.md) costs less GPU there and nothing at the zoom the table is played at, where
+## the ground cover is all visible at 1:1. The triangle budget this replaced counted triangles,
+## which are not what foliage costs, and never engaged on a reference map.
 ##
 ## No instance moves or fades: every chunk is shuffled at build (ScatterGlbUtils for a GLB's
 ## scatter, ScatterRows.instance_order for an authored map's, both deterministic and seeded by the
@@ -40,8 +40,10 @@ const FULL_UNTIL_SIZE := 14.0
 ## the default far end of the orbit zoom range.
 const FLOOR_AT_SIZE := 20.0
 ## The share of ground cover still drawn at the far end of the ramp and beyond.
-const GROUND_KEEP := 0.5
-## The fraction moves in steps of 1 / STEPS (1.0, 0.969, ... 0.5), so a zoom does not rewrite
+## Two thirds (user board perf-look-thin, "gentler", 2026-11-09; look-pending; it was one half),
+## which the 1 / STEPS quantisation makes 21 / 32 = 0.656 at the far end.
+const GROUND_KEEP := 2.0 / 3.0
+## The fraction moves in steps of 1 / STEPS (1.0, 0.969, ... 0.656), so a zoom does not rewrite
 ## every chunk each frame.
 const STEPS := 32
 ## Group of the ground-cover chunks that have been sized, so the thinner finds them without
