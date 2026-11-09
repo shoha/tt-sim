@@ -156,7 +156,7 @@ func test_loads_pass_pictures_and_the_bytes_stay_the_same() -> void:
 	)
 	SurfaceStore.prebake(PackedStringArray([_names[1]]), SurfaceStore.PRIORITY_SHOWN)
 	SurfaceStore.prebake(PackedStringArray([_names[0]]), SurfaceStore.PRIORITY_LOAD)
-	var order := SurfaceStore._prebake.queued()
+	var order: PackedStringArray = SurfaceStore._prebake.queued()
 	var last_load := -1
 	var first_shown := order.size()
 	for i in order.size():
