@@ -175,8 +175,8 @@ static func get_shader_ground_no_aa() -> Shader:
 
 ## True for a material of the ground cover, which draws on the lean ground variant: the wind
 ## category "grass" (grass cards, sprig clumps, litter) except flowers, which keep the full
-## shader for their petals' normal maps (measured: moving them too saved nothing,
-## docs/PERFORMANCE.md "Ground-cover lighting").
+## shader for their petals' normal maps (moving them would save about 0.09 ms at home and 0.22 ms
+## at zoom 20 on a filled 320 ft map, a look question: docs/PERFORMANCE.md "Material copies").
 static func is_ground_cover(category: String, flower: bool) -> bool:
 	return category == "grass" and not flower
 

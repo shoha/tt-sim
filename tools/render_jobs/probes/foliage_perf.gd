@@ -34,6 +34,10 @@ extends RefCounted
 ##   {action: "stack", dir, files, out}  strips joined into one sheet.
 ## Card foliagelight added the variant key `swap` {class: shader path}: that class's wind
 ## materials drawn on another shader (copies of the built materials, `_aa` twin under MSAA).
+## Card matcopy added `remat` {class: mode} (foliage_perf_remat.gd's `make`: same-shader copies,
+## duplicates, the lean ground cover back on the plain shader). A class key falls back to the
+## size class: "ground" also names the flowers (size class ground) and every painted ground-cover
+## material, so name "flower": "" to leave the flowers out. perf logs what each variant redraws.
 
 const GROUP := "foliage_perf_rig"
 const INCLUDE_PATH := "res://shaders/wind_foliage_include.gdshaderinc"
@@ -45,6 +49,8 @@ const NO_WIND := "FOLIAGE_PERF_NO_WIND"
 const PX_BINS: Array[float] = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
 ## The `load` action, in its own file (the line cap).
 const LOAD := preload("res://tools/render_jobs/probes/foliage_perf_load.gd")
+## The `remat` variant key's materials (card matcopy).
+const REMAT := preload("res://tools/render_jobs/probes/foliage_perf_remat.gd")
 
 
 static func blocker(base: Node, step: Dictionary) -> String:
@@ -498,7 +504,7 @@ class Rig:
 				want = _lod_mesh.get(orig, orig)
 			if mm.mesh != want:
 				mm.mesh = want
-			_apply_swap(n, v.get("swap", {}))
+			_apply_swap(n, v.get("swap", {}), v.get("remat", {}))
 		var merge := int(v.get("merge", 0))
 		for k in _merged:
 			for m: MultiMeshInstance3D in _merged[k]:
@@ -510,22 +516,29 @@ class Rig:
 	## `swap` {class: shader path} (card foliagelight): every wind material of that class's
 	## meshes drawn on the shader at the path instead (a copy, every uniform carried over); an
 	## empty dictionary puts the built materials back. The mesh is shared by every chunk of its
-	## asset, so this is one switch per asset.
-	func _apply_swap(n: Dictionary, swap: Dictionary) -> void:
+	## asset, so this is one switch per asset. `remat` {class: mode} (card matcopy) draws the
+	## class's wind materials as foliage_perf_remat.gd's `make` returns them instead.
+	func _apply_swap(n: Dictionary, swap: Dictionary, remat: Dictionary = {}) -> void:
 		var mesh: Mesh = n.mesh
 		if not _orig_surfaces.has(mesh):
-			if swap.is_empty():
+			if swap.is_empty() and remat.is_empty():
 				return
 			var mats: Array[Material] = []
 			for s in mesh.get_surface_count():
 				mats.append(mesh.surface_get_material(s))
 			_orig_surfaces[mesh] = mats
 		var path := String(swap.get(n.cls, swap.get(n.size_class, swap.get("all", ""))))
+		var mode := REMAT.picks(n, remat)
 		var origs: Array[Material] = _orig_surfaces[mesh]
 		for s in origs.size():
 			var want: Material = origs[s]
 			var src := want as ShaderMaterial
-			if path != "" and src != null and WindFoliage.is_wind_shader(src.shader):
+			if mode != "" and src != null and WindFoliage.is_wind_shader(src.shader):
+				var rkey := "%d|%s" % [src.get_instance_id(), mode]
+				if not _swap_mat.has(rkey):
+					_swap_mat[rkey] = REMAT.make(src, mode)
+				want = _swap_mat[rkey]
+			elif path != "" and src != null and WindFoliage.is_wind_shader(src.shader):
 				# A source on an antialiased wind shader (the eye view's MSAA) takes the variant's
 				# `_aa` twin when there is one.
 				var use := path
@@ -680,6 +693,9 @@ class Rig:
 		var keys: Array[String] = ["ref_start"]
 		for v: Dictionary in variants:
 			keys.append(String(v.name))
+			var moved := REMAT.census(_nodes, v)
+			if moved != "":
+				_log("perf: " + moved)
 		keys.append("ref_end")
 		var data := {}
 		for key in keys:
