@@ -41,6 +41,11 @@ const SCATTER_NODE := "AuthoredScatter"
 ## The AuthoredScatter holding hand-placed props, when separate_props is on.
 const PROPS_NODE := "AuthoredProps"
 
+## False starts a load's ground-layer prebake where the terrain is built (as card sysbake did)
+## instead of as soon as the document is read, and a new map's at the build instead of before its
+## recipe: the performance harness's in-run A/B switch (perfaudit_system.gd `prebake`).
+static var early_prebake: bool = true
+
 var tree: SceneTree = null
 ## LevelData.light_intensity_scale of the level being loaded.
 var light_intensity_scale: float = 1.0
@@ -132,6 +137,11 @@ func load_async(glb_path: String, document_path: String) -> Node3D:
 				return null
 			report_document_problem("Map document could not be read: " + document_path)
 		else:
+			if glb_path == "" and early_prebake:
+				# The ground layers' maps start baking now, ahead of the library gate and the
+				# adaptation (card authbake); _create_authored_root_async asks again for a document
+				# they changed.
+				SurfaceStore.prebake(AuthoredTerrain.layer_surfaces(document))
 			# The libraries the map names against the ones served (MapLibraryGate): renamed
 			# ids, a missing library asked about, never a quiet substitution.
 			library_gate = await MapLibraryGate.run(

@@ -268,7 +268,10 @@ func _open_async(
 		if not _superseded(generation):
 			root = await loader.build_async(glb, document)
 	elif not spec.is_empty():
-		# The recipe runs on a worker under the loading screen (NewMapBuild, P5-8).
+		# The recipe runs on a worker under the loading screen (NewMapBuild, P5-8), and the
+		# ground layers it will bind bake on the prebake lane meanwhile (card authbake).
+		if MapSourceLoader.early_prebake:
+			SurfaceStore.prebake(NewMap.planned_surfaces(spec))
 		var made := await NewMapBuild.start(spec).wait(get_tree())
 		if not _superseded(generation):
 			root = await loader.build_async("", made)

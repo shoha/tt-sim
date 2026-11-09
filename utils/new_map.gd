@@ -151,6 +151,27 @@ static func create(
 	return doc
 
 
+## The ground-layer surfaces a map made from `spec` (from_spec's keys) binds, known before its
+## recipe runs: AuthoredTerrain.layer_surfaces of a stand-in with create()'s base surface and
+## biome and no water (what the recipe paints or carves is asked for once it has run). An open
+## starts baking them while the recipe runs on its worker (card authbake). Empty for the biome
+## designer's proving ground.
+static func planned_surfaces(
+	spec: Dictionary, root: String = PaletteLibrary.DEFAULT_ROOT
+) -> PackedStringArray:
+	if String(spec.get("proving_ground", "")) != "":
+		return PackedStringArray()
+	var biome_id := String(spec.get("biome_id", BARE_BIOME))
+	var biome := PaletteLibrary.biome(biome_id, root) if biome_id != BARE_BIOME else {}
+	var stand_in := MapDocument.new()
+	stand_in.base_surface = String(biome.get("ground_surface", ""))
+	if stand_in.base_surface == "":
+		stand_in.base_surface = BARE_SURFACE
+	if not biome.is_empty():
+		stand_in.biome_ids = PackedStringArray([biome_id])
+	return AuthoredTerrain.layer_surfaces(stand_in, root)
+
+
 ## create() from the new-map spec NewMapDialog emits and AuthoringController opens:
 ## {"size_ft" (the width), "depth_ft", "biome_id", "seed", "landform"}, each optional
 ## (DEFAULT_SIZE_FT, the width, BARE_BIOME, a fresh random_seed(), StartingLandform.FLAT).
