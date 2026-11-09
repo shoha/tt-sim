@@ -11,7 +11,7 @@
  * 1. Replicates the original material's PBR appearance (albedo, roughness,
  *    metallic, ambient occlusion -- including their ORM texture channels --
  *    normal map, emission, UV transform).
- * 2. In the fragment shader, for each token:
+ * 2. In the fragment shader, for each token its screen tile lists:
  *    - Transforms the token's world position to view space.
  *    - Checks if this fragment is closer to the camera than the token (Z test).
  *    - Checks if this fragment is within the token's fade radius (XY distance).
@@ -46,13 +46,14 @@
  *
  * MANAGED BY: OcclusionFadeManager (scenes/states/playing/occlusion_fade_manager.gd)
  * - Converts map StandardMaterial3D → this shader at map load time.
- * - Updates the shared occlusion_tokens texture and the occlusion_token_count global
- *   every few physics frames.
+ * - Updates the shared occlusion_tokens texture (tokens, screen tiles and tile lists)
+ *   and its globals before each frame whose tokens or camera changed.
  * - Syncs lofi_pixelation from the lo-fi post-process shader.
  * - Restores original materials on map unload or when the effect is disabled.
  *
  * LIMITATIONS:
- * - Max 32 tokens (token texture width).
+ * - Every token on screen fades in the camera's passes (screen tiles, no cap); other
+ *   views (the sun's shadow pass) see the first 32 tokens, on-screen ones first.
  * - Only replaces StandardMaterial3D; existing ShaderMaterials are left as-is.
  * - Does not copy all StandardMaterial3D features (e.g., detail textures,
  *   transparency modes, backlight, subsurface scattering).

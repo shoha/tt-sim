@@ -1076,6 +1076,16 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   (the token cap), vsync off, GPU median and draw calls for `none`, `full` (ghost, no budget),
   `capped` (ghost at the 16-token budget), repeated to show drift. Numbers in
   `docs/PERFORMANCE.md` "Token ghost".
+- `jobs/perfaudit_tokens.json` (about 170 s windowed, 55 s headless; the performance audit's tokens
+  stream, 2026-11-09): a 100 ft temperate forest built and played, then `probes/perfaudit_tokens.gd`
+  sweeps pack tokens (the shipped Beasts pack) and avatar tokens at 10, 50, 100, 250 and 500 on a
+  grid over the map: spawn and despawn timings, memory per token, a node census, CPU micro timings
+  (picking rays, input dispatch with and without the token controllers, occlusion texture,
+  ghost budget, avatar shade) and in-run interleaved frame/GPU/render-CPU tables over variants
+  (ship, hidden, no ghost, no shadow, no occlusion fade, no per-token processing, frozen bodies,
+  original shading, and a MultiMesh ceiling). It also runs headless (`godot --headless --path ...
+  --script res://tools/render_jobs/run.gd -- perfaudit_tokens`): no lane, and the frame column is
+  then the CPU frame. It saves and removes `_avatartoken_perfaudit_tokens`.
 - `jobs/token_ghost_self.json`, `token_ghost_self_grass.json`, `token_ghost_self_temperate.json`
   (about 25 s each, taiga, open meadow and temperate forest): a large multi-part pack token
   (`token_ghost.gd` probe `spawn_big`: body, head, bloom and four legs, scale 1.5, 0.7 and 2) beside

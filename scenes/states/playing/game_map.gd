@@ -148,12 +148,14 @@ func _ready() -> void:
 	_match_world_render()
 
 
-## Keep the board's 3D render at its Interface size 100% resolution. The world viewport fills a
-## canvas that shrinks by content_scale_factor, so its 3D render scales back up by the same
-## factor (bilinear supersampling, as the 100% canvas already does on windows under 1080p):
-## the render size, and pixel-sized details such as grid line widths, stay as they were.
+## Keep the board's 3D render at its Interface size 100% resolution times the Render scale. The
+## world viewport fills a canvas that shrinks by content_scale_factor, so its 3D render scales
+## back up by the same factor (bilinear supersampling, as the 100% canvas already does on windows
+## under 1080p): at Render scale 100% the render size, and pixel-sized details such as grid line
+## widths, stay as they were. A lower Render scale (or Auto on a small window) draws fewer
+## pixels and FSR 1.0 upscales them (RenderScale; Settings applies a new choice the same way).
 func _match_world_render() -> void:
-	world_viewport.scaling_3d_scale = InterfaceSize.world_render_scale(get_window())
+	RenderScale.apply_to(world_viewport, get_window(), RenderScale.current)
 
 
 ## Setup with a reference to the level play controller

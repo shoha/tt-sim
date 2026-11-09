@@ -17,7 +17,8 @@ extends RefCounted
 ## any window, the canvas every screen must fit (test_interface_size_fit.gd).
 ##
 ## Only the canvas scales. The board renders at its 100% size (GameMap scales its world
-## viewport's 3D render back up by the factor, world_render_scale), so the camera's framing,
+## viewport's 3D render back up by the factor, world_render_scale, times the player's Render
+## scale, RenderScale), so the camera's framing,
 ## the render resolution and pixel-sized 3D details such as grid lines are unchanged. Overlays
 ## drawn on the canvas over the board (measure labels, gizmo handles) are UI and follow it.
 ##

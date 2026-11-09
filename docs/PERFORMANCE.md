@@ -305,6 +305,10 @@ ShaderMaterial -- one per map surface plus every tree species material -- every 
 physics frame, and every surface got its own ShaderMaterial even when several surfaces
 shared one source StandardMaterial3D.
 
+(Since 2026-11-08 the same texture also carries screen tiles and their token lists, and the
+fragment tests only its tile's tokens: "Occlusion fade tiles (topic perfaudit, card occfade)"
+below. The rest of this section describes the 2026-09-14 state.)
+
 After: token data is packed into one 32x1 RGBAF `ImageTexture` (pixel i = world x, y, z,
 fade radius) bound once per material as `occlusion_tokens`, updated with
 `ImageTexture.update()` once per tick; the count is the global shader parameter
@@ -4751,6 +4755,81 @@ one adds no draw and no triangle); drift home_end over home 1.016 (per round 1.0
 1348 flower instances in all, 103 within 9 m of the eye, about 60 of which the near grass term would
 have thinned (530 other grass tufts lie within that radius).
 
+## Occlusion fade tiles (topic perfaudit, card occfade)
+
+The occlusion fade (`occlusion_fade_include.gdshaderinc`) tested every token in every tree and
+converted map fragment, covered or not: the tokens stream measured 1.3-1.6 ms GPU at 10 tokens and
+4-5.5 ms at 32 or more (F-tokens-1), and the manager fed it only the first 32 tokens in scene order
+(F-tokens-9). Now `OcclusionFadeManager` bins the tokens into 32x18 screen tiles for the camera that
+draws (`OcclusionTiles`, as Forward+ bins lights): a tile lists every token whose projected fade zone
+(padded 2 px) touches it, and a fragment of the camera's passes tests only its tile's tokens with the
+unchanged per-token test. The zone lies in a plane at the token's view depth, so its screen rectangle
+is exact for the orthographic play camera and the perspective eye alike. The tiles are rebuilt at
+`RenderingServer.frame_pre_draw` when the tokens (collected at 30 Hz as before) or the camera changed,
+never at physics time: tiles a frame old would clip a moving hole. A pass from another view (the sun's
+shadow pass, another viewport: its `VIEW_MATRIX` translation or `PROJECTION_MATRIX[0][0]` differs from
+the published `occlusion_tile_view`) keeps the plain loop over the first 32 tokens (on-screen ones
+first). Everything lives in the one shared texture (layout in `OcclusionTiles`' header); the cap went
+from 32 to 256 tokens (`OcclusionFadeManager.MAX_TOKENS`, a CPU bound, see below).
+
+**How.** RTX 3080, idle before the run (P8, 4 %); the `perfaudit-tokens` harness map (new map,
+`temperate_forest_summer_s1`, 100 ft, seed 1234, home pose), 1920x1080 world viewport, vsync off,
+`max_fps` 0, default graphics (SSAO on, lo-fi on, shadow quality High), wind frozen, launched with
+`--gpu-profile`. Tokens on the harness's 1.25 m grid round the centre (pack = Beasts pack animals,
+avatar = AvatarPresets figures). One run, an in-run A/B by hot-swapping the include's
+`ShaderInclude.code` (and re-setting each dependent `Shader.code`): `old` (the include before the
+tiles), `new` and `new2` (the tiles; two windows of one configuration = the noise floor), `new_noshadow`
+(the tiles with the plain loop emptied: what the shadow pass's loop costs), `no_fade` (the manager
+cleared). 6 rounds, the first discarded, order rotated each round and reversed on odd rounds; 30
+frames plus 0.6 s of settle after each swap, then 60 measured frames; median of the 5 round medians
+[range]. Another stream's GUT shards ran on the CPU from the 500-token pack block on.
+
+| Tokens | old | new | new2 | new_noshadow | no_fade | old - no_fade | new - no_fade |
+|---|---|---|---|---|---|---|---|
+| none | 3.823 [3.536-3.958] | 3.768 | 3.765 | 3.790 | 3.767 | 0.06 | 0.00 |
+| pack 10 | 5.322 [5.204-5.992] | 4.512 [4.423-4.667] | 4.480 | 4.402 | 3.918 | 1.40 | 0.59 |
+| pack 32 | 9.277 [9.018-9.312] | 5.237 [5.194-5.588] | 5.238 | 4.696 | 3.950 | 5.33 | 1.29 |
+| pack 100 | 9.239 [9.050-9.297] | 5.912 [5.836-6.001] | 5.959 | 5.449 | 3.976 | 5.26 | 1.94 |
+| pack 100, 2560x1440 | 15.243 [15.103-15.404] | 9.807 [9.668-9.956] | | | 6.541 | 8.70 | 3.27 |
+| pack 500 | 8.918 [7.837-10.650] | 8.597 [8.322-10.062] | 8.855 | 9.022 | 6.442 | 2.48 | 2.16 |
+| avatar 10 | 5.299 [5.044-5.372] | 4.282 [4.267-4.388] | 4.286 | 4.145 | 3.863 | 1.44 | 0.42 |
+| avatar 32 | 9.539 [9.363-9.715] | 4.869 [4.816-4.939] | 4.892 | 4.365 | 3.955 | 5.58 | 0.91 |
+| avatar 100 | 9.641 [9.546-9.893] | 5.340 [5.279-5.530] | 5.460 | 4.793 | 4.002 | 5.64 | 1.34 |
+
+Avatar 500 ran while the gate's GUT shards loaded the CPU: totals are not usable (no_fade 16.6
+[9.2-18.2] above old 16.2 [13.0-23.1]); its depth pre-pass alone read old 8.86, new 4.81, no_fade 4.69 ms.
+
+- **Where it went (per pass, old / new / no_fade).** The loop ran in the depth pre-pass, the opaque
+  pass and the shadow pass. Pack 32: depth pre-pass 5.41 / 2.01 / 1.49 ms, opaque 2.34 / 2.10 / 1.84,
+  directional shadows 0.58 / 0.60 / 0.12. The depth pre-pass carried most of the old cost (leaf-card
+  overdraw runs the fragment shader per layer); the tiles take 3.4 ms off it at 32 tokens.
+- **What is left.** The shadow pass's plain loop: 0.13 ms at 10 tokens, 0.47 ms from 32 (`new` against
+  `new_noshadow`), unchanged from before. It cannot use screen tiles, and its fade is visible: at 10
+  pack tokens 34,823 pixels change (up to 0.18) without it, the sunlit patch through the canopy onto a
+  covered token. So it stays; a light-space grid (the sun's view axes are known) would remove it.
+  The rest of `new`'s increment at 100 is partly the look fix: `new` opens holes for all 90 tokens
+  collected, `old` for 32, and every hole lets the depth and opaque passes shade what is behind it.
+- **Dense crowds.** At 500 pack tokens on the 1.25 m grid the zones overlap: 8,470 list entries, a
+  tile lists 14.7 tokens on average and 26 at most, so the fragment still tests many tokens and the
+  tiles win nothing measurable (8.60 against 8.92, ranges overlapping; frames partly CPU-bound). The
+  cost follows the overlap, not the count. Measured before the 256 cap, which halves those lists.
+- **CPU.** Per publish (bin, image, upload, globals), paid on each frame whose camera or tokens
+  changed: pack 10 0.15 ms, pack 32 0.25, pack 100 0.63, pack 500 2.40 (a token's zone covers about 17
+  tiles at home zoom; avatar figures about 6, avatar 10 0.20 ms). The collect at the 30 Hz tick,
+  uncapped in this run: 0.024 ms at 10, 0.26 at 100, 1.21 at 500 (2.4 us a token; it stopped at 32
+  before). The 256 cap bounds both (about 0.6 ms collect, 1.2 ms publish, inferred). Debug build.
+- **Look parity** (`parity` action: frozen clock, the same camera and tokens, the world viewport read
+  back): with the same 32 tokens the tile path is pixel-identical to the old loop (0 differing pixels
+  at pack 10, avatar 10, pack 100 and avatar 100, `old` against `new32`; two `new` frames also 0 apart).
+  The only change is the look fix: at 100 tokens the 33rd and later now open their holes too (pack 100:
+  636,483 pixels differ old against new; the mask shows solid holes over the canopies in front of
+  those tokens plus a low-amplitude speckle round them). Outside the zones of the tokens past 32 the
+  differences stay under 0.008 (pack 100) and 0.024 (avatar 100) and none passes 0.1: screen-space
+  passes (SSAO) reacting to the new holes.
+- **Next.** A light-space tile grid for the sun's shadow pass (0.47 ms at 32+ tokens); a grid
+  anchored to the orthographic camera's view plane in world units, so pans and zooms need no rebuild
+  (only rotation and token moves); and a cached per-token collect.
+
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
 What each Shadow quality tier (`directional_soft_shadow_filter_set_quality`) costs, and a "blur"
@@ -4865,3 +4944,110 @@ per sample), the writer's checks 64 ms (`row_ok` per row, the height scan), biom
 write 184 ms. All of it is on the worker now. Format-neutral speedups were not taken: the frame no
 longer pays any of it, and the big one (binary rows) is a format change (board question
 perf-map-format).
+
+## Render scale (topic perfaudit, card renderscale)
+
+Settings > Graphics > Render scale (`RenderScale`, `utils/render_scale.gd`): Auto, 100 % (the
+default), 85, 75, 67 or 50 % of the board's full render, upscaled with FSR 1.0. Added because the
+frame is fill-bound (1440p-sized render 1.72 times, 4K-sized 3.5 times the 1080p time).
+
+**The board already renders at 1920x1080 on every screen.** The world SubViewport sits in a
+stretched SubViewportContainer and the project stretches canvas_items on a 1920x1080 base canvas, so
+the viewport is sized in canvas units: 1920x1080 at every 16:9 window from 720p to 4K (headless probe
+of a stretched container, 2026-11-08; at Interface size 1.4 it is 1371x771 and GameMap's
+`scaling_3d_scale` 1.4 brings the render back to 1920x1080). On a 1440p or 4K screen the canvas
+enlarges that render bilinearly, which is the pixel count of FSR 0.75 and 0.5 of the output; below
+1080p the render is supersampled (2.25 times the shown pixels at 720p). The 2D layer always draws at
+the window's resolution. So a 4K player pays about 4 ms here, not 14, and sees a softer board: native
+output rendering would need an output-sized world viewport (overlays, pixel-sized grid widths and
+unproject call sites change with it), a board decision rather than this card.
+
+**The setting.** A percent scales the full render (`scaling_3d_scale` = Interface size factor x
+percent), FSR 1.0 under 1 and bilinear at or above (FSR cannot downsample). 100 % is the game before
+the setting. Auto draws no more pixels than the screen shows: the full render at 1080p and up (the
+same pixels as FSR 0.75 at 1440p and 0.5 at 4K) and the window's own size below 1080p, snapped to the
+viewport's size within 0.9 to 1 (an upscale pass over a nearly equal size costs more than it saves).
+GameMap re-applies it on every window resize. FSR sharpness stays at the engine's 0.2; the texture mip
+bias stays 0, since the engine already lowers it by log2(scale) for a scaled render.
+
+**Cost.** `perfaudit_gpu.gd` `perf` (renderscale job), `--gpu-profile`, RTX 3080 idle before (3 %,
+P8, 42 C), real 1920x1080 window, vsync off, `max_fps` 0, SSAO on, MSAA off, lo-fi on, shadow High; map
+`temperate_forest_summer_s1`, 100 ft, seed 1234, valley; 6 rounds, the first discarded, 20 settle and
+60 measured frames per configuration; median of the 5 round medians [range]. Noise floor (the base
+measured twice per round) 0.06 ms; drift 0.98-1.07. "Output-sized" rows resize the viewport in-run to
+what native rendering at that output would cost; the game does not run them.
+
+| Configuration | Home GPU ms | Close (zoom 4) GPU ms |
+|---|---|---|
+| 100 % (1920x1080, every screen today) | 3.93 [3.60-3.98] | 3.48 [3.29-3.54] |
+| FSR 85 % | 3.18 [3.10-3.20] | |
+| FSR 75 % | 2.62 [2.56-2.67] | 2.27 [2.23-2.30] |
+| FSR 67 % | 2.27 [2.18-2.28] | |
+| FSR 50 % | 1.54 [1.50-1.55] | 1.27 [1.25-1.28] |
+| Bilinear 75 % | 2.59 [2.50-2.82] | 2.20 [2.17-2.23] |
+| Bilinear 50 % | 1.52 [1.46-1.60] | 1.24 [1.23-1.25] |
+| Output-sized 1440p, native | 6.76 [6.56-6.82] | 5.70 [5.67-5.75] |
+| Output-sized 1440p, FSR 0.75 | 4.38 [4.26-4.41] | 3.70 [3.65-3.74] |
+| Output-sized 1440p, FSR 0.5 | 2.44 [2.36-2.46] | 1.98 [1.94-1.99] |
+| Output-sized 4K, native | 13.68 [13.09-13.80] | 12.32 [12.02-12.40] |
+| Output-sized 4K, FSR 0.75 | 8.86 [8.10-8.97] | 7.50 [7.25-7.73] |
+| Output-sized 4K, FSR 0.5 | 4.54 [4.27-4.58] | 3.87 [3.79-3.98] |
+| Output-sized 4K, bilinear 0.5 | 4.39 [4.14-4.49] | 3.74 [3.64-3.87] |
+
+- FSR 1.0's own pass is in the Tonemap timestamp: 0.16 ms against bilinear's 0.10 at a 1920x1080
+  output, 0.49-0.52 against 0.39 at 4K. Every other pass scales with the render's pixels.
+- A GPU three times slower (about 12 ms at 100 %) gets about 8 ms at 75 % and 4.6 ms at 50 %.
+- **Look** (contact sheet and 1:1 crops of home, zoom 4 and the eye; the lo-fi pass and the UI are
+  untouched, they draw at the window's resolution). FSR 75 % is hard to tell from 100 % (flower
+  petals a little simpler). FSR 50 % keeps the bold painted masses and clean cutout edges, but small
+  things simplify: flowers lose their petals, berries shrink, grass blades thicken, the ground's
+  brush streaks smooth out. No ringing or halo round the alpha-tested cards. Bilinear 50 % smears the
+  same edges for 0.02-0.06 ms less, so the setting offers FSR only. FSR sharpness 0 and a mip bias
+  of +0.5 were indistinguishable from the defaults at 50 %.
+- **Picking.** The camera rays and the engine's physics picking read world-viewport coordinates,
+  which the 3D scale does not change: a probe pushed mouse motions through the root window onto a
+  pickable stand-in at its projected pixel and 40 px beside it, at 100, 75, 67 and 50 %, with the
+  same hits every time. The occlusion fade works in view space; its Bayer dither (and the ground
+  skirt's and the avatar fade's) is in render pixels, so at 50 % its cells are twice as large.
+  Grid line widths are in render pixels too and enlarge with the render.
+
+## Token sync bytes (topic perfaudit, card netspawn, 2026-11-08)
+
+What changed (NETWORKING.md "Token adds and the table state on the wire", "Periodic
+Reconciliation"): a placement sends that token alone (`TokenStateWire` ADD) instead of the whole
+state; every state message is zstd-compressed and cut into 64 KB chunks; the 2 s reconciliation
+sends only tokens that moved (`TokenTransformPack`, packed, reliable) with the full state every
+30 s as the heartbeat; a drag's batch is packed under the MTU.
+
+Method: the perfaudit net harness (`tests/net/perfaudit_net.gd`, branch perfaudit-net), 100 ft
+map, `--peers=3`, ENet on loopback, avatar tokens with identical recipes; bytes are the
+application payload the host hands the transport for ONE client, exact and repeatable (the
+placement counts matched the wave 1 runs to the byte). Host upload is that times the clients
+(`rpc()` sends one copy per peer). Steam itself was not driven.
+
+| Scenario (host to one client) | Before | After |
+| --- | --- | --- |
+| One placement at 200 tokens | 96,448 B | 423 B (228x) |
+| Placing tokens 51 to 200 (state messages) | 14,467,200 B | 63,438 B |
+| Spawn window to 1 / 10 / 50 / 200 tokens (all messages) | 1,088 / 45,760 / 951,040 / 14,537,600 B | 609 / 5,455 / 23,570 / 99,247 B |
+| Late join, the state at 200 tokens | 153,664 B | 4,715 B (33x) |
+| Late join window, 200 tokens (map, state, transforms) | 328,842 B | 71,516 B |
+| Idle 10 s at 1 / 10 / 50 / 200 tokens | 640 / 6,400 / 32,000 / 128,000 B | 0 / 0 / 0 / 0 B (plus the heartbeat) |
+| Heartbeat at 200 tokens | none | 4,715 B every 30 s (157 B/s) |
+| Drag 10 tokens 5 s, 200 on the board | 107,304 B in 812 msgs | 56,188 B in 432 msgs |
+| Drop tail 1 s | 27,412 B | 5,289 B (of it the heartbeat 4,715) |
+
+Idle host upload at 200 tokens: 12,800 B/s and 100 messages/s per client before, so 12.8 / 38.4 /
+89.6 KB/s and 100 / 300 / 700 messages/s for 1 / 3 / 7 clients; after, 0 between heartbeats and
+157 B/s averaged (one 4.7 KB message per client per 30 s): 0.16 / 0.47 / 1.1 KB/s. The drag
+itself still sends one 128 B transform RPC per dragged token per 0.1 s (F-net-7's packed drag
+path is the remaining step; the batch flush is packed already).
+
+State size by token kind (`TokenStateWire`, a pure probe with random positions, so less
+compressible than the harness grid): 200 tokens 8.1 KB (identical avatars), 9.2 KB (pack
+tokens), 19.3 KB (avatars with distinct full recipes); 670 tokens 26.9 / 30.2 / 63.1 KB, all one
+chunk (the Variant was 512 KB to 1 MB, past Steam's 512 KB queue). zstd beat deflate from 10
+tokens up (200 distinct avatars: 19.3 against 24.6 KB); deflate is 40 B smaller for one token.
+Largest single message after: an AssetStreamer map chunk (32 KB); the largest token message
+measured was a 16.6 KB reliable reconcile pair as 150 freshly placed tokens settled.
+`TokenStateWire.SEND_BUDGET_BYTES` (192 KB) is reached at 2,000 to 4,900 tokens.

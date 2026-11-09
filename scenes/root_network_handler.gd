@@ -12,6 +12,8 @@ class_name RootNetworkHandler
 static func connect_client_signals(handler: Node) -> void:
 	if not NetworkStateSync.full_state_received.is_connected(handler._on_full_state_received):
 		NetworkStateSync.full_state_received.connect(handler._on_full_state_received)
+	if not NetworkStateSync.tokens_added.is_connected(handler._on_tokens_added):
+		NetworkStateSync.tokens_added.connect(handler._on_tokens_added)
 
 	var game_sync := NetworkManager.game_sync
 	if not game_sync.token_transform_received.is_connected(handler._on_token_transform_received):
@@ -28,6 +30,8 @@ static func connect_client_signals(handler: Node) -> void:
 static func disconnect_client_signals(handler: Node) -> void:
 	if NetworkStateSync.full_state_received.is_connected(handler._on_full_state_received):
 		NetworkStateSync.full_state_received.disconnect(handler._on_full_state_received)
+	if NetworkStateSync.tokens_added.is_connected(handler._on_tokens_added):
+		NetworkStateSync.tokens_added.disconnect(handler._on_tokens_added)
 	var game_sync := NetworkManager.game_sync
 	if game_sync.token_transform_received.is_connected(handler._on_token_transform_received):
 		game_sync.token_transform_received.disconnect(handler._on_token_transform_received)
@@ -99,6 +103,15 @@ static func on_token_removed_received(controller: LevelPlayController, network_i
 
 ## Apply full GameState to all visual tokens (initial sync or reconciliation)
 static func apply_game_state_to_tokens(controller: LevelPlayController, game_map: Node) -> void:
+	apply_tokens_to_board(controller, game_map, GameState.get_all_token_states().keys())
+
+
+## Apply GameState's tokens `network_ids` to the board: a token already there takes its state,
+## a missing one is created (keyed by network_id, so applying a token twice never duplicates
+## it). A full state passes every id; a token add (NetworkStateSync.tokens_added) its own.
+static func apply_tokens_to_board(
+	controller: LevelPlayController, game_map: Node, network_ids: Array
+) -> void:
 	if not controller or not game_map:
 		return
 	if controller.is_loading():
@@ -108,8 +121,10 @@ static func apply_game_state_to_tokens(controller: LevelPlayController, game_map
 	if not drag_and_drop:
 		return
 
-	for network_id in GameState.get_all_token_states():
+	for network_id in network_ids:
 		var token_state: TokenState = GameState.get_token_state(network_id)
+		if token_state == null:
+			continue
 		var token = controller.find_token_by_network_id(network_id)
 
 		if token and is_instance_valid(token):
@@ -122,7 +137,7 @@ static func apply_game_state_to_tokens(controller: LevelPlayController, game_map
 				controller._connect_token_context_menu(new_token)
 
 	# Apply any active drag locks to visual tokens (for late joiners)
-	for network_id in GameState.get_all_token_states():
+	for network_id in network_ids:
 		var lock_holder := GameState.get_drag_lock(network_id)
 		if lock_holder > 0:
 			var token = controller.find_token_by_network_id(network_id)
