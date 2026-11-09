@@ -43,6 +43,8 @@ extends RefCounted
 const PREFIX := "_perfaudit_sys_"
 ## The levels of the wave-2 load card (sysload) that reuses this probe.
 const CARD_PREFIX := "_sysload_"
+## The levels of the card after it (sysopen: authoring open and new maps).
+const OPEN_CARD_PREFIX := "_sysopen_"
 const NODE_PREFIX := "PerfauditSys"
 const SHAPES := preload("res://tools/render_jobs/probes/terrain_shapes.gd")
 const WATER := preload("res://tools/render_jobs/probes/water.gd")
@@ -509,7 +511,10 @@ static func _cleanup() -> String:
 
 ## Whether level `folder` is one this probe made (its own prefix, or a wave-2 card's).
 static func _owned(folder: String) -> bool:
-	return folder.begins_with(PREFIX) or folder.begins_with(CARD_PREFIX)
+	for prefix in [PREFIX, CARD_PREFIX, OPEN_CARD_PREFIX]:
+		if folder.begins_with(prefix):
+			return true
+	return false
 
 
 # --- helpers -----------------------------------------------------------------------------------
@@ -727,11 +732,15 @@ class LoadWatch:
 	var label := ""
 	var mode := ""
 	var open_us := 0
+	var last_bakes := 0
+	var last_hits := 0
 
 	func _ready() -> void:
 		process_mode = Node.PROCESS_MODE_ALWAYS
 		process_priority = -100
 		mem_before = _monitors(false)
+		last_bakes = int(SurfaceStore.stats.get("bakes", 0))
+		last_hits = int(SurfaceStore.stats.get("cache_hits", 0))
 		# The clock starts before the request: entering a state builds its scene synchronously
 		# here, and that frame (the first one in ms) is often the worst of the load (wave 1 left
 		# it out of every load's wall and frames).
@@ -770,7 +779,16 @@ class LoadWatch:
 		var now := Time.get_ticks_usec()
 		ms.append((now - last_us) / 1000.0)
 		var c := compiles()
-		comp.append(compile_text(last_comp, c))
+		# Surface maps baked (cold) or read from the cache in the frame (sysopen: what a cold
+		# open's long frames are).
+		var bakes := int(SurfaceStore.stats.get("bakes", 0))
+		var hits := int(SurfaceStore.stats.get("cache_hits", 0))
+		var surf := ""
+		if bakes != last_bakes or hits != last_hits:
+			surf = " bakes+%d hits+%d" % [bakes - last_bakes, hits - last_hits]
+		last_bakes = bakes
+		last_hits = hits
+		comp.append(compile_text(last_comp, c) + surf)
 		last_comp = c
 		last_us = now
 		if not _landed():

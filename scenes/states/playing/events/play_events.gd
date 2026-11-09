@@ -225,9 +225,20 @@ static func done_phrase(label: String) -> String:
 	return past if words.size() == 1 else past + " " + words[1]
 
 
-## Wires the controller to the table's LevelPlayController and to `events_pane`.
-func setup(lpc: LevelPlayController, events_pane: EventsPane) -> void:
+## Wires the controller to the table's LevelPlayController and to `events_pane`, or, without
+## one, to nothing until attach_pane (the drawer makes its Events pane on first use).
+func setup(lpc: LevelPlayController, events_pane: EventsPane = null) -> void:
 	_lpc = lpc
+	lpc.level_cleared.connect(_on_level_cleared)
+	lpc.level_loaded.connect(func(_level: LevelData) -> void: refresh())
+	if events_pane != null:
+		attach_pane(events_pane)
+
+
+## Wires the controller to `events_pane` (once) and shows the table's state on it.
+func attach_pane(events_pane: EventsPane) -> void:
+	if pane != null:
+		return
 	pane = events_pane
 	pane.tool_toggled.connect(_on_tool_toggled)
 	pane.sculpt_selected.connect(_on_sculpt_selected)
@@ -269,8 +280,6 @@ func setup(lpc: LevelPlayController, events_pane: EventsPane) -> void:
 	pane.brush_size_changed.connect(func(radius: float) -> void: _wired_brush().set_radius(radius))
 	pane.brush_strength_changed.connect(func(flow: float) -> void: _wired_brush().set_flow(flow))
 	pane.visibility_changed.connect(refresh)
-	lpc.level_cleared.connect(_on_level_cleared)
-	lpc.level_loaded.connect(func(_level: LevelData) -> void: refresh())
 	refresh()
 
 

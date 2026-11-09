@@ -112,7 +112,11 @@ func setup(level_play_controller: LevelPlayController) -> void:
 		play_events = PlayEvents.new()
 		play_events.name = "PlayEvents"
 		add_child(play_events)
-		play_events.setup(level_play_controller, level_edit_panel.events_pane)
+		# The pane is made on the drawer's first show of it, and wired then (perfaudit F-system-8).
+		play_events.setup(level_play_controller)
+		if level_edit_panel.is_pane_built(LevelEditPanel.EVENTS_ID):
+			play_events.attach_pane(level_edit_panel.events_pane)
+		level_edit_panel.events_pane_built.connect(play_events.attach_pane)
 		play_events.armed_changed.connect(
 			func(tool_id: StringName) -> void:
 				level_edit_panel.set_rail_item_active(LevelEditPanel.EVENTS_ID, tool_id != &"")

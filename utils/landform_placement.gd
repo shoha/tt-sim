@@ -165,14 +165,21 @@ static func paint_open(
 	box = box.grow(reach)
 	var lo := doc.world_to_sample(box.position).floor()
 	var hi := doc.world_to_sample(box.end).ceil()
+	if not doc.surface_slot_ok(slot):
+		return
+	# The grid read once, not per sample (sample_to_world and sample_index, same arithmetic).
+	var count := doc.sample_count()
+	var sx := doc.samples_x()
+	var step := doc.sample_step()
+	var origin := doc.extent_m() * 0.5
 	for z in range(maxi(int(lo.y), 0), mini(int(hi.y) + 1, doc.samples_z())):
-		for x in range(maxi(int(lo.x), 0), mini(int(hi.x) + 1, doc.samples_x())):
-			var p := doc.sample_to_world(Vector2(x, z))
+		for x in range(maxi(int(lo.x), 0), mini(int(hi.x) + 1, sx)):
+			var p := Vector2(x, z) * step - origin
 			var inside := -gap_to(p, feature) + noise.get_noise_2d(p.x, p.y) * OPEN_WARP * radius
 			if inside <= 0.0:
 				continue
 			var t := smoothstep(0.0, radius * (1.0 - OPEN_CORE_SHARE), inside)
-			_raise(doc, doc.sample_index(x, z), slot, roundi(255.0 * t))
+			_raise(doc, z * sx + x, slot, roundi(255.0 * t), count)
 
 
 ## Paints the meadow surface of `biome_id` over the thin parts of `doc`'s starting cover (its
@@ -201,11 +208,18 @@ static func paint_sparse(
 	var half := doc.extent_m() * 0.5
 	var width := NewMap.edge_feather_m(half)
 	var band := width * (1.0 + NewMap.EDGE_FEATHER_WOBBLE)
+	if not doc.surface_slot_ok(slot):
+		return
+	# The grid read once, not per sample (sample_to_world and sample_index, same arithmetic).
+	var sx := doc.samples_x()
+	var step := doc.sample_step()
+	var origin := half
+	var density := doc.biome_density
 	for z in doc.samples_z():
-		for x in doc.samples_x():
-			var i := doc.sample_index(x, z)
-			var p := doc.sample_to_world(Vector2(x, z))
-			var thin := 1.0 - smoothstep(SPARSE_FULL, SPARSE_NONE, doc.biome_density[i] / 255.0)
+		for x in sx:
+			var i := z * sx + x
+			var p := Vector2(x, z) * step - origin
+			var thin := 1.0 - smoothstep(SPARSE_FULL, SPARSE_NONE, density[i] / 255.0)
 			var score := thin + SPARSE_NOISE * noise.get_noise_2d(p.x, p.y)
 			var t := smoothstep(
 				SPARSE_THRESHOLD - SPARSE_SOFT, SPARSE_THRESHOLD + SPARSE_SOFT, score
@@ -213,7 +227,7 @@ static func paint_sparse(
 			if minf(half.x - absf(p.x), half.y - absf(p.y)) < band:
 				var keep := NewMap.edge_keep(p, half, width, cover)
 				t = maxf(t, 1.0 - smoothstep(EDGE_GREEN_FULL, EDGE_GREEN_NONE, keep))
-			_raise(doc, i, slot, roundi(255.0 * t))
+			_raise(doc, i, slot, roundi(255.0 * t), count)
 
 
 ## A landform's wood drawn from `rng` (NewMap.wood_density): the groves keep a share of their
@@ -267,10 +281,11 @@ static func widest(body: WaterBody) -> float:
 	return out + WaterGeometry.RIVER_BANK_M
 
 
-## Raises sample `i`'s weight of `slot` to `value` when it is below it.
-static func _raise(doc: MapDocument, i: int, slot: int, value: int) -> void:
-	if value > doc.surface_weight(i, slot):
-		doc.set_surface_weight(i, slot, value)
+## Raises sample `i`'s weight of `slot` to `value` when it is below it, in a loop that checked
+## doc.surface_slot_ok(`slot`) and holds `count` = doc.sample_count().
+static func _raise(doc: MapDocument, i: int, slot: int, value: int, count: int) -> void:
+	if value > doc.surface_weight_in(i, slot, count):
+		doc.set_surface_weight_in(i, slot, value, count)
 
 
 ## True when no water of `doc` lies within `reach` of `p`: a river's course with its
