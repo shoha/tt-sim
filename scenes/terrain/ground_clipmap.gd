@@ -194,12 +194,17 @@ func _suppressed() -> bool:
 		return false
 	if GroundClipmapSetting.current == GroundClipmapSetting.OFF:
 		return true
-	var node: Node = terrain
+	var node: Node = self  # the terrain's parents are this node's
 	while node != null:
 		if node.has_method("setup_authoring"):
 			return bool(node.get("authoring_mode"))
 		node = node.get_parent()
 	return false
+
+
+## True once the node has made a window or a strip.
+func _allocated() -> bool:
+	return not _strips.is_empty() or _levels.any(func(lv: Variant) -> bool: return lv != null)
 
 
 ## The map ground's shader for the look and `read`: the clip variant while it reads the windows,
@@ -253,10 +258,14 @@ func is_settled() -> bool:
 
 
 func _process(delta: float) -> void:
-	if terrain == null or terrain.document == null or terrain.get_material() == null:
-		return
-	if Engine.get_process_frames() % 30 == 0 and _suppressed():
+	# Every frame until anything is made (an authoring map's terrain attaches one on build: it
+	# goes before it binds its shader or makes a window, where a check every 30 frames let it
+	# make both first; clipmap3), then every 30 (the Ground detail setting turned Off).
+	var check := not _allocated() or Engine.get_process_frames() % 30 == 0
+	if check and _suppressed():
 		queue_free()
+		return
+	if terrain == null or terrain.document == null or terrain.get_material() == null:
 		return
 	_sync_shader()
 	frame_bake_ms = 0.0

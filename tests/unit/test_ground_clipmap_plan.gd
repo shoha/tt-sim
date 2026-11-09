@@ -161,6 +161,33 @@ func test_the_clipmap_follows_its_default_and_the_ground_detail_setting() -> voi
 	assert_null(GroundClipmap.attach(terrain), "a headless run has no renderer to bake with")
 
 
+## A map in authoring (an owner with setup_authoring and authoring_mode, as GameMap) frees the
+## clipmap its terrain's build attached on the first frame, before it makes a window or binds its
+## shader (clipmap3: a check every 30 frames let it make both first).
+func test_an_authoring_map_frees_its_clipmap_on_the_first_frame() -> void:
+	var owner_script := GDScript.new()
+	owner_script.source_code = (
+		"extends Node\nvar authoring_mode := true\nfunc setup_authoring() -> void:\n\tpass\n"
+	)
+	owner_script.reload()
+	var map := Node.new()
+	map.set_script(owner_script)
+	add_child_autofree(map)
+	var cm := GroundClipmap.new()
+	map.add_child(cm)
+	cm._process(0.016)
+	assert_true(cm.is_queued_for_deletion(), "freed at the first frame in authoring")
+	assert_true(cm.held_levels().is_empty(), "no window made")
+	var play := Node.new()
+	play.set_script(owner_script)
+	play.set("authoring_mode", false)
+	add_child_autofree(play)
+	var kept := GroundClipmap.new()
+	play.add_child(kept)
+	kept._process(0.016)
+	assert_false(kept.is_queued_for_deletion(), "kept in play")
+
+
 func test_patch_jobs_skip_what_is_not_baked_or_not_in_the_block() -> void:
 	var block := Rect2i(-4, -4, 8, 8)
 	var ts := Plan.tile_m(2)

@@ -23,6 +23,14 @@ extends RefCounted
 const COVERED_SHADERS := [
 	"res://shaders/authored_ground.gdshader",
 	"res://shaders/authored_ground_looked.gdshader",
+	# The ground clipmap (on by default in play since clipmap2): the read on every played map, the
+	# strip bake and its copy. Excluded while it was off by default, which left the first played
+	# map to compile the clip ground on a cold cache (clipmap3).
+	"res://shaders/authored_ground_clip.gdshader",
+	"res://shaders/authored_ground_clip_looked.gdshader",
+	"res://shaders/authored_ground_bake.gdshader",
+	"res://shaders/authored_ground_bake_looked.gdshader",
+	"res://shaders/ground_clipmap_blit.gdshader",
 	"res://shaders/avatar_figure.gdshader",
 	"res://shaders/avatar_figure_double_sided.gdshader",
 	"res://shaders/authored_ground_skirt.gdshader",
@@ -77,11 +85,6 @@ const EXCLUDED_SHADERS := {
 	"res://shaders/pixelate.gdshader": "no references in the code",
 	"res://shaders/sharpen.gdshader": "no references in the code",
 	"res://shaders/selected_indicator.gdshader": "no references in the code",
-	"res://shaders/authored_ground_clip.gdshader": "ground clipmap, off by default (clipmap1)",
-	"res://shaders/authored_ground_clip_looked.gdshader": "ground clipmap, off by default",
-	"res://shaders/authored_ground_bake.gdshader": "ground clipmap strip bake, off by default",
-	"res://shaders/authored_ground_bake_looked.gdshader": "ground clipmap strip bake, off",
-	"res://shaders/ground_clipmap_blit.gdshader": "ground clipmap blit, off by default",
 }
 ## A user argument (after `--`) that forces the warm-up, whatever the skip rules say.
 const FORCE_ARG := "--warm-graphics"

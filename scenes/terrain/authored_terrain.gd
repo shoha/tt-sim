@@ -619,12 +619,13 @@ func _exit_tree() -> void:
 
 ## Rebuilds the ground layers from scratch, as every load does, when the session's list ran
 ## past GroundLayers.MAX_LAYERS (a fresh, compacted list may hold every surface again).
-## Called on save. Returns true when it rebuilt.
+## Called on save. Returns true when it rebuilt (the whole ground is edited: a clipmap rebakes).
 func replan_ground_layers() -> bool:
 	if not _layers.overflowed():
 		return false
 	_layers.build(document, _material, palette_root, _has_water())
 	_sync_skirt_tables()
+	ground_edited.emit(Rect2i(0, 0, document.samples_x(), document.samples_z()))
 	return true
 
 

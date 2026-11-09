@@ -479,12 +479,14 @@ static func warmup_document() -> MapDocument:
 
 ## GraphicsWarmup samples: one ground chunk and one skirt, built by the same functions as a
 ## real AuthoredTerrain (so a layout change here carries into the warm-up), on bare
-## ShaderMaterials of the real shaders, plain and looked (AuthoredTerrain.set_looked).
+## ShaderMaterials of the real shaders, plain and looked (AuthoredTerrain.set_looked), and the
+## chunk again on the ground clipmap's read (GroundClipmap, on by default in play).
 static func warmup_samples() -> Array[Dictionary]:
 	var doc := warmup_document()
 	var chunk := build_chunk_arrays(doc, chunk_cells(doc)[0], grid_fields(doc))
 	# Loaded by path: naming AuthoredTerrain would put the terrain node on the start-up graph.
 	var terrain: Variant = load("res://scenes/terrain/authored_terrain.gd")
+	var clipmap: Variant = load("res://scenes/terrain/ground_clipmap.gd")
 	var skirt := build_skirt_arrays(doc, terrain.skirt_width_m(), terrain.SKIRT_FADE_M)
 	var samples: Array[Dictionary] = []
 	for entry in [
@@ -494,6 +496,8 @@ static func warmup_samples() -> Array[Dictionary]:
 		["terrain_skirt_looked", skirt, terrain.SKIRT_LOOKED_SHADER],
 		["terrain_skirt_ring", skirt, terrain.SKIRT_RING_SHADER],
 		["terrain_skirt_ring_looked", skirt, terrain.SKIRT_RING_LOOKED_SHADER],
+		["terrain_chunk_clip", chunk, clipmap.CLIP_SHADER],
+		["terrain_chunk_clip_looked", chunk, clipmap.CLIP_LOOKED_SHADER],
 	]:
 		var sample := {
 			"name": entry[0],
