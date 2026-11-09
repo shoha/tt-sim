@@ -21,8 +21,9 @@ extends RefCounted
 ##   terraces {rings}      concentric 1.524 m tiers (sharp faces, rounded lips) filling the
 ##                         home view, so a large share of the pixels are rock faces drawn
 ##                         through the side projections.
-##   fraction              the share of the view's ground pixels steeper than the side
-##                         projection threshold, from the document (a ray per 16 px).
+##   fraction              the share of the view's ground pixels that sample a side projection
+##                         (TerrainRules.projection_weights), from the document (a ray per
+##                         16 px).
 
 const SURFACES := [
 	"cobblestone",
@@ -37,9 +38,6 @@ const SURFACES := [
 const ARCHIVE := "user://p34_%s_ground.zip"
 const ENTRY := "shaders/authored_ground.gdshaderinc"
 const INCLUDE_LINE := '#include "res://shaders/authored_ground.gdshaderinc"'
-## The shader's SIDE_START_NY: steeper pixels sample side projections.
-const SIDE_START_NY := 0.72
-
 ## version -> Shader built from its archive.
 static var _shaders: Dictionary = {}
 
@@ -174,9 +172,11 @@ static func _fraction(base: Node, ctrl: AuthoringController) -> String:
 			var n := ScatterGenerator.triangle_normal(
 				doc.heights, doc.samples_x(), doc.samples_z(), s, doc.sample_step()
 			)
-			if n.y < SIDE_START_NY:
+			# The shader samples a side plane wherever its projection weight is not 0.
+			var w := TerrainRules.projection_weights(n)
+			if maxf(w.x, w.z) > 0.0:
 				steep += 1
 	return (
-		"fraction: %d of %d ground rays steeper than n.y %.2f (%.1f %%)"
-		% [steep, hits, SIDE_START_NY, 100.0 * steep / maxf(hits, 1)]
+		"fraction: %d of %d ground rays sample a side projection (%.1f %%)"
+		% [steep, hits, 100.0 * steep / maxf(hits, 1)]
 	)

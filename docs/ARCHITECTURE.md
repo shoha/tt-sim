@@ -1527,8 +1527,13 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   sheer faces (tail 1..2) so the face stays rock under a grassy lip. Scree: concave
   curvature tail (0.02..0.12 m) times steepness nearby (0.03..0.1), edge noise, a coarse
   breakup noise that moves the band's reach (+-0.8) and opens gaps, never under the cliff.
-  Inputs, identical on CPU and GPU: the interpolated shading normal, the position (noise
-  domain sheared by height so it varies up a face) and two **per-vertex fields in UV2**
+  Inputs, identical on CPU and GPU: the interpolated shading normal, the position (the edge
+  noise is a 3D value noise, `TerrainRules.layered_noise`: 2D layers one 1.6 m feature apart
+  in height, each lattice shifted, smoothstep-blended and rescaled so the spread holds
+  between layers; a face of any slope and facing cuts it into patches as round as flat
+  ground's, measured 1.01-1.09 against 1.6-130 for the height-sheared 2D domain it
+  replaced, rockstretch 2026-11-08; at height 0 it is the old 2D noise bit for bit) and two
+  **per-vertex fields in UV2**
   (`TerrainRules.sample_fields`): curvature `(h - mean_R(h)) * n.y` and steepness nearby
   (mean of the slope tail), box means of radius `CURVATURE_RADIUS_M` 1.5 m on the sample
   grid, edges replicated. AuthoredTerrain keeps them for the whole grid
@@ -1553,7 +1558,10 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   cross-faded, which double-exposed two rock patterns into a smear. Every surface present uses the
   projections; since P3-6 a painted ground or built surface yields to the rock on a face
   (above), so only painted rock (or the mid-slope band where the cliff rule is partial) draws
-  a painted surface on the side planes.
+  a painted surface on the side planes. The edge noise that outlines the rock and scree
+  patches takes no projection: it is a 3D noise (the rules above; rockstretch), isotropic on
+  every face, where blending planar projections of it would still stretch it about 1.3 to
+  1.45 down a 44 to 51 degree face (measured; a planar projection's limit there).
 - **Two-scale edge (T7):** that frayed edge is decimetres wide and alone read like a decal
   beside a Blender map's layers, which fade over metres. A second, broad scale:
   `GroundLayerTable.broad_image()` box-filters each weight mirror by `BROAD_FACTOR` (14

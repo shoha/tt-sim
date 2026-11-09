@@ -284,7 +284,8 @@ struct Consts {
 	double scree_curvature_start = 0.0, scree_curvature_end = 0.0, scree_near_start = 0.0;
 	double scree_near_end = 0.0, scree_edge_noise = 0.0, scree_breakup_scale_m = 1.0, scree_fan = 0.0;
 	double scree_breakup_low = 0.0, scree_breakup_high = 1.0;
-	double rule_noise_scale_m = 1.0, rule_noise_shear = 0.0;
+	double rule_noise_scale_m = 1.0;
+	Vector2 rule_noise_layer_offset;
 	double paint_edge_warp_m = 0.0, paint_edge_scale_m = 1.0, paint_edge_noise = 0.0;
 	double paint_cliff_yield = 1.0, paint_water_yield = 1.0, paint_ford_start_m = 0.0, paint_ford_end_m = 1.0;
 	Vector2 cliff_noise_offset, scree_noise_offset, scree_breakup_offset;

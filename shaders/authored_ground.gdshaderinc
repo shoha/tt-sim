@@ -195,7 +195,8 @@
  *     curvature in UV2.x), smoothstep;
  *   - scree: concave curvature tail with edge noise, times the steepness nearby (UV2.y),
  *     smoothstep, never under the cliff.
- * The noise domain is sheared by height so it varies up a face.
+ * The edge noise is three-dimensional (layered_noise), so a face of any slope and facing cuts
+ * it into patches as round as flat ground's; at height 0 it is the plain 2D noise.
  *
  * WET DRESSING (phase 4, P4-3; WaterDressing in utils/ computes the field, TerrainRules
  * .compose_water is the CPU twin of the composition): water_weights holds per document
@@ -474,7 +475,7 @@ const float SCREE_FAN = 1.6;
 const float SCREE_BREAKUP_LOW = 0.15;
 const float SCREE_BREAKUP_HIGH = 0.45;
 const float RULE_NOISE_SCALE_M = 1.6;
-const float RULE_NOISE_SHEAR = 0.8;
+const vec2 RULE_NOISE_LAYER_OFFSET = vec2(37.13, 23.71);
 const vec2 CLIFF_NOISE_OFFSET = vec2(13.7, -41.3);
 const vec2 SCREE_NOISE_OFFSET = vec2(-27.9, 8.6);
 const vec2 SCREE_BREAKUP_OFFSET = vec2(61.3, 19.4);
@@ -989,12 +990,30 @@ float painted_candidates(vec2 world_xz, out ivec4 cl, out vec4 pw) {
 	return shaped;
 }
 
-// Two-octave rule noise at map-frame point (xz, y), sheared by height
-// (TerrainRules.rule_noise).
+// A 3D value noise at noise-space point (p, h) (TerrainRules.layered_noise): the value noise
+// of layers one unit apart in h, layer k's lattice shifted by RULE_NOISE_LAYER_OFFSET * k,
+// blended by smoothstep and rescaled about 0.5 so its spread does not dip between layers. On
+// a layer (flat ground at height 0) it is that layer's value noise alone, one lookup.
+float layered_noise(vec2 p, float h) {
+	float layer = floor(h);
+	float t = h - layer;
+	t = t * t * (3.0 - 2.0 * t);
+	float low = value_noise(p + RULE_NOISE_LAYER_OFFSET * layer);
+	if (t <= 0.0) {
+		return low;
+	}
+	float high = value_noise(p + RULE_NOISE_LAYER_OFFSET * (layer + 1.0));
+	return 0.5 + (mix(low, high, t) - 0.5) * inversesqrt(t * t + (1.0 - t) * (1.0 - t));
+}
+
+// Two-octave rule noise at map-frame point (xz, y), three-dimensional so a face of any slope
+// and facing cuts it into patches as round as flat ground's (TerrainRules.rule_noise).
 float rule_noise(vec2 xz, float y, vec2 offset) {
-	vec2 p = (xz + vec2(y * RULE_NOISE_SHEAR, -y * RULE_NOISE_SHEAR)) / RULE_NOISE_SCALE_M;
-	p += offset;
-	return value_noise(p) * 0.65 + value_noise(p * 2.3 + vec2(5.2, -1.7)) * 0.35;
+	vec2 p = xz / RULE_NOISE_SCALE_M + offset;
+	float h = y / RULE_NOISE_SCALE_M;
+	float n = layered_noise(p, h) * 0.65
+		+ layered_noise(p * 2.3 + vec2(5.2, -1.7), h * 2.3) * 0.35;
+	return clamp(n, 0.0, 1.0);
 }
 
 // The shaping ramp with EASE interpolation (TerrainRules.ease_ramp).

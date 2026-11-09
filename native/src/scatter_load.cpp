@@ -136,7 +136,7 @@ static void load_consts(const Dictionary &d, Consts &c) {
 	c.scree_breakup_low = num(d, "scree_breakup_low");
 	c.scree_breakup_high = num(d, "scree_breakup_high");
 	c.rule_noise_scale_m = num(d, "rule_noise_scale_m");
-	c.rule_noise_shear = num(d, "rule_noise_shear");
+	c.rule_noise_layer_offset = vec2(d, "rule_noise_layer_offset");
 	c.paint_edge_warp_m = num(d, "paint_edge_warp_m");
 	c.paint_edge_scale_m = num(d, "paint_edge_scale_m");
 	c.paint_edge_noise = num(d, "paint_edge_noise");

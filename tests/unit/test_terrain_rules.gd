@@ -26,7 +26,7 @@ const MIRRORED := [
 	"SCREE_BREAKUP_LOW",
 	"SCREE_BREAKUP_HIGH",
 	"RULE_NOISE_SCALE_M",
-	"RULE_NOISE_SHEAR",
+	"RULE_NOISE_LAYER_OFFSET",
 	"PROJECTION_SHARPNESS",
 	"PROJECTION_MIN_WEIGHT",
 	"CLIFF_NOISE_OFFSET",
@@ -145,6 +145,82 @@ func test_value_noise_is_smooth_bounded_and_seeded() -> void:
 	assert_true(low >= 0.0 and high <= 1.0, "noise within [0, 1]: %f .. %f" % [low, high])
 	assert_lt(low, 0.2, "and it spans the range")
 	assert_gt(high, 0.8)
+
+
+func test_rule_noise_at_height_zero_is_the_plain_2d_noise() -> void:
+	# Flat ground at height 0 keeps the rule noise it had before the noise went 3D, bit for
+	# bit: the two-octave value noise of xz alone.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var offset := TerrainRules.SCREE_NOISE_OFFSET
+	for _i in 200:
+		var xz := Vector2(rng.randf_range(-60.0, 60.0), rng.randf_range(-60.0, 60.0))
+		var p := xz / TerrainRules.RULE_NOISE_SCALE_M + offset
+		var plain := (
+			TerrainRules.value_noise(p, 77) * 0.65
+			+ TerrainRules.value_noise(p * 2.3 + Vector2(5.2, -1.7), 77) * 0.35
+		)
+		assert_eq(TerrainRules.rule_noise(xz, 0.0, offset, 77), plain, "at %s" % xz)
+
+
+func test_rule_noise_is_continuous_and_bounded_across_layers() -> void:
+	var xz := Vector2(3.7, -8.2)
+	var offset := TerrainRules.CLIFF_NOISE_OFFSET
+	var layer_m := TerrainRules.RULE_NOISE_SCALE_M
+	for k in [-2, 1, 3]:
+		var below := TerrainRules.rule_noise(xz, k * layer_m - 1e-6, offset, 77)
+		var at := TerrainRules.rule_noise(xz, k * layer_m, offset, 77)
+		assert_almost_eq(below, at, 1e-4, "layer %d" % k)
+	var low := 1.0
+	var high := 0.0
+	for k in 600:
+		var n := TerrainRules.rule_noise(Vector2(k * 0.31, -k * 0.17), k * 0.023 - 5.0, offset, 9)
+		low = minf(low, n)
+		high = maxf(high, n)
+	assert_true(low >= 0.0 and high <= 1.0, "within [0, 1]: %f .. %f" % [low, high])
+	assert_lt(low, 0.25, "and it spans the range")
+	assert_gt(high, 0.75)
+
+
+func test_rule_noise_patches_are_round_on_faces_of_every_facing() -> void:
+	# The rule noise's structure tensor over a 50 degree face, in face coordinates (down the
+	# dip, along the strike): sqrt(largest / smallest eigenvalue) is the patch elongation,
+	# 1 for round patches. The height-sheared 2D domain it replaced measured about 130 on a
+	# face turned to +X (its two map axes fold into one near 51 degrees) and 1.8 to -X.
+	var slope := deg_to_rad(50.0)
+	var elongation := {}
+	for facing: float in [0.0, 90.0, 180.0, 270.0, 45.0]:
+		var phi := deg_to_rad(facing)
+		var dip := Vector3(cos(slope) * cos(phi), -sin(slope), cos(slope) * sin(phi))
+		var strike := Vector3(-sin(phi), 0.0, cos(phi))
+		elongation[facing] = _face_elongation(dip, strike)
+		assert_lt(elongation[facing], 1.2, "face turned %d degrees" % facing)
+	assert_almost_eq(elongation[0.0], elongation[270.0], 0.15, "+X like -Z")
+	assert_almost_eq(elongation[0.0], elongation[180.0], 0.15, "+X like -X")
+
+
+## Patch elongation of the cliff rule noise over a 30 m square of the plane through
+## (2, 4, -3) spanned by unit vectors `dip` and `strike` (see the test above).
+func _face_elongation(dip: Vector3, strike: Vector3) -> float:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4242
+	var offset := TerrainRules.CLIFF_NOISE_OFFSET
+	var h := 0.02
+	var g := Vector3.ZERO
+	for _i in 400:
+		var p := Vector3(2.0, 4.0, -3.0)
+		p += dip * rng.randf_range(-15.0, 15.0) + strike * rng.randf_range(-15.0, 15.0)
+		var c := _rule_at(p, offset)
+		var a := (_rule_at(p + dip * h, offset) - c) / h
+		var b := (_rule_at(p + strike * h, offset) - c) / h
+		g += Vector3(a * a, b * b, a * b)
+	var half_trace := (g.x + g.y) * 0.5
+	var spread := sqrt(maxf(half_trace * half_trace - (g.x * g.y - g.z * g.z), 0.0))
+	return sqrt((half_trace + spread) / maxf(half_trace - spread, 1e-9))
+
+
+func _rule_at(p: Vector3, offset: Vector2) -> float:
+	return TerrainRules.rule_noise(Vector2(p.x, p.z), p.y, offset, 77)
 
 
 func _step_grid(columns: int, rows: int, at: int, height: float) -> PackedFloat32Array:

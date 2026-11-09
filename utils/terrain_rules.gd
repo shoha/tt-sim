@@ -85,10 +85,14 @@ const SCREE_BREAKUP_SCALE_M := 2.6
 const SCREE_FAN := 1.6
 const SCREE_BREAKUP_LOW := 0.15
 const SCREE_BREAKUP_HIGH := 0.45
-## Feature size of the rule noise, metres. The noise domain is sheared by height
-## (RULE_NOISE_SHEAR) so it also varies up a vertical face.
+## Feature size of the rule noise, metres. The noise is three-dimensional (rockstretch,
+## 2026-11-08), so a face of any slope and facing cuts it into patches as round as on flat
+## ground: value noise layers one feature apart in height, each layer's lattice shifted by
+## RULE_NOISE_LAYER_OFFSET (in noise units) times its index, blended by smoothstep. A domain
+## sheared by height (the noise before) streaked faces turned to +X or -Z: about 51 degrees
+## steep, its two map axes fold into one and every patch ran out into a diagonal line.
 const RULE_NOISE_SCALE_M := 1.6
-const RULE_NOISE_SHEAR := 0.8
+const RULE_NOISE_LAYER_OFFSET := Vector2(37.13, 23.71)
 ## The ground's texture projections on slopes (the shader's STEEP FACES; slopesmear,
 ## 2026-11-08): top-down and the planes facing X and Z, each weighted by |n . axis| raised to
 ## PROJECTION_SHARPNESS, a share at or under PROJECTION_MIN_WEIGHT dropped
@@ -247,15 +251,36 @@ static func value_noise_memo(p: Vector2, seed_value: int, memo: Dictionary) -> f
 	return lerpf(lerpf(h[0], h[1], u.x), lerpf(h[2], h[3], u.x), u.y) * INV_UINT_MAX
 
 
-## Two-octave rule noise in [0, 1] at map-frame point (xz, y), the domain sheared by height
-## so it varies up a face too.
+## Two-octave rule noise in [0, 1] at map-frame point (xz, y): three-dimensional
+## (layered_noise), so it is as fine down a face of any facing as across it. At height 0 it is
+## the two-octave value noise of xz alone, bit for bit.
 static func rule_noise(xz: Vector2, y: float, offset: Vector2, seed_value: int) -> float:
-	var p := (xz + Vector2(y * RULE_NOISE_SHEAR, -y * RULE_NOISE_SHEAR)) / RULE_NOISE_SCALE_M
-	p += offset
-	return (
-		value_noise(p, seed_value) * 0.65
-		+ value_noise(p * 2.3 + Vector2(5.2, -1.7), seed_value) * 0.35
+	var p := xz / RULE_NOISE_SCALE_M + offset
+	var h := y / RULE_NOISE_SCALE_M
+	return clampf(
+		(
+			layered_noise(p, h, seed_value) * 0.65
+			+ layered_noise(p * 2.3 + Vector2(5.2, -1.7), h * 2.3, seed_value) * 0.35
+		),
+		0.0,
+		1.0
 	)
+
+
+## A 3D value noise at noise-space point (p, h): the 2D value noise of layers one unit apart
+## in h, layer k's lattice shifted by RULE_NOISE_LAYER_OFFSET * k, blended by smoothstep and
+## rescaled about 0.5 so its spread does not dip between layers (two independent layers
+## mixed by t and 1 - t spread sqrt(t^2 + (1 - t)^2) as far as one). On a layer it is that
+## layer's value_noise exactly.
+static func layered_noise(p: Vector2, h: float, seed_value: int) -> float:
+	var layer := floori(h)
+	var t := h - layer
+	t = t * t * (3.0 - 2.0 * t)
+	var low := value_noise(p + RULE_NOISE_LAYER_OFFSET * layer, seed_value)
+	if t <= 0.0:
+		return low
+	var high := value_noise(p + RULE_NOISE_LAYER_OFFSET * (layer + 1), seed_value)
+	return 0.5 + (lerpf(low, high, t) - 0.5) / sqrt(t * t + (1.0 - t) * (1.0 - t))
 
 
 # ---------------------------------------------------------------------------------------

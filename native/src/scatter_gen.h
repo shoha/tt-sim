@@ -77,6 +77,7 @@ class Ground {
 	Vector3 ground_at(Vector2 p, int role) const;
 	Vector2 weights(double normal_y, Vector2 fields, Vector2 xz, double y) const;
 	double value_noise(Vector2 p) const;
+	double layered_noise(Vector2 p, double h) const;
 	double rule_noise(Vector2 xz, double y, Vector2 offset) const;
 	double cliff_from(double normal_y, double curvature, double noise) const;
 	double scree_from(double curvature, double steep, double cliff, double noise, double breakup) const;

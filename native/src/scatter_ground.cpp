@@ -267,10 +267,23 @@ double Ground::value_noise(Vector2 p) const {
 	return glerp(glerp(a, b, u.x), glerp(d, e, u.x), u.y) * c.inv_uint_max;
 }
 
+double Ground::layered_noise(Vector2 p, double h) const {
+	int64_t layer = floori(h);
+	double t = h - layer;
+	t = t * t * (3.0 - 2.0 * t);
+	double low = value_noise(p + c.rule_noise_layer_offset * (float)layer);
+	if (t <= 0.0) {
+		return low;
+	}
+	double high = value_noise(p + c.rule_noise_layer_offset * (float)(layer + 1));
+	return 0.5 + (glerp(low, high, t) - 0.5) / std::sqrt(t * t + (1.0 - t) * (1.0 - t));
+}
+
 double Ground::rule_noise(Vector2 xz, double y, Vector2 offset) const {
-	Vector2 p = (xz + v2(y * c.rule_noise_shear, -y * c.rule_noise_shear)) / (float)c.rule_noise_scale_m;
-	p += offset;
-	return value_noise(p) * 0.65 + value_noise(p * 2.3f + Vector2(5.2f, -1.7f)) * 0.35;
+	Vector2 p = xz / (float)c.rule_noise_scale_m + offset;
+	double h = y / c.rule_noise_scale_m;
+	double n = layered_noise(p, h) * 0.65 + layered_noise(p * 2.3f + Vector2(5.2f, -1.7f), h * 2.3) * 0.35;
+	return gclamp(n, 0.0, 1.0);
 }
 
 double Ground::cliff_from(double normal_y, double curvature, double noise) const {
