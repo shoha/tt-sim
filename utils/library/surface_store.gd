@@ -7,11 +7,12 @@ extends RefCounted
 ## - A legacy palette surface (a test fixture palette) is a relative path under the palette root
 ##   whose PNG the editor imported; the texture is ResourceLoader's, exactly as
 ##   GroundPalette.load_texture always returned it.
-## - A library surface (`surfaces/<name>/{albedo,normal,orm,height}.png` plus surface.json in a
-##   library folder, no editor import; core's files are `importer="keep"` raw files in the pack)
-##   is registered by LibraryRegistry.apply with a palette entry whose paths are
-##   `surfaces/<runtime name>/<map>.png`. The store decodes the PNG's bytes
-##   (Image.load_png_from_buffer), bakes it to the formats the import gives (SurfaceBake: BC7
+## - A library surface (`surfaces/<name>/{albedo,normal,orm,height}.<webp|png>` plus surface.json
+##   in a library folder, no editor import; core's files are `importer="keep"` raw lossless WebP in
+##   the pack) is registered by LibraryRegistry.apply with a palette entry whose paths are
+##   `surfaces/<runtime name>/<map>.<webp|png>`. The store decodes the file's bytes
+##   (SurfaceBake.decode: WebP preferred when a folder holds both, map_file), bakes it to the
+##   formats the import gives (SurfaceBake: BC7
 ##   albedo, BC5 normal, BC1 ORM, L8 height, full mip chains), keeps the result in memory and
 ##   in the raw cache (SurfaceCache, user://library_cache/<library id>/<hash>/), and hands out an
 ##   Image or an ImageTexture. A
@@ -27,12 +28,12 @@ extends RefCounted
 ## only: no scheme is registered with Godot and no resource is ever loaded through it.
 ##
 ## Nothing here executes library content: files are read as bytes or images, never as
-## resources or scripts. A library file is also re-checked at load (size on disk, PNG header,
-## dimensions) because the registry's check may be long past.
+## resources or scripts. A library file is also re-checked at load (size on disk, PNG or WebP
+## header, dimensions) because the registry's check may be long past.
 
-## A PNG larger than this on disk is never read (a 2048 px RGBA16 map is about 32 MB raw, a
-## compressed PNG far less).
-const MAX_PNG_BYTES := 48 * 1024 * 1024
+## A map file larger than this on disk is never read (a 2048 px RGBA16 map is about 32 MB raw, a
+## compressed PNG or WebP far less).
+const MAX_MAP_BYTES := 48 * 1024 * 1024
 ## A library biome's thumbnail: at most this many bytes on disk and this many pixels a side
 ## (larger ones are shrunk to the side).
 const MAX_THUMB_BYTES := 4 * 1024 * 1024
@@ -117,10 +118,12 @@ static func register_library(root: String, folder: String, surfaces: Dictionary)
 		}
 		_hashes.erase(runtime)
 		_forget_prebaked()
+		var files: Dictionary = found.get("files", {})
 		for kind: String in found["maps"]:
-			_paths[_key(root, SurfaceBake.relative_path(runtime, kind))] = {
-				"surface": runtime, "kind": kind
-			}
+			var relative := SurfaceBake.relative_path(
+				runtime, kind, SurfaceBake.extension_of(files, kind)
+			)
+			_paths[_key(root, relative)] = {"surface": runtime, "kind": kind}
 
 
 ## Registers the biome thumbnails of a compiled library (BiomeCompiler.compile's `thumbnails`:
@@ -257,7 +260,8 @@ static func prebaking(names: PackedStringArray) -> bool:
 			continue
 		var dir := String(found.get("dir", ""))
 		for kind in SurfaceBake.KINDS:
-			if _prebake.is_pending(dir.path_join(kind + ".png")):
+			var file := map_file(dir, kind)
+			if file != "" and _prebake.is_pending(file):
 				return true
 	return false
 
@@ -366,7 +370,7 @@ static func image_of(root: String, ref: String, kind: String) -> Image:
 	return image(root, _relative_of(root, ref, kind))
 
 
-## The surface set in `folder` (a `surfaces/<name>` folder: surface.json plus the PNGs), loaded
+## The surface set in `folder` (a `surfaces/<name>` folder: surface.json plus the maps), loaded
 ## and baked without registering anything: {ok, errors, warnings, info, images: {kind: Image},
 ## mean_albedo_linear (info's when given, else measured from the albedo)}. `library_id` names the
 ## cache folder. A set that fails the reader's checks returns ok false and no images.
@@ -391,12 +395,12 @@ static func load_set(folder: String, library_id: String = "dev") -> Dictionary:
 	warnings.append_array(checked["warnings"])
 	var files := {}
 	for kind in SurfaceBake.KINDS:
-		var file := folder.path_join(kind + ".png")
-		if FileAccess.file_exists(file):
+		var file := map_file(folder, kind)
+		if file != "":
 			files[kind] = file
-			SurfaceBake.check_png(png_header_of(file), kind, "surface " + name, errors, warnings)
+			SurfaceBake.check_png(map_header_of(file), kind, "surface " + name, errors, warnings)
 	if not files.has("albedo"):
-		errors.append("surface %s: albedo.png is missing" % name)
+		errors.append("surface %s: albedo.webp or albedo.png is missing" % name)
 	if not errors.is_empty():
 		return out
 	out["info"] = checked["info"]
@@ -404,7 +408,7 @@ static func load_set(folder: String, library_id: String = "dev") -> Dictionary:
 	for kind: String in files:
 		var baked := _bake_or_cache(String(files[kind]), kind, library_id, name, hash_text)
 		if baked == null:
-			errors.append("surface %s: %s.png could not be decoded" % [name, kind])
+			errors.append("surface %s: %s could not be decoded" % [name, String(files[kind]).get_file()])
 		else:
 			out["images"][kind] = baked
 	if not errors.is_empty():
@@ -422,14 +426,36 @@ static func load_set(folder: String, library_id: String = "dev") -> Dictionary:
 ## {ok, width, height, bit_depth, color_type, interlace} of the PNG at `path`, read from its
 ## first bytes; {ok: false, error} when it is missing, unreadable or not a PNG.
 static func png_header_of(path: String) -> Dictionary:
+	return _header_of(path, "png")
+
+
+## SurfaceBake.map_header of the map file at `path` (WebP or PNG by its extension), read from its
+## first bytes and checked against its size; {ok: false, error} when it is missing, over
+## MAX_MAP_BYTES, unreadable, not the format its name says or a truncated WebP.
+static func map_header_of(path: String) -> Dictionary:
+	return _header_of(path, path.get_extension())
+
+
+static func _header_of(path: String, extension: String) -> Dictionary:
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		return {"ok": false, "error": "cannot be opened"}
-	if file.get_length() > MAX_PNG_BYTES:
-		return {"ok": false, "error": "is over %d bytes" % MAX_PNG_BYTES}
-	var bytes := file.get_buffer(SurfaceBake.PNG_HEADER_BYTES)
+	var length := file.get_length()
+	if length > MAX_MAP_BYTES:
+		return {"ok": false, "error": "is over %d bytes" % MAX_MAP_BYTES}
+	var bytes := file.get_buffer(SurfaceBake.HEADER_BYTES)
 	file.close()
-	return SurfaceBake.png_header(bytes)
+	return SurfaceBake.map_header(bytes, extension, length)
+
+
+## The map file of `kind` in the surface folder `dir`: `<kind>.webp` when it exists, else
+## `<kind>.png` (SurfaceBake.MAP_EXTENSIONS order), or "" when neither does.
+static func map_file(dir: String, kind: String) -> String:
+	for extension in SurfaceBake.MAP_EXTENSIONS:
+		var candidate := dir.path_join("%s.%s" % [kind, extension])
+		if FileAccess.file_exists(candidate):
+			return candidate
+	return ""
 
 
 # ---- internals ----
@@ -446,7 +472,9 @@ static func _relative_of(root: String, ref: String, kind: String) -> String:
 
 static func _file_of(entry: Dictionary) -> String:
 	var found: Dictionary = _surfaces.get(String(entry["surface"]), {})
-	return String(found.get("dir", "")).path_join(String(entry["kind"]) + ".png")
+	var dir := String(found.get("dir", ""))
+	var file := map_file(dir, String(entry["kind"]))
+	return file if file != "" else dir.path_join(String(entry["kind"]) + ".png")
 
 
 ## A library biome's thumbnail as a texture (cached by file), or null for a missing, oversized
@@ -534,13 +562,13 @@ static func _baked(entry: Dictionary) -> Image:
 	return baked
 
 
-## {kind: absolute PNG} of the maps a registered surface (`_surfaces` entry) has on disk.
+## {kind: absolute map file} of the maps a registered surface (`_surfaces` entry) has on disk.
 static func _surface_files(found: Dictionary) -> Dictionary:
 	var files := {}
 	for kind in SurfaceBake.KINDS:
-		var candidate := String(found.get("dir", "")).path_join(kind + ".png")
-		if FileAccess.file_exists(candidate):
-			files[kind] = candidate
+		var file := map_file(String(found.get("dir", "")), kind)
+		if file != "":
+			files[kind] = file
 	return files
 
 
@@ -565,8 +593,8 @@ static func _count(loaded: Dictionary, baked_key: String, hit_key: String) -> vo
 
 
 ## The map of `file` as {image, outcome, rejected}: the raw cache's when it holds a valid entry for
-## this engine (outcome "hit"), else decoded from the PNG, baked and written to the cache
-## ("baked"); image null and outcome "failed" when the PNG is missing, hostile or unreadable;
+## this engine (outcome "hit"), else decoded from the WebP or PNG, baked and written to the cache
+## ("baked"); image null and outcome "failed" when the file is missing, hostile or unreadable;
 ## rejected true when a cache file was there but unusable. It reads and writes no table of the
 ## store, so the prebake lane runs it on its worker; the bake and the cache write hold
 ## compress_lock (one compression at a time). Two bakes of one PNG can differ in a few BC7 block
@@ -583,7 +611,7 @@ static func load_map(
 			out["outcome"] = "hit"
 			return out
 		out["rejected"] = true
-	var header := png_header_of(file)
+	var header := map_header_of(file)
 	var problems: Array[String] = []
 	SurfaceBake.check_png(header, kind, name, problems, [] as Array[String])
 	if not problems.is_empty():
@@ -591,9 +619,7 @@ static func load_map(
 		return out
 	# From bytes, not Image.load_from_file: that one warns (once per process) for a res:// file the
 	# editor knows through its keep sidecar, and the bytes are the same ones in a pack.
-	var decoded := Image.new()
-	if decoded.load_png_from_buffer(FileAccess.get_file_as_bytes(file)) != OK:
-		decoded = null
+	var decoded := SurfaceBake.decode(FileAccess.get_file_as_bytes(file), file.get_extension())
 	compress_lock.lock()
 	var baked := SurfaceBake.bake(decoded, kind)
 	if baked != null:
@@ -608,8 +634,8 @@ static func load_map(
 
 
 ## A short hash of the surface's files (name and the SHA-256 of each map), the cache folder name:
-## editing a PNG gives a new folder, so a stale bake is never read. Reads files only, so the
-## prebake lane calls it on its worker.
+## editing a map, or re-encoding it (PNG to WebP), gives a new folder, so a stale bake is never
+## read. Reads files only, so the prebake lane calls it on its worker.
 static func files_hash(name: String, files: Dictionary) -> String:
 	var hashing := HashingContext.new()
 	hashing.start(HashingContext.HASH_SHA256)

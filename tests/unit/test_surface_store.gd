@@ -187,11 +187,12 @@ func _remove_tree(path: String) -> void:
 	DirAccess.remove_absolute(path)
 
 
-## The shipped core's `ash` surface as a library surface folder (albedo.png ... plus surface.json).
+## The shipped core's `ash` surface as a library surface folder (its four maps as shipped, WebP
+## or PNG, plus surface.json).
 func _install_as_set(name: String, folder: String) -> void:
 	for kind in SurfaceBake.KINDS:
-		var source := INSTALLED.path_join("%s/%s.png" % [name, kind])
-		_write_bytes(folder.path_join(kind + ".png"), FileAccess.get_file_as_bytes(source))
+		var source := SurfaceStore.map_file(INSTALLED.path_join(name), kind)
+		_write_bytes(folder.path_join(source.get_file()), FileAccess.get_file_as_bytes(source))
 	var info := _core_info(name)
 	_write_text(folder.path_join("surface.json"), JSON.stringify(info))
 

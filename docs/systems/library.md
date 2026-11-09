@@ -30,7 +30,7 @@ treecube is gone ("The core library"). Step S9 (2026-10-25): per-season override
 | `utils/library/library_ids.gd` | `LibraryIds` | The id grammar and the one mapping to runtime ids, `runtime_biome`, `runtime_asset`, `biome_field`, `runtime_surface`, `parse_runtime_biome`, `library_of`, `resolve_alias`, the portable-names checks (`path_problems`, `segment_problems`, `case_duplicates`) |
 | `utils/library/library_reader.gd` | `LibraryReader` | `read(sources)` over the TEXT of `library.json`, `assets/catalog.json`, `biomes/*.json` and the file list: schema, caps, unknown-key warnings, portable names, existence and exact case; returns `{ok, errors, warnings, library, catalog, catalog_order, biomes}`, never throws |
 | `utils/library/biome_compiler.gd` | `BiomeCompiler` | `compile(read, options)`: one palette biome per season and the asset table, with `role`, `habit`, `weight` and `library` riding on each rule; the palette's `surfaces` are the base table plus the library's own (S3); runs `validate_palette` and returns its warnings |
-| `utils/library/surface_bake.gd`, `surface_reader.gd` | `SurfaceBake`, `SurfaceReader` | (S3, pure) `surface.json` and PNG-header checks (`check_info`, `check_png`: sizes 4 to 2048, bit depth 8 or 16, a normal map with colour channels), the bake of a decoded PNG to the imported formats (`bake`, `format_of`, `data_size`), the palette entry of a library surface (`palette_entry`), and the reader of the `surfaces/` folder |
+| `utils/library/surface_bake.gd`, `surface_reader.gd` | `SurfaceBake`, `SurfaceReader` | (S3, pure) `surface.json` and map-header checks (`check_info`, `map_header` = `png_header` or `webp_header`, `check_png`: sizes 4 to 2048, bit depth 8 or 16, a normal map with colour channels), the decode of a map's bytes by extension (`decode`: WebP or PNG), the bake of a decoded map to the imported formats (`bake`, `format_of`, `data_size`), the palette entry of a library surface (`palette_entry`), and the reader of the `surfaces/` folder (WebP preferred over PNG per kind, `MAP_EXTENSIONS`) |
 | `utils/library/surface_cache.gd` | `SurfaceCache` | (S3) The raw `TTIMG` cache under `user://library_cache/<library id>/<hash>/<surface>_<map>.ttimg`: header (magic, version, engine string, format, size, mips, length, SHA-256) plus `Image.get_data()`; never a resource |
 | `utils/library/surface_store.gd` | `SurfaceStore` | (S3) The one place the ground, crossings, swatches and biome thumbnails get a surface's maps: `texture(root, relative)`, `image(root, relative)`, `available`, `texture_of` / `image_of(root, name or lib:// ref, kind)`, `runtime_name` / `ref_of` (the `lib://<library id>/<name>` convention), `register_library`, `label_of`, `load_set(folder)` and `load_installed(root, name)` (the two forms, for the equality test) |
 | `utils/library/library_bindings.gd` | `LibraryBindings` | (S3) The named things code needs (`fire.ash_surface`, `fire.ash_fallback`, `fire.burnt_biome`, `crossings.planks/moss/gravel/stone_default/paving`, `paint.default`, `water.bed/shore`, `default_biome`) with the legacy values as defaults; `value(key)` answers from the served libraries, else the default |
@@ -192,14 +192,18 @@ treecube is gone ("The core library"). Step S9 (2026-10-25): per-season override
   with all its `<id>/` assets (`LibraryLayer.lay`), so a developer override of core's
   `savanna_summer_s1` replaces core's. A library's own surfaces are laid into the palette's
   `surfaces` table too (the compiled table is merged over the base's), by name.
-- **Surfaces (S3).** `surfaces/<name>/{albedo,normal,orm,height}.png` plus `surface.json`
+- **Surfaces (S3).** `surfaces/<name>/{albedo,normal,orm,height}.<webp|png>` plus `surface.json`
   (`label`, `kind`, `role` ground / cliff / built, `tile_m` 0.001 to 10000 required,
-  `albedo_mean_linear` optional). The reader (`SurfaceReader`) checks the folder: names
+  `albedo_mean_linear` optional). Each map is a WebP (lossless or lossy) or a PNG; a kind with both
+  uses the WebP and warns about the PNG (card texwebp, 2026-11-09: core ships lossless WebP, the
+  same decoded pixels as its old PNGs; user libraries may stay PNG). The reader (`SurfaceReader`)
+  checks the folder: names
   `[a-z][a-z0-9_]*` without `__` or a device name, at most 64 surfaces, albedo required (another
-  missing map warns and is drawn as a flat stand-in), every PNG header read by the registry (first
-  33 bytes: signature, IHDR, 4 to 2048 px a side, 8 or 16 bit, a normal map needs colour
-  channels; a size other than 1024 warns, since the ground arrays hold one size per kind and draw a
-  mismatched kind uncompressed), a stray file warns. A biome-def's `surfaces` is `legacy` (names
+  missing map warns and is drawn as a flat stand-in), every map header read by the registry (first
+  33 bytes; a PNG's signature and IHDR, a WebP's RIFF/WEBP signature, a RIFF size within the file
+  and its VP8L, VP8 or VP8X frame header, not animated; 4 to 2048 px a side, 8 or 16 bit, a normal
+  map needs colour channels; a size other than 1024 warns, since the ground arrays hold one size per
+  kind and draw a mismatched kind uncompressed), a stray file warns. A biome-def's `surfaces` is `legacy` (names
   are the installed palette's, the default) or `library` (a name that is one of the library's own
   surfaces, or a `lib://<library id>/<name>` reference, resolves to its runtime name; any other
   plain name is the palette's; a name in neither warns and the validator blanks it); any other
@@ -211,10 +215,12 @@ treecube is gone ("The core library"). Step S9 (2026-10-25): per-season override
 - **SurfaceStore.** A legacy palette path (`surfaces/ash/ash_albedo.png` under the root) is
   ResourceLoader's editor-imported texture, unchanged (only a test fixture has one since S10).
   A library surface's palette entry holds
-  `surfaces/<runtime name>/<map>.png` (unique per library, so two libraries' `crystal` never
+  `surfaces/<runtime name>/<map>.<webp|png>` (the extension of the file the reader chose; unique
+  per library, so two libraries' `crystal` never
   collide and the validator's relative-path rule holds); `LibraryRegistry.apply` registers them
-  (`SurfaceStore.register_library`) and the store resolves the path to the library file with
-  `Image.load_png_from_buffer` over the file's bytes (core's PNGs are raw `importer="keep"` files in the pack; a library file
+  (`SurfaceStore.register_library`) and the store resolves the path to the library file
+  (`SurfaceStore.map_file`, WebP first) and decodes the file's bytes (`SurfaceBake.decode`:
+  `Image.load_webp_from_buffer` or `load_png_from_buffer`; core's WebPs are raw `importer="keep"` files in the pack; a library file
   is never loaded as a resource), a bake to the formats the import gave the retired installed
   surfaces, a memory cache and the raw disk cache (`user://library_cache`, about 170 MB once all
   36 core surfaces have been baked: the maps are BC7, BC5, BC1 and L8 at 1024 px). Formats (measured on 4.7.2
@@ -246,7 +252,8 @@ treecube is gone ("The core library"). Step S9 (2026-10-25): per-season override
   version, the engine version string and hash (a different engine ignores the file, bakes anew
   and replaces it), format, size, mips, data length, the data's SHA-256, then
   `Image.get_data()`. `<hash>` is a SHA-256 of the surface name and its map files' own hashes, so
-  an edited PNG gets a new folder. Read with `FileAccess` and `Image.create_from_data` after the
+  an edited or re-encoded map gets a new folder (core's PNG-to-WebP change re-bakes every core
+  surface once per user, to the same pixels; the old folders stay until the cache is cleared). Read with `FileAccess` and `Image.create_from_data` after the
   header, the size the format implies and the digest all check; never a `.res`, never loaded with
   `ResourceLoader` (a `.res` can carry a script). Old hash folders are not pruned yet.
 - **Bindings (S3).** `library.json` `bindings` (and `default_biome`) replace the constants that
@@ -341,7 +348,7 @@ import so the sidecars stay constant (see below). Nothing in the scatter, ground
 code changed for S5: the proof is that the library route reads and places exactly like the package
 route (Verification, "Step S5 proof"), now frozen as `tests/fixtures/library_core_golden.json`.
 
-- **Route K (how the files ship).** Every PNG, GLB and JPG under `libraries/core/` has a constant
+- **Route K (how the files ship).** Every PNG, WebP, GLB and JPG under `libraries/core/` has a constant
   sidecar `<file>.import` holding exactly `[remap]`, a blank line and `importer="keep"`: the
   editor does not import the file, an export stores the RAW file in the pack and stores no
   sidecar. One loader path then serves core, user libraries and the developer override
@@ -356,9 +363,12 @@ route (Verification, "Step S5 proof"), now frozen as `tests/fixtures/library_cor
   the 288 assets to a mesh in 634 ms, `AssetStore.verify` every GLB's sha256 against the catalog
   with 0 failures, bake a surface and read a thumbnail, and `compile_folder` the folder clean.
   `LibraryRegistry` skips `*.import` when it lists a folder (the editor run shows them, the pack
-  does not). `.gitattributes` keeps `libraries/core/**/*.glb`, `*.png` and `*.jpg` in LFS; the
-  JSON files and the sidecars are plain git. The surfaces are the SAME bytes as the retired
-  `assets/palette` ones, so they dedupe in LFS.
+  does not). `.gitattributes` keeps `libraries/core/**/*.glb`, `*.png`, `*.webp` and `*.jpg` in
+  LFS; the JSON files and the sidecars are plain git. Until 2026-11-09 the surfaces were the SAME
+  PNG bytes as the retired `assets/palette` ones; since card texwebp they are lossless WebP
+  re-encodes of them (39 sets, 156 maps, 45.2 MB instead of 151.2 MB). A rebuild of core that
+  adds a map writes its keep sidecar by hand (the 25 bytes `[remap]`, a blank line,
+  `importer="keep"`, LF) before any `--import`, which would otherwise import a `.webp` as a texture.
 - **Official by location, no built-in core.** `LibraryRegistry` scans `res://libraries` first: a
   folder there is OFFICIAL (never read from the file), listed in the manager as "Built in", with
   no Remove and a switch that cannot turn it off; `core` is the first in load order and what

@@ -181,9 +181,14 @@ static func _library_surfaces(
 		var found: Dictionary = (read["surfaces"] as Dictionary)[name]
 		var runtime := LibraryIds.runtime_surface(library_id, name)
 		own[name] = runtime
-		table[runtime] = SurfaceBake.palette_entry(runtime, found["info"], found["maps"])
+		var files: Dictionary = found.get("files", {})
+		table[runtime] = SurfaceBake.palette_entry(runtime, found["info"], found["maps"], files)
 		recorded[runtime] = {
-			"library": library_id, "name": name, "info": found["info"], "maps": found["maps"]
+			"library": library_id,
+			"name": name,
+			"info": found["info"],
+			"maps": found["maps"],
+			"files": files,
 		}
 	result["surfaces"] = recorded
 	return own

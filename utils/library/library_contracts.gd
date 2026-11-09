@@ -30,7 +30,8 @@ const CATEGORIES: Array[String] = [
 const ALIGNS: Array[String] = ["upright", "normal"]
 ## habit.water values: "" none, a bank plant, an emergent (in the water), an arid plant.
 const HABIT_WATER: Array[String] = ["", "bank", "emergent", "arid"]
-const EXTENSIONS: Array[String] = [".json", ".glb", ".png", ".jpg", ".txt", ".md"]
+## The file types a library may hold (.webp since card texwebp: surface maps only).
+const EXTENSIONS: Array[String] = [".json", ".glb", ".png", ".webp", ".jpg", ".txt", ".md"]
 ## Library ids tt-sim keeps for itself; `core` is the official library and is allowed.
 const RESERVED_LIBRARY_IDS: Array[String] = ["legacy", "draft", "dev"]
 ## The one library whose runtime ids carry no prefix, so every saved map keeps opening.
