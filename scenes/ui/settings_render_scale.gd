@@ -28,7 +28,7 @@ static func show_defaults(menu: SettingsMenu) -> void:
 
 
 ## Applies the choice now: the map on screen re-sizes its render, and later maps read it.
-static func apply(menu: SettingsMenu, game_map: GameMap) -> void:
+static func apply(menu: SettingsMenu, game_map: Node3D) -> void:
 	RenderScale.current = RenderScale.sanitize(menu.render_scale_option.get_selected_id())
 	if game_map:
 		RenderScale.apply_to(game_map.world_viewport, game_map.get_window(), RenderScale.current)

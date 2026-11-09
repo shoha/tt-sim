@@ -9,10 +9,11 @@ extends GutTest
 ## When it fails, run tools/boot_graph.gd (--show=<script> names who brought it in) and load the
 ## new part on first use (OnDemand, StructureProcgen) instead. When it shrinks, lower the limit.
 
-## Measured 2026-11-09 after the boot card's stages (812 at the start of the card). 669 since the
-## gpuoptions card: shadow_cascades.gd, foliage_edges.gd and settings_gpu_options.gd apply a saved
-## setting when a map's environment is built, so they are start-up code, not first-use code.
-const LIMIT_SCRIPTS := 669
+## Measured 2026-11-09 after the boot cards' stages (812 at the start of the first card, 669 at
+## the start of boot2). 407 after boot2's play and authoring cut: the start-up names no board
+## token, game map, table (LevelPlayController) or authoring editor class; Root makes the table
+## when a session or a map first needs it (Root._ensure_table).
+const LIMIT_SCRIPTS := 407
 
 var _classes: Dictionary = {}
 var _strings := RegEx.create_from_string(

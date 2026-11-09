@@ -72,7 +72,7 @@ func _setup_batch_timer() -> void:
 ## Broadcast a token's transform (position, rotation, scale) to all clients.
 ## Uses unreliable channel and rate limiting for efficiency.
 ## Call this for high-frequency updates like dragging.
-func broadcast_token_transform(token: BoardToken) -> void:
+func broadcast_token_transform(token: Node) -> void:
 	if not NetworkManager.is_host():
 		return
 
@@ -92,7 +92,7 @@ func broadcast_token_transform(token: BoardToken) -> void:
 
 
 ## Queue a transform update for the next batch send
-func _queue_transform_update(token: BoardToken) -> void:
+func _queue_transform_update(token: Node) -> void:
 	var state = TokenState.from_board_token(token)
 
 	# Keep GameState in step with the wire, exactly as _send_transform_update does.
@@ -104,7 +104,7 @@ func _queue_transform_update(token: BoardToken) -> void:
 
 
 ## Send a single token's transform immediately
-func _send_transform_update(token: BoardToken) -> void:
+func _send_transform_update(token: Node) -> void:
 	var state = TokenState.from_board_token(token)
 
 	# Also update GameState
@@ -131,7 +131,7 @@ func _flush_pending_transforms() -> void:
 
 ## Broadcast a token's full state (properties) to all clients.
 ## Uses reliable channel - call for important changes like health/death.
-func broadcast_token_properties(token: BoardToken) -> void:
+func broadcast_token_properties(token: Node) -> void:
 	if not NetworkManager.is_host():
 		return
 

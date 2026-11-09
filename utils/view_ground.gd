@@ -100,10 +100,10 @@ static func eye_point(
 
 ## The ground height function of `game_map` (its ground field's world_height_at), or an invalid
 ## Callable on the fixed Y = 0 band.
-static func height_function(game_map: GameMap) -> Callable:
+static func height_function(game_map: Node3D) -> Callable:
 	if game_map == null:
 		return Callable()
-	var field := game_map.get_grid_ground()
+	var field: Variant = game_map.get_grid_ground()
 	if field == null or not field.is_valid():
 		return Callable()
 	return field.world_height_at
@@ -111,13 +111,13 @@ static func height_function(game_map: GameMap) -> Callable:
 
 ## The view centre on the ground at the eye (eye_point of the screen-centre ray), or null when
 ## the camera is not perspective: the orbit view keeps its own plane maths.
-static func eye_centre(game_map: GameMap) -> Variant:
+static func eye_centre(game_map: Node3D) -> Variant:
 	if game_map == null or game_map.camera_node == null or game_map.world_viewport == null:
 		return null
-	var camera := game_map.camera_node
+	var camera: Camera3D = game_map.camera_node
 	if camera.projection != Camera3D.PROJECTION_PERSPECTIVE:
 		return null
-	var centre := Vector2(game_map.world_viewport.size) * 0.5
+	var centre := Vector2(game_map.world_viewport.size as Vector2i) * 0.5
 	return eye_point(
 		camera.project_ray_origin(centre),
 		camera.project_ray_normal(centre),

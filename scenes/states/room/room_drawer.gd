@@ -99,11 +99,13 @@ func _board_busy() -> bool:
 	return map.get_measure_tool() != null and map.get_measure_tool().is_active()
 
 
-func _game_map() -> GameMap:
+## The GameMap this drawer sits under, found by its get_brush_tool() (the class is not named so
+## the map's script stays off the start-up graph).
+func _game_map() -> Node:
 	var node := get_parent()
-	while node != null and not node is GameMap:
+	while node != null and not node.has_method(&"get_brush_tool"):
 		node = node.get_parent()
-	return node as GameMap
+	return node
 
 
 func _on_move_table_requested(key: String) -> void:

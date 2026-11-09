@@ -234,10 +234,11 @@ static func build(
 			out.append(build_one(doc, structure, decor, info))
 		return {"structures": out, "decor": decor}
 	out.resize(list.size())
+	var structures: Variant = load("res://scenes/terrain/authored_structures.gd")
 	var group := WorkerThreadPool.add_group_task(
 		func(index: int) -> void: out[index] = build_one(doc, list[index], decor, info),
 		list.size(),
-		mini(list.size(), AuthoredStructures.load_threads()),
+		mini(list.size(), int(structures.load_threads())),
 		true,
 		"StructureGeometry.build"
 	)

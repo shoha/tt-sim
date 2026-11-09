@@ -58,7 +58,7 @@ static func _generate_id() -> String:
 
 ## Create a TokenPlacement from an existing BoardToken
 static func from_board_token(
-	token: BoardToken, pack: String, asset: String, variant: String = "default"
+	token: Node3D, pack: String, asset: String, variant: String = "default"
 ) -> TokenPlacement:
 	var placement = TokenPlacement.new()
 	placement.pack_id = pack
@@ -78,11 +78,11 @@ func is_avatar() -> bool:
 ## BoardToken fields a placement persists; the in-play save path uses it too.
 ## An avatar token's recipe is copied too: unlike the asset ids it can change live
 ## (AvatarTokenFactory.set_recipe).
-func sync_from_board_token(token: BoardToken) -> void:
+func sync_from_board_token(token: Node3D) -> void:
 	if token.is_avatar():
 		avatar_recipe = token.avatar_recipe.duplicate(true)
 	# Read position from rigid_body since that's what gets moved during gameplay
-	var rigid_body := token.get_rigid_body()
+	var rigid_body: Node3D = token.get_rigid_body()
 	if rigid_body:
 		position = rigid_body.global_position
 		rotation_y = rigid_body.rotation.y
@@ -103,7 +103,7 @@ func sync_from_board_token(token: BoardToken) -> void:
 
 ## Apply this placement's properties to a BoardToken
 ## Note: Positions the rigid_body since that's what the drag system moves
-func apply_to_token(token: BoardToken) -> void:
+func apply_to_token(token: Node3D) -> void:
 	# The rigid_body is what gets moved during gameplay, so position it
 	var rigid_body = token.get_rigid_body()
 	if rigid_body:

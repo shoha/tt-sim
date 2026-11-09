@@ -9,7 +9,12 @@ extends RefCounted
 
 ## The saved choice's item id (SHADING_PAINTED when the key is missing).
 static func saved_id(config: ConfigFile) -> int:
-	return int(config.get_value("graphics", TokenToon.SETTINGS_KEY, TokenToon.DEFAULT_ID))
+	return int(config.get_value("graphics", _toon().SETTINGS_KEY, _toon().DEFAULT_ID))
+
+
+## TokenToon's script, loaded by path so the title does not compile it (perf audit boot2).
+static func _toon() -> Variant:
+	return load("res://scenes/board_token/token_toon.gd")
 
 
 ## Puts the saved choice on the option without firing its handler.
@@ -19,17 +24,17 @@ static func show_saved(menu: SettingsMenu, config: ConfigFile) -> void:
 
 static func save(menu: SettingsMenu, config: ConfigFile) -> void:
 	var id := menu.token_shading_option.get_selected_id()
-	config.set_value("graphics", TokenToon.SETTINGS_KEY, id)
+	config.set_value("graphics", _toon().SETTINGS_KEY, id)
 
 
 static func show_defaults(menu: SettingsMenu) -> void:
-	_select(menu, TokenToon.DEFAULT_ID)
+	_select(menu, _toon().DEFAULT_ID)
 
 
 ## Applies the choice now, to the tokens on the map and the ones made later.
 static func apply(menu: SettingsMenu) -> void:
-	var painted := menu.token_shading_option.get_selected_id() == TokenToon.SHADING_PAINTED
-	TokenToon.set_painted(painted, menu.get_tree())
+	var painted: bool = menu.token_shading_option.get_selected_id() == _toon().SHADING_PAINTED
+	_toon().set_painted(painted, menu.get_tree())
 
 
 static func apply_tooltip(menu: SettingsMenu) -> void:

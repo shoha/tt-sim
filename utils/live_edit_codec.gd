@@ -65,7 +65,7 @@ const SIDED: Array[String] = ["mask", "surface", "height", "water"]
 ## op: its redo, or with `undo` its undo (see the header), or {} when that Callable is none of
 ## the methods above. Finishes the editor's height work first (see the header); called once
 ## that work is done, it costs nothing more.
-static func op_of(entry: Dictionary, editor: AuthoringEditor, undo: bool = false) -> Dictionary:
+static func op_of(entry: Dictionary, editor: RefCounted, undo: bool = false) -> Dictionary:
 	editor.finish_height_work()
 	var action: Callable = entry.get("undo" if undo else "redo", Callable())
 	if not action.is_valid():
@@ -73,20 +73,26 @@ static func op_of(entry: Dictionary, editor: AuthoringEditor, undo: bool = false
 	var target := action.get_object()
 	var args := action.get_bound_arguments()
 	var key := String(action.get_method())
-	if target is HeightEditor:
-		key = "heights." + key
-	elif target is WaterEditor:
-		key = "water." + key
-	elif target is CrossingEditor:
-		key = "crossings." + key
-	elif target is WallEditor:
-		key = "walls." + key
-	elif target is StructureEditor:
-		key = "structures." + key
-	elif target is SettlementEditor:
-		key = "settlements." + key
-	elif not target is AuthoringEditor:
-		return {}
+	# The editors are told apart by their class name, not `is`: naming them would put the whole
+	# authoring code on the start-up graph (perf audit boot2).
+	var script: Script = target.get_script() if target != null else null
+	match script.get_global_name() if script != null else &"":
+		&"HeightEditor":
+			key = "heights." + key
+		&"WaterEditor":
+			key = "water." + key
+		&"CrossingEditor":
+			key = "crossings." + key
+		&"WallEditor":
+			key = "walls." + key
+		&"StructureEditor":
+			key = "structures." + key
+		&"SettlementEditor":
+			key = "settlements." + key
+		&"AuthoringEditor":
+			pass
+		_:
+			return {}
 	match key:
 		"apply_mask_diff":
 			return _op("mask", [_diff_side(args[0], args[1])], args[1])
@@ -116,7 +122,7 @@ static func op_of(entry: Dictionary, editor: AuthoringEditor, undo: bool = false
 ## reverse for its undo, as the group's own undo runs them. Parts that are none of op_of()'s
 ## methods are left out.
 static func ops_of(
-	entry: Dictionary, editor: AuthoringEditor, undo: bool = false
+	entry: Dictionary, editor: RefCounted, undo: bool = false
 ) -> Array[Dictionary]:
 	var ops: Array[Dictionary] = []
 	var parts: Array = entry.get("parts", [entry])
@@ -174,7 +180,7 @@ static func decode(
 ## Applies a decoded op to `editor` (the peer's) through the method the host's redo (or undo)
 ## calls, once the height work of any earlier op is done (see the header). A height or water
 ## op returns with its ground work queued for the editor's step_height_work().
-static func apply(op: Dictionary, editor: AuthoringEditor) -> void:
+static func apply(op: Dictionary, editor: RefCounted) -> void:
 	editor.finish_height_work()
 	var args: Array = op.args
 	var redo: bool = op.get("redo", true)
@@ -289,16 +295,18 @@ static func _crossings_json(list: Array) -> Array:
 class Queue:
 	extends RefCounted
 
-	var editor: AuthoringEditor = null
+	var editor: RefCounted = null
 	var _ops: Array[Dictionary] = []
 
-	func _init(target: AuthoringEditor) -> void:
+	func _init(target: RefCounted) -> void:
 		editor = target
 
 	## Decodes `bytes` against the editor's document and queues the op: "", or why it was
 	## refused (nothing queued).
 	func push(bytes: PackedByteArray) -> String:
-		var decoded := LiveEditCodec.decode(bytes, editor.document, editor.palette_root)
+		var decoded: Dictionary = LiveEditCodec.decode(
+			bytes, editor.document, editor.palette_root
+		)
 		if decoded.problem == "":
 			_ops.append(decoded.op)
 		return decoded.problem
@@ -306,7 +314,7 @@ class Queue:
 	## One frame: the editor's height work, or, on a frame that started with none, the next op.
 	## True when an op was applied.
 	func step() -> bool:
-		var busy := editor.has_height_work()
+		var busy: bool = editor.has_height_work()
 		editor.step_height_work()
 		if busy or _ops.is_empty():
 			return false

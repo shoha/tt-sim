@@ -525,8 +525,8 @@ func _show_saved_values(config: ConfigFile) -> void:
 	foliage_density_slider.set_value_no_signal(
 		(
 			config.get_value(
-				FoliageDensityController.SETTINGS_SECTION,
-				FoliageDensityController.SETTINGS_KEY,
+				_foliage_density_settings().SETTINGS_SECTION,
+				_foliage_density_settings().SETTINGS_KEY,
 				FoliageBudget.PRIMITIVE_BUDGET
 			)
 			/ 1000000.0
@@ -580,8 +580,8 @@ func _save_settings(path: String = Paths.SETTINGS_PATH) -> void:
 		)
 	)
 	config.set_value(
-		FoliageDensityController.SETTINGS_SECTION,
-		FoliageDensityController.SETTINGS_KEY,
+		_foliage_density_settings().SETTINGS_SECTION,
+		_foliage_density_settings().SETTINGS_KEY,
 		int(foliage_density_slider.value * 1000000)
 	)
 	config.set_value("network", "p2p_enabled", p2p_enabled_check.button_pressed)
@@ -786,22 +786,27 @@ func _update_grid_labels() -> void:
 	foliage_density_label.text = "%.1fM" % foliage_density_slider.value
 
 
-func _find_game_map() -> GameMap:
-	# Look for GameMap in the scene tree
+## The open GameMap, found by method, not class (keeps the map off the start-up graph, boot2).
+func _find_game_map() -> Node3D:
 	var root = get_tree().root
 	for child in root.get_children():
 		if child.name == "Root":
 			for subchild in child.get_children():
-				if subchild is GameMap:
+				if subchild is Node3D and subchild.has_method(&"get_level_play_controller"):
 					return subchild
 	return null
 
 
-func _find_level_play_controller() -> LevelPlayController:
+func _find_level_play_controller() -> Node:
 	var game_map := _find_game_map()
 	if game_map:
 		return game_map.get_level_play_controller()
 	return null
+
+
+## FoliageDensityController's script, by path (boot2).
+func _foliage_density_settings() -> Variant:
+	return load("res://scenes/states/playing/foliage_density_controller.gd")
 
 
 func _on_close_pressed() -> void:

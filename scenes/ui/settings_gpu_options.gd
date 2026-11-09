@@ -52,7 +52,7 @@ static func show_defaults(menu: SettingsMenu) -> void:
 ## Applies both choices now, with the Antialiasing level: the map on screen sets its MSAA and
 ## re-picks every foliage shader variant (that reads FoliageEdges.current, so it runs after it),
 ## the sun on screen takes its cascades, and later maps read both.
-static func apply(menu: SettingsMenu, game_map: GameMap) -> void:
+static func apply(menu: SettingsMenu, game_map: Node3D) -> void:
 	FoliageEdges.current = FoliageEdges.sanitize(menu.foliage_edges_option.get_selected_id())
 	ShadowCascades.current = ShadowCascades.sanitize(menu.shadow_cascades_option.get_selected_id())
 	if game_map == null:

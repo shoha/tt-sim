@@ -62,6 +62,8 @@ signal species_added(materials: Array[ShaderMaterial])
 signal cells_applied(cells: Array[Vector2i])
 
 const NODE_INFIX := "_MultiMesh"
+## FoliageDensityController, by path so the play code stays off the start-up graph (boot2).
+const DENSITY_CONTROLLER := "res://scenes/states/playing/foliage_density_controller.gd"
 const GROWING_INFIX := "_grow"
 ## Instance uniform in shaders/wind_foliage_include.gdshaderinc (0 = collapsed, 1 = full).
 const GROW_UNIFORM := &"grow"
@@ -959,7 +961,7 @@ func _apply_budget(delta: int) -> void:
 		_touched.clear()
 		return
 	if budget < 0:
-		budget = FoliageDensityController.budget_from_settings()
+		budget = load(DENSITY_CONTROLLER).budget_from_settings()
 	if _known_total >= 0 and _known_total + delta <= budget:
 		_known_total += delta
 		for node in _touched:
@@ -971,10 +973,11 @@ func _apply_budget(delta: int) -> void:
 			root = get_parent() as Node3D
 		if root == null:
 			root = self
-		var report := FoliageDensityController.apply(root, budget)
+		var report: Dictionary = load(DENSITY_CONTROLLER).apply(root, budget)
 		var total: int = report.get("total_before", 0)
 		_known_total = total if total <= budget else -1
 	_touched.clear()
+
 
 
 ## Primitives a cell gains going from `old` to `fresh` rows (negative when it loses some).

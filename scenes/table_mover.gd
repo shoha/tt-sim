@@ -79,7 +79,7 @@ var states := TableStates.new()
 ## The session file of the hosted session, and Resume (a child, set up after this mover).
 var keeper: SessionKeeper = null
 
-var _controller: LevelPlayController = null
+var _controller: Node = null
 ## The level _arrive() prepared, until it has loaded, with what its template had.
 var _arriving: LevelData = null
 var _restored := false
@@ -96,10 +96,10 @@ var _notice: TableMoveNotice = null
 var _saving_elsewhere := false
 
 
-## Root's table, which lives as long as Root does.
-func setup(controller: LevelPlayController) -> void:
-	_controller = controller
-	controller.level_loaded.connect(_on_level_loaded)
+## Sets the mover up. With a `controller` (Root's table, which lives as long as Root does) it is
+## bound at once; Root passes none at start-up and hands the table over in bind_table() when the
+## first session or map makes it.
+func setup(controller: Node = null) -> void:
 	LevelManager.level_saved.connect(_on_level_saved)
 	NetworkManager.session.table_moving.connect(_on_table_moving)
 	NetworkManager.session.table_move_cancelled.connect(_drop_notice)
@@ -110,6 +110,14 @@ func setup(controller: LevelPlayController) -> void:
 	keeper.name = "SessionKeeper"
 	add_child(keeper)
 	keeper.setup(self)
+	if controller != null:
+		bind_table(controller)
+
+
+## Root's table: the mover reads its level, edits and tokens and listens to its loads.
+func bind_table(controller: Node) -> void:
+	_controller = controller
+	controller.level_loaded.connect(_on_level_loaded)
 
 
 ## Root leaves the table (PLAYING): the session file keeps it as it stands first (the host
@@ -149,11 +157,11 @@ func changes(settle := true) -> Dictionary:
 	var level: LevelData = _controller.active_level_data if _controller else null
 	if level == null:
 		return {"tokens": false, "look": false, "terrain": false}
-	var edits := _controller.live_edits
-	var gm_edits := is_instance_valid(edits) and edits.sends
+	var edits: Variant = _controller.live_edits
+	var gm_edits: bool = is_instance_valid(edits) and edits.sends
 	if gm_edits and settle:
 		edits.send_now()
-	var terrain := gm_edits and (edits.op_log.size() > _terrain_base or not edits.is_settled())
+	var terrain: bool = gm_edits and (edits.op_log.size() > _terrain_base or not edits.is_settled())
 	return {
 		"tokens": _controller.has_unsaved_tokens(),
 		"look": TableStates.look_of(level) != _baseline_look,
@@ -193,8 +201,8 @@ func table_entry(settle := false) -> Variant:
 	var level: LevelData = _controller.active_level_data if _controller else null
 	if key == "" or level == null or _controller.is_loading():
 		return null
-	var edits := _controller.live_edits
-	var gm_edits := is_instance_valid(edits) and edits.sends
+	var edits: Variant = _controller.live_edits
+	var gm_edits: bool = is_instance_valid(edits) and edits.sends
 	if gm_edits and settle:
 		edits.send_now()
 	var changed := changes(false)
@@ -205,7 +213,7 @@ func table_entry(settle := false) -> Variant:
 		ops.assign(edits.op_log.slice(_terrain_base))
 	var entry := TableStates.capture(level, _controller.spawned_tokens, ops)
 	if changed.terrain and gm_edits and can_save(key) and edits.is_settled():
-		var scatter := edits.editor.scatter
+		var scatter: Node = edits.editor.scatter
 		if not (is_instance_valid(scatter) and scatter.is_regenerating()):
 			entry["document"] = document_of(edits.editor)
 	return entry
@@ -311,7 +319,7 @@ func _on_notice_elapsed() -> void:
 ## template comes back next time). False when Save into map failed.
 func _leave_table(choice: Choice) -> bool:
 	var key := NetworkManager.session.get_table()
-	var level := _controller.active_level_data
+	var level: LevelData = _controller.active_level_data
 	if key == "" or level == null:
 		return true
 	match choice:
@@ -335,7 +343,7 @@ func _leave_table(choice: Choice) -> bool:
 ## and with `with_document` the edited document as it stands, for a later Save into map from
 ## the shelf (the map is no longer out to save from).
 func _capture(level: LevelData, with_document: bool) -> Dictionary:
-	var edits := _controller.live_edits
+	var edits: Variant = _controller.live_edits
 	var ops: Array[PackedByteArray] = []
 	if is_instance_valid(edits) and edits.sends:
 		ops.assign(edits.op_log.slice(_terrain_base))
@@ -472,8 +480,8 @@ func _write_kept(level: LevelData, entry: Dictionary) -> String:
 ## go into the level as the play HUD's Save map writes them. Says how it went; false when it
 ## did not save.
 func _save_into_map() -> bool:
-	var level := _controller.active_level_data
-	var edits := _controller.live_edits
+	var level: LevelData = _controller.active_level_data
+	var edits: Variant = _controller.live_edits
 	if changes().terrain:
 		var document := await _settled_document()
 		var written := (
@@ -500,11 +508,11 @@ func _save_into_map() -> bool:
 ## editor's height work and any regrowth have landed (document_of()), or null with no live
 ## edits on this side or when the table went away meanwhile.
 func _settled_document() -> MapDocument:
-	var level := _controller.active_level_data
-	var edits := _controller.live_edits
+	var level: LevelData = _controller.active_level_data
+	var edits: Variant = _controller.live_edits
 	if not is_instance_valid(edits) or not edits.sends:
 		return null
-	var editor := edits.editor
+	var editor: Node = edits.editor
 	editor.finish_height_work()
 	while is_instance_valid(editor.scatter) and editor.scatter.is_regenerating():
 		await get_tree().process_frame
@@ -514,8 +522,8 @@ func _settled_document() -> MapDocument:
 
 
 ## `editor`'s document with its scatter and props rows as they stand.
-static func document_of(editor: AuthoringEditor) -> MapDocument:
-	var doc := editor.document
+static func document_of(editor: Node) -> MapDocument:
+	var doc: MapDocument = editor.document
 	if is_instance_valid(editor.scatter) and is_instance_valid(editor.props):
 		doc.scatter = editor.scatter.rows_by_asset()
 		doc.mass_anchors = ScatterMass.anchors_entry(editor.scatter.mass_anchors, doc.scatter)
@@ -525,7 +533,7 @@ static func document_of(editor: AuthoringEditor) -> MapDocument:
 
 ## Writes `editor`'s document, with its scatter and props rows as they stand, to `level`'s
 ## map.ttmap. False for a level without a folder or a document, or when the write failed.
-static func write_document(editor: AuthoringEditor, level: LevelData) -> bool:
+static func write_document(editor: Node, level: LevelData) -> bool:
 	if level.level_folder == "" or level.map_document == "":
 		return false
 	var path := LevelManager.map_document_path(level.level_folder)

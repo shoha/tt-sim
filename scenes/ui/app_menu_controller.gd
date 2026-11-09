@@ -17,7 +17,7 @@ const LevelEditorScene = preload("res://scenes/level_editor/level_editor.tscn")
 
 var _level_editor_instance: LevelEditor = null
 var _editor_canvas_layer: CanvasLayer = null
-var _level_play_controller: LevelPlayController = null
+var _level_play_controller: Node = null
 var _force_hide_button: bool = false
 
 @onready var _level_editor_button: Button = %LevelEditorButton
@@ -35,7 +35,7 @@ func _exit_tree() -> void:
 
 
 ## Setup with a reference to the level play controller
-func setup(level_play_controller: LevelPlayController) -> void:
+func setup(level_play_controller: Node) -> void:
 	_level_play_controller = level_play_controller
 
 

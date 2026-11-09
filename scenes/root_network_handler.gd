@@ -50,7 +50,7 @@ static func disconnect_client_signals(handler: Node) -> void:
 
 ## Handle a transform message: a drag's single update or batch (unreliable) or a
 ## reconciliation (reliable), all TokenTransformPack messages decoded by NetworkGameSync
-static func on_transform_batch_received(controller: LevelPlayController, batch: Dictionary) -> void:
+static func on_transform_batch_received(controller: Node, batch: Dictionary) -> void:
 	for network_id in batch:
 		var data = batch[network_id]
 		var pos := SerializationUtils.array_to_vec3(data["position"])
@@ -64,7 +64,7 @@ static func on_transform_batch_received(controller: LevelPlayController, batch: 
 
 ## Handle individual token property update (reliable channel, low frequency)
 static func on_token_state_received(
-	controller: LevelPlayController, game_map: Node, network_id: String, token_dict: Dictionary
+	controller: Node, game_map: Node, network_id: String, token_dict: Dictionary
 ) -> void:
 	var token_state = TokenState.from_dict(token_dict)
 
@@ -85,7 +85,7 @@ static func on_token_state_received(
 
 
 ## Handle token removal (reliable channel)
-static func on_token_removed_received(controller: LevelPlayController, network_id: String) -> void:
+static func on_token_removed_received(controller: Node, network_id: String) -> void:
 	GameState.remove_token_state(network_id)
 
 	var token = controller.find_token_by_network_id(network_id)
@@ -95,7 +95,7 @@ static func on_token_removed_received(controller: LevelPlayController, network_i
 
 
 ## Apply full GameState to all visual tokens (initial sync or reconciliation)
-static func apply_game_state_to_tokens(controller: LevelPlayController, game_map: Node) -> void:
+static func apply_game_state_to_tokens(controller: Node, game_map: Node) -> void:
 	apply_tokens_to_board(controller, game_map, GameState.get_all_token_states().keys())
 
 
@@ -104,7 +104,7 @@ static func apply_game_state_to_tokens(controller: LevelPlayController, game_map
 ## token twice never duplicates it). A full state passes every id; a token add
 ## (NetworkStateSync.tokens_added) its own.
 static func apply_tokens_to_board(
-	controller: LevelPlayController, game_map: Node, network_ids: Array
+	controller: Node, game_map: Node, network_ids: Array
 ) -> void:
 	if not controller or not game_map:
 		return
@@ -133,14 +133,13 @@ static func apply_tokens_to_board(
 ## build is already waiting there. The job reads GameState when it runs (the newest state, or
 ## nothing if the token was removed meanwhile) and builds nothing if the token is on the board
 ## by then, the board is gone or a table load has started (whose end applies the state again).
-static func queue_token_build(
-	controller: LevelPlayController, game_map: Node, network_id: String
-) -> void:
+static func queue_token_build(controller: Node, game_map: Node, network_id: String) -> void:
 	if _queued.has(network_id):
 		return
 	_next_ticket += 1
 	_queued[network_id] = _next_ticket
-	TokenSpawnQueue.shared().enqueue(
+	var spawn_queue: Variant = load("res://scenes/states/playing/token_spawn_queue.gd")
+	spawn_queue.shared().enqueue(
 		_build_queued.bind(
 			controller.get_instance_id(), game_map.get_instance_id(), network_id, _next_ticket
 		)
@@ -158,7 +157,7 @@ static func _build_queued(controller_id: int, map_id: int, network_id: String, t
 	if _queued.get(network_id, 0) != ticket:
 		return
 	_queued.erase(network_id)
-	var controller := instance_from_id(controller_id) as LevelPlayController
+	var controller := instance_from_id(controller_id) as Node
 	var game_map := instance_from_id(map_id) as Node
 	if controller == null or game_map == null or controller.is_loading():
 		return
@@ -177,7 +176,7 @@ static func _build_queued(controller_id: int, map_id: int, network_id: String, t
 	_apply_drag_lock(new_token, network_id)
 
 
-static func _apply_drag_lock(token: BoardToken, network_id: String) -> void:
+static func _apply_drag_lock(token: Node3D, network_id: String) -> void:
 	var lock_holder := GameState.get_drag_lock(network_id)
 	if lock_holder > 0:
 		token.set_drag_lock(lock_holder)
@@ -189,12 +188,13 @@ static func _apply_drag_lock(token: BoardToken, network_id: String) -> void:
 ## interactive; players only tokens they hold CONTROL permission for). Without
 ## it, interactivity falls back to has_gm_access() only.
 static func create_token_from_state(
-	token_state: TokenState, controller: LevelPlayController = null
-) -> BoardToken:
-	var token: BoardToken = null
+	token_state: TokenState, controller: Node = null
+) -> Node3D:
+	var token: Node3D = null
 	if not token_state.avatar_recipe.is_empty():
 		# An avatar: rebuilt here from the recipe and this client's own kit.
-		token = AvatarTokenFactory.create(token_state.avatar_recipe, token_state.token_name)
+		var avatar_factory: Variant = load("res://scenes/board_token/avatar_token_factory.gd")
+		token = avatar_factory.create(token_state.avatar_recipe, token_state.token_name)
 	else:
 		if token_state.pack_id == "" or token_state.asset_id == "":
 			push_warning("RootNetworkHandler: Cannot create token — missing pack_id or asset_id")
@@ -206,7 +206,8 @@ static func create_token_from_state(
 			else Constants.ASSET_PRIORITY_DEFAULT
 		)
 
-		var result = BoardTokenFactory.create_from_asset_async(
+		var token_factory: Variant = load("res://scenes/board_token/board_token_factory.gd")
+		var result = token_factory.create_from_asset_async(
 			token_state.pack_id, token_state.asset_id, token_state.variant_id, priority
 		)
 		token = result.token

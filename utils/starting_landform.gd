@@ -363,7 +363,7 @@ static func carve_river(
 	if bodies.is_empty():
 		return bodies
 	var before := doc.heights.duplicate()
-	WaterEditor.lower(doc, WaterCarve.river_goals(doc, bodies, before))
+	_water_editor().lower(doc, WaterCarve.river_goals(doc, bodies, before))
 	doc.water_bodies = WaterEdit.with_bodies(doc, bodies)
 	return bodies
 
@@ -427,8 +427,14 @@ static func carve_pond(doc: MapDocument, contains: Callable, depth: WaterBody.De
 	bodies.assign(doc.water_bodies)
 	bodies.append(body)
 	doc.water_bodies = bodies
-	WaterEditor.lower(doc, WaterCarve.pond_goals(doc, body, doc.heights))
+	_water_editor().lower(doc, WaterCarve.pond_goals(doc, body, doc.heights))
 	return body
+
+
+## WaterEditor's script, loaded by path: naming it would put the authoring code on the start-up
+## graph (perf audit boot2).
+static func _water_editor() -> Variant:
+	return load("res://scenes/states/authoring/water_editor.gd")
 
 
 ## A crossing of `kind` standing on two chosen anchors `a` and `b` (map XZ, dry ground)

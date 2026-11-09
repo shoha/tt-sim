@@ -328,7 +328,7 @@ static func build_chunk(
 		parent, mesh, node_stem, transforms, wind_category, name_suffix, anchors
 	)
 	if node != null:
-		node.layers = LevelEnvironmentManager.SCATTER_RENDER_LAYER
+		node.layers = _scatter_render_layer()
 	return node
 
 
@@ -342,8 +342,15 @@ static func chunk_node(
 	name_suffix: String = ""
 ) -> MultiMeshInstance3D:
 	var node := _add_chunk_node(parent, multimesh, node_stem, wind_category, name_suffix)
-	node.layers = LevelEnvironmentManager.SCATTER_RENDER_LAYER
+	node.layers = _scatter_render_layer()
 	return node
+
+
+## LevelEnvironmentManager.SCATTER_RENDER_LAYER, read by path (naming the class would put the
+## play code on the start-up graph, perf audit boot2).
+static func _scatter_render_layer() -> int:
+	var environment: Variant = load("res://scenes/states/playing/level_environment_manager.gd")
+	return int(environment.SCATTER_RENDER_LAYER)
 
 
 ## The MultiMesh build_multimesh() makes, from a chunk's data (ScatterRows.chunk): the native
