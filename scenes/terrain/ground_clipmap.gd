@@ -9,26 +9,29 @@ extends Node
 ## It bakes the layer-blended ground top-down into a pyramid of toroidal windows (two RGBA8
 ## textures each: lit albedo + AO, then normal + roughness) and binds them to the map's ground
 ## material; the ground shader reads them where a level covers a pixel and keeps the layer blend
-## elsewhere. Windows are written a strip at a time: a strip viewport renders the chunk meshes
-## (the real ground shader, GROUND_BAKE_OUT, a copy of the map's material) over one column or row
-## of tiles, and the next frame a 2D draw copies it into the level's window (CLEAR_MODE_NEVER,
-## blend off, so the strip overwrites whatever the slot held). One strip per two frames, coarsest
-## level first, so a fresh map is covered top-down within a second and a pan only pays for the
-## tiles that enter. A level's rectangle of baked tiles reaches the shader one frame after its
-## window is drawn.
+## elsewhere. Windows are written a strip at a time: a strip viewport (GroundClipmapStrips)
+## renders the chunk meshes (the real ground shader, GROUND_BAKE_OUT, a copy of the map's
+## material) over a part of one column or row of tiles (PART_TILES of them), and the next frame a
+## 2D draw copies it into the level's window (CLEAR_MODE_NEVER, blend off, so the part overwrites
+## whatever its slots held). One part per two frames, coarsest level first, so a fresh map is
+## covered top-down within about two seconds and a pan only pays for the tiles that enter. A
+## level's rectangle of baked tiles reaches the shader one frame after a strip's last part is
+## drawn. The strip viewports are made when a strip is due and freed after STRIPS_IDLE_S without
+## one (their 3D buffers are most of the clipmap's memory past the windows).
 ##
 ## Levels exist only from the finest one the view needs (from the screen's texels per metre, read
 ## every frame) up to the map's coarsest; a level the view stopped needing goes after
 ## RELEASE_S. The bake follows the ground. A brush or zone edit (AuthoredTerrain.ground_edited)
-## marks its rectangle: at once the ground shader draws the layer blend inside it (clip_hole, the
-## live ground, so the edit shows in the next frame), and once the edit has been quiet for
-## EDIT_QUIET_S the strips over the tiles it touched are rebaked (patch_jobs) and the hole
-## closes. A palette or look change, or anything else that changes the ground material, rebakes
-## every level (invalidate()).
+## and a restamp of the ground look's grass masses (GroundLookBake.masses_restamped) mark their
+## rectangle: at once the ground shader draws the layer blend inside it (clip_hole, the live
+## ground, so the edit shows in the next frame), and once the edit has been quiet for
+## EDIT_QUIET_S the touched tiles are rebaked (patch_jobs) and the hole closes. A palette or look
+## change, a sun change, or anything else that changes the ground material, rebakes every level
+## (invalidate()).
 
 const NODE_NAME := "GroundClipmap"
-const BAKE_SHADER := preload("res://shaders/authored_ground_bake.gdshader")
-const BAKE_LOOKED_SHADER := preload("res://shaders/authored_ground_bake_looked.gdshader")
+const BAKE_SHADER := GroundClipmapStrips.BAKE_SHADER
+const BAKE_LOOKED_SHADER := GroundClipmapStrips.BAKE_LOOKED_SHADER
 ## The strip copy: a 2D draw with blending off (an overwrite).
 const BLIT_SHADER := preload("res://shaders/ground_clipmap_blit.gdshader")
 ## The map ground with the clipmap's read compiled in, plain and looked.
@@ -44,6 +47,8 @@ const SETTLE_S := 0.4
 const EDIT_QUIET_S := 0.25
 ## Metres the hole grows past an edit (a sample step is added): the bake's filtering reaches.
 const HOLE_PAD_M := 0.15
+## Seconds without a strip to draw before the strip viewports are freed (made again on demand).
+const STRIPS_IDLE_S := 2.0
 ## Edits covering this share of the grid or more rebake everything.
 const WHOLE_SHARE := 0.5
 ## Bytes of one level: two RGBA8 windows.
@@ -68,6 +73,8 @@ var read: bool = true:
 ## Strips baked since the node was made, and the cost of the last one's submission (usec).
 var jobs_done: int = 0
 var last_job_usec: int = 0
+## Texels the strip viewports have rendered (both passes of every part drawn), for measurement.
+var texels_baked: int = 0
 ## Bumped when the ground changed and every level is being rebaked.
 var rebakes: int = 0
 ## With measure on, the GPU milliseconds the last strip cost (its two strip viewports and two
@@ -96,9 +103,11 @@ var _patch: Array = []  # of {level, job} waiting
 var _patching: bool = false
 var _blit_material := ShaderMaterial.new()
 var _levels: Array = []  # of Level, null where the level is not held
-var _strips: Array = []  # [kind][pass] -> SubViewport
-var _bake_mats: Array[ShaderMaterial] = []
-var _copies: Array = []  # of MeshInstance3D in the strip viewports
+var _strips := GroundClipmapStrips.new()
+var _parts: Array[Vector2i] = []  # the job's draws (GroundClipmapPlan.parts)
+var _part: int = 0
+var _idle_s: float = 0.0
+var _look: GroundLookBake = null  # the look whose restamps are connected
 var _signature: Array = []
 var _settle: float = 0.0
 var _stage: int = 0  # 0 idle, 1 a strip is drawing, 2 a window is drawing
@@ -182,6 +191,9 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if terrain != null and is_instance_valid(terrain):
 		terrain.ground_edited.disconnect(_on_edited)
+	if _look != null and is_instance_valid(_look):
+		_look.masses_restamped.disconnect(_on_restamped)
+	_look = null
 	_unbind()
 	read = false
 
@@ -204,7 +216,12 @@ func _suppressed() -> bool:
 
 ## True once the node has made a window or a strip.
 func _allocated() -> bool:
-	return not _strips.is_empty() or _levels.any(func(lv: Variant) -> bool: return lv != null)
+	return _strips.is_made() or _levels.any(func(lv: Variant) -> bool: return lv != null)
+
+
+## How many strip viewports exist now (4 while strips are drawn, 0 once idle), for measurement.
+func strip_viewport_count() -> int:
+	return _strips.viewports.size() * 2
 
 
 ## The map ground's shader for the look and `read`: the clip variant while it reads the windows,
@@ -285,6 +302,17 @@ func _process(delta: float) -> void:
 	if _bind_dirty:
 		_bind()
 	_start_job()
+	_release_idle(delta)
+
+
+## Frees the strip viewports once nothing has been drawn for STRIPS_IDLE_S (not while measuring).
+func _release_idle(delta: float) -> void:
+	if _stage != 0 or _patching or _has_dirty or measure:
+		_idle_s = 0.0
+		return
+	_idle_s += delta
+	if _idle_s >= STRIPS_IDLE_S and _strips.is_made():
+		_strips.free_all()
 
 
 # ---- the ground the bake reads ----
@@ -300,7 +328,13 @@ func _watch_ground(delta: float) -> void:
 		if mi != null and mi.mesh != null:
 			chunks += 1
 	var look := terrain.ground_look()
-	# Brush, zone and sculpt edits are not in it: they arrive as ground_edited rectangles (a
+	if look != _look:
+		if _look != null and is_instance_valid(_look):
+			_look.masses_restamped.disconnect(_on_restamped)
+		_look = look
+		if look != null:
+			look.masses_restamped.connect(_on_restamped)
+	# Brush, zone and sculpt edits and mass restamps are not in it: they arrive as rectangles (a
 	# rebuilt chunk is a new mesh, which a patch picks up; the count changes while a map loads).
 	var sig: Array = [
 		mat.get_instance_id(),
@@ -318,7 +352,7 @@ func _watch_ground(delta: float) -> void:
 		_settle -= delta
 		if _settle <= 0.0:
 			_settle = 0.0
-			_rebuild_strips()
+			_restart_strips()
 			rebakes += 1
 
 
@@ -345,7 +379,27 @@ func _on_edited(rect: Rect2i) -> void:
 		invalidate()
 		return
 	var step := doc.sample_step()
-	var world := MaskBrush.sample_rect_to_world(doc, rect).grow(maxf(step.x, step.y) + HOLE_PAD_M)
+	_mark(MaskBrush.sample_rect_to_world(doc, rect).grow(maxf(step.x, step.y) + HOLE_PAD_M))
+
+
+## The ground look restamped the grass masses over `world_rect` (world XZ metres): the bake there
+## changed, as an edit's would (the look bake's own texel of filtering added).
+func _on_restamped(world_rect: Rect2) -> void:
+	var doc := terrain.document
+	if doc == null or not world_rect.has_area():
+		return
+	var a := terrain.to_local(Vector3(world_rect.position.x, 0.0, world_rect.position.y))
+	var b := terrain.to_local(Vector3(world_rect.end.x, 0.0, world_rect.end.y))
+	var local := Rect2(Vector2(a.x, a.z), Vector2.ZERO).expand(Vector2(b.x, b.z))
+	var ext := doc.extent_m()
+	if local.get_area() >= WHOLE_SHARE * ext.x * ext.y:
+		invalidate()
+		return
+	_mark(local.grow(1.0 / GroundLookBake.TEXELS_PER_M + HOLE_PAD_M))
+
+
+## Opens the hole over `world` (map-frame metres) and restarts the quiet before its patch.
+func _mark(world: Rect2) -> void:
 	if not _has_dirty:
 		_dirty_since_msec = Time.get_ticks_msec()
 	_dirty = _dirty.merge(world) if _has_dirty else world
@@ -375,7 +429,7 @@ func _tick_edit(delta: float) -> void:
 	_dirty_quiet -= delta
 	if _dirty_quiet > 0.0:
 		return
-	_sync_bake_inputs()
+	_strips.sync_inputs(terrain)
 	for l in GroundClipmapPlan.CLIP_LEVELS:
 		var lv: Level = _levels[l]
 		if lv == null:
@@ -383,26 +437,6 @@ func _tick_edit(delta: float) -> void:
 		for job in GroundClipmapPlan.patch_jobs(l, lv.target, lv.valid, _dirty):
 			_patch.append({"level": l, "job": job})
 	_patching = true
-
-
-## Brings the strips' copies of the ground up to the live one: the uniforms of the map's
-## material (its textures are shared, but arrays and scalars were copied) and the chunks' current
-## meshes (a rebuilt chunk is a new mesh).
-func _sync_bake_inputs() -> void:
-	var source := terrain.get_material()
-	if source == null or source.shader == null:
-		return
-	for u: Dictionary in source.shader.get_shader_uniform_list():
-		var uniform_name := String(u.name)
-		if uniform_name.begins_with("clip_") or uniform_name == "bake_pass":
-			continue
-		var value: Variant = source.get_shader_parameter(uniform_name)
-		for mat in _bake_mats:
-			mat.set_shader_parameter(uniform_name, value)
-	for mi: MeshInstance3D in _copies:
-		var src := terrain.get_chunk(mi.get_meta("cell"))
-		if src != null and src.mesh != null and mi.mesh != src.mesh:
-			mi.mesh = src.mesh
 
 
 ## The patch's last strip is baked: the windows hold the live ground, so the hole closes.
@@ -515,10 +549,8 @@ func _retarget() -> void:
 ## The next strip: the coarsest incomplete level first, so the map is always covered by the
 ## widest level before the finer ones fill.
 func _start_job() -> void:
-	if _strips.is_empty():
-		_rebuild_strips()
-		if _strips.is_empty():
-			return
+	if _stage != 0:
+		return  # a strip's next part is drawing
 	for l in range(GroundClipmapPlan.CLIP_LEVELS - 1, -1, -1):
 		var lv: Level = _levels[l]
 		if lv == null:
@@ -526,13 +558,28 @@ func _start_job() -> void:
 		var job := GroundClipmapPlan.next_job(lv.valid, lv.target)
 		if job.is_empty():
 			continue
-		_job = job
-		_job_level = l
-		_render_strip(l, job)
-		_stage = 1
+		_begin_job(l, job)
 		return
 	if _patching:
 		_start_patch_job()
+
+
+## Starts strip `job` of level `l`: the strip viewports made if they were freed, its parts planned
+## and the first drawn. False when there is no ground to make them from.
+func _begin_job(l: int, job: Dictionary) -> bool:
+	if not _strips.is_made():
+		_strips.make(self, terrain, measure)
+		if not _strips.is_made():
+			return false
+	_job = job
+	_job_level = l
+	_parts = GroundClipmapPlan.parts(
+		int(job.get("from", job.span)), int(job.get("count", GroundClipmapPlan.TILES))
+	)
+	_part = 0
+	_render_part()
+	_stage = 1
+	return true
 
 
 ## The next strip of the edit's patch; a strip whose tile left the window (the block moved) or
@@ -555,45 +602,37 @@ func _start_patch_job() -> void:
 		if not inside or job.span != along:
 			continue
 		job.after = lv.valid
-		_job = job
-		_job_level = item.level
-		_render_strip(_job_level, job)
-		_stage = 1
-		return
+		if _begin_job(item.level, job):
+			return
 	_end_patch()
 
 
-func _render_strip(l: int, job: Dictionary) -> void:
+## Draws the job's current part: both passes' cameras on its PART_TILES tiles, rendered once.
+func _render_part() -> void:
 	var started := Time.get_ticks_usec()
-	var kind: int = job.kind
-	var rect := GroundClipmapPlan.strip_rect(l, kind, job.tile, job.span)
-	var centre := rect.get_center()
-	for p in 2:
-		var vp: SubViewport = _strips[kind][p]
-		var cam := vp.get_child(0) as Camera3D
-		cam.size = rect.size.y
-		cam.position = Vector3(centre.x, _cam_y, centre.y)
-		vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	var part: Vector2i = _parts[_part]
+	var rect := GroundClipmapPlan.strip_rect(_job_level, _job.kind, _job.tile, part.x)
+	_strips.frame(_job.kind, rect, _cam_y, true)
+	texels_baked += GroundClipmapPlan.PART_TEXELS
 	last_job_usec = Time.get_ticks_usec() - started
 
 
-## The strip is drawn: copy it into the level's two windows.
+## The part is drawn: copy its tiles into the level's two windows.
 func _blit() -> void:
 	var lv: Level = _levels[_job_level]
-	if lv == null:
+	if lv == null or not _strips.is_made():
 		_stage = 0
 		return
 	var kind: int = _job.kind
 	if measure:
 		# The strips drew last frame; a timing is only readable the frame after its draw.
-		last_job_ms = 0.0
-		for vp: SubViewport in _strips[kind]:
-			last_job_ms += _gpu_ms(vp)
+		last_job_ms = _strips.gpu_ms(kind)
 		frame_bake_ms += last_job_ms
 		bake_ms_total += last_job_ms
-	var pieces := GroundClipmapPlan.blits(kind, _job.tile, _job.span)
+	var part: Vector2i = _parts[_part]
+	var pieces := GroundClipmapPlan.blits(kind, _job.tile, part.x, part.y)
 	for p in 2:
-		var tex: Texture2D = (_strips[kind][p] as SubViewport).get_texture()
+		var tex := _strips.texture(kind, p)
 		var pair: Array = lv.sprites[p]
 		for i in 2:
 			var sprite: Sprite2D = pair[i]
@@ -607,7 +646,8 @@ func _blit() -> void:
 	_stage = 2
 
 
-## The windows were drawn last frame: the strip's tiles count as baked.
+## The windows were drawn last frame: the next part draws, or after the last the strip's tiles
+## count as baked.
 func _finish_window() -> void:
 	_stage = 0
 	var lv: Level = _levels[_commit_level] if _commit_level >= 0 else null
@@ -619,6 +659,11 @@ func _finish_window() -> void:
 		last_job_ms += ms
 		frame_bake_ms += ms
 		bake_ms_total += ms
+	if lv != null and not _job.is_empty() and _part + 1 < _parts.size() and _strips.is_made():
+		_part += 1
+		_render_part()
+		_stage = 1
+		return
 	if lv != null and not _job.is_empty():
 		lv.valid = GroundClipmapPlan.clip_valid(_job.after, lv.target)
 		# The job's after was computed from the valid rectangle when it started; a retarget since
@@ -646,43 +691,41 @@ func hold_drawing(on: bool) -> void:
 		if lv != null:
 			for vp in lv.windows:
 				vp.render_target_update_mode = mode
-	for pair: Array in _strips:
-		for vp: SubViewport in pair:
-			vp.render_target_update_mode = mode
+	if on and not _strips.is_made():
+		_strips.make(self, terrain, true)
+	_strips.set_update(mode)
 
 
-## Measurement only: points the `kind` strip cameras at the centre column (or row) of level `l`'s
-## block, a full-length strip. The world rectangle it shows is strip_world_rect().
+## Measurement only: points the `kind` strip cameras at the centre part of the centre column (or
+## row) of level `l`'s block. The world rectangle it shows is strip_world_rect().
 func place_strip(l: int, kind: int) -> void:
 	var lv: Level = _levels[l]
-	if lv == null or _strips.is_empty():
+	if lv == null or not _strips.is_made():
 		return
-	var rect := strip_world_rect(l, kind)
-	for vp: SubViewport in _strips[kind]:
-		var cam := vp.get_child(0) as Camera3D
-		cam.size = rect.size.y
-		cam.position = Vector3(rect.get_center().x, _cam_y, rect.get_center().y)
+	_strips.frame(kind, strip_world_rect(l, kind), _cam_y, false)
 
 
-## The world rectangle (metres) of the centre strip of `kind` on level `l` (empty if not held).
+## The world rectangle (metres) of the centre part of `kind` on level `l` (empty if not held).
 func strip_world_rect(l: int, kind: int) -> Rect2:
 	var lv: Level = _levels[l]
 	if lv == null:
 		return Rect2()
 	var half := Vector2i(GroundClipmapPlan.TILES / 2, GroundClipmapPlan.TILES / 2)
 	var centre := lv.target.position + half
+	var back := GroundClipmapPlan.PART_TILES / 2
 	if kind == GroundClipmapPlan.Kind.COLUMN:
-		return GroundClipmapPlan.strip_rect(l, kind, centre.x, lv.target.position.y)
-	return GroundClipmapPlan.strip_rect(l, kind, centre.y, lv.target.position.x)
+		return GroundClipmapPlan.strip_rect(l, kind, centre.x, centre.y - back)
+	return GroundClipmapPlan.strip_rect(l, kind, centre.y, centre.x - back)
 
 
-## The measured GPU ms of the held drawing: {column: both passes of a column strip, row: the
-## same for a row strip, windows: all levels' windows}. Needs hold_drawing(true) for a few frames.
+## The measured GPU ms of the held drawing: {column: both passes of a column part, row: the same
+## for a row part, windows: all levels' windows}. Needs hold_drawing(true) for a few frames.
 func drawing_cost_ms() -> Dictionary:
-	var cost := {"column": 0.0, "row": 0.0, "windows": 0.0}
-	for kind in _strips.size():
-		for vp: SubViewport in _strips[kind]:
-			cost["column" if kind == GroundClipmapPlan.Kind.COLUMN else "row"] += _gpu_ms(vp)
+	var cost := {
+		"column": _strips.gpu_ms(GroundClipmapPlan.Kind.COLUMN),
+		"row": _strips.gpu_ms(GroundClipmapPlan.Kind.ROW),
+		"windows": 0.0,
+	}
 	for lv: Level in _levels:
 		if lv != null:
 			for vp in lv.windows:
@@ -696,9 +739,7 @@ func _measure_all() -> void:
 		if lv != null:
 			for vp in lv.windows:
 				RenderingServer.viewport_set_measure_render_time(vp.get_viewport_rid(), measure)
-	for pair: Array in _strips:
-		for vp: SubViewport in pair:
-			RenderingServer.viewport_set_measure_render_time(vp.get_viewport_rid(), measure)
+	_strips.set_measure(measure)
 
 
 func _make_level(l: int) -> Level:
@@ -741,80 +782,14 @@ func _free_level(l: int) -> void:
 		_job = {}
 
 
-## The strip viewports (column and row, pass 0 and 1) with a copy of every chunk and a copy of
-## the map's ground material on the bake shader. Rebuilt whenever the ground changes, since the
-## copies snapshot the material's uniforms.
-func _rebuild_strips() -> void:
-	for kind_vps: Array in _strips:
-		for vp: SubViewport in kind_vps:
-			vp.queue_free()
-	_strips.clear()
-	_bake_mats.clear()
-	_copies.clear()
-	var source := terrain.get_material()
-	if source == null:
-		return
-	var look_present: Variant = source.get_shader_parameter("look_present")
-	var looked: bool = look_present != null and int(look_present) != 0
-	var shader: Shader = BAKE_LOOKED_SHADER if looked else BAKE_SHADER
-	for p in 2:
-		var mat := source.duplicate() as ShaderMaterial
-		mat.shader = shader
-		mat.render_priority = 0
-		mat.set_shader_parameter("bake_pass", p)
-		_bake_mats.append(mat)
-	var px := GroundClipmapPlan.TILE_PX
-	var long_px := GroundClipmapPlan.WINDOW_PX
-	for kind in 2:
-		var size := Vector2i(long_px, px)
-		if kind == GroundClipmapPlan.Kind.COLUMN:
-			size = Vector2i(px, long_px)
-		var pair: Array = []
-		for p in 2:
-			var vp := SubViewport.new()
-			vp.name = "ClipStrip%d%d" % [kind, p]
-			vp.own_world_3d = true
-			vp.size = size
-			vp.transparent_bg = true
-			vp.msaa_3d = Viewport.MSAA_DISABLED
-			vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
-			vp.use_taa = false
-			vp.use_debanding = false
-			vp.positional_shadow_atlas_size = 0
-			vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
-			var cam := Camera3D.new()
-			cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-			cam.keep_aspect = Camera3D.KEEP_HEIGHT
-			cam.near = 0.05
-			cam.far = 400.0
-			cam.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
-			var env := Environment.new()
-			env.background_mode = Environment.BG_CLEAR_COLOR
-			env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
-			env.tonemap_exposure = 1.0
-			cam.environment = env
-			vp.add_child(cam)
-			for cell in terrain.chunk_cells():
-				var src := terrain.get_chunk(cell)
-				if src == null or src.mesh == null:
-					continue
-				var mi := MeshInstance3D.new()
-				mi.mesh = src.mesh
-				mi.material_override = _bake_mats[p]
-				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-				vp.add_child(mi)
-				mi.set_meta("cell", cell)
-				_copies.append(mi)
-			add_child(vp)
-			cam.current = true
-			pair.append(vp)
-		_strips.append(pair)
+## The ground changed whole: the strip viewports go (the next strip makes them from the live
+## material; they snapshot its uniforms) and every level is emptied, to be baked again.
+func _restart_strips() -> void:
+	_strips.free_all()
 	for lv: Level in _levels:
 		if lv != null:
 			lv.valid = Rect2i()
 	_bind_dirty = true
-	if measure:
-		_measure_all()
 
 
 # ---- the ground material ----

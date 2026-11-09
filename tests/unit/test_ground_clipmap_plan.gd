@@ -105,14 +105,33 @@ func test_blits_split_a_strip_where_it_wraps_the_torus() -> void:
 	assert_eq(row[1].dst, Vector2i(0, 2 * Plan.TILE_PX))
 
 
-func test_strip_rect_is_one_tile_by_eight() -> void:
+func test_strip_rect_is_one_tile_by_a_part() -> void:
 	var col := Plan.strip_rect(1, Plan.Kind.COLUMN, 3, -2)
 	var ts := Plan.tile_m(1)
 	assert_eq(col.position, Vector2(3.0, -2.0) * ts)
-	assert_eq(col.size, Vector2(1.0, 8.0) * ts)
-	var row := Plan.strip_rect(1, Plan.Kind.ROW, 3, -2)
+	assert_eq(col.size, Vector2(1.0, Plan.PART_TILES) * ts, "a draw frames PART_TILES tiles")
+	var row := Plan.strip_rect(1, Plan.Kind.ROW, 3, -2, Plan.TILES)
 	assert_eq(row.position, Vector2(-2.0, 3.0) * ts)
 	assert_eq(row.size, Vector2(8.0, 1.0) * ts)
+
+
+func test_a_strip_is_drawn_in_parts_of_at_most_part_tiles() -> void:
+	assert_eq(Plan.parts(-4, Plan.TILES), [Vector2i(-4, 4), Vector2i(0, 4)], "a whole strip: two")
+	assert_eq(Plan.parts(2, 3), [Vector2i(2, 3)], "a short patch run: one")
+	assert_eq(Plan.parts(1, 5), [Vector2i(1, 4), Vector2i(5, 1)])
+	assert_true(Plan.parts(0, 0).is_empty())
+
+
+func test_a_part_blits_only_its_tiles() -> void:
+	# Tiles 6 .. 8 of column 3: slots 6, 7 then 0 (the torus wraps after 7).
+	var run := Plan.blits(Plan.Kind.COLUMN, 3, 6, 3)
+	assert_eq(run.size(), 2)
+	assert_eq(run[0].src, Rect2i(0, 0, Plan.TILE_PX, 2 * Plan.TILE_PX), "the part's first texel")
+	assert_eq(run[0].dst, Vector2i(3 * Plan.TILE_PX, 6 * Plan.TILE_PX))
+	assert_eq(run[1].src, Rect2i(0, 2 * Plan.TILE_PX, Plan.TILE_PX, Plan.TILE_PX))
+	assert_eq(run[1].dst, Vector2i(3 * Plan.TILE_PX, 0))
+	var one := Plan.blits(Plan.Kind.ROW, -1, 2, 1)
+	assert_eq(one, [{"src": Rect2i(0, 0, Plan.TILE_PX, Plan.TILE_PX), "dst": Vector2i(512, 1792)}])
 
 
 func test_valid_rect_in_metres_is_cut_to_the_map() -> void:
@@ -135,13 +154,15 @@ func test_patch_jobs_cover_the_edited_tiles_with_the_fewer_strips() -> void:
 	assert_eq(jobs.size(), 1)
 	assert_eq(jobs[0].kind, Plan.Kind.COLUMN)
 	assert_eq(jobs[0].tile, 0)
-	assert_eq(jobs[0].span, -4, "as long as the block")
+	assert_eq(jobs[0].span, -4, "the block's first tile along it")
+	assert_eq([jobs[0].from, jobs[0].count], [-2, 4], "covering only the touched tiles")
 	# A wide short one: rows.
 	var wide := Rect2(-2.5 * ts, 0.2 * ts, 4.0 * ts, 0.4 * ts)
 	var rows := Plan.patch_jobs(1, block, block, wide)
 	assert_eq(rows.size(), 1)
 	assert_eq(rows[0].kind, Plan.Kind.ROW)
 	assert_eq(rows[0].tile, 0)
+	assert_eq([rows[0].from, rows[0].count], [-3, 5])
 	# Two tiles each way: two strips, the columns on a tie.
 	var square := Rect2(-0.5 * ts, -0.5 * ts, 1.0 * ts, 1.0 * ts)
 	var pair := Plan.patch_jobs(1, block, block, square)

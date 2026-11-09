@@ -56,6 +56,7 @@
 		"res://tests/unit/test_glb_utils_water.gd",
 		"res://tests/unit/test_grid_ground.gd",
 		"res://tests/unit/test_ground_accents.gd",
+		"res://tests/unit/test_ground_clipmap_patch.gd",
 		"res://tests/unit/test_ground_clipmap_plan.gd",
 		"res://tests/unit/test_ground_layer_binding.gd",
 		"res://tests/unit/test_ground_layer_prepare.gd",

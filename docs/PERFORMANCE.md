@@ -6125,3 +6125,35 @@ q4, SSAO and lofi on, six in-run rounds with a plain-second control (drift 0.98 
   inside it) while the stale windows alone show none of it; the patch rebake finishes 324 to 542 ms
   after the edit (250 ms of that is the quiet wait). The rebaked cobble reads a little softer than the
   per-pixel one at home (L1 and L2 are 100 and 50 texels per metre).
+
+### Patches, parts and idle strips (card clipmap4, 2026-11-09)
+
+200 ft badlands terraces map with a meadow band (looked), clipmap forced on in authoring, home view,
+wind frozen, vsync off; the same job before and after (`tools/render_jobs/local/clipmap4/`, gitignored).
+Each event is a stroke of 20 dabs (one a frame) through the AuthoringEditor, watched until the
+clipmap, scatter and look are quiet; the world viewport's GPU ms per frame (strip GPU is separate).
+
+| Event | Strips (texels rendered) | Whole rebakes | World GPU mean / p95 / max |
+|---|---|---|---|
+| Paint 20 dabs (cobble), before | 48 (50.3 M) | 2 (stroke end, regrowth restamp) | 3.46 / 4.21 / 4.82 |
+| Paint 20 dabs, after | 17 (15.7 M) | 0 (2 patches) | 3.34 / 3.87 / 4.17 |
+| Clear 20 dabs (regrowth restamp), before | 30 (31.5 M) | 1 (restamp) | 3.34 / 4.01 / 4.63 |
+| Clear 20 dabs, after | 22 (19.9 M) | 0 (2 patches) | 3.38 / 4.21 / 4.34 |
+
+Baselines (settled, before each event) 3.17 to 3.48. Strip GPU per frame: a part (4 tiles, both
+passes) 0.34 to 0.63 ms, against 0.56 to 1.04 ms for a whole strip in clipmap1 (another session). The
+settled clipmap against the per-pixel truth (on/off/on2 grabs, STILL mean): 0.224 and 0.227 levels after
+both events, the same as before; mid-patch 0.226 and 0.227 (the hole shows the live ground, no stale
+patch). Memory at zoom 4: windows only at rest (96, 128, 160 MB on 100, 200, 320 ft maps), plus 24 MB of
+strip viewports while drawing, freed 2 s after the last strip (before: 48 MB held for the map's life;
+a full-length 3D strip viewport is 12 MB alone, 2 MB of it the render target). A remake costs 2.7 to
+4.3 ms of CPU with no frame-time step.
+
+Skirt clipmap (item 3, not built): same map, six rounds, first discarded, drift 0.996 to 1.056. Home:
+skirt hidden +0.01 ms, skirt on a flat lit material +0.01 (the skirt costs nothing measurable there).
+Full zoom-out: base 1.63 ms; skirt hidden -0.37 (its whole cost, depth and colour, the ceiling); skirt
+on a flat lit StandardMaterial3D +0.08 (dearer than its own shader, whose outer part is shadowless);
+map chunks on the flat material -0.36; clipmap read off -0.02. A baked read still draws the skirt's
+geometry and lights it, so it cannot reach the 0.3 ms bar there; a coarse level for the map at far
+zoom would save at most part of the 0.36 (the clip read cost about half of the per-pixel premium over
+flat at home). Not built.

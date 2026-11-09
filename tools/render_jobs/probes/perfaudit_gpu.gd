@@ -34,7 +34,8 @@ extends RefCounted
 ## upscale ("bilinear", "fsr", "fsr2"), msaa (0, 2, 4, 8, through VisualEffectsController so the
 ## foliage swaps its cutout variant), taa, fxaa (bool), aniso (0-4), size ([w, h] world viewport),
 ## fshader ("trivial", "unshaded", "cheap": every wind material's shader), ground_flat (bool: a
-## plain lit StandardMaterial3D over the ground classes), debug (Viewport.DEBUG_DRAW_* int), and
+## plain lit StandardMaterial3D over the ground classes; or "skirt" / "map" for one of them),
+## debug (Viewport.DEBUG_DRAW_* int), and
 ## blend, splits, noaa, a2c (perfaudit_gpu_knobs.gd).
 
 const GROUP := "perfaudit_gpu_rig"
@@ -333,7 +334,8 @@ class Rig:
 			gm.viewport_container.stretch = _orig.stretch
 		_set_hidden(cfg.get("hide", []))
 		_set_foliage_shader(String(cfg.get("fshader", "")))
-		_set_ground_flat(bool(cfg.get("ground_flat", false)))
+		var flat: Variant = cfg.get("ground_flat", false)
+		_set_ground_flat(flat if flat is String else ("all" if bool(flat) else ""))
 		_set_ground_shader(String(cfg.get("gshader", "")))
 		_set_ground_priority(int(cfg.get("gprio", 0)))
 		if _knobs == null:
@@ -464,12 +466,14 @@ class Rig:
 				_foliage_shaders[m] = m.shader
 			m.shader = target
 
-	func _set_ground_flat(on: bool) -> void:
-		if not on:
-			for gi: GeometryInstance3D in _ground_overrides:
-				if is_instance_valid(gi):
-					gi.material_override = _ground_overrides[gi]
-			_ground_overrides.clear()
+	## `which`: "" puts the ground's own materials back; "all" a flat lit material over every
+	## ground class, "skirt" over the skirt's alone, "map" over the map's chunks alone (clipmap4).
+	func _set_ground_flat(which: String) -> void:
+		for key: Variant in _ground_overrides:
+			if is_instance_valid(key):
+				(key as GeometryInstance3D).material_override = _ground_overrides[key]
+		_ground_overrides.clear()
+		if which == "":
 			return
 		if _flat_ground == null:
 			_flat_ground = StandardMaterial3D.new()
@@ -477,7 +481,12 @@ class Rig:
 			_flat_ground.roughness = 1.0
 		for node in gm.world_viewport.find_children("*", "GeometryInstance3D", true, false):
 			var gi := node as GeometryInstance3D
-			if _cls(gi).contains("authored_ground") and not _ground_overrides.has(gi):
+			var cls := _cls(gi)
+			var skirt := cls.begins_with("authored_ground_skirt")
+			var wanted := which == "all" or (skirt if which == "skirt" else not skirt)
+			# The ground clipmap's strip copies (bake shader, own world) are not the drawn ground.
+			wanted = wanted and not cls.contains("authored_ground_bake")
+			if cls.contains("authored_ground") and wanted and not _ground_overrides.has(gi):
 				_ground_overrides[gi] = gi.material_override
 				gi.material_override = _flat_ground
 

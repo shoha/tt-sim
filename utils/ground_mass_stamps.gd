@@ -91,16 +91,10 @@ static func draw(
 		var s: PackedFloat64Array = sums[key]
 		if s[0] < MIN_TUFTS:
 			continue
-		var c := Vector2(s[1], s[2]) / s[0]
-		var cxx := s[3] / s[0] - c.x * c.x
-		var czz := s[4] / s[0] - c.y * c.y
-		var cxz := s[5] / s[0] - c.x * c.y
-		var angle := 0.5 * atan2(2.0 * cxz, cxx - czz)
-		var mid := 0.5 * (cxx + czz)
-		var spread := sqrt(maxf(0.25 * (cxx - czz) * (cxx - czz) + cxz * cxz, 0.0))
-		var axes := Vector2(
-			2.0 * sqrt(maxf(mid + spread, 1e-4)), 2.0 * sqrt(maxf(mid - spread, 1e-4))
-		)
+		var shape := _shape(s)
+		var c: Vector2 = shape[0]
+		var angle: float = shape[1]
+		var axes: Vector2 = shape[2]
 		# The mass's extent toward the sun: its ellipse's support along `sun`.
 		var u := Vector2(cos(angle), sin(angle))
 		var reach := sqrt(
@@ -125,6 +119,51 @@ static func draw(
 		drawn += 1
 	shade.set_meta("masses", drawn)
 	return drawn
+
+
+## The world XZ rectangle (metres) whose stamps differ between `before` and `after` (collect()
+## results) under any of `masses` (the slots' mass groups) and any sun: the union of the bounds of
+## every mass whose moments changed, appeared or went (a mass under MIN_TUFTS draws nothing). An
+## empty Rect2 when no drawn mass changed. A restamp redraws every mass, but an unchanged one lands
+## on the same texels, so only this rectangle of the bake changes (GroundLookBake._restamp).
+static func changed_rect(before: Dictionary, after: Dictionary, masses: Array) -> Rect2:
+	var reach := 0.0
+	for mass: Dictionary in masses:
+		var shade := sqrt(2.0) * float(mass.get("shade_size", 0.0)) + float(mass.get("shade_push", 0.0))
+		var lift := sqrt(2.0) * float(mass.get("lift_size", 0.0)) + float(mass.get("lift_push", 0.0))
+		reach = maxf(reach, maxf(shade, lift))
+	var out := Rect2()
+	var found := false
+	for side in 2:
+		var sums := before if side == 0 else after
+		var other := after if side == 0 else before
+		for key: Vector2i in sums:
+			var s: PackedFloat64Array = sums[key]
+			if s[0] < MIN_TUFTS or other.get(key) == s:
+				continue
+			var shape := _shape(s)
+			var axes: Vector2 = shape[2]
+			# The stamp's texture rect is axes x size about a centre pushed by up to push x the
+			# mass's support (at most its longer axis); its corners bound it.
+			var r := maxf(axes.x, axes.y) * reach
+			var box := Rect2(shape[0] - Vector2(r, r), Vector2(r, r) * 2.0)
+			out = out.merge(box) if found else box
+			found = true
+	return out
+
+
+## A mass's ellipse from its moments (collect()): [centre (world XZ), angle (radians), axes (two
+## standard deviations along each principal direction, metres)].
+static func _shape(s: PackedFloat64Array) -> Array:
+	var c := Vector2(s[1], s[2]) / s[0]
+	var cxx := s[3] / s[0] - c.x * c.x
+	var czz := s[4] / s[0] - c.y * c.y
+	var cxz := s[5] / s[0] - c.x * c.y
+	var angle := 0.5 * atan2(2.0 * cxz, cxx - czz)
+	var mid := 0.5 * (cxx + czz)
+	var spread := sqrt(maxf(0.25 * (cxx - czz) * (cxx - czz) + cxz * cxz, 0.0))
+	var axes := Vector2(2.0 * sqrt(maxf(mid + spread, 1e-4)), 2.0 * sqrt(maxf(mid - spread, 1e-4)))
+	return [c, angle, axes]
 
 
 ## The Node2D child of `vp` named `node_name`, drawing with `blend`, holding a radial texture (as

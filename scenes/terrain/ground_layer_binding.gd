@@ -114,16 +114,20 @@ func needs_retable(water: bool) -> bool:
 
 ## Brings the bindings up to the document after an edit of the samples in `rect` (clipped to
 ## the grid): the tables first when needs_retable(), then the index maps (whole) and the
-## broad tint of `rect` (whole when the tables recoloured a component already drawn).
-func update_region(rect: Rect2i, water: bool) -> void:
+## broad tint of `rect` (whole when the tables recoloured a component already drawn). True when
+## the tint was rebuilt whole, so the ground may have changed outside `rect` too (a retable only
+## appends layers and routes each sample as before, so nothing else draws differently).
+func update_region(rect: Rect2i, water: bool) -> bool:
 	if needs_retable(water):
 		retable(water)
 	upload_index()
 	var size := Vector2i(document.samples_x(), document.samples_z())
 	if _tint_stale or tint_mirror == null or tint_mirror.get_size() != size:
 		_build_broad()
-	elif rect.has_area():
+		return true
+	if rect.has_area():
 		_update_broad(rect)
+	return false
 
 
 ## Recomputes the layer list (appending to the bound one), the routing table and the broad

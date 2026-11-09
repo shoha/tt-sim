@@ -474,18 +474,24 @@ func get_rule_fields() -> Dictionary:
 ## native copies) and the broad edge's tint recomputed over the rectangle. Call it after
 ## every mask or paint edit with a rectangle covering every sample changed since the last
 ## call. A biome or painted surface added to the document since the last call first gets its
-## layers (appended; only uniforms and new array layers are set).
+## layers (appended; only uniforms and new array layers are set). An empty `sample_rect` re-plans
+## the tables alone (a Paint stroke's end, after its dabs refreshed their own samples): it emits
+## ground_edited over the whole grid only when that rebuilt the broad tint whole, since otherwise
+## no sample draws differently (the ground clipmap then patches the stroke alone, card clipmap4).
 func update_ground_region(sample_rect: Rect2i) -> void:
 	var start := Time.get_ticks_usec()
 	var grid := Rect2i(0, 0, document.samples_x(), document.samples_z())
 	var retabled := _layers.needs_retable(_has_water())
-	_layers.update_region(sample_rect.intersection(grid), _has_water())
+	var whole := _layers.update_region(sample_rect.intersection(grid), _has_water())
 	if retabled:
 		_sync_skirt_tables()
 		_sync_ground_look(false)
 	last_broad_update_usec = _layers.last_broad_usec
 	last_biome_update_usec = Time.get_ticks_usec() - start
-	ground_edited.emit(sample_rect.intersection(grid) if sample_rect.has_area() else grid)
+	if whole:
+		ground_edited.emit(grid)
+	elif sample_rect.has_area():
+		ground_edited.emit(sample_rect.intersection(grid))
 
 
 ## Brings the ground's wet dressing up to the document's water_dressing (WaterDressing

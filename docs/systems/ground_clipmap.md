@@ -11,18 +11,24 @@ design history are in `docs/PERFORMANCE.md` "Ground clipmap".
 - **Levels.** Five fixed-density levels, L0 to L4 at 200, 100, 50, 25 and 12.5 texels per metre. Each is a
   toroidal window of 2048 x 2048 texels (8 x 8 tiles of 256) in two RGBA8 textures: lit albedo with AO
   in alpha, then normal.xz and roughness. 32 MB a level; 160 MB with all five. The four strip viewports
-  (3D, with depth and the renderer's buffers) add about 48 MB for the map's life, so the measured
-  footprint at zoom 4 is 144 MB on a 100 ft map, 176 MB at 200 ft and 208 MB at 320 ft (texture memory
-  with the clipmap against detached, clipmap3). The coarsest level that spans the map (with a tile to
-  spare) is static; finer ones follow the view's focus.
+  (3D, with depth and the renderer's buffers; `GroundClipmapStrips`) are half a window long and exist
+  only while strips are drawn: made by the first strip due, freed 2 s (`STRIPS_IDLE_S`) after the last.
+  Measured at zoom 4 (texture memory against detached, clipmap4): 96 MB at rest on a 100 ft map, 128 MB
+  at 200 ft, 160 MB at 320 ft, plus 24 MB while drawing (before clipmap4 the full-length strips held
+  48 MB for the map's life: 144, 176 and 208 MB). Making them again costs 2.7 to 4.3 ms of CPU and no
+  frame-time step was seen. The coarsest level that spans the map (with a tile to spare) is static;
+  finer ones follow the view's focus.
 - **Held levels.** From the finest the zoom needs (the screen's texels per metre) up to the top; a level
   stops being held 4 s after the view stops needing it. Zoom needs no rebake. The Ground detail setting
   (`GroundClipmapSetting`: 5, 4, 3 or Off) caps how many are held, dropping the sharpest first.
-- **Strips.** A window is written a column or row of tiles at a time. A strip viewport renders the
-  chunk meshes top down with the bake shader (`authored_ground_bake*.gdshader`, the ground include with
-  `GROUND_BAKE_OUT`, two passes), and the frame after a 2D draw copies it into the window with blending
-  off. One strip per two frames, coarsest level first. `GroundClipmapPlan` is the pure geometry (blocks,
-  next job, blit pieces, patch jobs; unit-tested).
+- **Strips.** A window is written a column or row of tiles at a time, drawn in parts of `PART_TILES`
+  (4) tiles. A strip viewport renders the chunk meshes of a part top down with the bake shader
+  (`authored_ground_bake*.gdshader`, the ground include with `GROUND_BAKE_OUT`, two passes), and the
+  frame after a 2D draw copies the part's tiles into the window with blending off. One part per two
+  frames, coarsest level first; a part costs 0.34 to 0.63 ms of GPU (both passes, L0 to L3 on the
+  200 ft badlands map; a whole 8-tile strip was 0.56 to 1.04 ms in clipmap1), so no frame draws more
+  than about 0.65 ms of bake. `GroundClipmapPlan` is the pure geometry (blocks, next job, parts, blit
+  pieces, patch jobs; unit-tested).
 - **Sampling.** `clip_fetch` in `shaders/authored_ground.gdshaderinc`: window uv = world xz / extent
   (toroidal, `repeat_enable`), level = floor(log2(footprint x 200)), a crossfade to the next level above
   the 0.7 fraction, a fade at a window's edge, and a coverage share; at 0.5 or more the pixel reads the
@@ -39,10 +45,12 @@ design history are in `docs/PERFORMANCE.md` "Ground clipmap".
 the rule fields' reach), `settle_heights` and `refresh_water_dressing`. The clipmap marks the rectangle
 (`clip_hole`, a uniform): at once every pixel inside it uses the layer blend, which reads the live ground,
 so an edit shows in the next frame. After `EDIT_QUIET_S` (0.25 s) without edits and without height work,
-the strips over the tiles it touched are rebaked (`patch_jobs`: the fewer of columns and rows, each as long
-as the block, so tiles outside the edit are rewritten with the same content), the bake materials are
-synced to the live ground (uniforms, rebuilt chunk meshes) and the hole closes. An edit over half the grid,
-a new ground material, a look rebake or a chunk-count change rebakes everything.
+the bake materials are synced to the live ground (uniforms, rebuilt chunk meshes), the touched tiles are
+rebaked (`patch_jobs`: the fewer of columns and rows, each covering only the touched tiles along it) and
+the hole closes. A restamp of the look's grass masses arrives the same way
+(`GroundLookBake.masses_restamped`, the rectangle of the masses whose moments changed, `GroundMassStamps
+.changed_rect`). An edit over half the grid, a new ground material, a look rebake (a new set of looked
+biomes, a sun change) or a chunk-count change rebakes everything.
 
 What changes the composited ground at runtime, and how each reaches the clipmap (audit, clipmap3):
 
@@ -50,11 +58,13 @@ What changes the composited ground at runtime, and how each reaches the clipmap 
   their undo and redo, a peer's `LiveEditReader`, `TerrainEvents`' fire, forest fall and bridge collapse):
   biome, thin, clear and Paint strokes call `update_ground_region` (a rectangle); sculpt and water
   carves call `queue_heights` and `settle_heights`; water calls `refresh_water_dressing` (the whole grid).
-  A Paint stroke's end re-plans the tables with an empty rectangle, which emits the whole grid: a whole
-  rebake, correct and costly.
-- The ground look (`GroundLookBake`): a rebake, a restamp of the grass masses after the scatter regenerates
-  and a sun change (the Sun pane, the gizmo) bump `bakes`, in the signature: a whole rebake. On a looked
-  map every edit that regrows plants therefore ends in a whole rebake too.
+  A Paint stroke's end re-plans the tables with an empty rectangle: since clipmap4 that emits nothing
+  unless it rebuilt the broad tint whole (`GroundLayerBinding.update_region` returns true; then the whole
+  grid), because the stroke's dabs already emitted their samples and a re-plan only appends layers.
+- The ground look (`GroundLookBake`): a rebake and a sun change (the Sun pane, the gizmo) bump `bakes`, in
+  the signature: a whole rebake. A restamp of the grass masses after the scatter regenerates emits
+  `masses_restamped` with the changed masses' rectangle (since clipmap4; it bumped `bakes` before, so every
+  regrowth on a looked map ended in a whole rebake).
 - A new material (a rebuild, a resize), `look_present` (the looked shaders), the chunk count.
 - `replan_ground_layers` (on save, a session past `MAX_LAYERS`) emits the whole grid (it did not before
   clipmap3; authoring only, where the clipmap is off unless forced).

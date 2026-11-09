@@ -105,6 +105,7 @@ const TEST_PREFIXES: Array[String] = [
 	"_haytop_",
 	"_hayrope_",
 	"_clipmap3_",
+	"_clipmap4_",
 ]
 const NET_PREFIX := "_nettest_"
 const BASIN := {"id": 21, "at": [-17, -14], "r": 4.0, "depth": "waist"}

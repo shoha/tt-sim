@@ -21,11 +21,17 @@ extends Node
 ## When: build() calls sync(true) (map open, resize); update_ground_region() calls sync(false)
 ## (biome paint, fire), which only re-tables the slots unless the set of looked biomes changed;
 ## the scatter's applied regeneration restamps the masses once it has settled (DEBOUNCE_S, and
-## not while growing); a species resolved later gets the grass uniforms; the sun's direction
-## (the first DirectionalLight3D) is polled each frame and a change reapplies the grass's lit
-## side and restamps. A map whose biomes carry no look binds look_present 0 and runs nothing.
-## Binding the ground also picks its shaders (AuthoredTerrain.set_looked): the looked twins only
-## while a look is bound, so a map without one draws shaders with no look code in them.
+## not while growing), announcing the rectangle of the masses that changed (masses_restamped,
+## which the ground clipmap patches); a species resolved later gets the grass uniforms; the
+## sun's direction (the first DirectionalLight3D) is polled each frame and a change reapplies the
+## grass's lit side and restamps every mass (a whole bake). A map whose biomes carry no look binds
+## look_present 0 and runs nothing. Binding the ground also picks its shaders
+## (AuthoredTerrain.set_looked): the looked twins only while a look is bound, so a map without one
+## draws shaders with no look code in them.
+
+## Emitted after a restamp that changed only some masses, with the world XZ rectangle (metres)
+## of the bake it changed (see _restamp); a whole change bumps `bakes` instead.
+signal masses_restamped(world_rect: Rect2)
 
 const NODE_NAME := "GroundLookBake"
 const BAKE_SHADER := preload("res://shaders/ground_light_field_bake.gdshader")
@@ -46,8 +52,11 @@ const SCATTER_NODE := "AuthoredScatter"
 const SUN_EPSILON := 1e-4
 
 var terrain: AuthoredTerrain = null
-## Bakes run (each slot rendered once), for tests and measurement.
+## Bakes run (each slot rendered whole: a build, a new set of looked biomes, a sun change), for
+## tests, measurement and the ground clipmap's signature.
 var bakes: int = 0
+## Restamps that changed only some masses (masses_restamped).
+var restamps: int = 0
 ## Microseconds the last bake's CPU side took (tables, stamps; the GPU render is not counted).
 var last_bake_usec: int = 0
 
@@ -61,6 +70,9 @@ var _rect := Vector4.ZERO
 var _px := Vector2i.ZERO
 var _seed_m := Vector2.ZERO
 var _stamp_wait: float = -1.0
+## The masses drawn last (GroundMassStamps.collect()) and the sun they were drawn for.
+var _stamped: Dictionary = {}
+var _stamped_sun := Vector2(0.0, -1.0)
 var _grass_dirty: bool = false
 var _bind_pending: bool = false
 var _sun: DirectionalLight3D = null
@@ -248,6 +260,8 @@ func _bake_all() -> void:
 			mat.set_shader_parameter(key, params[key])
 		GroundMassStamps.draw(vp, sums, _rect, _px, _looks[s].mass, _sun_dir)
 		vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	_stamped = sums
+	_stamped_sun = _sun_dir
 	_bake_steep()
 	bakes += 1
 	_await_draw()
@@ -286,15 +300,28 @@ func _bake_steep() -> void:
 	_steep.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
-## Redraws every slot's mass stamps from the scatter now (and the bake under them).
+## Redraws every slot's mass stamps from the scatter now (and the bake under them). A sun change
+## moves every stamp, a whole change (bakes); otherwise only the masses that changed since the last
+## draw land on new texels, and their world rectangle is announced (masses_restamped) so that the
+## ground clipmap rebakes that rectangle alone (card clipmap4; it rebaked the whole map on every
+## regrowth before).
 func _restamp() -> void:
 	if _viewports.is_empty():
 		return
 	var sums := GroundMassStamps.collect(_stamp_root())
+	var masses := _looks.map(func(look: Dictionary) -> Dictionary: return look.mass)
+	var whole := _sun_dir.distance_to(_stamped_sun) > SUN_EPSILON
+	var changed := Rect2() if whole else GroundMassStamps.changed_rect(_stamped, sums, masses)
 	for s in _viewports.size():
 		GroundMassStamps.draw(_viewports[s], sums, _rect, _px, _looks[s].mass, _sun_dir)
 		_viewports[s].render_target_update_mode = SubViewport.UPDATE_ONCE
-	bakes += 1
+	_stamped = sums
+	_stamped_sun = _sun_dir
+	if whole:
+		bakes += 1
+	elif changed.has_area():
+		restamps += 1
+		masses_restamped.emit(changed)
 
 
 ## Slot `s`'s viewport (made on first use): a transparent 2D SubViewport whose ColorRect runs the

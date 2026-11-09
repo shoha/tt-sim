@@ -21,6 +21,12 @@ const CLIP_LEVELS := 5
 const WINDOW_PX := 2048
 const TILE_PX := 256
 const TILES := 8
+## Tiles along a strip that one draw covers (the strip viewports are TILE_PX x PART_TILES tiles):
+## a strip is drawn in parts(), so the viewports are half a window long and no frame draws more
+## than half a strip (card clipmap4).
+const PART_TILES := 4
+## Texels one part renders: both passes of TILE_PX x PART_TILES tiles.
+const PART_TEXELS := 2 * TILE_PX * TILE_PX * PART_TILES
 ## Texels per metre of level 0 (a 10.24 m window).
 const D0 := 200.0
 ## The shader's lod bias and the density margin for choosing the finest level a view needs.
@@ -136,9 +142,10 @@ static func next_job(valid: Rect2i, target: Rect2i) -> Dictionary:
 
 ## The strips that rebake what `world` (a rectangle in map-frame metres, an edit) changed in
 ## level `l`: the columns (or the rows, whichever are fewer) of tiles over the part of `valid`
-## it touches, each as long as `block` (the level's target block), so the strip machinery bakes
-## them as it does a pan's. Each job is {kind, tile, span, after: valid}; [] when the edit
-## touches no baked tile of the level.
+## it touches, each covering only the touched tiles along it (`from`, `count`), so a patch draws
+## the edit's tiles and no others (card clipmap4; a patch strip was as long as the block before).
+## Each job is {kind, tile, span (the block's first tile along the strip), from, count, after:
+## valid}; [] when the edit touches no baked tile of the level.
 static func patch_jobs(l: int, block: Rect2i, valid: Rect2i, world: Rect2) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var ts := tile_m(l)
@@ -149,25 +156,56 @@ static func patch_jobs(l: int, block: Rect2i, valid: Rect2i, world: Rect2) -> Ar
 		return out
 	if touched.size.x <= touched.size.y:
 		for tx in range(touched.position.x, touched.end.x):
-			out.append({"kind": Kind.COLUMN, "tile": tx, "span": block.position.y, "after": valid})
+			out.append(
+				{
+					"kind": Kind.COLUMN,
+					"tile": tx,
+					"span": block.position.y,
+					"from": touched.position.y,
+					"count": touched.size.y,
+					"after": valid,
+				}
+			)
 	else:
 		for ty in range(touched.position.y, touched.end.y):
-			out.append({"kind": Kind.ROW, "tile": ty, "span": block.position.x, "after": valid})
+			out.append(
+				{
+					"kind": Kind.ROW,
+					"tile": ty,
+					"span": block.position.x,
+					"from": touched.position.x,
+					"count": touched.size.x,
+					"after": valid,
+				}
+			)
 	return out
 
 
-## Where a strip lands in the window, as 1 or 2 pieces (a strip that wraps the torus splits):
-## each {src: Rect2i in strip texels, dst: Vector2i in window texels}. `kind`, the strip's
-## `tile` index along its short axis and `span` (its first tile along the long one).
-static func blits(kind: int, tile: int, span: int) -> Array[Dictionary]:
+## The draws of a strip covering tiles `from` .. `from + count - 1` along it: Vector2i(first
+## tile, tiles) runs of at most PART_TILES, in order.
+static func parts(from: int, count: int) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var at := from
+	while at < from + count:
+		var n := mini(PART_TILES, from + count - at)
+		out.append(Vector2i(at, n))
+		at += n
+	return out
+
+
+## Where a strip's tiles `first` .. `first + count - 1` along it land in the window, as 1 or 2
+## pieces (a run that wraps the torus splits): each {src: Rect2i in strip texels, the strip's
+## first texel being tile `first`'s, dst: Vector2i in window texels}. `kind`, the strip's `tile`
+## index along its short axis.
+static func blits(kind: int, tile: int, first: int, count: int = TILES) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var short_slot := posmod(tile, TILES) * TILE_PX
-	var first := posmod(span, TILES)
-	var head := mini(TILES - first, TILES)
+	var slot := posmod(first, TILES)
+	var head := mini(TILES - slot, count)
 	# Tiles first .. first + head - 1 fit before the wrap; the rest start at slot 0.
-	var pieces := [[0, first, head]]
-	if head < TILES:
-		pieces.append([head, 0, TILES - head])
+	var pieces := [[0, slot, head]]
+	if head < count:
+		pieces.append([head, 0, count - head])
 	for p: Array in pieces:
 		var src_from: int = p[0] * TILE_PX
 		var dst_from: int = p[1] * TILE_PX
@@ -183,12 +221,13 @@ static func blits(kind: int, tile: int, span: int) -> Array[Dictionary]:
 	return out
 
 
-## A strip's world rectangle (position, size in metres) for level `l`: the camera frames it.
-static func strip_rect(l: int, kind: int, tile: int, span: int) -> Rect2:
+## The world rectangle (position, size in metres) of `count` tiles of a strip of level `l` from
+## tile `first` along it: a part's camera frames PART_TILES of them (the viewport's length).
+static func strip_rect(l: int, kind: int, tile: int, first: int, count: int = PART_TILES) -> Rect2:
 	var ts := tile_m(l)
 	if kind == Kind.COLUMN:
-		return Rect2(Vector2(tile, span) * ts, Vector2(1, TILES) * ts)
-	return Rect2(Vector2(span, tile) * ts, Vector2(TILES, 1) * ts)
+		return Rect2(Vector2(tile, first) * ts, Vector2(1, count) * ts)
+	return Rect2(Vector2(first, tile) * ts, Vector2(count, 1) * ts)
 
 
 ## `valid` (tiles) as the shader's rectangle: (min x, min z, max x, max z) in metres, cut to
