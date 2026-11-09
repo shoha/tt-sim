@@ -46,6 +46,7 @@
 		"res://tests/unit/test_token_spawner_network_tracking.gd",
 		"res://tests/unit/test_token_spawner_offline_sync.gd",
 		"res://tests/unit/test_token_spawner_signal_wiring.gd",
+		"res://tests/unit/test_token_state_wire.gd",
 		"res://tests/unit/test_version_gate.gd",
 		"res://tests/unit/test_visual_broadcast_throttle.gd"
 	],

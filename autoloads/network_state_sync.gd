@@ -21,6 +21,8 @@ extends Node
 
 ## Emitted when full game state is received (clients only, for initial sync)
 signal full_state_received(state_dict: Dictionary)
+## Emitted on clients once a token add is in GameState (broadcast_token_added): the ids
+signal tokens_added(network_ids: Array[String])
 
 ## Rate limiting for transform updates
 const TRANSFORM_SEND_INTERVAL := 0.05  # 20 updates/sec max per token
@@ -38,6 +40,7 @@ var _transform_batch_timer: Timer = null
 func _ready() -> void:
 	# Connect to NetworkManager signals for receiving data
 	NetworkManager.game_state_received.connect(_on_game_state_received)
+	NetworkManager.tokens_added_received.connect(_on_tokens_added_received)
 	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
 
 	# Setup batch timer for transform updates (starts when hosting)
@@ -183,7 +186,18 @@ func broadcast_token_removed(network_id: String) -> void:
 	NetworkManager.game_sync.broadcast_token_removed(network_id)
 
 
-## Broadcast the full game state to all clients (for initial sync or reconciliation)
+## Broadcast a token the host just added (placed, or re-created by an undo) to all clients:
+## that token's state and permissions alone (GameState.get_tokens_state_dict), not the
+## table's, so a placement costs one token's bytes whatever is on the board. Clients apply
+## it by network_id (GameState.upsert_state_dict), so an add that crosses a full state
+## carrying the same token changes nothing twice.
+func broadcast_token_added(network_id: String) -> void:
+	if not NetworkManager.is_host() or not GameState.has_token(network_id):
+		return
+	NetworkManager.broadcast_tokens_added(GameState.get_tokens_state_dict([network_id]))
+
+
+## Broadcast the full game state to all clients (a table set out, the heartbeat)
 func broadcast_full_state() -> void:
 	if not NetworkManager.is_host():
 		return
@@ -214,6 +228,10 @@ func _on_game_state_received(state_dict: Dictionary) -> void:
 
 	# Emit signal for visual layer
 	full_state_received.emit(state_dict)
+
+
+func _on_tokens_added_received(state_dict: Dictionary) -> void:
+	tokens_added.emit(GameState.upsert_state_dict(state_dict))
 
 
 # =============================================================================

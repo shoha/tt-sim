@@ -30,6 +30,8 @@ signal game_starting
 signal level_data_received(level_dict: Dictionary)
 signal late_joiner_connected(peer_id: int)  ## Emitted when a player joins mid-game
 signal game_state_received(state_dict: Dictionary)
+## Client: the host added (or re-sent) some tokens, in GameState.get_tokens_state_dict()'s shape
+signal tokens_added_received(state_dict: Dictionary)
 signal table_loaded(peer_id: int)  ## Host: a client's level load completed (LateJoinerSync)
 
 ## Connection states
@@ -115,6 +117,10 @@ var _connection_timer: Timer = null
 
 ## Game state tracking (for late joiner detection)
 var _game_in_progress: bool = false
+
+## Host: serial of the last token state message sent (TokenStateWire); client: its reassembly
+var _state_serial: int = 0
+var _state_assembler := TokenStateWire.Assembler.new()
 
 ## Steam initialization state
 var _steam_initialized: bool = false
@@ -426,6 +432,7 @@ func disconnect_game() -> void:
 	_lobby_id = 0
 	_game_in_progress = false
 	_current_level_dict.clear()
+	_state_assembler = TokenStateWire.Assembler.new()
 	game_sync.reset()
 	_stop_connection_timeout()
 
@@ -638,9 +645,27 @@ func _rpc_table_loaded() -> void:
 	table_loaded.emit(peer_id)
 
 
+## RPC: one chunk of a token state message (TokenStateWire, host -> clients). The whole
+## message is decoded once its last chunk is in: a FULL state emits game_state_received, an
+## ADD tokens_added_received. A refused chunk or message is dropped with a warning; the next
+## full state (the heartbeat, NetworkTokenSync) brings the table back.
 @rpc("authority", "reliable")
-func _rpc_receive_game_state(state_dict: Dictionary) -> void:
-	game_state_received.emit(state_dict)
+func _rpc_receive_state_chunk(serial: int, part: int, parts: int, data: PackedByteArray) -> void:
+	if is_host():
+		return
+	var whole := _state_assembler.add(serial, part, parts, data)
+	if _state_assembler.problem != "":
+		push_warning("NetworkManager: token state refused: %s" % _state_assembler.problem)
+		return
+	if whole.is_empty():
+		return
+	var message := TokenStateWire.decode(whole)
+	if message.problem != "":
+		push_warning("NetworkManager: token state refused: %s" % message.problem)
+	elif message.kind == TokenStateWire.Kind.ADD:
+		tokens_added_received.emit(message.state)
+	else:
+		game_state_received.emit(message.state)
 
 
 # =============================================================================
@@ -709,16 +734,43 @@ static func with_map_hashes(level_dict: Dictionary) -> Dictionary:
 func broadcast_game_state(state_dict: Dictionary) -> void:
 	if not is_host():
 		return
-
-	_rpc_receive_game_state.rpc(state_dict)
+	_send_state(0, state_dict, TokenStateWire.Kind.FULL)
 
 
 ## Called by host to send game state to a specific client
 func send_game_state_to_peer(peer_id: int, state_dict: Dictionary) -> void:
 	if not is_host():
 		return
+	_send_state(peer_id, state_dict, TokenStateWire.Kind.FULL)
 
-	_rpc_receive_game_state.rpc_id(peer_id, state_dict)
+
+## Host: send some tokens (GameState.get_tokens_state_dict()) to every client, added to or
+## updated in what each holds (TokenStateWire.Kind.ADD).
+func broadcast_tokens_added(state_dict: Dictionary) -> void:
+	if not is_host():
+		return
+	_send_state(0, state_dict, TokenStateWire.Kind.ADD)
+
+
+## Host: `state_dict` as one TokenStateWire message of `kind` to `peer_id` (0: every client),
+## every chunk in this call so no other message comes between them (TokenStateWire header).
+func _send_state(peer_id: int, state_dict: Dictionary, kind: int) -> void:
+	var bytes := TokenStateWire.encode(state_dict, kind)
+	if bytes.size() > TokenStateWire.SEND_BUDGET_BYTES:
+		var count: int = (state_dict.get("tokens", {}) as Dictionary).size()
+		push_warning(
+			(
+				"NetworkManager: a token state of %d B (%d tokens) is past the %d B send budget"
+				% [bytes.size(), count, TokenStateWire.SEND_BUDGET_BYTES]
+			)
+		)
+	var parts := TokenStateWire.chunks(bytes)
+	_state_serial += 1
+	for part in parts.size():
+		if peer_id == 0:
+			_rpc_receive_state_chunk.rpc(_state_serial, part, parts.size(), parts[part])
+		else:
+			_rpc_receive_state_chunk.rpc_id(peer_id, _state_serial, part, parts.size(), parts[part])
 
 
 ## Host: replace the level snapshot served to late joiners with `patch` applied to it, so
