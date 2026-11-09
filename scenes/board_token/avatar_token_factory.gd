@@ -10,7 +10,8 @@ extends RefCounted
 ## - `avatar_recipe` set (BoardToken.is_avatar) and empty pack ids; the recipe rides along
 ##   wherever a pack token's ids do (TokenPlacement, TokenState, level.json, the host's
 ##   state sync, undo);
-## - an AvatarTokenView under the rigid body holding the figure (hidden fade and shade);
+## - an AvatarTokenView under the rigid body holding the figure and drawing it baked into one
+##   static mesh (AvatarFigureBake; hidden fade and shade);
 ## - its own collision capsule round the figure's posed body core (AvatarExtent), which
 ##   sizes the selection glow, the drag height and the landing.
 ##
@@ -117,8 +118,10 @@ static func _apply_recipe(token: BoardToken, recipe: Dictionary) -> bool:
 		if fresh.colours != built.colours or fresh.face != built.face:
 			avatar_kit.apply_look(view.figure, normalized)
 		if fresh.stance == built.stance:
+			view.refresh_mesh()
 			return true
 		avatar_kit.apply_stance(view.figure, normalized)
+		view.refresh_mesh()
 	var collision := _collision_of(token)
 	var capsule := _capsule_for(avatar_kit, view.figure)
 	if collision != null and collision.shape != capsule:

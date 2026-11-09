@@ -1,0 +1,24 @@
+{
+  "out_dir": "render_jobs/perfaudit_system_retain",
+  "timeout_s": 400,
+  "hang_s": 120,
+  "steps": [
+    {"op": "wait_title"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "key"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "census", "name": "title", "ws": true},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "profiler", "on": true},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "load", "new": {"biome": "temperate_forest_summer_s1", "size": 200, "seed": 1234, "landform": "valley"}, "ws": true},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "await"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "await"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "profiler", "on": false},
+    {"op": "no_autosave"},
+    {"op": "title"},
+    {"op": "wait", "s": 1.5},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "census", "name": "title_after_author", "ws": true},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "drop_caches"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "await"},
+    {"op": "wait", "s": 1.0},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "census", "name": "title_after_drop", "ws": true},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "orphans"}
+  ]
+}

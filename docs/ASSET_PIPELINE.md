@@ -1915,6 +1915,14 @@ because they constrain the producer:
   token has its own collision capsule, which also sizes the selection glow. Both are in
   (the avatar token card, docs/ARCHITECTURE.md "Avatar tokens"): a token carries the recipe
   as written (not resolved) and every peer rebuilds the figure from it and its own kit.
+- On the board a token draws its figure baked (`utils/avatar_figure_bake.gd`, the tokenmesh card,
+  2026-11-09): the posed, skinned parts are skinned once on the CPU (blend shapes at their
+  weights, Skin binds through the skeleton's local poses) into one static mesh with one surface
+  per part, each drawn by the part's own material, so a figure is 3-6 draws instead of one per
+  body region (about 18). Nothing here changes for the producer: the bake reads the same
+  position, normal, UV, UV2 and COLOR_0, and a part's region surfaces still name its regions
+  (the hides rule runs before the bake). A kit change that animates bones on the board would
+  need the skinned figure back (`AvatarTokenView.bake_figures`).
 
 ### Round trip
 

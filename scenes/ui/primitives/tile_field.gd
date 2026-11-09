@@ -67,6 +67,18 @@ func _ready() -> void:
 	_refresh_override()
 
 
+## The row and the note are made before the field enters the tree and only become children in
+## _ready, so a field freed without ever being shown (the title's new-map card frees its
+## never-opened Advanced popover with the size field inside) must free them itself: they
+## leaked as six orphan nodes per title visit (perfaudit, 2026-11-08).
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_PREDELETE:
+		return
+	for part: Node in [tiles, note]:
+		if is_instance_valid(part) and part.get_parent() == null:
+			part.free()
+
+
 ## Puts the caption and the note on one line, once both exist.
 func _place_note() -> void:
 	if note == null or _caption == null or note.get_parent() != null:
