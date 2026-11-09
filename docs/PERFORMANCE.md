@@ -4819,3 +4819,69 @@ a probe then reads them each frame with `get_captured_timestamps_count`,
 interval to the next timestamp by name. The flag also prints a one-second GPU PROFILE to stdout. The
 probe was a one-use job (not in the repo); `probes/eye_perf.gd`'s `perf` action is the committed
 neighbour with the same in-run A/B loop, to which the timestamp read adds about 30 lines.
+
+## Render scale (topic perfaudit, card renderscale)
+
+Settings > Graphics > Render scale (`RenderScale`, `utils/render_scale.gd`): Auto, 100 % (the
+default), 85, 75, 67 or 50 % of the board's full render, upscaled with FSR 1.0. Added because the
+frame is fill-bound (1440p-sized render 1.72 times, 4K-sized 3.5 times the 1080p time).
+
+**The board already renders at 1920x1080 on every screen.** The world SubViewport sits in a
+stretched SubViewportContainer and the project stretches canvas_items on a 1920x1080 base canvas, so
+the viewport is sized in canvas units: 1920x1080 at every 16:9 window from 720p to 4K (headless probe
+of a stretched container, 2026-11-08; at Interface size 1.4 it is 1371x771 and GameMap's
+`scaling_3d_scale` 1.4 brings the render back to 1920x1080). On a 1440p or 4K screen the canvas
+enlarges that render bilinearly, which is the pixel count of FSR 0.75 and 0.5 of the output; below
+1080p the render is supersampled (2.25 times the shown pixels at 720p). The 2D layer always draws at
+the window's resolution. So a 4K player pays about 4 ms here, not 14, and sees a softer board: native
+output rendering would need an output-sized world viewport (overlays, pixel-sized grid widths and
+unproject call sites change with it), a board decision rather than this card.
+
+**The setting.** A percent scales the full render (`scaling_3d_scale` = Interface size factor x
+percent), FSR 1.0 under 1 and bilinear at or above (FSR cannot downsample). 100 % is the game before
+the setting. Auto draws no more pixels than the screen shows: the full render at 1080p and up (the
+same pixels as FSR 0.75 at 1440p and 0.5 at 4K) and the window's own size below 1080p, snapped to the
+viewport's size within 0.9 to 1 (an upscale pass over a nearly equal size costs more than it saves).
+GameMap re-applies it on every window resize. FSR sharpness stays at the engine's 0.2; the texture mip
+bias stays 0, since the engine already lowers it by log2(scale) for a scaled render.
+
+**Cost.** `perfaudit_gpu.gd` `perf` (renderscale job), `--gpu-profile`, RTX 3080 idle before (3 %,
+P8, 42 C), real 1920x1080 window, vsync off, `max_fps` 0, SSAO on, MSAA off, lo-fi on, shadow High; map
+`temperate_forest_summer_s1`, 100 ft, seed 1234, valley; 6 rounds, the first discarded, 20 settle and
+60 measured frames per configuration; median of the 5 round medians [range]. Noise floor (the base
+measured twice per round) 0.06 ms; drift 0.98-1.07. "Output-sized" rows resize the viewport in-run to
+what native rendering at that output would cost; the game does not run them.
+
+| Configuration | Home GPU ms | Close (zoom 4) GPU ms |
+|---|---|---|
+| 100 % (1920x1080, every screen today) | 3.93 [3.60-3.98] | 3.48 [3.29-3.54] |
+| FSR 85 % | 3.18 [3.10-3.20] | |
+| FSR 75 % | 2.62 [2.56-2.67] | 2.27 [2.23-2.30] |
+| FSR 67 % | 2.27 [2.18-2.28] | |
+| FSR 50 % | 1.54 [1.50-1.55] | 1.27 [1.25-1.28] |
+| Bilinear 75 % | 2.59 [2.50-2.82] | 2.20 [2.17-2.23] |
+| Bilinear 50 % | 1.52 [1.46-1.60] | 1.24 [1.23-1.25] |
+| Output-sized 1440p, native | 6.76 [6.56-6.82] | 5.70 [5.67-5.75] |
+| Output-sized 1440p, FSR 0.75 | 4.38 [4.26-4.41] | 3.70 [3.65-3.74] |
+| Output-sized 1440p, FSR 0.5 | 2.44 [2.36-2.46] | 1.98 [1.94-1.99] |
+| Output-sized 4K, native | 13.68 [13.09-13.80] | 12.32 [12.02-12.40] |
+| Output-sized 4K, FSR 0.75 | 8.86 [8.10-8.97] | 7.50 [7.25-7.73] |
+| Output-sized 4K, FSR 0.5 | 4.54 [4.27-4.58] | 3.87 [3.79-3.98] |
+| Output-sized 4K, bilinear 0.5 | 4.39 [4.14-4.49] | 3.74 [3.64-3.87] |
+
+- FSR 1.0's own pass is in the Tonemap timestamp: 0.16 ms against bilinear's 0.10 at a 1920x1080
+  output, 0.49-0.52 against 0.39 at 4K. Every other pass scales with the render's pixels.
+- A GPU three times slower (about 12 ms at 100 %) gets about 8 ms at 75 % and 4.6 ms at 50 %.
+- **Look** (contact sheet and 1:1 crops of home, zoom 4 and the eye; the lo-fi pass and the UI are
+  untouched, they draw at the window's resolution). FSR 75 % is hard to tell from 100 % (flower
+  petals a little simpler). FSR 50 % keeps the bold painted masses and clean cutout edges, but small
+  things simplify: flowers lose their petals, berries shrink, grass blades thicken, the ground's
+  brush streaks smooth out. No ringing or halo round the alpha-tested cards. Bilinear 50 % smears the
+  same edges for 0.02-0.06 ms less, so the setting offers FSR only. FSR sharpness 0 and a mip bias
+  of +0.5 were indistinguishable from the defaults at 50 %.
+- **Picking.** The camera rays and the engine's physics picking read world-viewport coordinates,
+  which the 3D scale does not change: a probe pushed mouse motions through the root window onto a
+  pickable stand-in at its projected pixel and 40 px beside it, at 100, 75, 67 and 50 %, with the
+  same hits every time. The occlusion fade works in view space; its Bayer dither (and the ground
+  skirt's and the avatar fade's) is in render pixels, so at 50 % its cells are twice as large.
+  Grid line widths are in render pixels too and enlarge with the render.
