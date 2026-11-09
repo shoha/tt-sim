@@ -4919,6 +4919,15 @@ lobe, no ORM or normal map fetch, no backlight, and none of the canopy fades' in
 position, authored wind phase, eye light). Kept: the sun and its cast shadow, the ambient and SSAO,
 the base darkening, the ground look's tuft colour and the eye view's near grass. The cards'
 normals all point up and they carry no ORM or normal map, so the dropped terms showed nothing.
+Painted ground cover (`FoliageLight.is_painted`) keeps the painted shader: in
+`_build_shader_material` painted wins over ground.
+
+Correction (card matcopy, below): every `swap` in the tables of this section used the class key
+"ground", which is a size class and also takes the flowers (size class ground) and the painted
+ground cover. On the measured map that is 26 materials (8 plain ground cover, 6 painted ground
+cover, 12 flowers), against the 8 the shipped change moves. So rounds 1 to 4 priced the lean light
+on all 26; "D on flowers too" is the same set as D; and the shipped change saves less than the
+round 4 figures below: 0.14 ms at home and 0.12 ms at zoom 20 (card matcopy's `lean_to_old`).
 
 Measured on a filled 320 ft map (temperate forest, seed 1234, valley), RTX 3080, 1920x1080,
 the player's settings (MSAA off, SSAO on, lo-fi on, shadow High), in-run A/B, 6 rounds (first
@@ -4952,15 +4961,11 @@ sides (round 4, after merging main with the occlusion fade tiles; ref is the shi
 | copies on the old shader | +0.054 | +0.178 |
 | copies on the ground shader | -0.126 | -0.363 |
 
-The ground shader saves 0.180 ms at home and 0.541 ms at zoom 20 against the old one, copy
-against copy (0.18 / 0.54 ms of a 5.1 / 6.8 ms frame); about a third of that on a default map.
-The copies themselves run 0.13 / 0.36 ms faster than the built materials of the same shader, for
-a reason not found yet (suspects: a property the copy leaves at its default, such as render
-priority or next pass, or a parameter written to the built materials every frame); round 3's
-direct A/B (built ground shader against copies on the old shader: -0.137 / -0.114) and round 4's
-(-0.054 / -0.178) both fit a 0.18 / 0.54 ms gain less that offset. The offset is a lead for a
-later card: whatever it is costs the built ground cover up to 0.36 ms at zoom 20. Raw tables and
-the contact sheets (columns current, A, B, C, D; rows home, zoom 4, a sun 12 degrees up, the eye
+Read with the correction above: "copies on the ground shader" also moved the painted ground
+cover and the flowers onto the lean shader, which is why they ran 0.13 / 0.36 ms faster than the
+built materials; that was not a cost of the built materials (section "Material copies" below).
+The 0.18 / 0.54 ms between the two rows is the lean light on all 26 materials. Raw tables and the
+contact sheets (columns current, A, B, C, D; rows home, zoom 4, a sun 12 degrees up, the eye
 view) are in the card's handoff folder.
 
 The global shader uniform buffer (`rendering/limits/global_shader_variables/buffer_size`) is
@@ -4969,6 +4974,53 @@ The global shader uniform buffer (`rendering/limits/global_shader_variables/buff
 ("Too many instances using shader instance variables", measured with MeshInstance3D nodes in a
 SubViewport, as the game draws its world), and a filled 320 ft map has 2,824 scatter nodes.
 At 262,144, 16,000 instances drew with a clean log. `test_project_limits.gd` pins it.
+
+### Material copies (topic perfaudit, card matcopy, 2026-11-08)
+
+The lead from foliagelight (copies of the built materials drawing 0.13 / 0.36 ms faster than
+the built materials on the same shader) is a probe artifact, not a cost in the game. A copy on
+the material's own shader costs what the built material costs, for every class; the offset came
+from the swap's class key, which moved 18 more materials than the shipped change onto the lean
+shader. No game change follows; nothing is free here.
+
+**How.** RTX 3080, nvidia-smi idle before each run (0-3 %, P8, 40-43 C), Vulkan Forward+, 4.7.2
+debug, default graphics (MSAA off, so every wind material is on its no-AA shader; SSAO on, lo-fi
+on, shadow High), the filled 320 ft map of foliagelight (temperate forest, seed 1234, valley),
+1920x1080, the foliage probe's in-run A/B (6 rounds, first dropped, 30 settle + 90 measured
+frames), world viewport GPU ms, delta against the built materials. New probe keys:
+`remat` {class: mode} (`tools/render_jobs/probes/foliage_perf_remat.gd`: `copy` a new
+ShaderMaterial on the material's own shader with every uniform carried over, `dup`
+`duplicate()`, `lean_old` the lean ground cover back on the plain shader), and the probe now logs
+what each variant redraws, per class and shader.
+
+What a built material and its copy hold (the remat `dump` action, the first material of each
+class): the same shader, the same uniforms on the material and on the RenderingServer, render
+priority 0 and no next pass on both; they differ only in metadata (`wind_category`,
+`foliage_painted`). No uniform of the built materials changed value over 60 frames. On this map
+the classes are large (9 plain, 9 painted), medium (6 plain, 7 painted, 1 standard), small (3
+painted, 15 standard: rocks keep their imported material), ground (8 lean, 6 painted) and flower
+(size class ground: 4 plain, 8 painted).
+
+| Variant (round m2) | Home (ref 4.84) | Zoom 20 (ref 6.05) |
+|---|---|---|
+| ref again (noise) | -0.011 | -0.026 |
+| every wind material a same-shader copy | +0.003 | +0.001 |
+| same-shader copies, one class: ground / flower / large / medium / small | (m1: -0.016 / +0.010 / +0.058 / -0.051 / +0.004, ref again +0.043) | +0.010 / +0.002 / +0.021 / -0.072 / -0.056 |
+| foliagelight's swap, "ground" onto the lean shader (26 materials) | -0.134 | -0.311 |
+| painted ground cover onto the lean shader (6) | -0.031 | -0.139 |
+| flowers onto the lean shader (12) | -0.085 | -0.219 |
+| the shipped lean ground cover back on the plain shader (8) | +0.140 | +0.124 |
+
+Round m1 (home only, a separate run) had `duplicate()` of the ground class +0.031 and of every
+class +0.068 against ref again +0.043: duplicates are no different either. The two parts of the
+swap's offset add up to about the whole (-0.12 / -0.36 against -0.13 / -0.31). So the shipped
+lean shader saves 0.14 ms at home and 0.12 ms at zoom 20, and the open saving is a look
+question: the painted ground cover (0.03 / 0.14 ms) and the flowers (0.09 / 0.22 ms) on a lean
+light would drop the painted light and the petals' normal maps, which a look card would have to
+judge. Look: the frozen-clock pixel diff (ground_parity `freeze`) did not hold the frame still
+(two frames of the built materials differ on about half the pixels, max 234 levels), so copy
+against built was not proven by pixels; it is the same shader with the same uniforms. Tables and
+the jobs: `docs/plans/handoffs/matcopy/`.
 
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
