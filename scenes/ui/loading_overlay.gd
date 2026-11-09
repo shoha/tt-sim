@@ -98,12 +98,18 @@ func _ready() -> void:
 	hide()
 
 
+func _exit_tree() -> void:
+	LoadPacing.uncover(self)
+
+
 ## Show a map load: the sheet on the painted backdrop with a determinate bar. The backdrop
 ## covers the screen at once in the mood and land last shown (the title and the room stand on
 ## the same world); the sheet fades in.
 func show_loading(title: String = SETTING_OUT_ANY) -> void:
 	_sky.show_last()
 	_open(title, false, false)
+	# Nothing under the backdrop is seen: the load may run unpaced by the display.
+	LoadPacing.cover(self)
 
 
 ## Show a wait over the live screen behind it: the scrim and a gliding bar, for an
@@ -111,6 +117,7 @@ func show_loading(title: String = SETTING_OUT_ANY) -> void:
 ## CANCEL_AFTER_S (cancel_requested); its `step`, when given, is the caption in Cancel's band
 ## until then.
 func show_indeterminate(title: String, cancellable: bool = false, step: String = "") -> void:
+	LoadPacing.uncover(self)
 	_open(title, true, cancellable)
 	if step == "":
 		return
@@ -157,6 +164,8 @@ func set_progress(value: float, status: String = "") -> void:
 
 ## Fade the overlay out (over a finished table, the sky's reveal) and hide it.
 func hide_loading() -> void:
+	# The reveal fades the backdrop off a live table: the display paces frames again.
+	LoadPacing.uncover(self)
 	_kill_cancel_tween()
 	cancel_button.focus_mode = Control.FOCUS_NONE
 	cancel_button.mouse_filter = Control.MOUSE_FILTER_IGNORE

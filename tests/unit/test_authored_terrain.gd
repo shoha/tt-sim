@@ -283,6 +283,32 @@ func test_ground_draws_after_foliage_with_the_cheap_prepass() -> void:
 	assert_true(inc.contains("void light()"), "the include shades through light()")
 
 
+## Card groundskirt: the skirt shaders receive no shadows (the shadow filter was half the skirt's
+## cost at full zoom-out); the map's own ground still does.
+func test_skirt_receives_no_shadows_and_the_ground_does() -> void:
+	for shader: Shader in [AuthoredTerrain.SKIRT_SHADER, AuthoredTerrain.SKIRT_LOOKED_SHADER]:
+		assert_true(_render_mode(shader).has("shadows_disabled"), shader.resource_path)
+	for shader: Shader in [AuthoredTerrain.GROUND_SHADER, AuthoredTerrain.GROUND_LOOKED_SHADER]:
+		assert_false(_render_mode(shader).has("shadows_disabled"), shader.resource_path)
+	var terrain := AuthoredTerrain.create(_flat(20))
+	add_child_autofree(terrain)
+	var skirt_mat := terrain.get_skirt_material()
+	assert_not_null(skirt_mat, "the skirt material exists")
+	if skirt_mat != null:
+		assert_true(_render_mode(skirt_mat.shader).has("shadows_disabled"), "the bound skirt")
+
+
+## The render modes a shader's code declares, trimmed.
+func _render_mode(shader: Shader) -> PackedStringArray:
+	var out := PackedStringArray()
+	for line in shader.code.split("\n"):
+		var t := line.strip_edges()
+		if t.begins_with("render_mode"):
+			for mode in t.trim_prefix("render_mode").trim_suffix(";").split(","):
+				out.append(mode.strip_edges())
+	return out
+
+
 func test_material_binds_the_palette_surface() -> void:
 	var surface: Dictionary = PaletteLibrary.surfaces()[GRASS]
 	var terrain := AuthoredTerrain.create(_flat(20))

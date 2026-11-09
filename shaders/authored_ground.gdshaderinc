@@ -57,6 +57,12 @@
  * 2026-10-09). That surface is the base, or the painted surface that covers the map's edge
  * when one does (skirt_ground_layer, TerrainSkirt.edge_surface): a new forest map's edge band
  * is greened, and the skirt fades out on that green instead of the brown forest floor.
+ *   The skirt receives no shadows (shadows_disabled in both skirt shaders; card groundskirt,
+ * PERFORMANCE.md "Ground skirt shadows"): the directional shadow filter was about half of the
+ * skirt's cost at full zoom-out (0.58 of 1.19 ms at 1080p on an RTX 3080), while the layer
+ * blend was under a tenth of it, and on the measured map no shadow reached the skirt (home, full
+ * zoom-out and eye views within 3 levels, mean 0). A shadow cast across the map edge now stops
+ * at the edge line.
  *
  * ANTI-TILING (the live port of terrain-paint's Mosaic tiling breakup):
  * terrain-paint breaks a repeating texture by cutting UV space into a grid of cells, giving
