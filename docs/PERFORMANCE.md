@@ -5709,3 +5709,19 @@ The title is cheap to draw, so the unfocused saving here is the small end: a loa
 frame several times more (the audit's 3-4 ms GPU frame at home), and the 15 fps cap removes three
 quarters of those frames. The perf budget holds the two caps (`idle_unfocused_fps`,
 `idle_minimized_fps`). The boot graph limit rose by one script (343).
+
+## Boot splash (topic sysidle, card sysidle, 2026-11-09)
+
+Register S1 (board perf-boot-splash, answered "yes"). A launch waits about 3.5 s from a pack (7 s
+wall with the quit) before the first title frame with nothing on screen. The project now shows the
+orange d20 (`assets/icons/ui/ttsim-icon.png`, the app icon, the only logo the repo has: no new art)
+centred on the splash colour it already had (`application/boot_splash/bg_color`, which the icon's
+own background matches), `show_image` on, `fullsize` off. The image is a plain file in the pack
+(checked in an exported `--export-pack`: `res://assets/icons/ui/ttsim-icon.png` is stored as is, 0
+bytes of pack growth because the window icon already needed it), and the editor binary running the
+pack prints no splash error. Cost at the title, `tools/boot_rounds.gd --window`, packs with and
+without the splash alternated, n 5, same code otherwise: first title frame median 3,498 ms
+(3,443-3,606) without and 3,568 ms (3,347-3,613) with; process wall 7,091 without and 7,185 ms
+with (the pair's order alternated, ranges overlap), so the cost is inside the run-to-run noise
+(+70 ms median, the with-splash minimum is the lowest of all ten). What the player sees is not
+measurable headless: only a real window shows the splash.
