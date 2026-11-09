@@ -23,7 +23,8 @@ static func apply(menu: SettingsMenu) -> void:
 	SettingsWindMotion.apply_tooltip(menu)
 	menu.antialiasing_option.tooltip_text = "Smooths jagged edges on foliage (uses more GPU memory)"
 	menu.shadow_quality_option.tooltip_text = (
-		"Shadow edge softness (Hard is fastest, " + "Ultra is priciest)"
+		"Shadow edge softness (Hard is fastest, Ultra is priciest). Very Low and Low show a "
+		+ "fine hatch along soft shadow edges; High, the default, smooths it"
 	)
 	menu.water_quality_option.tooltip_text = (
 		"Water ripple detail and refraction quality (Low is fastest, " + "High is highest fidelity)"

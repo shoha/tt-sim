@@ -121,3 +121,40 @@ func test_active_rendering_method_is_a_known_nonempty_value() -> void:
 	var active := SettingsMenu._get_active_rendering_method()
 	assert_true(active != "")
 	assert_true(SettingsMenu._RENDERING_METHOD_VALUES.has(active))
+
+
+func test_default_shadow_quality_is_high_and_matches_the_boot_setting() -> void:
+	# shadowtier (2026-11-08): High is the cheapest tier without Low's tap hatch. A fresh install
+	# never reaches the settings code, so project.godot's boot value must say the same.
+	assert_eq(SettingsMenu.DEFAULT_SHADOW_QUALITY, RenderingServer.SHADOW_QUALITY_SOFT_HIGH)
+	assert_eq(
+		ProjectSettings.get_setting(
+			"rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality"
+		),
+		SettingsMenu.DEFAULT_SHADOW_QUALITY
+	)
+
+
+func test_saved_shadow_quality_is_the_default_when_nothing_is_saved() -> void:
+	assert_eq(
+		SettingsMenu.saved_shadow_quality(ConfigFile.new()), SettingsMenu.DEFAULT_SHADOW_QUALITY
+	)
+
+
+func test_saved_shadow_quality_honours_every_saved_tier() -> void:
+	# The player's own choice is never raised: a saved Low stays Low, down to Very Low and Hard.
+	var config := ConfigFile.new()
+	config.set_value("graphics", "shadow_quality", RenderingServer.SHADOW_QUALITY_SOFT_LOW)
+	assert_eq(SettingsMenu.saved_shadow_quality(config), RenderingServer.SHADOW_QUALITY_SOFT_LOW)
+	for saved in range(RenderingServer.SHADOW_QUALITY_HARD, RenderingServer.SHADOW_QUALITY_MAX):
+		config.set_value("graphics", "shadow_quality", saved)
+		assert_eq(SettingsMenu.saved_shadow_quality(config), saved, str(saved))
+
+
+func test_shadow_quality_menu_offers_every_tier() -> void:
+	var menu: SettingsMenu = preload("res://scenes/ui/settings_menu.tscn").instantiate()
+	add_child_autofree(menu)
+	var option := menu.shadow_quality_option
+	assert_eq(option.item_count, RenderingServer.SHADOW_QUALITY_MAX)
+	for tier in range(RenderingServer.SHADOW_QUALITY_HARD, RenderingServer.SHADOW_QUALITY_MAX):
+		assert_true(option.get_item_index(tier) >= 0, "tier %d offered" % tier)

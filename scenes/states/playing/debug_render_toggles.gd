@@ -56,12 +56,14 @@ extends Node
 ##
 ## It was: disabling "Grass shadows" (grass no longer a shadow CASTER) only recovered
 ## 2-3 FPS, far short of disabling "Sun shadows" entirely -- ruling out caster instance
-## count as the driver. project.godot has
+## count as the driver. project.godot then had
 ## rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality=5
 ## (SHADOW_QUALITY_SOFT_ULTRA), the most expensive PCF filter setting, applied
 ## per-fragment to every shaded pixel regardless of which geometry it belongs to --
-## consistent with both of the above results. "Hard sun shadows" tests this directly
-## via RenderingServer.directional_soft_shadow_filter_set_quality(), swapping to
+## consistent with both of the above results (the default is High since shadowtier,
+## 2026-11-08; the tiers' measured cost is in docs/PERFORMANCE.md "Shadow quality tiers").
+## "Hard sun shadows" tests this directly via
+## RenderingServer.directional_soft_shadow_filter_set_quality(), swapping to
 ## SHADOW_QUALITY_HARD (no filtering) without touching the light's shadow_enabled or
 ## any material/shader. This is a global renderer setting, not tied to a specific
 ## node, so unlike the other toggles above it needs no map_container/world_viewport
@@ -410,13 +412,13 @@ func _on_baked_foliage_ao_toggled(pressed: bool) -> void:
 ## and apply_startup_graphics_settings() read from -- so "Hard sun shadows"
 ## and refresh() restore the player's actual setting instead of a value
 ## snapshotted once at startup, which would go stale the moment the player
-## changes Shadow Quality mid-session. Falls back to SHADOW_QUALITY_SOFT_ULTRA,
-## matching every other read site's fallback, when settings.cfg has no saved
-## value yet.
+## changes Shadow Quality mid-session. Falls back to SettingsMenu.DEFAULT_SHADOW_QUALITY,
+## through the same SettingsMenu.saved_shadow_quality every read site uses, when
+## settings.cfg has no saved value yet.
 static func _get_configured_shadow_quality() -> int:
 	var config := ConfigFile.new()
 	config.load(Paths.SETTINGS_PATH)
-	return config.get_value("graphics", "shadow_quality", RenderingServer.SHADOW_QUALITY_SOFT_ULTRA)
+	return SettingsMenu.saved_shadow_quality(config)
 
 
 func _on_debug_shader_checkbox_toggled(pressed: bool, checkbox_key: String, mode: String) -> void:

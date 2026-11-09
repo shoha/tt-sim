@@ -794,6 +794,24 @@ independent layers.
   hard shadows (groundband, 2026-11-08). The normal bias does not clear it (1.0
   removed 13 %); the bias does, at 0.05 and 0.1. The small log and pebble keep
   their contact shadows at 0.05 (zoom 4 capture).
+- Shadow quality (Settings > Graphics, `SettingsMenu.DEFAULT_SHADOW_QUALITY`)
+  defaults to High for a player with no saved choice; project.godot's
+  `directional_shadow/soft_shadow_filter_quality` is 4 to match, since a fresh
+  install never reaches the settings code. Every tier from Hard and Very Low to
+  Ultra stays in the menu and a saved choice is always honoured
+  (`SettingsMenu.saved_shadow_quality`). Godot rotates its soft-shadow taps per
+  pixel and, with no TAA, nothing averages them, so Very Low and Low read as a
+  fine diagonal hatch across every penumbra and on shaded grass cards (the
+  player's screenshot at Low, groundband, 2026-11-08). The shadow term's dither
+  with the albedo divided out: Medium 60-72 % of Low's, High about 45 %, Ultra
+  32-51 %; `shadow_blur` 0.5-1.0 and the angular distance left it unchanged.
+  High is the cheapest tier that removes most of it: about 0.45 ms more GPU
+  than Low at 1080p on an RTX 3080, where Ultra costs another 0.5-0.65 ms for
+  no visible gain in a 1:1 crop sheet (shadowtier, 2026-11-08; the default had
+  been Ultra since the setting was added). The tier changes only the per-pixel
+  filter in the opaque pass, so its cost scales with the resolution, not the
+  casters; the table is in `docs/PERFORMANCE.md` "Shadow quality tiers". The
+  Shadow quality tooltip says that Low shows the hatch.
 
 The sun blends its shadow cascades (`directional_shadow_blend_splits`, `SUN_SHADOW_BLEND_SPLITS` in
 `level_environment_manager.gd`, 2026-11-02). Without it, far trees' shadows were missing at the

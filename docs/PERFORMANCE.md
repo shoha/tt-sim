@@ -4750,3 +4750,72 @@ one adds no draw and no triangle); drift home_end over home 1.016 (per round 1.0
 1.020). Kept versus thinned is within 0.05 ms at every pose, i.e. noise. On the hamlet (eye at 0, 30):
 1348 flower instances in all, 103 within 9 m of the eye, about 60 of which the near grass term would
 have thinned (530 other grass tufts lie within that radius).
+
+## Shadow quality tiers (topic shadowtier, 2026-11-08)
+
+What each Shadow quality tier (`directional_soft_shadow_filter_set_quality`) costs, and a "blur"
+candidate, in GPU milliseconds of the world viewport. Measured to pick the default for a player with
+no saved choice (now High, `SettingsMenu.DEFAULT_SHADOW_QUALITY`; it was Ultra) after the player's
+screenshot at Low showed the soft-shadow tap hatch (`docs/lighting-and-environment.md`).
+
+**How.** RTX 3080 idle before the runs (0 %, P8, 40 C), Vulkan Forward+, the render-job harness in a
+real 1920x1080 window (world viewport 1920x1080 logged in every run), vsync off and `max_fps` 0 at
+runtime, the player's graphics settings (SSAO on, MSAA off, lo-fi on, 8M foliage budget). Map: a new
+map, `temperate_forest_summer_s1`, 100 ft, seed 1234, valley. Two poses: home (zoom 13.85) and zoom 4
+centred on the computed crown shadow of an 11.7 m tree. An in-run A/B per pose: 6 rounds (the first
+discarded), each round the reference (Low), the ten configurations (order rotated each round,
+reversed on odd rounds) and the reference again; 30 settle plus 90 measured frames per
+configuration. Each number is the median of the 5 round medians, with their range. Drift
+(reference end over start) 0.97-1.08 per round. Two runs: run 1 with the engine's per-pass
+timestamps on, run 2 without (they agree within 0.03-0.12 ms, so the timestamps cost nothing
+measurable). The table gives run 2's totals and run 1's opaque pass.
+
+| Configuration | Home GPU ms | Home opaque pass | Tree GPU ms | Tree opaque pass |
+|---|---|---|---|---|
+| Sun shadows off | 2.870 [2.863-2.903] | 1.152 | 2.819 [2.800-2.878] | 1.194 |
+| Hard | 2.988 [2.978-3.014] | 1.171 | 2.874 [2.838-2.935] | 1.137 |
+| Very Low | 2.996 [2.981-3.005] | 1.200 | 2.883 [2.863-2.958] | 1.173 |
+| Low (the player's) | 3.125 [3.100-3.158] | 1.301 | 3.003 [2.988-3.073] | 1.319 |
+| Medium | 3.332 [3.275-3.356] | 1.493 | 3.188 [3.122-3.282] | 1.504 |
+| High (the new default) | 3.589 [3.563-3.621] | 1.783 | 3.450 [3.379-3.536] | 1.726 |
+| Ultra (the old default) | 4.223 [4.179-4.291] | 2.409 | 3.978 [3.866-4.041] | 2.192 |
+| Low, `shadow_blur` 3.0 | 3.131 [3.100-3.184] | 1.311 | 3.040 [2.995-3.045] | 1.324 |
+| Low, angular distance 0.5 deg | 3.560 [3.498-3.610] | 1.803 | 3.453 [3.320-3.510] | 1.864 |
+| High, angular distance 0.5 deg | 4.228 [4.194-4.246] | 2.448 | 4.001 [3.926-4.035] | 2.331 |
+
+- **Where the frame goes at Low** (home, run 1, 3.13 ms): depth pre-pass 1.34 ms, opaque pass 1.30,
+  glow 0.13, SSAO 0.10, tonemap 0.10, canvas 0.08, the sun's shadow map render ("Render
+  Directional/SpotLight Shadows") 0.06; every other pass under 0.03. The sun's shadows in all
+  (Low minus off) are 0.26 ms, 8 % of the frame; at Ultra 1.35 ms, 32 %.
+- **The tier changes only the opaque pass.** The shadow map render is 0.06 ms (home) and 0.05 ms
+  (tree) at every tier: the tier sets the PCF taps each shaded pixel takes, so its cost scales with
+  the resolution and not with the casters. Casters in the cascades (4 PSSM splits, 4096 atlas, max
+  distance 100): home 108 objects, 148,320 primitives, 108 draw calls; tree 76, 115,040, 76 (the
+  visible pass: 237 objects and 81,832 primitives at home, 82 and 32,047 at the tree). A dense map
+  has a much heavier shadow map pass (Sandy Clearing, "Where the frame goes": shadows off saved
+  5.9 ms), but the tier's increment stays a per-pixel cost.
+- **The default.** Low to High is +0.42-0.46 ms; Low to Medium +0.19-0.21; High to Ultra another
+  +0.53-0.63. High is the cheapest tier that removes most of the hatch (the shadow term's dither at
+  about 45 % of Low's against Medium's 60-72 % and Ultra's 32-51 %), and a 1:1 crop sheet of the tree
+  pose (Low, Medium, High, Ultra) shows the rock penumbra cross-hatched at Low, a finer stipple at
+  Medium and no difference between High and Ultra. Ultra costs about 1.4 times High's increment for
+  no visible gain, so the default became High, about 0.55 ms under the old Ultra default.
+- **The blur candidates.** `shadow_blur` 3.0 (a wider kernel, the same taps) is free (+0.01-0.04 ms)
+  but does not touch the hatch (groundband found 0.5-1.0 leave it unchanged). A light angular
+  distance of 0.5 deg (Godot's PCSS: a blocker search before the filter) costs as much as moving
+  Low to High (+0.43-0.45 ms) and High to Ultra (+0.6-0.64 ms); not adopted.
+- **At the frame cap.** The whole world viewport is 3-4 ms here and the wall frame 3.4-4.7 ms; with
+  vsync at 60 Hz (16.7 ms) every tier sits at the cap on this GPU, so frame rate cannot show any of
+  these differences. The ms deltas are the honest number, and they scale with the pixel count (about
+  4 times at 4K) and inversely with the GPU.
+
+**Per-pass GPU timestamps.** A plain run exposes only the viewport total
+(`viewport_get_measured_render_time_gpu`): the RenderingDevice's captured timestamps hold just the
+viewport's `vp_begin_<id>` and `vp_end_<id>`, no frame-profiling switch is bound to scripts, and
+EngineDebugger's visual profiler is absent without a debugger. Launching Godot with the engine flag
+`--gpu-profile` (before `--script`) makes the RenderingDevice capture every engine pass timestamp;
+a probe then reads them each frame with `get_captured_timestamps_count`,
+`get_captured_timestamp_name` and `get_captured_timestamp_gpu_time` (nanoseconds), summing the
+interval to the next timestamp by name. The flag also prints a one-second GPU PROFILE to stdout. The
+probe was a one-use job (not in the repo); `probes/eye_perf.gd`'s `perf` action is the committed
+neighbour with the same in-run A/B loop, to which the timestamp read adds about 30 lines.

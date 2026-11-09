@@ -40,6 +40,17 @@ const _RELAUNCH_SENTINEL_ARG := "--renderer-relaunched"
 ## Shows the Music volume row. Off until the game plays music.
 const SHOW_MUSIC_VOLUME := false
 
+## The Shadow quality for a player with no saved choice; project.godot's
+## directional soft_shadow_filter_quality matches it, since a fresh install keeps that one.
+## Godot rotates its soft-shadow taps per pixel and, with no TAA, nothing averages them, so
+## Very Low and Low read as a fine diagonal hatch in every penumbra and on shaded grass cards.
+## High is the cheapest tier that removes most of it (the shadow term's dither at about 45 % of
+## Low's, Ultra 32-51 %, Medium 60-72 %), for about 0.45 ms more GPU than Low at 1080p on an
+## RTX 3080; Ultra costs another 0.5-0.65 ms for no visible gain (shadowtier, 2026-11-08;
+## docs/PERFORMANCE.md "Shadow quality tiers"). Every tier stays selectable and a saved choice
+## is always honoured.
+const DEFAULT_SHADOW_QUALITY := RenderingServer.SHADOW_QUALITY_SOFT_HIGH
+
 ## [tab node name, Tabler icon]. Node names double as rail ids and labels.
 const SECTIONS := [
 	["Audio", "volume"],
@@ -155,10 +166,7 @@ static func apply_startup_graphics_settings() -> void:
 		DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED
 	)
 
-	var shadow_quality: int = config.get_value(
-		"graphics", "shadow_quality", RenderingServer.SHADOW_QUALITY_SOFT_ULTRA
-	)
-	RenderingServer.directional_soft_shadow_filter_set_quality(shadow_quality)
+	RenderingServer.directional_soft_shadow_filter_set_quality(saved_shadow_quality(config))
 
 	var water_quality_value: int = config.get_value(
 		"graphics", "water_quality", WaterQuality.MEDIUM
@@ -442,13 +450,10 @@ func _load_settings() -> void:
 	)
 	antialiasing_option.select(antialiasing_option.get_item_index(antialiasing_value))
 
-	# Same unconditional-select reasoning as antialiasing above. Defaults to Ultra --
-	# project.godot's own configured value -- so a fresh install matches the engine's
-	# own boot-time default rather than silently downgrading shadow quality.
-	var shadow_quality_value: int = config.get_value(
-		"graphics", "shadow_quality", RenderingServer.SHADOW_QUALITY_SOFT_ULTRA
-	)
-	shadow_quality_option.select(shadow_quality_option.get_item_index(shadow_quality_value))
+	# Same unconditional-select reasoning as antialiasing above. Defaults to
+	# DEFAULT_SHADOW_QUALITY -- project.godot's own configured value -- so a fresh install
+	# shows the tier the engine booted with.
+	shadow_quality_option.select(shadow_quality_option.get_item_index(saved_shadow_quality(config)))
 
 	var water_quality_value: int = config.get_value(
 		"graphics", "water_quality", WaterQuality.MEDIUM
@@ -692,6 +697,12 @@ func _apply_shadow_quality_setting() -> void:
 	)
 
 
+## The player's saved Shadow quality from a loaded settings file, exactly as saved (Hard and
+## every soft tier down to Very Low are honoured), or DEFAULT_SHADOW_QUALITY when none is saved.
+static func saved_shadow_quality(config: ConfigFile) -> int:
+	return config.get_value("graphics", "shadow_quality", DEFAULT_SHADOW_QUALITY)
+
+
 ## Unlike most other _apply_*_setting() functions, this needs no
 ## GameMap/LevelPlayController lookup -- global shader uniforms apply
 ## engine-wide regardless of whether a level (or any water material) is
@@ -840,9 +851,7 @@ func _show_defaults() -> void:
 	SettingsTokenShading.show_defaults(self)
 	SettingsSeeThrough.show_defaults(self)
 	antialiasing_option.select(antialiasing_option.get_item_index(Viewport.MSAA_DISABLED))
-	shadow_quality_option.select(
-		shadow_quality_option.get_item_index(RenderingServer.SHADOW_QUALITY_SOFT_ULTRA)
-	)
+	shadow_quality_option.select(shadow_quality_option.get_item_index(DEFAULT_SHADOW_QUALITY))
 	water_quality_option.select(water_quality_option.get_item_index(WaterQuality.MEDIUM))
 	ssao_check.set_pressed_no_signal(Constants.RENDERING_TOGGLES_DEFAULTS["ssao_enabled"])
 	ssr_check.set_pressed_no_signal(Constants.RENDERING_TOGGLES_DEFAULTS["ssr_enabled"])
