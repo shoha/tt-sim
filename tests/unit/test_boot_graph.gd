@@ -59,28 +59,37 @@ func test_the_start_up_script_graph_stays_within_its_limit() -> void:
 	gut.p("start-up script graph: %d scripts (limit %d)" % [scripts, LIMIT_SCRIPTS])
 
 
-## BootPrecompile's generated order (tools/boot_graph.gd --write-order) lists only scripts that
-## exist, each once, and covers what the three late roots reach: a stale list still works, but a
-## script it lacks is compiled by the first map instead of in the title's idle.
-func test_the_precompile_order_is_current() -> void:
-	var order: PackedStringArray = (load(BootPrecompile.ORDER_SCRIPT) as GDScript).SCRIPTS
-	assert_gt(order.size(), 300, "the order lists the play and authoring scripts")
+## BootPrecompile's roots exist and are listed once: a renamed script would make the worker skip
+## its door silently, and the first map would compile it instead.
+func test_the_precompile_roots_are_current() -> void:
 	var seen := {}
-	for path in order:
+	for path in BootPrecompile.ROOTS:
 		assert_true(ResourceLoader.exists(path), "%s exists" % path)
 		assert_false(seen.has(path), "%s is listed once" % path)
 		seen[path] = true
-	for must in [
-		"res://scenes/states/playing/game_map.gd",
-		"res://scenes/states/playing/level_play_controller.gd",
-		"res://scenes/states/authoring/authoring_controller.gd",
-	]:
-		assert_true(seen.has(must), "%s is in the order (run boot_graph --write-order)" % must)
-	assert_lt(
-		order.find("res://scenes/states/playing/camera_controller.gd"),
-		order.find("res://scenes/states/playing/game_map.gd"),
-		"dependencies come first"
+	assert_true(seen.has("res://scenes/states/playing/game_map.tscn"), "the map scene is a root")
+	assert_true(
+		seen.has("res://scenes/states/authoring/authoring_controller.gd"), "authoring is a root"
 	)
+
+
+## A window close while the worker runs is held back (auto_accept_quit off), so the engine does not
+## tear the scripts down under a compile (measured: an access violation on 5 of 6 early quits).
+func test_a_close_request_waits_for_the_worker() -> void:
+	var precompile := BootPrecompile.new()
+	add_child_autofree(precompile)
+	var release := Semaphore.new()
+	precompile._thread = Thread.new()
+	precompile._thread.start(func() -> void: release.wait())
+	assert_true(get_tree().auto_accept_quit, "the engine quits on a close request by default")
+	precompile.notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
+	var held := not get_tree().auto_accept_quit
+	get_tree().auto_accept_quit = true
+	assert_true(held, "the close request is held back while the worker runs")
+	assert_true(precompile._stop, "and the worker is told to stop")
+	release.post()
+	precompile._thread.wait_to_finish()
+	precompile.set_process(false)
 
 
 ## Settlement.KIND_NAMES copies procgen's list so the resource does not name ProcgenSettlement.

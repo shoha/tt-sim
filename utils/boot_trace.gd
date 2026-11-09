@@ -59,6 +59,8 @@ static func title_ready(tree: SceneTree) -> void:
 	mark("title _ready done")
 	if OS.get_cmdline_user_args().has("--boot-trace-precompile"):
 		_precompile()
+	if OS.get_cmdline_user_args().has("--boot-trace-main-compile"):
+		_main_compile()
 	_watching = true
 	_title_at_us = Time.get_ticks_usec()
 	_last_us = _title_at_us
@@ -74,6 +76,27 @@ static func _settle_s() -> float:
 		if arg.begins_with("--boot-trace-idle="):
 			return float(arg.get_slice("=", 1))
 	return SETTLE_S
+
+
+## `--boot-trace-quit-at=<seconds>`: leaves the game that long after the title is up, to probe a
+## quit while BootPrecompile's worker is mid-compile. `--boot-trace-quit-via=close` sends the
+## window's close request (what the OS does for the close button) instead of SceneTree.quit().
+## Returns true once it has asked to quit.
+static func _quit_early(tree: SceneTree, now_us: int) -> bool:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--boot-trace-quit-at="):
+			if now_us - _title_at_us < int(float(arg.get_slice("=", 1)) * 1000000.0):
+				return false
+			tree.process_frame.disconnect(_on_frame)
+			mark("quitting early")
+			if OS.get_cmdline_user_args().has("--boot-trace-quit-via=close"):
+				tree.root.propagate_notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
+				# The window's signal ends in SceneTree's handler, which quits when auto_accept_quit.
+				tree.root.close_requested.emit()
+			else:
+				tree.quit()
+			return true
+	return false
 
 
 static func _on_first_draw() -> void:
@@ -93,6 +116,8 @@ static func _on_frame(tree: SceneTree) -> void:
 		_worst_ms = maxf(_worst_ms, frame_ms)
 		if frame_ms > HITCH_MS:
 			_settled_us = now
+	if _quit_early(tree, now):
+		return
 	if now - _title_at_us < int(_settle_s() * 1000000.0):
 		return
 	tree.process_frame.disconnect(_on_frame)
@@ -116,6 +141,15 @@ static func _precompile() -> void:
 	]:
 		ResourceLoader.load(path)
 	mark("precompiled the on-demand scripts")
+
+
+## `--boot-trace-main-compile`: loads BootPrecompile's roots on the main thread, in one go (a
+## hitch of seconds), to compare what the worker thread leaves at exit with the same scripts
+## compiled on the main thread.
+static func _main_compile() -> void:
+	for path in BootPrecompile.ROOTS:
+		ResourceLoader.load(path)
+	mark("compiled the precompile roots on the main thread")
 
 
 ## `--boot-trace-map`: after the title settles, opens a new map (the new-map dialog's default
