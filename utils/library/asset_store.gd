@@ -37,6 +37,8 @@ static var _meshes: Dictionary = {}
 static var _errors: Dictionary = {}
 ## "<root>|<decor id>" -> StructureDecor row (the decor assets, also in _entries).
 static var _decor: Dictionary = {}
+## Give a parsed mesh's textures mipmaps (FoliageMips). Off only to measure the difference.
+static var mips_enabled: bool = true
 ## Counters tests read: parses (GLBs decoded), cache_hits, hash_checks, refused.
 static var stats: Dictionary = {"parses": 0, "cache_hits": 0, "hash_checks": 0, "refused": 0}
 
@@ -360,4 +362,9 @@ static func _parse(buffer: PackedByteArray, path: String, node_name: String) -> 
 		if (node as Node3D).transform != Transform3D.IDENTITY:
 			push_warning("AssetStore: node '%s' in %s is not at the origin" % [node_name, path])
 	scene.free()
+	# The runtime parse builds textures without mipmaps; the foliage shaders sample mipmapped.
+	# Loaded here, not named, so the start-up's script graph (test_boot_graph) does not grow.
+	if found != null and mips_enabled:
+		var mips: GDScript = load("res://utils/foliage_mips.gd")
+		mips.apply(found)
 	return found

@@ -35,9 +35,12 @@ extends RefCounted
 ## Card foliagelight added the variant key `swap` {class: shader path}: that class's wind
 ## materials drawn on another shader (copies of the built materials, `_aa` twin under MSAA).
 ## Card matcopy added `remat` {class: mode} (foliage_perf_remat.gd's `make`: same-shader copies,
-## duplicates, the lean ground cover back on the plain shader). A class key falls back to the
-## size class: "ground" also names the flowers (size class ground) and every painted ground-cover
-## material, so name "flower": "" to leave the flowers out. perf logs what each variant redraws.
+## duplicates, the lean ground cover back on the plain shader).
+## Card foliagelod added `thin` (bool, see _thin_count: ground cover thinned as shipped, or in
+## full) and `mips` (bool, foliage_perf_mips.gd: the textures with their chain, or without).
+## A class key falls back to the size class: "ground" also names the flowers (size class ground)
+## and every painted ground-cover material, so name "flower": "" to leave the flowers out. perf
+## logs what each variant redraws.
 
 const GROUP := "foliage_perf_rig"
 const INCLUDE_PATH := "res://shaders/wind_foliage_include.gdshaderinc"
@@ -51,6 +54,8 @@ const PX_BINS: Array[float] = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
 const LOAD := preload("res://tools/render_jobs/probes/foliage_perf_load.gd")
 ## The `remat` variant key's materials (card matcopy).
 const REMAT := preload("res://tools/render_jobs/probes/foliage_perf_remat.gd")
+## The `mips` variant key's textures (card foliagelod).
+const MIPS := preload("res://tools/render_jobs/probes/foliage_perf_mips.gd")
 
 
 static func blocker(base: Node, step: Dictionary) -> String:
@@ -492,6 +497,8 @@ class Rig:
 				mm.visible_instance_count = int(ceil(full * f))
 			else:
 				mm.visible_instance_count = int(n.count)
+			if v.has("thin") and FoliageDensityController.is_ground(mmi):
+				mm.visible_instance_count = _thin_count(mm, bool(v.thin))
 			if int(v.get("merge", 0)) > 0:
 				mmi.visible = false
 			var trivial: Array = v.get("trivial", [])
@@ -505,6 +512,8 @@ class Rig:
 			if mm.mesh != want:
 				mm.mesh = want
 			_apply_swap(n, v.get("swap", {}), v.get("remat", {}))
+			if v.has("mips"):
+				MIPS.set_mips(orig, bool(v.mips))
 		var merge := int(v.get("merge", 0))
 		for k in _merged:
 			for m: MultiMeshInstance3D in _merged[k]:
@@ -512,6 +521,12 @@ class Rig:
 		gm.world_viewport.scaling_3d_scale = _orig_scale * float(v.get("scale3d", 1.0))
 		gm.world_viewport.mesh_lod_threshold = float(v.get("lod_px", _orig_lod_px))
 		_set_wind(not bool(v.get("nowind", false)))
+
+	## `thin` (card foliagelod): ground cover at the camera's zoom-keyed thinning (true) or in full.
+	func _thin_count(mm: MultiMesh, on: bool) -> int:
+		var home := float(gm.get_camera_controller().get("_home_zoom"))
+		var keep := FoliageDensityController.keep_fraction(gm.camera_node.size, home)
+		return FoliageDensityController.thinned_count(mm.instance_count, keep if on else 1.0)
 
 	## `swap` {class: shader path} (card foliagelight): every wind material of that class's
 	## meshes drawn on the shader at the path instead (a copy, every uniform carried over); an

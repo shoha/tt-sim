@@ -5668,3 +5668,78 @@ run. Not moved to workers: the remaining main-thread time is mostly node creatio
 insertion (165 ms of load at 320 ft against a 25 ms native call and about 15 ms of buffer
 assignment), so threading the call would save at most about 25 ms. Grow-ins, shrinks and the GLB
 path still use the per-instance path (they hold transforms for their animation).
+
+## Zoom-keyed ground thinning (topic foliagelod, 2026-11-09)
+
+Replaces "The foliage primitive budget" (board perf-ground-thin, answer "thin"). The budget
+counted triangles, which are not what foliage costs, and never engaged on a reference map; its
+Settings slider is gone (an old `graphics/foliage_budget` key is tolerated and erased on the next
+save). `FoliageDensityController` (`scenes/states/playing/`) writes
+`MultiMesh.visible_instance_count` on every ground-cover chunk (wind category "grass": cards, sprig
+clumps, litter and flowers; trees, bushes, rocks and structure decor are never thinned) from the
+camera size: 1.0 up to 14 (a map whose home is further out keeps its own home), a smoothstep
+to 0.5 at 20 (scaled with the home), quantised to 1/32, so a step drops about 3 percent of the
+ground cover while the zoom moves. `GroundThinner` (a child of the play map) reads the camera and
+calls `set_fraction`; the eye view never thins. Every chunk is already shuffled (seeded by its
+name), so a prefix is a spatially even sample and a thinner draw keeps the instances of a fuller
+one: nothing moves, so there is no shimmer. No per-instance fade: a step is one instance in
+thirty-two, scattered over every chunk at once, below what the eye resolves while the camera is
+moving; a fade would need a shader edit (the foliagefix card owns them). `perf_budget` holds
+`ground_keep_far` (0.5 at camera size 20) and `ground_keep_home` (1.0 at the 100 ft home).
+
+Direction note: the card says "zoomed in"; the thinning is for the far end of the zoom (camera
+size 14 and up). At zoom 4 and 10 and at home (13.85) nothing is thinned, as intended.
+
+Measured (render job `tools/render_jobs/local/foliagelod/ab_thin.json`, probe `foliage_perf.gd`,
+key `thin`, six-round in-run A/B, ref_start / thinned / full_again / ref_end, real window, the
+reference map, lane held): home, zoom 4 and zoom 10 are unchanged to the noise (4.397 / 4.446,
+3.278 / 3.292, 4.253 / 4.261 ms; the draw counts are identical). The first build thinned
+only the non-flower grass: zoom 17 5.166 to 5.125 (-0.04), zoom 20 5.724 to 5.656 (-0.071 ms
+GPU, visible primitives 2,648,390 to 2,491,814, -5.9 percent). That is far below the half
+millisecond the audit expected, because the audit's "ground" class included the flowers, each
+about four cards of cost (352-400 triangles, three surfaces, the full shader). The shipped rule
+therefore includes flowers (category "grass"); its GPU time and the 1:1 pairs at zoom 4, 10 and 20
+were NOT re-measured in that commit (lane busy): see the handoff
+`docs/plans/handoffs/foliagelod.md`.
+
+## Foliage mipmaps (topic foliagelod, 2026-11-09)
+
+Board perf-foliage-mips, "yes". The runtime glTF parse (`AssetStore._parse`) builds textures
+with no mipmaps, while the foliage and rock shaders sample mipmapped, so a minified texture
+sampled the base level: aliasing and a poor cache hit rate. `FoliageMips` (`utils/foliage_mips.gd`)
+rebuilds each parsed mesh's textures with a mip chain: level 0 bytes are untouched; for an
+alpha-cutout texture each level's alpha is rescaled (a quantile of a strided sample, against the
+128 cutoff) so a leaf keeps its coverage when minified; colour edges are bled
+(`fix_alpha_edges`). It is done at the consumer (tt-sim), in `AssetStore`, on every parse
+(`AssetStore.mips_enabled` turns it off for measurement); the cache of parsed assets is unchanged.
+plantgen and core-library were not edited. Producer side, if wanted: ship the textures as
+KTX2 with BC7 and a mip chain at library build, which cuts VRAM by about 4x and removes the
+runtime work; the loader would then keep the file's mips (this change skips a texture that
+already has them).
+
+Measured (render job `ab_mips.json`, probe `foliage_perf_mips.gd`, key `mips`, six-round in-run
+A/B, ref_start / mipped / flat_again / ref_end, GPU ms, the flat runs about 4.7, 3.3 and 8.6):
+
+| View | flat (mean of the three) | mipped | change |
+| --- | --- | --- | --- |
+| home (13.85) | 4.72 | 4.52 | -0.20 (-4 percent) |
+| zoom 4 | 3.33 | 3.29 | -0.04 (inside the noise) |
+| full zoom-out (83.8) | 8.57 | 8.15 | -0.42 (-5 percent) |
+
+Eye view: only the 1:1 pair was taken, no GPU time (not measured). The drift of the reference
+across a table is up to 6 percent per round, so home and zoom 4 are indicative; the zoom-out
+and home gains are consistent in sign across the three flat runs.
+
+Shimmer (the probe's `shimmer` action: the same view shifted by a fraction of a pixel, the mean
+and rms of the difference, `Image.compute_image_metrics`; lower is steadier), 41 meshes: at
+camera size 83.8, 0.25 px shift rms 8.74 flat, 8.35 mipped (-4.4 percent), 0.5 px 11.15 / 10.87
+(-2.6), 0.75 px 12.79 / 12.60 (-1.5); at home 4.03 / 3.86, 5.46 / 5.25, 6.43 / 6.24 (-3 to -4
+percent). A small gain: the foliage is mostly large, flat colour shapes.
+
+VRAM: the reference map's 98 foliage and rock textures: 17,629,184 bytes flat, 23,505,448
+bytes mipped, +5,876,264 bytes (+33.3 percent: a full chain adds a third), raw RGBA8.
+
+1:1 pairs (flat left, mipped right): at home and full zoom-out the two frames are
+indistinguishable at a glance; the mipped zoom-out has slightly cleaner leaf edges. The "home"
+capture's framing is an upside-down terrain edge (a camera orientation of the shot, not of
+the change) and so says little. The eye pair shows no visible difference either.
