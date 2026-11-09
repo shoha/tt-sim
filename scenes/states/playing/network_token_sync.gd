@@ -24,11 +24,17 @@ class_name NetworkTokenSync
 ## owning LevelPlayController (a Node) purely to add_child() the timer onto
 ## it.
 
-const RECONCILIATION_INTERVAL: float = 2.0  # Full state sync every 2 seconds
+## Seconds between reconciliation ticks (broadcast_token_positions: moved tokens only)
+const RECONCILIATION_INTERVAL: float = 2.0
+## Every this many ticks the full state goes instead (the heartbeat: 30 s)
+const HEARTBEAT_TICKS: int = 15
 const CLIENT_TRANSFORM_SEND_INTERVAL: float = 0.05  # 20 updates/sec max (same as host)
 
 var _token_spawner: TokenSpawner
 var _reconciliation_timer: Timer = null
+## Host: the transform last reconciled per token, and the ticks since the timer started
+var _reconciled := TokenTransformPack.DirtySet.new()
+var _ticks: int = 0
 ## The owning controller (set in setup()), for set_avatar_recipe on a player's edit.
 var _level_play_controller: Node = null
 
@@ -138,10 +144,13 @@ func start_reconciliation_timer() -> void:
 		_reconciliation_timer.start()
 
 
-## Stop the reconciliation timer. Call on level clear.
+## Stop the reconciliation timer. Call on level clear. The next table starts its dirty set
+## and its heartbeat count afresh.
 func stop_reconciliation_timer() -> void:
 	if _reconciliation_timer:
 		_reconciliation_timer.stop()
+	_reconciled.clear()
+	_ticks = 0
 
 
 ## Disconnect all client transform signals and clear throttle state. Call
@@ -196,42 +205,49 @@ func _update_all_token_state() -> void:
 		_update_client_transform_wiring()
 
 
-## Sync all token positions to network (call after drags, etc.)
-## Skips tokens currently under client authority to avoid overwriting GameState
-## with stale interpolation data from the host's visual.
+## One reconciliation tick (host): GameState takes each token's transform, except tokens under
+## client authority (drag-locked by a client, or still converging on a client's drop), and
+## clients get only the tokens that moved since the last tick, in one packed reliable message
+## (TokenTransformPack, NetworkGameSync.broadcast_reconcile); a table at rest sends nothing.
+## Every HEARTBEAT_TICKS-th tick sends the full state instead (compressed, TokenStateWire),
+## which heals whatever a lost message or a missed drop left behind.
 func broadcast_token_positions() -> void:
 	if not NetworkManager.is_host():
 		return
 
+	var current := {}
+	var alive := {}
 	var tokens := _token_spawner.get_spawned_tokens()
 	for placement_id in tokens:
 		var token = tokens[placement_id] as BoardToken
-		if is_instance_valid(token):
-			# Skip tokens currently under client authority:
-			# 1. Drag-locked by a non-host peer (client is actively dragging)
-			var lock_holder := GameState.get_drag_lock(token.network_id)
-			if lock_holder > 1:
-				continue
-			# 2. Still network-interpolating on the host (client just dropped,
-			#    host visual hasn't converged yet)
-			if token._dragging_object and token._dragging_object.is_network_interpolating():
-				continue
-			GameState.sync_from_board_token(token)
+		if not is_instance_valid(token):
+			continue
+		alive[token.network_id] = true
+		# Skip tokens currently under client authority:
+		# 1. Drag-locked by a non-host peer (client is actively dragging)
+		var lock_holder := GameState.get_drag_lock(token.network_id)
+		if lock_holder > 1:
+			continue
+		# 2. Still network-interpolating on the host (client just dropped,
+		#    host visual hasn't converged yet)
+		if token._dragging_object and token._dragging_object.is_network_interpolating():
+			continue
+		GameState.sync_from_board_token(token)
+		var state := GameState.get_token_state(token.network_id)
+		if state:
+			current[token.network_id] = TokenTransformPack.floats_of(
+				state.position, state.rotation, state.scale
+			)
+	_reconciled.retain(alive)
 
-	# Use per-token transforms instead of full state blast to avoid
-	# clearing client-side permissions and drag locks every 2 seconds.
-	_broadcast_reconciliation_transforms()
-
-
-## Send per-token transform updates for reconciliation instead of a full state
-## blast. This avoids the destructive clear-and-rebuild path in
-## apply_full_state_dict which clears permissions and drag locks on clients.
-func _broadcast_reconciliation_transforms() -> void:
-	var tokens := _token_spawner.get_spawned_tokens()
-	for placement_id in tokens:
-		var token = tokens[placement_id] as BoardToken
-		if is_instance_valid(token):
-			NetworkStateSync.broadcast_token_transform(token)
+	_ticks += 1
+	if _ticks % HEARTBEAT_TICKS == 0:
+		_reconciled.mark_sent(current)
+		NetworkStateSync.broadcast_full_state()
+		return
+	var changed := _reconciled.take_changed(current)
+	if not changed.is_empty():
+		NetworkManager.game_sync.broadcast_reconcile(changed)
 
 
 ## Called when any token permission changes (grant or revoke).

@@ -59,6 +59,11 @@ extends RefCounted
 ## was. Probed on Windows (4.7.1): DirAccess.rename_absolute over an existing file
 ## replaces it, so no remove-first window is needed; while another handle holds the target
 ## open, the rename fails with ERR_FAILED and both files are left untouched.
+##
+## Writing is two halves (MapDocumentSnapshot): a capture on the main thread (copy-on-write
+## copies of the packed data, the manifest and the object lists' entries) and an encode that
+## runs anywhere, so the authoring saves serialize, deflate and write on a worker
+## (MapDocumentWriter) and the frame pays only the capture.
 
 const MANIFEST_ENTRY := "manifest.json"
 const HEIGHT_ENTRY := "height.bin"
@@ -174,21 +179,33 @@ class _WarningLog:
 		return out
 
 
-## Writes `doc` to `path` atomically (see the header). Returns OK, or the error of the
-## step that failed; a document that violates the reader's caps is refused with
-## ERR_INVALID_DATA and a warning naming the problem, so nothing is ever written that
-## read() would reject or trim.
+## Writes `doc` to `path` atomically (see the header), on the calling thread. Returns OK, or
+## the error of the step that failed; a document that violates the reader's caps is refused
+## with ERR_INVALID_DATA and a warning naming the problem, so nothing is ever written that
+## read() would reject or trim. The authoring saves write off the main thread instead
+## (MapDocumentSnapshot.capture, then write_snapshot on a MapDocumentWriter task).
 static func write(doc: MapDocument, path: String) -> Error:
-	var packed := serialize(doc)
+	var snapshot := MapDocumentSnapshot.capture(doc)
+	var err := write_snapshot(snapshot, path)
+	if err == ERR_INVALID_DATA:
+		push_warning("MapDocumentIO: not writing %s: %s" % [path, snapshot.error])
+	if err == OK:
+		MapFileHash.invalidate(path)
+	return err
+
+
+## Encodes `snapshot` and writes it to `path` atomically: packed into `<path>.tmp` in the same
+## folder, then renamed over the target (see the header). Any thread: touches only the snapshot
+## and the files, so the caller calls MapFileHash.invalidate(path) after an OK on the main
+## thread. ERR_INVALID_DATA leaves the rule broken in `snapshot.error`; nothing is written.
+static func write_snapshot(snapshot: MapDocumentSnapshot, path: String) -> Error:
+	var packed := snapshot.encode()
 	if packed["error"] != "":
-		push_warning("MapDocumentIO: not writing %s: %s" % [path, packed["error"]])
 		return ERR_INVALID_DATA
 	var temp_path := path + TEMP_SUFFIX
 	var err := _write_zip(temp_path, packed["entries"])
 	if err == OK:
 		err = DirAccess.rename_absolute(temp_path, path)
-	if err == OK:
-		MapFileHash.invalidate(path)
 	if err != OK and FileAccess.file_exists(temp_path):
 		DirAccess.remove_absolute(temp_path)
 	return err
@@ -237,46 +254,10 @@ static func parse(entries: Dictionary) -> Dictionary:
 
 ## The entries write() would store: {"entries": Dictionary[String, PackedByteArray],
 ## "error": String}. Pure. `error` is non-empty (and `entries` empty) when the document
-## breaks a rule the reader enforces.
+## breaks a rule the reader enforces. Main thread (the capture half reads the library
+## registry); MapDocumentSnapshot splits it for a worker.
 static func serialize(doc: MapDocument) -> Dictionary:
-	var entries: Dictionary[String, PackedByteArray] = {}
-	var problem := _writable_problem(doc)
-	if problem != "":
-		return {"entries": entries, "error": problem}
-	entries[MANIFEST_ENTRY] = JSON.stringify(_manifest(doc), "\t", false, true).to_utf8_buffer()
-	entries[HEIGHT_ENTRY] = doc.heights.to_byte_array()
-	entries[SCATTER_ENTRY] = _rows_json(doc.scatter).to_utf8_buffer()
-	entries[PROPS_ENTRY] = _rows_json(doc.props).to_utf8_buffer()
-	if not doc.erase_mask.is_empty():
-		entries[ERASE_ENTRY] = _png(doc.erase_mask, doc, Image.FORMAT_L8)
-	if not doc.biome_ids.is_empty():
-		var biomes := {"biomes": Array(doc.biome_ids)}
-		entries[BIOMES_JSON_ENTRY] = JSON.stringify(biomes, "\t").to_utf8_buffer()
-	if not doc.biome_slots.is_empty():
-		var interleaved := _interleave(doc.biome_slots, doc.biome_density)
-		entries[BIOMES_PNG_ENTRY] = _png(interleaved, doc, Image.FORMAT_RG8)
-	if not doc.surface_ids.is_empty():
-		MapSurfacesIO.serialize(doc, entries)
-	MapWaterIO.serialize(doc, entries)
-	MapCrossingIO.serialize(doc, entries)
-	MapWallIO.serialize(doc, entries)
-	MapStructureIO.serialize(doc, entries)
-	MapSettlementIO.serialize(doc, entries)
-	if has_fire(doc.fire_mask):
-		entries[FIRE_ENTRY] = _png(doc.fire_mask, doc, Image.FORMAT_L8)
-	MapAnchorsIO.serialize(doc, entries)
-	var total := 0
-	for entry_name in entries:
-		var size := entries[entry_name].size()
-		total += size
-		if size > ENTRY_CAPS[entry_name]:
-			var message := "%s is %d bytes, over its cap of %d"
-			return {"entries": {}, "error": message % [entry_name, size, ENTRY_CAPS[entry_name]]}
-	if total > MAX_TOTAL_BYTES:
-		return {
-			"entries": {}, "error": "entries total %d bytes, over %d" % [total, MAX_TOTAL_BYTES]
-		}
-	return {"entries": entries, "error": ""}
+	return MapDocumentSnapshot.capture(doc).encode()
 
 
 # --- writing --------------------------------------------------------------------------
@@ -406,8 +387,9 @@ static func _interleave(first: PackedByteArray, second: PackedByteArray) -> Pack
 	return out
 
 
-## The first rule `doc` breaks that the reader enforces, or "" when it can be written.
-static func _writable_problem(doc: MapDocument) -> String:
+## The first rule the reader enforces that `doc`'s geometry, scalars or object lists break,
+## or "": the half of the writer's checks that MapDocumentSnapshot.capture runs (main thread).
+static func capture_problem(doc: MapDocument) -> String:
 	if doc == null:
 		return "no document"
 	var geometry := _geometry_problem(
@@ -421,6 +403,22 @@ static func _writable_problem(doc: MapDocument) -> String:
 		return "base_surface is too long"
 	if absi(doc.map_seed) > MAX_SEED:
 		return "map_seed does not fit a JSON number exactly"
+	for problem in [
+		MapWaterIO.bodies_problem(doc),
+		MapCrossingIO.problem(doc),
+		MapWallIO.problem(doc),
+		MapStructureIO.problem(doc),
+		MapSettlementIO.problem(doc),
+	]:
+		if problem != "":
+			return problem
+	return ""
+
+
+## The first rule the reader enforces that `doc`'s packed data break, or "": heights, masks,
+## biomes, surfaces, the water grids (`ponds`: MapWaterIO.pond_ids) and rows. Reads only packed
+## fields, so MapDocumentSnapshot.encode runs it on any thread.
+static func data_problem(doc: MapDocument, ponds: Dictionary) -> String:
 	var count := doc.sample_count()
 	if doc.heights.size() != count:
 		return "heights hold %d samples, the grid has %d" % [doc.heights.size(), count]
@@ -436,21 +434,9 @@ static func _writable_problem(doc: MapDocument) -> String:
 	var surfaces := MapSurfacesIO.problem(doc, count)
 	if surfaces != "":
 		return surfaces
-	var water := MapWaterIO.problem(doc)
+	var water := MapWaterIO.grids_problem(doc, ponds)
 	if water != "":
 		return water
-	var crossings := MapCrossingIO.problem(doc)
-	if crossings != "":
-		return crossings
-	var walls := MapWallIO.problem(doc)
-	if walls != "":
-		return walls
-	var structures := MapStructureIO.problem(doc)
-	if structures != "":
-		return structures
-	var settlements := MapSettlementIO.problem(doc)
-	if settlements != "":
-		return settlements
 	var total_rows := 0
 	for rows_by_asset in [doc.props, doc.scatter]:
 		var rows_problem := _rows_problem(rows_by_asset)

@@ -61,6 +61,8 @@ const COVERED_SHADERS := [
 	"res://shaders/waterfall.gdshader",
 	"res://shaders/wind_foliage.gdshader",
 	"res://shaders/wind_foliage_burn.gdshader",
+	"res://shaders/wind_foliage_ground.gdshader",
+	"res://shaders/wind_foliage_ground_no_aa.gdshader",
 	"res://shaders/wind_foliage_no_aa.gdshader",
 	"res://shaders/wind_foliage_painted.gdshader",
 	"res://shaders/wind_foliage_painted_no_aa.gdshader",

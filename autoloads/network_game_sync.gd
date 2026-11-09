@@ -4,7 +4,8 @@ extends Node
 ## Table-play sub-component of NetworkManager: the RPCs that move tokens, hand out drag
 ## locks and carry live visual settings and live map edits once a level is loaded.
 ##
-## Host -> clients: token transforms (one token, or a batch; unreliable), a token's full
+## Host -> clients: token transforms (one token, or a TokenTransformPack batch: a drag's,
+## unreliable, or the reconciliation's moved tokens, reliable), a token's full
 ## state and its removal (reliable), drag-lock grants, denials and releases, live visual
 ## settings, live map edits (LiveEdits; reliable) and the terrain events the GM starts
 ## (TerrainEvents, through the same outbox; reliable). Client -> host: a controlled token's
@@ -125,10 +126,20 @@ func send_token_transform_to_peer(
 	)
 
 
-## Host: send a batch of queued transforms to every client (unreliable), in the shape
-## transform_batch_received documents.
-func broadcast_transform_batch(batch: Dictionary) -> void:
-	_rpc_receive_transform_batch.rpc(batch)
+## Host: send a batch of queued transforms (network_id -> TokenTransformPack.floats_of) to
+## every client, packed, in messages under the MTU (unreliable). Clients get
+## transform_batch_received.
+func broadcast_transform_batch(transforms: Dictionary) -> void:
+	for bytes in TokenTransformPack.encode(transforms, TokenTransformPack.UNRELIABLE_BYTES):
+		_rpc_receive_transform_batch.rpc(bytes)
+
+
+## Host: send the reconciliation's moved tokens (network_id -> TokenTransformPack.floats_of)
+## to every client, packed (reliable: a token at rest is sent once, so the message must
+## arrive). Clients get transform_batch_received, the same as a drag's batch.
+func broadcast_reconcile(transforms: Dictionary) -> void:
+	for bytes in TokenTransformPack.encode(transforms):
+		_rpc_receive_reconcile.rpc(bytes)
 
 
 ## Host: send a token's full state (TokenState.to_dict()) to every client (reliable).
@@ -325,8 +336,25 @@ func _rpc_receive_token_transform(
 
 
 @rpc("authority", "unreliable")
-func _rpc_receive_transform_batch(batch: Dictionary) -> void:
-	transform_batch_received.emit(batch)
+func _rpc_receive_transform_batch(bytes: PackedByteArray) -> void:
+	_emit_transform_pack(bytes)
+
+
+@rpc("authority", "reliable")
+func _rpc_receive_reconcile(bytes: PackedByteArray) -> void:
+	_emit_transform_pack(bytes)
+
+
+## Decodes a TokenTransformPack message and emits it as transform_batch_received; a refused
+## one is dropped with a warning (the next reconciliation or heartbeat brings the tokens).
+func _emit_transform_pack(bytes: PackedByteArray) -> void:
+	if NetworkManager.is_host():
+		return
+	var decoded := TokenTransformPack.decode(bytes)
+	if decoded.problem != "":
+		push_warning("NetworkGameSync: transforms refused: %s" % decoded.problem)
+		return
+	transform_batch_received.emit(TokenTransformPack.to_batch(decoded.transforms))
 
 
 @rpc("authority", "reliable")

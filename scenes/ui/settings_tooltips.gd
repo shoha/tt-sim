@@ -26,6 +26,7 @@ static func apply(menu: SettingsMenu) -> void:
 		"Shadow edge softness (Hard is fastest, Ultra is priciest). Very Low and Low show a "
 		+ "fine hatch along soft shadow edges; High, the default, smooths it"
 	)
+	SettingsRenderScale.apply_tooltip(menu)
 	menu.water_quality_option.tooltip_text = (
 		"Water ripple detail and refraction quality (Low is fastest, " + "High is highest fidelity)"
 	)

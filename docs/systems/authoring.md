@@ -18,7 +18,8 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 | `scenes/states/authoring/new_map_dialog.gd` | `NewMapDialog` | The new-map dialog |
 | `utils/new_map.gd` | `NewMap` | Size, base surface from the biome, starting cover; `create_dressing` |
 | `scenes/states/authoring/authoring_session.gd` | `AuthoringSession` | The dirty state |
-| `scenes/states/authoring/authoring_autosave.gd` | `AuthoringAutosave` | Autosave |
+| `scenes/states/authoring/authoring_autosave.gd` | `AuthoringAutosave` | The autosave slot; `job()` for a worker write |
+| `scenes/states/authoring/authoring_saving.gd` | `AuthoringSaving` | Save and autosave on a worker: snapshot, coalescing, waits, errors; `write_level()` |
 | `scenes/states/authoring/authoring_history.gd` | `AuthoringHistory` | The undo seam |
 | `scenes/states/authoring/authoring_tokens.gd` | `AuthoringTokens` | The level's tokens, spawned as play does, saved back as placements |
 | `utils/token_grounding.gd` | `TokenGrounding` | Sets saved tokens down on ground that moved (authoring and play load) |
@@ -76,10 +77,25 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   source of truth: rows are copied back from the AuthoredScatter nodes before each write.
 - New maps come from `NewMapDialog` + `NewMap` (size, base surface from the biome, starting
   cover). A GLB-only level opens as a dressing layer (`NewMap.create_dressing`).
-- Save is `AuthoringController.write_level()`: `map.ttmap` first, then `level.json`, then the
-  thumbnail. Dirty is `AuthoringSession`. Autosave is `AuthoringAutosave`
-  (`_autosave/map.ttmap` + `map_level.json`). The undo seam is `AuthoringHistory`
-  (`record({label, undo, redo, bytes})`, capped at 100 entries and 64 MB).
+- Save writes `map.ttmap` first, then `level.json`, then the thumbnail. Dirty is
+  `AuthoringSession` (revision counters). Autosave is `AuthoringAutosave` (`_autosave/map.ttmap` +
+  `map_level.json`, both replaced atomically, the level after the document). The undo seam is
+  `AuthoringHistory` (`record({label, undo, redo, bytes})`, capped at 100 entries and 64 MB).
+- Saves run on a worker (2026-11-09, perfaudit card authsave; `AuthoringSaving`, a child of the
+  controller, which is its duck-typed host). Save and the 30 s autosave sync the scene into the
+  document, freeze it (`MapDocumentSnapshot.capture`, about 0.3 ms) with the session's revision
+  and hand it to a `MapDocumentWriter` task; the frame pays the scene sync and the capture (1.3 /
+  3.4 / 7.9 ms at 100 / 200 / 320 ft, where the whole write was 46 / 163 / 441 ms). A stroke during
+  the write belongs to the next save: `mark_saved(at)` and `mark_autosaved(at)` record the
+  snapshot's revision, so the session stays dirty. One write at a time: autosave ticks during a
+  write or a save run once afterwards if still needed; Save pressed during a save makes it go round
+  once more (every caller gets the last result); a Save during an autosave waits for it. The
+  manual save and save-and-leave await their write (a "Saving" toast after 0.4 s);
+  `discard_autosave()` (Discard and leave) and `teardown()` block on a write in flight, so a late
+  autosave never lands after its discard, and freeing the writer at quit blocks too. A worker
+  error comes back in the job: the manual save shows "The map could not be saved." with the reason
+  as a warning; a failed autosave shows one warning toast until one succeeds. Synchronous
+  `AuthoringController.write_level()` stays for render jobs and tests.
 - One camera model (`MapViewFit`, 2026-10-09), owned by `AuthoringController` and
   `LevelPlayController` alike: zoom-out reaches the whole map, never less than 20
   (`GameMap.set_zoom_limits`, `fit_zoom_for_extent`, margin 1.08, 12 m of canopy above the
