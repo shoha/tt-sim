@@ -5,6 +5,7 @@ extends GutTest
 ## settings.cfg's [graphics] section, and apply to the sun and the foliage materials.
 
 const TMP_SETTINGS := "user://test_gpu_options_settings.cfg"
+const MENU_SCENE := preload("res://scenes/ui/settings_menu.tscn")
 
 var _saved_cascades: int
 var _saved_edges: int
@@ -99,7 +100,7 @@ func test_startup_reads_both_choices() -> void:
 
 
 func test_settings_menu_offers_saves_and_shows_both_choices() -> void:
-	var menu: SettingsMenu = preload("res://scenes/ui/settings_menu.tscn").instantiate()
+	var menu: SettingsMenu = MENU_SCENE.instantiate()
 	add_child_autofree(menu)
 	var cascades := menu.shadow_cascades_option
 	var edges := menu.foliage_edges_option
@@ -128,6 +129,32 @@ func test_settings_menu_offers_saves_and_shows_both_choices() -> void:
 	SettingsGpuOptions.apply(menu, null)
 	assert_eq(ShadowCascades.current, ShadowCascades.SINGLE)
 	assert_eq(FoliageEdges.current, FoliageEdges.FAST)
+
+
+func test_ground_detail_is_a_saved_level_cap_with_an_off() -> void:
+	var saved := GroundClipmapSetting.current
+	assert_eq(GroundClipmapSetting.DEFAULT, 5, "every level by default")
+	assert_eq(GroundClipmapSetting.stored(ConfigFile.new()), GroundClipmapSetting.DEFAULT)
+	var config := ConfigFile.new()
+	config.set_value("graphics", GroundClipmapSetting.KEY, 3)
+	assert_eq(GroundClipmapSetting.stored(config), 3)
+	config.set_value("graphics", GroundClipmapSetting.KEY, 9)
+	assert_eq(GroundClipmapSetting.stored(config), GroundClipmapSetting.DEFAULT, "a stale value")
+	var menu: SettingsMenu = MENU_SCENE.instantiate()
+	add_child_autofree(menu)
+	var option := menu.ground_detail_option
+	assert_eq(option.item_count, GroundClipmapSetting.CHOICES.size())
+	for choice in GroundClipmapSetting.CHOICES:
+		assert_true(option.get_item_index(choice) >= 0, "ground detail %d offered" % choice)
+	assert_false(option.tooltip_text.is_empty())
+	option.select(option.get_item_index(GroundClipmapSetting.OFF))
+	menu._save_settings(TMP_SETTINGS)
+	var file := ConfigFile.new()
+	assert_eq(file.load(TMP_SETTINGS), OK)
+	assert_eq(file.get_value("graphics", GroundClipmapSetting.KEY), GroundClipmapSetting.OFF)
+	SettingsGpuOptions.apply(menu, null)
+	assert_eq(GroundClipmapSetting.current, GroundClipmapSetting.OFF)
+	GroundClipmapSetting.current = saved
 
 
 func test_fast_edges_put_foliage_on_the_plain_cutout_under_msaa() -> void:

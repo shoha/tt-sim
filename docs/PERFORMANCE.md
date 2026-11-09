@@ -6093,3 +6093,35 @@ beat's 16/32 token steps become ramps of 8 to 20 over two samples. Frame strip, 
 now come up as a thickening spray from 600 ms to 1,400 ms, not in blocks; no pop is visible as a
 jump. Capturing the strip costs a frame readback (the strip runs' worst frame, 89 and 95 ms, is the
 capture, not the pops).
+
+## Ground clipmap (topic clipmap1, cards clipmap1 and clipmap2, 2026-11-09)
+
+The model and switches are in `docs/systems/ground_clipmap.md`. Measured on an RTX 3080 at 1080p,
+q4, SSAO and lofi on, six in-run rounds with a plain-second control (drift 0.98 to 1.05), render jobs
+`tools/render_jobs/local/clipmap1/` (gitignored; probe `probes/clipmap.gd`):
+
+| Map and view | Per pixel | Clipmap | Delta |
+|---|---|---|---|
+| Valley 100 ft home | 2.82 to 2.99 | 2.28 to 2.39 | -0.57 to -0.67 |
+| Valley zoom 4 / steepest view / zoom 20 | 2.59 to 2.96 | 1.91 to 2.50 | -0.69 / -0.82 / -0.55 |
+| Valley full zoom-out, eye view | 0.83, 4.65 | 0.84, 4.62 | 0 (per pixel by design) |
+| Valley with a 4 m cliff, home / zoom 4 | 2.92, 3.21 | 2.52, 2.77 | -0.44, -0.52 |
+| Badlands terraces 200 ft home / zoom 4 / steepest | 2.63, 2.29, 2.48 | 1.93, 1.38, 1.68 | -0.70, -0.92, -0.85 |
+
+- Memory 32 MB a level (two 2048^2 RGBA8): 64 to 128 MB on 100 and 200 ft maps, up to 160 MB on a
+  320 ft map at zoom 4. The compiled-in fallback branch costs 0.24 ms of the ceiling (a baked-only
+  material per covered chunk would regain it); the octave rule (a level more than one octave coarser than
+  the pixel wants is not used) costs 0.02 ms; anisotropic filtering and the crossfade cost nothing.
+- Look against the per-pixel path (mean levels, home to far): 0.1 to 0.45 at the table views, 0.0001
+  at full zoom-out and 0.03 at the eye view (both per pixel by design); the largest differences are 1-texel
+  shifts on accent rims and pebbles. 1:1 pairs: `docs/plans/handoffs/clipmap1/clipmap_*.jpg`.
+- A strip (both passes of 256 x 2048) costs 0.56 to 1.04 ms of GPU when it lies over ground
+  (L0 to L3, column and row; the same strip mostly off the map 0.07 ms), all windows' copies 0.1 ms.
+  Frame time on a 45 m pan at 6 m/s, vsync off, same path both reads, badlands map: mean 3.11 ms per
+  pixel, 2.49 ms clipmap; p99 5.56 and 2.78; max 52 (a hitch in the first run) and 4.33. A trace
+  with vsync on showed 2 ms steps in the world viewport's GPU time with nothing changing: the GPU's
+  clocks follow its load under a frame cap, so a pan timing needs vsync off.
+- Edits: a 6 m cobblestone dab on the 200 ft map is correct in the next frame (the hole; the live blend
+  inside it) while the stale windows alone show none of it; the patch rebake finishes 324 to 542 ms
+  after the edit (250 ms of that is the quiet wait). The rebaked cobble reads a little softer than the
+  per-pixel one at home (L1 and L2 are 100 and 50 texels per metre).

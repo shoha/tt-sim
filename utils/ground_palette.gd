@@ -49,6 +49,35 @@ static func texture_paths(
 	return paths
 
 
+## The surfaces a fire's change brings to `doc` at once (FireSweep.plan_for: the palette's
+## burnt forest biome's ground, cliff, scree and accent surfaces, its water bed and shore on a
+## map with water, and the ash), drawable ones other than the base; none of the biome's when it
+## would draw as the base. AuthoredTerrain.fire_surfaces() is this.
+static func fire_surfaces(doc: MapDocument, root: String, water: bool) -> PackedStringArray:
+	var available := func(surface: String) -> bool:
+		return surface != "" and surface_available(surface, root)
+	var plan := FireSweep.plan_for(
+		PaletteLibrary.get_palette(root)["biomes"], PaletteLibrary.surfaces(root)
+	)
+	var names: Array = []
+	if String(plan.biome) != "":
+		var biome := PaletteLibrary.biome(String(plan.biome), root)
+		var ground := String(biome.get("ground_surface", ""))
+		if available.call(ground) and ground != doc.base_surface:
+			var keys := ["ground_surface", "cliff_surface", "scree_surface"]
+			if water:
+				keys.append_array(["water_bed_surface", "shore_surface"])
+			for key in keys:
+				names.append(String(biome.get(key, "")))
+			names.append_array(GroundAccents.surface_names(biome.get("ground_accents", [])))
+	names.append(String(plan.surface))
+	var out := PackedStringArray()
+	for surface: String in names:
+		if available.call(surface) and surface != doc.base_surface and not surface in out:
+			out.append(surface)
+	return out
+
+
 ## The cliff and scree surfaces [cliff, scree] that dress base surface `base` where no
 ## painted biome says otherwise: those of the palette's first biome on that ground, else
 ## the palette's first cliff surface and no scree ("" = none).

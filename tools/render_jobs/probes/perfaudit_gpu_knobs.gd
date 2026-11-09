@@ -16,6 +16,8 @@ extends RefCounted
 ##                       skirt material on the shadowless outer shader (the skirt of card
 ##                       groundskirt), "full" on the include with no render mode and no ring fade
 ##                       (the skirt before that card); absent = the shipped ring and shadowless rest
+##   clip (bool)         the ground clipmap's read (clipmap.gd "on" made one): false = the plain
+##                       per-pixel ground, windows kept; absent = true
 
 const Util := preload("res://tools/render_jobs/probes/perfaudit_gpu_util.gd")
 const GROUND := "res://shaders/authored_ground.gdshaderinc"
@@ -34,6 +36,16 @@ func apply(gm: GameMap, cfg: Dictionary) -> void:
 	_apply_suns(gm, cfg)
 	_apply_foliage(gm, cfg)
 	_apply_skirt(gm, String(cfg.get("skirt", "")))
+	_apply_clip(gm, bool(cfg.get("clip", true)))
+
+
+## The ground clipmap's read (card clipmap1): `clip` false draws the plain per-pixel ground while
+## the windows stay baked, true (the default) the clip shader. A map with no clipmap is untouched.
+func _apply_clip(gm: GameMap, read: bool) -> void:
+	var terrain := gm.world_viewport.find_child("AuthoredTerrain", true, false) as AuthoredTerrain
+	var clipmap := GroundClipmap.of(terrain) if terrain != null else null
+	if clipmap != null:
+		clipmap.read = read
 
 
 ## Every skirt material (the mesh's two surfaces and the river patch) on the shader the knob
