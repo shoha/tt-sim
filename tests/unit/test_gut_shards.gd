@@ -78,6 +78,22 @@ func test_a_young_lock_file_is_live_and_an_old_or_unreadable_one_is_not() -> voi
 	assert_false(Shards.lock_is_live("soon", 1500.0), "unreadable")
 
 
+func test_a_shard_without_a_verdict_is_a_crash() -> void:
+	var verdict := {"tests": 3}
+	assert_false(Shards.crashed(0, false, verdict), "passed")
+	assert_false(Shards.crashed(1, false, verdict), "GUT's own failure exit")
+	assert_true(Shards.crashed(-1073741819, false, verdict), "an access violation")
+	assert_true(Shards.crashed(0, true, verdict), "killed after the hang limit")
+	assert_true(Shards.crashed(1, false, {}), "no JUnit file")
+
+
+func test_the_log_tail_skips_blank_lines_and_keeps_the_last_ones() -> void:
+	var text := "a\n\nb\r\n  \nc\nd\n"
+	assert_eq(Shards.tail_lines(text, 2), PackedStringArray(["c", "d"]))
+	assert_eq(Shards.tail_lines(text, 10), PackedStringArray(["a", "b", "c", "d"]))
+	assert_eq(Shards.tail_lines("", 5), PackedStringArray())
+
+
 func test_the_committed_table_names_existing_scripts() -> void:
 	var parsed = JSON.parse_string(FileAccess.get_file_as_string(Shards.COMMITTED_TIMES))
 	assert_true(parsed is Dictionary, "tests/gut_times.json parses")

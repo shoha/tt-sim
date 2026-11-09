@@ -10,13 +10,34 @@ extends GutTest
 const ROOT := "user://test_surface_prebake"
 const KINDS: Array[String] = ["albedo", "normal", "orm", "height"]
 ## The most one channel of a decompressed block may move between two bakes of the same map.
-const MAX_LEVEL_DIFF := 4
+## Measured on ash albedo: 0 to 2 on an idle machine (card bakedet), 5 in 2 of 8 runs with 20 busy
+## processes competing for the cores (card gateflakes; the encoder's thread use changes with the
+## load). There is no derived bound, so this leaves headroom over what was seen; the share below
+## is what catches a bake that is wrong across a region.
+const MAX_LEVEL_DIFF := 8
+## The share of a map's decompressed bytes that may differ at all: a few blocks flip between modes
+## (2 to 5 blocks of 65,536 on an idle machine), never a whole region.
+const MAX_DIFF_SHARE := 0.001
 
 var _saved_cache_root: String = ""
 var _names: PackedStringArray = PackedStringArray()
 
 
+## Another script of the same process can leave work on the lane and pictures waiting for it
+## (test_structure_tool's events pane queues the biome tiles' ground albedos; the lane is still
+## baking them when the next script starts). Cleared memory makes that waiting work ready, and it
+## then bakes on the main thread inside a test here, counted in its stats and writing cache files
+## into its scratch cache (measured 2026-11-09: five strays after test_structure_tool, every run
+## of the pair). So the lane and the waiting work are let finish first.
+func _let_other_scripts_finish() -> void:
+	var frames := 0
+	while (SurfaceStore.is_prebaking() or SurfaceWait.waiting() > 0) and frames < 1200:
+		await wait_frames(1)
+		frames += 1
+
+
 func before_all() -> void:
+	await _let_other_scripts_finish()
 	_saved_cache_root = SurfaceCache.root
 	var surfaces := PaletteLibrary.surfaces(PaletteLibrary.DEFAULT_ROOT)
 	var found: Array = []
@@ -119,14 +140,24 @@ func _difference(a: Image, b: Image) -> String:
 	var pb := b.duplicate() as Image
 	if pa.decompress() != OK or pb.decompress() != OK:
 		return "does not decompress"
-	var da := pa.get_data()
-	var db := pb.get_data()
+	return _bytes_difference(pa.get_data(), pb.get_data())
+
+
+## "" when two decompressed buffers are equal or differ only by a few blocks flipping between
+## modes (MAX_LEVEL_DIFF, MAX_DIFF_SHARE), else why not.
+func _bytes_difference(da: PackedByteArray, db: PackedByteArray) -> String:
 	if da == db:
 		return ""
 	var worst := 0
+	var differing := 0
 	for i in da.size():
-		worst = maxi(worst, absi(int(da[i]) - int(db[i])))
-	return "" if worst <= MAX_LEVEL_DIFF else "decompressed pixels differ by %d" % worst
+		var moved := absi(int(da[i]) - int(db[i]))
+		worst = maxi(worst, moved)
+		if moved > 0:
+			differing += 1
+	if worst <= MAX_LEVEL_DIFF and differing <= da.size() * MAX_DIFF_SHARE:
+		return ""
+	return "decompressed pixels differ by %d levels in %d of %d bytes" % [worst, differing, da.size()]
 
 
 func _sha(bytes: PackedByteArray) -> String:
