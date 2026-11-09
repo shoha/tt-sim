@@ -256,7 +256,7 @@ func _on_libraries_changed(_library: String) -> void:
 
 ## Manage collections...: the manager over this dialog.
 func _on_manage_pressed() -> void:
-	LibraryManager.open(get_tree().root)
+	OnDemand.open_library_manager(get_tree().root)
 
 
 func _exit_tree() -> void:

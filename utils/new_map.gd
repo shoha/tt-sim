@@ -214,9 +214,12 @@ static func paint_starting_cover(
 	var feather := edge_feather_m(half)
 	var feather_reach := feather * (1.0 + EDGE_FEATHER_WOBBLE)
 	var line: PackedVector2Array = glade.get("line", PackedVector2Array())
+	# The grid read once, not per sample (sample_to_world and sample_index, same arithmetic).
+	var sx := doc.samples_x()
+	var step := doc.sample_step()
 	for z in doc.samples_z():
-		for x in doc.samples_x():
-			var world := doc.sample_to_world(Vector2(x, z))
+		for x in sx:
+			var world := Vector2(x, z) * step - half
 			var noise_value := noise.get_noise_2d(world.x, world.y)
 			var value := (
 				glade_density(world, glade, noise_value)
@@ -231,7 +234,7 @@ static func paint_starting_cover(
 				value *= edge_keep(world, half, feather, noise)
 				value = value if value >= COVER_MIN_DENSITY else 0.0
 			var byte := roundi(value * 255.0)
-			var index := doc.sample_index(x, z)
+			var index := z * sx + x
 			density[index] = byte
 			slots[index] = 1 if byte > 0 else 0
 	doc.biome_ids = PackedStringArray([biome_id])

@@ -71,8 +71,9 @@ var tokens: AuthoringTokens = null
 ## "ray_ms", "missed", "settled_rows", "wall_ms"}; {} for a map that is not a dressing.
 var ground_fit: Dictionary = {}
 ## The biome designer when this session is one (BiomeDesignerHost; docs/systems/biome_designer.md):
-## the proving ground instead of a map, the designer's panels instead of the tool drawer.
-var designer: BiomeDesignerHost = null
+## the proving ground instead of a map, the designer's panels instead of the tool drawer. A plain
+## Node, loaded on first use (OnDemand), so the designer stays out of the start-up compile.
+var designer: Node = null
 ## Save and autosave (a child; this controller is its host).
 var saving: AuthoringSaving = null
 
@@ -344,7 +345,7 @@ func _open_async(
 		saving.start_autosave()
 	set_process(true)
 	if not _designer_config.is_empty() and designer == null:
-		designer = BiomeDesignerHost.attach(self, _game_map, _designer_config)
+		designer = OnDemand.attach_biome_designer(self, _game_map, _designer_config)
 	if settled_rows > 0:
 		UIManager.show_toast(
 			"Plants painted before were set down onto the ground. Save to keep the fix.",

@@ -643,6 +643,7 @@ static func apply(root: String = PaletteLibrary.DEFAULT_ROOT) -> Dictionary:
 	if root == PaletteLibrary.DEFAULT_ROOT:
 		PaletteLibrary.note_default_served()
 	refresh(root)
+	BootTrace.mark("LibraryRegistry.apply: libraries scanned and read")
 	if _entries.is_empty():
 		LibraryStructureStore.publish()
 		return result

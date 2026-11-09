@@ -119,6 +119,7 @@
 		"res://tests/unit/test_mask_stroke.gd",
 		"res://tests/unit/test_mesh_instancing_utils.gd",
 		"res://tests/unit/test_new_map.gd",
+		"res://tests/unit/test_new_map_digest.gd",
 		"res://tests/unit/test_new_map_build.gd",
 		"res://tests/unit/test_new_map_dialog_libraries.gd",
 		"res://tests/unit/test_paint_tool.gd",
