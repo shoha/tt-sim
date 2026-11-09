@@ -98,6 +98,7 @@
     {"name": "r1440_pre_off", "size": [2560, 1440], "prepass": false}
    ]},
   {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_gpu.gd", "action": "await"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_gpu.gd", "action": "await"},
   {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_gpu.gd", "action": "overdraw", "name": "f100_home_od",
    "sets": [
     {"name": "ground", "hide": ["*", "!*authored_ground*"], "calib": true},

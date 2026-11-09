@@ -98,6 +98,15 @@ class Rig:
 	var _msaa_changed := false
 	var _atlas := -1
 	var _q := -1
+	var _class_cache := {}
+	var _ground_shaders := {}
+
+	## class_of as first seen, before the rig swapped any material (a flat ground override
+	## would otherwise read as "std" and fall out of the ground globs).
+	func _cls(gi: GeometryInstance3D) -> String:
+		if not _class_cache.has(gi):
+			_class_cache[gi] = class_of(gi)
+		return _class_cache[gi]
 
 	## The class of a geometry instance: a kind prefix, the shader file name of its material (or
 	## "std" for a StandardMaterial3D) and, for foliage, the material's wind category.
@@ -315,6 +324,27 @@ class Rig:
 		_set_hidden(cfg.get("hide", []))
 		_set_foliage_shader(String(cfg.get("fshader", "")))
 		_set_ground_flat(bool(cfg.get("ground_flat", false)))
+		_set_ground_shader(String(cfg.get("gshader", "")))
+
+	## Every ground chunk's ShaderMaterial (not the skirt) on the shader at `path`, or back.
+	func _set_ground_shader(path: String) -> void:
+		for m: ShaderMaterial in _ground_shaders:
+			m.shader = _ground_shaders[m]
+		_ground_shaders.clear()
+		if path.is_empty():
+			return
+		var target := load(path) as Shader
+		for node in gm.world_viewport.find_children("*", "GeometryInstance3D", true, false):
+			var gi := node as GeometryInstance3D
+			if not _cls(gi).begins_with("authored_ground_looked"):
+				continue
+			var mesh := (gi as MeshInstance3D).mesh if gi is MeshInstance3D else null
+			var m := gi.material_override as ShaderMaterial
+			if m == null and mesh != null and mesh.get_surface_count() > 0:
+				m = (gi as MeshInstance3D).get_active_material(0) as ShaderMaterial
+			if m != null and not _ground_shaders.has(m):
+				_ground_shaders[m] = m.shader
+				m.shader = target
 
 	## Whether `key` matches one of the globs and none of the "!glob" exclusions.
 	func _matches(key: String, patterns: Array) -> bool:
@@ -346,7 +376,7 @@ class Rig:
 			var gi := node as GeometryInstance3D
 			if gi.layers == HIDE_LAYER and not _hidden.has(gi):
 				continue
-			if _matches(class_of(gi), patterns):
+			if _matches(_cls(gi), patterns):
 				keep[gi] = true
 				if not _hidden.has(gi):
 					_hidden[gi] = {"layers": gi.layers, "cast": gi.cast_shadow}
@@ -391,7 +421,7 @@ class Rig:
 			_flat_ground.roughness = 1.0
 		for node in gm.world_viewport.find_children("*", "GeometryInstance3D", true, false):
 			var gi := node as GeometryInstance3D
-			if class_of(gi).contains("authored_ground") and not _ground_overrides.has(gi):
+			if _cls(gi).contains("authored_ground") and not _ground_overrides.has(gi):
 				_ground_overrides[gi] = gi.material_override
 				gi.material_override = _flat_ground
 
