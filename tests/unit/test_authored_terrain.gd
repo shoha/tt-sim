@@ -194,10 +194,12 @@ func test_collision_matches_the_document_surface() -> void:
 	var doc := _sine(40)
 	var terrain := AuthoredTerrain.create(doc)
 	add_child_autofree(terrain)
-	var body := terrain.get_collision_body()
-	assert_eq(body.collision_layer, 1, "terrain layer 1, like GLB map bodies")
-	assert_eq(body.collision_mask, 1)
-	assert_false(body.input_ray_pickable, "not pickable, like GLB map bodies")
+	var bodies := terrain.get_collision_bodies()
+	assert_gt(bodies.size(), 1, "a 40-cell map has several collision tiles")
+	for body in bodies:
+		assert_eq(body.collision_layer, 1, "terrain layer 1, like GLB map bodies")
+		assert_eq(body.collision_mask, 1)
+		assert_false(body.input_ray_pickable, "not pickable, like GLB map bodies")
 	await wait_physics_frames(2)
 	var half := doc.extent_m() * 0.5 - Vector2(0.001, 0.001)
 	var points: Array[Vector2] = [
@@ -281,6 +283,32 @@ func test_ground_draws_after_foliage_with_the_cheap_prepass() -> void:
 	assert_true(inc.contains("void light()"), "the include shades through light()")
 
 
+## Card groundskirt: the skirt shaders receive no shadows (the shadow filter was half the skirt's
+## cost at full zoom-out); the map's own ground still does.
+func test_skirt_receives_no_shadows_and_the_ground_does() -> void:
+	for shader: Shader in [AuthoredTerrain.SKIRT_SHADER, AuthoredTerrain.SKIRT_LOOKED_SHADER]:
+		assert_true(_render_mode(shader).has("shadows_disabled"), shader.resource_path)
+	for shader: Shader in [AuthoredTerrain.GROUND_SHADER, AuthoredTerrain.GROUND_LOOKED_SHADER]:
+		assert_false(_render_mode(shader).has("shadows_disabled"), shader.resource_path)
+	var terrain := AuthoredTerrain.create(_flat(20))
+	add_child_autofree(terrain)
+	var skirt_mat := terrain.get_skirt_material()
+	assert_not_null(skirt_mat, "the skirt material exists")
+	if skirt_mat != null:
+		assert_true(_render_mode(skirt_mat.shader).has("shadows_disabled"), "the bound skirt")
+
+
+## The render modes a shader's code declares, trimmed.
+func _render_mode(shader: Shader) -> PackedStringArray:
+	var out := PackedStringArray()
+	for line in shader.code.split("\n"):
+		var t := line.strip_edges()
+		if t.begins_with("render_mode"):
+			for mode in t.trim_prefix("render_mode").trim_suffix(";").split(","):
+				out.append(mode.strip_edges())
+	return out
+
+
 func test_material_binds_the_palette_surface() -> void:
 	var surface: Dictionary = PaletteLibrary.surfaces()[GRASS]
 	var terrain := AuthoredTerrain.create(_flat(20))
@@ -326,7 +354,7 @@ func test_missing_surface_falls_back_to_a_plain_ground() -> void:
 	assert_eq(
 		terrain.chunk_cells().size(), TerrainMeshBuilder.chunk_cells(doc).size(), "still built"
 	)
-	assert_not_null(terrain.get_collision_body(), "still collidable")
+	assert_false(terrain.get_collision_bodies().is_empty(), "still collidable")
 
 
 func test_skirt_rings_the_map_from_its_boundary_vertices() -> void:

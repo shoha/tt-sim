@@ -30,6 +30,27 @@ func test_tiles_usable_before_entering_tree() -> void:
 	assert_true(field.tiles.has_tile(&"x"))
 
 
+func test_a_field_freed_before_entering_the_tree_frees_its_row_and_note() -> void:
+	var field := TileField.new()
+	field.tiles.add_tile(&"x", "X")
+	var row := field.tiles
+	var note := field.show_note("a note")
+	var orphans_before := Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)
+	field.free()
+	assert_false(is_instance_valid(row), "the row goes with the field")
+	assert_false(is_instance_valid(note), "the note goes with the field")
+	assert_lt(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT), orphans_before)
+
+
+func test_a_shown_field_frees_its_row_once() -> void:
+	var field := TileField.new()
+	field.show_note("a note")
+	add_child(field)
+	var row := field.tiles
+	field.free()
+	assert_false(is_instance_valid(row))
+
+
 func test_overridden_tints_caption_and_right_click_resets() -> void:
 	var field := _field()
 	watch_signals(field)
