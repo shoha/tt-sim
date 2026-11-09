@@ -356,6 +356,7 @@ func _bind_ground() -> void:
 		if mat != null:
 			for key: String in tables:
 				(mat as ShaderMaterial).set_shader_parameter(key, tables[key])
+	terrain.sync_skirt_ring()
 
 
 ## Each looked biome's grass materials: its tuft and mass uniforms, its bake, the sun, and each

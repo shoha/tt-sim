@@ -5072,6 +5072,55 @@ foliage shown the only differences in the skirt's area are the trees' wind sway 
 same-configuration control differs as much), also under a sun lowered to 12 degrees. A shadow cast
 across the map edge would stop at the edge line; none did on this map.
 
+### Inner ring (card skirtring, 2026-11-09)
+
+The user's board answer: keep edge shadows, so the skirt's first rings receive shadows again as a
+second surface and the rest stays shadowless. `TerrainMeshBuilder.SKIRT_SHADOW_RINGS` = 3 ring
+steps (10.4 m on the shipped 45.6 m width, `TerrainSkirt.ring_edge_m`; 5.7 m at 2 rings, 16.1 m at
+4) are the skirt mesh's second surface, drawn with `authored_ground_skirt_ring*.gdshader` (the skirt shaders
+without `shadows_disabled`, `GROUND_SKIRT_RING` in the include). Surface 0 keeps the shadowless
+`_skirt_material`; the ring material is a copy kept in step uniform for uniform
+(`TerrainSkirt.sync_ring`, called by the terrain's syncs and the look bake; `SkirtBackdrop` lists
+both materials). The channel patch of a river exit uses the ring material too. No seam: the
+shader gives the sun's shadow back over the ring (`light()`: directional `ATTENUATION` mixed
+toward 1 by `v_ring_fade`, a smoothstep of the distance to the map rectangle from 0.3 to 1.0 of
+`skirt_shadow_m`, the ring's outer edge), so the shadow thins to nothing exactly where the
+shadowless surface begins. Perf budget counters: `skirt_shadowed` (outer shaders with reception, 0),
+`skirt_ring_unshadowed` (ring shaders without it, 0), `skirt_ring_m` (ring width, at most 10.5).
+
+**Cost.** As "Ground skirt shadows" above (RTX 3080, idle, `perfaudit_gpu` `perf`, 6 rounds, the
+first discarded, 1080p, SSAO and lo-fi on, shadows High, `--gpu-profile`; in-run variants `ring`,
+`ring2` (the noise floor), `none` (the shadowless skirt of card groundskirt, knob `skirt: none`),
+`full` (the pre-audit skirt, knob `skirt: full`), `noskirt`). GPU ms, median of round medians,
+three runs at 4, 3 and 2 rings (the 4-ring run's tables were overwritten; its numbers are from
+the run log); noise floor `ring` vs `ring2` 0.00-0.04:
+
+| View | none | ring 2 | ring 3 | ring 4 | full |
+|---|---|---|---|---|---|
+| home | 2.85 to 2.90 | 3.02 (+0.14) | 3.01 (+0.12) | 3.03 (+0.18) | 3.03 to 3.07 |
+| zoom 4 on an edge | 1.97 to 1.98 | 2.26 (+0.29) | 2.28 (+0.31) | 2.28 (+0.30) | 2.27 to 2.28 |
+| full zoom-out | 2.03 to 2.06 | 2.21 (+0.16) | 2.34 (+0.29) | 2.44 (+0.42) | 2.57 to 2.62 |
+| eye | 4.23 to 4.30 | within 0.03 | within 0.03 | within 0.03 | within 0.03 |
+
+So in the close views the ring costs as much as the whole shadow filter did (the ring covers what
+the camera sees of the skirt: ring 2 already equals `full` at the edge), and the ring gives back
+most of what card groundskirt saved at home and at an edge; only at full zoom-out does its width
+matter, about 0.13 ms per 5 m of ring. 3 rings keep the saving of 0.27 ms against the
+old skirt at full zoom-out (4 rings: 0.13, 2 rings: 0.39) and shadows that reach about 7 m of
+visible ground past the edge (the fade starts at 3.1 m).
+
+**Look** (1080p captures, foliage and particles hidden, a sun pitched to -12 and -25 degrees
+travelling across the +X edge, three 13 m tree-like casters 1.5 m inside the edge; the casters'
+shadows are 61 m and 28 m long). Levels of 255, ring against `full` (the pre-audit skirt), 3 rings:
+edge views at three yaws max 4 to 6, mean 0.013 to 0.021; full zoom-out at two yaws max 8, mean 0.017;
+sun -25 full zoom-out max 14, mean 0.095 (the tips of the long shadows beyond 10 m, where the
+skirt's fade has made them faint). `none` (card groundskirt) against `full`: max 38 to 65, 4.3 to
+5.4 % of the pixels over 8 levels at an edge: the shadow of each caster stops dead at the edge
+line. 1:1 crops (`docs/plans/handoffs/skirtring/r3_p12_edge4.png`, `r3_p25_far.png`: none | ring |
+full, and the x16 differences): the ring continues the shadow past the edge exactly as the full
+skirt, and no seam shows where the ring ends (10.4 m), including at full zoom-out where the ring's
+copy of a long shadow fades into the haze a little before the full skirt's.
+
 ## Occlusion fade tiles (topic perfaudit, card occfade)
 
 The occlusion fade (`occlusion_fade_include.gdshaderinc`) tested every token in every tree and

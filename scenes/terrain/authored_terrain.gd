@@ -66,6 +66,12 @@ const SKIRT_SHADER := preload("res://shaders/authored_ground_skirt.gdshader")
 ## The same with the GROUND LOOK path compiled in (bound by set_looked).
 const GROUND_LOOKED_SHADER := preload("res://shaders/authored_ground_looked.gdshader")
 const SKIRT_LOOKED_SHADER := preload("res://shaders/authored_ground_skirt_looked.gdshader")
+## The skirt's inner ring (TerrainSkirt, the mesh's second surface): the skirt shaders with the
+## shadow reception back, so a caster at the map edge shadows the ground just beyond it.
+const SKIRT_RING_SHADER := preload("res://shaders/authored_ground_skirt_ring.gdshader")
+const SKIRT_RING_LOOKED_SHADER := preload(
+	"res://shaders/authored_ground_skirt_ring_looked.gdshader"
+)
 ## The ground's and the skirt's render_priority (GroundPalette.build_ground_material; the skirt
 ## duplicates it). Above the foliage's 0, so the opaque passes sort the ground after the foliage
 ## and the depth pre-pass runs the ground's fragment only where no card already covers it: 1.39
@@ -135,6 +141,8 @@ var _settling: Dictionary = {}
 var _skirt_dirty: bool = false
 ## The skirt's material, made once per build() so a sculpt refresh reuses it.
 var _skirt_material: ShaderMaterial = null
+## The inner ring's material (TerrainSkirt.ring_material), kept in step with _skirt_material.
+var _skirt_ring_material: ShaderMaterial = null
 ## TerrainMeshBuilder.skirt_vertex_mirror() once the edge is first edited, and the samples
 ## waiting for refresh_skirt().
 var _skirt_mirror: Dictionary = {}
@@ -249,6 +257,7 @@ func build(
 	_skirt_dirty = false
 	_fields_dirty = Rect2i()
 	_skirt_material = null
+	_skirt_ring_material = null
 	_material = GroundPalette.build_ground_material(doc.base_surface, doc.map_seed, root)
 	# The wet dressing first: whether the map has water decides the layer list.
 	if prepared.has(AuthoredLoadPrep.DRESSING):
@@ -281,6 +290,19 @@ func get_skirt_material() -> ShaderMaterial:
 	return _skirt_material
 
 
+## The inner ring's material (the skirt's second surface and the river channel patch), or null.
+## It follows the skirt's material uniform for uniform (sync_skirt_ring()).
+func get_skirt_ring_material() -> ShaderMaterial:
+	return _skirt_ring_material
+
+
+## Copies the skirt material's uniforms onto the ring's, after code that wrote them to the skirt
+## alone (GroundLookBake's tables). The terrain's own syncs call it themselves.
+func sync_skirt_ring() -> void:
+	if _skirt_material != null and _skirt_ring_material != null:
+		TerrainSkirt.sync_ring(_skirt_material, _skirt_ring_material)
+
+
 ## The ground look's bake (GroundLookBake), or null while no biome of the map carries a look.
 func ground_look() -> GroundLookBake:
 	return _look_bake
@@ -291,6 +313,11 @@ static func ground_shader(skirt: bool, looked: bool) -> Shader:
 	if skirt:
 		return SKIRT_LOOKED_SHADER if looked else SKIRT_SHADER
 	return GROUND_LOOKED_SHADER if looked else GROUND_SHADER
+
+
+## The shader for the skirt's inner ring, with the look path (`looked`) or not.
+static func ring_shader(looked: bool) -> Shader:
+	return SKIRT_RING_LOOKED_SHADER if looked else SKIRT_RING_SHADER
 
 
 ## True while the ground draws the looked shader (set_looked).
@@ -306,6 +333,9 @@ func set_looked(looked: bool) -> void:
 		_material.shader = ground_shader(false, looked)
 	if _skirt_material != null and _skirt_material.shader != ground_shader(true, looked):
 		_skirt_material.shader = ground_shader(true, looked)
+	if _skirt_ring_material != null and _skirt_ring_material.shader != ring_shader(looked):
+		_skirt_ring_material.shader = ring_shader(looked)
+		sync_skirt_ring()
 
 
 ## Bakes the ground look again from the palette's looks as they are now (the biome designer
@@ -352,15 +382,23 @@ func _build_skirt(parts: Dictionary = {}) -> void:
 		_skirt_material = TerrainSkirt.material(
 			_material, _layers, document, SKIRT_FADE_M, SKIRT_WOBBLE
 		)
+	if _skirt_ring_material == null:
+		_skirt_ring_material = TerrainSkirt.ring_material(
+			_skirt_material, is_looked(), TerrainSkirt.ring_edge_m(skirt_width_m())
+		)
 	if parts.is_empty():
 		parts = RiverExitMesh.skirt_parts(document, skirt_width_m(), SKIRT_FADE_M, SKIRT_WOBBLE)
 	_exits = parts.get("exits", {})
-	var mesh := TerrainSkirt.mesh(parts.skirt, _skirt_material)
+	var mesh := TerrainSkirt.mesh(
+		parts.skirt, _skirt_material, _skirt_ring_material, int(parts.get("ring_split", 0))
+	)
 	_skirt_mirror = parts.get("mirror", {})  # Built with the parts; refresh_skirt() needs it.
 	_channel_mirror = {}
 	_skirt_rect = Rect2i()
 	var skirt := SkirtExits.decoration(SKIRT_NAME, mesh)
-	SkirtExits.decorate(skirt, _exits, _skirt_material, document, SKIRT_FADE_M, SKIRT_WOBBLE)
+	SkirtExits.decorate(
+		skirt, _exits, _skirt_material, document, SKIRT_FADE_M, SKIRT_WOBBLE, _skirt_ring_material
+	)
 	_sync_skirt_water()
 	add_child(skirt)
 
@@ -382,6 +420,7 @@ func _sync_skirt_water() -> void:
 	if _skirt_material != null:
 		var channel := not _exits.is_empty() and _has_water()
 		SkirtExits.sync_water(_skirt_material, _material, channel)
+		sync_skirt_ring()
 
 
 ## Brings the skirt's geometry up to the current boundary heights (a sculpt edit on the map

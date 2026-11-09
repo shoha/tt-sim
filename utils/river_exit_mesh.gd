@@ -84,7 +84,9 @@ const BANK_DRY_M := 0.8
 
 ## The skirt for `doc` with its river exits: {"skirt": TerrainMeshBuilder.build_skirt_arrays
 ## with the exits' windows cut out, "exits": build() ({} without exits), "mirror": the skirt's
-## vertex mirror for in-place edge updates (TerrainMeshBuilder.skirt_mirror_of)}. `width`,
+## vertex mirror for in-place edge updates (TerrainMeshBuilder.skirt_mirror_of), "ring_split":
+## how many of the skirt's indices, from the front, belong to the shadow receiving inner rings
+## (TerrainMeshBuilder.SKIRT_SHADOW_RINGS ring steps; TerrainSkirt.mesh splits there)}. `width`,
 ## `fall`, `wobble`: the skirt's (AuthoredTerrain.skirt_width_m(), SKIRT_FADE_M, SKIRT_WOBBLE).
 static func skirt_parts(
 	doc: MapDocument, width: float, fall: float, wobble: float, previous: Dictionary = {}
@@ -93,9 +95,12 @@ static func skirt_parts(
 	var count := TerrainMeshBuilder.boundary_samples(doc).size()
 	var mirror := TerrainMeshBuilder.skirt_mirror_of(arrays, count)
 	var exits := build(doc, width, fall, wobble, previous)
+	var ring_split := TerrainMeshBuilder.SKIRT_SHADOW_RINGS * count * 6
 	if not exits.is_empty():
-		arrays[Mesh.ARRAY_INDEX] = skip_columns(arrays[Mesh.ARRAY_INDEX], count, exits.windows)
-	return {"skirt": arrays, "exits": exits, "mirror": mirror}
+		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		ring_split = skip_columns(indices.slice(0, ring_split), count, exits.windows).size()
+		arrays[Mesh.ARRAY_INDEX] = skip_columns(indices, count, exits.windows)
+	return {"skirt": arrays, "exits": exits, "mirror": mirror, "ring_split": ring_split}
 
 
 ## The exits' geometry (see the header): {"windows": Array[Vector2i] (first boundary column,

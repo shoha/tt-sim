@@ -40,6 +40,8 @@ const LIMITS := {
 	"ground_prepass_writes": 0.0,
 	"ground_blend_roughness": 0.0,
 	"skirt_shadowed": 0.0,
+	"skirt_ring_unshadowed": 0.0,
+	"skirt_ring_m": 10.5,
 	"ground_cover_fetches": 0.0,
 	"ground_priority": 1.0,
 	"global_uniform_slots": 262144.0,
@@ -69,10 +71,18 @@ const GROUND_SHADERS: Array[String] = [
 	"res://shaders/authored_ground_looked.gdshader",
 	"res://shaders/authored_ground_skirt.gdshader",
 	"res://shaders/authored_ground_skirt_looked.gdshader",
+	"res://shaders/authored_ground_skirt_ring.gdshader",
+	"res://shaders/authored_ground_skirt_ring_looked.gdshader",
 ]
+## The skirt's outer shaders: no shadow reception (card groundskirt).
 const SKIRT_SHADERS: Array[String] = [
 	"res://shaders/authored_ground_skirt.gdshader",
 	"res://shaders/authored_ground_skirt_looked.gdshader",
+]
+## The skirt's inner ring shaders, the only skirt shaders that receive shadows (card skirtring).
+const SKIRT_RING_SHADERS: Array[String] = [
+	"res://shaders/authored_ground_skirt_ring.gdshader",
+	"res://shaders/authored_ground_skirt_ring_looked.gdshader",
 ]
 const GROUND_COVER_SHADERS: Array[String] = [
 	"res://shaders/wind_foliage_ground.gdshader",
@@ -411,6 +421,10 @@ static func render_rows() -> Array[Dictionary]:
 	for path in SKIRT_SHADERS:
 		if not render_modes(active_code(path)).has("shadows_disabled"):
 			shadowed += 1
+	var ring_unshadowed := 0
+	for path in SKIRT_RING_SHADERS:
+		if render_modes(active_code(path)).has("shadows_disabled"):
+			ring_unshadowed += 1
 	var fetches := 0
 	for path in GROUND_COVER_SHADERS:
 		fetches += sampler_fetches(active_code(path), ["orm_texture", "normal_texture"])
@@ -436,11 +450,30 @@ static func render_rows() -> Array[Dictionary]:
 		),
 		_row(
 			"skirt_shadowed",
-			"Skirt shaders that receive shadows",
+			"Outer skirt shaders that receive shadows",
 			shadowed,
 			"",
 			"0; shadows_disabled saves 0.49 ms at full zoom-out, 0.13 at home",
 			"groundskirt, 33647fd0"
+		),
+		_row(
+			"skirt_ring_unshadowed",
+			"Inner-ring skirt shaders without shadow reception",
+			ring_unshadowed,
+			"",
+			"0; the ring is the one part of the skirt that receives shadows (edge casters)",
+			"skirtring"
+		),
+		_row(
+			"skirt_ring_m",
+			"Width of the skirt's shadow-receiving inner ring",
+			snappedf(TerrainSkirt.ring_edge_m(AuthoredTerrain.skirt_width_m()), 0.01),
+			"m",
+			(
+				"10.5; the ring's pixels pay the shadow filter: 2, 3, 4 rings cost"
+				+ " +0.16, +0.29, +0.42 ms at full zoom-out"
+			),
+			"skirtring, ring vs shadowless skirt vs full skirt"
 		),
 		_row(
 			"ground_cover_fetches",

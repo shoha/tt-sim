@@ -21,7 +21,14 @@ func test_terrain_samples_match_the_real_ground_and_skirt() -> void:
 	_assert_well_formed(samples)
 	assert_eq(
 		samples.map(func(s): return s.name),
-		["terrain_chunk", "terrain_skirt", "terrain_chunk_looked", "terrain_skirt_looked"]
+		[
+			"terrain_chunk",
+			"terrain_skirt",
+			"terrain_chunk_looked",
+			"terrain_skirt_looked",
+			"terrain_skirt_ring",
+			"terrain_skirt_ring_looked"
+		]
 	)
 	var doc := TerrainMeshBuilder.warmup_document()
 	var terrain := AuthoredTerrain.create(doc)
@@ -39,6 +46,10 @@ func test_terrain_samples_match_the_real_ground_and_skirt() -> void:
 	var looked := (samples[2].material as ShaderMaterial).shader
 	assert_eq(looked, AuthoredTerrain.GROUND_LOOKED_SHADER, "the looked twin is warmed")
 	assert_eq((samples[3].material as ShaderMaterial).shader, AuthoredTerrain.SKIRT_LOOKED_SHADER)
+	assert_eq((samples[4].material as ShaderMaterial).shader, AuthoredTerrain.SKIRT_RING_SHADER)
+	assert_eq(
+		(samples[5].material as ShaderMaterial).shader, AuthoredTerrain.SKIRT_RING_LOOKED_SHADER
+	)
 	assert_eq(samples[2].arrays, samples[0].arrays, "on the same chunk")
 
 
@@ -191,6 +202,8 @@ func test_collect_samples_has_every_owner_once() -> void:
 		"res://shaders/authored_ground_skirt.gdshader",
 		"res://shaders/authored_ground_looked.gdshader",
 		"res://shaders/authored_ground_skirt_looked.gdshader",
+		"res://shaders/authored_ground_skirt_ring.gdshader",
+		"res://shaders/authored_ground_skirt_ring_looked.gdshader",
 		"res://shaders/water.gdshader",
 		"res://shaders/waterfall.gdshader",
 		"res://shaders/wind_foliage.gdshader",
