@@ -209,6 +209,10 @@ foliage_sun={
 "type": "vec4",
 "value": Vector4(0, 1, 0, 1)
 }
+world_px_scale={
+"type": "float",
+"value": 1.0
+}
 
 [steam]
 

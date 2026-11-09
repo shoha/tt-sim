@@ -133,7 +133,7 @@ func follow() -> void:
 		)
 		return
 	_environment.fit_shadow_distance_to_view(
-		camera, Vector2(_game_map.world_viewport.size), shadow_bounds, ground.x
+		camera, WorldView.canvas_size(_game_map.world_viewport), shadow_bounds, ground.x
 	)
 
 

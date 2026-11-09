@@ -43,6 +43,8 @@ uniform sampler2D depth_texture : hint_depth_texture;
 uniform float cell_size = 1.524;
 uniform vec4 line_color : source_color = vec4(1.0, 1.0, 1.0, 0.0);
 uniform float line_thickness = 2.0; // multiplier for grid line width (helps survive lo-fi pixelation)
+// The world viewport's pixel height over 1080 (WorldView): line widths are 1080p pixels.
+global uniform float world_px_scale;
 uniform float fade_radius = 30.0;
 uniform float opacity = 1.0;            // global opacity multiplier (animated for fade in/out)
 uniform vec3 grid_center = vec3(0.0);
@@ -316,7 +318,7 @@ void fragment() {
 	// Grid lines from world XZ coordinates
 	vec2 grid_uv = (world_pos.xz - grid_origin) / cell_size;
 	vec2 grid_frac = abs(fract(grid_uv - 0.5) - 0.5);
-	vec2 grid_width = fwidth(grid_uv) * line_thickness;
+	vec2 grid_width = fwidth(grid_uv) * line_thickness * world_px_scale;
 	vec2 line = smoothstep(grid_width * 0.5, grid_width * 1.5, grid_frac);
 	float grid_line = 1.0 - min(line.x, line.y);
 

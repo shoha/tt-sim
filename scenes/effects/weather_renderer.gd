@@ -329,7 +329,7 @@ func _update_emitter_positions() -> void:
 	if _wind_emitter:
 		_wind_emitter.global_position = wind_pos
 
-	var viewport_size: Vector2i = _camera.get_viewport().size
+	var viewport_size := Vector2i(WorldView.canvas_size(_camera.get_viewport()))
 	var half_extent := emission_half_extent(
 		_camera.projection == Camera3D.PROJECTION_PERSPECTIVE, _camera.size, viewport_size
 	)

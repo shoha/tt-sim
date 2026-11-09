@@ -117,7 +117,7 @@ func activate(owner_controller: CameraController, map: GameMap) -> void:
 	_saved_pitch = owner_controller.current_pitch()
 	_saved_yaw = owner_controller.current_yaw()
 	# Before the camera changes: the ground point under the screen centre, as the orbit sees it.
-	var centre := _centre_ground_xz(camera, Vector2(map.world_viewport.size))
+	var centre := _centre_ground_xz(camera, WorldView.canvas_size(map.world_viewport))
 	_saved_pivot = Vector3(centre.x, 0.0, centre.y)
 	_entered = true
 	var orbit := owner_controller.orbit_view()
@@ -211,7 +211,7 @@ func process(delta: float) -> void:
 	if absf(_foot_y - ground) < 0.001:
 		_foot_y = ground
 	_place()
-	CanopyFade.publish(camera, camera.size, Vector2(game_map.world_viewport.size), delta)
+	CanopyFade.publish(camera, camera.size, WorldView.canvas_size(game_map.world_viewport), delta)
 
 
 ## WASD and Shift: held keys, read from the key events (the controller passes on the ones it did
@@ -315,7 +315,8 @@ func skip_view_glide() -> void:
 
 func _begin_glide(entering: bool) -> void:
 	var camera := game_map.camera_node
-	var aspect := float(game_map.world_viewport.size.x) / maxf(game_map.world_viewport.size.y, 1.0)
+	var canvas := WorldView.canvas_size(game_map.world_viewport)
+	var aspect := canvas.x / maxf(canvas.y, 1.0)
 	var home := _home_pose()
 	var eye_basis := (
 		game_map.cameraholder_node.global_basis
@@ -350,7 +351,7 @@ func _process_glide(delta: float, env: Environment = null) -> void:
 	var camera := game_map.camera_node
 	var running := glide.step(delta)
 	_sync_painted_sky(env)
-	CanopyFade.publish(camera, camera.size, Vector2(game_map.world_viewport.size), delta)
+	CanopyFade.publish(camera, camera.size, WorldView.canvas_size(game_map.world_viewport), delta)
 	if not running:
 		_land_glide(true)
 
@@ -626,8 +627,8 @@ func _place() -> void:
 
 
 func _apply_fov() -> void:
-	var size := game_map.world_viewport.size
-	var aspect := float(size.x) / float(size.y) if size.y > 0 else CameraController.REFERENCE_ASPECT
+	var size := WorldView.canvas_size(game_map.world_viewport)
+	var aspect := size.x / size.y if size.y > 0.0 else CameraController.REFERENCE_ASPECT
 	game_map.camera_node.fov = EyeRig.corrected_fov(_lens, aspect)
 
 
