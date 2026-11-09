@@ -72,6 +72,6 @@ static func is_covered() -> bool:
 
 
 ## The per-frame budget a load slice may spend: `uncovered_usec` normally, at least
-## COVERED_BUDGET_USEC while covered.
-static func budget_usec(uncovered_usec: int) -> int:
-	return maxi(uncovered_usec, COVERED_BUDGET_USEC) if is_covered() else uncovered_usec
+## `covered_usec` (COVERED_BUDGET_USEC unless the caller has its own) while covered.
+static func budget_usec(uncovered_usec: int, covered_usec: int = COVERED_BUDGET_USEC) -> int:
+	return maxi(uncovered_usec, covered_usec) if is_covered() else uncovered_usec
