@@ -16,14 +16,23 @@ extends Node3D
 ## SETUP:
 ## Call setup() with references to the camera, map container, and token container
 ## after the map has been loaded. The manager converts map materials to the
-## occlusion shader, then packs token positions into one shared texture and
-## publishes the count as a global every few physics frames.
+## occlusion shader, collects token positions every few physics frames, and before
+## each frame that changed (a token moved, or the camera did) bins them into screen
+## tiles for the viewport's camera (OcclusionTiles) and packs the tokens, the tiles
+## and their lists into one shared texture. Every token on screen fades what hides it;
+## the fragment shader tests only its own tile's tokens.
 
-## Max tracked tokens, and the width of the shared token data texture (one pixel
-## per token slot).
-const MAX_TOKENS := 32
-## Global shader parameter carrying the number of valid token slots.
+## Most tokens collected per tick (scene order). The shader's cost no longer grows with the
+## count (screen tiles); the CPU's does: collecting is about 2.4 us a token per tick and the
+## tile build about 4 us a token per frame the camera moves (perfaudit occfade, 500 tokens:
+## 1.2 ms and 2.4 ms). It was 32 before the tiles.
+const MAX_TOKENS := 256
+## Global shader parameter carrying the plain loop's token count (0: no tokens).
 const GLOBAL_TOKEN_COUNT := &"occlusion_token_count"
+## Global shader parameter naming the camera the tile lists were built for.
+const GLOBAL_TILE_VIEW := &"occlusion_tile_view"
+## Global shader parameter describing the tile grid (zero: no valid lists).
+const GLOBAL_TILE_GRID := &"occlusion_tile_grid"
 ## Per-material sampler uniform the shared token texture is bound to.
 const TOKEN_TEXTURE_UNIFORM := &"occlusion_tokens"
 ## Channel masks matching BaseMaterial3D.TextureChannel, dotted against the sampled
@@ -83,10 +92,14 @@ var _frame_counter: int = 0
 var _is_setup: bool = false
 var _lofi_pixelation: float = 0.0  # Mirror of lo-fi shader's pixelation value (0 = disabled)
 
-# Shared token data: pixel i = (world x, y, z, fade radius). Bound once to every
-# material; one update() per tick reaches all of them.
+# Shared token and tile data (OcclusionTiles' layout). Bound once to every material;
+# one update() per change reaches all of them.
 var _token_image: Image
 var _token_texture: ImageTexture
+# The tokens collected on the last tick, waiting for the next frame's publish.
+var _entries_dirty := false
+# The camera state the published tiles were built for (transform, projection, viewport size).
+var _last_view_key: Array = []
 
 # Mirrors the value last published to GLOBAL_TOKEN_COUNT. RenderingServer's global
 # shader parameter getter only returns real values inside the editor process (it
@@ -108,8 +121,13 @@ func _ready() -> void:
 	_shader = load("res://shaders/occlusion_fade.gdshader") as Shader
 	if not _shader:
 		push_error("OcclusionFadeManager: Failed to load occlusion_fade.gdshader")
-	_token_image = build_token_image([])
+	var none: Array[Vector4] = []
+	_token_image = OcclusionTiles.build_image(none, _empty_bins(), OcclusionTiles.TILES)
 	_token_texture = ImageTexture.create_from_image(_token_image)
+
+
+func _exit_tree() -> void:
+	_set_frame_hook(false)
 
 
 ## Initialize the manager with required node references.
@@ -127,6 +145,7 @@ func setup(camera: Camera3D, map_container: Node3D, tokens_container: Node3D) ->
 	_collect_tree_materials()
 	_is_setup = true
 	set_physics_process(true)
+	_set_frame_hook(true)
 
 
 ## Clear all state and restore original materials. Call before loading a new map.
@@ -139,10 +158,14 @@ func clear() -> void:
 	_shader_material_by_source.clear()
 	_aabb_cache.clear()
 	_last_entries = []
+	_entries_dirty = false
+	_last_view_key = []
 	RenderingServer.global_shader_parameter_set(GLOBAL_TOKEN_COUNT, 0)
+	RenderingServer.global_shader_parameter_set(GLOBAL_TILE_GRID, Vector4.ZERO)
 	_last_token_count = 0
 	_is_setup = false
 	set_physics_process(false)
+	_set_frame_hook(false)
 
 
 func _physics_process(_delta: float) -> void:
@@ -384,27 +407,106 @@ func _disable_tree_materials() -> void:
 # =============================================================================
 
 
-## Collect token world centres and per-token fade radii, pack them into the shared
-## token texture, and publish the count as a global. One texture update plus one
-## global set per tick, regardless of how many materials are converted. Returns
-## false (and touches nothing) when no token moved since the previous tick.
+## Collect token world centres and per-token fade radii for the next frame's publish.
+## Returns false (and touches nothing) when no token moved since the previous tick.
 func _update_token_uniforms() -> bool:
 	var entries := _collect_token_entries()
 	if entries == _last_entries:
 		return false
 	_last_entries = entries
-	_token_image = build_token_image(entries)
-	_token_texture.update(_token_image)
-	RenderingServer.global_shader_parameter_set(GLOBAL_TOKEN_COUNT, entries.size())
-	_last_token_count = entries.size()
+	_entries_dirty = true
 	return true
+
+
+func _set_frame_hook(on: bool) -> void:
+	var hooked := RenderingServer.frame_pre_draw.is_connected(_publish_if_needed)
+	if on and not hooked:
+		RenderingServer.frame_pre_draw.connect(_publish_if_needed)
+	elif not on and hooked:
+		RenderingServer.frame_pre_draw.disconnect(_publish_if_needed)
+
+
+## Republishes the token texture and globals when the tokens or the camera changed since
+## the last publish. Runs just before the frame is drawn (RenderingServer.frame_pre_draw),
+## after every _process has moved the camera, so the tiles match the camera that draws:
+## tiles from a camera a frame old would clip a moving hole. Returns true when it published.
+func _publish_if_needed() -> bool:
+	if not _is_setup:
+		return false
+	if not _entries_dirty and _last_entries.is_empty():
+		return false  # No tokens: the shader returns before it reads a tile.
+	var camera := _view_camera()
+	var key := _view_key(camera)
+	if not _entries_dirty and key == _last_view_key:
+		return false
+	_publish(camera)
+	_last_view_key = key
+	_entries_dirty = false
+	return true
+
+
+## The camera drawing this manager's viewport (the eye view swaps it), else setup()'s.
+func _view_camera() -> Camera3D:
+	var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if camera == null and is_instance_valid(_camera):
+		camera = _camera
+	return camera
+
+
+func _view_key(camera: Camera3D) -> Array:
+	if camera == null or not camera.is_inside_tree():
+		return []
+	return [
+		camera.get_camera_transform(),
+		camera.get_camera_projection(),
+		get_viewport().get_visible_rect().size
+	]
+
+
+## Bins the collected tokens for `camera`, packs the shared texture and sets the globals.
+## Without a camera in the tree the tiles stay empty and every pass takes the plain loop.
+func _publish(camera: Camera3D) -> void:
+	var entries := _last_entries
+	var bins := _empty_bins()
+	var tile_view := Vector4.ZERO
+	var tile_grid := Vector4.ZERO
+	if camera != null and camera.is_inside_tree():
+		var view := camera.get_camera_transform().affine_inverse()
+		var projection := camera.get_camera_projection()
+		var size := get_viewport().get_visible_rect().size
+		var margin := Vector2.ONE * OcclusionTiles.MARGIN_PX / size.max(Vector2.ONE)
+		bins = OcclusionTiles.bin(entries, view, projection, OcclusionTiles.TILES, margin)
+		tile_view = Vector4(view.origin.x, view.origin.y, view.origin.z, projection.x.x)
+		tile_grid = Vector4(
+			OcclusionTiles.TILES.x, OcclusionTiles.TILES.y, OcclusionTiles.HEADER_BASE, 0.0
+		)
+	var rows := _token_image.get_height() if _token_image != null else 4
+	_token_image = OcclusionTiles.build_image(entries, bins, OcclusionTiles.TILES, rows)
+	if _token_image.get_size() == Vector2i(_token_texture.get_size()):
+		_token_texture.update(_token_image)
+	else:
+		_token_texture.set_image(_token_image)
+	var count := OcclusionTiles.fallback_count(entries)
+	RenderingServer.global_shader_parameter_set(GLOBAL_TOKEN_COUNT, count)
+	RenderingServer.global_shader_parameter_set(GLOBAL_TILE_VIEW, tile_view)
+	RenderingServer.global_shader_parameter_set(GLOBAL_TILE_GRID, tile_grid)
+	_last_token_count = count
+
+
+## No token in any tile.
+static func _empty_bins() -> Array[PackedInt32Array]:
+	var starts := PackedInt32Array()
+	starts.resize(OcclusionTiles.TILES.x * OcclusionTiles.TILES.y + 1)
+	starts.fill(0)
+	return [starts, PackedInt32Array()]
 
 
 ## Per-token (world centre, fade radius) as Vector4(x, y, z, radius). Uses the
 ## collision shape AABB centre as the token position and derives the fade radius
 ## from the AABB extent so small tokens get a tight zone and large tokens get a
-## proportionally larger one. Capped at MAX_TOKENS. (A map brush's ring opens the canopy
-## through CanopyFade's brush window, not here.)
+## proportionally larger one. The first MAX_TOKENS visible tokens, in scene order: the
+## tiles keep the shader's cost flat however many there are. (A map brush's ring opens the
+## canopy through CanopyFade's brush window, not here.)
 func _collect_token_entries() -> Array[Vector4]:
 	var entries: Array[Vector4] = []
 	for child in _tokens_container.get_children():
@@ -446,17 +548,6 @@ func _collect_token_entries() -> Array[Vector4]:
 		if entries.size() >= MAX_TOKENS:
 			break
 	return entries
-
-
-## Pack (x, y, z, radius) entries into a MAX_TOKENS x 1 RGBAF image.
-## Unused slots are zero, which the shader treats as "no token" (radius 0).
-static func build_token_image(entries: Array[Vector4]) -> Image:
-	var image := Image.create_empty(MAX_TOKENS, 1, false, Image.FORMAT_RGBAF)
-	var count := mini(entries.size(), MAX_TOKENS)
-	for i in range(count):
-		var e := entries[i]
-		image.set_pixel(i, 0, Color(e.x, e.y, e.z, e.w))
-	return image
 
 
 # =============================================================================

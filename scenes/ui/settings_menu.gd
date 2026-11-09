@@ -98,6 +98,7 @@ var _reset_tween: Tween
 @onready var wind_motion_label: Label = %WindMotionLabel
 @onready var antialiasing_option: OptionButton = %AntialiasingOption
 @onready var shadow_quality_option: OptionButton = %ShadowQualityOption
+@onready var render_scale_option: OptionButton = %RenderScaleOption
 @onready var water_quality_option: OptionButton = %WaterQualityOption
 @onready var ssao_check: CheckButton = %SSAOCheck
 @onready var ssr_check: CheckButton = %SSRCheck
@@ -145,7 +146,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-## Apply saved graphics settings (fullscreen, vsync, shadow quality, water quality) at startup.
+## Apply saved graphics settings (fullscreen, vsync, shadow quality, render scale, water quality)
+## at startup.
 ## Call this early (e.g. from Root._ready()) so the window mode is correct
 ## before any UI is shown.  Fullscreen is deferred so the window is fully
 ## presented first — required on macOS where native fullscreen is async. A
@@ -167,6 +169,7 @@ static func apply_startup_graphics_settings() -> void:
 	)
 
 	RenderingServer.directional_soft_shadow_filter_set_quality(saved_shadow_quality(config))
+	RenderScale.current = RenderScale.stored(config)
 
 	var water_quality_value: int = config.get_value(
 		"graphics", "water_quality", WaterQuality.MEDIUM
@@ -325,8 +328,10 @@ func _on_panel_ready() -> void:
 		interface_size_option, get_tree().root, UIManager.get_interface_size()
 	)
 	interface_size_option.item_selected.connect(_on_interface_size_selected)
-	# Each fixed size is named against Auto on this window, which Fullscreen can change.
-	get_tree().root.size_changed.connect(_refill_interface_size)
+	# Each fixed size is named against Auto on this window, which Fullscreen can change, and
+	# each Render scale choice by its render size on it (_refill_window_labels).
+	SettingsRenderScale.fill(self)
+	get_tree().root.size_changed.connect(_refill_window_labels)
 
 	# Grid visuals
 	cell_tint_opacity_slider.value_changed.connect(_on_cell_tint_opacity_changed)
@@ -454,6 +459,7 @@ func _load_settings() -> void:
 	# DEFAULT_SHADOW_QUALITY -- project.godot's own configured value -- so a fresh install
 	# shows the tier the engine booted with.
 	shadow_quality_option.select(shadow_quality_option.get_item_index(saved_shadow_quality(config)))
+	SettingsRenderScale.show_saved(self, config)
 
 	var water_quality_value: int = config.get_value(
 		"graphics", "water_quality", WaterQuality.MEDIUM
@@ -557,6 +563,7 @@ func _save_settings(path: String = Paths.SETTINGS_PATH) -> void:
 	config.set_value("graphics", "sdfgi_enabled", sdfgi_check.button_pressed)
 	config.set_value("graphics", "antialiasing", antialiasing_option.get_selected_id())
 	config.set_value("graphics", "shadow_quality", shadow_quality_option.get_selected_id())
+	SettingsRenderScale.save(self, config)
 	config.set_value("graphics", "water_quality", water_quality_option.get_selected_id())
 	(
 		config
@@ -607,6 +614,9 @@ func _apply_settings() -> void:
 
 	# Apply shadow quality setting
 	_apply_shadow_quality_setting()
+
+	# Apply render scale setting (the world viewport's 3D resolution)
+	SettingsRenderScale.apply(self, _find_game_map())
 
 	# Apply water quality setting
 	_apply_water_quality_setting()
@@ -814,10 +824,13 @@ func _on_interface_size_selected(index: int) -> void:
 	UIManager.set_interface_size(interface_size_option.get_item_id(index))
 
 
-func _refill_interface_size() -> void:
+## Relabels the options named against this window (Interface size and Render scale), keeping
+## each selection. A method of the menu, so the connection goes when the menu does.
+func _refill_window_labels() -> void:
 	InterfaceSize.fill_option(
 		interface_size_option, get_tree().root, interface_size_option.get_selected_id()
 	)
+	SettingsRenderScale.refill(self)
 
 
 ## Puts every Settings control except those three on its default without a sound: the
@@ -852,6 +865,7 @@ func _show_defaults() -> void:
 	SettingsSeeThrough.show_defaults(self)
 	antialiasing_option.select(antialiasing_option.get_item_index(Viewport.MSAA_DISABLED))
 	shadow_quality_option.select(shadow_quality_option.get_item_index(DEFAULT_SHADOW_QUALITY))
+	SettingsRenderScale.show_defaults(self)
 	water_quality_option.select(water_quality_option.get_item_index(WaterQuality.MEDIUM))
 	ssao_check.set_pressed_no_signal(Constants.RENDERING_TOGGLES_DEFAULTS["ssao_enabled"])
 	ssr_check.set_pressed_no_signal(Constants.RENDERING_TOGGLES_DEFAULTS["ssr_enabled"])

@@ -812,6 +812,14 @@ independent layers.
   filter in the opaque pass, so its cost scales with the resolution, not the
   casters; the table is in `docs/PERFORMANCE.md` "Shadow quality tiers". The
   Shadow quality tooltip says that Low shows the hatch.
+- Render scale (Settings > Graphics, `RenderScale`, default 100 %) sets the
+  world viewport's `scaling_3d_scale` and FSR 1.0: Auto or 100, 85, 75, 67, 50 %
+  of the board's full render, which is 1920x1080 on every 16:9 screen (the
+  viewport is sized in canvas units; 1440p and 4K screens show it enlarged). Only
+  the 3D board scales: the lo-fi pass, the canvas and the UI draw at the window's
+  resolution. Auto draws no more pixels than the screen shows (the full render at
+  1080p and up, the window's size below). Costs, look and the picking check:
+  `docs/PERFORMANCE.md` "Render scale (topic perfaudit, card renderscale)".
 
 The sun blends its shadow cascades (`directional_shadow_blend_splits`, `SUN_SHADOW_BLEND_SPLITS` in
 `level_environment_manager.gd`, 2026-11-02). Without it, far trees' shadows were missing at the
