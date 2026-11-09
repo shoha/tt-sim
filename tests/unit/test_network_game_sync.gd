@@ -242,3 +242,25 @@ func test_the_full_state_waits_behind_queued_live_edits() -> void:
 	assert_eq(sent, [0, 1, "state"], "then the state follows it at once")
 	game_sync.after_live_edits(func() -> void: sent.append("next"))
 	assert_eq(sent.back(), "next", "with nothing queued it goes at once")
+
+
+## netverify: a client's GameState follows the transforms the host sends (a reconciliation,
+## a drag's batch), quietly, so a token built from GameState later is where the host has it.
+func test_a_client_takes_received_transforms_into_game_state() -> void:
+	NetworkManager._connection_state = NetworkManager.ConnectionState.JOINED
+	var state := TokenState.new()
+	state.network_id = LEFT_TOKEN
+	state.position = Vector3(1.0, 2.0, 3.0)
+	GameState.set_token_state(LEFT_TOKEN, state)
+	watch_signals(GameState)
+	var moved := {
+		LEFT_TOKEN:
+		TokenTransformPack.floats_of(Vector3(4.0, 0.5, -2.0), Vector3(0.0, 1.5, 0.0), Vector3.ONE),
+		"gamesync_test_unknown": TokenTransformPack.floats_of(Vector3.ONE, Vector3.ZERO, Vector3.ONE),
+	}
+	NetworkManager.game_sync._rpc_receive_reconcile(TokenTransformPack.encode(moved)[0])
+	var got := GameState.get_token_state(LEFT_TOKEN)
+	assert_eq(got.position, Vector3(4.0, 0.5, -2.0))
+	assert_eq(got.rotation, Vector3(0.0, 1.5, 0.0))
+	assert_signal_not_emitted(GameState, "token_state_changed", "the mirror is quiet")
+	assert_false(GameState.has_token("gamesync_test_unknown"), "an unknown token is not made")

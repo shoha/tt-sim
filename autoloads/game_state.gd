@@ -105,6 +105,24 @@ func remove_token_state(network_id: String) -> void:
 		token_removed.emit(network_id)
 
 
+## Take a transform the host sent (a drag's update, a batch, a reconciliation) into this
+## client's copy of the token's state, quietly: the board token already took it as its
+## interpolation target, so no token_state_changed. Without it a client's GameState kept each
+## token where its add or the last full state left it until the next heartbeat (netverify:
+## 41 of 100 tokens placed in a burst, up to 30 s), and anything built from GameState then
+## (a table load's apply_game_state_to_tokens) used those positions. Bypasses the authority
+## check like set_token_state; a token GameState does not hold is ignored.
+func mirror_transform(
+	network_id: String, position: Vector3, rotation: Vector3, scale: Vector3
+) -> void:
+	var state: TokenState = _token_states.get(network_id, null)
+	if state == null:
+		return
+	state.position = position
+	state.rotation = rotation
+	state.scale = scale
+
+
 ## Get all token states
 func get_all_token_states() -> Dictionary:
 	return _token_states.duplicate()

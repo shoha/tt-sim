@@ -868,6 +868,13 @@ f32 position, rotation, scale]`, 37 B plus the id (about 57 B). A drag's batch
 same layout, split under the MTU (`UNRELIABLE_BYTES`), in place of the Variant batch (180 B per
 token). Both arrive as `transform_batch_received` in the old dictionary shape.
 
+Every transform a client receives also goes into its GameState (`GameState.mirror_transform`,
+quiet: no `token_state_changed`), for a token not on its board yet as well, so a token built from
+GameState later (a table load's `apply_game_state_to_tokens`) is where the host has it. Before
+2026-11-08 only adds and full states wrote a client's GameState; once a placement stopped sending
+the full state, a client's copy lagged up to the 30 s heartbeat (`enet_token_consistency`: 41 of
+100 burst-placed tokens).
+
 **Important:** Reconciliation skips tokens that are currently under client authority:
 - Tokens drag-locked by a non-host peer (the client is actively dragging)
 - Tokens still network-interpolating on the host (client just dropped, host visual hasn't converged)
@@ -1127,6 +1134,16 @@ on every peer on 2026-10-10 with the card's path; the launcher flagged only anot
   unlocked with dragging allowed, and a GM drag claims and releases the lock. With the old
   leave path the host's copy stayed locked to the departed peer (`host_token_unlocked_ok` and
   `host_drag_allowed_ok` false).
+- `enet_token_consistency` (`--opts=mode=heal|burst|reconnect`, two peers, `--timeout-s=150`):
+  the client ends with exactly the host's tokens (ids on its board and in GameState, no
+  duplicates, positions within 5 cm of the host's board). heal: the client's CountingPeer
+  drops one `_rpc_receive_reconcile` after the host moved six tokens without a drag; every
+  token is 2.5 m off until the heartbeat's full state, then 0. burst: the client joins when 10
+  of 100 avatars placed at 20 per second are down. reconnect: the client leaves (Pause > Main
+  menu) and joins again after the host removed two tokens, moved two and added three. All three
+  passed on 2026-11-08 (topic netverify); before `GameState.mirror_transform` the boards
+  matched but a client's GameState kept 41 of the burst's 100 positions (2 in reconnect) where
+  the add left them, until the heartbeat ("Periodic Reconciliation").
 
 - `enet_session_room` (`--peers=5 --timeout-s=420`): the session room, its party and the
   table moves (TableMover). Each client reports its role as its session key. Table A is a flat

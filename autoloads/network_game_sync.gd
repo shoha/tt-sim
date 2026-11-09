@@ -332,6 +332,7 @@ func _rpc_receive_token_transform(
 	var pos := SerializationUtils.array_to_vec3(pos_arr)
 	var rot := SerializationUtils.array_to_vec3(rot_arr)
 	var scl := SerializationUtils.array_to_vec3(scale_arr, Vector3.ONE)
+	GameState.mirror_transform(network_id, pos, rot, scl)
 	token_transform_received.emit(network_id, pos, rot, scl)
 
 
@@ -345,8 +346,10 @@ func _rpc_receive_reconcile(bytes: PackedByteArray) -> void:
 	_emit_transform_pack(bytes)
 
 
-## Decodes a TokenTransformPack message and emits it as transform_batch_received; a refused
-## one is dropped with a warning (the next reconciliation or heartbeat brings the tokens).
+## Decodes a TokenTransformPack message, takes it into GameState (mirror_transform, so a token
+## not yet on this board, or built later from GameState, is where the host has it) and emits it
+## as transform_batch_received; a refused one is dropped with a warning (the next
+## reconciliation or heartbeat brings the tokens).
 func _emit_transform_pack(bytes: PackedByteArray) -> void:
 	if NetworkManager.is_host():
 		return
@@ -354,6 +357,14 @@ func _emit_transform_pack(bytes: PackedByteArray) -> void:
 	if decoded.problem != "":
 		push_warning("NetworkGameSync: transforms refused: %s" % decoded.problem)
 		return
+	for network_id: String in decoded.transforms:
+		var f: PackedFloat32Array = decoded.transforms[network_id]
+		GameState.mirror_transform(
+			network_id,
+			Vector3(f[0], f[1], f[2]),
+			Vector3(f[3], f[4], f[5]),
+			Vector3(f[6], f[7], f[8]),
+		)
 	transform_batch_received.emit(TokenTransformPack.to_batch(decoded.transforms))
 
 
