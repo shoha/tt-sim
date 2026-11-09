@@ -66,11 +66,25 @@ GPU.
 | Authoring | Rule fields sampled natively, `ttscatter 8` (terrainrules) | fields part of a stroke end 5.8-9.3 -> 0.8-1.3 ms | 7e36ddbf |
 | Network | A level save at rest sends 0 bytes; a client's join spawns through the queue (netjoin) | 500 avatars, late joiner worst frame 657 -> 90 ms | 52d9bbfa |
 | GPU | Options, defaults unchanged (gpuoptions): Shadow cascades Unblended / Single, Foliage edges Fast | Unblended -0.31 ms home, -0.48 eye (pixel-identical at the table views); Single -0.35 / -0.97; Fast -0.59 home with MSAA 4x, -0.65 eye | 110ae84f |
+| GPU | World viewport output-sized, Render scale as the player's lever (rendersize, board perf-render-scale) | home GPU ms at 100 % / FSR 75 / FSR 50: 1080p 2.70 / 1.83 / 1.09, 1440p 4.68 / 3.07 / 1.72, 4K 11.65 / 7.05 / 3.81 | rendersize |
+| GPU | Ground clipmap bake, ON in play mode (clipmap1-4; boards perf-ground-bake, perf-look-clipmap: keep) | valley home 2.99 -> 2.39 ms (-0.67), zoom 4 -0.78, zoom 20 -0.55, far -0.23; badlands terraces home -0.70, zoom 4 -0.92; with a 4 m cliff home -0.44. 96 / 128 / 160 MB at rest on 100 / 200 / 320 ft; a 20-dab Paint stroke rebakes 15.7M texels (was 50.3M) with no whole rebake | 1b0f84cc, 0de57479, 6a7c52d1 |
+| GPU | Zoom-keyed ground thinning, then a gentler far end (foliagelod, tweaks; board perf-ground-thin: gentler) | -0.64 to -0.67 ms at zoom 20 at half kept; the gentler 2/3 keep is unmeasured (estimate about 0.4) | foliagelod, d711bfb3 |
+| GPU | Foliage and rock mipmaps (foliagelod; board perf-foliage-mips) | -0.20 home, -0.25 eye, -0.42 zoom-out for +5.9 MB | foliagelod |
+| GPU | Skirt shadow ring instead of a shadowless skirt (skirtring; look kept) | costs +0.12 ms home, +0.31 zoom 4 at an edge, +0.29 full zoom-out over the shadowless skirt (the original full skirt: +0.15-0.19, +0.30, +0.55) | skirtring |
+| System | Idle throttle: 15 fps unfocused, 5 fps minimised (sysidle; board perf-idle-throttle) | minimised 0.20-0.22 -> 0.005-0.016 cores | sysidle |
+| System | A new map's first open: swatches and biome colours from the decoded maps (never baked), dialog bakes ahead, strips paint over frames (coldopen) | sheet 8,165-8,188 -> 2,556-2,630 ms; cover settled and lane idle 11,481-11,496 -> 5,885-5,952 ms; dialog first frame 2,790-2,836 -> 158-160 ms; main-thread bakes 10 (about 8.4 s of BC7) -> 0 | f2ba68aa |
+| Tokens | Pack idle animation at 30 Hz on screen, none off screen (tokenmesh; board perf-token-anim: 30) | 500 tokens 8.09 -> 0.67 ms headless | tokenmesh |
+| Network | Map document format 4 and 5: scatter rows in a binary codec (mapformat; board perf-map-format: binary) | 320 ft `map.ttmap` 3.60 -> 1.44 MB; late-join state 3.62 -> 1.46 MB; join to table 3.12 -> 2.12 s | mapformat |
+| Download | Surface maps shipped as lossless WebP, the loader reads WebP or PNG (texwebp; board perf-texture-shipping: webp) | surfaces in the zip 150.4 -> 45.1 MB (deflate 6, about -105 MB of the 269 MB); pixel-identical (156 of 156 maps; a home frame byte-identical); cold open +78 ms inside the spread | 57f62b34, core-library c67e39f, plantgen baa95df |
 
 Correctness found on the way: a client's GameState never took transforms, so after per-token adds
 it lagged up to the heartbeat (fixed, three ENet consistency scenarios, 8fd3af5e); two dev builds
 with different wire formats now refuse each other (protocol number, c7f14580); a save waits out a
-reader holding its file (4c56da38); the title leaked six orphan nodes per visit (387808ab).
+reader holding its file (4c56da38); the title leaked six orphan nodes per visit (387808ab); Godot's
+BC7 compressor is not bit-reproducible (about 1 block in 100 differs, thread-dependent: bakedet), so
+tests compare baked maps by decompressed pixels within a tolerance; the sculpt re-bed test was random
+per run (a random prop yaw against the row quaternion's 2^-10 rounding; the product was right,
+gateflakes); wall-time budget tests fail under heavy load by design (`test_live_map_edits`).
 
 ### Found false
 
@@ -119,38 +133,44 @@ against 1.37 ms) or oblong tiles (Jolt's triangle-mesh fallback, which also leak
 
 From the register's rows that are not merged, with their measured size:
 
-- **GPU.** A camera-centred clipmap bake of the ground, about 1 ms at 1080p on every view, 4-6
-  cards (board perf-ground-bake; groundbake Phase 1 only). One sun shadow split fewer, 0.41-0.45
-  ms and the MSAA foliage cost (1.0 ms in the eye view) are now player options (gpuoptions; the
-  defaults are the board's question perf-gpu-options). Foliage and rock textures RGBA8 without
-  mips, layer arrays padded to 16 (board perf-foliage-mips). 71 % of drawn instances off screen at
-  home: a GPU-driven or finer cull was probed and dropped (cullprobe: the best cull with shadows
-  kept saves 0.32-0.34 ms on a filled 320 ft map; finer chunks lose). Zoom-keyed ground
-  thinning, about 0.5 ms zoomed in (board perf-ground-thin), with FoliageBudget counting triangles
+- **GPU.** The ground clipmap is merged and on (see Wins); not measured: a 1060-class GPU,
+  1440p/4K with it on, the skirt on a 320 ft map, and the clipmap's regrowth patch in play or over
+  the network. A skirt clipmap was evaluated and not built (at the far view the plain ground shader
+  saves nothing, +0.084 ms; hiding the skirt saves 0.369 ms but that is its geometry and shadows).
+  The baked-only material for fully covered flat chunks (about 0.24 ms at home) is unbuilt, and
+  `authored_terrain.gd` (941 of 1000 lines) needs its skirt and chunk code split out first (84
+  private-field references across 9 files). 71 % of drawn instances off screen at home: a
+  GPU-driven or finer cull was probed and dropped (cullprobe: the best cull with shadows kept saves
+  0.32-0.34 ms on a filled 320 ft map; finer chunks lose). FoliageBudget still counts triangles
   instead of the cost. Built ground-cover materials run 0.13 / 0.36 ms slower than copies of
-  themselves (cause not found). Render scale's Auto as the default (board perf-render-scale).
-- **Tokens.** The shadow pass's plain fade loop, 0.47 ms from 32 tokens (a light-space grid). Pack
-  idle animation at 30 Hz on screen and none off screen, 500 tokens 8.09 -> 0.67 ms headless: built
-  and held for the user's look (branch tokenmesh, a6da2175). A client's join still spawns every
-  token at once. Shared helper meshes (a pack token is still 29.2 nodes in the census).
-- **Authoring.** `_sync_document` stays on the main thread, 1 / 3 / 7.6 ms at save. The sculpt and
-  carve stroke end's rule fields, 4.5-4.7 ms, to native. At 320 ft a new painted surface's retable
-  still costs 12-20 ms, the first looked biome 30 ms, the Dress 21 pipeline compiles. A new map
-  opens in 6.6 s at 320 ft.
-- **Network.** Steam not driven; scatter rows are 80 % of `map.ttmap` and binary rows 3.5 times
-  smaller (board perf-map-format); a join runs in series behind main-thread blocks (about 1.4 s to
-  overlap).
-- **System.** Boot reaches the title in 2.8 s from a pack (was 4.8 s after boot part 1, 6.4-7.7 s at the
-  start of the audit; the library serve in `Root._ready`, about 245 ms, is the next lever, and no
-  non-editor export-template build was measured); the first authoring open 2.3 s warm and 10.2 s
-  cold (UI built up front; since authbake no cold bake runs in its frames, but a cold new 200 ft
-  map still takes 11.7 s and a cold play load 3.4 s, both waiting on the lane's serial bakes:
-  decoding, hashing and cache writes could move off the serial lane, unmeasured); about 620 MB of texture memory stays at the title after a map (526 MB
-  unattributed, engine-side); the first-launch warm-up; about 80 pipeline compiles per load;
-  surface PNGs 54 % of the download; process memory creeps 2.7 MB per map cycle; the idle throttle (15 fps unfocused, 5 minimised, sysidle) is built:
-  see "Idle throttle".
-- **Look-pending** (the user's look is the gate): the occlusion fade tiles, render scale, ground-
-  cover light and skirt commits; the gpuoptions defaults.
+  themselves (cause not found). A lean ground-cover shader variant saves 0.04-0.16 ms and was
+  skipped (board perf-flower-lean: skip; branch foliagefix keeps it). The user's one unanswered
+  look question is perf-look-rendersize (1440p at the output-sized viewport).
+- **Tokens.** The shadow pass's plain fade loop, 0.47 ms from 32 tokens (a light-space grid).
+  Shared helper meshes (a pack token is still 29.2 nodes in the census). The avatar system is
+  likely to be reworked (user, 2026-11-09), so avatar-side work waits.
+- **Authoring.** `_sync_document` stays on the main thread, 1 / 3 / 7.6 ms at save. At 320 ft a new
+  painted surface's retable still costs 12-20 ms, the first looked biome 30 ms, the Dress 21
+  pipeline compiles. The clipmap's regrowth rectangle can be large (one clear run's patch took 16
+  strips): several smaller rectangles instead of one union is the next saving.
+- **Network.** Steam not driven (ENet loopback only); a join runs in series behind main-thread
+  blocks (about 1.4 s to overlap, N4, after `root.gd` settles).
+- **System.** Boot reaches the title in 2.8 s from a pack (was 4.8 s after boot part 1, 6.4-7.7 s at
+  the start of the audit; the library serve in `Root._ready`, about 245 ms, is the next lever, and
+  no non-editor export-template build was measured, nor one of boot2's worker precompile); a cold
+  first open of a new 100 ft map is 5.9 s with the lane idle (was 11.5 s): next levers are the
+  470-490 ms panel and asset-load frame (one run in six hit 2,363 ms there, cause not found), moving
+  the lane's decode, hash and cache write (about 0.5 s) off its serial path, and the sheet,
+  entry and "ground created" frames (about 290 / 280 / 260 ms); about 620 MB of texture memory
+  stays at the title after a map (526 MB unattributed, engine-side); the first-launch warm-up
+  (17 s) and its 3.8 s frozen frame; about 80 pipeline compiles per load; 1,500 Controls rebuilt
+  per play load; process memory creeps 2.7 MB per map cycle.
+- **Look-pending** (the user's look is the gate): cleared by the board's answers on 2026-11-09,
+  except perf-look-rendersize. Texture shipping is lossless, so it has no look to judge.
+- **Test hygiene found on the way.** GUT silently dropped two test scripts that did not parse
+  (14 tests, for days); `tools/gut_shards.gd` now fails a shard whose log says "Ignoring script",
+  and keeps and prints a crashed shard's log (an access violation in `test_authoring_open` was seen
+  once in five gates and did not reproduce in about 41 tries).
 - **Test hygiene found on the way.** GUT silently dropped two test scripts that did not parse
   (14 tests, for days); `tools/gut_shards.gd` now fails a shard whose log says "Ignoring script".
 
@@ -195,7 +215,12 @@ is a decision to measure first.
 | Global shader uniform buffer slots | 262,144 | at least 262,144 | F-foliage-5 |
 | Default shadow quality tier | High | at most High | shadowtier |
 | Default Shadow cascades / Foliage edges | Blended / Smooth | the shipped look | gpuoptions |
-| Scripts compiled before the first frame (`tests/unit/test_boot_graph.gd`) | 341 | 342 | boot, boot2 |
+| Frame cap while the window is unfocused / minimised (idle throttle) | 15 / 5 | 15 / 5 | S4, sysidle |
+| Deflated bytes per scatter row in `map.ttmap` | 7.45 | 11 | mapformat |
+| Inner-ring skirt shaders without shadow reception | 0 | 0 | skirtring |
+| Width of the skirt's shadow-receiving inner ring | 10.48 m | 10.5 | skirtring |
+| Share of ground cover drawn at camera size 20 / at the 100 ft home zoom (13.85) | 0.66 / 1 | at most 0.66 / at least 1 | F-foliage-4, foliagelod |
+| Scripts compiled before the first frame (`tests/unit/test_boot_graph.gd`) | 344 | 344 | boot, boot2; the limit rose 342 -> 344 with the clipmap's setting and warm-up, so it now has no headroom: a new start-up script needs a reason or a first-use load |
 
 What it cannot see: milliseconds. A shader that gets dearer without writing a new output, a frame
 slowed by work no counter reads, or a hitch in a path these counters do not drive passes here; the
