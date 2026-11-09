@@ -64,7 +64,7 @@ extends Resource
 
 
 ## Create a TokenState from a BoardToken
-static func from_board_token(token: BoardToken) -> TokenState:
+static func from_board_token(token: Node3D) -> TokenState:
 	var state = TokenState.new()
 	state.network_id = token.network_id
 
@@ -144,10 +144,11 @@ static func from_placement(placement: TokenPlacement) -> TokenState:
 ## Apply this state to a BoardToken
 ## On clients, uses interpolation for smooth motion
 ## On host or for initial placement, applies immediately
-func apply_to_token(token: BoardToken, use_interpolation: bool = true) -> void:
+func apply_to_token(token: Node3D, use_interpolation: bool = true) -> void:
 	# A changed recipe rebuilds the figure (the builder edits a placed avatar live).
 	if not avatar_recipe.is_empty() and token.avatar_recipe != avatar_recipe:
-		AvatarTokenFactory.set_recipe(token, avatar_recipe)
+		var avatar_factory: Variant = load("res://scenes/board_token/avatar_token_factory.gd")
+		avatar_factory.set_recipe(token, avatar_recipe)
 
 	# Transform - use interpolation on clients for smooth motion
 	if use_interpolation and NetworkManager.is_client():

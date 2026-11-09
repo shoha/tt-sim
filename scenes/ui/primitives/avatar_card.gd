@@ -19,6 +19,11 @@ enum { ACTION_EDIT, ACTION_DUPLICATE, ACTION_DELETE }
 ## How far a held card moves before it counts as a drag (the pack tabs' threshold).
 const DRAG_THRESHOLD_PX := 8.0
 
+## The builder's scripts, loaded when a card is built so the title does not compile them.
+const AVATAR_BUILDER := "res://scenes/states/playing/avatar_builder.gd"
+const AVATAR_BUILDER_PREVIEW := "res://scenes/states/playing/avatar_builder_preview.gd"
+const AVATAR_THUMBNAILS := "res://scenes/states/playing/avatar_thumbnails.gd"
+
 ## The picture's height as a share of the card's width (the thumbnail is 3:4).
 const PICTURE_ASPECT := 4.0 / 3.0
 const INSET := 4.0
@@ -66,7 +71,8 @@ func _init() -> void:
 	_slot.clip_contents = true
 	_slot.resized.connect(_on_slot_resized)
 	_column.add_child(_slot)
-	_slot.add_child(AvatarBuilderPreview.backdrop())
+	var preview_script: Variant = load(AVATAR_BUILDER_PREVIEW)
+	_slot.add_child(preview_script.backdrop())
 	_thumb = TextureRect.new()
 	_thumb.name = "Thumb"
 	_thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -114,7 +120,8 @@ func setup(info: Dictionary, menu: bool = false) -> void:
 	_name.text = String(info.get("name", AvatarLibrary.DEFAULT_NAME))
 	tooltip_text = _name.text
 	var recipe: Dictionary = info.get("recipe", {})
-	_thumb.texture = AvatarThumbnails.request(recipe, _on_thumbnail)
+	var thumbnails_script: Variant = load(AVATAR_THUMBNAILS)
+	_thumb.texture = thumbnails_script.request(recipe, _on_thumbnail)
 	if menu and _menu_button == null:
 		_add_menu()
 
@@ -123,7 +130,8 @@ func setup(info: Dictionary, menu: bool = false) -> void:
 func setup_make(caption: String = "") -> void:
 	entry = {}
 	_name.text = "Make an avatar"
-	tooltip_text = AvatarBuilder.SUBTITLE
+	var builder_script: Variant = load(AVATAR_BUILDER)
+	tooltip_text = builder_script.SUBTITLE
 	_mark.texture = IconButton.load_icon("plus")
 	_mark.visible = true
 	_thumb.texture = null

@@ -84,9 +84,14 @@ func _get_shortcut_data() -> Array:
 	]
 	# The GM's live brushes are map-building tools, whose rows are under Map building; a tool
 	# that exists only in play lists its own rows here.
-	tools.append([PlayEvents.HELP_KEYS, PlayEvents.HELP_TEXT])
-	for tool in ToolRegistry.tools(ToolDescriptor.PLAY):
-		if not tool.exists_in(ToolDescriptor.AUTHORING):
+	# The play events and the tool registry are loaded here, when the overlay is built, so the
+	# title does not compile them (perf audit boot2).
+	var play_events: Variant = load("res://scenes/states/playing/events/play_events.gd")
+	var tool_registry: Variant = load("res://scenes/states/authoring/tool_registry.gd")
+	var tool_descriptor: Variant = load("res://scenes/states/authoring/tools/tool_descriptor.gd")
+	tools.append([play_events.HELP_KEYS, play_events.HELP_TEXT])
+	for tool in tool_registry.tools(tool_descriptor.PLAY):
+		if not tool.exists_in(tool_descriptor.AUTHORING):
 			tools.append_array(tool.help_rows())
 	var building: Array = [
 		[
@@ -99,7 +104,7 @@ func _get_shortcut_data() -> Array:
 			"Clear, lower (Raise), cut a tier down (Tier), erase paint or water",
 		],
 	]
-	building.append_array(ToolRegistry.help_rows(ToolDescriptor.AUTHORING))
+	building.append_array(tool_registry.help_rows(tool_descriptor.AUTHORING))
 	building.append_array(
 		[
 			[

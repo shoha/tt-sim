@@ -16,7 +16,8 @@ extends RefCounted
 
 ## Main-thread time per frame the authored scatter build (species resolution, then cells)
 ## and the terrain chunk build may take before yielding, so a painted map loads without a
-## long stall.
+## long stall. While the loading sheet covers the table the budget rises to
+## LoadPacing.COVERED_BUDGET_USEC (frame_budget_usec()).
 const FRAME_BUDGET_USEC: int = 8000
 ## Map-default lighting for a map with no GLB, written as the same scene extras a
 ## terrain-paint GLB carries (GlbUtils.extract_lighting_config reads them into the
@@ -39,6 +40,11 @@ const AUTHORED_MAP_LIGHTING := {
 const SCATTER_NODE := "AuthoredScatter"
 ## The AuthoredScatter holding hand-placed props, when separate_props is on.
 const PROPS_NODE := "AuthoredProps"
+
+## False starts a load's ground-layer prebake where the terrain is built (as card sysbake did)
+## instead of as soon as the document is read, and a new map's at the build instead of before its
+## recipe: the performance harness's in-run A/B switch (perfaudit_system.gd `prebake`).
+static var early_prebake: bool = true
 
 var tree: SceneTree = null
 ## LevelData.light_intensity_scale of the level being loaded.
@@ -92,6 +98,12 @@ func _init(scene_tree: SceneTree = null) -> void:
 	tree = scene_tree
 
 
+## The main-thread time a load slice may take this frame: FRAME_BUDGET_USEC, or more while the
+## loading sheet covers the table (LoadPacing).
+static func frame_budget_usec() -> int:
+	return LoadPacing.budget_usec(FRAME_BUDGET_USEC)
+
+
 ## Builds the map root from its files: the GLB (with its scatter filtered by the document's
 ## erase mask), or a bare root with an AuthoredTerrain when there is no GLB, plus the
 ## document's scatter and props as AuthoredScatter children of the root. Either path may be
@@ -125,6 +137,11 @@ func load_async(glb_path: String, document_path: String) -> Node3D:
 				return null
 			report_document_problem("Map document could not be read: " + document_path)
 		else:
+			if glb_path == "" and early_prebake:
+				# The ground layers' maps start baking now, ahead of the library gate and the
+				# adaptation (card authbake); _create_authored_root_async asks again for a document
+				# they changed.
+				SurfaceStore.prebake(AuthoredTerrain.layer_surfaces(document))
 			# The libraries the map names against the ones served (MapLibraryGate): renamed
 			# ids, a missing library asked about, never a quiet substitution.
 			library_gate = await MapLibraryGate.run(
@@ -328,7 +345,8 @@ static func authored_root_shell() -> Node3D:
 
 
 ## create_authored_root() spread over frames: the ground and crossing textures load on
-## background threads while workers compute the pure data (AuthoredLoadPrep: the wet dressing,
+## background threads (a library surface's maps bake on SurfaceStore's prebake lane) while
+## workers compute the pure data (AuthoredLoadPrep: the wet dressing,
 ## the water and crossing geometry, the rule fields, the skirt and every chunk's arrays), then
 ## the material,
 ## biome weights, collision and skirt are built in one frame and the chunk meshes within the
@@ -339,6 +357,11 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	# Under the headless dummy renderer the material loads them in place instead
 	# (GlbUtils.threaded_loads_safe).
 	var threaded := GlbUtils.threaded_loads_safe()
+	# The ground layers' library surface maps bake on the prebake lane meanwhile (a cold cache
+	# baked them in AuthoredTerrain.create's frame: 2.4 to 2.9 s, perfaudit sysopen); the load
+	# waits for them, and only for them (pictures a panel queued behind them bake on).
+	var layers := AuthoredTerrain.layer_surfaces(doc)
+	SurfaceStore.prebake(layers)
 	var paths := AuthoredTerrain.texture_paths(doc)
 	paths.append_array(AuthoredCrossings.texture_paths(doc))
 	paths.append_array(AuthoredWalls.texture_paths(doc))
@@ -350,7 +373,7 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 			pending.append(path)
 	var loading := true
 	while loading:
-		loading = not prep.is_done()
+		loading = not prep.is_done() or SurfaceStore.prebaking(layers)
 		for path in pending:
 			if (
 				ResourceLoader.load_threaded_get_status(path)
@@ -381,7 +404,8 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 			return null
 		var start := Time.get_ticks_usec()
 		var batch: Array[Vector2i] = []
-		while next < chunk_cells.size() and Time.get_ticks_usec() - start < FRAME_BUDGET_USEC:
+		var budget := frame_budget_usec()
+		while next < chunk_cells.size() and Time.get_ticks_usec() - start < budget:
 			batch.assign([chunk_cells[next]])
 			terrain.rebuild_chunks(batch)
 			next += 1
@@ -480,7 +504,7 @@ func _build_authored_scatter_async(
 			assets[asset_id] = true
 	scatter.prepare_assets(assets.keys())
 	while scatter.has_prepared_species():
-		scatter.resolve_prepared(FRAME_BUDGET_USEC)
+		scatter.resolve_prepared(frame_budget_usec())
 		await tree.process_frame
 		if is_superseded.call():
 			return false
@@ -490,7 +514,8 @@ func _build_authored_scatter_async(
 	var next := 0
 	while next < keys.size():
 		var start := Time.get_ticks_usec()
-		while next < keys.size() and Time.get_ticks_usec() - start < FRAME_BUDGET_USEC:
+		var budget := frame_budget_usec()
+		while next < keys.size() and Time.get_ticks_usec() - start < budget:
 			scatter.build_cells({keys[next]: rows_by_cell[keys[next]]})
 			next += 1
 		await tree.process_frame
@@ -530,7 +555,7 @@ func fit_grid_ground_async(map: Node3D, game_map: GameMap) -> Dictionary:
 		grid.rows,
 		WaterSurface.WALKABLE_MASK
 	)
-	while not sampler.step(FRAME_BUDGET_USEC):
+	while not sampler.step(frame_budget_usec()):
 		await tree.process_frame
 		if not _still_installed(map, game_map):
 			return {}
@@ -583,7 +608,7 @@ func fit_dressing_ground_async(map: Node3D, game_map: GameMap, doc: MapDocument)
 	var sampler := DressingGround.begin(
 		doc, map.get_world_3d(), map.global_transform, top, excluded
 	)
-	while not sampler.step(FRAME_BUDGET_USEC):
+	while not sampler.step(frame_budget_usec()):
 		await tree.process_frame
 		if not _still_installed(map, game_map):
 			return {}
@@ -603,7 +628,7 @@ func fit_dressing_ground_async(map: Node3D, game_map: GameMap, doc: MapDocument)
 			doc.samples_z(),
 			WaterSurface.WALKABLE_MASK
 		)
-		while not grid.step(FRAME_BUDGET_USEC):
+		while not grid.step(frame_budget_usec()):
 			await tree.process_frame
 			if not _still_installed(map, game_map):
 				return {}

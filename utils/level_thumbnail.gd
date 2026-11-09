@@ -96,7 +96,8 @@ static func render_scene_async(map: Node3D, tree: SceneTree) -> Image:
 	await tree.process_frame
 	# The ground's mesh bounds: the scatter is left out, so the tallest back trees may be
 	# cropped at the top (the whole ground reads better than room for every crown).
-	var bounds := LevelEnvironmentManager.compute_map_bounds(map)
+	var environment: Variant = load("res://scenes/states/playing/level_environment_manager.gd")
+	var bounds: AABB = environment.compute_map_bounds(map)
 	var view := frame(bounds, camera.basis, float(RENDER_SIZE.x) / float(RENDER_SIZE.y))
 	camera.size = maxf(view.size, 0.1)
 	camera.position = view.position

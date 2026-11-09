@@ -118,9 +118,15 @@ func release_bodies() -> void:
 	for body in get_overlapping_bodies():
 		if not WaterRippleRegistry.unregister(body.get_instance_id()):
 			continue
-		var token := body.get_parent() as DraggableToken
-		if token:
-			token.set_submerged(false)
+		_set_submerged(body, false)
+
+
+## Sinks or raises the visuals of the DraggableToken that owns `body`, if it has one. Named by
+## method, not by class: the token's script stays off the start-up graph (perf audit boot2).
+func _set_submerged(body: Node3D, submerged: bool) -> void:
+	var token := body.get_parent()
+	if token != null and token.has_method(&"set_submerged"):
+		token.set_submerged(submerged)
 
 
 func _ready() -> void:
@@ -154,9 +160,7 @@ func _on_body_entered(body: Node3D) -> void:
 	var first_entry := WaterRippleRegistry.register(body.get_instance_id(), body)
 	if not first_entry:
 		return
-	var token := body.get_parent() as DraggableToken
-	if token:
-		token.set_submerged(true)
+	_set_submerged(body, true)
 	var splash := SplashBurst.create_at(
 		Vector3(body.global_position.x, global_position.y, body.global_position.z), true
 	)
@@ -184,9 +188,7 @@ func _on_body_exited(body: Node3D) -> void:
 	var fully_exited := WaterRippleRegistry.unregister(body.get_instance_id())
 	if not fully_exited or not body.is_inside_tree():
 		return
-	var token := body.get_parent() as DraggableToken
-	if token:
-		token.set_submerged(false)
+	_set_submerged(body, false)
 	if _leaving_tree or not is_inside_tree():
 		return
 	_splash_out.call_deferred(body)

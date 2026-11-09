@@ -54,7 +54,8 @@ static func water_material() -> ShaderMaterial:
 ## every authored map's falls draw with it, and apply_water_settings() keeps its shared keys
 ## in step with the water material's.
 static func _get_fall_material() -> ShaderMaterial:
-	return AuthoredWater.fall_material()
+	var water: Variant = load("res://scenes/terrain/authored_water.gd")
+	return water.fall_material()
 
 
 ## Apply the shared water shader to any mesh named with a "-water" suffix (case-

@@ -37,7 +37,7 @@ var _members: Array[Dictionary] = []
 ## Clients that get the full state again on their table-loaded report (see the class doc)
 var _awaiting: Array[int] = []
 ## Root's LevelPlayController, the table the party lands on (attach())
-var _controller: LevelPlayController = null
+var _controller: Node = null
 
 
 func _ready() -> void:
@@ -48,7 +48,7 @@ func _ready() -> void:
 
 ## Give the party the table it lands on: Root's LevelPlayController, which lives as long as
 ## Root does.
-func attach(controller: LevelPlayController) -> void:
+func attach(controller: Node) -> void:
 	_controller = controller
 	if not NetworkManager.table_loaded.is_connected(_on_table_loaded):
 		NetworkManager.table_loaded.connect(_on_table_loaded)
@@ -149,11 +149,11 @@ func restore(members: Array, grants: Dictionary) -> void:
 func set_out() -> int:
 	if _members.is_empty() or not NetworkManager.is_host() or not is_instance_valid(_controller):
 		return 0
-	var game_map := _controller.get_game_map()
+	var game_map: Node = _controller.get_game_map()
 	if game_map == null:
 		return 0
 	var spots := landing_spots(landing_point(_controller.active_level_data, game_map), _members.size())
-	var placed: Array[BoardToken] = []
+	var placed: Array = []
 	var claimed := 0
 	for member in _members:
 		var state := TokenState.from_dict(member.state)
@@ -164,7 +164,7 @@ func set_out() -> int:
 			claimed += 1
 			continue
 		state.position = spots[placed.size()]
-		var token := _controller.place_session_token(state)
+		var token: Node = _controller.place_session_token(state)
 		if token == null:
 			continue
 		token.hide()
@@ -259,7 +259,7 @@ static func landing_spots(
 
 
 ## Where the party lands on `level`: its spawn point, else the camera's ground point.
-static func landing_point(level: LevelData, game_map: GameMap) -> Vector3:
+static func landing_point(level: LevelData, game_map: Node) -> Vector3:
 	if level != null and level.has_spawn_point:
 		return level.spawn_point
 	return camera_ground_point(game_map)
@@ -269,17 +269,17 @@ static func landing_point(level: LevelData, game_map: GameMap) -> Vector3:
 ## new token; the camera holder's X/Z when the view never meets it, the origin without a
 ## camera. At the eye (a perspective camera) the centre ray meets the ground at the horizon or
 ## never, so it is the ground ViewGround.AHEAD_M ahead of the eye (ViewGround.eye_centre).
-static func camera_ground_point(game_map: GameMap) -> Vector3:
+static func camera_ground_point(game_map: Node) -> Vector3:
 	if game_map == null or game_map.camera_node == null or game_map.world_viewport == null:
 		return Vector3.ZERO
 	var eye: Variant = ViewGround.eye_centre(game_map)
 	if eye != null:
 		return eye
 	var centre := Vector2(game_map.world_viewport.size) / 2.0
-	var origin := game_map.camera_node.project_ray_origin(centre)
-	var direction := game_map.camera_node.project_ray_normal(centre)
+	var origin: Vector3 = game_map.camera_node.project_ray_origin(centre)
+	var direction: Vector3 = game_map.camera_node.project_ray_normal(centre)
 	if absf(direction.y) < 0.0001 or -origin.y / direction.y < 0.0:
-		var holder := game_map.cameraholder_node.global_position
+		var holder: Vector3 = game_map.cameraholder_node.global_position
 		return Vector3(holder.x, 0.0, holder.z)
 	var hit := origin - direction * (origin.y / direction.y)
 	return Vector3(hit.x, 0.0, hit.z)
@@ -305,7 +305,7 @@ func _claim(network_id: String, owners_now: Array) -> void:
 
 ## A physics frame after set_out(): sets each placed member down on the map, shows it with
 ## its arrival, and sends every peer the table's full state.
-func _ground_and_send(tokens: Array[BoardToken], game_map: GameMap) -> void:
+func _ground_and_send(tokens: Array, game_map: Node) -> void:
 	await get_tree().physics_frame
 	if not is_instance_valid(game_map) or game_map.is_queued_for_deletion():
 		return

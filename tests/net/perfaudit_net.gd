@@ -61,6 +61,7 @@ var _frames := 0
 var _join_ms := 0
 var _late_peers := false
 var _last_frame_us := 0
+var _steps: Array[int] = TOKEN_STEPS.duplicate()
 
 
 func _ready() -> void:
@@ -68,6 +69,10 @@ func _ready() -> void:
 	for pair in str(_args.get("opts", "")).split(",", false):
 		var kv := pair.split("=")
 		_opts[kv[0]] = kv[1] if kv.size() > 1 else "1"
+	if _opts.has("steps"):
+		_steps.clear()
+		for n in str(_opts.steps).split("/", false):
+			_steps.append(int(n))
 	_result["opts"] = _opts
 	_log("opts %s" % JSON.stringify(_opts))
 
@@ -197,12 +202,20 @@ func _process_host() -> void:
 				_next_step()
 		"settle":
 			if _since_phase_s() >= SETTLE_S:
-				_cut("spawn_to_%d" % TOKEN_STEPS[_step])
-				_log_state_sizes(TOKEN_STEPS[_step])
+				_cut("spawn_to_%d" % _steps[_step])
+				_log_state_sizes(_steps[_step])
+				if _opts.has("save"):
+					_lpc().save_level()
+					_set_phase("save")
+				else:
+					_set_phase("idle")
+		"save":
+			if _since_phase_s() >= 1.0:
+				_cut("save_at_%d_tokens" % _steps[_step])
 				_set_phase("idle")
 		"idle":
 			if _since_phase_s() >= IDLE_S:
-				_cut("idle_%d_tokens_%ds" % [TOKEN_STEPS[_step], int(IDLE_S)])
+				_cut("idle_%d_tokens_%ds" % [_steps[_step], int(IDLE_S)])
 				_step += 1
 				_next_step()
 		"drag":
@@ -222,18 +235,18 @@ func _process_host() -> void:
 					_host_done()
 		"late":
 			var late := _peer_marks("client2")
-			if late.has("tokens") or _since_phase_s() >= LATE_WAIT_S:
+			if late.has("board") or _since_phase_s() >= LATE_WAIT_S:
 				_cut("late_join_%d_tokens" % _tokens.size())
 				_host_done()
 
 
 func _next_step() -> void:
 	var cap := int(_opts.get("max_tokens", "200"))
-	if _step >= TOKEN_STEPS.size() or TOKEN_STEPS[_step] > cap:
+	if _step >= _steps.size() or _steps[_step] > cap:
 		_start_drag()
 		return
 	var lpc := _lpc()
-	while _tokens.size() < TOKEN_STEPS[_step]:
+	while _tokens.size() < _steps[_step]:
 		var i := _tokens.size()
 		var at := Vector3((i % 20) * 1.6 - 15.0, 12.0, int(i / 20.0) * 1.6 - 8.0)
 		var token := lpc.spawn_avatar({"format": 1}, "T%d" % i, at, true)
@@ -538,8 +551,21 @@ func _process_client() -> void:
 			if _marks.has("table") and GameState.get_token_count() > 0 and not _marks.has("tokens"):
 				_mark("tokens_ms", Time.get_ticks_msec() - _join_ms)
 				_mark("token_count", GameState.get_token_count())
-				_cut("to_tokens")
+				var tw := _cut("to_tokens")
+				_mark("tokens_frame_max_ms", tw.get("frame_max_ms", 0.0))
 				_mark("tokens")
+			# Every token GameState holds is on the board: "to_tokens" (table to state) and this
+			# window (state to board) hold the token builds of the join, built in the frame the
+			# state lands or spread over the frames after it.
+			if (
+				_marks.has("tokens")
+				and not _marks.has("board")
+				and _lpc()._token_spawner.get_spawned_tokens().size() >= GameState.get_token_count()
+			):
+				_mark("board_ms", Time.get_ticks_msec() - _join_ms)
+				var w := _cut("tokens_to_board")
+				_mark("board_frame_max_ms", w.get("frame_max_ms", 0.0))
+				_mark("board")
 			if _host_phase() in ["collect", "done"]:
 				_cut("rest")
 				_mark("windows", _windows)

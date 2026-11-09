@@ -241,8 +241,8 @@ static func _frame_at(plan: PackedVector2Array, s: float, outward: float) -> Dic
 ## when its layout is known, else the middle of edge 0.
 static func _door(plan: PackedVector2Array, layout: Variant, outward: float) -> Dictionary:
 	var at := (plan[0] + plan[1]) * 0.5
-	if layout is ProcgenBuildingLayout:
-		var box: Dictionary = (layout as ProcgenBuildingLayout).door_opening()
+	if StructureProcgen.is_building_layout(layout):
+		var box: Dictionary = layout.door_opening()
 		if not box.is_empty() and box.has("centre"):
 			var centre: Vector3 = box.centre
 			at = Vector2(centre.x, centre.z)

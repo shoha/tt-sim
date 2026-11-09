@@ -65,9 +65,11 @@ static func lens_after_notch(target: float, direction: int) -> float:
 ## height): unchanged at 16:9 or wider, widened on a narrower window so the horizontal angle of
 ## the 16:9 view is kept, as the orthographic size is (OrbitView.aspect_corrected_size).
 static func corrected_fov(lens: float, aspect: float) -> float:
-	if aspect <= 0.0 or aspect >= CameraController.REFERENCE_ASPECT:
+	var camera_script: Variant = load("res://scenes/states/playing/camera_controller.gd")
+	var reference: float = camera_script.REFERENCE_ASPECT
+	if aspect <= 0.0 or aspect >= reference:
 		return lens
-	var half := tan(deg_to_rad(lens) * 0.5) * CameraController.REFERENCE_ASPECT / aspect
+	var half := tan(deg_to_rad(lens) * 0.5) * reference / aspect
 	return minf(rad_to_deg(2.0 * atan(half)), FOV_CEILING)
 
 

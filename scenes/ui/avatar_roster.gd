@@ -77,13 +77,18 @@ func _stagger_targets() -> Array[Control]:
 
 
 ## Opens the builder for a new avatar; its save lands in the library.
-func make() -> AvatarBuilder:
-	return AvatarBuilder.open_for_library(get_tree().root)
+func make() -> Node:
+	return _builder_script().open_for_library(get_tree().root)
 
 
 ## Opens the builder on saved avatar `entry`.
-func edit(entry: Dictionary) -> AvatarBuilder:
-	return AvatarBuilder.open_for_library(get_tree().root, entry)
+func edit(entry: Dictionary) -> Node:
+	return _builder_script().open_for_library(get_tree().root, entry)
+
+
+## AvatarBuilder's script, loaded on first use so the title does not compile the builder.
+func _builder_script() -> Variant:
+	return load("res://scenes/states/playing/avatar_builder.gd")
 
 
 func close() -> void:

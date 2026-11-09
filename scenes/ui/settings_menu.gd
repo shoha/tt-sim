@@ -97,7 +97,9 @@ var _reset_tween: Tween
 @onready var wind_motion_slider: HSlider = %WindMotionSlider
 @onready var wind_motion_label: Label = %WindMotionLabel
 @onready var antialiasing_option: OptionButton = %AntialiasingOption
+@onready var foliage_edges_option: OptionButton = %FoliageEdgesOption
 @onready var shadow_quality_option: OptionButton = %ShadowQualityOption
+@onready var shadow_cascades_option: OptionButton = %ShadowCascadesOption
 @onready var render_scale_option: OptionButton = %RenderScaleOption
 @onready var water_quality_option: OptionButton = %WaterQualityOption
 @onready var ssao_check: CheckButton = %SSAOCheck
@@ -170,6 +172,7 @@ static func apply_startup_graphics_settings() -> void:
 
 	RenderingServer.directional_soft_shadow_filter_set_quality(saved_shadow_quality(config))
 	RenderScale.current = RenderScale.stored(config)
+	SettingsGpuOptions.apply_startup(config)
 
 	var water_quality_value: int = config.get_value(
 		"graphics", "water_quality", WaterQuality.MEDIUM
@@ -332,6 +335,7 @@ func _on_panel_ready() -> void:
 	# each Render scale choice by its render size on it (_refill_window_labels).
 	SettingsRenderScale.fill(self)
 	get_tree().root.size_changed.connect(_refill_window_labels)
+	SettingsGpuOptions.apply_tooltips(self)
 
 	# Grid visuals
 	cell_tint_opacity_slider.value_changed.connect(_on_cell_tint_opacity_changed)
@@ -460,6 +464,7 @@ func _load_settings() -> void:
 	# shows the tier the engine booted with.
 	shadow_quality_option.select(shadow_quality_option.get_item_index(saved_shadow_quality(config)))
 	SettingsRenderScale.show_saved(self, config)
+	SettingsGpuOptions.show_saved(self, config)
 
 	var water_quality_value: int = config.get_value(
 		"graphics", "water_quality", WaterQuality.MEDIUM
@@ -520,8 +525,8 @@ func _show_saved_values(config: ConfigFile) -> void:
 	foliage_density_slider.set_value_no_signal(
 		(
 			config.get_value(
-				FoliageDensityController.SETTINGS_SECTION,
-				FoliageDensityController.SETTINGS_KEY,
+				_foliage_density_settings().SETTINGS_SECTION,
+				_foliage_density_settings().SETTINGS_KEY,
 				FoliageBudget.PRIMITIVE_BUDGET
 			)
 			/ 1000000.0
@@ -564,6 +569,7 @@ func _save_settings(path: String = Paths.SETTINGS_PATH) -> void:
 	config.set_value("graphics", "antialiasing", antialiasing_option.get_selected_id())
 	config.set_value("graphics", "shadow_quality", shadow_quality_option.get_selected_id())
 	SettingsRenderScale.save(self, config)
+	SettingsGpuOptions.save(self, config)
 	config.set_value("graphics", "water_quality", water_quality_option.get_selected_id())
 	(
 		config
@@ -574,8 +580,8 @@ func _save_settings(path: String = Paths.SETTINGS_PATH) -> void:
 		)
 	)
 	config.set_value(
-		FoliageDensityController.SETTINGS_SECTION,
-		FoliageDensityController.SETTINGS_KEY,
+		_foliage_density_settings().SETTINGS_SECTION,
+		_foliage_density_settings().SETTINGS_KEY,
 		int(foliage_density_slider.value * 1000000)
 	)
 	config.set_value("network", "p2p_enabled", p2p_enabled_check.button_pressed)
@@ -609,8 +615,8 @@ func _apply_settings() -> void:
 	SettingsTokenShading.apply(self)
 	SettingsSeeThrough.apply(self, _find_game_map())
 
-	# Apply foliage antialiasing setting
-	_apply_foliage_antialiasing_setting()
+	# Apply foliage edges, the foliage antialiasing level and shadow cascades
+	SettingsGpuOptions.apply(self, _find_game_map())
 
 	# Apply shadow quality setting
 	_apply_shadow_quality_setting()
@@ -686,12 +692,6 @@ func _apply_lofi_setting() -> void:
 	var game_map = _find_game_map()
 	if game_map:
 		game_map.set_lofi_enabled(lofi_check.button_pressed)
-
-
-func _apply_foliage_antialiasing_setting() -> void:
-	var game_map = _find_game_map()
-	if game_map:
-		game_map.set_foliage_antialiasing_level(antialiasing_option.selected)
 
 
 ## Unlike the other _apply_*_setting() functions, this needs no GameMap lookup --
@@ -786,22 +786,27 @@ func _update_grid_labels() -> void:
 	foliage_density_label.text = "%.1fM" % foliage_density_slider.value
 
 
-func _find_game_map() -> GameMap:
-	# Look for GameMap in the scene tree
+## The open GameMap, found by method, not class (keeps the map off the start-up graph, boot2).
+func _find_game_map() -> Node3D:
 	var root = get_tree().root
 	for child in root.get_children():
 		if child.name == "Root":
 			for subchild in child.get_children():
-				if subchild is GameMap:
+				if subchild is Node3D and subchild.has_method(&"get_level_play_controller"):
 					return subchild
 	return null
 
 
-func _find_level_play_controller() -> LevelPlayController:
+func _find_level_play_controller() -> Node:
 	var game_map := _find_game_map()
 	if game_map:
 		return game_map.get_level_play_controller()
 	return null
+
+
+## FoliageDensityController's script, by path (boot2).
+func _foliage_density_settings() -> Variant:
+	return load("res://scenes/states/playing/foliage_density_controller.gd")
 
 
 func _on_close_pressed() -> void:
@@ -866,6 +871,7 @@ func _show_defaults() -> void:
 	antialiasing_option.select(antialiasing_option.get_item_index(Viewport.MSAA_DISABLED))
 	shadow_quality_option.select(shadow_quality_option.get_item_index(DEFAULT_SHADOW_QUALITY))
 	SettingsRenderScale.show_defaults(self)
+	SettingsGpuOptions.show_defaults(self)
 	water_quality_option.select(water_quality_option.get_item_index(WaterQuality.MEDIUM))
 	ssao_check.set_pressed_no_signal(Constants.RENDERING_TOGGLES_DEFAULTS["ssao_enabled"])
 	ssr_check.set_pressed_no_signal(Constants.RENDERING_TOGGLES_DEFAULTS["ssr_enabled"])

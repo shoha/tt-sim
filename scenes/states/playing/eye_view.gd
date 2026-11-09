@@ -55,7 +55,7 @@ var _lens_target: float = EyeRig.FOV_DEFAULT
 var _bounds: AABB = AABB()  # the walking area now: the document's, else the fallback
 var _document_bounds: AABB = AABB()
 var _fallback_bounds: AABB = AABB()
-var _terrain_body: Object = null  # the authored ground's body, which the sphere ignores
+var _terrain_body: Object = null  # the authored ground's collision tiles, which the sphere ignores
 var _terrain_looked: bool = false  # whether the map was searched for it (a GLB map has none)
 var _settlements_node: Node = null  # the furnishings layer, whose standing surfaces it ignores
 var _velocity: Vector2 = Vector2.ZERO
@@ -688,9 +688,11 @@ func _excluded_bodies() -> Array[RID]:
 		_settlements_node = game_map.map_container.find_child(
 			AuthoredSettlements.NODE_NAME, true, false
 		)
-	var body := _terrain_body as CollisionObject3D
-	if body != null:
-		rids.append(body.get_rid())
+	# The authored ground's collision is a node of tile bodies (TerrainCollision).
+	if _terrain_body != null and is_instance_valid(_terrain_body):
+		for tile in (_terrain_body as Node).get_children():
+			if tile is CollisionObject3D:
+				rids.append((tile as CollisionObject3D).get_rid())
 	# The furnishings' standing surfaces are for tokens; the eye walks through a haystack as it did.
 	if _settlements_node != null and is_instance_valid(_settlements_node):
 		rids.append_array(AuthoredSettlements.exclude_of(_settlements_node.get_parent()))

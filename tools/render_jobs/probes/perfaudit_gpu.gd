@@ -34,12 +34,14 @@ extends RefCounted
 ## upscale ("bilinear", "fsr", "fsr2"), msaa (0, 2, 4, 8, through VisualEffectsController so the
 ## foliage swaps its cutout variant), taa, fxaa (bool), aniso (0-4), size ([w, h] world viewport),
 ## fshader ("trivial", "unshaded", "cheap": every wind material's shader), ground_flat (bool: a
-## plain lit StandardMaterial3D over the ground classes), debug (Viewport.DEBUG_DRAW_* int).
+## plain lit StandardMaterial3D over the ground classes), debug (Viewport.DEBUG_DRAW_* int), and
+## blend, splits, noaa, a2c (perfaudit_gpu_knobs.gd).
 
 const GROUP := "perfaudit_gpu_rig"
 const HIDE_LAYER := 1 << 19
 const DEFAULT_DIR := "user://render_jobs/perfaudit_gpu"
 const Util := preload("res://tools/render_jobs/probes/perfaudit_gpu_util.gd")
+const Knobs := preload("res://tools/render_jobs/probes/perfaudit_gpu_knobs.gd")
 
 
 static func blocker(base: Node, step: Dictionary) -> String:
@@ -80,6 +82,8 @@ static func _pose(gm: GameMap, step: Dictionary) -> String:
 	else:
 		cc.set_view_mode(cc.orbit_view())
 		gm.eye_view_antialiasing = false
+		if step.has("pitch"):
+			cc.set_pitch_now(float(step.pitch))
 	return "pose %s" % String(cc.view_mode().mode_name())
 
 
@@ -103,6 +107,7 @@ class Rig:
 	var _ground_shaders := {}
 	var _built_shaders := {}
 	var _ground_prios := {}
+	var _knobs: RefCounted = null
 
 	## class_of as first seen, before the rig swapped any material (a flat ground override
 	## would otherwise read as "std" and fall out of the ground globs).
@@ -259,6 +264,8 @@ class Rig:
 
 	## Every knob to `cfg`'s value, or back to what the game had when the rig started.
 	func _apply(cfg: Dictionary) -> void:
+		if _knobs != null:
+			_knobs.restore_foliage()
 		var vp := gm.world_viewport
 		var env := _env()
 		ProjectSettings.set_setting(
@@ -329,6 +336,10 @@ class Rig:
 		_set_ground_flat(bool(cfg.get("ground_flat", false)))
 		_set_ground_shader(String(cfg.get("gshader", "")))
 		_set_ground_priority(int(cfg.get("gprio", 0)))
+		if _knobs == null:
+			_knobs = Knobs.new()
+			_knobs.rig = self
+		_knobs.apply(gm, cfg)
 
 	## Every ground material's (chunks and skirt) render_priority, or back to what it was. The
 	## opaque passes sort by priority before shader and material, so it decides whether the ground

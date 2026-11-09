@@ -62,6 +62,8 @@ signal species_added(materials: Array[ShaderMaterial])
 signal cells_applied(cells: Array[Vector2i])
 
 const NODE_INFIX := "_MultiMesh"
+## FoliageDensityController, by path so the play code stays off the start-up graph (boot2).
+const DENSITY_CONTROLLER := "res://scenes/states/playing/foliage_density_controller.gd"
 const GROWING_INFIX := "_grow"
 ## Instance uniform in shaders/wind_foliage_include.gdshaderinc (0 = collapsed, 1 = full).
 const GROW_UNIFORM := &"grow"
@@ -647,6 +649,12 @@ func _rebuild_asset(
 	if species.is_empty():
 		return
 	var rows: PackedFloat32Array = _cells.get(cell, {}).get(asset_id, PackedFloat32Array())
+	if not grow and not rows.is_empty() and not _growing.get(cell, {}).has(asset_id):
+		# Nothing grows or shrinks (the load): keys, order and buffer in one call, native or not.
+		var built := ScatterRows.chunk(rows, null, node_name_for(asset_id, cell), mass_anchors)
+		_keys[cell][asset_id] = built.keys
+		_place_settled(cell, asset_id, built, -1)
+		return
 	var keys := row_keys(rows.to_byte_array().to_int32_array())
 	if not rows.is_empty():
 		_keys[cell][asset_id] = keys
@@ -751,23 +759,31 @@ func _set_settled(
 				_nodes.erase(cell)
 			_orders.get(cell, {}).erase(asset_id)
 		return
-	var order := ScatterRows.instance_order(keys, indices, node_name_for(asset_id, cell))
-	var transforms := ScatterRows.transforms_from_rows(rows, order)
+	var built := ScatterRows.chunk(rows, indices, node_name_for(asset_id, cell), mass_anchors, keys)
+	_place_settled(cell, asset_id, built, visible_count)
+
+
+## Builds (or rebuilds) a settled node from chunk data (ScatterRows.chunk), keeping the order
+## for move_rows(); `visible` as _set_settled's `visible_count`.
+func _place_settled(cell: Vector2i, asset_id: String, built: Dictionary, visible: int) -> void:
+	var node: MultiMeshInstance3D = _nodes.get(cell, {}).get(asset_id)
 	if not _orders.has(cell):
 		_orders[cell] = {}
-	_orders[cell][asset_id] = order
-	if node == null:
-		node = _new_chunk_node(asset_id, cell, "", transforms)
+	_orders[cell][asset_id] = built.order
+	var sp: Dictionary = _species[asset_id]
+	var mesh: Mesh = node.multimesh.mesh if node != null else sp.mesh
+	var multimesh := ScatterGlbUtils.multimesh_from_chunk(mesh, built, mass_anchors)
+	if node == null:  # never empty here: _set_settled frees an emptied node it does not keep
+		var suffix := ScatterChunker.cell_suffix(cell)
+		node = ScatterGlbUtils.chunk_node(self, multimesh, sp.stem, sp.wind_category, suffix)
 		if not _nodes.has(cell):
 			_nodes[cell] = {}
 		_nodes[cell][asset_id] = node
 	else:
-		node.multimesh = ScatterGlbUtils.build_multimesh(
-			node.multimesh.mesh, transforms, mass_anchors
-		)
+		node.multimesh = multimesh
 	_touched.append(node)
-	if visible_count >= 0:
-		node.multimesh.visible_instance_count = mini(visible_count, node.multimesh.instance_count)
+	if visible >= 0:
+		node.multimesh.visible_instance_count = mini(visible, node.multimesh.instance_count)
 
 
 func _start_growth(
@@ -945,7 +961,7 @@ func _apply_budget(delta: int) -> void:
 		_touched.clear()
 		return
 	if budget < 0:
-		budget = FoliageDensityController.budget_from_settings()
+		budget = load(DENSITY_CONTROLLER).budget_from_settings()
 	if _known_total >= 0 and _known_total + delta <= budget:
 		_known_total += delta
 		for node in _touched:
@@ -957,10 +973,11 @@ func _apply_budget(delta: int) -> void:
 			root = get_parent() as Node3D
 		if root == null:
 			root = self
-		var report := FoliageDensityController.apply(root, budget)
+		var report: Dictionary = load(DENSITY_CONTROLLER).apply(root, budget)
 		var total: int = report.get("total_before", 0)
 		_known_total = total if total <= budget else -1
 	_touched.clear()
+
 
 
 ## Primitives a cell gains going from `old` to `fresh` rows (negative when it loses some).

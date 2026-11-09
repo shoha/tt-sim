@@ -176,6 +176,48 @@ func test_strokes_during_worker_writes_never_tear_them() -> void:
 	_assert_entries(_zip_entries(path), MapDocumentIO.serialize(doc)["entries"], "the last save")
 
 
+## Which document `path` holds: "old" or "new" (every entry equal), "unreadable" (the zip did
+## not open, as while the rename replaces it) or "torn" (it opened and matches neither).
+func _which(path: String, old_entries: Dictionary, new_entries: Dictionary) -> String:
+	var got := _zip_entries(path)
+	if got.is_empty():
+		return "unreadable"
+	if got == old_entries:
+		return "old"
+	return "new" if got == new_entries else "torn"
+
+
+## A quit or teardown that frees the writer with a write in flight (card authfirst): the file
+## reads as the old whole document or the new whole one at every moment, never a mix; the free
+## blocks until the write is done, so the new document is on disk, no temp file is left, the
+## cached hash is dropped, and the free returns (the process can exit).
+func test_freeing_the_writer_mid_write_leaves_a_whole_document() -> void:
+	var path := ROOT + "quit.ttmap"
+	var old_doc := Fixtures.full_doc()
+	assert_eq(MapDocumentIO.write(old_doc, path), OK)
+	var old_entries := _zip_entries(path)
+	assert_ne(MapFileHash.hash_file_cached(path), "", "the old document's hash is cached")
+	for round in 3:
+		var new_doc := Fixtures.full_doc()
+		for n in 40 * (round + 1):
+			_stroke(new_doc, n)
+		var new_entries: Dictionary = MapDocumentIO.serialize(new_doc)["entries"]
+		var writer := MapDocumentWriter.new()
+		assert_true(writer.start(_job(new_doc, path)))
+		var seen := {}
+		# Read the target while the worker encodes and renames (a few reads land mid-write).
+		for i in 6:
+			var state := _which(path, old_entries, new_entries)
+			seen[state] = int(seen.get(state, 0)) + 1
+		writer = null
+		assert_false(seen.has("torn"), "round %d: never a mix of the two: %s" % [round, seen])
+		assert_eq(_which(path, old_entries, new_entries), "new", "round %d: the write finished" % round)
+		assert_false(FileAccess.file_exists(path + MapDocumentIO.TEMP_SUFFIX), "no temp file left")
+		assert_false(MapFileHash._cache.has(path), "round %d: the old hash is dropped" % round)
+		assert_eq(MapFileHash.hash_file_cached(path), MapFileHash.hash_file(path))
+		old_entries = new_entries
+
+
 # --- the writer -----------------------------------------------------------------------
 
 

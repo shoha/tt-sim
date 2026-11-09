@@ -656,9 +656,10 @@ func save_level() -> String:
 				if GameState.has_authority():
 					GameState.sync_from_board_token(token)
 
-	# Broadcast updated state to clients
+	# Clients get the tokens that moved since the last reconciliation, and nothing at rest
+	# (not the full state: every other change already reached them by its own message)
 	if NetworkManager.is_host():
-		NetworkStateSync.broadcast_full_state()
+		_level_play_controller._network_token_sync.reconcile_now()
 
 	# Save the level — use folder format when the level came from a folder
 	return LevelManager.save_level_in_place(_level_play_controller.active_level_data)

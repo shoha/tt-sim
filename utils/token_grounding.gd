@@ -27,21 +27,23 @@ const TOLERANCE_M := 0.01
 ## A world height above every surface of `game_map`'s map (its mesh bounds, which take in
 ## terrain chunks and crossings, plus the terrain downcast's clearance), for a buried
 ## token's cast. Walks the map's mesh instances, so call it once per pass, not per token.
-static func cast_top(game_map: GameMap) -> float:
-	return (
-		LevelEnvironmentManager.compute_map_bounds(game_map.map_container).end.y
-		+ DragPlaceController.TERRAIN_DOWNCAST_HEIGHT
-	)
+static func cast_top(game_map: Node3D) -> float:
+	# The environment manager and the drag controller are loaded by path (perf audit boot2: naming
+	# them would put the play code on the start-up graph).
+	var environment: Variant = load("res://scenes/states/playing/level_environment_manager.gd")
+	var drag_place: Variant = load("res://scenes/states/playing/drag_place_controller.gd")
+	var bounds: AABB = environment.compute_map_bounds(game_map.map_container)
+	return bounds.end.y + float(drag_place.TERRAIN_DOWNCAST_HEIGHT)
 
 
 ## Where `token`'s rigid body rests on the ground as it is now, or Vector3.INF when nothing
 ## is under it (or it is not in the tree). `top_y` is cast_top()'s.
-static func resting_position(token: BoardToken, top_y: float) -> Vector3:
+static func resting_position(token: Node3D, top_y: float) -> Vector3:
 	if not is_instance_valid(token) or token.rigid_body == null:
 		return Vector3.INF
 	if not token.rigid_body.is_inside_tree():
 		return Vector3.INF
-	var dragging := token.get_dragging_object()
+	var dragging: Node = token.get_dragging_object()
 	if dragging == null:
 		return Vector3.INF
 	var landing: Variant = dragging.water.landing_position()
@@ -53,8 +55,8 @@ static func resting_position(token: BoardToken, top_y: float) -> Vector3:
 ## Moves `token` straight onto its resting position, with no animation, when it stands more
 ## than TOLERANCE_M off it. Returns true when it moved. Leaves a token mid-drag alone (the
 ## drop decides where that one lands; a settle tween in flight overwrites any move).
-static func reground(token: BoardToken, top_y: float) -> bool:
-	var dragging := token.get_dragging_object() if is_instance_valid(token) else null
+static func reground(token: Node3D, top_y: float) -> bool:
+	var dragging: Node = token.get_dragging_object() if is_instance_valid(token) else null
 	if dragging == null or dragging.is_being_dragged():
 		return false
 	var rest := resting_position(token, top_y)

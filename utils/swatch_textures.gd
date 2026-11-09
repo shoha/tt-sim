@@ -106,6 +106,48 @@ static func palette_thumbnail(
 	return texture
 
 
+## The albedos (palette-relative) of the surfaces of `roles` under `root`, in role then palette
+## order, queued on the prebake lane behind the maps a load waits for and the pictures shown
+## (SurfaceStore.PRIORITY_AHEAD) when `queue` is true and panels' pictures use the lane
+## (SurfaceWait.enabled; card authbake).
+static func prebake_albedos(
+	roles: PackedStringArray, root: String, queue: bool = true
+) -> PackedStringArray:
+	var surfaces := PaletteLibrary.surfaces(root)
+	var albedos := PackedStringArray()
+	for role in roles:
+		for surface in PaletteLibrary.surfaces_with_role(role, root):
+			albedos.append(String(surfaces.get(surface, {}).get("albedo", "")))
+	if queue:
+		var waits: Variant = load(SurfaceStore.SURFACE_WAIT)
+		waits.queue(root, albedos, SurfaceStore.PRIORITY_AHEAD)
+	return albedos
+
+
+## palette_thumbnail() of each of `albedos` at `size` under `root` (cached for the process), a few
+## a frame within the load's frame budget (about 23 ms a swatch with the map in memory). A swatch
+## whose albedo is still on the prebake lane is waited for a frame at a time instead of baked
+## here (card authbake). Stops early when `is_superseded` (func() -> bool) says so.
+static func warm_async(
+	albedos: PackedStringArray,
+	size: int,
+	root: String,
+	tree: SceneTree,
+	is_superseded: Callable
+) -> void:
+	var started := Time.get_ticks_usec()
+	for albedo in albedos:
+		while (
+			Time.get_ticks_usec() - started >= MapSourceLoader.frame_budget_usec()
+			or SurfaceStore.is_pending(root, albedo)
+		):
+			await tree.process_frame
+			if is_superseded.call():
+				return
+			started = Time.get_ticks_usec()
+		palette_thumbnail(albedo, size, root)
+
+
 static func _sky_texture(
 	prefix: String,
 	preset_name: String,

@@ -13,18 +13,21 @@ extends RefCounted
 const KEY_GHOST := "token_ghost_enabled"
 const KEY_OCCLUSION := "occlusion_fade_enabled"
 const KEY_CANOPY := "canopy_fade_enabled"
+## TokenGhost and CanopyFade, loaded by path so the title does not compile them (perf audit boot2).
+const TOKEN_GHOST := "res://scenes/board_token/token_ghost.gd"
+const CANOPY_FADE := "res://scenes/states/playing/canopy_fade.gd"
 
 
 ## Puts the saved values in `config` on the checks without firing their handlers.
 static func show_saved(menu: SettingsMenu, config: ConfigFile) -> void:
 	menu.token_ghost_check.set_pressed_no_signal(
-		config.get_value("graphics", KEY_GHOST, TokenGhost.DEFAULT_ENABLED)
+		config.get_value("graphics", KEY_GHOST, _ghost().DEFAULT_ENABLED)
 	)
 	menu.occlusion_fade_check.set_pressed_no_signal(
 		config.get_value("graphics", KEY_OCCLUSION, true)
 	)
 	menu.canopy_fade_check.set_pressed_no_signal(
-		config.get_value("graphics", KEY_CANOPY, CanopyFade.DEFAULT_ENABLED)
+		config.get_value("graphics", KEY_CANOPY, _canopy().DEFAULT_ENABLED)
 	)
 
 
@@ -35,18 +38,26 @@ static func save(menu: SettingsMenu, config: ConfigFile) -> void:
 
 
 static func show_defaults(menu: SettingsMenu) -> void:
-	menu.token_ghost_check.set_pressed_no_signal(TokenGhost.DEFAULT_ENABLED)
+	menu.token_ghost_check.set_pressed_no_signal(_ghost().DEFAULT_ENABLED)
 	menu.occlusion_fade_check.set_pressed_no_signal(true)
-	menu.canopy_fade_check.set_pressed_no_signal(CanopyFade.DEFAULT_ENABLED)
+	menu.canopy_fade_check.set_pressed_no_signal(_canopy().DEFAULT_ENABLED)
 
 
 ## Applies the three checks now. The ghost and the canopy fade are static state that any later
 ## map reads too; the occlusion fade needs the open map (the next one reads the file).
-static func apply(menu: SettingsMenu, game_map: GameMap) -> void:
-	TokenGhost.set_enabled(menu.token_ghost_check.button_pressed, menu.get_tree())
-	CanopyFade.enabled = menu.canopy_fade_check.button_pressed
+static func apply(menu: SettingsMenu, game_map: Node3D) -> void:
+	_ghost().set_enabled(menu.token_ghost_check.button_pressed, menu.get_tree())
+	_canopy().enabled = menu.canopy_fade_check.button_pressed
 	if game_map != null:
 		game_map.set_occlusion_fade_enabled(menu.occlusion_fade_check.button_pressed)
+
+
+static func _ghost() -> Variant:
+	return load(TOKEN_GHOST)
+
+
+static func _canopy() -> Variant:
+	return load(CANOPY_FADE)
 
 
 static func apply_tooltips(menu: SettingsMenu) -> void:

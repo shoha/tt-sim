@@ -120,14 +120,14 @@ static func row_plan(doc: MapDocument, wall: Wall) -> Array[Dictionary]:
 	if recipe == null or not wall.is_row():
 		return []
 	var inputs := inputs_for(doc, wall)
-	var node := RowNode.new()
+	var node := StructureProcgen.new_row_node()
 	var p := node.coerce_params(
 		{"setback": wall.height_m, "side": wall.side, "preset": wall.preset}
 	)
 	var node_seed := node.node_seed(
 		p, {"seed": inputs.seed_value, "node_id": recipe.resolve_node("street_row")}
 	)
-	return ProcgenRow.plan(inputs.guide, PlantRng.new(node_seed), p)
+	return StructureProcgen.row_plan(inputs.guide, PlantRng.new(node_seed), p)
 
 
 ## One wall's parts: {"id", "kind", "style", "stone": mesh arrays or [], "wood": mesh arrays or
@@ -150,7 +150,7 @@ static func build_one(doc: MapDocument, wall: Wall) -> Dictionary:
 	var recipe := recipe_for(wall)
 	if recipe == null or wall.points.size() < Wall.MIN_POINTS:
 		return parts
-	var evaluator := PlantGraphEvaluator.new(recipe.registry)
+	var evaluator := StructureProcgen.new_evaluator(recipe.registry)
 	var plant: Variant = evaluator.evaluate_structure(recipe, inputs_for(doc, wall))
 	if plant == null or not evaluator.errors.is_empty():
 		return parts
@@ -184,7 +184,9 @@ static func _row_surfaces(
 ) -> void:
 	var lot_hints := {}
 	for lot in standing:
-		lot_hints[ProcgenRow.lot_path(lot)] = StructureLook.lot_hints(lot.get("palette", {}))
+		lot_hints[StructureProcgen.row_lot_path(lot)] = StructureLook.lot_hints(
+			lot.get("palette", {})
+		)
 	var roles := PackedStringArray()
 	# The same with a door's pieces (StructureLook.DOOR) apart, for every kind but glass: a door in
 	# the glass kind (an older procgen) stays with the panes, as it always was.
@@ -266,7 +268,7 @@ static func key_of(doc: MapDocument, wall: Wall) -> int:
 		# Water beside the line (under a lot, not the street) moves which lots stand.
 		var standing := PackedStringArray()
 		for lot in row_lots(doc, wall):
-			standing.append(ProcgenRow.lot_path(lot))
+			standing.append(StructureProcgen.row_lot_path(lot))
 		fields.append(standing)
 	return hash(fields)
 

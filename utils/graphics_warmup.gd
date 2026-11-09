@@ -286,12 +286,17 @@ static func material_for(shader: Shader) -> ShaderMaterial:
 ## Each owner's warmup_samples(), one Callable per owner, so the screen can show progress
 ## between them. Called on the warm-up's worker thread.
 static func sample_sources() -> Array[Callable]:
+	# The owners' scripts are loaded by path: naming them would put the play and authoring code
+	# on the start-up graph, and this runs only on a first launch (perf audit boot2).
+	var water: Variant = load("res://scenes/terrain/authored_water.gd")
+	var structures: Variant = load("res://scenes/terrain/structure_warmup.gd")
+	var toon: Variant = load("res://scenes/board_token/token_toon.gd")
 	return [
 		TerrainMeshBuilder.warmup_samples,
-		AuthoredWater.warmup_samples,
+		water.warmup_samples,
 		WindFoliage.warmup_samples,
-		StructureWarmup.warmup_samples,
-		TokenToon.warmup_samples,
+		structures.warmup_samples,
+		toon.warmup_samples,
 	]
 
 

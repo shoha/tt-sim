@@ -143,7 +143,7 @@ static func build_one(
 	if decor:
 		StructureOrnaments.soften(recipe)
 	parts.decor = decor
-	var evaluator := PlantGraphEvaluator.new(recipe.registry)
+	var evaluator := StructureProcgen.new_evaluator(recipe.registry)
 	var plant: Variant = evaluator.evaluate_structure(
 		recipe, inputs_for(doc, structure, recipe), true
 	)
@@ -197,14 +197,14 @@ static func build_one(
 	parts.top = geometry.top if triangles > 0 else NONE
 	parts.openings = geometry.openings
 	parts.layout = plant.get("layout")
-	parts.anchors = ProcgenOrnaments.anchors(geometry)
+	parts.anchors = StructureProcgen.ornaments().anchors(geometry)
 	if decor and not info.is_empty() and not (parts.anchors as Array).is_empty():
 		var anchors: Array[Dictionary] = []
 		anchors.assign(parts.anchors)
 		parts.decor_plan = StructureDecor.plan(anchors, info.rows, info.cost, int(info.sig))
 	# With soft: "anchors" an ivy blanket or flower box that found room has an anchor but no blob.
 	parts.placed_kinds = StructureDecor.placed_kinds_with(
-		ProcgenOrnaments.placed_kinds(geometry), parts.anchors
+		StructureProcgen.ornaments().placed_kinds(geometry), parts.anchors
 	)
 	# A prop (barrel, well, stall) has no yard: no ground patch, path or plants under it.
 	if not ProcgenStructureIndex.is_prop(LibraryStructureStore.structure(structure.recipe)):
@@ -234,10 +234,11 @@ static func build(
 			out.append(build_one(doc, structure, decor, info))
 		return {"structures": out, "decor": decor}
 	out.resize(list.size())
+	var structures: Variant = load("res://scenes/terrain/authored_structures.gd")
 	var group := WorkerThreadPool.add_group_task(
 		func(index: int) -> void: out[index] = build_one(doc, list[index], decor, info),
 		list.size(),
-		mini(list.size(), AuthoredStructures.load_threads()),
+		mini(list.size(), int(structures.load_threads())),
 		true,
 		"StructureGeometry.build"
 	)

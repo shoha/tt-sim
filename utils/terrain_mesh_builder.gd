@@ -477,15 +477,15 @@ static func warmup_document() -> MapDocument:
 static func warmup_samples() -> Array[Dictionary]:
 	var doc := warmup_document()
 	var chunk := build_chunk_arrays(doc, chunk_cells(doc)[0], grid_fields(doc))
-	var skirt := build_skirt_arrays(
-		doc, AuthoredTerrain.skirt_width_m(), AuthoredTerrain.SKIRT_FADE_M
-	)
+	# Loaded by path: naming AuthoredTerrain would put the terrain node on the start-up graph.
+	var terrain: Variant = load("res://scenes/terrain/authored_terrain.gd")
+	var skirt := build_skirt_arrays(doc, terrain.skirt_width_m(), terrain.SKIRT_FADE_M)
 	var samples: Array[Dictionary] = []
 	for entry in [
-		["terrain_chunk", chunk, AuthoredTerrain.GROUND_SHADER],
-		["terrain_skirt", skirt, AuthoredTerrain.SKIRT_SHADER],
-		["terrain_chunk_looked", chunk, AuthoredTerrain.GROUND_LOOKED_SHADER],
-		["terrain_skirt_looked", skirt, AuthoredTerrain.SKIRT_LOOKED_SHADER],
+		["terrain_chunk", chunk, terrain.GROUND_SHADER],
+		["terrain_skirt", skirt, terrain.SKIRT_SHADER],
+		["terrain_chunk_looked", chunk, terrain.GROUND_LOOKED_SHADER],
+		["terrain_skirt_looked", skirt, terrain.SKIRT_LOOKED_SHADER],
 	]:
 		var sample := {
 			"name": entry[0],

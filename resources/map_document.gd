@@ -359,10 +359,24 @@ func has_surface_entries() -> bool:
 ## `slot`'s weight 0..255 at sample `sample`: its entry's weight, 0 when the sample has no
 ## entry for it, there are no painted surfaces, or the slot is not in use.
 func surface_weight(sample: int, slot: int) -> int:
-	if slot < 0 or slot >= surface_ids.size() or not has_surface_entries():
+	if not surface_slot_ok(slot):
 		return 0
+	return surface_weight_in(sample, slot, sample_count())
+
+
+## True when `slot` is in use and the painted surfaces are sized for the grid: what
+## surface_weight and set_surface_weight check at every call, for a whole-map loop to check
+## once before it calls their `_in` forms.
+func surface_slot_ok(slot: int) -> bool:
+	return slot >= 0 and slot < surface_ids.size() and has_surface_entries()
+
+
+## surface_weight inside a whole-map loop that checked surface_slot_ok(`slot`) and holds
+## `count` = sample_count(): the same read without the per-sample checks and size reads (the
+## new-map recipe made about 0.4 M of them at 320 ft, perfaudit sysopen).
+func surface_weight_in(sample: int, slot: int, count: int) -> int:
 	var at := sample * SURFACE_CHANNELS
-	var weights_at := sample_count() * SURFACE_CHANNELS + at
+	var weights_at := count * SURFACE_CHANNELS + at
 	for e in SURFACE_ENTRIES:
 		var weight := surface_weights[weights_at + e]
 		if weight != 0 and surface_weights[at + e] == slot:
@@ -375,12 +389,17 @@ func surface_weight(sample: int, slot: int) -> int:
 ## does over automatic ground; when the sample already holds SURFACE_ENTRIES other
 ## surfaces, the weakest is dropped (its weight returns to the automatic ground). A value
 ## of 0 removes the slot's entry. Does nothing for a slot not in use.
-@warning_ignore("integer_division")
 func set_surface_weight(sample: int, slot: int, value: int) -> void:
-	if slot < 0 or slot >= surface_ids.size() or not has_surface_entries():
+	if not surface_slot_ok(slot):
 		return
+	set_surface_weight_in(sample, slot, value, sample_count())
+
+
+## set_surface_weight inside a whole-map loop that checked surface_slot_ok(`slot`) and holds
+## `count` = sample_count() (see surface_weight_in).
+@warning_ignore("integer_division")
+func set_surface_weight_in(sample: int, slot: int, value: int, count: int) -> void:
 	var target := clampi(value, 0, 255)
-	var count := sample_count()
 	var entries := SurfaceEntries.read_sample(surface_weights, sample, count)
 	var indices: PackedInt32Array = entries[0]
 	var weights: PackedInt32Array = entries[1]

@@ -1622,7 +1622,11 @@ and nothing numeric in the main flow:
   Picking a tile emits `paint_selected(surface)`, which warms the surface's textures
   (`AuthoredTerrain.warm_surface`) and activates the Paint brush. The swatches cost one
   texture decode each, so `ensure_paint_tiles()` builds them once, under the loading screen
-  (the controller calls it) or on the pane's first show. When all eight paint slots hold
+  (the controller calls it) or on the pane's first show; their albedos are queued on the surface
+  prebake lane as the open starts and `warm_paint_swatches_async` waits for each instead of
+  baking it in a frame (card authbake). The Biome pane's and Place foldouts' pictures are
+  `BiomeThumbnail.of(..., deferred)`: a placeholder that repaints itself once the lane has the
+  ground map (`SurfaceWait`). When all eight paint slots hold
   paint, the tiles of surfaces not on the map are disabled and their tooltip says why
   ("All 8 paint slots hold paint. Erase one surface completely (Ctrl+drag) to free a slot.";
   `set_paint_limits`), and a refused press shows the same line as a warning toast. The hint

@@ -5,8 +5,9 @@ extends RefCounted
 ## the spawns of a level load and the frees after removal animations. A pack token costs about
 ## 4.4 ms to build and add and a removed one about 0.2 ms to free, so 500 at once made a
 ## one-second frame or a 100 ms one. Jobs run in the order they were queued, each frame until
-## FRAME_BUDGET_MS of it is spent, then wait for the next; at least one job runs a frame, so a
-## job dearer than the budget still progresses. A host's single spawn does not come through
+## FRAME_BUDGET_MS of it is spent (COVERED_BUDGET_MS while a level load's sheet covers the table,
+## LoadPacing), then wait for the next; at least one job runs a frame, so a job dearer than the
+## budget still progresses. A host's single spawn does not come through
 ## here: its caller gets the token back at once.
 ##
 ## One shared queue per process (shared()), driven by SceneTree.process_frame while it holds
@@ -20,6 +21,11 @@ extends RefCounted
 signal drained
 
 const FRAME_BUDGET_MS := 4.0
+## The budget while the loading sheet covers the table: a 20 to 25 ms frame is invisible there, and
+## with hundreds of tokens alive each frame costs about 20 ms besides the spawn, so more tokens a
+## frame shortens the load (coordinator, 2026-11-08; 12 ms took a 500-token load from 14.9 to
+## 8.8 s).
+const COVERED_BUDGET_MS := 20.0
 const POP_IN_STEP_S := 0.05
 const POP_IN_SPAN_S := 1.5
 
@@ -68,7 +74,9 @@ func clear() -> void:
 
 func _run_frame() -> void:
 	var start := Time.get_ticks_usec()
-	var budget_usec := int(FRAME_BUDGET_MS * 1000.0)
+	var budget_usec := LoadPacing.budget_usec(
+		int(FRAME_BUDGET_MS * 1000.0), int(COVERED_BUDGET_MS * 1000.0)
+	)
 	var ran := false
 	while _head < _jobs.size():
 		if ran and Time.get_ticks_usec() - start >= budget_usec:

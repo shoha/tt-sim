@@ -269,26 +269,29 @@ static func move_problem(
 	plans: Array[PackedVector2Array]
 ) -> Dictionary:
 	var held := doc.settlement(from) if from > 0 else null
+	# The refusal ids are SettlementEditor's, read by path so the authoring code stays off the
+	# start-up graph (perf audit boot2).
+	var editor: Variant = load("res://scenes/states/authoring/settlement_editor.gd")
 	if held == null or index < 0 or index >= held.plazas.size():
-		return {"village": -1, "reason": SettlementEditor.REFUSED_STREET}
+		return {"village": -1, "reason": editor.REFUSED_STREET}
 	var target := destination_village(doc, from, index, at)
 	var out := {"village": target, "reason": &""}
 	if target < 0:
-		out["reason"] = SettlementEditor.REFUSED_REACH
+		out["reason"] = editor.REFUSED_REACH
 		return out
 	if target != from and doc.settlement(target).plazas.size() >= Settlement.MAX_PLAZAS:
-		out["reason"] = SettlementEditor.REFUSED_FULL
+		out["reason"] = editor.REFUSED_FULL
 		return out
 	var radius := float(held.plazas[index]["radius"])
 	match SettlementGround.plaza_problem(world, at, radius):
 		"water":
-			out["reason"] = SettlementEditor.REFUSED_WATER
+			out["reason"] = editor.REFUSED_WATER
 		"slope":
-			out["reason"] = SettlementEditor.REFUSED_STEEP
+			out["reason"] = editor.REFUSED_STEEP
 		"building":
-			out["reason"] = SettlementEditor.REFUSED_BUILDING
+			out["reason"] = editor.REFUSED_BUILDING
 	if out["reason"] == &"" and VillageFieldGround.covers_building(plans, at, radius):
-		out["reason"] = SettlementEditor.REFUSED_BUILDING
+		out["reason"] = editor.REFUSED_BUILDING
 	return out
 
 
@@ -369,13 +372,15 @@ static func with_preview(state: Dictionary, radius: float) -> Dictionary:
 ## The ground block of kit `kit` ({"road", "door_path", "plaza"}: palette surface ids), cached.
 static func ground_of(kit: String) -> Dictionary:
 	if not _grounds.has(kit):
-		_grounds[kit] = ProcgenSettlement.ground_of(ProcgenSettlement.kit_named(kit))
+		var settlement: Variant = StructureProcgen.settlement()
+		_grounds[kit] = settlement.ground_of(settlement.kit_named(kit))
 	return _grounds[kit]
 
 
 ## The author-facing name of kit `kit` ("Market town"), or the kit id spelled out.
 static func kit_label(kit: String) -> String:
-	for item in SettlementSection.CHIPS:
+	var section: Variant = load("res://scenes/states/authoring/settlement_section.gd")
+	for item in section.CHIPS:
 		if item["kit"] == kit:
 			return String(item["label"])
 	return kit.capitalize()
@@ -383,4 +388,7 @@ static func kit_label(kit: String) -> String:
 
 ## The author-facing name of palette surface `surface` ("" for none).
 static func surface_name(surface: String) -> String:
-	return "" if surface == "" else AuthoringPanel.surface_label(surface)
+	if surface == "":
+		return ""
+	var panel: Variant = load("res://scenes/states/authoring/authoring_panel.gd")
+	return panel.surface_label(surface)

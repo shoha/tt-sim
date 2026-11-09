@@ -16,7 +16,9 @@ extends RefCounted
 ##   in the raw cache (SurfaceCache, user://library_cache/<library id>/<hash>/), and hands out an
 ##   Image or an ImageTexture. A
 ##   library file is NEVER loaded through ResourceLoader (it does not work on a keep file in a
-##   pack, and would fail in the editor).
+##   pack, and would fail in the editor). A map load can have the maps it is about to draw baked
+##   ahead on a worker (prebake(), SurfacePrebake): the first texture() or image() then takes
+##   the worker's result instead of baking in its own frame (about 200 ms per albedo, cold).
 ##
 ## Names. A surface is named by its palette name (`ash`, or `mylib__crystal` for a library
 ## surface of a non-core library: LibraryIds.runtime_surface) or by the string convention
@@ -36,6 +38,14 @@ const MAX_PNG_BYTES := 48 * 1024 * 1024
 const MAX_THUMB_BYTES := 4 * 1024 * 1024
 const MAX_THUMB_PX := 1024
 const SCHEME := LibraryIds.SURFACE_SCHEME
+## The prebake lane's priorities, first to last: the maps a load waits for under its sheet, the
+## pictures a panel shows (a biome tile), the ones it warms ahead of their first show (the Paint
+## swatches).
+const PRIORITY_LOAD := 0
+const PRIORITY_SHOWN := 1
+const PRIORITY_AHEAD := 2
+## SurfaceWait's script, loaded on first use by start-up code (the start-up script graph).
+const SURFACE_WAIT := "res://utils/library/surface_wait.gd"
 
 ## "<root>|<palette-relative path>" -> {surface: runtime name, kind}.
 static var _paths: Dictionary = {}
@@ -49,8 +59,18 @@ static var _images: Dictionary = {}
 static var _textures: Dictionary = {}
 ## Runtime surface name -> the hash of its four files (the cache folder name).
 static var _hashes: Dictionary = {}
-## Counters tests and diagnostics read: bakes, cache_hits, cache_rejects, imports.
-static var stats: Dictionary = {"bakes": 0, "cache_hits": 0, "cache_rejects": 0, "imports": 0}
+## Counters tests and diagnostics read: bakes and cache_hits on the main thread, prebakes and
+## prebake_hits by the prebake lane (counted when the main thread takes the map), cache_rejects,
+## imports.
+static var stats: Dictionary = _zero_stats()
+## The lane that bakes maps ahead of their first use (prebake()), made on the first prebake.
+static var _prebake: Variant = null  # a SurfacePrebake, loaded on first use (start-up size)
+## Held around every bake (compression and cache write), on any thread: two compressions at once
+## differ in their bytes. Lives here, not in SurfacePrebake, so start-up never loads that script.
+static var compress_lock := Mutex.new()
+## False turns prebake() into a no-op (every map bakes where it is first asked for): the
+## performance harness's in-run A/B switch (perfaudit_system.gd `prebake`).
+static var prebake_enabled: bool = true
 
 # ---- names ----
 
@@ -94,6 +114,7 @@ static func register_library(root: String, folder: String, surfaces: Dictionary)
 			"root": root,
 		}
 		_hashes.erase(runtime)
+		_forget_prebaked()
 		for kind: String in found["maps"]:
 			_paths[_key(root, SurfaceBake.relative_path(runtime, kind))] = {
 				"surface": runtime, "kind": kind
@@ -116,6 +137,7 @@ static func clear_libraries() -> void:
 	_images.clear()
 	_textures.clear()
 	_hashes.clear()
+	_forget_prebaked()
 
 
 ## Forgets what was registered for the palette at `root` only (LibraryRegistry.apply serving one
@@ -133,16 +155,123 @@ static func clear_libraries_of(root: String) -> void:
 			_hashes.erase(runtime)
 	_images.clear()
 	_textures.clear()
+	_forget_prebaked()
 
 
-## Drops the in-memory images and textures of library surfaces (the next load reads the cache).
+## Drops the in-memory images and textures of library surfaces, and what the prebake lane holds
+## (the next load reads the cache).
 static func clear_memory() -> void:
 	_images.clear()
 	_textures.clear()
+	_forget_prebaked()
 
 
 static func reset_stats() -> void:
-	stats = {"bakes": 0, "cache_hits": 0, "cache_rejects": 0, "imports": 0}
+	stats = _zero_stats()
+
+
+static func _zero_stats() -> Dictionary:
+	return {
+		"bakes": 0,
+		"cache_hits": 0,
+		"prebakes": 0,
+		"prebake_hits": 0,
+		"cache_rejects": 0,
+		"imports": 0,
+	}
+
+
+## Starts baking the maps of the library surfaces `names` (palette names or lib:// references; a
+## plain palette's or an unknown name is skipped) on the prebake lane (SurfacePrebake: one worker
+## task, the same bytes as a main-thread bake), so their first texture() or image() finds them
+## baked instead of baking in its frame. `priority` places them in the lane's queue
+## (PRIORITY_LOAD first); `kinds` limits the maps (all four when empty: a swatch needs only the
+## albedo). Maps in memory or already queued are left alone, but a queued one moves up to a
+## higher priority. A map asked for before the lane reached it is baked by the asker, as without a
+## prebake.
+static func prebake(
+	names: PackedStringArray,
+	priority: int = PRIORITY_LOAD,
+	kinds: PackedStringArray = PackedStringArray()
+) -> void:
+	if not prebake_enabled:
+		return
+	for ref in names:
+		var runtime := runtime_name(ref)
+		var found: Dictionary = _surfaces.get(runtime, {})
+		if found.is_empty():
+			continue
+		var files := _surface_files(found)
+		for kind: String in files:
+			if not kinds.is_empty() and not kind in kinds:
+				continue
+			var file := String(files[kind])
+			if _images.has(file):
+				continue
+			if _prebake == null:
+				_prebake = (load("res://utils/library/surface_prebake.gd") as GDScript).new()
+			_prebake.add(
+				{
+					"file": file,
+					"kind": kind,
+					"library": String(found.get("library", "")),
+					"name": String(found.get("name", "")),
+					"runtime": runtime,
+					"files": files,
+					"hash": String(_hashes.get(runtime, "")),
+				},
+				priority
+			)
+
+
+## prebake() for the maps at the palette-relative paths `relatives` under `root` (a swatch's or a
+## biome picture's albedo); a path that is not a registered library map is skipped.
+static func prebake_paths(root: String, relatives: PackedStringArray, priority: int) -> void:
+	for relative in relatives:
+		var entry: Dictionary = _paths.get(_key(root, relative), {})
+		if not entry.is_empty():
+			prebake(
+				PackedStringArray([String(entry["surface"])]),
+				priority,
+				PackedStringArray([String(entry["kind"])])
+			)
+
+
+## True while the prebake lane has maps queued or baking.
+static func is_prebaking() -> bool:
+	return _prebake != null and _prebake.is_busy()
+
+
+## True while any map of the library surfaces `names` is queued or baking on the lane (a load
+## waits for its own maps under its sheet, not for pictures queued behind them).
+static func prebaking(names: PackedStringArray) -> bool:
+	if _prebake == null:
+		return false
+	# Releases the lane tasks that have ended (the pool keeps a task until it is waited on).
+	_prebake.is_busy()
+	for ref in names:
+		var found: Dictionary = _surfaces.get(runtime_name(ref), {})
+		if found.is_empty():
+			continue
+		var dir := String(found.get("dir", ""))
+		for kind in SurfaceBake.KINDS:
+			if _prebake.is_pending(dir.path_join(kind + ".png")):
+				return true
+	return false
+
+
+## True while the map at palette-relative `relative` under `root` is queued or baking on the lane:
+## its texture() or image() would wait for the bake (or bake it, when still queued).
+static func is_pending(root: String, relative: String) -> bool:
+	if _prebake == null:
+		return false
+	var entry: Dictionary = _paths.get(_key(root, relative), {})
+	return not entry.is_empty() and _prebake.is_pending(_file_of(entry))
+
+
+static func _forget_prebaked() -> void:
+	if _prebake != null:
+		_prebake.forget()
 
 
 ## True when the palette-relative path is a registered library map (not an editor import).
@@ -269,7 +398,7 @@ static func load_set(folder: String, library_id: String = "dev") -> Dictionary:
 	if not errors.is_empty():
 		return out
 	out["info"] = checked["info"]
-	var hash_text := _hash_files(name, files)
+	var hash_text := files_hash(name, files)
 	for kind: String in files:
 		var baked := _bake_or_cache(String(files[kind]), kind, library_id, name, hash_text)
 		if baked == null:
@@ -378,14 +507,19 @@ static func _baked(entry: Dictionary) -> Image:
 	if _images.has(file):
 		return _images[file]
 	var runtime := String(entry["surface"])
+	if _prebake != null:
+		var lane: Dictionary = _prebake.take(file)
+		if not lane.is_empty():
+			if not _hashes.has(runtime):
+				_hashes[runtime] = String(lane["hash"])
+			_count(lane, "prebakes", "prebake_hits")
+			if lane["image"] != null:
+				_images[file] = lane["image"]
+			return lane["image"]
 	var found: Dictionary = _surfaces.get(runtime, {})
-	var files := {}
-	for kind in SurfaceBake.KINDS:
-		var candidate := String(found.get("dir", "")).path_join(kind + ".png")
-		if FileAccess.file_exists(candidate):
-			files[kind] = candidate
+	var files := _surface_files(found)
 	if not _hashes.has(runtime):
-		_hashes[runtime] = _hash_files(String(found.get("name", "")), files)
+		_hashes[runtime] = files_hash(String(found.get("name", "")), files)
 	var baked := _bake_or_cache(
 		file,
 		String(entry["kind"]),
@@ -398,41 +532,82 @@ static func _baked(entry: Dictionary) -> Image:
 	return baked
 
 
-## The map of `file`: the raw cache when it holds a valid entry for this engine, else decoded from
-## the PNG, baked, and written to the cache. Null when the PNG is missing, hostile or unreadable.
+## {kind: absolute PNG} of the maps a registered surface (`_surfaces` entry) has on disk.
+static func _surface_files(found: Dictionary) -> Dictionary:
+	var files := {}
+	for kind in SurfaceBake.KINDS:
+		var candidate := String(found.get("dir", "")).path_join(kind + ".png")
+		if FileAccess.file_exists(candidate):
+			files[kind] = candidate
+	return files
+
+
+## load_map() on the main thread, counted in stats.
 static func _bake_or_cache(
 	file: String, kind: String, library_id: String, name: String, hash_text: String
 ) -> Image:
+	var loaded := load_map(file, kind, library_id, name, hash_text)
+	_count(loaded, "bakes", "cache_hits")
+	return loaded["image"]
+
+
+## Adds load_map's outcome `loaded` to stats under `baked_key` or `hit_key`.
+static func _count(loaded: Dictionary, baked_key: String, hit_key: String) -> void:
+	if loaded["rejected"]:
+		stats["cache_rejects"] += 1
+	match String(loaded["outcome"]):
+		"baked":
+			stats[baked_key] += 1
+		"hit":
+			stats[hit_key] += 1
+
+
+## The map of `file` as {image, outcome, rejected}: the raw cache's when it holds a valid entry for
+## this engine (outcome "hit"), else decoded from the PNG, baked and written to the cache
+## ("baked"); image null and outcome "failed" when the PNG is missing, hostile or unreadable;
+## rejected true when a cache file was there but unusable. It reads and writes no table of the
+## store, so the prebake lane runs it on its worker; the bake and the cache write hold
+## compress_lock (two compressions at once differ in their bytes).
+static func load_map(
+	file: String, kind: String, library_id: String, name: String, hash_text: String
+) -> Dictionary:
+	var out := {"image": null, "outcome": "failed", "rejected": false}
 	var cache_path := SurfaceCache.path_for(library_id, hash_text, name, kind)
 	if FileAccess.file_exists(cache_path):
 		var cached := SurfaceCache.read(cache_path)
 		if cached != null and cached.get_format() == SurfaceBake.format_of(kind):
-			stats["cache_hits"] += 1
-			return cached
-		stats["cache_rejects"] += 1
+			out["image"] = cached
+			out["outcome"] = "hit"
+			return out
+		out["rejected"] = true
 	var header := png_header_of(file)
 	var problems: Array[String] = []
 	SurfaceBake.check_png(header, kind, name, problems, [] as Array[String])
 	if not problems.is_empty():
 		push_warning("SurfaceStore: %s" % problems[0])
-		return null
+		return out
 	# From bytes, not Image.load_from_file: that one warns (once per process) for a res:// file the
 	# editor knows through its keep sidecar, and the bytes are the same ones in a pack.
 	var decoded := Image.new()
 	if decoded.load_png_from_buffer(FileAccess.get_file_as_bytes(file)) != OK:
 		decoded = null
+	compress_lock.lock()
 	var baked := SurfaceBake.bake(decoded, kind)
+	if baked != null:
+		SurfaceCache.write(cache_path, baked)
+	compress_lock.unlock()
 	if baked == null:
 		push_warning("SurfaceStore: %s could not be decoded" % file)
-		return null
-	stats["bakes"] += 1
-	SurfaceCache.write(cache_path, baked)
-	return baked
+		return out
+	out["image"] = baked
+	out["outcome"] = "baked"
+	return out
 
 
 ## A short hash of the surface's files (name and the SHA-256 of each map), the cache folder name:
-## editing a PNG gives a new folder, so a stale bake is never read.
-static func _hash_files(name: String, files: Dictionary) -> String:
+## editing a PNG gives a new folder, so a stale bake is never read. Reads files only, so the
+## prebake lane calls it on its worker.
+static func files_hash(name: String, files: Dictionary) -> String:
 	var hashing := HashingContext.new()
 	hashing.start(HashingContext.HASH_SHA256)
 	hashing.update(name.to_utf8_buffer())

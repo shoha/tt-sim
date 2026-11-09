@@ -55,7 +55,7 @@ func test_the_ripple_phase_is_linear_in_the_distance_from_the_pole() -> void:
 					StructureCloth.phase_distance(w[k].x), s, 0.08 * s, "length %.1f s %.2f" % [length, s]
 				)
 		var strip := 0.2
-		var before := length * pow((length - strip) / length, StructureCloth.CURVE)
+		var before: float = length * pow((length - strip) / length, StructureCloth.CURVE)
 		var step := StructureCloth.phase_distance(length) - StructureCloth.phase_distance(before)
 		assert_lt(k_max * step, 1.5, "a strip at the tip turns the wave under 1.5 rad")
 

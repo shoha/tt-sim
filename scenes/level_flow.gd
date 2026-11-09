@@ -21,21 +21,28 @@ const LOADING_OVERLAY_SCENE := preload("res://scenes/ui/loading_overlay.tscn")
 var loading_overlay: LoadingOverlay = null
 
 var _root: RootScript = null
-var _controller: LevelPlayController = null
+var _controller: Node = null
 
 
-## Root and its table, which live as long as Root does: listens to the table's loads and adds
-## the loading overlay.
-func setup(root: RootScript, controller: LevelPlayController) -> void:
+## Root, which lives as long as this flow does: adds the loading overlay. With a `controller`
+## (Root's table) it listens to its loads at once; Root passes none at start-up and hands the
+## table over in bind_table() when the first session or map makes it.
+func setup(root: RootScript, controller: Node = null) -> void:
 	_root = root
+	loading_overlay = LOADING_OVERLAY_SCENE.instantiate()
+	add_child(loading_overlay)
+	if controller != null:
+		bind_table(controller)
+
+
+## Root's table, which lives as long as Root does: listens to its loads.
+func bind_table(controller: Node) -> void:
 	_controller = controller
 	controller.level_loaded.connect(_on_level_play_loaded)
 	controller.level_cleared.connect(_on_level_cleared)
 	controller.level_loading_started.connect(_on_level_loading_started)
 	controller.level_loading_progress.connect(_on_level_loading_progress)
 	controller.level_loading_completed.connect(_on_level_loading_completed)
-	loading_overlay = LOADING_OVERLAY_SCENE.instantiate()
-	add_child(loading_overlay)
 
 
 ## Client, entering a table: listen for the level and the state stream from the host.
@@ -52,7 +59,7 @@ func stop_client_table() -> void:
 
 
 ## Building a map (AUTHORING) shows its loads on the same overlay.
-func track_authoring(controller: AuthoringController) -> void:
+func track_authoring(controller: Node) -> void:
 	controller.loading_started.connect(_on_authoring_loading_started)
 	controller.loading_progress.connect(_on_level_loading_progress)
 	controller.loading_completed.connect(_on_authoring_loading_completed)
@@ -152,16 +159,7 @@ func _on_tokens_added(network_ids: Array[String]) -> void:
 	RootNetworkHandler.apply_tokens_to_board(_controller, _root.get_game_map(), network_ids)
 
 
-## Handle individual token transform update (unreliable channel, high frequency)
-func _on_token_transform_received(
-	network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
-) -> void:
-	if not _controller or not _root.get_game_map():
-		return
-	RootNetworkHandler.on_token_transform_received(_controller, network_id, pos, rot, scl)
-
-
-## Handle batch transform update (unreliable channel)
+## Handle a transform message (a drag's single update or batch, or a reconciliation)
 func _on_transform_batch_received(batch: Dictionary) -> void:
 	if not _controller or not _root.get_game_map():
 		return

@@ -142,7 +142,7 @@ func register_token(state: TokenState) -> bool:
 
 
 ## Register a token from a BoardToken instance
-func register_token_from_board_token(token: BoardToken) -> bool:
+func register_token_from_board_token(token: Node) -> bool:
 	var state = TokenState.from_board_token(token)
 	return register_token(state)
 
@@ -422,7 +422,7 @@ func end_batch_update() -> void:
 
 
 ## Sync state from a BoardToken (call after token moves, etc.)
-func sync_from_board_token(token: BoardToken) -> bool:
+func sync_from_board_token(token: Node) -> bool:
 	if not has_authority():
 		return false
 
@@ -445,7 +445,7 @@ func sync_from_board_token(token: BoardToken) -> bool:
 
 
 ## Apply state to a BoardToken (call when receiving network updates)
-func apply_to_board_token(network_id: String, token: BoardToken) -> bool:
+func apply_to_board_token(network_id: String, token: Node) -> bool:
 	var state: TokenState = _token_states.get(network_id, null)
 	if not state:
 		return false

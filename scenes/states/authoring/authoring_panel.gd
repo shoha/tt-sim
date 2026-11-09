@@ -70,6 +70,8 @@ signal water_depth_selected(depth: int)
 signal water_speed_changed(speed: float)
 ## A Bridge tile was picked: the crossing kind (Crossing.Kind).
 signal bridge_kind_selected(kind: int)
+## A tool's own pane was built, on its first show (or a tool_pane() request).
+signal tool_pane_built(tool_id: StringName, pane: Control)
 
 ## The drawer width token (UI_TASTE S5), as the room drawer: at 320 the two-column biome
 ## tiles' longest labels (Riverside Wetland) ran within a few px of the tile edges at 720p.
@@ -95,6 +97,11 @@ const TOOL_SCULPT := SculptTool.ID
 const TOOL_PAINT := PaintTool.ID
 const TOOL_WATER := WaterTool.ID
 const TOOL_BRIDGE := BridgeTool.ID
+## The panes the panel builds itself (_build_pane), when the drawer opens: the controller sets
+## their fields during the open. Every other tool's pane is built on first show.
+const OWN_PANES := [
+	TOOL_BIOME, TOOL_THIN, TOOL_PLACE, TOOL_SCULPT, TOOL_PAINT, TOOL_WATER, TOOL_BRIDGE
+]
 const ACTION_UNDO := &"undo"
 const ACTION_REDO := &"redo"
 const ACTION_SAVE := &"save_map"
@@ -221,14 +228,19 @@ func _on_ready() -> void:
 	_stack.bar_in_margin = true
 	_stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content_container.add_child(_stack)
+	_stack.pane_built.connect(
+		func(id: StringName, pane: Control) -> void: tool_pane_built.emit(id, pane)
+	)
 	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
-		var pane := tool.build_pane(self)
-		if pane == null:
-			pane = _build_pane(tool)
-		if pane == null:
-			push_error("AuthoringPanel: tool %s has no pane" % tool.id)
-			continue
-		_stack.add_pane(tool.id, pane)
+		if tool.id in OWN_PANES:
+			var pane := tool.build_pane(self)
+			if pane == null:
+				pane = _build_pane(tool)
+			_stack.add_pane(tool.id, pane)
+		else:
+			# A tool's own pane (fire's EventsPane, the structure and village tiles and their
+			# thumbnails) is built when it is first shown, not in the open's first frame.
+			_stack.add_pane_builder(tool.id, _tool_pane_builder.bind(tool))
 	_stack.show_pane(TOOL_BIOME, false)
 
 	pane_requested.connect(_on_pane_requested)
@@ -259,6 +271,16 @@ func _build_name_field() -> void:
 
 ## The pane of one of the seven tools that predate ToolRegistry, titled from its
 ## descriptor, or null for any other tool.
+## Builds the pane of a tool that brings its own (ToolDescriptor.build_pane); a placeholder
+## that says so when it brings none.
+func _tool_pane_builder(tool: ToolDescriptor) -> Control:
+	var pane := tool.build_pane(self)
+	if pane == null:
+		push_error("AuthoringPanel: tool %s has no pane" % tool.id)
+		pane = VBoxContainer.new()
+	return pane
+
+
 func _build_pane(tool: ToolDescriptor) -> Control:
 	match tool.id:
 		TOOL_BIOME:
@@ -310,7 +332,9 @@ func _build_biome_pane(tool: ToolDescriptor) -> Control:
 			short_name(String(biome["name"])),
 			"",
 			String(biome["name"]),
-			BiomeThumbnail.of(biome, BIOME_THUMB_PX, palette_root)
+			# Deferred: the drawer is built in the open's first frame, and a cold ground albedo
+			# bakes on the prebake lane instead (card authbake).
+			BiomeThumbnail.of(biome, BIOME_THUMB_PX, palette_root, true)
 		)
 	biome_field.tiles.selection_changed.connect(
 		func(id: StringName) -> void: biome_selected.emit(String(id))
@@ -370,7 +394,7 @@ func _build_place_pane(tool: ToolDescriptor) -> Control:
 		var foldout := Foldout.new()
 		foldout.name = "Place_" + biome_id.validate_node_name()
 		foldout.title = String(biome["name"])
-		foldout.icon = BiomeThumbnail.of(biome, 28, palette_root)
+		foldout.icon = BiomeThumbnail.of(biome, 28, palette_root, true)
 		var row := TileRow.new()
 		row.name = "PlaceTiles"
 		row.tile_min_size = PLACE_TILE_SIZE
@@ -492,9 +516,14 @@ func _build_bridge_pane() -> Control:
 	return bridge_pane
 
 
-## A tool's pane (ToolRegistry id), or null.
+## A tool's pane (ToolRegistry id), built now if it was not yet, or null.
 func tool_pane(id: StringName) -> Control:
 	return _stack.get_pane(id)
+
+
+## Whether a tool's pane has been built (a tool's own pane is built on first show).
+func is_tool_pane_built(id: StringName) -> bool:
+	return _stack.is_built(id)
 
 
 ## Enables a tool's rail item with its tooltip, or disables it with the descriptor's
@@ -528,6 +557,25 @@ func set_water_available(carves: bool, has_water: bool) -> void:
 func set_bridge_available(available: bool, has_water: bool) -> void:
 	set_tool_available(TOOL_BRIDGE, available)
 	bridge_pane.set_has_water(has_water)
+
+
+## Makes the Paint swatches ahead of ensure_paint_tiles() (SwatchTextures.warm_async: a few a
+## frame within the load's budget, waiting for a map still on the prebake lane; 39 in one frame
+## were 1.4 s warm and 9.5 s cold, perfaudit F-system-2). Stops when `is_superseded` says so.
+func warm_paint_swatches_async(tree: SceneTree, is_superseded: Callable) -> void:
+	if _paint_tiles.is_empty():
+		var albedos := prebake_paint_swatches()
+		await SwatchTextures.warm_async(albedos, PAINT_THUMB_PX, palette_root, tree, is_superseded)
+
+
+## Queues the Paint swatches' albedos on the prebake lane behind the maps a load waits for and the
+## pictures shown (SwatchTextures.prebake_albedos, card authbake) until the tiles are built; an
+## open calls it as it starts. Returns the albedos in tile order.
+func prebake_paint_swatches() -> PackedStringArray:
+	var roles := PackedStringArray()
+	for group in PAINT_GROUPS:
+		roles.append(String(group.role))
+	return SwatchTextures.prebake_albedos(roles, palette_root, _paint_tiles.is_empty())
 
 
 ## Builds the Paint tiles once (palette surfaces by role, swatches from each surface's

@@ -328,6 +328,25 @@ popup/item_1/id = 1
 popup/item_2/text = "MSAA x4"
 popup/item_2/id = 2
 
+[node name="FoliageEdges" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/FoliageEdges"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Foliage edges"
+
+[node name="FoliageEdgesOption" type="OptionButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/FoliageEdges"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+item_count = 2
+selected = 0
+popup/item_0/text = "Smooth"
+popup/item_1/text = "Fast"
+popup/item_1/id = 1
+
 [node name="ShadowQuality" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
 layout_mode = 2
 
@@ -354,6 +373,27 @@ popup/item_4/text = "High"
 popup/item_4/id = 4
 popup/item_5/text = "Ultra"
 popup/item_5/id = 5
+
+[node name="ShadowCascades" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/ShadowCascades"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Shadow cascades"
+
+[node name="ShadowCascadesOption" type="OptionButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/ShadowCascades"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+item_count = 3
+selected = 0
+popup/item_0/text = "Blended"
+popup/item_1/text = "Unblended"
+popup/item_1/id = 1
+popup/item_2/text = "Single"
+popup/item_2/id = 2
 
 [node name="RenderScale" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
 layout_mode = 2

@@ -86,7 +86,7 @@ func _on_panel_ready() -> void:
 
 ## Leaving reads the tokens on `table` (Root passes it as the menu opens): it names lost
 ## token moves only when there are some, and offers to save them to a player who can.
-func watch_table(table: LevelPlayController) -> void:
+func watch_table(table: Node) -> void:
 	tokens_unsaved = table.has_unsaved_tokens
 	if not NetworkManager.is_restricted_client():
 		save_map = _save_table.bind(table)
@@ -94,14 +94,13 @@ func watch_table(table: LevelPlayController) -> void:
 
 ## Save the table's tokens to its map as the play HUD's Save map does, and say so. Returns
 ## whether it saved, so a failed save keeps the table.
-func _save_table(table: LevelPlayController) -> bool:
-	var saved := not table.save_level_with_thumbnail().is_empty()
+func _save_table(table: Node) -> bool:
+	var saved: bool = not String(table.save_level_with_thumbnail()).is_empty()
 	if saved:
 		UIManager.show_success("Map saved")
 	else:
-		UIManager.show_error(
-			preload("res://scenes/states/playing/gameplay_menu_controller.gd").SAVE_ERROR
-		)
+		var menu_script: Variant = load("res://scenes/states/playing/gameplay_menu_controller.gd")
+		UIManager.show_error(menu_script.SAVE_ERROR)
 	return saved
 
 

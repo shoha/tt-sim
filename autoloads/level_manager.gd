@@ -42,6 +42,11 @@ var current_level: LevelData = null
 var current_level_path: String = ""
 
 
+func _init() -> void:
+	# The first autoload: by now the engine is set up and this script's whole graph compiled.
+	BootTrace.mark("LevelManager loaded (first autoload)")
+
+
 func _ready() -> void:
 	_ensure_levels_directory()
 

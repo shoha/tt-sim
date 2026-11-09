@@ -245,10 +245,15 @@ static func tier_inset(distance: float) -> float:
 static func write_heights(doc: MapDocument, height_of: Callable) -> void:
 	var limit := MapDocument.MAX_ABS_HEIGHT_M
 	var heights := doc.heights
+	# The grid read once, not per sample (sample_to_world and sample_index, same arithmetic):
+	# the accessors were most of a big map's recipe (perfaudit sysopen).
+	var sx := doc.samples_x()
+	var step := doc.sample_step()
+	var origin := doc.extent_m() * 0.5
 	for z in doc.samples_z():
-		for x in doc.samples_x():
-			var i := doc.sample_index(x, z)
-			var h: float = height_of.call(doc.sample_to_world(Vector2(x, z)), heights[i])
+		for x in sx:
+			var i := z * sx + x
+			var h: float = height_of.call(Vector2(x, z) * step - origin, heights[i])
 			heights[i] = clampf(h, -limit, limit)
 	doc.heights = heights
 
@@ -265,12 +270,15 @@ static func restore_outside(
 	if shape.size() != doc.sample_count() or line.size() < 2:
 		return
 	var heights := doc.heights
+	var sx := doc.samples_x()
+	var step := doc.sample_step()
+	var origin := doc.extent_m() * 0.5
 	for z in doc.samples_z():
-		for x in doc.samples_x():
-			var i := doc.sample_index(x, z)
+		for x in sx:
+			var i := z * sx + x
 			if heights[i] >= shape[i]:
 				continue
-			if nearest_on(line, doc.sample_to_world(Vector2(x, z))).x > keep:
+			if nearest_on(line, Vector2(x, z) * step - origin).x > keep:
 				heights[i] = shape[i]
 	doc.heights = heights
 
@@ -355,7 +363,7 @@ static func carve_river(
 	if bodies.is_empty():
 		return bodies
 	var before := doc.heights.duplicate()
-	WaterEditor.lower(doc, WaterCarve.river_goals(doc, bodies, before))
+	_water_editor().lower(doc, WaterCarve.river_goals(doc, bodies, before))
 	doc.water_bodies = WaterEdit.with_bodies(doc, bodies)
 	return bodies
 
@@ -399,10 +407,13 @@ static func carve_pond(doc: MapDocument, contains: Callable, depth: WaterBody.De
 		mask = PackedByteArray()
 		mask.resize(count)
 	var marked := 0
+	var sx := doc.samples_x()
+	var step := doc.sample_step()
+	var origin := doc.extent_m() * 0.5
 	for z in doc.samples_z():
-		for x in doc.samples_x():
-			var i := doc.sample_index(x, z)
-			if mask[i] == 0 and contains.call(doc.sample_to_world(Vector2(x, z))):
+		for x in sx:
+			var i := z * sx + x
+			if mask[i] == 0 and contains.call(Vector2(x, z) * step - origin):
 				mask[i] = id
 				marked += 1
 	if marked == 0:
@@ -416,8 +427,14 @@ static func carve_pond(doc: MapDocument, contains: Callable, depth: WaterBody.De
 	bodies.assign(doc.water_bodies)
 	bodies.append(body)
 	doc.water_bodies = bodies
-	WaterEditor.lower(doc, WaterCarve.pond_goals(doc, body, doc.heights))
+	_water_editor().lower(doc, WaterCarve.pond_goals(doc, body, doc.heights))
 	return body
+
+
+## WaterEditor's script, loaded by path: naming it would put the authoring code on the start-up
+## graph (perf audit boot2).
+static func _water_editor() -> Variant:
+	return load("res://scenes/states/authoring/water_editor.gd")
 
 
 ## A crossing of `kind` standing on two chosen anchors `a` and `b` (map XZ, dry ground)
@@ -516,9 +533,15 @@ static func paint_line(
 	for p in points:
 		box = box.expand(p)
 	box = box.grow(half_width + soft)
+	if not doc.surface_slot_ok(slot):
+		return 0
+	var count := doc.sample_count()
+	var sx := doc.samples_x()
+	var step := doc.sample_step()
+	var origin := doc.extent_m() * 0.5
 	for z in doc.samples_z():
-		for x in doc.samples_x():
-			var p := doc.sample_to_world(Vector2(x, z))
+		for x in sx:
+			var p := Vector2(x, z) * step - origin
 			if not box.has_point(p):
 				continue
 			var d := nearest_on(points, p).x - half_width
@@ -526,8 +549,8 @@ static func paint_line(
 				continue
 			var t := clampf(1.0 - d / maxf(soft, 1e-3), 0.0, 1.0) if d > 0.0 else 1.0
 			var value := roundi(255.0 * t * t * (3.0 - 2.0 * t))
-			var i := doc.sample_index(x, z)
-			if value > doc.surface_weight(i, slot):
-				doc.set_surface_weight(i, slot, value)
+			var i := z * sx + x
+			if value > doc.surface_weight_in(i, slot, count):
+				doc.set_surface_weight_in(i, slot, value, count)
 				painted += 1
 	return painted

@@ -121,6 +121,7 @@ func _ready() -> void:
 	call_deferred("_discover_packs")
 	_connect_resolver_signals()
 	pack_download_completed.connect(_on_own_pack_download_completed)
+	BootTrace.mark("AssetManager _ready done")
 
 
 func _exit_tree() -> void:
@@ -172,6 +173,7 @@ func _discover_packs() -> void:
 	_discover_packs_in_dir(Paths.USER_ASSETS_DIR)
 
 	packs_loaded.emit()
+	BootTrace.mark("AssetManager packs discovered")
 
 
 ## Discover and register packs from a single directory. A pack whose pack_id is already

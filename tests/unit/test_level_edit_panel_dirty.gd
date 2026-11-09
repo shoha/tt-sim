@@ -264,7 +264,37 @@ func test_gizmo_forwards_reach_the_sun_pane() -> void:
 	assert_false(_panel.sun_pane._aim_button.button_pressed, "initialize clears the aim toggle")
 
 
+## The drawer is part of every game map (play and authoring), so its panes are made on first
+## show or read only (perfaudit F-system-8): an initialized drawer has made none, and a pane made
+## after initialize shows the initialized state.
+func test_panes_are_made_on_first_use_with_the_initialized_state() -> void:
+	for id in LevelEditPanel.PANE_IDS:
+		assert_false(_panel.is_pane_built(id), "%s not made before use" % id)
+	assert_false(_panel.is_pane_built(LevelEditPanel.EVENTS_ID))
+	var level := LevelData.new()
+	level.lofi.pixelation = 0.4
+	level.grid_cell_size = 3.0
+	_panel.initialize(level)
+	assert_false(_panel.is_pane_built(&"film"), "initialize makes no pane")
+	assert_eq(_panel.film_pane._lofi.pixelation, 0.4, "a pane made later loads the state")
+	assert_true(_panel.is_pane_built(&"film"))
+	var state := _panel._build_state()
+	assert_eq(state.grid_cell_size, 3.0, "Save keeps what a pane never made would show")
+	assert_eq(state.lofi.pixelation, 0.4)
+
+
+func test_events_pane_is_announced_when_made() -> void:
+	var made: Array = []
+	_panel.events_pane_built.connect(func(pane: EventsPane) -> void: made.append(pane))
+	var pane := _panel.events_pane
+	assert_eq(made, [pane], "events_pane_built carries the pane, once")
+	assert_same(_panel.events_pane, pane)
+	assert_eq(made.size(), 1)
+
+
 func test_values_toggle_flips_every_row_and_persists() -> void:
+	for id in LevelEditPanel.PANE_IDS:
+		_panel._stack.get_pane(id)
 	var rows: Array[Node] = _panel._stack.find_children("*", "PropertyRow", true, false)
 	assert_true(rows.has(_panel.color_pane._rows["glow_bloom"]), "Advanced color row collected")
 	assert_true(
@@ -283,3 +313,12 @@ func test_values_toggle_flips_every_row_and_persists() -> void:
 	_panel._on_rail_footer_pressed(&"values")
 	assert_false(UiPreferences.load_show_values())
 	assert_eq(_panel._footer_rail._buttons[&"values"].tooltip_text, "Show values")
+
+
+func test_a_pane_made_after_the_values_toggle_takes_it() -> void:
+	_panel._on_rail_footer_pressed(&"values")
+	var rows: Array[Node] = _panel.film_pane.find_children("*", "PropertyRow", true, false)
+	assert_true(rows.size() > 0)
+	for row in rows:
+		assert_true(row.values_visible)
+	_panel._on_rail_footer_pressed(&"values")

@@ -150,6 +150,7 @@ func _ready() -> void:
 	get_tree().node_added.connect(_on_node_added_or_removed)
 	get_tree().node_removed.connect(_on_node_added_or_removed)
 	get_window().files_dropped.connect(_on_files_dropped)
+	BootTrace.title_ready(get_tree())
 
 
 func _exit_tree() -> void:
@@ -495,7 +496,7 @@ func _on_avatars_pressed() -> void:
 
 ## Collections: the manager over the title (list, import, switch, verify, remove).
 func _on_libraries_pressed() -> void:
-	LibraryManager.open(get_tree().root)
+	OnDemand.open_library_manager(get_tree().root)
 
 
 func _on_settings_pressed() -> void:

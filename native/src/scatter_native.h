@@ -8,6 +8,9 @@
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
 #include <godot_cpp/variant/packed_float64_array.hpp>
+#include <godot_cpp/variant/rect2i.hpp>
+#include <godot_cpp/variant/variant.hpp>
+#include <godot_cpp/variant/vector2.hpp>
 
 namespace godot {
 
@@ -32,6 +35,17 @@ public:
 	/// whole-grid arrays keyed as ScatterNative.grids_for keys them, or {"error"}: the grid
 	/// parity check's call.
 	Dictionary grids(const Dictionary &source) const;
+	/// TerrainRules.sample_fields (terrain_fields.h): {"rect": the rect clipped to the grid,
+	/// "curvature", "steep": PackedFloat32Array row-major over it}, both empty when the clipped
+	/// rect has no area or `heights` is short. `radius`, `start_cos`, `end_cos` are
+	/// TerrainRules.radius_samples, cliff_start_cos and cliff_end_cos.
+	Dictionary rule_fields(const PackedFloat32Array &heights, int64_t columns, int64_t rows, const Vector2 &step,
+			const Rect2i &rect, int64_t radius, double start_cos, double end_cos) const;
+	/// A settled chunk node's data from its saved rows (scatter_chunk.cpp; ScatterRows.chunk):
+	/// {"keys": PackedInt64Array of every row, "order": PackedInt32Array of `indices` (null: every
+	/// row) in instance order under `seed`, "buffer": the MultiMesh buffer in that order,
+	/// "custom": whether it carries custom data (`anchors`, ScatterMass's table)}, or {"error"}.
+	Dictionary chunk(const PackedFloat32Array &rows, const Variant &indices, int64_t seed, const Dictionary &anchors) const;
 };
 
 } // namespace godot

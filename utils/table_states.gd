@@ -67,7 +67,7 @@ static func capture(
 	var placements: Array[Dictionary] = []
 	for placement in level.token_placements:
 		var copy := TokenPlacement.from_dict(placement.to_dict())
-		var token := tokens.get(placement.placement_id) as BoardToken
+		var token := tokens.get(placement.placement_id) as Node3D
 		if is_instance_valid(token):
 			copy.sync_from_board_token(token)
 		placements.append(copy.to_dict())

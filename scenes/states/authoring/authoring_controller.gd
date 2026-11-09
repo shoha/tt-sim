@@ -71,8 +71,9 @@ var tokens: AuthoringTokens = null
 ## "ray_ms", "missed", "settled_rows", "wall_ms"}; {} for a map that is not a dressing.
 var ground_fit: Dictionary = {}
 ## The biome designer when this session is one (BiomeDesignerHost; docs/systems/biome_designer.md):
-## the proving ground instead of a map, the designer's panels instead of the tool drawer.
-var designer: BiomeDesignerHost = null
+## the proving ground instead of a map, the designer's panels instead of the tool drawer. A plain
+## Node, loaded on first use (OnDemand), so the designer stays out of the start-up compile.
+var designer: Node = null
 ## Save and autosave (a child; this controller is its host).
 var saving: AuthoringSaving = null
 
@@ -161,9 +162,18 @@ func _build_ui() -> void:
 	panel.pick_up_requested.connect(_select_tool)
 	panel.brush_size_changed.connect(func(radius: float) -> void: brush.set_radius(radius))
 	panel.brush_strength_changed.connect(func(flow: float) -> void: brush.set_flow(flow))
-	# A tool that brings its own pane wires it here; the panel's own panes signal above.
+	# A tool that brings its own pane wires it here, when the pane is built (on its first show:
+	# AuthoringPanel builds those lazily); the panel's own panes signal above.
+	panel.tool_pane_built.connect(_on_tool_pane_built)
 	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
-		tool.connect_pane(self, panel.tool_pane(tool.id))
+		if panel.is_tool_pane_built(tool.id):
+			tool.connect_pane(self, panel.tool_pane(tool.id))
+
+
+func _on_tool_pane_built(tool_id: StringName, pane: Control) -> void:
+	var tool := ToolRegistry.find(tool_id)
+	if tool != null:
+		tool.connect_pane(self, pane)
 
 
 ## Opens what `request` names ({"level": LevelData or null, "new_map": NewMapDialog spec or
@@ -247,6 +257,9 @@ func _open_async(
 	loader.is_superseded = func() -> bool: return _superseded(generation)
 	var glb := opened.get_absolute_map_path() if opened.map_path != "" else ""
 	var root: Node3D = null
+	# The Paint swatches' albedos bake on the prebake lane behind the map's own maps, so the lane
+	# keeps working through the open (card authbake).
+	panel.prebake_paint_swatches()
 	if reopen:
 		# Rows whose assets the active foliage library lacks are regenerated from the biome
 		# painting first (FoliageLibrary.adapt_async), then the map is built from the document.
@@ -258,7 +271,10 @@ func _open_async(
 		if not _superseded(generation):
 			root = await loader.build_async(glb, document)
 	elif not spec.is_empty():
-		# The recipe runs on a worker under the loading screen (NewMapBuild, P5-8).
+		# The recipe runs on a worker under the loading screen (NewMapBuild, P5-8), and the
+		# ground layers it will bind bake on the prebake lane meanwhile (card authbake).
+		if MapSourceLoader.early_prebake:
+			SurfaceStore.prebake(NewMap.planned_surfaces(spec))
 		var made := await NewMapBuild.start(spec).wait(get_tree())
 		if not _superseded(generation):
 			root = await loader.build_async("", made)
@@ -296,7 +312,11 @@ func _open_async(
 	loading_progress.emit(0.9, "Preparing the palette...")
 	for biome in PaletteLibrary.biomes(scatter.palette_root):
 		scatter.prepare_biome(String(biome.get("id", "")))
-	# The Paint swatches decode each surface's albedo once; better here than on first click.
+	# The Paint swatches decode each surface's albedo once; better here than on first click, and
+	# a few a frame so the bar keeps moving.
+	await panel.warm_paint_swatches_async(get_tree(), func() -> bool: return _superseded(generation))
+	if _superseded(generation):
+		return
 	panel.ensure_paint_tiles()
 	await _await_palette_warm(generation)
 	if _superseded(generation):
@@ -331,7 +351,7 @@ func _open_async(
 		saving.start_autosave()
 	set_process(true)
 	if not _designer_config.is_empty() and designer == null:
-		designer = BiomeDesignerHost.attach(self, _game_map, _designer_config)
+		designer = OnDemand.attach_biome_designer(self, _game_map, _designer_config)
 	if settled_rows > 0:
 		UIManager.show_toast(
 			"Plants painted before were set down onto the ground. Save to keep the fix.",
@@ -631,8 +651,9 @@ func _on_paint_selected(surface: String) -> void:
 	_select_tool(AuthoringPanel.TOOL_PAINT)
 
 
-## Makes `surface` the Paint brush's surface and ring tint, starts loading its textures (so
-## the first dab binds them from the cache) and shows its tile as picked, without a signal.
+## Makes `surface` the Paint brush's surface and ring tint, starts loading its textures and
+## binding its ground layer (so the first dab sets only uniforms) and shows its tile as
+## picked, without a signal.
 func use_surface(surface: String) -> void:
 	if brush == null:
 		return
@@ -641,7 +662,15 @@ func use_surface(surface: String) -> void:
 	var terrain := _terrain()
 	if terrain:
 		terrain.warm_surface(surface)
+		terrain.prepare_surfaces(PackedStringArray([surface]))
 	panel.select_paint_surface(surface)
+
+
+## Binds the ground layers a Dress in `kit` paints (its road, door path and plaza surfaces)
+## ahead of the Dress (SettlementBarLink.prepare_dress; the Street tool's bar calls it when it
+## shows an undressed street).
+func prepare_dress(kit: String) -> void:
+	SettlementBarLink.prepare_dress(editor, kit)
 
 
 ## A picked Water tile (River or Pond) becomes the Water brush's shape and switches to it.
@@ -756,6 +785,9 @@ func _select_tool(tool_id: StringName) -> void:
 		brush.deactivate()
 		return
 	tool.prepare(self)
+	if tool_id == AuthoringPanel.TOOL_WATER and _terrain() != null:
+		# The map's first water brings bed and shore layers: bound while the author draws.
+		_terrain().prepare_water()
 	brush.activate()
 	panel.set_active_tool(tool_id)
 	refresh_tool_hints()

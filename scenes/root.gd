@@ -40,11 +40,12 @@ enum State {
 
 const TITLE_SCREEN_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
 const APP_MENU_SCENE := preload("res://scenes/ui/app_menu.tscn")
-const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
+## The table's scenes and scripts, loaded when a table is first needed (on_demand.gd explains why).
+const GAME_MAP_SCENE_PATH := "res://scenes/states/playing/game_map.tscn"
+const LEVEL_PLAY_CONTROLLER_PATH := "res://scenes/states/playing/level_play_controller.gd"
+const AUTHORING_CONTROLLER_PATH := "res://scenes/states/authoring/authoring_controller.gd"
 const PAUSE_OVERLAY_SCENE := preload("res://scenes/states/paused/pause_overlay.tscn")
 const UPDATE_DIALOG_SCENE := preload("res://scenes/ui/update_dialog.tscn")
-const NEW_MAP_DIALOG_SCENE := preload("res://scenes/states/authoring/new_map_dialog.tscn")
-const GRAPHICS_WARMUP_SCENE := preload("res://scenes/states/warmup/graphics_warmup_screen.tscn")
 ## Where leaving authoring returns to.
 const RETURN_TO_TITLE := &"title"
 const RETURN_TO_EDITOR := &"editor"
@@ -57,9 +58,10 @@ var pending_level: LevelData = null
 var _state_stack: Array[State] = []
 var _title_screen: CanvasLayer = null
 var _app_menu: CanvasLayer = null
-var _game_map: GameMap = null
+var _game_map: Node3D = null
 var _pause_overlay: CanvasLayer = null
-var _level_play_controller: LevelPlayController = null
+## The table (LevelPlayController): made by _ensure_table() when a session or a map first needs it.
+var _level_play_controller: Node = null
 ## A table's load and the loading overlay, and a client's level and state stream
 var _level_flow: LevelFlow = null
 ## Moves the table between the session's maps and keeps each map's session state
@@ -67,19 +69,26 @@ var _table_mover: TableMover = null
 ## Host, Join, the room and leaving a session
 var _session_flow: SessionFlow = null
 var _startup_update_check_pending: bool = false
-var _authoring_controller: AuthoringController = null
+var _authoring_controller: Node = null
 ## What the next AUTHORING state opens: {"level": LevelData or null, "new_map": spec,
 ## "return_to": RETURN_TO_*}. See request_authoring().
 var _authoring_request: Dictionary = {}
-var _new_map_dialog: NewMapDialog = null
-var _warmup_screen: GraphicsWarmupScreen = null
+## The new-map dialog (NewMapDialog) and the warm-up screen (GraphicsWarmupScreen), made through
+## OnDemand on first use so neither is compiled at start-up.
+var _new_map_dialog: Node = null
+var _warmup_screen: Node = null
 var _warmup_entered: bool = false
 ## Whether the first entry into TITLE_SCREEN starts the startup update check (not for Steam,
 ## which updates the game itself). Consumed by _take_startup_update_check().
 var _update_check_on_title: bool = false
 
 
+func _init() -> void:
+	BootTrace.mark("main scene loaded")
+
+
 func _ready() -> void:
+	BootTrace.mark("Root _ready (autoloads ready)")
 	# Check the saved renderer preference first -- it may relaunch the process
 	# entirely (see its own doc comment), so there is no reason to do any other
 	# startup work first.
@@ -87,10 +96,12 @@ func _ready() -> void:
 
 	# Apply saved graphics settings (fullscreen, vsync) before any UI is shown
 	SettingsMenu.apply_startup_graphics_settings()
+	BootTrace.mark("startup settings applied")
 
 	# The saved foliage library (a dev setting) before anything reads the palette, the graphics
 	# warm-up included.
 	FoliageLibrary.apply_saved()
+	BootTrace.mark("foliage library served")
 
 	# Setup core systems
 	_setup_level_play_controller()
@@ -98,6 +109,7 @@ func _ready() -> void:
 	_setup_download_notifications()
 	# Network signals (hosting, the room, disconnects and player events while in-game)
 	_setup_session_flow()
+	BootTrace.mark("root controllers and app menu built")
 
 	# Connect to level manager signals
 	LevelManager.level_loaded.connect(_on_level_loaded)
@@ -116,6 +128,10 @@ func _ready() -> void:
 
 	# Enter initial state
 	push_state(boot_state(GraphicsWarmup.should_run()))
+	# The play and authoring code compiles in slices while the title idles (BootPrecompile).
+	var precompile := BootPrecompile.new()
+	precompile.name = "BootPrecompile"
+	add_child(precompile)
 
 
 ## FoliageLibrary switched the palette: rebuild the open map so its scatter draws the new
@@ -129,7 +145,7 @@ func _on_foliage_library_changed(_library: String) -> void:
 			if _authoring_controller:
 				_authoring_controller.reopen_async()
 		State.PLAYING:
-			var level := _level_play_controller.active_level_data
+			var level: LevelData = _level_play_controller.active_level_data
 			if level == null or _level_play_controller.is_loading():
 				return
 			if NetworkManager.is_networked():
@@ -161,22 +177,45 @@ func _on_asset_download_failed(
 	UIManager.show_error("Failed to download " + display_name + ": " + error)
 
 
+## The table's helpers, built at start-up without the table itself: the loading overlay and the
+## table mover. The table (LevelPlayController, which names the whole play and authoring code) is
+## made by _ensure_table() when a session starts or a map first opens, so the title does not
+## compile it (perf audit boot2).
 func _setup_level_play_controller() -> void:
-	_level_play_controller = LevelPlayController.new()
-	add_child(_level_play_controller)
-	# The party (players' avatars) lands on this table after each map change (SessionParty).
-	NetworkManager.session.party.attach(_level_play_controller)
-	# The loads and the loading overlay (always available). Set up before TableMover, so the
-	# party is set out on a loaded table before TableMover's own level_loaded handler runs.
+	# Before TableMover listens for the same signal, so the table exists when it does.
+	NetworkManager.connection_state_changed.connect(_on_network_state_for_table)
 	_level_flow = LevelFlow.new()
 	_level_flow.name = "LevelFlow"
 	add_child(_level_flow)
-	_level_flow.setup(self, _level_play_controller)
+	_level_flow.setup(self)
 	_table_mover = TableMover.new()
 	_table_mover.name = "TableMover"
 	add_child(_table_mover)
-	_table_mover.setup(_level_play_controller)
+	_table_mover.setup()
 	_table_mover.level_chosen.connect(_on_table_level_chosen)
+
+
+## Makes the table (LevelPlayController) once, on the first session or map, and hands it to
+## everything that listens to it. The loads and the loading overlay come first, so the party is
+## set out on a loaded table before TableMover's own level_loaded handler runs.
+func _ensure_table() -> void:
+	if _level_play_controller != null:
+		return
+	BootPrecompile.finish_current()
+	var table_script: GDScript = load(LEVEL_PLAY_CONTROLLER_PATH)
+	_level_play_controller = table_script.new()
+	add_child(_level_play_controller)
+	# The party (players' avatars) lands on this table after each map change (SessionParty).
+	NetworkManager.session.party.attach(_level_play_controller)
+	_level_flow.bind_table(_level_play_controller)
+	_table_mover.bind_table(_level_play_controller)
+	var app_menu_controller := _app_menu.get_node_or_null("AppMenu") if _app_menu else null
+	if app_menu_controller:
+		app_menu_controller.setup(_level_play_controller)
+
+
+func _on_network_state_for_table(_old_state: Variant, _new_state: Variant) -> void:
+	_ensure_table()
 
 
 ## After TableMover's setup: the flow's network handlers run after the mover's and the
@@ -201,7 +240,6 @@ func _setup_app_menu() -> void:
 	# Get the controller and set it up
 	var app_menu_controller = _app_menu.get_node("AppMenu")
 	if app_menu_controller:
-		app_menu_controller.setup(_level_play_controller)
 		app_menu_controller.play_level_requested.connect(_on_play_level_requested)
 		app_menu_controller.build_map_requested.connect(
 			func(level: LevelData) -> void: request_authoring(level, RETURN_TO_EDITOR)
@@ -260,7 +298,7 @@ func is_in_state(state: State) -> bool:
 
 
 ## The table's GameMap in PLAYING and AUTHORING, else null.
-func get_game_map() -> GameMap:
+func get_game_map() -> Node3D:
 	return _game_map
 
 
@@ -337,7 +375,7 @@ func _enter_state(state: State) -> void:
 				)
 			if _title_screen.has_signal("design_biome_requested"):
 				_title_screen.design_biome_requested.connect(
-					func() -> void: BiomeDesignerPicker.show_over(self)
+					func() -> void: OnDemand.show_biome_designer_picker(self)
 				)
 			if _title_screen.has_signal("edit_map_requested"):
 				_title_screen.edit_map_requested.connect(_on_edit_map_requested)
@@ -347,6 +385,7 @@ func _enter_state(state: State) -> void:
 			if _take_startup_update_check():
 				_check_for_updates_on_startup()
 		State.ROOM:
+			_ensure_table()
 			_session_flow.enter_room()
 		State.PLAYING:
 			_enter_playing_state()
@@ -360,7 +399,8 @@ func _enter_state(state: State) -> void:
 
 func _enter_playing_state() -> void:
 	# Instantiate GameMap
-	_game_map = GAME_MAP_SCENE.instantiate()
+	_ensure_table()
+	_game_map = (load(GAME_MAP_SCENE_PATH) as PackedScene).instantiate()
 	add_child(_game_map)
 
 	# Setup bidirectional references between LevelPlayController and GameMap
@@ -428,8 +468,7 @@ func _enter_warming_up_state() -> void:
 	_warmup_entered = true
 	if _app_menu:
 		_app_menu.hide()
-	_warmup_screen = GRAPHICS_WARMUP_SCENE.instantiate()
-	_warmup_screen.finished.connect(change_state.bind(State.TITLE_SCREEN), CONNECT_ONE_SHOT)
+	_warmup_screen = OnDemand.graphics_warmup_screen(change_state.bind(State.TITLE_SCREEN))
 	add_child(_warmup_screen)
 
 
@@ -510,9 +549,8 @@ func request_authoring(level: LevelData, return_to: StringName, preset := {}) ->
 		return
 	if is_instance_valid(_new_map_dialog):
 		return
-	_new_map_dialog = NEW_MAP_DIALOG_SCENE.instantiate()
-	_new_map_dialog.preset = preset
-	_new_map_dialog.map_chosen.connect(
+	_new_map_dialog = OnDemand.new_map_dialog(
+		preset,
 		func(spec: Dictionary) -> void:
 			_begin_authoring({"level": level, "new_map": spec, "return_to": return_to})
 	)
@@ -538,7 +576,7 @@ func _on_biome_designer_requested(library_id: String, biome_id: String) -> void:
 	if refusal != "":
 		UIManager.show_warning(refusal)
 		return
-	var prepared := BiomeDesignerEntry.prepare(library_id, biome_id)
+	var prepared := OnDemand.prepare_biome_designer(library_id, biome_id)
 	if not prepared["ok"]:
 		UIManager.show_error(String(prepared["error"]))
 		return
@@ -562,9 +600,11 @@ func _on_edit_map_requested(level_info: Dictionary) -> void:
 
 
 func _enter_authoring_state() -> void:
-	_game_map = GAME_MAP_SCENE.instantiate()
+	_ensure_table()
+	_game_map = (load(GAME_MAP_SCENE_PATH) as PackedScene).instantiate()
 	add_child(_game_map)
-	_authoring_controller = AuthoringController.new()
+	var authoring_script: GDScript = load(AUTHORING_CONTROLLER_PATH)
+	_authoring_controller = authoring_script.new()
 	_authoring_controller.name = "AuthoringController"
 	add_child(_authoring_controller)
 	_level_flow.track_authoring(_authoring_controller)

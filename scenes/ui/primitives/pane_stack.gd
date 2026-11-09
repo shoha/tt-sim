@@ -13,8 +13,13 @@ extends Control
 ## edge rather than in a gutter taken from the pane, so a pane is the stack's width whether
 ## it scrolls or not and ends on the same edge as the rows pinned above and below it (the
 ## authoring map name, the Visuals foot). The margin must be wider than the bar.
+##
+## A pane may be registered with a builder instead (add_pane_builder): it is made the first time
+## it is shown or asked for, so a host with many panes pays only for the ones the user opens.
 
 signal pane_changed(id: StringName)
+## A pane registered with add_pane_builder was built (on its first show or get_pane).
+signal pane_built(id: StringName, pane: Control)
 
 const FADE_OUT_DURATION := 0.10
 
@@ -27,6 +32,8 @@ var current: StringName = &""
 
 var _wrappers: Dictionary = {}
 var _panes: Dictionary = {}
+## Panes registered with add_pane_builder and not built yet: id -> func() -> Control.
+var _builders: Dictionary = {}
 var _tween: Tween
 
 
@@ -34,6 +41,38 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+
+## Registers pane `id` to be built by `builder` (func() -> Control) the first time it is shown or
+## asked for (show_pane, get_pane), not now: a drawer with many tools builds only the one on
+## screen when it opens (perfaudit F-system-2: the authoring drawer built 19 panes, 2398 Controls
+## for 73 visible, in the open's first frame). pane_built is emitted when it is made.
+func add_pane_builder(id: StringName, builder: Callable) -> void:
+	_builders[id] = builder
+
+
+## Whether pane `id` is registered, built or not.
+func has_pane(id: StringName) -> bool:
+	return _panes.has(id) or _builders.has(id)
+
+
+## Whether pane `id` has been built (a builder's pane is made on first use).
+func is_built(id: StringName) -> bool:
+	return _panes.has(id)
+
+
+## Builds pane `id` now if it was registered with a builder and not built yet.
+func ensure_built(id: StringName) -> void:
+	if not _builders.has(id):
+		return
+	var builder: Callable = _builders[id]
+	_builders.erase(id)
+	var pane: Control = builder.call()
+	if pane == null:
+		push_error("PaneStack: the builder of pane %s made nothing" % id)
+		return
+	add_pane(id, pane)
+	pane_built.emit(id, pane)
 
 
 func add_pane(id: StringName, pane: Control) -> void:
@@ -81,11 +120,14 @@ func _ring_kind() -> ShadowGutter.Kind:
 	return ShadowGutter.Kind.GLASS_RING if bar_in_margin else ShadowGutter.Kind.RING
 
 
+## Pane `id`, built first if it was registered with a builder; null when there is none.
 func get_pane(id: StringName) -> Control:
+	ensure_built(id)
 	return _panes.get(id)
 
 
 func show_pane(id: StringName, animate: bool = true) -> void:
+	ensure_built(id)
 	if id == current or not _wrappers.has(id):
 		return
 	var outgoing: Control = _wrappers.get(current)

@@ -27,7 +27,7 @@ static func run(base: Node, step: Dictionary) -> String:
 	var controller: AuthoringController = base.get("_authoring_controller")
 	if controller == null or controller.designer == null:
 		return "no designer open"
-	var designer := controller.designer
+	var designer: BiomeDesignerHost = controller.designer
 	var session := designer.session
 	var model := session.model
 	var action := String(step.get("action", ""))

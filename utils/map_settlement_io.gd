@@ -112,7 +112,7 @@ static func settlement_problem(settlement: Settlement) -> String:
 		if not _slot_ok(slot):
 			return "a removed slot is not a short text"
 	for slot: Variant in settlement.swapped:
-		if not _slot_ok(slot) or not ProcgenProps.NAMES.has(str(settlement.swapped[slot])):
+		if not _slot_ok(slot) or not StructureProcgen.props().NAMES.has(str(settlement.swapped[slot])):
 			return "a swapped slot or prop is unknown"
 	for slot: Variant in settlement.pinned:
 		if not _slot_ok(slot) or _pin_problem(settlement.pinned[slot]) != "":
@@ -395,7 +395,8 @@ static func _pin_from(value: Variant) -> Variant:
 		"at": Vector2(_number_or_nan(at[0]), _number_or_nan(at[1])),
 		"yaw": _number_or_nan(value.get("yaw")),
 		"scale": _number_or_nan(value.get("scale")),
-		"seed": MapDocumentIO._integer(value.get("seed"), 0, ProcgenSettlement.VARIANTS - 1),
+		"seed":
+		MapDocumentIO._integer(value.get("seed"), 0, int(StructureProcgen.settlement().VARIANTS) - 1),
 	}
 	return pin if _pin_problem(pin) == "" else null
 
@@ -406,7 +407,7 @@ static func _pin_problem(pin: Variant) -> String:
 	var at: Variant = pin.get("at")
 	if not at is Vector2 or not _finite((at as Vector2).x) or not _finite((at as Vector2).y):
 		return "position"
-	if not ProcgenProps.NAMES.has(str(pin.get("prop", ""))):
+	if not StructureProcgen.props().NAMES.has(str(pin.get("prop", ""))):
 		return "prop"
 	if not _within(float(pin.get("yaw", NAN)), -10.0, 10.0):
 		return "yaw"
