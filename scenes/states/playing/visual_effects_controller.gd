@@ -305,10 +305,13 @@ func adopt_foliage_materials(materials: Array[ShaderMaterial]) -> void:
 	_apply_antialiasing_variant(materials)
 
 
-## Points `materials` at the antialiased or plain-cutout wind shader for the current level,
-## each keeping its plain or painted-light form (WindFoliage.shader_for).
+## Points `materials` at the antialiased or plain-cutout wind shader for the current level and
+## the Foliage edges setting (FoliageEdges: Fast keeps the plain cutout under MSAA), each keeping
+## its plain or painted-light form (WindFoliage.shader_for).
 func _apply_antialiasing_variant(materials: Array[ShaderMaterial]) -> void:
-	var antialiased := effective_antialiasing_level() != Viewport.MSAA_DISABLED
+	var antialiased := FoliageEdges.uses_antialiased_shader(
+		effective_antialiasing_level(), FoliageEdges.current
+	)
 	if not antialiased and not WindFoliage.get_shader_no_aa():
 		push_warning(
 			(

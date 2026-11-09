@@ -30,6 +30,7 @@
 		"res://tests/unit/test_focus_trap_stacking.gd",
 		"res://tests/unit/test_foldout.gd",
 		"res://tests/unit/test_glass_roots.gd",
+		"res://tests/unit/test_gpu_options.gd",
 		"res://tests/unit/test_help_overlay_style.gd",
 		"res://tests/unit/test_icon_button.gd",
 		"res://tests/unit/test_icon_rail.gd",

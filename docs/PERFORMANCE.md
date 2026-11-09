@@ -5310,6 +5310,60 @@ interval to the next timestamp by name. The flag also prints a one-second GPU PR
 probe was a one-use job (not in the repo); `probes/eye_perf.gd`'s `perf` action is the committed
 neighbour with the same in-run A/B loop, to which the timestamp read adds about 30 lines.
 
+## Shadow cascades and foliage edges (topic perfaudit, card gpuoptions, 2026-11-09)
+
+Two Settings > Graphics options for slower GPUs, each defaulting to the shipped look (the board
+judges the pairs first; `ShadowCascades.DEFAULT` and `FoliageEdges.DEFAULT` are pinned in
+`tests/unit/test_perf_budget.gd`). Method: RTX 3080, 1920x1080 world viewport, Godot 4.7.2 render
+jobs with `--gpu-profile`, `probes/perfaudit_gpu.gd` (knobs `blend`, `cascades`, `noaa` and `a2c`
+from `perfaudit_gpu_knobs.gd`), 6 rounds, first discarded, 20 + 60 frames, wind frozen, nvidia-smi
+idle before each run; median of round medians against the mean of the two base readings (drift
+0.97-1.05). Map: new 100 ft temperate_forest_summer_s1, valley, seed 1234; shadow tier High, SSAO
+on. Home = zoom 13.85 orbit, MSAA off; eye = map centre, yaw 45, MSAA 4x (shipped).
+
+**Shadow cascades** (`ShadowCascades`, beside Shadow quality): Blended (four splits, blended: the
+shipped sun), Unblended (four splits, `directional_shadow_blend_splits` off), Single
+(`SHADOW_ORTHOGONAL`).
+
+| View | Base | Unblended | Single | 2 splits | Shadows off |
+|---|---|---|---|---|---|
+| Home | 2.81 | -0.31 | -0.35 | -0.04 | -0.63 |
+| Zoom 4 | 1.82 | -0.14 | -0.17 | | |
+| Zoom 20 | 2.54 | -0.19 | -0.25 | | |
+| Eye | 4.14 | -0.48 (run 1: -0.49) | -0.97 (run 1: -0.96) | -0.14 (run 1) | -1.46 (run 1) |
+
+- Why the blend costs: with it on, the engine shades every lit pixel from two cascades, not only
+  the pixels near a split. Unblended was pixel-identical (max 0 levels) at home, zoom 4, zoom 20 and
+  at pitch 21.6 on this map, and at the eye within the noise floor (5.5 % of channels over 1 level
+  against 5.9 % for the base taken twice; the eye's clouds move). It halves the shadow casters
+  (98 to 49 at home), which is what brings back the far-tree pop as the orbit camera tilts that
+  the blend was adopted to fix (docs/lighting-and-environment.md); not reproduced on this map.
+- Single draws shadows (the old note that SHADOW_ORTHOGONAL drew none no longer holds) but its texels
+  cover the whole shadow distance: at zoom 20 far shadows go soft and faint, at the eye the crowns
+  lose their self-shadow; home 16.6 % of channels over 1 level (max 103), zoom 4 33.9 %, zoom 20 11 %.
+  At the eye it also renders a cheaper shadow map (0.56 to 0.08 ms).
+- Two splits instead of four buy nothing at the table (-0.04 home) and are not offered.
+
+**Foliage edges** (`FoliageEdges`, beside Antialiasing): Smooth (shipped) or Fast. With MSAA on (an
+Antialiasing setting, or the eye's 4x) the wind materials take their antialiased twins, which write
+`ALPHA_ANTIALIASING_EDGE`; Godot then classes them as transparent, so the foliage draws in the depth
+pre-pass and the transparent pass (0.89-1.03 ms) instead of the opaque pass (where it costs
+0.40-0.48 ms more). It is drawn once for colour, not twice; the transparent draw is the dearer one.
+Fast keeps MSAA and puts the foliage on its plain-cutout twin.
+
+| View | Base | Fast | Trees only plain | Cover only plain |
+|---|---|---|---|---|
+| Eye, MSAA 4x | 4.14 | -0.65 (run 1: -0.59) | -0.48 (run 1) | -0.07 (run 1) |
+| Home, MSAA 4x | 4.28 | -0.59 (three runs: -0.58 to -0.60) | -0.44 (run 1) | -0.09 (run 1) |
+
+- MSAA 4x itself costs 1.21 ms at home (4.28 against 3.07 with MSAA off); Fast removes half of it.
+  Fast and Unblended together at the eye: -0.98.
+- Look: crisper and very slightly thinner leaf edges. At the eye 12.4 % of channels over 1 level
+  (noise 5.9 %); at home with MSAA 3.7 %, and a 1:1 crop of the worst place reads the same.
+- No cheaper soft edge in the stock engine: `alpha_to_coverage` with the edge built-ins dropped is
+  pixel-identical to the plain cutout (max 0 levels) and costs the same, since the engine sets
+  alpha to 1 after the scissor unless the edge is written.
+
 ## Worker saves (topic perfaudit, card authsave, 2026-11-09)
 
 Every save and the 30 s autosave serialized, deflated and wrote the whole map on the main thread
