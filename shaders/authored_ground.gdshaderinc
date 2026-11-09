@@ -281,6 +281,11 @@
  * the lo-fi post pass apply as to any opaque surface.
  */
 
+// The skirt never reads the clipmap (a measurement may define GROUND_CLIPMAP for both).
+#ifdef GROUND_SKIRT
+#undef GROUND_CLIPMAP
+#endif
+
 // The map's surfaces, one layer each, the base at layer 0 (see LAYERS).
 uniform sampler2DArray layer_albedo_array : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2DArray layer_normal_array : filter_linear_mipmap_anisotropic, repeat_enable;
@@ -461,6 +466,57 @@ uniform float skirt_shadow_m : hint_range(1.0, 100.0) = 16.0;
 const float SKIRT_RING_FADE_FROM = 0.3;
 varying float v_ring_fade;
 #endif
+#endif
+
+// CLIPMAP (card clipmap1; docs/systems/ground_clipmap.md). GROUND_CLIPMAP compiles in the read
+// of the baked composite: a pyramid of CLIP_LEVELS camera-following windows, level l at
+// clip_d0 / 2^l texels per metre, each two textures over the same toroidal window (A: lit albedo
+// as sRGB bytes + AO in alpha; B: map-frame normal x and z + roughness), written by the bake
+// shaders below (GROUND_BAKE_OUT). A pixel on ground gentler than clip_steep_cos finds its level
+// from the finer axis of its screen footprint and takes the baked composite where a level covers
+// it; everywhere else (steep faces, the windows' gaps, the skirt) the layer blend below runs as
+// ever. Fire, the wet line and the lighting stay per pixel.
+#ifdef GROUND_CLIPMAP
+// The windows have no mip chain: the anisotropic filter takes the taps along a foreshortened
+// footprint at level 0 of the window (CLIP_NO_ANISO is a measurement define: plain bilinear).
+#ifdef CLIP_NO_ANISO
+#define CLIP_FILTER filter_linear
+#else
+#define CLIP_FILTER filter_linear_mipmap_anisotropic
+#endif
+uniform sampler2D clip_a0 : hint_default_black, CLIP_FILTER, repeat_enable;
+uniform sampler2D clip_a1 : hint_default_black, CLIP_FILTER, repeat_enable;
+uniform sampler2D clip_a2 : hint_default_black, CLIP_FILTER, repeat_enable;
+uniform sampler2D clip_a3 : hint_default_black, CLIP_FILTER, repeat_enable;
+uniform sampler2D clip_a4 : hint_default_black, CLIP_FILTER, repeat_enable;
+uniform sampler2D clip_b0 : hint_default_black, CLIP_FILTER, repeat_enable;
+uniform sampler2D clip_b1 : hint_default_black, CLIP_FILTER, repeat_enable;
+uniform sampler2D clip_b2 : hint_default_black, CLIP_FILTER, repeat_enable;
+uniform sampler2D clip_b3 : hint_default_black, CLIP_FILTER, repeat_enable;
+uniform sampler2D clip_b4 : hint_default_black, CLIP_FILTER, repeat_enable;
+// Per level: the baked rectangle in map-frame metres (min x, min z, max x, max z; empty when max
+// is under min), and (1 / window extent in metres, fade width in metres, guard in metres, 0).
+uniform vec4 clip_valid[5];
+uniform vec4 clip_info[5];
+// Texels per metre of level 0, the lod bias (negative: sharper), the lod fraction above which a
+// level cross-fades into the next, and the cosine of the slope above which a pixel keeps the
+// layer blend. clip_top is the coarsest level; a footprint coarser than it still reads it.
+uniform float clip_d0 = 200.0;
+uniform float clip_lod_bias = 0.0;
+uniform float clip_blend_from = 0.7;
+uniform float clip_steep_cos = 0.6;
+// A footprint under this many texels of level 0 keeps the layer blend (magnifying a bake would
+// show its texels where the blend shows the surface's own).
+uniform float clip_near = 0.5;
+uniform int clip_top = 0;
+// A pixel at least this covered reads the bake (the rest of its weight renormalised).
+const float CLIP_FULL = 0.5;
+#endif
+#ifdef GROUND_BAKE_OUT
+// The bake shaders (authored_ground_bake*.gdshader): bake_pass 0 writes the lit albedo and AO,
+// 1 the normal and roughness, unshaded and premultiplied so the alpha channel carries data. The
+// viewport encodes colour to sRGB on output; pass 1 pre-decodes so its bytes are the values.
+uniform int bake_pass = 0;
 #endif
 
 // Map-frame normal, position and the per-vertex rule fields (UV2: curvature, steepness).
@@ -1391,10 +1447,94 @@ float limited_roughness(float r, vec3 n) {
 }
 #endif
 
+#ifdef GROUND_CLIPMAP
+vec4 clip_tex_a(int l, vec2 uv, vec2 gx, vec2 gy) {
+	if (l == 0) {
+		return textureGrad(clip_a0, uv, gx, gy);
+	} else if (l == 1) {
+		return textureGrad(clip_a1, uv, gx, gy);
+	} else if (l == 2) {
+		return textureGrad(clip_a2, uv, gx, gy);
+	} else if (l == 3) {
+		return textureGrad(clip_a3, uv, gx, gy);
+	}
+	return textureGrad(clip_a4, uv, gx, gy);
+}
+
+vec4 clip_tex_b(int l, vec2 uv, vec2 gx, vec2 gy) {
+	if (l == 0) {
+		return textureGrad(clip_b0, uv, gx, gy);
+	} else if (l == 1) {
+		return textureGrad(clip_b1, uv, gx, gy);
+	} else if (l == 2) {
+		return textureGrad(clip_b2, uv, gx, gy);
+	} else if (l == 3) {
+		return textureGrad(clip_b3, uv, gx, gy);
+	}
+	return textureGrad(clip_b4, uv, gx, gy);
+}
+
+// The baked composite at a point (see CLIPMAP): a, b are the weighted sums of the levels that
+// cover it; the return is the covered share (0: none, the layer blend runs). The level is the
+// footprint's finer axis in texels of level 0, floored; the upper part of each octave
+// cross-fades into the level above, and so does the edge of a window (its fade width), so a
+// level that is missing or still filling hands over to the next without a seam.
+float clip_fetch(vec2 xz, vec2 dx, vec2 dy, float slope_cos, out vec4 a, out vec4 b) {
+	a = vec4(0.0);
+	b = vec4(0.0);
+	if (slope_cos < clip_steep_cos) {
+		return 0.0;
+	}
+	float fp = min(length(dx), length(dy));
+	if (fp * clip_d0 < clip_near) {
+		// Finer than level 0 can show (the eye view's ground at the feet): the blend draws it.
+		return 0.0;
+	}
+	float lod = max(log2(max(fp, 1e-5) * clip_d0) + clip_lod_bias, 0.0);
+	int first = min(int(floor(lod)), clip_top);
+	float up = first < clip_top ? smoothstep(clip_blend_from, 1.0, lod - float(first)) : 0.0;
+#ifdef CLIP_NO_BLEND
+	up = 0.0;  // measurement define: one level per pixel
+#endif
+	float rem = 1.0;
+	for (int l = first; l <= clip_top; l++) {
+		vec4 valid = clip_valid[l];
+		vec4 info = clip_info[l];
+		vec2 inside = min(xz - valid.xy, valid.zw - xz) - info.z;
+		float c = clamp(min(inside.x, inside.y) / info.y, 0.0, 1.0);
+		if (l == first) {
+			c *= 1.0 - up;
+		}
+		float w = rem * c;
+		if (w > 0.0) {
+			vec2 uv = xz * info.x;
+			a += w * clip_tex_a(l, uv, dx * info.x, dy * info.x);
+			b += w * clip_tex_b(l, uv, dx * info.x, dy * info.x);
+			rem -= w;
+		}
+		if (rem < 0.01) {
+			break;
+		}
+	}
+	return 1.0 - rem;
+}
+#endif
+
+#if defined(GROUND_CLIPMAP) || defined(GROUND_BAKE_OUT)
+// sRGB bytes to linear: how the bake's sRGB output is undone (and, for pass 1, pre-compensated).
+vec3 clip_to_linear(vec3 c) {
+	return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+#endif
+
 void vertex() {
 	v_normal = NORMAL;
 	v_position = VERTEX;
 	v_fields = UV2;
+#ifdef GROUND_BAKE_OUT
+	// The bake draws the map top-down: each vertex goes to its map-frame position.
+	VERTEX = vec3(UV.x, VERTEX.y, UV.y);
+#endif
 }
 
 void fragment() {
@@ -1420,6 +1560,38 @@ void fragment() {
 	}
 #endif
 	vec3 n_geom = normalize(v_normal);
+	// What the blend (or the clipmap's bake) hands to the tail: the wet line, roughness, specular
+	// amount and the map-frame normal before the fire's flattening.
+	float wet_line = 0.0;
+	float roughness = 1.0;
+	float specular = 0.5;
+	vec3 n_map = n_geom;
+#ifdef GROUND_CLIPMAP
+	vec4 clip_a;
+	vec4 clip_b;
+	float clip_w = clip_fetch(world_xz, dx, dy, n_geom.y, clip_a, clip_b);
+	if (clip_w >= CLIP_FULL) {
+		// The baked composite (see CLIPMAP). Only the wet line is read as the blend reads it, so
+		// the depth pre-pass needs nothing else; the rest is two fetches per level.
+		if (water_present != 0) {
+			wet_line = texture(water_weights, weight_uv(world_xz, vec2(textureSize(water_weights, 0)))).a;
+		}
+		clip_a /= clip_w;
+		clip_b /= clip_w;
+		ALBEDO = clip_to_linear(clip_a.rgb);
+		AO = clip_a.a;
+		AO_LIGHT_AFFECT = 0.0;
+		METALLIC = 0.0;
+		roughness = clip_b.b;
+		vec2 n_xz = clip_b.rg * 2.0 - 1.0;
+		n_map = vec3(n_xz.x, sqrt(max(1.0 - dot(n_xz, n_xz), 0.0)), n_xz.y);
+	} else
+#ifdef CLIP_ONLY
+	// Measurement define: the layer blend dead, to see what its registers cost the bake's read.
+	if (false)
+#endif
+#endif
+	{
 	TileFrame frame = tile_frame(world_xz);
 	vec3 proj = projection_weights(n_geom);
 
@@ -1454,7 +1626,6 @@ void fragment() {
 	vec2 rule = vec2(0.0);
 	vec2 water = vec2(0.0);
 	float water_depth = 0.0;
-	float wet_line = 0.0;
 #ifndef GROUND_SKIRT
 	if (unpainted + yielding > WEIGHT_EPSILON) {
 		rule = rule_weights(n_geom.y, v_fields, v_position);
@@ -1788,22 +1959,20 @@ void fragment() {
 	ALBEDO = lit_albedo * (1.0 - WET_DARKEN * wet_line);
 	AO = ground.orm.r;
 	AO_LIGHT_AFFECT = 0.0;
-	float roughness = mix(ground.orm.g, WET_ROUGHNESS, WET_GLOSS * gloss);
-	float specular = 0.5;
+	roughness = mix(ground.orm.g, WET_ROUGHNESS, WET_GLOSS * gloss);
 	METALLIC = ground.orm.b;
-#ifndef GROUND_SKIRT
+	n_map = normalize(ground.normal + n_geom * 1e-4);
+	}
+#if !defined(GROUND_SKIRT) && !defined(GROUND_BAKE_OUT)
 	// FIRE (fire_glow.gdshaderinc): the burn turns the ground to matte char and glows on it (a
-	// sheen on a near-black ground read as grey and showed every facet of its normals).
+	// sheen on a near-black ground read as grey and showed every facet of its normals). The
+	// clipmap's bake leaves it out: fire is per pixel.
 	vec3 fire_albedo = ALBEDO;
 	float charred = 0.0;
 	EMISSION = fire_glow(world_xz, TIME, fire_albedo, charred);
 	ALBEDO = fire_albedo;
 	roughness = mix(roughness, 1.0, charred);
 	specular = 0.5 - 0.45 * charred;
-#endif
-
-	vec3 n_map = normalize(ground.normal + n_geom * 1e-4);
-#ifndef GROUND_SKIRT
 	// Char's normals lean up, so the ground's facets do not show through its even near-black.
 	n_map = normalize(mix(n_map, vec3(0.0, 1.0, 0.0), FIRE_FLATTEN * charred));
 #endif
@@ -1839,6 +2008,17 @@ void fragment() {
 #else
 	ROUGHNESS = roughness;
 	NORMAL = n_view;
+#endif
+#ifdef GROUND_BAKE_OUT
+	EMISSION = vec3(0.0);
+	if (bake_pass == 0) {
+		ALPHA = clamp(AO, 0.0, 1.0);
+		ALBEDO = clamp(ALBEDO, vec3(0.0), vec3(1.0));
+	} else {
+		vec3 packed_nr = clamp(vec3(n_map.x * 0.5 + 0.5, n_map.z * 0.5 + 0.5, roughness), vec3(0.0), vec3(1.0));
+		ALBEDO = clip_to_linear(packed_nr);
+		ALPHA = 1.0;
+	}
 #endif
 }
 

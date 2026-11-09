@@ -374,7 +374,11 @@ class Rig:
 		for node in gm.world_viewport.find_children("*", "GeometryInstance3D", true, false):
 			var gi := node as GeometryInstance3D
 			var on_skirt := skirt_target != null and _cls(gi).begins_with("authored_ground_skirt")
-			if not _cls(gi).begins_with("authored_ground_looked") and not on_skirt:
+			var on_map := (
+				_cls(gi).begins_with("authored_ground_looked")
+				or _cls(gi).begins_with("authored_ground_clip")
+			)
+			if not on_map and not on_skirt:
 				continue
 			var mesh := (gi as MeshInstance3D).mesh if gi is MeshInstance3D else null
 			var m := gi.material_override as ShaderMaterial

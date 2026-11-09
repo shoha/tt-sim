@@ -278,6 +278,8 @@ func build(
 	_build_skirt(prepared.get(AuthoredLoadPrep.SKIRT, {}))
 	_refresh_height_texture()
 	_sync_ground_look(true)
+	if GroundClipmap.flag_on():
+		GroundClipmap.attach(self)
 
 
 ## The shared ground material.
@@ -322,12 +324,13 @@ static func ring_shader(looked: bool) -> Shader:
 
 ## True while the ground draws the looked shader (set_looked).
 func is_looked() -> bool:
-	return _material != null and _material.shader == GROUND_LOOKED_SHADER
+	return _material != null and _material.shader.resource_path.contains("_looked")
 
 
 ## Binds the looked shaders (`looked`) or the plain ones on the ground and the skirt, keeping
 ## every uniform. GroundLookBake calls it with the tables it binds, so the variant follows the
-## map's looked biomes on every peer (each rebuilds and re-plans from its own document).
+## map's looked biomes on every peer (each rebuilds and re-plans from its own document). A
+## ground clipmap (GroundClipmap) puts its own variant back the frame after.
 func set_looked(looked: bool) -> void:
 	if _material != null and _material.shader != ground_shader(false, looked):
 		_material.shader = ground_shader(false, looked)
