@@ -4,6 +4,179 @@ Measured findings for tt-sim's renderer, and the procedure that produced them. R
 this before attempting any rendering optimisation -- several obvious-looking ideas are
 already known dead ends, with numbers.
 
+## Performance audit 2026-11
+
+A three-wave audit (topic perfaudit) of everything that populates and renders a map: the frame
+on the GPU, scatter and foliage, in-game authoring, tokens, hosting and transfer, and the system
+(boot, loads, memory). Wave 1 measured in six streams and changed no production code; wave 2 ran
+one card per top finding, each A/B'd against its stream's harness; wave 3 added the regression
+guard below. The plan, the ranked register and the raw findings are gitignored plan space
+(`docs/plans/2026-11-09-perfaudit/`); this section is the durable summary, and the card sections
+further down ("Ground pre-pass", "Ground skirt shadows", "Occlusion fade tiles", "Ground-cover
+lighting", "Worker saves", "Collision tiles", "Render scale", "Token sync bytes") hold the method
+and the full tables. Numbers below are copied from those sections, the cards' commit messages and
+their handoffs; none was re-measured for this summary.
+
+**How it was measured.** GPU: RTX 3080 with `nvidia-smi` idle (P8) before every run, Vulkan
+Forward+, Godot 4.7.2 debug, a real 1920x1080 window, vsync off, `max_fps` 0, the player's
+settings (SSAO on, MSAA off, lo-fi on, shadows High), launched with `--gpu-profile` for the
+engine's per-pass timestamps; an in-run A/B (6 rounds, the first discarded, order rotated and
+reversed, median of the round medians with their range); the reference scene a new 100 ft
+`temperate_forest_summer_s1` map, valley, seed 1234 (320 ft filled for foliage); 1440p and 4K as
+the world viewport resized in-run. Probes: `tools/render_jobs/probes/perfaudit_gpu.gd`,
+`perfaudit_tokens.gd`, `perfaudit_authoring.gd`, `foliage_perf.gd` and the system harness
+(`perfaudit_boot.gd`). Authoring and loads: real-window render jobs logging every frame with
+named main-thread parts, plus headless micro probes. Network: `tests/net/perfaudit_net.gd`, a
+counting peer that names every packet by its RPC, exact application bytes host to one client on
+ENet loopback (Steam was not driven). The base frame at home, 1080p, before the audit: 4.0 ms GPU
+= opaque 2.1 + depth pre-pass 1.45 + the rest 0.45. The machine was shared with other cards, so CPU
+numbers are pessimistic, and at the 60 Hz vsync cap every one of these GPU frames is under 16.7
+ms: the deltas are the honest number, and they scale with the pixel count and inversely with the
+GPU.
+
+### Wins
+
+| Area | Change (finding) | Before -> after | Commit |
+|---|---|---|---|
+| GPU | Ground shades through light(); the pre-pass sees the interpolated normal, ground sorts after foliage (F-gpu-2) | home 1080p frame 3.94 -> 3.27 ms (pre-pass 1.41 -> 0.72); 4K-sized 13.61 -> 11.11; eye view, MSAA 4x 5.14 -> 4.33 | 23805b34 (merge) |
+| GPU | Skirt receives no shadows (groundskirt) | full zoom-out 2.43 -> 1.94 ms, zoom 4 on an edge 2.16 -> 1.89, home 3.07 -> 2.94 | 33647fd0 |
+| GPU | Lean ground-cover light (F-foliage-1) | 320 ft filled map: -0.18 ms at home, -0.54 ms at zoom 20 | 304bf738 |
+| GPU | Global shader uniform buffer 65,536 -> 262,144 slots (F-foliage-5) | overflowed at 4,000-4,500 wind instances; 16,000 draw clean | aa499807 |
+| GPU | Render scale setting, default 100 % (renderscale) | home 3.93 ms at 100 %, FSR 75 % 2.62, FSR 50 % 1.54 | 892d28c0 |
+| GPU | Shadow quality default High instead of Ultra (shadowtier, same week) | home 4.22 -> 3.59 ms | "Shadow quality tiers" |
+| Tokens | Occlusion fade binned into 32x18 screen tiles, cap 32 -> 256 (F-tokens-1) | pack 32 9.28 -> 5.24 ms, pack 100 9.24 -> 5.91, avatar 32 9.54 -> 4.87 | 823f69a0 |
+| Tokens | Avatar figure baked into one static mesh (F-tokens-2) | 500 avatars: frame 36.57 -> 5.84 ms, render CPU 23.79 -> 1.05 ms, draws 8,124 -> 449 | 663b7c33 |
+| Tokens | TokenSpawnQueue, 4 ms a frame (F-tokens-4) | 500 placed at once: worst frame 2,617-2,804 -> 29.7-36.2 ms; 100: 495-608 -> 15-17 ms; despawn of 100 13.2-23.9 -> 6.6-7.6 ms; pop-in cascade at most 1.5 s (was 0.05 s per token) | 3355e42c |
+| Tokens | board_token.tscn is one node (F-tokens-8) | 5.9 MB placeholder -> 250 B; uncached load 481 -> 0.4 ms; boot -0.74 s (paired median) | 71ba9a9e |
+| Tokens | Ghost budget pass skipped when nothing changed (F-tokens-6) | unchanged pass 46 / 106 / 207 us at 100 / 250 / 500 tokens, against 529 / 1,263 / 2,817 us for a pass that runs | 8ed75680 |
+| Authoring | Saves and autosave encode and write on a worker from a copy-on-write snapshot (F-authoring-1) | main thread 46.4 / 162.6 / 440.8 -> 1.25 / 3.35 / 7.91 ms at 100 / 200 / 320 ft; worst frame near an autosave 54-490 -> 15-27 ms | cbda254e |
+| Authoring | Collision in 32-quad tiles, a stroke rebuilds its own (F-authoring-4) | sculpt stroke end 0.71 / 2.86 / 6.87 -> 0.56 / 0.50 / 0.61 ms at 100 / 200 / 320 ft | 0ebb674c |
+| Authoring | Paint stroke end re-plans the tables only (F-authoring-3, part) | broad tint 2.84 / 6.53 / 7.07 -> 0.53 / 0.71 / 0.73 ms | 1582c096 |
+| Authoring | A picked surface, biome, Water tool or street binds its layers ahead of use (F-authoring-2) | first-use ground update at 320 ft: cobble 41.1 -> 20.0 ms, biome 84.1 -> 30.3, river 81.1 -> 17.8, Dress ground 57.9 -> 27.6; the arrays' sync 19-63 -> 0.01 ms | 412f0af6, 33307a25 |
+| Network | A placement sends that token alone; states zstd in 64 KB chunks (F-net-1) | one placement at 200 tokens 96,448 -> 423 B; late-join state 153,664 -> 4,715 B; placing tokens 51-200 14,467,200 -> 63,438 B | 7dd96e6c |
+| Network | Reconciliation sends only tokens that moved, full state every 30 s (F-net-2) | idle at 200 tokens 12,800 B/s per client -> 0 between heartbeats (157 B/s averaged); 7 clients 89.6 -> 1.1 KB/s | 7a96ccd4 |
+| Network | A single drag update travels packed (F-net-7) | 128 -> 63 B per token per update; a 5 s drag of 10 tokens 55,040 -> 27,047 B | 835d75b7, 00f944dd |
+| System | Loads covered by the loading sheet: vsync off, 240 fps cap, 12 ms slices (F-system-3) | 100 ft + 100 pack tokens 2,429 -> 1,435 ms; 320 ft + 500 tokens 14,867 -> 8,832 ms; 100 ft play 422 -> 350 ms | 42a1dfe9 |
+
+Correctness found on the way: a client's GameState never took transforms, so after per-token adds
+it lagged up to the heartbeat (fixed, three ENet consistency scenarios, 8fd3af5e); two dev builds
+with different wire formats now refuse each other (protocol number, c7f14580); a save waits out a
+reader holding its file (4c56da38); the title leaked six orphan nodes per visit (387808ab).
+
+### Found false
+
+- **Render scale's premise.** The world viewport is 1920x1080 on every 16:9 window (a stretched
+  SubViewportContainer on a 1920x1080 canvas), so a 4K player pays about 4 ms and sees a softer
+  upscaled board. The register's "4K 14.1 ms" and "FSR 0.5 at 4K: 14.1 -> 4.7 ms" were
+  output-sized renders the game never draws ("Render scale").
+- **The ground's half of the frame.** The flat-material floor (2.0 of 4.0 ms) shrank after the
+  pre-pass change (`ground_flat` saves 0.23 ms at home now); a full bake of the composited ground
+  saves 0.85-1.12 ms at 1080p on the near views (home 3.18 -> 2.27) and 0.45 at full zoom-out,
+  not 1.5-2 (card groundbake, a probe, nothing merged).
+- **Texture work in the skirt.** Its layer blend was under a tenth of its cost (no texture work at
+  all -0.20 of 1.19 ms at full zoom-out); half was the shadow filter, the rest the engine's lighting.
+- **Foliage fetches in the pre-pass.** The ORM and normal-map fetches in the normal-roughness
+  pre-pass cost nothing measurable (1.385 -> 1.377 ms).
+- **The shadow tier and casters.** The sun's shadow-map render is 0.06 ms at every tier; the tier
+  is a per-pixel cost of the opaque pass.
+- **Boot as a dev-run artefact.** An exported pack reaches the title in 6.4-7.7 s (median 7.4)
+  against the dev run's 9.9 s: boot is a real player cost.
+- **Vsync-bound token loads.** Token loads are frame-bound: with hundreds of tokens alive a frame
+  costs 20-25 ms besides the spawn, vsync or not.
+- `Performance.TIME_PROCESS` is a one-second maximum, so the older `process_time_avg_ms` columns
+  in this file are suspect.
+
+### Dead ends
+
+Vertex lighting for ground cover (no cheaper than per-pixel Lambert: a 12-triangle card has as
+many vertices as lit fragments at zoom 20); unshaded ground cover (loses every cast shadow); bent
+normals in the ground (mean 0.89 levels of ambient change); bilinear instead of FSR at 50 % (edges
+smear for 0.02-0.06 ms); FSR sharpness 0 and a mip bias of +0.5 (indistinguishable); a full-map
+ground bake at the density the look needs (99 MB at 100 ft, 1,015 MB at 320 ft) and its two-level
+detail variant (worse at every view); `shadow_blur` 3.0 (free, but the hatch stays) and PCSS at 0.5
+degrees (costs as much as Low to High); screen tiles for 500 densely packed tokens (the cost follows
+the overlap, not the count); collision as one body of many shapes (Jolt rebuilds the compound: 2.92
+against 1.37 ms) or oblong tiles (Jolt's triangle-mesh fallback, which also leaked rays).
+
+### Open
+
+From the register's rows that are not merged, with their measured size:
+
+- **GPU.** A camera-centred clipmap bake of the ground, about 1 ms at 1080p on every view, 4-6
+  cards (board perf-ground-bake; groundbake Phase 1 only). One sun shadow split fewer, 0.41-0.45
+  ms. MSAA draws foliage twice in the eye view, 1.0 ms. Foliage and rock textures RGBA8 without
+  mips, layer arrays padded to 16 (board perf-foliage-mips). 71 % of drawn instances off screen at
+  home: a GPU-driven cull, 0.35-0.6 ms GPU and 0.7 ms render CPU (probe queued). Zoom-keyed ground
+  thinning, about 0.5 ms zoomed in (board perf-ground-thin), with FoliageBudget counting triangles
+  instead of the cost. Built ground-cover materials run 0.13 / 0.36 ms slower than copies of
+  themselves (cause not found). Render scale's Auto as the default (board perf-render-scale).
+- **Tokens.** The shadow pass's plain fade loop, 0.47 ms from 32 tokens (a light-space grid). Pack
+  idle animation at 30 Hz on screen and none off screen, 500 tokens 8.09 -> 0.67 ms headless: built
+  and held for the user's look (branch tokenmesh, a6da2175). A client's join still spawns every
+  token at once. Shared helper meshes (a pack token is still 29.2 nodes in the census).
+- **Authoring.** `_sync_document` stays on the main thread, 1 / 3 / 7.6 ms at save. The sculpt and
+  carve stroke end's rule fields, 4.5-4.7 ms, to native. At 320 ft a new painted surface's retable
+  still costs 12-20 ms, the first looked biome 30 ms, the Dress 21 pipeline compiles. A new map
+  opens in 6.6 s at 320 ft.
+- **Network.** Steam not driven; scatter rows are 80 % of `map.ttmap` and binary rows 3.5 times
+  smaller (board perf-map-format); a join runs in series behind main-thread blocks (about 1.4 s to
+  overlap).
+- **System.** Boot 6.4-7.7 s to the title from a pack; the first authoring open 2.3 s warm and 10.2 s
+  cold (UI built up front); about 620 MB of texture memory stays at the title after a map (526 MB
+  unattributed, engine-side); the first-launch warm-up; about 80 pipeline compiles per load;
+  surface PNGs 54 % of the download; process memory creeps 2.7 MB per map cycle; idle runs at full
+  rate (board perf-idle-throttle).
+- **Look-pending** (the user's look is the gate): the occlusion fade tiles, render scale, ground-
+  cover light and skirt commits.
+
+### The guard
+
+The wins are held by deterministic counters, not timings: a headless run draws nothing (the dummy
+renderer reports 0 draw calls and 0 objects, checked), CI's runners have no stable GPU and the dev
+machine is shared, so a timing assertion would be noise. Each counter is a quantity the audit found
+to drive a cost, read from the real code path: bytes a client receives, mesh surfaces and nodes a
+token adds, collision tiles a stroke rebuilds, what the ground and ground-cover shaders write and
+fetch in their shipped variants (the includes inlined and the defines resolved), and the settings
+the wins rest on. `tests/unit/test_perf_budget.gd` asserts every row in the gate and on CI (about
+0.5 s; it also checks the shader reader finds the old pre-pass writes and the canopy's ORM fetch, so
+a zero is never vacuous); `godot --headless --path <project> --script res://tools/perf_budget.gd`
+prints the table and exits 1 when a row is over. Counters and limits live in
+`tools/perf_budget_counters.gd`. Limits sit at about 1.5 times the value read when the guard was set
+where a count may grow a little, and at the value itself where any growth is the regression. A
+failure names the counter, the value, the limit and the finding and commit it holds; raising a limit
+is a decision to measure first.
+
+| Counter | Value | Limit | Holds |
+|---|---|---|---|
+| One placement's message, 200 tokens on the table | 395 B | 600 | F-net-1 |
+| Table state at 200 tokens (late join, heartbeat) | 3,399 B | 5,100 | F-net-1 |
+| Reconciliation bytes for a table at rest | 0 B | 0 | F-net-2 |
+| One token's drag update | 60 B | 90 | F-net-7 |
+| Mesh surfaces an avatar token draws | 3 | 4 | F-tokens-2 |
+| Nodes an avatar token adds to the tree | 14 | 21 | F-tokens-2 |
+| Nodes a pack token (beasts/cow) adds to the tree | 21 | 31 | F-tokens-8 |
+| board_token.tscn on disk | 250 B | 375 | F-tokens-8 |
+| TokenSpawnQueue frame budget | 4 ms | 4 | F-tokens-4 |
+| Last pop-in delay of a 500-token load | 1.5 s | 1.5 | F-tokens-4 |
+| Occlusion fade token cap (collect and publish CPU) | 256 | 256 | F-tokens-1 |
+| Frame cap while the loading sheet covers the table | 240 | 240 | F-system-3 |
+| Collision tiles a 20 m x 8 m stroke rebuilds (320 ft, of 169) | 8 | 12 | F-authoring-4 |
+| Collision tiles a 4 m dab rebuilds (320 ft) | 4 | 6 | F-authoring-4 |
+| NORMAL / NORMAL_MAP writes in the ground's fragment() | 0 | 0 | F-gpu-2 |
+| ROUGHNESS writes from the ground's layer blend | 0 | 0 | F-gpu-2 |
+| Skirt shaders that receive shadows | 0 | 0 | groundskirt |
+| ORM / normal-map fetches in the ground-cover shaders | 0 | 0 | F-foliage-1 |
+| Ground and skirt render_priority | 1 | at least 1 | F-gpu-2 |
+| Global shader uniform buffer slots | 262,144 | at least 262,144 | F-foliage-5 |
+| Default shadow quality tier | High | at most High | shadowtier |
+
+What it cannot see: milliseconds. A shader that gets dearer without writing a new output, a frame
+slowed by work no counter reads, or a hitch in a path these counters do not drive passes here; the
+pinned procedure in "How to measure without fooling yourself" stays the judge of those. Not guarded
+for that reason: the map document snapshot's copy-on-write cost (a packed array's sharing is not
+observable from GDScript, only its time), the ghost pass skip and the load pacing's effect on load
+time.
+
 ## Where the frame goes
 
 Dense forest map ("Sandy Clearing"), 1920x1080, vsync disabled, deterministic camera

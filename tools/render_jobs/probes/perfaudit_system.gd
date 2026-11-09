@@ -732,6 +732,12 @@ class LoadWatch:
 		process_mode = Node.PROCESS_MODE_ALWAYS
 		process_priority = -100
 		mem_before = _monitors(false)
+		# The clock starts before the request: entering a state builds its scene synchronously
+		# here, and that frame (the first one in ms) is often the worst of the load (wave 1 left
+		# it out of every load's wall and frames).
+		start_us = Time.get_ticks_usec()
+		last_us = start_us
+		last_comp = compiles()
 		var new_map: Dictionary = step.get("new", {})
 		if not new_map.is_empty():
 			mode = "author"
@@ -759,9 +765,6 @@ class LoadWatch:
 				base.call("_on_play_level_requested", level)
 			else:
 				base.call("_begin_authoring", {"level": level, "return_to": &"title"})
-		start_us = Time.get_ticks_usec()
-		last_us = start_us
-		last_comp = compiles()
 
 	func _process(_delta: float) -> void:
 		var now := Time.get_ticks_usec()

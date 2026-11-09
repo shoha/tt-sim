@@ -152,6 +152,7 @@ After making architectural or API changes, update the relevant documentation. Ch
 - **New RPC or network patterns** – update `docs/CONVENTIONS.md` and `docs/NETWORKING.md`
 - **Measure tool or gameplay tool changes** – update `docs/ARCHITECTURE.md` (Scale & Measurement / Measure Tool / Grid Overlay / Drag Ruler sections) and `docs/UI_SYSTEMS.md` (Measure Tool / Grid Overlay / Drag Ruler sections)
 - **Grid overlay or snap changes** – update `docs/ARCHITECTURE.md` (Grid Overlay / Grid-Snapped Movement sections) and `docs/UI_SYSTEMS.md` (Grid Overlay section)
+- **Performance work** – start from `docs/PERFORMANCE.md` "Performance audit 2026-11" (what costs what, the wins with their numbers, what was found false, what is open) and add a measured section there. The audit's wins are held by deterministic counters (`tests/unit/test_perf_budget.gd`, limits and counters in `tools/perf_budget_counters.gd`; `godot --headless --path <project> --script res://tools/perf_budget.gd` prints the table): a change that trips one either undoes a win or has to measure and justify a new limit
 
 ## Formatting
 

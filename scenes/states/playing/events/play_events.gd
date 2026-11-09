@@ -491,8 +491,12 @@ func _prepare(tool_id: StringName) -> void:
 ## brush is GameMap's, shared with authoring, whose own pane takes the connections back when it is
 ## built again.
 func _wire_structure_bar(tool_id: StringName, wired: BrushTool) -> void:
-	var structure_pane := pane.structure_pane if pane != null else null
-	if tool_id != StructureTool.ID or structure_pane == null or not is_instance_valid(structure_pane):
+	# The tool first: reading structure_pane builds the Building tiles (EventsPane makes them on
+	# first use).
+	if tool_id != StructureTool.ID or pane == null:
+		return
+	var structure_pane := pane.structure_pane
+	if structure_pane == null or not is_instance_valid(structure_pane):
 		return
 	if structure_pane.has_meta(BAR_WIRED_META):
 		return

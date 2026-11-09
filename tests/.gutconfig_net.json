@@ -42,6 +42,7 @@
 		"res://tests/unit/test_library_transfer_consent.gd",
 		"res://tests/unit/test_library_transfer_flow.gd",
 		"res://tests/unit/test_library_transfer_install.gd",
+		"res://tests/unit/test_perf_budget.gd",
 		"res://tests/unit/test_stream_peer_queue.gd",
 		"res://tests/unit/test_stream_send_window.gd",
 		"res://tests/unit/test_token_spawner_network_tracking.gd",

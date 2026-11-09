@@ -161,9 +161,18 @@ func _build_ui() -> void:
 	panel.pick_up_requested.connect(_select_tool)
 	panel.brush_size_changed.connect(func(radius: float) -> void: brush.set_radius(radius))
 	panel.brush_strength_changed.connect(func(flow: float) -> void: brush.set_flow(flow))
-	# A tool that brings its own pane wires it here; the panel's own panes signal above.
+	# A tool that brings its own pane wires it here, when the pane is built (on its first show:
+	# AuthoringPanel builds those lazily); the panel's own panes signal above.
+	panel.tool_pane_built.connect(_on_tool_pane_built)
 	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
-		tool.connect_pane(self, panel.tool_pane(tool.id))
+		if panel.is_tool_pane_built(tool.id):
+			tool.connect_pane(self, panel.tool_pane(tool.id))
+
+
+func _on_tool_pane_built(tool_id: StringName, pane: Control) -> void:
+	var tool := ToolRegistry.find(tool_id)
+	if tool != null:
+		tool.connect_pane(self, pane)
 
 
 ## Opens what `request` names ({"level": LevelData or null, "new_map": NewMapDialog spec or
@@ -296,7 +305,11 @@ func _open_async(
 	loading_progress.emit(0.9, "Preparing the palette...")
 	for biome in PaletteLibrary.biomes(scatter.palette_root):
 		scatter.prepare_biome(String(biome.get("id", "")))
-	# The Paint swatches decode each surface's albedo once; better here than on first click.
+	# The Paint swatches decode each surface's albedo once; better here than on first click, and
+	# a few a frame so the bar keeps moving.
+	await panel.warm_paint_swatches_async(get_tree(), func() -> bool: return _superseded(generation))
+	if _superseded(generation):
+		return
 	panel.ensure_paint_tiles()
 	await _await_palette_warm(generation)
 	if _superseded(generation):
