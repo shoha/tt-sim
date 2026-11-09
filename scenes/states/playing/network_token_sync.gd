@@ -215,6 +215,36 @@ func broadcast_token_positions() -> void:
 	if not NetworkManager.is_host():
 		return
 
+	var current := _reconcilable_transforms()
+	_ticks += 1
+	if _ticks % HEARTBEAT_TICKS == 0:
+		_reconciled.mark_sent(current)
+		NetworkStateSync.broadcast_full_state()
+		return
+	_send_changed(current)
+
+
+## Host: send now, outside the tick count, what a reconciliation tick would: the tokens that
+## moved since the last one, in one packed reliable message, and nothing when none did. A
+## level save calls it (LevelPlayLoader.save_level), so a save no longer re-sends the whole
+## table: adds, removals and property changes reach clients by their own messages, and the
+## heartbeat heals anything lost.
+func reconcile_now() -> void:
+	if not NetworkManager.is_host():
+		return
+	_send_changed(_reconcilable_transforms())
+
+
+func _send_changed(current: Dictionary) -> void:
+	var changed := _reconciled.take_changed(current)
+	if not changed.is_empty():
+		NetworkManager.game_sync.broadcast_reconcile(changed)
+
+
+## Host: GameState takes each spawned token's transform, and the transforms of those not under
+## client authority come back keyed by network id (TokenTransformPack.floats_of); tokens no
+## longer alive leave the reconciled set.
+func _reconcilable_transforms() -> Dictionary:
 	var current := {}
 	var alive := {}
 	var tokens := _token_spawner.get_spawned_tokens()
@@ -239,15 +269,7 @@ func broadcast_token_positions() -> void:
 				state.position, state.rotation, state.scale
 			)
 	_reconciled.retain(alive)
-
-	_ticks += 1
-	if _ticks % HEARTBEAT_TICKS == 0:
-		_reconciled.mark_sent(current)
-		NetworkStateSync.broadcast_full_state()
-		return
-	var changed := _reconciled.take_changed(current)
-	if not changed.is_empty():
-		NetworkManager.game_sync.broadcast_reconcile(changed)
+	return current
 
 
 ## Called when any token permission changes (grant or revoke).

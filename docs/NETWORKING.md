@@ -910,9 +910,12 @@ the full state, a client's copy lagged up to the 30 s heartbeat (`enet_token_con
 
 This prevents the host's interpolating visual position from overwriting GameState with stale data, which would cause tokens to snap back on the client. A client ignores network targets for a token it is dragging or settling (`DraggableToken.set_network_target`), so the heartbeat never yanks a live drag.
 
-Still sent whole, unchanged (found while here, not changed): `LevelLoader` broadcasts the full state
-on every level save (`level_loader.gd`, now compressed); a party's set-out sends it once
-(`SessionParty._ground_and_send`, a table change).
+A level save (`LevelPlayLoader.save_level`) sends what a tick would, at once and outside the tick
+count (`NetworkTokenSync.reconcile_now`): the tokens that moved since the last tick, nothing at
+rest. Until 2026-11-08 (netjoin) every save broadcast the full state (100 ft table, host to one
+client: 650 / 2,382 / 4,551 B at 10 / 100 / 200 tokens, now 0 B at rest); adds, removals and
+property changes already reach clients by their own messages, and the heartbeat heals the rest.
+A party's set-out still sends the full state once (`SessionParty._ground_and_send`, a table change).
 
 ---
 
