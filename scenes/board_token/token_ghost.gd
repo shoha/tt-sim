@@ -212,7 +212,12 @@ static func _strip_mesh(mi: MeshInstance3D) -> void:
 static func _dress_mesh(mi: MeshInstance3D, highlighted: bool, bounds: Dictionary) -> void:
 	var source: Variant = source_of(mi)
 	var ghost := overlay_of(mi)
-	if ghost == null or ghost.get_meta(SOURCE_META) != source:
+	# A mesh with no material has a null source, which set_meta stores as no meta at all (and
+	# get_meta with a null default still reports a missing key)
+	var had: Variant = null
+	if ghost != null and ghost.has_meta(SOURCE_META):
+		had = ghost.get_meta(SOURCE_META)
+	if ghost == null or had != source:
 		ghost = _make_ghost(source)
 		mi.material_overlay = ghost
 	_set_rim(ghost, highlighted)

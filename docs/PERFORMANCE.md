@@ -49,6 +49,8 @@ GPU.
 | Tokens | TokenSpawnQueue, 4 ms a frame (F-tokens-4) | 500 placed at once: worst frame 2,617-2,804 -> 29.7-36.2 ms; 100: 495-608 -> 15-17 ms; despawn of 100 13.2-23.9 -> 6.6-7.6 ms; pop-in cascade at most 1.5 s (was 0.05 s per token) | 3355e42c |
 | Tokens | board_token.tscn is one node (F-tokens-8) | 5.9 MB placeholder -> 250 B; uncached load 481 -> 0.4 ms; boot -0.74 s (paired median) | 71ba9a9e |
 | Tokens | Ghost budget pass skipped when nothing changed (F-tokens-6) | unchanged pass 46 / 106 / 207 us at 100 / 250 / 500 tokens, against 529 / 1,263 / 2,817 us for a pass that runs | 8ed75680 |
+| Tokens | A pack token leaves its model's shared idle clip alone once it loops: writing loop_mode emitted `changed` and every same-model mixer rebuilt its caches (tokenscale) | headless load token phase, 500 pack (8 models) 3,030-3,094 -> 2,611-2,681 ms, 500 of one model 4,181 -> 2,892 ms; frame after one spawn at 500 a quiet frame +3.4 -> +1.2 ms | d632d66f |
+| Tokens | A token's controller joins the unhandled input dispatch only while hovered or mid-gesture (F-tokens-5) | per event at 500 tokens: motion 221 -> 3.4 us, button 969 -> 3.4 us; flat at every count | 18e8e1b8 |
 | Authoring | Saves and autosave encode and write on a worker from a copy-on-write snapshot (F-authoring-1) | main thread 46.4 / 162.6 / 440.8 -> 1.25 / 3.35 / 7.91 ms at 100 / 200 / 320 ft; worst frame near an autosave 54-490 -> 15-27 ms | cbda254e |
 | Authoring | Collision in 32-quad tiles, a stroke rebuilds its own (F-authoring-4) | sculpt stroke end 0.71 / 2.86 / 6.87 -> 0.56 / 0.50 / 0.61 ms at 100 / 200 / 320 ft | 0ebb674c |
 | Authoring | Paint stroke end re-plans the tables only (F-authoring-3, part) | broad tint 2.84 / 6.53 / 7.07 -> 0.53 / 0.71 / 0.73 ms | 1582c096 |
@@ -83,6 +85,12 @@ reader holding its file (4c56da38); the title leaked six orphan nodes per visit 
   against the dev run's 9.9 s: boot is a real player cost.
 - **Vsync-bound token loads.** Token loads are frame-bound: with hundreds of tokens alive a frame
   costs 20-25 ms besides the spawn, vsync or not.
+- **A spawn path that grows with the token count** (tokenscale, headless). `_place_new_token` is
+  flat (pack 3.4-3.6 ms at 22, 283 and 478 live tokens, avatars 0.28-0.31), and so is each step of
+  a load job (create, add_child, reground, track, connect, pop-in). What grew was the frame after
+  a pack spawn (the shared idle clip's cache rebuild, fixed) and every live token's idle animation
+  (6.7 of 7.3 ms a frame at 500 pack tokens; everything else 0.59 ms, the occlusion fade, ghost
+  budget and markers within noise), which a covered load pays every frame.
 - `Performance.TIME_PROCESS` is a one-second maximum, so the older `process_time_avg_ms` columns
   in this file are suspect.
 

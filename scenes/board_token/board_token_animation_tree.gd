@@ -31,9 +31,12 @@ func _ready() -> void:
 		# Set the animation player path
 		tree.anim_player = tree.get_path_to(anim_player)
 
-		# A glTF clip carries no loop flag, so a model's idle would play once and freeze.
+		# A glTF clip carries no loop flag, so a model's idle would play once and freeze. The clip
+		# is shared by every token of the model (one cached scene), and setting loop_mode emits
+		# `changed` even when the value is the same, which makes every mixer playing the clip
+		# drop its caches and rebuild them on its next process: written once, by the first token.
 		var idle := anim_player.get_animation(IDLE) if anim_player.has_animation(IDLE) else null
-		if idle != null:
+		if idle != null and idle.loop_mode != Animation.LOOP_LINEAR:
 			idle.loop_mode = Animation.LOOP_LINEAR
 
 		# Set root_node to the model scene (AnimationPlayer's parent) where animation tracks are valid
