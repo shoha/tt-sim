@@ -600,47 +600,41 @@ func test_rebuilds_create_no_materials_for_resolved_species() -> void:
 			assert_same(cell_mesh.surface_get_material(i), surfaces[i])
 
 
-func test_the_density_budget_is_reapplied_after_a_rebuild() -> void:
+func test_a_rebuilt_ground_cover_node_takes_the_current_thinning() -> void:
 	var scatter := _scatter()
-	scatter.build_all({GRASS: _cell_rows(Vector2i(0, 0), 20)})
+	scatter.build_all({GRASS: _cell_rows(Vector2i(0, 0), 20), OAK: _cell_rows(Vector2i(0, 0), 4)})
+	var settled := scatter.get_cell_node(Vector2i(0, 0), GRASS).multimesh
+	assert_eq(settled.visible_instance_count, 20, "everything is drawn at full size")
+
+	FoliageDensityController.fraction = 0.5
 	scatter.set_cells({Vector2i(1, 0): {GRASS: _cell_rows(Vector2i(1, 0), 30)}}, false)
-	for cell in [Vector2i(0, 0), Vector2i(1, 0)]:
-		var multimesh := scatter.get_cell_node(cell, GRASS).multimesh
-		assert_eq(multimesh.visible_instance_count, multimesh.instance_count, "under budget")
-
-	var per_instance := FoliageBudget.primitives_per_instance(
-		scatter.get_cell_node(Vector2i(0, 0), GRASS).multimesh.mesh
-	)
-	scatter.budget = per_instance * 25
-	scatter.set_cells({Vector2i(2, 0): {GRASS: _cell_rows(Vector2i(2, 0), 10)}}, false)
-	var shown := 0
-	for cell in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]:
-		var multimesh := scatter.get_cell_node(cell, GRASS).multimesh
-		assert_ne(multimesh.visible_instance_count, -1)
-		shown += multimesh.visible_instance_count
-	# 60 instances over a 25-instance budget: the global allocation (floor of 25.0, which
-	# float rounding can put at 24) spans the untouched cells too.
-	assert_between(shown, 24, 25)
+	FoliageDensityController.fraction = 1.0
+	var thinned := scatter.get_cell_node(Vector2i(1, 0), GRASS).multimesh
+	assert_eq(thinned.instance_count, 30, "the full set is built")
+	assert_eq(thinned.visible_instance_count, 15, "half of it is drawn")
+	assert_eq(settled.visible_instance_count, 20, "a cell the rebuild did not touch is left alone")
 
 
-func test_under_budget_rebuilds_skip_the_global_replan_but_stay_correct() -> void:
+func test_a_tree_is_never_thinned() -> void:
 	var scatter := _scatter()
+	FoliageDensityController.fraction = 0.5
+	scatter.build_all({OAK: _cell_rows(Vector2i(0, 0), 6)})
+	FoliageDensityController.fraction = 1.0
+	var multimesh := scatter.get_cell_node(Vector2i(0, 0), OAK).multimesh
+	assert_eq(multimesh.visible_instance_count, 6)
+
+
+func test_a_merged_grow_in_is_sized_from_its_own_count() -> void:
+	var scatter := _scatter()
+	FoliageDensityController.fraction = 0.5
 	scatter.build_all({GRASS: _cell_rows(Vector2i(0, 0), 20)})
-	var untouched := scatter.get_cell_node(Vector2i(0, 0), GRASS).multimesh
-	untouched.visible_instance_count = 3  # a marker the fast path must leave alone
 	scatter.set_cells({Vector2i(1, 0): {GRASS: _cell_rows(Vector2i(1, 0), 30)}})
-	assert_eq(untouched.visible_instance_count, 3, "no map-wide re-plan while under budget")
 	for node in scatter.get_growing_nodes(Vector2i(1, 0), GRASS):
-		assert_eq(node.multimesh.visible_instance_count, node.multimesh.instance_count)
+		assert_eq(node.multimesh.visible_instance_count, 15)
 	scatter.complete_growth()
 	var grown := scatter.get_cell_node(Vector2i(1, 0), GRASS).multimesh
-	assert_eq(grown.visible_instance_count, 30)
-
-
-func test_a_density_change_reaches_the_scatter_through_its_group() -> void:
-	var scatter := _scatter()
-	get_tree().call_group(AuthoredScatter.GROUP, "set_budget", 1234)
-	assert_eq(scatter.budget, 1234)
+	FoliageDensityController.fraction = 1.0
+	assert_eq(grown.visible_instance_count, 15)
 
 
 func test_new_instances_grow_in_and_unchanged_ones_stay_put() -> void:

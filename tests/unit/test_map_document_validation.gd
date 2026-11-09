@@ -36,14 +36,14 @@ func test_unknown_entries_are_ignored() -> void:
 
 
 func test_non_byte_entry_is_ignored() -> void:
-	var result := _parse(Fixtures.minimal_entries({"props.json": "a string, not bytes"}))
+	var result := _parse(Fixtures.minimal_entries({"props.bin": "a string, not bytes"}))
 	assert_not_null(result["document"])
 	assert_true(Fixtures.has_warning(result, "not a byte buffer"))
 
 
 func test_manifest_over_its_byte_cap_is_ignored() -> void:
 	var padding := " ".repeat(MapDocumentIO.ENTRY_CAPS["manifest.json"])
-	var bytes := (padding + JSON.stringify({"format": 1})).to_utf8_buffer()
+	var bytes := (padding + JSON.stringify({"format": MapDocument.FORMAT})).to_utf8_buffer()
 	var result := _parse(Fixtures.minimal_entries({"manifest.json": bytes}))
 	assert_null(result["document"])
 	assert_true(Fixtures.has_warning(result, "over its cap"))
@@ -77,12 +77,26 @@ func test_bad_json_manifest() -> void:
 
 
 func test_unsupported_format() -> void:
-	for format in [0, MapDocument.MAX_FORMAT + 1, 1.5, "2"]:
+	for format in [0, MapDocument.MAX_FORMAT + 1, 1.5, "4"]:
 		var result := _parse(_with_manifest({"format": format}))
 		assert_null(result["document"], "format %s" % str(format))
 		assert_true(Fixtures.has_warning(result, "unsupported"))
-	for format in [1, 2, 3]:
+	for format in [4, 5]:
 		assert_not_null(_parse(_with_manifest({"format": format}))["document"], str(format))
+
+
+## Formats 1 to 3 stored the rows as JSON, which this build no longer reads: the document is
+## refused whole, with a warning that names the format and says what to do (never read as if it
+## had no rows, which the next save would turn into an empty map).
+func test_a_pre_binary_format_is_refused_with_a_clear_message() -> void:
+	for format in [1, 2, 3]:
+		var entries := _with_manifest({"format": format})
+		entries["scatter.json"] = '{"a/b": [[0,0,0,0,0,0,1,1,1,1]]}'.to_utf8_buffer()
+		var result := _parse(entries)
+		assert_null(result["document"], "format %d" % format)
+		assert_eq(result["warnings"].size(), 1, str(result["warnings"]))
+		assert_true(Fixtures.has_warning(result, "format %d is from an older version" % format))
+		assert_true(Fixtures.has_warning(result, "formats 4 to 5"))
 
 
 func test_geometry_out_of_range_is_rejected() -> void:
@@ -122,7 +136,12 @@ func test_sample_cap_is_checked_before_heights_are_read() -> void:
 
 func test_optional_manifest_fields_fall_back_with_warnings() -> void:
 	var manifest := JSON.stringify(
-		{"format": 1, "size_cells": [20, 20], "cell_size_m": 1.524, "sample_spacing_m": 0.25}
+		{
+			"format": MapDocument.FORMAT,
+			"size_cells": [20, 20],
+			"cell_size_m": 1.524,
+			"sample_spacing_m": 0.25
+		}
 	)
 	var result := _parse(Fixtures.minimal_entries({"manifest.json": manifest.to_utf8_buffer()}))
 	var doc: MapDocument = result["document"]
@@ -172,90 +191,140 @@ func test_non_finite_or_absurd_heights() -> void:
 # --- rows -----------------------------------------------------------------------------
 
 
-func test_malformed_rows_are_skipped() -> void:
-	var text := (
-		'{"a/b": ['
-		+ "[1,2,3,0,0,0,1,1,1,1],"  # good
-		+ "[1,2,3,0,0,0,1,1,1],"  # nine components
-		+ '[1,2,"3",0,0,0,1,1,1,1],'  # a string
-		+ "[1,2,3,0,0,0,1,1,1,true],"  # a bool
-		+ "[1e400,2,3,0,0,0,1,1,1,1],"  # Inf
-		+ "[1e6,2,3,0,0,0,1,1,1,1],"  # beyond MAX_ROW_COMPONENT
-		+ "[1,2,3,0,0,0,0,1,1,1],"  # zero quaternion
-		+ "5,"
-		+ "[4,5,6,0,0,0,1,1,1,1]"  # good
-		+ "]}"
+func _row(
+	x: float, y: float, z: float, quaternion: Quaternion = Quaternion()
+) -> PackedFloat32Array:
+	return PackedFloat32Array(
+		[x, y, z, quaternion.x, quaternion.y, quaternion.z, quaternion.w, 1.0, 1.0, 1.0]
 	)
-	var result := _parse(Fixtures.rows_entry(text))
+
+
+func _encoded(rows_by_asset: Dictionary) -> PackedByteArray:
+	var typed: Dictionary[String, PackedFloat32Array] = {}
+	typed.assign(rows_by_asset)
+	return MapRowsCodec.encode_rows(typed)
+
+
+func _decoded(bytes: PackedByteArray, budget: int = 1000) -> Dictionary:
+	var warnings := MapDocumentIO._WarningLog.new()
+	var rows := MapRowsCodec.decode_rows(bytes, budget, "scatter.bin", warnings)
+	return {"rows": rows, "warnings": warnings.result()}
+
+
+func test_degenerate_rows_are_dropped() -> void:
+	var flat := _row(1, 2, 3)
+	flat.append_array(_row(1, 2, 3, Quaternion(0, 0, 0, 0)))  # zero quaternion
+	flat.append_array(_row(1.0e6, 2, 3))  # beyond MAX_ROW_COMPONENT
+	flat.append_array(_row(4, 5, 6))
+	var result := _parse(Fixtures.rows_entry({"a/b": flat}))
 	var rows: PackedFloat32Array = result["document"].scatter["a/b"]
 	assert_eq(rows.size(), 20, "two good rows kept")
 	assert_eq(rows[10], 4.0)
-	assert_true(Fixtures.has_warning(result, "7 malformed rows"), str(result["warnings"]))
+	assert_true(Fixtures.has_warning(result, "2 malformed rows"), str(result["warnings"]))
 
 
-func test_malformed_assets_are_skipped() -> void:
-	var row := [0, 0, 0, 0, 0, 0, 1, 1, 1, 1]
+func test_an_asset_with_a_bad_id_ends_the_entry_with_one_warning() -> void:
 	var long_id := "p/" + "x".repeat(MapDocumentIO.MAX_ID_LENGTH)
-	var text := JSON.stringify(
-		{"": [row], long_id: [row], "a/not_rows": 5, "a/all_bad": [[1]], "a/good": [row]}
-	)
-	var result := _parse(Fixtures.rows_entry(text))
-	assert_eq(result["document"].scatter.keys(), ["a/good"])
-	assert_eq(result["warnings"].size(), 4, str(result["warnings"]))
+	var bytes := _encoded({"a/good": _row(0, 0, 0)})
+	var tail := _encoded({long_id: _row(0, 0, 0)})
+	# The sorted second asset's header follows the first; patch a bad id by splicing an empty one.
+	var empty_id := _encoded({"": _row(0, 0, 0)})
+	var glued := bytes.slice(0, 5)
+	glued.append_array(MapRowsCodec._u32(2))
+	glued.append_array(bytes.slice(MapRowsCodec.HEADER_BYTES))
+	glued.append_array(empty_id.slice(MapRowsCodec.HEADER_BYTES))
+	var got := _decoded(glued)
+	assert_eq(got["rows"].keys(), ["a/good"], "what came before the bad asset is kept")
+	assert_eq(got["warnings"].size(), 1, str(got["warnings"]))
+	var long := _decoded(tail)
+	assert_true(long["rows"].is_empty())
+	assert_eq(long["warnings"].size(), 1)
 
 
 func test_unknown_asset_ids_are_kept() -> void:
-	var text := '{"not_in_palette/Thing": [%s]}' % Fixtures.IDENTITY_ROW
-	var result := _parse(Fixtures.rows_entry(text))
+	var result := _parse(Fixtures.rows_entry({"not_in_palette/Thing": _row(1, 0, 1)}))
 	assert_true(result["document"].scatter.has("not_in_palette/Thing"))
 
 
 func test_bad_rows_entry_does_not_reject_the_map() -> void:
-	var not_object := _parse(Fixtures.rows_entry("[1, 2]"))
-	assert_not_null(not_object["document"])
-	assert_true(not_object["document"].scatter.is_empty())
-	var bad_json := _parse(Fixtures.minimal_entries({"props.json": "{".to_utf8_buffer()}))
-	assert_not_null(bad_json["document"])
-	assert_true(Fixtures.has_warning(bad_json, "props.json is not valid JSON"))
+	var not_rows := _parse(Fixtures.minimal_entries({"scatter.bin": "[1, 2]".to_utf8_buffer()}))
+	assert_not_null(not_rows["document"])
+	assert_true(not_rows["document"].scatter.is_empty())
+	assert_true(Fixtures.has_warning(not_rows, "scatter.bin is not a TTRW entry"))
+	var wrong_version := _encoded({"a/b": _row(0, 0, 0)})
+	wrong_version[4] = 9
+	var versioned := _parse(Fixtures.minimal_entries({"props.bin": wrong_version}))
+	assert_not_null(versioned["document"])
+	assert_true(Fixtures.has_warning(versioned, "props.bin is version 9"))
 
 
-func test_rows_per_asset_cap() -> void:
-	var rows := PackedStringArray()
-	rows.resize(MapDocumentIO.MAX_ROWS_PER_ASSET + 1)
-	rows.fill(Fixtures.IDENTITY_ROW)
-	var result := _parse(Fixtures.rows_entry('{"a/b": [' + ",".join(rows) + "]}"))
-	var kept := MapDocument.row_count(result["document"].scatter)
-	assert_eq(kept, MapDocumentIO.MAX_ROWS_PER_ASSET)
-	assert_true(Fixtures.has_warning(result, "keeps its first"))
+func test_an_asset_over_the_row_cap_is_not_read() -> void:
+	var bytes := _encoded({"a/b": _row(0, 0, 0)})
+	var count_at := MapRowsCodec.HEADER_BYTES + 2 + 3
+	bytes.encode_u32(count_at, MapDocumentIO.MAX_ROWS_PER_ASSET + 1)
+	var got := _decoded(bytes)
+	assert_true(got["rows"].is_empty())
+	assert_eq(got["warnings"].size(), 1)
 
 
 ## The total-row budget, exercised through the budget parameter rather than a
 ## million-row fixture; parse passes MAX_TOTAL_ROWS minus the props rows.
 func test_total_row_budget() -> void:
-	var warnings := MapDocumentIO._WarningLog.new()
-	var text := (
-		JSON
-		. stringify(
-			{
-				"a/one": [[0, 0, 0, 0, 0, 0, 1, 1, 1, 1], [1, 0, 0, 0, 0, 0, 1, 1, 1, 1]],
-				"a/two": [[2, 0, 0, 0, 0, 0, 1, 1, 1, 1], [3, 0, 0, 0, 0, 0, 1, 1, 1, 1]],
-			}
-		)
-	)
-	var rows := MapDocumentIO._parse_rows(text.to_utf8_buffer(), "scatter.json", 3, warnings)
+	var one := _row(0, 0, 0)
+	one.append_array(_row(1, 0, 0))
+	var two := _row(2, 0, 0)
+	two.append_array(_row(3, 0, 0))
+	var got := _decoded(_encoded({"a/one": one, "a/two": two}), 3)
+	var rows: Dictionary = got["rows"]
 	assert_eq(MapDocument.row_count(rows), 3)
 	assert_eq(rows["a/two"].size(), 10)
-	assert_eq(warnings.result().size(), 1)
+	assert_eq(got["warnings"].size(), 1)
 
 
 func test_props_and_scatter_share_the_budget() -> void:
-	var one := '{"x/a": [%s]}' % Fixtures.IDENTITY_ROW
+	var typed: Dictionary[String, PackedFloat32Array] = {"x/a": _row(0, 0, 0)}
 	var entries := Fixtures.minimal_entries(
-		{"props.json": one.to_utf8_buffer(), "scatter.json": one.to_utf8_buffer()}
+		{"props.bin": MapRowsCodec.encode_rows(typed), "scatter.bin": MapRowsCodec.encode_rows(typed)}
 	)
 	var doc: MapDocument = _parse(entries)["document"]
 	assert_eq(MapDocument.row_count(doc.props), 1)
 	assert_eq(MapDocument.row_count(doc.scatter), 1)
+
+
+## Every prefix of a real entry, and the entry with a byte changed anywhere, decodes without a
+## crash into rows that are all finite, in range and rotating (the reader's rule).
+func test_truncated_and_corrupt_row_entries_never_yield_bad_rows() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var flat := PackedFloat32Array()
+	for i in 40:
+		flat.append_array(
+			_row(
+				rng.randf_range(-40, 40),
+				rng.randf_range(-5, 5),
+				rng.randf_range(-40, 40),
+				Quaternion(Vector3.UP, rng.randf_range(0, TAU))
+			)
+		)
+	MapDocumentIO.snap_rows(flat)
+	var bytes := _encoded({"a/b": flat, "c/d": flat.slice(0, 100)})
+	for cut in bytes.size():
+		_assert_sound(_decoded(bytes.slice(0, cut))["rows"])
+	for round in 300:
+		var damaged := bytes.duplicate()
+		for flips in rng.randi_range(1, 4):
+			damaged[rng.randi_range(0, damaged.size() - 1)] = rng.randi_range(0, 255)
+		_assert_sound(_decoded(damaged)["rows"])
+
+
+func _assert_sound(rows_by_asset: Dictionary) -> void:
+	for asset_id: String in rows_by_asset:
+		var flat: PackedFloat32Array = rows_by_asset[asset_id]
+		assert_eq(flat.size() % MapDocument.ROW_STRIDE, 0)
+		for start in range(0, flat.size(), MapDocument.ROW_STRIDE):
+			if not MapDocumentIO.row_ok(flat, start):
+				fail_test("an unsound row came out of a damaged entry")
+				return
 
 
 # --- masks ---------------------------------------------------------------------------
@@ -341,10 +410,17 @@ func test_malformed_biome_list_drops_the_biomes() -> void:
 
 
 func test_warnings_are_capped() -> void:
-	var assets := {}
+	# 80 assets whose column data is missing (a body of 0 bytes): one warning each.
+	var bytes := "TTRW".to_ascii_buffer()
+	bytes.append(MapRowsCodec.VERSION)
+	bytes.append_array(MapRowsCodec._u32(80))
 	for i in 80:
-		assets["bad_%d/x" % i] = "not rows"
-	var result := _parse(Fixtures.rows_entry(JSON.stringify(assets)))
+		var id := ("bad_%02d/x" % i).to_utf8_buffer()
+		bytes.append_array(MapRowsCodec._u16(id.size()))
+		bytes.append_array(id)
+		bytes.append_array(MapRowsCodec._u32(1))
+		bytes.append_array(MapRowsCodec._u32(0))
+	var result := _parse(Fixtures.minimal_entries({"scatter.bin": bytes}))
 	var warnings: PackedStringArray = result["warnings"]
 	assert_eq(warnings.size(), MapDocumentIO.MAX_WARNINGS + 1)
 	assert_eq(warnings[warnings.size() - 1], "30 more problems not listed")

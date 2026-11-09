@@ -62,6 +62,14 @@ global uniform vec4 occlusion_tile_view;
 // The tile grid: tiles across, tiles down, the texel index of the first tile header, unused.
 // Zero tiles across: no valid lists, every pass runs the plain loop.
 global uniform vec4 occlusion_tile_grid;
+// The world viewport's pixel height over 1080 (WorldView, project.godot [shader_globals]): 1 at
+// 1080p, 2 at 4K. Dither cells are whole numbers of render pixels that keep their share of the
+// screen: world_px_cell() pixels across (1 at 1080p and 1440p, 2 at 4K).
+global uniform float world_px_scale;
+
+float world_px_cell() {
+	return max(1.0, floor(world_px_scale + 0.5));
+}
 
 
 // 16x16 Bayer ordered dither via recursive construction. Builds from 2x2 -> 4x4 ->
@@ -211,7 +219,7 @@ void apply_occlusion_fade(
 		return;
 	}
 
-	vec2 dither_coord = frag_coord;
+	vec2 dither_coord = frag_coord / world_px_cell();
 	if (lofi_pixelation > 0.0) {
 		float aspect = 16.0 / 9.0;
 		vec2 uv_here = frag_coord / viewport_size;

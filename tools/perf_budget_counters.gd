@@ -32,8 +32,11 @@ const LIMITS := {
 	"pop_in_span_s": 1.5,
 	"fade_token_cap": 256.0,
 	"covered_max_fps": 240.0,
+	"idle_unfocused_fps": 15.0,
+	"idle_minimized_fps": 5.0,
 	"stroke_tiles": 12.0,
 	"dab_tiles": 6.0,
+	"doc_row_bytes": 11.0,
 	"ground_prepass_writes": 0.0,
 	"ground_blend_roughness": 0.0,
 	"skirt_shadowed": 0.0,
@@ -45,6 +48,8 @@ const LIMITS := {
 	"default_shadow_tier": float(RenderingServer.SHADOW_QUALITY_SOFT_HIGH),
 	"default_shadow_cascades": float(ShadowCascades.BLENDED),
 	"default_foliage_edges": float(FoliageEdges.SMOOTH),
+	"ground_keep_far": 0.5,
+	"ground_keep_home": 1.0,
 }
 
 ## Tokens on the table for the net counters, laid out on the perfaudit net harness's 1.25 m grid.
@@ -96,6 +101,7 @@ static func rows(parent: Node) -> Array[Dictionary]:
 	out.append_array(net_rows())
 	out.append_array(token_rows(parent))
 	out.append_array(authoring_rows())
+	out.append_array(document_rows())
 	out.append_array(render_rows())
 	return out
 
@@ -296,6 +302,22 @@ static func token_rows(parent: Node) -> Array[Dictionary]:
 			"240; uncapped, the cover spun 3,500 frames of 0.5 ms",
 			"F-system-3, 42a1dfe9"
 		),
+		_row(
+			"idle_unfocused_fps",
+			"Frame cap while the window is unfocused (idle throttle)",
+			IdleThrottle.cap_for(true, false, false, false),
+			"fps",
+			"15; an idle game ran at full rate",
+			"S4, sysidle"
+		),
+		_row(
+			"idle_minimized_fps",
+			"Frame cap while the window is minimised (idle throttle)",
+			IdleThrottle.cap_for(true, false, true, false),
+			"fps",
+			"5; a minimised game drew nothing yet used 0.18-0.23 cores",
+			"S4, sysidle"
+		),
 	]
 
 
@@ -333,6 +355,47 @@ static func authoring_rows() -> Array[Dictionary]:
 			"",
 			"set at 4 of %d" % total,
 			"F-authoring-4, 0ebb674c"
+		),
+	]
+
+
+## Bytes per scatter row of the map document (topic mapformat): a fixed 19600-row field of
+## plants, laid cell by cell as the generator emits them (a jittered 1.4 m lattice per 10 m cell,
+## yaw about +Y, uniform scale, a smooth hill), encoded by MapRowsCodec and deflated as the ZIP
+## stores it. JSON rows cost about 34 bytes deflated (93 raw); a regression of the column coding
+## shows here.
+@warning_ignore("integer_division")
+static func document_rows() -> Array[Dictionary]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var flat := PackedFloat32Array()
+	for cell_z in 20:
+		for cell_x in 20:
+			for i in 49:
+				var x := cell_x * 10.0 + (i % 7) * 1.4 + rng.randf() * 0.6
+				var z := cell_z * 10.0 + (i / 7) * 1.4 + rng.randf() * 0.6
+				var scale := rng.randf_range(0.85, 1.15)
+				var q := Quaternion(Vector3.UP, rng.randf() * TAU)
+				flat.append_array(
+					PackedFloat32Array(
+						[x, sin(x * 0.05) * cos(z * 0.04) * 3.0, z, q.x, q.y, q.z, q.w, scale, scale, scale]
+					)
+				)
+	MapDocumentIO.snap_rows(flat)
+	var codec: Variant = MapDocumentIO.codec()
+	var by_asset: Dictionary[String, PackedFloat32Array] = {"perf_budget/plant": flat}
+	var packed: PackedByteArray = codec.encode_rows(by_asset)
+	var deflated := packed.compress(FileAccess.COMPRESSION_DEFLATE).size()
+	var rows_count := flat.size() / MapDocument.ROW_STRIDE
+	var measured := "set at 1.5 times the value read (%d rows, %d B raw, %d B deflated)"
+	return [
+		_row(
+			"doc_row_bytes",
+			"Deflated bytes per scatter row in map.ttmap",
+			float(deflated) / rows_count,
+			"B",
+			measured % [rows_count, packed.size(), deflated],
+			"mapformat"
 		),
 	]
 
@@ -461,6 +524,23 @@ static func render_rows() -> Array[Dictionary]:
 			"",
 			"Smooth, the shipped look; Fast saves about 0.6 ms with MSAA on, board first",
 			"gpuoptions"
+		),
+		_row(
+			"ground_keep_far",
+			"Share of ground cover drawn at camera size 20 (zoomed out)",
+			FoliageDensityController.keep_fraction(20.0),
+			"",
+			"0.5; the canopy hides most of the ground there: about 0.5 ms",
+			"F-foliage-4, foliagelod"
+		),
+		_row(
+			"ground_keep_home",
+			"Share of ground cover drawn at the 100 ft map's home zoom (13.85)",
+			FoliageDensityController.keep_fraction(13.85),
+			"",
+			"1.0; half of it missing is visible at 1:1 there",
+			"F-foliage-4, foliagelod",
+			"min"
 		),
 	]
 

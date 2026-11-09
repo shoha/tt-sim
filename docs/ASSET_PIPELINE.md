@@ -32,7 +32,7 @@ treecube presets + biomes/*.json
   -> map.glb
   -> tt-sim  %APPDATA%/Godot/app_userdata/TTSim/levels/<level>/map.glb
   -> GlbUtils.load_map_async  ->  collision, water, scatter MultiMeshes + wind, lighting extras, duplicate instancing
-  -> FoliageDensityController applies the per-user primitive budget at runtime
+  -> FoliageDensityController sizes the chunks; GroundThinner thins ground cover with the zoom
 ```
 
 Tokens (asset packs) take a separate path through `AssetManager` and only share the
@@ -311,9 +311,10 @@ Scatter instances contract in full:
 
 ## 7. Budgets and scale
 
-- **Foliage primitive budget:** per-user setting `graphics/foliage_budget`, default
-  8,000,000, range 2M to 24M, applied at runtime per chunk. Not overridable per map.
-  Measured reference map: 52,154 instances across 57 species.
+- **Ground-cover thinning:** no triangle budget is applied any more; ground cover (the lean
+  ground-cover material) is drawn at 1.0 up to camera size 14 and thins to 0.5 by 20
+  (`FoliageDensityController`), at runtime per chunk, not overridable per map. Measured reference
+  map: 52,154 instances across 57 species.
 - **Triangle targets:** treecube trees are 4k to 5k triangles by construction (pine about
   10k, the heaviest preset); grass clumps 6; rocks 80 to 1,280. terrain-paint's catalog
   decimation for legacy FloraPaint assets targets 3,000 for wood surfaces and 300 for
@@ -943,8 +944,11 @@ treecube `docs/looks/ground20/refs8.py` measured it). The consumer computes it f
 imported texture when absent. It is read as a biome's light reference through
 `ground_look.ref_surface`.
 
-**Saved levels: mass anchors.** A level gains one optional entry (like the erase and fire
-entries): per asset id, one (dx, dz) offset in metres per instance row of that asset, in row
+**Saved levels: mass anchors.** A level gains one optional entry, `mass_anchors.bin` (like the
+erase and fire entries; binary `TTAN` columns since map format 4, `docs/systems/map_document.md`
+"Rows as binary"; the scatter and props rows are `scatter.bin` and `props.bin`, snapped to
+2^-10 m): per asset id, one (dx, dz) offset in metres per instance row of that asset, on a 0.1
+mm grid, in row
 order, from the row to its mass anchor; a row with no anchor in an anchored asset is
 written (0, 0), its own anchor. It is validated on load: the count must equal the asset's
 rows and every offset must lie within the rule's reach (checked where the palette is known,

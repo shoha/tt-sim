@@ -443,7 +443,7 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	scatter = root.get_node_or_null(NodePath(MapSourceLoader.SCATTER_NODE)) as AuthoredScatter
 	props = root.get_node_or_null(NodePath(MapSourceLoader.PROPS_NODE)) as AuthoredScatter
 	scatter.attach_document(document)
-	FoliageDensityController.apply(root, FoliageDensityController.budget_from_settings())
+	FoliageDensityController.apply(root)
 	_view_fit.fit(root, document)
 	editor = AuthoringEditor.create(document, root, history)
 	editor.edited.connect(mark_edited)

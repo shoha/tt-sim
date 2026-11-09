@@ -205,11 +205,12 @@ func test_anchors_round_trip_and_degrade() -> void:
 	var old: Dictionary = MapDocumentIO.parse(entries)
 	assert_true(old.document.mass_anchors.is_empty(), "an older level has none")
 	assert_eq(old.warnings, PackedStringArray())
-	entries[MapAnchorsIO.ENTRY] = ('{"%s": [1, "x", 0, 0]}' % GRASS).to_utf8_buffer()
+	entries[MapAnchorsIO.ENTRY] = "not an anchors entry".to_utf8_buffer()
 	var bad: Dictionary = MapDocumentIO.parse(entries)
 	assert_true(bad.document.mass_anchors.is_empty(), "malformed is dropped")
 	assert_eq(bad.warnings.size(), 1)
-	entries[MapAnchorsIO.ENTRY] = ('{"%s": [1, 0]}' % GRASS).to_utf8_buffer()
+	var one_row: Dictionary[String, PackedFloat32Array] = {GRASS: PackedFloat32Array([1.0, 0.0])}
+	entries[MapAnchorsIO.ENTRY] = MapRowsCodec.encode_offsets(one_row, MapAnchorsIO.STEP)
 	var short: Dictionary = MapDocumentIO.parse(entries)
 	assert_true(short.document.mass_anchors.is_empty(), "a count mismatch is dropped")
 	assert_eq(short.warnings.size(), 1)
@@ -218,8 +219,8 @@ func test_anchors_round_trip_and_degrade() -> void:
 	assert_eq(warnings.size(), 1)
 
 
-## A level saves each offset to MapAnchorsIO.DECIMALS, and collect() snaps them the same way, so
-## the offsets a session draws with are the ones a reopened level (or a peer) reads back, bit
+## A level saves each offset on the MapAnchorsIO.STEP grid, and collect() snaps them the same way,
+## so the offsets a session draws with are the ones a reopened level (or a peer) reads back, bit
 ## for bit. Unsnapped, a mass whose anchor lay on a GroundMassStamps.ANCHOR_GRID line split in
 ## two on reopening and its shade stamp moved.
 func test_collected_offsets_equal_the_reopened_ones() -> void:

@@ -74,10 +74,12 @@ reader holding its file (4c56da38); the title leaked six orphan nodes per visit 
 
 ### Found false
 
-- **Render scale's premise.** The world viewport is 1920x1080 on every 16:9 window (a stretched
-  SubViewportContainer on a 1920x1080 canvas), so a 4K player pays about 4 ms and sees a softer
+- **Render scale's premise.** The world viewport was 1920x1080 on every 16:9 window (a stretched
+  SubViewportContainer on a 1920x1080 canvas), so a 4K player paid about 4 ms and saw a softer
   upscaled board. The register's "4K 14.1 ms" and "FSR 0.5 at 4K: 14.1 -> 4.7 ms" were
-  output-sized renders the game never draws ("Render scale").
+  output-sized renders the game did not draw. Card rendersize (2026-11-09, board
+  perf-render-scale: output-sized) made them real: the viewport is now output-sized, so a 4K
+  window pays about 11.7 ms at home and Render scale is the player's lever ("Render scale").
 - **The ground's half of the frame.** The flat-material floor (2.0 of 4.0 ms) shrank after the
   pre-pass change (`ground_flat` saves 0.23 ms at home now); a full bake of the composited ground
   saves 0.85-1.12 ms at 1080p on the near views (home 3.18 -> 2.27) and 0.45 at full zoom-out,
@@ -145,8 +147,8 @@ From the register's rows that are not merged, with their measured size:
   map still takes 11.7 s and a cold play load 3.4 s, both waiting on the lane's serial bakes:
   decoding, hashing and cache writes could move off the serial lane, unmeasured); about 620 MB of texture memory stays at the title after a map (526 MB
   unattributed, engine-side); the first-launch warm-up; about 80 pipeline compiles per load;
-  surface PNGs 54 % of the download; process memory creeps 2.7 MB per map cycle; idle runs at full
-  rate (board perf-idle-throttle).
+  surface PNGs 54 % of the download; process memory creeps 2.7 MB per map cycle; the idle throttle (15 fps unfocused, 5 minimised, sysidle) is built:
+  see "Idle throttle".
 - **Look-pending** (the user's look is the gate): the occlusion fade tiles, render scale, ground-
   cover light and skirt commits; the gpuoptions defaults.
 - **Test hygiene found on the way.** GUT silently dropped two test scripts that did not parse
@@ -5474,7 +5476,48 @@ JSON 246 ms (`String.num` per float), surfaces 108 ms (`SurfaceEntries.canonical
 per sample), the writer's checks 64 ms (`row_ok` per row, the height scan), biomes 10 ms, deflate and
 write 184 ms. All of it is on the worker now. Format-neutral speedups were not taken: the frame no
 longer pays any of it, and the big one (binary rows) is a format change (board question
-perf-map-format).
+perf-map-format; done by the card below).
+
+## Map document format 4 (topic perfaudit, card mapformat, 2026-11-09)
+
+Scatter, props and mass anchors are binary integer columns on a 2^-10 m grid (`MapRowsCodec`,
+`docs/systems/map_document.md` "Rows as binary"); the board answered "binary". Lossless for the
+rows the generator makes (they were already snapped; the grid moved from 6 decimals to 2^-10 so
+every value is an exact float32), at most 0.49 mm and 0.2 degree for a row built by hand. No look
+changes intended: the instance transforms move by under a millimetre and 0.1 degree, and the
+generated row count shifts by a few instances per 85,000 (84,919 to 84,911 at 320 ft; the
+coarser grid changes a few rejection decisions, cause not isolated further).
+
+**How.** `tools/map_size/doc_probe.tscn` (headless, in this worktree and in a worktree of the base
+commit `92f6a036`, same probe, same seed): the perfaudit net forest valley (seed 3) at full paint,
+scattered to the end, then `capture`, `encode`, `write_snapshot` and 3 `read` runs (best). Late join:
+`perfaudit_net` (`net_launcher`, 3 peers, `size=320,fill=1`, ENet loopback), the map file's payload
+in the host's `late_join_200_tokens` window and client2's `to_table` window. Both under the lane,
+but the machine was shared with other agents (their gate shards ran at times), so ms are
+indicative; bytes are exact.
+
+| Map | File before | File after | Scatter entry (deflated) before / after | Worker encode before / after | `write_snapshot` before / after | `read` before / after |
+|---|---|---|---|---|---|---|
+| 100 ft, light | 58,024 B | 47,220 B | 16,139 / 5,896 B | 18 / 28 ms | 22 / 19 ms | 17 / 16 ms |
+| 100 ft, full | 337,017 B | 139,228 B | 273,507 / 83,657 B | 83 / 47 ms | 130 / 55 ms | 48 / 38 ms |
+| 200 ft, full | 1,424,784 B | 569,634 B | 1,165,496 / 340,478 B | 360 / 198 ms | 555 / 225 ms | 184 / 145 ms |
+| 320 ft, full | 3,595,339 B | 1,444,132 B | 2,915,751 / 837,483 B | 813 / 500 ms | 1,314 / 564 ms | 455 / 370 ms |
+
+The mass anchors shrink too (320 ft: 282,279 to 209,341 B deflated). `height.bin` (369,684 B at
+320 ft) is now the largest single entry after the rows; it is the next candidate. The main-thread
+save share is unchanged (capture 0.3-0.45 ms at every size; the file format only moves worker
+time). The file is sent as is (zstd gains 0.0-0.5 percent over the ZIP).
+
+Late join at 320 ft, full paint, 200 tokens (loopback, one run each): the map payload the host
+sent was 3,620,288 B before and 1,461,942 B after (the whole window, tokens included), client2's
+`received_ttmap_ms` 865 before and 335 after, and its join-to-table 3,120 ms before and 2,115 ms
+after (no bandwidth cap, so a real link gains more: at 1 MiB/s the file alone is 3.4 s before and
+1.4 s after). Not measured: 100 and 200 ft late joins (the payload is the file's size by
+construction, rows above) and the load's scatter phase on its own (`read` above is the document
+parse; the native `chunk()` path is unchanged and still receives the same flat rows).
+
+The guard: `perf_budget` counter `doc_row_bytes` (`tools/perf_budget_counters.gd`), the deflated
+bytes per row of a fixed 19,600-row field, 7.45 now, limit 11 (JSON was about 34).
 
 ## Collision tiles (topic perfaudit, card authcollide, 2026-11-08)
 
@@ -5566,23 +5609,18 @@ Settings > Graphics > Render scale (`RenderScale`, `utils/render_scale.gd`): Aut
 default), 85, 75, 67 or 50 % of the board's full render, upscaled with FSR 1.0. Added because the
 frame is fill-bound (1440p-sized render 1.72 times, 4K-sized 3.5 times the 1080p time).
 
-**The board already renders at 1920x1080 on every screen.** The world SubViewport sits in a
-stretched SubViewportContainer and the project stretches canvas_items on a 1920x1080 base canvas, so
-the viewport is sized in canvas units: 1920x1080 at every 16:9 window from 720p to 4K (headless probe
-of a stretched container, 2026-11-08; at Interface size 1.4 it is 1371x771 and GameMap's
-`scaling_3d_scale` 1.4 brings the render back to 1920x1080). On a 1440p or 4K screen the canvas
-enlarges that render bilinearly, which is the pixel count of FSR 0.75 and 0.5 of the output; below
-1080p the render is supersampled (2.25 times the shown pixels at 720p). The 2D layer always draws at
-the window's resolution. So a 4K player pays about 4 ms here, not 14, and sees a softer board: native
-output rendering would need an output-sized world viewport (overlays, pixel-sized grid widths and
-unproject call sites change with it), a board decision rather than this card.
+**Before rendersize the board rendered at 1920x1080 on every screen.** The world SubViewport sat in
+a stretched SubViewportContainer on the 1920x1080 base canvas, so the viewport was sized in canvas
+units: 1920x1080 at every 16:9 window from 720p to 4K (headless probe, 2026-11-08), enlarged
+bilinearly on 1440p and 4K screens (the pixel count of FSR 0.75 and 0.5 of the output) and
+supersampled below 1080p. Card rendersize replaced that (next section); the numbers and look notes
+below were measured with the old sizing, and their "output-sized" rows are now the real cost.
 
-**The setting.** A percent scales the full render (`scaling_3d_scale` = Interface size factor x
-percent), FSR 1.0 under 1 and bilinear at or above (FSR cannot downsample). 100 % is the game before
-the setting. Auto draws no more pixels than the screen shows: the full render at 1080p and up (the
-same pixels as FSR 0.75 at 1440p and 0.5 at 4K) and the window's own size below 1080p, snapped to the
-viewport's size within 0.9 to 1 (an upscale pass over a nearly equal size costs more than it saves).
-GameMap re-applies it on every window resize. FSR sharpness stays at the engine's 0.2; the texture mip
+**The setting.** A percent scales the full render (`scaling_3d_scale` = percent / 100; the viewport
+is already output-sized), FSR 1.0 under 1 and bilinear at 1 (FSR cannot downsample). 100 % is the
+full render. Auto draws no more pixels than the screen shows: the full render at 1080p and up and the
+window's own size below 1080p, snapped to the viewport's size within 0.9 to 1 (an upscale pass over a
+nearly equal size costs more than it saves). GameMap re-applies it on every window resize. FSR sharpness stays at the engine's 0.2; the texture mip
 bias stays 0, since the engine already lowers it by log2(scale) for a scaled render.
 
 **Cost.** `perfaudit_gpu.gd` `perf` (renderscale job), `--gpu-profile`, RTX 3080 idle before (3 %,
@@ -5625,6 +5663,73 @@ what native rendering at that output would cost; the game does not run them.
   same hits every time. The occlusion fade works in view space; its Bayer dither (and the ground
   skirt's and the avatar fade's) is in render pixels, so at 50 % its cells are twice as large.
   Grid line widths are in render pixels too and enlarge with the render.
+
+## Output-sized world viewport (topic rendersize, 2026-11-09)
+
+Board perf-render-scale, user: "it is expected that moving up to higher resolutions would have a
+performance hit; if someone is at 4k but can't hit the framerate they want, they can adjust the
+render scale themselves." So the world viewport follows the window's pixels, Render scale stays
+the lever, the default stays 100 % and there is no Auto default.
+
+**The rule** (`WorldView`, `utils/world_view.gd`, tests `test_world_view.gd`): the canvas is
+V = window / (window_scale x Interface size factor) units (1920x1080 on any 16:9 window at factor
+1). The viewport is P = V x density pixels, density = factor x clamp(window_scale, 1, 2): the
+window's own pixels from 1080p up to 4K (1440p 2560x1440, 4K 3840x2160, a 3440x1440 ultrawide
+3440x1440), clamped at 4K (5K and 8K windows render 3840x2160 and the canvas upscales), and the
+old 1080p-class size below 1080p (supersample kept; Auto covers it). Render scale is a share of P
+(FSR 50 % at 4K draws 1920x1080: the cost the game had before).
+
+**Coordinates stay in canvas units.** The viewport's `size_2d_override` (with the stretch flag) is
+V, and the container is P wide, scaled by V / P, not stretched. Viewport.get_visible_rect(), the
+mouse position, `Camera3D.unproject_position` and `project_ray_*`, physics picking and forwarded
+events then all stay in canvas units whatever P is (probe on a 2560x1440 window, then in the game at
+1440p and 4K: viewport mouse and ground ray exact to 0.003 m, the pixel rounding of the cursor warp).
+So camera picking, the occlusion tiles (view space), token markers and edge arrows, drags and the
+authoring brush needed no change. Only reads of `world_viewport.size` as a screen extent did: they
+now read `WorldView.canvas_size()` (session_party, drag place, gameplay menu, eye view, orbit view,
+map view fit, sun gizmo, view ground, weather, token markers, edge arrows, biome designer compare).
+`world_viewport.size` is output pixels (the performance overlay shows it). Render-job probes under
+`tools/render_jobs/probes` still read it as a screen extent: they run at 1080p, where the two are
+equal.
+
+**Pixel-authored effects** multiply by the `world_px_scale` global (P.y / 1080, set by
+`WorldView.apply_layout`): the grid line width, the submerged marker's pixel floors, and the Bayer
+dither cells of the occlusion fade, the canopy fade and the avatar hidden fade (whole cells,
+max(1, round(scale)) render pixels: 1 at 1080p and 1440p, 2 at 4K). At 1080p the factor is 1 and the
+maths is unchanged. Derivative-based edge widths (fwidth anti-aliasing, detail fades) follow the
+pixels on their own; the lo-fi pass, grain and its dither run on the window's pixels as before.
+Left alone: the ground skirt's per-pixel hash dither (noise, finer at 4K) and SSAO (world-space
+radius).
+
+**1080p check** (`rs_pixels` job: temperate forest 100 ft, valley, seed 1234, wind frozen,
+`--full`; raw `_sub` captures, the composited ones carry time-varying lo-fi grain): before (base
+commit 92f6a036) against after, home 0.044 % of pixels differ (max 22 levels), zoom 5 with three
+tokens under the canopy 1.5 % (max 85); two runs of the base against each other differ by 0.064 %
+(max 20) and 1.4 % (max 175). The differences are the run-to-run noise of the harness (README
+"Repeatable captures"), not a pass-by-pass zero; no systematic change.
+
+**Cost** (`perfaudit_gpu.gd perf`, in-run A/B, RTX 3080 at 30 % utilisation before the runs, real
+windows, vsync off, SSAO on, MSAA off, lo-fi on, shadow High, temperate forest 100 ft, valley,
+home, 6 rounds, first discarded, 20 settle and 60 frames; GPU ms median [range]; drift 0.995-1.035
+except one 4K round 1.098):
+
+| Window | 100 % | FSR 75 % | FSR 50 % |
+|---|---|---|---|
+| 1920x1080 | 2.70 [2.67-2.74] | 1.83 [1.82-1.85] | 1.09 [1.09-1.12] |
+| 2560x1440 | 4.68 [4.50-4.87] | 3.07 [2.97-3.16] | 1.72 [1.66-1.77] |
+| 3840x2160 | 11.65 [10.60-11.84] | 7.05 [6.47-7.40] | 3.81 [3.67-3.93] |
+
+The 100 % row is 1.73 times (1440p) and 4.3 times (4K) the 1080p cost. FSR 50 % at 4K (3.8 ms)
+draws the 1920x1080 render the game drew before this card at 4K, plus the FSR pass. These are not
+comparable with the renderscale table above (a different run, session and GPU clock state: its
+1080p 100 % row read 3.93 ms).
+
+**Picking** (render job with events through `Input.parse_input_event` at window pixels, the real
+cursor warped there, the real drag path): at 1920x1080, 2560x1440 and 3840x2160 a token is picked
+and dragged by the same amount (-0.786, -0.534 m in all three), and the viewport mouse position
+and ground ray under 2 points are exact (0.000 m at 1080p and 4K, 0.003 m at 1440p from the
+cursor's whole-pixel warp). A window larger than the screen (4K on this 1440p monitor) needs the
+cursor inside the screen: the probe centres the window on it.
 
 ## Token sync bytes (topic perfaudit, card netspawn, 2026-11-08)
 
@@ -5717,3 +5822,192 @@ run. Not moved to workers: the remaining main-thread time is mostly node creatio
 insertion (165 ms of load at 320 ft against a 25 ms native call and about 15 ms of buffer
 assignment), so threading the call would save at most about 25 ms. Grow-ins, shrinks and the GLB
 path still use the per-instance path (they hold transforms for their animation).
+
+## Zoom-keyed ground thinning (topic foliagelod, 2026-11-09)
+
+Replaces "The foliage primitive budget" (board perf-ground-thin, answer "thin"). The budget
+counted triangles, which are not what foliage costs, and never engaged on a reference map; its
+Settings slider is gone (an old `graphics/foliage_budget` key is tolerated and erased on the next
+save). `FoliageDensityController` (`scenes/states/playing/`) writes
+`MultiMesh.visible_instance_count` on every ground-cover chunk (wind category "grass": cards, sprig
+clumps, litter and flowers; trees, bushes, rocks and structure decor are never thinned) from the
+camera size: 1.0 up to 14 (a map whose home is further out keeps its own home), a smoothstep
+to 0.5 at 20 (scaled with the home), quantised to 1/32, so a step drops about 3 percent of the
+ground cover while the zoom moves. `GroundThinner` (a child of the play map) reads the camera and
+calls `set_fraction`; the eye view never thins. Every chunk is already shuffled (seeded by its
+name), so a prefix is a spatially even sample and a thinner draw keeps the instances of a fuller
+one: nothing moves, so there is no shimmer. No per-instance fade: a step is one instance in
+thirty-two, scattered over every chunk at once, below what the eye resolves while the camera is
+moving; a fade would need a shader edit (the foliagefix card owns them). `perf_budget` holds
+`ground_keep_far` (0.5 at camera size 20) and `ground_keep_home` (1.0 at the 100 ft home).
+
+Direction note: the card says "zoomed in"; the thinning is for the far end of the zoom (camera
+size 14 and up). At zoom 4 and 10 and at home (13.85) nothing is thinned, as intended.
+
+Measured (render jobs `ab_thin2.json` and `ab_thin3.json` under `tools/render_jobs/local/foliagelod/`,
+probe `foliage_perf.gd`, keys `thin` and `cards_only`, six-round in-run A/B, real window, lane held,
+a new `temperate_forest_summer_s1` valley map of 320 ft filled to density 255, seed 1234, home view
+and zoom 4, 10 and 20). Arms: full (ref), thinned as shipped (cards, sprigs, litter and flowers),
+cards only (the flowers kept in full, `cards_only`), full again:
+
+| View | full | thinned (flowers too) | cards only | visible primitives full / thinned |
+| --- | --- | --- | --- | --- |
+| home | 4.56 | 4.61 (+0.04, nothing thinned) | 4.60 | 1,386,158 both |
+| zoom 4 | 3.35 | 3.34 | 3.36 | 458,410 both |
+| zoom 10 | 4.35 | 4.31 | 4.37 | 1,026,215 both |
+| zoom 20, run 1 | 5.82 | 5.18 (-0.64, -10.9 percent) | (arm not working in this run, see below) | 2,648,390 / 1,572,098 |
+| zoom 20, run 2 | 5.77 (mean of three) | 5.10 (-0.67, -11.6 percent) | 5.65 (-0.12) | 2,648,390 / 1,572,098; cards only 2,491,814 |
+
+At zoom 20 the flowers are most of the saving: thinning the cards alone is -0.07 to -0.12 ms
+(visible primitives -5.9 percent), the same rule with the flowers is -0.64 and -0.67 ms (-40.6
+percent of the visible primitives). A flower is about four cards of cost (352-400 triangles, three
+surfaces, the full shader). The first run's `cards_only` arm tested the node class "flower", which
+authored scatter does not set, so it equalled the shipped arm; run 2 tests the ground material
+(`WindFoliage.META_GROUND`) and matches the earlier cards-only run (zoom 20 5.724 to 5.656, -0.071).
+Home, zoom 4 and zoom 10 are unchanged, as intended (thinning starts at camera size 14; this
+map's home is within it, a map with a further-out home keeps its own home). Zoom 17 (earlier run,
+cards only) -0.04. The 1:1 pairs (full left, thinned right): zoom 4 and 10 are identical (zoom 4's
+crop is a canopy blob, uninformative); at zoom 20 the right frame is visibly sparser in the
+ground layer: fewer white and blue flower clumps, grass and moss beds thinner with the brown soil
+and rock showing through, but the meadow and the canopy read the same and nothing pops (the same
+instances stay). The decision: ship, since the saving is well over the 0.2 ms bar.
+
+## Foliage mipmaps (topic foliagelod, 2026-11-09)
+
+Board perf-foliage-mips, "yes". The runtime glTF parse (`AssetStore._parse`) builds textures
+with no mipmaps, while the foliage and rock shaders sample mipmapped, so a minified texture
+sampled the base level: aliasing and a poor cache hit rate. `FoliageMips` (`utils/foliage_mips.gd`)
+rebuilds each parsed mesh's textures with a mip chain: level 0 bytes are untouched; for an
+alpha-cutout texture each level's alpha is rescaled (a quantile of a strided sample, against the
+128 cutoff) so a leaf keeps its coverage when minified; colour edges are bled
+(`fix_alpha_edges`). It is done at the consumer (tt-sim), in `AssetStore`, on every parse
+(`AssetStore.mips_enabled` turns it off for measurement); the cache of parsed assets is unchanged.
+plantgen and core-library were not edited. Producer side, if wanted: ship the textures as
+KTX2 with BC7 and a mip chain at library build, which cuts VRAM by about 4x and removes the
+runtime work; the loader would then keep the file's mips (this change skips a texture that
+already has them).
+
+Measured (render job `ab_mips.json`, probe `foliage_perf_mips.gd`, key `mips`, six-round in-run
+A/B, ref_start / mipped / flat_again / ref_end, GPU ms, the flat runs about 4.7, 3.3 and 8.6):
+
+| View | flat (mean of the three) | mipped | change |
+| --- | --- | --- | --- |
+| home (13.85) | 4.72 | 4.52 | -0.20 (-4 percent) |
+| zoom 4 | 3.33 | 3.29 | -0.04 (inside the noise) |
+| full zoom-out (83.8) | 8.57 | 8.15 | -0.42 (-5 percent) |
+
+Eye view (`ab_thin2.json`, eye at (5, 5), yaw 225, pitch 0): flat 7.764 / 7.795 / 7.826, mipped
+7.543, so -0.25 ms (-3.2 percent); visible primitives 1,917,452 in all arms. The drift of the
+reference across a table is up to 6 percent per round, so home and zoom 4 are indicative; the
+zoom-out, home and eye gains are consistent in sign across the flat runs.
+
+Shimmer (the probe's `shimmer` action: the same view shifted by a fraction of a pixel, the mean
+and rms of the difference, `Image.compute_image_metrics`; lower is steadier), 41 meshes: at
+camera size 83.8, 0.25 px shift rms 8.74 flat, 8.35 mipped (-4.4 percent), 0.5 px 11.15 / 10.87
+(-2.6), 0.75 px 12.79 / 12.60 (-1.5); at home 4.03 / 3.86, 5.46 / 5.25, 6.43 / 6.24 (-3 to -4
+percent). A small gain: the foliage is mostly large, flat colour shapes.
+
+VRAM: the reference map's 98 foliage and rock textures: 17,629,184 bytes flat, 23,505,448
+bytes mipped, +5,876,264 bytes (+33.3 percent: a full chain adds a third), raw RGBA8.
+
+1:1 pairs (flat left, mipped right): at home and full zoom-out the two frames are
+indistinguishable at a glance; the mipped zoom-out has slightly cleaner leaf edges. The "home"
+capture's framing is an upside-down terrain edge (a camera orientation of the shot, not of
+the change) and so says little. The eye pair shows no visible difference either.
+
+## Idle throttle (topic sysidle, card sysidle, 2026-11-09)
+
+Register S4 (board perf-idle-throttle, answered "cap"). An idle game ran at full rate and a
+minimised one drew nothing but still spun its main loop at 145 iterations a second (the 6.9 ms
+low-processor sleep), 0.20-0.22 of a core. `IdleThrottle` (`utils/idle_throttle.gd`, a Node Root
+adds once the title is up) caps `Engine.max_fps` at 15 while the window has lost the focus and at
+5 while it is minimised; Settings > Graphics > "Idle throttle" (`graphics/idle_throttle`, default
+on) turns it off for second-monitor use. Details in the class header; the rules that matter:
+
+- A load behind the sheet is never slowed: `LoadPacing.cover` calls `IdleThrottle.release()` before
+  it saves `Engine.max_fps` (so the player's cap is the one saved, not the throttled one) and
+  `uncover` calls `reapply()` after it restores. The throttle never touches vsync.
+- A host with a connected peer keeps 30 fps in either state (the network poll and the physics steps
+  run once a frame; the engine catches up at most 8 physics steps a frame, so 5 fps would run a
+  host's physics at two thirds speed). Not driven by a net scenario here: the peer test is the
+  tree's `SceneMultiplayer` (`is_server()` with a non-empty peer list), covered by the policy test
+  only.
+- Headless, scripted (render jobs, probes, GUT) and `--validation-bridge` runs get no node
+  (`IdleThrottle.runs_here()`): an agent's window is rarely focused and its timings must not
+  change. A probe that wants the real throttle sets `IdleThrottle.allow_scripted` (the
+  `perfaudit_system.gd` `throttle` action).
+- A window minimised by a script reported `focused true` throughout (measured), so the node reads
+  the window mode every frame (a few microseconds) and the minimised cap does not wait for a focus
+  loss.
+
+Measured 2026-11-09, the title screen of a dev run, a real 1280x720 or 1920x1080 window, process
+CPU time over 10 s (render job `cpu` action and a PowerShell driver that took the foreground away
+with a second window and minimised with `ShowWindow`; another agent's headless shards ran on the
+machine for part of the session, so absolute CPU is pessimistic, the ratios are the point):
+
+| State | Throttle off | Throttle on |
+|---|---|---|
+| Focused (title, vsync) | 0.058-0.092 cores, 60 fps | unchanged (0.058-0.069, 60 fps) |
+| Unfocused, visible | 0.053 cores, 60 fps | 0.030 cores, 15 fps |
+| Minimised | 0.200-0.217 cores, loop 145/s | 0.005-0.016 cores, loop 5.1/s |
+
+The title is cheap to draw, so the unfocused saving here is the small end: a loaded map costs a
+frame several times more (the audit's 3-4 ms GPU frame at home), and the 15 fps cap removes three
+quarters of those frames. The perf budget holds the two caps (`idle_unfocused_fps`,
+`idle_minimized_fps`). The boot graph limit rose by one script (343).
+
+## Boot splash (topic sysidle, card sysidle, 2026-11-09)
+
+Register S1 (board perf-boot-splash, answered "yes"). A launch waits about 3.5 s from a pack (7 s
+wall with the quit) before the first title frame with nothing on screen. The project now shows the
+orange d20 (`assets/icons/ui/ttsim-icon.png`, the app icon, the only logo the repo has: no new art)
+centred on the splash colour it already had (`application/boot_splash/bg_color`, which the icon's
+own background matches), `show_image` on, `fullsize` off. The image is a plain file in the pack
+(checked in an exported `--export-pack`: `res://assets/icons/ui/ttsim-icon.png` is stored as is, 0
+bytes of pack growth because the window icon already needed it), and the editor binary running the
+pack prints no splash error. Cost at the title, `tools/boot_rounds.gd --window`, packs with and
+without the splash alternated, n 5, same code otherwise: first title frame median 3,498 ms
+(3,443-3,606) without and 3,568 ms (3,347-3,613) with; process wall 7,091 without and 7,185 ms
+with (the pair's order alternated, ranges overlap), so the cost is inside the run-to-run noise
+(+70 ms median, the with-splash minimum is the lowest of all ten). What the player sees is not
+measurable headless: only a real window shows the splash.
+
+## Doubling pop-in (topic sysidle, card sysidle, 2026-11-09; look-pending)
+
+Board perf-popin-cap: the user kept the 1.5 s cap and asked, "maybe an exponential pop-in? like 1,
+then the next 2, then 4, then 8, etc?". `TokenSpawnQueue.pop_in_doubling` (default true) pops a
+load's tokens in beats of 1, 2, 4, 8, ... tokens in placement order (`pop_in_batch`), a beat every
+`POP_IN_BEAT_S` = 0.2 s, squeezed to fit `POP_IN_SPAN_S` = 1.5 s from first beat to last
+(`pop_in_delay`: 10 tokens 4 beats, last 0.6 s; 100 tokens 7 beats, 1.2 s; 500 tokens 9 beats at
+0.1875 s, 1.5 s). Two changes make the beats visible. (1) The loader builds every token held at
+near-zero scale (`BoardToken.hold_for_pop_in`, which `get_logical_scale` reports as the target so
+state snapshots stay right) and starts the beats when the load completes, on the revealed table: the
+old cascade was timed from the first token built, so at 500 tokens every pop had already played
+behind the loading sheet (see the table) and at 100 half of them had. (2) Each pop is a job on the
+shared `TokenSpawnQueue`, so the 4 ms frame budget holds for a beat of 244 tokens; the measured
+post-reveal worst frame is the same as the linear cascade's, so no beat needed splitting across
+frames in practice. `pop_in_doubling = false` is the old linear cascade (kept for the A/B and as
+the way back).
+
+Real load of a saved level with N pack tokens (Beasts pack), 1920x1080 window, 3 runs each (warm-up
+plus two rounds, alternated modes), a probe logging every frame, ms after the load completed
+(`level_loading_completed`, which starts the sheet's fade):
+
+| Tokens | Mode | First pop | Last pop | Worst frame after completion |
+|---|---|---|---|---|
+| 10 | doubling | 21-23 | 631-644 | 21.3-21.6 |
+| 10 | linear | -155 to -106 | 232-279 | 23.4-28.1 |
+| 100 | doubling | 23-28 | 1,236-1,244 | 22.2-22.4 |
+| 100 | linear | -743 to -672 | 660-750 | 21.7-23.5 |
+| 500 | doubling | 73-88 | 1,558-1,569 | 41.0-59.7 |
+| 500 | linear | -6,136 to -5,559 | -27 to -25 (all behind the sheet) | 43.8-55.8 |
+
+The whole load's worst frame (the table's entry frame, 103-154 ms) is the same in both modes. The
+machine was shared (another agent's headless shards ran during the 500-token rounds), so frame
+numbers are pessimistic. Frame strips of a 100-token load, a capture every 100 ms from the
+completion (21 frames, half size), contact sheets `sheet_old.png` and `sheet_new.png` in
+`%APPDATA%/TTSim_sysidle/render_jobs/sysidle_pop_strip/` (copied beside the handoff): old, about half
+the crowd is already up at the reveal and the rest dribbles in over 0.7 s; new, the reveal shows the
+bare table, then one animal, three, seven, fifteen, thirty-one, sixty-three, the rest, each beat
+0.2 s after the last. The doubling mode costs the load nothing and shows the whole 1.5 s; the cost
+to the player is that the table is bare for the first beat or two.

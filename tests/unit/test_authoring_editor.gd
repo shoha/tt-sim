@@ -110,7 +110,8 @@ func test_placing_turning_and_removing_a_prop_round_trips() -> void:
 	var placed := editor.props.rows_by_asset()
 	assert_eq(MapDocument.row_count(placed), 1)
 	var row := PropRows.row_at(placed[handle.asset_id], 0)
-	assert_almost_eq(PropRows.row_yaw(row), 1.0, 1e-4)
+	# Rows are on the saved grid (MapDocumentIO.ROW_STEP): about 1e-3 rad in angles.
+	assert_almost_eq(PropRows.row_yaw(row), 1.0, 3e-3)
 	assert_almost_eq(Vector3(row[0], row[1], row[2]), Vector3(3, 0, 4), Vector3.ONE * 1e-5)
 	var found := editor.prop_at(Vector3(3.2, 0, 4.1))
 	assert_eq(found.get("row"), row, "picked under the pointer")

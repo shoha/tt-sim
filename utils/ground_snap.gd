@@ -208,6 +208,12 @@ static func snap_rows(
 				q = (Quaternion(from, to) * q.normalized()).normalized()
 				if max_tilt < PI:
 					q = RockKeep.capped_rotation(q, max_tilt)
+		# On the saved grid (MapDocumentIO.ROW_STEP), as every row is, so a reload is bit-equal.
+		var unit := MapDocumentIO.ROW_STEP
+		y = snappedf(y, unit)
+		q = Quaternion(
+			snappedf(q.x, unit), snappedf(q.y, unit), snappedf(q.z, unit), snappedf(q.w, unit)
+		)
 		if (
 			absf(y - current[b + 1]) <= 1e-6
 			and is_equal_approx(q.x, current[b + 3])

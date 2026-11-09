@@ -1,107 +1,133 @@
 class_name FoliageDensityController
-extends Node
+extends RefCounted
 
-## Applies the player's foliage density setting to a loaded map by writing
-## MultiMesh.visible_instance_count on every scatter chunk.
+## Zoom-keyed thinning of ground cover: writes MultiMesh.visible_instance_count on the scatter
+## chunks of ground cover (the wind category "grass": grass cards, sprig clumps, litter and
+## flowers) so that, zoomed out, a share of them is not drawn.
 ##
-## Import builds every scatter instance (see ScatterGlbUtils.process_scatter_instances) and
-## shuffles each chunk, so drawing a prefix of a chunk is a spatially even sample of that
-## cell. This turns the budget into a runtime dial that moves in both directions with no
-## map reload: 1,372 integer writes on the reference map, imperceptible.
+## Why: the audit (docs/PERFORMANCE.md "Zoom-keyed ground thinning") found ground cover the
+## largest foliage cost per instance (a card is a lit fragment, and a filled map draws three or
+## four layers of them per pixel), that its cost follows the drawn instances almost linearly, and
+## that zoomed out the canopy hides most of the ground the cards lie on while each card is
+## smaller on screen. Thinning to half at the far end costs about half a millisecond of GPU less
+## there and nothing at the zoom the table is played at, where half the ground cover is visible
+## at 1:1. The triangle budget this replaced counted triangles, which are not what foliage costs,
+## and never engaged on a reference map.
 ##
-## The setting is per-user and deliberately NOT networked -- a host and its clients may run
-## different densities to suit their own hardware. Scatter foliage carries no collision, so
-## peers disagreeing about it cannot desync anything.
+## No instance moves or fades: every chunk is shuffled at build (ScatterGlbUtils for a GLB's
+## scatter, ScatterRows.instance_order for an authored map's, both deterministic and seeded by the
+## chunk's name), so a prefix of it is a spatially even sample and a thinner draw keeps the
+## instances of a fuller one. The same instances stay while the camera zooms (no shimmer); the
+## fraction moves in 1/STEPS steps over six metres of camera size, so a step drops about three
+## percent of the ground cover, scattered over every chunk at once, while the zoom itself moves.
+##
+## Only ground cover is thinned: trees, bushes, rocks and a structure's decor are drawn in full at
+## every zoom. Flowers are ground cover here on purpose: a flower is about four ground cards of
+## cost (352-400 triangles, three surfaces, the full shader), so thinning the cards alone saved
+## only 0.07 ms at zoom 20 on the reference map.
+##
+## The fraction is one process-wide value, set by GroundThinner (the play scene's node) from the
+## camera, and read by whoever sizes a chunk (AuthoredScatter when it builds one, apply() at
+## load). The view's eye mode, a perspective camera at the ground, never thins.
 
-const SETTINGS_SECTION := "graphics"
-const SETTINGS_KEY := "foliage_budget"
+## Camera size (Camera3D.size, the orthographic height in metres) up to which every instance
+## is drawn: the home zoom of a 100 ft map is 13.85, and half the ground cover missing there is
+## visible at 1:1. A map whose home zoom is larger keeps its own home (keep_fraction's
+## `full_until`).
+const FULL_UNTIL_SIZE := 14.0
+## The camera size at which the thinning reaches GROUND_KEEP for a map whose home is
+## FULL_UNTIL_SIZE; the span scales with a larger home, so the ramp keeps its shape. It is also
+## the default far end of the orbit zoom range.
+const FLOOR_AT_SIZE := 20.0
+## The share of ground cover still drawn at the far end of the ramp and beyond.
+const GROUND_KEEP := 0.5
+## The fraction moves in steps of 1 / STEPS (1.0, 0.969, ... 0.5), so a zoom does not rewrite
+## every chunk each frame.
+const STEPS := 32
+## Group of the ground-cover chunks that have been sized, so the thinner finds them without
+## walking the tree.
+const GROUP := &"ground_cover_chunk"
 const MULTIMESH_SUFFIX := "_MultiMesh"
+const _META_GROUND := &"is_ground_cover_chunk"
+
+## The share of ground cover drawn now (1.0 = all). Process-wide: one camera looks at one map.
+static var fraction: float = 1.0
 
 
-## The player's configured budget, or FoliageBudget.PRIMITIVE_BUDGET when unset. Wrapped in
-## int(...) because ConfigFile.get_value returns whatever Variant type is on disk -- a
-## slider always writes a float or int, but a hand-edited or corrupt settings.cfg could
-## hold a String or bool, which would otherwise be a hard runtime type error on every map
-## load instead of a coerced number.
-##
-## `path` defaults to the real settings file and exists so tests can point this at a
-## disposable user:// path instead -- production callers never pass it.
-static func budget_from_settings(path: String = Paths.SETTINGS_PATH) -> int:
-	var config := ConfigFile.new()
-	if config.load(path) != OK:
-		return FoliageBudget.PRIMITIVE_BUDGET
-	return int(config.get_value(SETTINGS_SECTION, SETTINGS_KEY, FoliageBudget.PRIMITIVE_BUDGET))
+## The share of ground cover to draw at orthographic camera `camera_size`, `full_until` being
+## the size up to which all of it is drawn (at least FULL_UNTIL_SIZE). 1.0 up to it, GROUND_KEEP
+## from `full_until` times FLOOR_AT_SIZE / FULL_UNTIL_SIZE, a smoothstep between, quantised to
+## 1 / STEPS.
+static func keep_fraction(camera_size: float, full_until: float = FULL_UNTIL_SIZE) -> float:
+	var start := maxf(full_until, FULL_UNTIL_SIZE)
+	var span := start * (FLOOR_AT_SIZE / FULL_UNTIL_SIZE - 1.0)
+	var t := clampf((camera_size - start) / span, 0.0, 1.0)
+	var eased := t * t * (3.0 - 2.0 * t)
+	return snappedf(lerpf(1.0, GROUND_KEEP, eased), 1.0 / STEPS)
 
 
-## Writes visible_instance_count on every scatter chunk under `map_root` so the total stays
-## within `budget`. Returns FoliageBudget.plan()'s report so the caller can decide whether
-## to tell the player.
-##
-## Chunks are found by `has_meta("wind_foliage_category")`, which every chunk carries --
-## including deny-listed rock species, whose value is the empty string. Testing the value
-## instead of its presence would wrongly exclude rocks from the budget.
-static func apply(map_root: Node3D, budget: int) -> Dictionary:
-	var chunks_by_species := {}
-	var per_instance := {}
-	_collect(map_root, chunks_by_species, per_instance)
-
-	var species := {}
-	for species_name in chunks_by_species.keys():
-		var total := 0
-		for count in (chunks_by_species[species_name] as Dictionary).values():
-			total += count
-		species[species_name] = {
-			"count": total, "primitives_per_instance": per_instance[species_name]
-		}
-
-	var report := FoliageBudget.plan(species, budget)
-	for species_name in chunks_by_species.keys():
-		var chunk_counts: Dictionary = chunks_by_species[species_name]
-		var total: int = species[species_name]["count"]
-		var kept: int = report.kept.get(species_name, total)
-		var visible := FoliageBudget.visible_counts_for_chunks(chunk_counts, kept, total)
-		for node in visible.keys():
-			var mmi := node as MultiMeshInstance3D
-			if mmi and mmi.multimesh:
-				mmi.multimesh.visible_instance_count = visible[node]
-	return report
+## How many of `count` instances of a ground-cover chunk are drawn at `keep`: the first
+## ceil(count * keep) of its shuffled order, never fewer than one (a chunk is never emptied).
+static func thinned_count(count: int, keep: float) -> int:
+	if count <= 0 or keep >= 1.0:
+		return maxi(count, 0)
+	return clampi(ceili(float(count) * keep), 1, count)
 
 
-## Groups scatter chunks by species name, recording each chunk's instance count keyed by
-## the MultiMeshInstance3D node itself (not its name or path), plus one
-## primitives-per-instance figure per species.
-##
-## Keyed by node object rather than name or NodePath: `_collect` recurses arbitrarily deep
-## (ScatterGlbUtils parents chunks under the GLB scene root, which level_loader then
-## parents under map_container as "LevelMap", so real chunks sit two levels below the root
-## `apply()` is given), and a bare node name can only ever be resolved back to a DIRECT
-## child via get_node_or_null -- silently dropping the write-back for anything deeper. Node
-## objects also can't collide the way two identically-named chunks in different subtrees
-## would under a name-keyed dictionary, which would otherwise undercount one of them.
-static func _collect(node: Node, chunks_by_species: Dictionary, per_instance: Dictionary) -> void:
-	for child in node.get_children():
+## True for a scatter chunk of ground cover: named like a chunk (`<species>_MultiMesh...`, which
+## a structure's decor is not) and of the wind category "grass" (grass cards, sprig clumps, litter
+## and flowers; trees, bushes and rocks are not). Cached on the node.
+static func is_ground(chunk: MultiMeshInstance3D) -> bool:
+	if chunk.has_meta(_META_GROUND):
+		return chunk.get_meta(_META_GROUND)
+	if chunk.multimesh == null or chunk.multimesh.mesh == null:
+		return false
+	var ground := (
+		String(chunk.name).contains(MULTIMESH_SUFFIX)
+		and String(chunk.get_meta("wind_foliage_category", "")) == "grass"
+	)
+	chunk.set_meta(_META_GROUND, ground)
+	return ground
+
+
+## The visible_instance_count `chunk` should have now: all of its instances, except a
+## ground-cover chunk at the current fraction. A ground chunk joins GROUP here.
+static func visible_count(chunk: MultiMeshInstance3D) -> int:
+	var count := chunk.multimesh.instance_count
+	if not is_ground(chunk):
+		return count
+	if not chunk.is_in_group(GROUP):
+		chunk.add_to_group(GROUP)
+	return thinned_count(count, fraction)
+
+
+## Sizes every scatter chunk under `map_root` (the load-time pass: every node carrying the
+## "wind_foliage_category" meta, deny-listed rocks included) and returns the ground chunks.
+static func apply(map_root: Node) -> int:
+	var ground := 0
+	for child in map_root.get_children():
 		if child is MultiMeshInstance3D and child.has_meta("wind_foliage_category"):
-			var mmi := child as MultiMeshInstance3D
-			if mmi.multimesh and mmi.multimesh.mesh:
-				var species_name := _species_of(String(mmi.name))
-				if not chunks_by_species.has(species_name):
-					chunks_by_species[species_name] = {}
-					per_instance[species_name] = FoliageBudget.primitives_per_instance(
-						mmi.multimesh.mesh
-					)
-				chunks_by_species[species_name][mmi] = mmi.multimesh.instance_count
-		_collect(child, chunks_by_species, per_instance)
+			var chunk := child as MultiMeshInstance3D
+			if chunk.multimesh != null:
+				chunk.multimesh.visible_instance_count = visible_count(chunk)
+				if is_ground(chunk):
+					ground += 1
+		ground += apply(child)
+	return ground
 
 
-## "GrassBlade_MultiMesh_c-1_2" -> "GrassBlade". A species occupying one cell has no cell
-## suffix, so the species name is simply everything before "_MultiMesh".
-##
-## rfind, not find: a species whose own name contains "_MultiMesh" (e.g. a chunk literally
-## named "Rock_MultiMeshFoo_MultiMesh") would otherwise cut at the first occurrence and
-## collapse into the same species as a plain "Rock_MultiMesh" chunk, merging two unrelated
-## groups under one name and costing the merged group with whichever mesh was recorded
-## first. Cell suffixes ("_c<x>_<z>") never contain "_MultiMesh", so the last occurrence is
-## always the real separator.
-static func _species_of(node_name: String) -> String:
-	var cut := node_name.rfind(MULTIMESH_SUFFIX)
-	return node_name.substr(0, cut) if cut > 0 else node_name
+## Moves the fraction to `keep` and re-sizes every ground chunk; returns how many it wrote.
+## Does nothing when it is already there.
+static func set_fraction(tree: SceneTree, keep: float) -> int:
+	if is_equal_approx(keep, fraction):
+		return 0
+	fraction = keep
+	var written := 0
+	for node in tree.get_nodes_in_group(GROUP):
+		var chunk := node as MultiMeshInstance3D
+		if chunk != null and chunk.multimesh != null:
+			chunk.multimesh.visible_instance_count = thinned_count(
+				chunk.multimesh.instance_count, keep
+			)
+			written += 1
+	return written

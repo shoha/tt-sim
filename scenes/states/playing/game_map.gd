@@ -60,6 +60,7 @@ var _grid_visibility: GridVisibilityController = null
 var _token_context_menu: TokenContextMenuController = null
 var _drag_place: DragPlaceController = null
 var _camera_controller: CameraController = null
+var _ground_thinner: GroundThinner = null
 var _perf_overlay: PerformanceOverlay = null
 var _debug_render_toggles: DebugRenderToggles = null
 var _perf_overlay_container: VBoxContainer = null
@@ -143,18 +144,22 @@ func _ready() -> void:
 	_camera_controller.name = "CameraController"
 	add_child(_camera_controller)
 	_camera_controller.setup(self)
+	_ground_thinner = GroundThinner.new()
+	_ground_thinner.name = "GroundThinner"
+	add_child(_ground_thinner)
+	_ground_thinner.setup(self)
 	# The Interface size changes the window's content scale, which also fires size_changed.
 	get_window().size_changed.connect(_match_world_render)
 	_match_world_render()
 
 
-## Keep the board's 3D render at its Interface size 100% resolution times the Render scale. The
-## world viewport fills a canvas that shrinks by content_scale_factor, so its 3D render scales
-## back up by the same factor (bilinear supersampling, as the 100% canvas already does on windows
-## under 1080p): at Render scale 100% the render size, and pixel-sized details such as grid line
-## widths, stay as they were. A lower Render scale (or Auto on a small window) draws fewer
-## pixels and FSR 1.0 upscales them (RenderScale; Settings applies a new choice the same way).
+## Keep the board's viewport at the output's pixel size (WorldView: window pixels from 1080p up to
+## 4K, the 1080p-class size below, every position still in canvas units through the viewport's 2D
+## size override) and its 3D render at the Render scale of that. A lower Render scale (or Auto on
+## a small window) draws fewer pixels and FSR 1.0 upscales them (RenderScale; Settings applies a
+## new choice the same way).
 func _match_world_render() -> void:
+	WorldView.apply_layout(viewport_container, world_viewport, get_window())
 	RenderScale.apply_to(world_viewport, get_window(), RenderScale.current)
 
 
@@ -804,16 +809,6 @@ func apply_grid_visual_settings(
 ) -> void:
 	_visual_effects.apply_grid_visual_settings(cell_tint_opacity, line_thickness, fade_radius)
 
-
-## Apply the player's foliage density setting to the loaded map. Called by the settings
-## menu when the slider moves, and at map load. Returns nothing: the load-time caller owns
-## whether to tell the player, because only it knows this is a fresh map rather than a
-## slider nudge.
-func apply_foliage_density(budget: int) -> void:
-	if map_container:
-		FoliageDensityController.apply(map_container, budget)
-	# Authored scatter re-applies the budget itself after every brush rebuild.
-	get_tree().call_group(AuthoredScatter.GROUP, "set_budget", budget)
 
 
 ## Gives wind materials created after load (AuthoredScatter.species_added: a species first

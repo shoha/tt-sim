@@ -49,6 +49,9 @@ static func cover(owner: Object) -> void:
 		_saved_vsync = DisplayServer.window_get_vsync_mode()
 		if _saved_vsync != DisplayServer.VSYNC_DISABLED:
 			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		# A background throttle (IdleThrottle) puts the player's cap back first, so that is the
+		# one saved here, and a load behind the sheet runs at full pace when unfocused.
+		IdleThrottle.release()
 		_saved_max_fps = Engine.max_fps
 		if _saved_max_fps == 0 or _saved_max_fps > COVERED_MAX_FPS:
 			Engine.max_fps = COVERED_MAX_FPS
@@ -64,6 +67,7 @@ static func uncover(owner: Object) -> void:
 		DisplayServer.window_set_vsync_mode(_saved_vsync as DisplayServer.VSyncMode)
 	_saved_vsync = -1
 	Engine.max_fps = _saved_max_fps
+	IdleThrottle.reapply()
 
 
 ## Whether a map load's sheet covers the screen now.

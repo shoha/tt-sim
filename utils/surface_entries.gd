@@ -4,14 +4,13 @@ extends RefCounted
 ## The byte rules of a MapDocument's painted surface entries (format 2; the layout and the
 ## canonical form are in MapDocument's header): each sample keeps up to ENTRIES (index,
 ## weight) pairs in two RGBA8 planes of `count` samples each, the index plane and then the
-## weight plane. Shared by MapDocument's accessors, MapDocumentIO's reader (canonical() for
-## a format 2 document, from_slots() to migrate format 1) and the paint tools. Everything
+## weight plane. Shared by MapDocument's accessors, MapDocumentIO's reader (canonical()) and the
+## paint tools. Everything
 ## here is static; write_sample() edits the `planes` it is handed in place, the rest return
 ## new arrays and leave their input as it was.
 
 const ENTRIES := MapDocument.SURFACE_ENTRIES
 const CHANNELS := MapDocument.SURFACE_CHANNELS
-const SLOTS_1 := MapDocument.FORMAT_1_SLOTS
 
 
 ## Sample `sample`'s entries that carry weight, high to low (ties keep their entry order):
@@ -153,70 +152,6 @@ static func canonical(planes: PackedByteArray, count: int, used: int) -> Diction
 		fixed += 1
 		write_sample(out, sample, count, indices, weights)
 	return {"weights": out, "dropped": dropped, "merged": merged, "over": over, "fixed": fixed}
-
-
-## Format 1's painted surfaces as entries. `slot_planes` holds SLOTS_1 weight channels per
-## sample in two RGBA8 planes (slots 0-3, then slots 4-7) for `count` samples, of which
-## `used` slots are listed. Per sample, the non-zero weights of the listed slots high to
-## low, the strongest ENTRIES kept and scaled so they keep the sample's painted total
-## (capped at 255). Returns {"weights": the entries (MapDocument.SURFACE_BYTES per sample),
-## "stray": samples with weight in a slot not listed (cleared), "over": samples summing past
-## 255 (scaled down), "crowded": samples with more than ENTRIES surfaces (the weakest
-## dropped, the rest scaled up to keep the total)}.
-@warning_ignore("integer_division")
-static func from_slots(slot_planes: PackedByteArray, count: int, used: int) -> Dictionary:
-	var out := PackedByteArray()
-	out.resize(count * MapDocument.SURFACE_BYTES)
-	var plane := count * CHANNELS
-	var stray := 0
-	var over := 0
-	var crowded := 0
-	for sample in count:
-		var at := sample * CHANNELS
-		if (
-			slot_planes[at] == 0
-			and slot_planes[at + 1] == 0
-			and slot_planes[at + 2] == 0
-			and slot_planes[at + 3] == 0
-			and slot_planes[plane + at] == 0
-			and slot_planes[plane + at + 1] == 0
-			and slot_planes[plane + at + 2] == 0
-			and slot_planes[plane + at + 3] == 0
-		):
-			continue
-		var indices := PackedInt32Array()
-		var weights := PackedInt32Array()
-		var stray_here := false
-		var total := 0
-		for slot in SLOTS_1:
-			var weight := slot_planes[(slot >> 2) * plane + sample * CHANNELS + (slot & 3)]
-			if weight == 0:
-				continue
-			if slot >= used:
-				stray_here = true
-				continue
-			indices.append(slot)
-			weights.append(weight)
-			total += weight
-		stray += 1 if stray_here else 0
-		if weights.is_empty():
-			continue
-		if total > 255:
-			over += 1
-			total = 255
-		_sort(indices, weights)
-		if weights.size() > ENTRIES:
-			crowded += 1
-			indices.resize(ENTRIES)
-			weights.resize(ENTRIES)
-		var kept := 0
-		for weight in weights:
-			kept += weight
-		if kept != total:
-			for e in weights.size():
-				weights[e] = weights[e] * total / kept
-		write_sample(out, sample, count, indices, weights)
-	return {"weights": out, "stray": stray, "over": over, "crowded": crowded}
 
 
 ## Sorts the pairs by weight, high to low; equal weights keep their order (insertion sort:

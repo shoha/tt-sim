@@ -473,9 +473,9 @@ func _update_hits(pins: Array[Array], strength: float) -> void:
 ## tip's distance in front of the camera, so a near pin is small in metres and a far one large.
 func _head_at(tip: Vector3) -> float:
 	if _camera.projection != Camera3D.PROJECTION_PERSPECTIVE:
-		return head_metres(_camera.size, float(_viewport.size.y))
+		return head_metres(_camera.size, WorldView.canvas_size(_viewport).y)
 	var depth := maxf((-_camera.global_basis.z).dot(tip - _camera.global_position), 0.0)
-	return HEAD_PX * CameraRig.metres_per_pixel(_camera, Vector2(_viewport.size), depth)
+	return HEAD_PX * CameraRig.metres_per_pixel(_camera, WorldView.canvas_size(_viewport), depth)
 
 
 ## The edge arrows node (TokenEdgeArrows): made on first need in the eye view, null before.
@@ -521,7 +521,7 @@ func _clear_hits() -> void:
 
 ## Whether the pointer is over interface, outside the world viewport, or holding a token.
 func _is_blocked() -> bool:
-	if not Rect2(Vector2.ZERO, Vector2(_viewport.size)).has_point(_pointer):
+	if not Rect2(Vector2.ZERO, WorldView.canvas_size(_viewport)).has_point(_pointer):
 		return true
 	if gui_blocked.is_valid() and gui_blocked.call():
 		return true

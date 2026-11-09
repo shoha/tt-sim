@@ -46,6 +46,10 @@ func test_authoring_counts_are_within_budget() -> void:
 	_assert_within(Counters.authoring_rows())
 
 
+func test_map_document_rows_are_within_budget() -> void:
+	_assert_within(Counters.document_rows())
+
+
 func test_render_settings_and_shader_outputs_are_within_budget() -> void:
 	_assert_within(Counters.render_rows())
 

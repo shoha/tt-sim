@@ -23,6 +23,8 @@ const BIOME_DESIGNER_ENTRY := "res://scenes/states/authoring/designer/biome_desi
 ## The new-map dialog (NewMapDialog) and the first-launch graphics warm-up (GraphicsWarmupScreen).
 const NEW_MAP_DIALOG := "res://scenes/states/authoring/new_map_dialog.tscn"
 const GRAPHICS_WARMUP_SCREEN := "res://scenes/states/warmup/graphics_warmup_screen.tscn"
+## The mip chain builder for a parsed library mesh (FoliageMips, called from AssetStore).
+const FOLIAGE_MIPS := "res://utils/foliage_mips.gd"
 
 
 ## BiomeDesignerHost.attach(): puts the biome designer into the open authoring session and
@@ -60,6 +62,12 @@ static func new_map_dialog(preset: Dictionary, on_chosen: Callable) -> Node:
 	dialog.preset = preset
 	dialog.map_chosen.connect(on_chosen)
 	return dialog
+
+
+## FoliageMips.apply(): gives the textures of `mesh` (a parsed library mesh) mipmaps.
+static func foliage_mips(mesh: Mesh) -> void:
+	var mips: Variant = load(FOLIAGE_MIPS)
+	mips.apply(mesh)
 
 
 ## A new GraphicsWarmupScreen; `on_finished` runs once when it is done. Not yet in the tree.

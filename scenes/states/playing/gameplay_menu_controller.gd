@@ -358,7 +358,7 @@ func _get_camera_ground_position() -> Vector3:
 	if eye != null:
 		return _snapped_if_enabled(game_map, eye)
 
-	var viewport_center := Vector2(game_map.world_viewport.size) / 2.0
+	var viewport_center := WorldView.canvas_size(game_map.world_viewport) / 2.0
 	var origin := game_map.camera_node.project_ray_origin(viewport_center)
 	var direction := game_map.camera_node.project_ray_normal(viewport_center)
 

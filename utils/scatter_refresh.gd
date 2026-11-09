@@ -64,7 +64,8 @@ static func drop_assets(scatter: AuthoredScatter, asset_ids: PackedStringArray) 
 		var cells: Array[Vector2i] = []
 		cells.assign(fresh.keys())
 		var started := Time.get_ticks_usec()
-		scatter.finish_cells(cells, scatter.rebuild_cells(fresh, true), started)
+		scatter.rebuild_cells(fresh, true)
+		scatter.finish_cells(cells, started)
 	return fresh.size()
 
 

@@ -114,7 +114,7 @@ func process(delta: float) -> void:
 	handle_edge_pan(delta)
 	# Last, once the pose is final: the shaders' camera-pass test reads this axis (camera-3).
 	CanopyFade.publish(
-		game_map.camera_node, base_camera_size, Vector2(game_map.world_viewport.size), delta
+		game_map.camera_node, base_camera_size, WorldView.canvas_size(game_map.world_viewport), delta
 	)
 
 
@@ -170,9 +170,8 @@ static func aspect_corrected_size(
 
 ## The aspect-corrected camera size for the current viewport.
 func corrected_size(height: float) -> float:
-	return aspect_corrected_size(
-		height, game_map.world_viewport.size, CameraController.REFERENCE_ASPECT
-	)
+	var canvas := Vector2i(WorldView.canvas_size(game_map.world_viewport))
+	return aspect_corrected_size(height, canvas, CameraController.REFERENCE_ASPECT)
 
 
 ## Scale the Camera3D local position so that all screen-corner ray origins
@@ -193,9 +192,9 @@ func update_camera_offset() -> void:
 	# camera's right axis tilts downward.  On wide or zoomed-out viewports
 	# this can push the ray origin below Y=0, causing near-plane culling.
 	# Check the actual ray origins and add exactly enough extra offset.
-	var vp_size := game_map.world_viewport.size
+	var vp_size := WorldView.canvas_size(game_map.world_viewport)
 	if vp_size.x > 0 and vp_size.y > 0:
-		var min_y := bottom_ray_origin_y(Vector2(vp_size))
+		var min_y := bottom_ray_origin_y(vp_size)
 		if min_y < NEAR_PLANE_GROUND_MARGIN:
 			var deficit := NEAR_PLANE_GROUND_MARGIN - min_y
 			offset_scale += deficit / base_camera_offset.y
@@ -625,7 +624,7 @@ func _compute_map_bounds() -> void:
 ## center maps to is NOT at the holder's XZ position. Zero when the centre ray is flatter than
 ## 0.001 (never meets the ground): an orthographic orbit never looks that flat.
 func view_center_offset() -> Vector2:
-	var vp_size := game_map.world_viewport.size
+	var vp_size := WorldView.canvas_size(game_map.world_viewport)
 	var camera_node := game_map.camera_node
 	var screen_center := Vector2(vp_size.x * 0.5, vp_size.y * 0.5)
 	var origin := camera_node.project_ray_origin(screen_center)
