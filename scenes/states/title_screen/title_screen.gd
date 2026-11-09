@@ -150,6 +150,7 @@ func _ready() -> void:
 	get_tree().node_added.connect(_on_node_added_or_removed)
 	get_tree().node_removed.connect(_on_node_added_or_removed)
 	get_window().files_dropped.connect(_on_files_dropped)
+	BootTrace.title_ready(get_tree())
 
 
 func _exit_tree() -> void:

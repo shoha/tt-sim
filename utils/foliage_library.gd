@@ -38,6 +38,7 @@ const JOB_CELLS := 16
 static func apply(root: String = PaletteLibrary.DEFAULT_ROOT) -> Dictionary:
 	reset_caches()
 	PaletteLibrary.base_for_serving(root)
+	BootTrace.mark("FoliageLibrary.apply: caches reset, base palette ready")
 	var content := LibraryRegistry.apply(root)
 	if not content["ok"]:
 		push_warning("FoliageLibrary: %s" % content["error"])
@@ -54,6 +55,7 @@ static func apply(root: String = PaletteLibrary.DEFAULT_ROOT) -> Dictionary:
 static func apply_saved() -> void:
 	LibraryRegistry.use_saved_override()
 	var result := apply()
+	BootTrace.mark("FoliageLibrary.apply_saved: libraries served")
 	if not result["ok"]:
 		push_warning("FoliageLibrary: %s" % result["error"])
 	var started := LibraryFromHost.startup()
