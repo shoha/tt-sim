@@ -5725,3 +5725,43 @@ without the splash alternated, n 5, same code otherwise: first title frame media
 with (the pair's order alternated, ranges overlap), so the cost is inside the run-to-run noise
 (+70 ms median, the with-splash minimum is the lowest of all ten). What the player sees is not
 measurable headless: only a real window shows the splash.
+
+## Doubling pop-in (topic sysidle, card sysidle, 2026-11-09; look-pending)
+
+Board perf-popin-cap: the user kept the 1.5 s cap and asked, "maybe an exponential pop-in? like 1,
+then the next 2, then 4, then 8, etc?". `TokenSpawnQueue.pop_in_doubling` (default true) pops a
+load's tokens in beats of 1, 2, 4, 8, ... tokens in placement order (`pop_in_batch`), a beat every
+`POP_IN_BEAT_S` = 0.2 s, squeezed to fit `POP_IN_SPAN_S` = 1.5 s from first beat to last
+(`pop_in_delay`: 10 tokens 4 beats, last 0.6 s; 100 tokens 7 beats, 1.2 s; 500 tokens 9 beats at
+0.1875 s, 1.5 s). Two changes make the beats visible. (1) The loader builds every token held at
+near-zero scale (`BoardToken.hold_for_pop_in`, which `get_logical_scale` reports as the target so
+state snapshots stay right) and starts the beats when the load completes, on the revealed table: the
+old cascade was timed from the first token built, so at 500 tokens every pop had already played
+behind the loading sheet (see the table) and at 100 half of them had. (2) Each pop is a job on the
+shared `TokenSpawnQueue`, so the 4 ms frame budget holds for a beat of 244 tokens; the measured
+post-reveal worst frame is the same as the linear cascade's, so no beat needed splitting across
+frames in practice. `pop_in_doubling = false` is the old linear cascade (kept for the A/B and as
+the way back).
+
+Real load of a saved level with N pack tokens (Beasts pack), 1920x1080 window, 3 runs each (warm-up
+plus two rounds, alternated modes), a probe logging every frame, ms after the load completed
+(`level_loading_completed`, which starts the sheet's fade):
+
+| Tokens | Mode | First pop | Last pop | Worst frame after completion |
+|---|---|---|---|---|
+| 10 | doubling | 21-23 | 631-644 | 21.3-21.6 |
+| 10 | linear | -155 to -106 | 232-279 | 23.4-28.1 |
+| 100 | doubling | 23-28 | 1,236-1,244 | 22.2-22.4 |
+| 100 | linear | -743 to -672 | 660-750 | 21.7-23.5 |
+| 500 | doubling | 73-88 | 1,558-1,569 | 41.0-59.7 |
+| 500 | linear | -6,136 to -5,559 | -27 to -25 (all behind the sheet) | 43.8-55.8 |
+
+The whole load's worst frame (the table's entry frame, 103-154 ms) is the same in both modes. The
+machine was shared (another agent's headless shards ran during the 500-token rounds), so frame
+numbers are pessimistic. Frame strips of a 100-token load, a capture every 100 ms from the
+completion (21 frames, half size), contact sheets `sheet_old.png` and `sheet_new.png` in
+`%APPDATA%/TTSim_sysidle/render_jobs/sysidle_pop_strip/` (copied beside the handoff): old, about half
+the crowd is already up at the reveal and the rest dribbles in over 0.7 s; new, the reveal shows the
+bare table, then one animal, three, seven, fifteen, thirty-one, sixty-three, the rest, each beat
+0.2 s after the last. The doubling mode costs the load nothing and shows the whole 1.5 s; the cost
+to the player is that the table is bare for the first beat or two.
