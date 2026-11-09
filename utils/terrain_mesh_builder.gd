@@ -33,6 +33,9 @@ const EDGE_EPSILON_SAMPLES := 1e-4
 ## the map where the fall-off curves most.
 const SKIRT_RINGS := 8
 const SKIRT_RING_SPACING_POWER := 1.5
+## The first this many ring steps of the skirt (about 16 m on the shipped width) are its shadow
+## receiving inner ring, a second surface (TerrainSkirt, card skirtring); the rest receives none.
+const SKIRT_SHADOW_RINGS := 4
 
 
 ## Index of the first sample at or past world coordinate `edge_m` on an axis of `samples`
@@ -486,6 +489,8 @@ static func warmup_samples() -> Array[Dictionary]:
 		["terrain_skirt", skirt, terrain.SKIRT_SHADER],
 		["terrain_chunk_looked", chunk, terrain.GROUND_LOOKED_SHADER],
 		["terrain_skirt_looked", skirt, terrain.SKIRT_LOOKED_SHADER],
+		["terrain_skirt_ring", skirt, terrain.SKIRT_RING_SHADER],
+		["terrain_skirt_ring_looked", skirt, terrain.SKIRT_RING_LOOKED_SHADER],
 	]:
 		var sample := {
 			"name": entry[0],

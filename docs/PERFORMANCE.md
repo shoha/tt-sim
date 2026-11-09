@@ -5070,6 +5070,22 @@ foliage shown the only differences in the skirt's area are the trees' wind sway 
 same-configuration control differs as much), also under a sun lowered to 12 degrees. A shadow cast
 across the map edge would stop at the edge line; none did on this map.
 
+### Inner ring (card skirtring, 2026-11-09; measurements and look pairs pending, see below)
+
+The user's board answer: keep edge shadows, so the skirt's first rings receive shadows again as a
+second surface and the rest stays shadowless. `TerrainMeshBuilder.SKIRT_SHADOW_RINGS` = 4 ring
+steps (16.1 m on the shipped 45.6 m width, `TerrainSkirt.ring_edge_m`; 10.4 m at 3 rings) are the
+skirt mesh's second surface, drawn with `authored_ground_skirt_ring*.gdshader` (the skirt shaders
+without `shadows_disabled`, `GROUND_SKIRT_RING` in the include). Surface 0 keeps the shadowless
+`_skirt_material`; the ring material is a copy kept in step uniform for uniform
+(`TerrainSkirt.sync_ring`, called by the terrain's syncs and the look bake; `SkirtBackdrop` lists
+both materials). The channel patch of a river exit uses the ring material too. No seam: the
+shader gives the sun's shadow back over the ring (`light()`: directional `ATTENUATION` mixed
+toward 1 by `v_ring_fade`, a smoothstep of the distance to the map rectangle from 0.3 to 1.0 of
+`skirt_shadow_m`, the ring's outer edge), so the shadow thins to nothing exactly where the
+shadowless surface begins. Perf budget counters: `skirt_shadowed` (outer shaders with reception, 0),
+`skirt_ring_unshadowed` (ring shaders without it, 0), `skirt_ring_m` (ring width, at most 16.5).
+
 ## Occlusion fade tiles (topic perfaudit, card occfade)
 
 The occlusion fade (`occlusion_fade_include.gdshaderinc`) tested every token in every tree and

@@ -69,3 +69,9 @@ func test_the_shader_reader_sees_what_it_guards() -> void:
 	assert_gt(Counters.sampler_fetches(cover, ["albedo_texture"]), 0, "the cover reads albedo")
 	var plain := Counters.active_code("res://shaders/authored_ground.gdshader")
 	assert_false(Counters.render_modes(plain).has("shadows_disabled"), "the map ground has shadows")
+	for path in Counters.SKIRT_SHADERS:
+		var outer := Counters.render_modes(Counters.active_code(path))
+		assert_true(outer.has("shadows_disabled"), "the outer skirt %s receives none" % path)
+	for path in Counters.SKIRT_RING_SHADERS:
+		var ring := Counters.render_modes(Counters.active_code(path))
+		assert_false(ring.has("shadows_disabled"), "the inner ring %s receives them" % path)

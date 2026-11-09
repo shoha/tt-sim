@@ -12,8 +12,13 @@ extends RefCounted
 ##                       as set: the cutout without alpha-to-coverage edges, drawn opaque
 ##   a2c ("noedge")      every antialiased wind material on its include with the alpha_to_coverage
 ##                       render mode kept and the edge built-ins dropped (WIND_FOLIAGE_NO_AA)
+##   skirt ("none"|"full")  the ground skirt's shadow reception (card skirtring): "none" puts every
+##                       skirt material on the shadowless outer shader (the skirt of card
+##                       groundskirt), "full" on the include with no render mode and no ring fade
+##                       (the skirt before that card); absent = the shipped ring and shadowless rest
 
 const Util := preload("res://tools/render_jobs/probes/perfaudit_gpu_util.gd")
+const GROUND := "res://shaders/authored_ground.gdshaderinc"
 const MAIN := "res://shaders/wind_foliage_main.gdshaderinc"
 const LIT_A2C := "cull_disabled, diffuse_burley, specular_schlick_ggx, alpha_to_coverage"
 const LEAN_A2C := "cull_disabled, diffuse_lambert, specular_disabled, alpha_to_coverage"
@@ -22,11 +27,38 @@ var rig: Node = null
 var _suns := {}
 var _shaders := {}
 var _built := {}
+var _skirt_shaders := {}
 
 
 func apply(gm: GameMap, cfg: Dictionary) -> void:
 	_apply_suns(gm, cfg)
 	_apply_foliage(gm, cfg)
+	_apply_skirt(gm, String(cfg.get("skirt", "")))
+
+
+## Every skirt material (the mesh's two surfaces and the river patch) on the shader the knob
+## names, or back on the one it had.
+func _apply_skirt(gm: GameMap, mode: String) -> void:
+	for m: ShaderMaterial in _skirt_shaders:
+		m.shader = _skirt_shaders[m]
+	_skirt_shaders.clear()
+	if mode.is_empty():
+		return
+	for node in gm.world_viewport.find_children("*", "MeshInstance3D", true, false):
+		var mesh := (node as MeshInstance3D).mesh
+		if mesh == null or not rig._cls(node).begins_with("authored_ground_skirt"):
+			continue
+		for i in mesh.get_surface_count():
+			var m := mesh.surface_get_material(i) as ShaderMaterial
+			if m == null or _skirt_shaders.has(m):
+				continue
+			var looked := m.shader.resource_path.contains("looked")
+			_skirt_shaders[m] = m.shader
+			if mode == "none":
+				m.shader = AuthoredTerrain.ground_shader(true, looked)
+			else:
+				var spec := GROUND + "#GROUND_SKIRT" + (",GROUND_LOOK" if looked else "")
+				m.shader = Util.define_shader(spec, Util.GROUND_MODE, _built)
 
 
 func _apply_suns(gm: GameMap, cfg: Dictionary) -> void:

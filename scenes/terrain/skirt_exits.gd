@@ -22,20 +22,24 @@ const WATER_SKIRT_FADE_PARAM := &"water_skirt_fade"
 
 
 ## Adds the children of `skirt` (its material `material`) for `exits` (RiverExitMesh.build();
-## {} for none) on map `doc`, whose skirt fades over `fade_m` stretched by `wobble`.
+## {} for none) on map `doc`, whose skirt fades over `fade_m` stretched by `wobble`. The channel
+## patch draws with the inner ring's material `ring` when given (it lies at the map edge, where
+## the ring's shadows fade to nothing by distance; the patch is a small area), and the backdrop
+## keeps both materials in step.
 static func decorate(
 	skirt: MeshInstance3D,
 	exits: Dictionary,
 	material: ShaderMaterial,
 	doc: MapDocument,
 	fade_m: float,
-	wobble: float
+	wobble: float,
+	ring: ShaderMaterial = null
 ) -> void:
 	var channel: Array = exits.get("channel", [])
 	if not channel.is_empty():
 		var patch := ArrayMesh.new()
 		patch.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, channel)
-		patch.surface_set_material(0, material)
+		patch.surface_set_material(0, material if ring == null else ring)
 		# As the skirt's: an edge edit moves its vertices in place (update_channel_in_place).
 		var box := patch.get_aabb()
 		var half := AuthoredTerrain.SKIRT_AABB_HALF_HEIGHT_M
@@ -57,6 +61,8 @@ static func decorate(
 		node.set_instance_shader_parameter(WATER_SKIRT_FADE_PARAM, true)
 		skirt.add_child(node)
 		backdrop.materials.append(node.material_override as ShaderMaterial)
+	if ring != null:
+		backdrop.materials.append(ring)
 	skirt.add_child(backdrop)
 
 
