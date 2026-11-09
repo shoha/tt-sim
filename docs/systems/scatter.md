@@ -77,8 +77,11 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
   `ScatterTerrain.wet_sampler`, and `Ground::water_dist_at` mirrors `sample_grid` over the grid
   `ScatterNative.pack` adds to the job's `source` as `water_dist`, only for a job with a
   `water_dist` curve; the cap travels in the constants table as `water_dist_max_m`) and
-  `version()` is `ttscatter 6 curves water` (6: the rule noise went 3D, rockstretch
-  2026-11-08). The plan keys
+  `version()` is `ttscatter 8 curves water chunk fields` (6: the rule noise went 3D, rockstretch
+  2026-11-08; 7: the chunk call, "Native path"; 8 and `fields`: `rule_fields`,
+  TerrainRules.sample_fields for every caller through `ScatterNative.rule_fields`, card
+  terrainrules 2026-11-08, `native/src/terrain_fields.cpp`, which the scatter window's grids in
+  `scatter_grids.cpp` call too). The plan keys
   (`slope_min`, `slope_min_cos`, `curve_slope`, `curve_height`, `curve_wet`, `curve_water_dist`,
   `has_response`) are keyed reads with neutral defaults, so a legacy plan loads as before. A
   library without the word `curves` (built before S12b; `native/bin` is gitignored and survives
@@ -255,6 +258,21 @@ library for every export platform, checks it on each, and ships it in every expo
   outcomes by reason ("native", "forced", "missing", "grids"), and `force_gdscript` sends every
   job to GDScript for A/B runs and tests. A branch added to the GDScript generator must be ported
   (and its parity cell added to the test) or refused in `ScatterNative._refusal`.
+- **Instance buffers (card scatterload, 2026-11-09).** The library also builds the settled nodes'
+  MultiMeshes: `TTScatterNative.chunk(rows, indices, seed, anchors)` (`native/src/scatter_chunk.cpp`,
+  through `ScatterRows.chunk` and `ScatterNative.chunk`) returns a chunk's row keys, its instance
+  order and the whole MultiMesh buffer (transforms in Godot's TRANSFORM_3D layout, then the
+  grass-mass custom data when any instance is anchored), which
+  `ScatterGlbUtils.multimesh_from_chunk` assigns at once. `AuthoredScatter` takes it for every
+  settled node: the whole of a map load, and the settled part of a rebuild; grow-ins and shrinks
+  keep the per-instance path (they hold transforms for their animation). The bytes are the
+  per-instance path's: `test_scatter_native_chunk.gd` checks keys, order and buffer against
+  GDScript (in CI's parity on every platform, its name matching `parity.sh`'s selection), and the
+  foliage perf probe's `load` action compares every chunk against `build_multimesh`'s MultiMesh
+  read back on the real renderer. Without the word `chunk` in `version()`, or with
+  `ScatterNative.force_gdscript_chunks`, the GDScript path is the old one (row_keys,
+  instance_order, transforms, `build_multimesh`). A filled 320 ft map loads in 165 ms instead of
+  426 ms (`PERFORMANCE.md` "Scatter load: native instance buffers").
 - **No class identifier.** No script names `TTScatterNative`: a missing library would make it
   fail to parse. `ScatterNative` finds it through `ClassDB.class_exists` and `instantiate`.
 - **Reentrant.** Each call builds its own context (memos, the edge and anchor slots, the noise

@@ -259,10 +259,27 @@ static func _build_multimesh_from_transforms(
 	# having done nothing rather than leaking a MultiMesh.
 	if valid_transforms.is_empty():
 		return null
+	return _add_chunk_node(
+		scene_root,
+		build_multimesh(mesh, valid_transforms, anchors),
+		node_stem,
+		wind_category,
+		name_suffix
+	)
 
+
+## The MultiMeshInstance3D of `multimesh` under `scene_root`, named, tagged and set up as every
+## scatter chunk node is (see _build_multimesh_from_transforms).
+static func _add_chunk_node(
+	scene_root: Node3D,
+	multimesh: MultiMesh,
+	node_stem: String,
+	wind_category: String,
+	name_suffix: String
+) -> MultiMeshInstance3D:
 	var multimesh_instance := MultiMeshInstance3D.new()
 	multimesh_instance.name = node_stem + "_MultiMesh" + name_suffix
-	multimesh_instance.multimesh = build_multimesh(mesh, valid_transforms, anchors)
+	multimesh_instance.multimesh = multimesh
 	# Tags the node itself (not the Mesh resource) with its wind category so
 	# OcclusionFadeManager._collect_tree_materials() can find tree-category instances
 	# without re-deriving WindFoliage.classify_category()'s result.
@@ -315,8 +332,43 @@ static func build_chunk(
 	return node
 
 
+## build_chunk() around a MultiMesh already built (multimesh_from_chunk): the same node, name,
+## meta, shadow, cull and render-layer settings, added under `parent`.
+static func chunk_node(
+	parent: Node3D,
+	multimesh: MultiMesh,
+	node_stem: String,
+	wind_category: String = "",
+	name_suffix: String = ""
+) -> MultiMeshInstance3D:
+	var node := _add_chunk_node(parent, multimesh, node_stem, wind_category, name_suffix)
+	node.layers = LevelEnvironmentManager.SCATTER_RENDER_LAYER
+	return node
+
+
+## The MultiMesh build_multimesh() makes, from a chunk's data (ScatterRows.chunk): the native
+## buffer in one assignment, about a third of the per-instance path's cost with the keys and
+## order included (card scatterload), or, from the GDScript path's transforms, build_multimesh
+## itself with the grass-mass `anchors` (the native buffer carries them already).
+static func multimesh_from_chunk(
+	mesh: Mesh, built: Dictionary, anchors: Dictionary = {}
+) -> MultiMesh:
+	if not built.has("buffer"):
+		return build_multimesh(mesh, built.transforms, anchors)
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_custom_data = built.custom
+	multimesh.mesh = mesh
+	multimesh.instance_count = (built.order as PackedInt32Array).size()
+	if multimesh.instance_count > 0:
+		multimesh.buffer = built.buffer
+	return multimesh
+
+
 ## A MultiMesh of `mesh` holding `transforms` in order, one set_instance_transform() per
-## instance (the measured-faster upload; see docs/PERFORMANCE.md "Known dead ends").
+## instance (as fast as a buffer filled in GDScript; see docs/PERFORMANCE.md "Known dead ends").
+## Settled authored-scatter nodes build from a native buffer instead (multimesh_from_chunk);
+## grow-ins, shrinks and the GLB path still come here, since they hold transforms.
 ## visible_instance_count is left at -1 (all); FoliageDensityController sets it.
 ## Instances placed as part of a grass mass (found in `anchors`, the caller's ScatterMass table)
 ## carry the offset to their clump parent in custom data, Color(0, dx, dz, 1); .x stays 0 (the
