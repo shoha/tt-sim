@@ -602,6 +602,7 @@ func _on_edit_map_requested(level_info: Dictionary) -> void:
 
 
 func _enter_authoring_state() -> void:
+	BootTrace.mark("authoring: state entered")
 	_ensure_table()
 	_game_map = (load(GAME_MAP_SCENE_PATH) as PackedScene).instantiate()
 	add_child(_game_map)
@@ -615,6 +616,7 @@ func _enter_authoring_state() -> void:
 	var app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
 	if app_ctrl:
 		app_ctrl.hide_editor_button()
+	BootTrace.mark("authoring: scene built")
 	_authoring_controller.start(_authoring_request)
 
 

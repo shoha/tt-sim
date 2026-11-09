@@ -74,6 +74,13 @@ static var compress_lock := Mutex.new()
 ## False turns prebake() into a no-op (every map bakes where it is first asked for): the
 ## performance harness's in-run A/B switch (perfaudit_system.gd `prebake`).
 static var prebake_enabled: bool = true
+## The open trace's step timers (OpenTrace, card coldopen), off by default: while on, every map
+## load reports the microseconds of its steps (read: a cache hit; decode; bake: the compression;
+## write: the cache file; hash: the SHA-256 of the surface's files) and timings sums them per
+## side ("lane_<step>" for the prebake lane, "main_<step>" for the main thread) with a count per
+## outcome ("lane_baked", "main_hit", ...), when the main thread takes the map.
+static var timing_enabled: bool = false
+static var timings: Dictionary = {}
 
 # ---- names ----
 
@@ -549,7 +556,10 @@ static func _baked(entry: Dictionary) -> Image:
 	var found: Dictionary = _surfaces.get(runtime, {})
 	var files := _surface_files(found)
 	if not _hashes.has(runtime):
+		var hashed_at := Time.get_ticks_usec() if timing_enabled else 0
 		_hashes[runtime] = files_hash(String(found.get("name", "")), files)
+		if timing_enabled:
+			_time("main_hash", Time.get_ticks_usec() - hashed_at)
 	var baked := _bake_or_cache(
 		file,
 		String(entry["kind"]),
@@ -590,6 +600,17 @@ static func _count(loaded: Dictionary, baked_key: String, hit_key: String) -> vo
 			stats[baked_key] += 1
 		"hit":
 			stats[hit_key] += 1
+	if timing_enabled and loaded.has("us"):
+		var side := "lane_" if baked_key == "prebakes" else "main_"
+		_time(side + String(loaded["outcome"]), 1)
+		var steps: Dictionary = loaded["us"]
+		for step: String in steps:
+			_time(side + step, int(steps[step]))
+
+
+## Adds `amount` to timings[`key`] (the open trace's step timers).
+static func _time(key: String, amount: int) -> void:
+	timings[key] = int(timings.get(key, 0)) + amount
 
 
 ## The map of `file` as {image, outcome, rejected}: the raw cache's when it holds a valid entry for
@@ -603,12 +624,17 @@ static func load_map(
 	file: String, kind: String, library_id: String, name: String, hash_text: String
 ) -> Dictionary:
 	var out := {"image": null, "outcome": "failed", "rejected": false}
+	# The open trace's step timers (timing_enabled): microseconds per step, in out["us"].
+	var timed := timing_enabled
+	var at := Time.get_ticks_usec() if timed else 0
 	var cache_path := SurfaceCache.path_for(library_id, hash_text, name, kind)
 	if FileAccess.file_exists(cache_path):
 		var cached := SurfaceCache.read(cache_path)
 		if cached != null and cached.get_format() == SurfaceBake.format_of(kind):
 			out["image"] = cached
 			out["outcome"] = "hit"
+			if timed:
+				out["us"] = {"read": Time.get_ticks_usec() - at}
 			return out
 		out["rejected"] = true
 	var header := map_header_of(file)
@@ -620,11 +646,21 @@ static func load_map(
 	# From bytes, not Image.load_from_file: that one warns (once per process) for a res:// file the
 	# editor knows through its keep sidecar, and the bytes are the same ones in a pack.
 	var decoded := SurfaceBake.decode(FileAccess.get_file_as_bytes(file), file.get_extension())
+	var decoded_at := Time.get_ticks_usec() if timed else 0
 	compress_lock.lock()
+	var locked_at := Time.get_ticks_usec() if timed else 0
 	var baked := SurfaceBake.bake(decoded, kind)
+	var baked_at := Time.get_ticks_usec() if timed else 0
 	if baked != null:
 		SurfaceCache.write(cache_path, baked)
 	compress_lock.unlock()
+	if timed:
+		out["us"] = {
+			"decode": decoded_at - at,
+			"lock": locked_at - decoded_at,
+			"bake": baked_at - locked_at,
+			"write": Time.get_ticks_usec() - baked_at,
+		}
 	if baked == null:
 		push_warning("SurfaceStore: %s could not be decoded" % file)
 		return out

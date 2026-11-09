@@ -276,6 +276,7 @@ func _open_async(
 		if MapSourceLoader.early_prebake:
 			SurfaceStore.prebake(NewMap.planned_surfaces(spec))
 		var made := await NewMapBuild.start(spec).wait(get_tree())
+		BootTrace.mark("open: recipe done")
 		if not _superseded(generation):
 			root = await loader.build_async("", made)
 	elif document_path != "":
@@ -295,6 +296,7 @@ func _open_async(
 			return
 		_fail_open()
 		return
+	BootTrace.mark("open: map built")
 	loading_progress.emit(0.8, "Placing the map...")
 	_install(root, loader.document)
 	var settled_rows := 0
@@ -312,11 +314,13 @@ func _open_async(
 	loading_progress.emit(0.9, "Preparing the palette...")
 	for biome in PaletteLibrary.biomes(scatter.palette_root):
 		scatter.prepare_biome(String(biome.get("id", "")))
+	BootTrace.mark("open: biomes prepared")
 	# The Paint swatches decode each surface's albedo once; better here than on first click, and
 	# a few a frame so the bar keeps moving.
 	await panel.warm_paint_swatches_async(get_tree(), func() -> bool: return _superseded(generation))
 	if _superseded(generation):
 		return
+	BootTrace.mark("open: paint swatches warmed")
 	panel.ensure_paint_tiles()
 	await _await_palette_warm(generation)
 	if _superseded(generation):
@@ -347,6 +351,7 @@ func _open_async(
 			_use_biome(document.biome_ids[0])
 		panel.begin_session()
 	_is_open = true
+	BootTrace.mark("open: sheet dropped")
 	if _designer_config.is_empty():
 		saving.start_autosave()
 	set_process(true)

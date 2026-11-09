@@ -163,12 +163,18 @@ func _work() -> void:
 			hash_text = String(_hashes.get(runtime, ""))
 		var generation := _generation
 		_mutex.unlock()
+		var hash_us := 0
 		if hash_text == "":
+			var hashed_at := Time.get_ticks_usec()
 			hash_text = SurfaceStore.files_hash(String(job["name"]), job["files"])
+			hash_us = Time.get_ticks_usec() - hashed_at
 		var result := SurfaceStore.load_map(
 			file, String(job["kind"]), String(job["library"]), String(job["name"]), hash_text
 		)
 		result["hash"] = hash_text
+		if result.has("us"):
+			# The open trace's step timers (SurfaceStore.timing_enabled).
+			result["us"]["hash"] = hash_us
 		_mutex.lock()
 		if generation == _generation:
 			_hashes[runtime] = hash_text

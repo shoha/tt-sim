@@ -247,6 +247,7 @@ func _build_async(glb_path: String, cells: Dictionary) -> Node3D:
 			scatter.release_prepared()
 			root.free()
 			return null
+	BootTrace.mark("load: scatter built")
 	return root
 
 
@@ -372,8 +373,17 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 		if ResourceLoader.load_threaded_request(path) == OK:
 			pending.append(path)
 	var loading := true
+	# The open trace's marks (BootTrace): which of the two waits ends first.
+	var traced := {"prep": false, "maps": false}
 	while loading:
-		loading = not prep.is_done() or SurfaceStore.prebaking(layers)
+		var prep_done := prep.is_done()
+		var maps_done := not SurfaceStore.prebaking(layers)
+		if BootTrace.enabled:
+			for part: String in traced:
+				if not traced[part] and (prep_done if part == "prep" else maps_done):
+					traced[part] = true
+					BootTrace.mark("load: ground " + part + " done")
+		loading = not prep_done or not maps_done
 		for path in pending:
 			if (
 				ResourceLoader.load_threaded_get_status(path)
@@ -388,6 +398,7 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	var held: Array[Resource] = []
 	for path in pending:
 		held.append(ResourceLoader.load_threaded_get(path))
+	BootTrace.mark("load: ground prep and its surface maps ready")
 	var prepared := prep.finish()
 	if is_superseded.call():
 		return null
@@ -395,6 +406,7 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	var terrain := AuthoredTerrain.create(doc, PaletteLibrary.DEFAULT_ROOT, false, prepared)
 	_prepared_water = prepared.get(AuthoredLoadPrep.WATER, {})
 	root.add_child(terrain)
+	BootTrace.mark("load: ground created")
 	var chunk_cells := TerrainMeshBuilder.chunk_cells(doc)
 	var next := 0
 	while next < chunk_cells.size():
@@ -409,6 +421,7 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 			batch.assign([chunk_cells[next]])
 			terrain.rebuild_chunks(batch)
 			next += 1
+	BootTrace.mark("load: ground chunks built")
 	# The crossings in a frame of their own, while their textures are still held.
 	if not doc.crossings.is_empty():
 		await tree.process_frame

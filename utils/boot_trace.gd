@@ -20,6 +20,10 @@ extends RefCounted
 ## `--boot-trace-map` then opens a new map and rebuilds it (first_map_ms, second_map_ms), and
 ## `--boot-trace-precompile` loads the on-demand scripts before the title settles, so the two
 ## together show what the on-demand doors moved from the start-up into the first map.
+## `--boot-trace-cold=<biome>,<size ft>,<landform>,<seed>` instead opens that map through the
+## new-map dialog as a player does and times it to the starting cover grown in and the surface
+## lane idle (OpenTrace, loaded only then; `--boot-trace-clear-cache` deletes the core library's
+## baked surface maps at the title first, for a new player's first open).
 ## At the end it prints the timeline and appends one JSON line to user://boot_trace.jsonl;
 ## `--boot-trace-quit` then quits, for scripted rounds (tools/render_jobs/local or a loop).
 
@@ -29,6 +33,8 @@ const LOG_PATH := "user://boot_trace.jsonl"
 const MAP_TIMEOUT_S := 120
 ## The level --boot-trace-prep saves and --boot-trace-play plays (a topic-named test level).
 const PLAY_FOLDER := "_boot2_play"
+## The cold-open driver (--boot-trace-cold), loaded only when asked for (the start-up graph).
+const OPEN_TRACE := "res://utils/open_trace.gd"
 
 static var enabled: bool = _detect()
 static var _marks: Array[Array] = []
@@ -51,6 +57,19 @@ static func mark(label: String) -> void:
 		_marks.append([label, Time.get_ticks_usec()])
 
 
+## The label of the latest mark ("" before the first).
+static func last_mark() -> String:
+	return String(_marks[-1][0]) if not _marks.is_empty() else ""
+
+
+## The value of the user argument `--<name>=<value>`, "" when it is not given.
+static func arg_value(name: String) -> String:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--%s=" % name):
+			return arg.get_slice("=", 1)
+	return ""
+
+
 ## Marks the title as built and watches the frames that follow (see the class doc). Called once,
 ## at the end of the title screen's _ready.
 static func title_ready(tree: SceneTree) -> void:
@@ -61,6 +80,8 @@ static func title_ready(tree: SceneTree) -> void:
 		_precompile()
 	if OS.get_cmdline_user_args().has("--boot-trace-main-compile"):
 		_main_compile()
+	if OS.get_cmdline_user_args().has("--boot-trace-clear-cache"):
+		load(OPEN_TRACE).call("clear_cache")
 	_watching = true
 	_title_at_us = Time.get_ticks_usec()
 	_last_us = _title_at_us
@@ -249,6 +270,8 @@ static func _finish(tree: SceneTree) -> void:
 		maps = await _maps(tree)
 	if user_args.has("--boot-trace-play"):
 		maps = await _play(tree)
+	if arg_value("boot-trace-cold") != "":
+		maps = await load(OPEN_TRACE).call("run", tree, arg_value("boot-trace-cold"))
 	var rows: Array[Dictionary] = []
 	var prev_us := 0
 	print("boot_trace: %d marks, worst frame after the title %.1f ms" % [_marks.size(), _worst_ms])
@@ -272,7 +295,8 @@ static func _finish(tree: SceneTree) -> void:
 	}
 	line.merge(maps)
 	for key: String in maps:
-		print("boot_trace: %s %.1f" % [key, maps[key]])
+		if maps[key] is float:
+			print("boot_trace: %s %.1f" % [key, maps[key]])
 	var f := FileAccess.open(LOG_PATH, FileAccess.READ_WRITE)
 	if f == null:
 		f = FileAccess.open(LOG_PATH, FileAccess.WRITE)
