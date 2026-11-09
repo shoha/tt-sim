@@ -27,7 +27,9 @@ func test_terrain_samples_match_the_real_ground_and_skirt() -> void:
 			"terrain_chunk_looked",
 			"terrain_skirt_looked",
 			"terrain_skirt_ring",
-			"terrain_skirt_ring_looked"
+			"terrain_skirt_ring_looked",
+			"terrain_chunk_clip",
+			"terrain_chunk_clip_looked",
 		]
 	)
 	var doc := TerrainMeshBuilder.warmup_document()
@@ -51,6 +53,12 @@ func test_terrain_samples_match_the_real_ground_and_skirt() -> void:
 		(samples[5].material as ShaderMaterial).shader, AuthoredTerrain.SKIRT_RING_LOOKED_SHADER
 	)
 	assert_eq(samples[2].arrays, samples[0].arrays, "on the same chunk")
+	# The ground clipmap's read, on by default in play (clipmap3: it was left to the first map).
+	assert_eq((samples[6].material as ShaderMaterial).shader, GroundClipmap.CLIP_SHADER)
+	assert_eq((samples[7].material as ShaderMaterial).shader, GroundClipmap.CLIP_LOOKED_SHADER)
+	assert_eq(samples[6].arrays, samples[0].arrays, "the clip read on the same chunk")
+	assert_true(GraphicsWarmup.COVERED_SHADERS.has(GroundClipmap.BAKE_SHADER.resource_path))
+	assert_true(GraphicsWarmup.COVERED_SHADERS.has(GroundClipmap.BLIT_SHADER.resource_path))
 
 
 func test_the_water_sample_matches_the_real_water_surface() -> void:

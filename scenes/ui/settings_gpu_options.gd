@@ -22,9 +22,10 @@ const SHADOW_CASCADES_TOOLTIP := (
 const GROUND_DETAIL_TOOLTIP := (
 	"How much of the ground is drawn once and reused instead of per pixel every frame, which "
 	+ "makes the game faster. Each step down uses less graphics memory (5 levels 160 MB, 4 "
-	+ "levels 128, 3 levels 96) and gives up some of the speed-up when zoomed in close on a "
-	+ "large map; Off draws the ground per pixel as before. A change between On and Off takes "
-	+ "effect when the next map loads."
+	+ "levels 128, 3 levels 96, plus about 48 MB for drawing them) and gives up some of the "
+	+ "speed-up when zoomed in close on a large map; Off draws the ground per pixel as before. "
+	+ "Off and a level count take effect at once; turning it back on takes effect when the "
+	+ "next map loads."
 )
 const IDLE_THROTTLE_TOOLTIP := (
 	"Slows the game down while its window is in the background (15 frames a second when another "

@@ -8,11 +8,14 @@ extends RefCounted
 ## from the one that matches the zoom up to the one that spans the map, up to five (160 MB, a
 ## 320 ft map at zoom 4). A cap of N holds the N coarsest of those, so a lower cap gives up the
 ## sharpest levels at close zoom (the ground there reads softer than the per-pixel one) and
-## keeps the memory down: 96 MB at 3, 128 MB at 4, 160 MB at 5. OFF draws the per-pixel ground
-## as before the clipmap. The setting is read when a map builds its terrain (on or off) and every
-## frame by a clipmap that exists (the cap), so Apply takes the cap at once and an on or off
-## change at the next map. Kept apart from GroundClipmap so Settings, which the start-up names,
-## does not pull the clipmap's scripts into every launch (test_boot_graph).
+## keeps the memory down: 96 MB at 3, 128 MB at 4, 160 MB at 5, plus about 48 MB of strip
+## viewports for the map's life (measured, clipmap3). OFF draws the per-pixel ground as before
+## the clipmap. The setting is read when a map builds its terrain (whether to attach one) and by a
+## clipmap that exists (the cap every frame, OFF every 30 frames), so Apply takes the cap and OFF
+## at once (the clipmap frees itself and the plain shaders return) and turning it back on at the
+## next map (checked through the Settings UI, clipmap3). Kept apart from GroundClipmap so Settings,
+## which the start-up names, does not pull the clipmap's scripts into every launch
+## (test_boot_graph).
 
 ## The clipmap off: the per-pixel ground.
 const OFF := 0

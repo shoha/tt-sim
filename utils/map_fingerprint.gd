@@ -31,7 +31,8 @@ extends RefCounted
 ##   scatter        per asset in every AuthoredScatter: "<asset> <rows>", sorted.
 ##   scatter_hash   every scatter row value, rounded, hashed (each asset's rows sorted, so
 ##                  the node or cell holding a row does not count).
-##   mesh_vertices  the vertex count of every MeshInstance3D under the root.
+##   mesh_vertices  the vertex count of every MeshInstance3D under the root (outside a
+##                  SubViewport with its own world).
 
 ## Floats are rounded to this before printing or hashing.
 const ROUND_M := 0.001
@@ -177,9 +178,15 @@ static func _water(doc: MapDocument) -> Array:
 	return out
 
 
-## [MeshInstance3D, its transform relative to the root] for every mesh instance under `node`.
+## [MeshInstance3D, its transform relative to the root] for every mesh instance under `node`,
+## leaving out a SubViewport with its own world: its meshes are render copies in another world
+## (the ground clipmap's strips, which only a peer with a renderer has), not the map's.
 static func _collect_meshes(node: Node, xform: Transform3D, out: Array) -> void:
 	for child in node.get_children():
+		if child is SubViewport:
+			var vp := child as SubViewport
+			if vp.own_world_3d or vp.world_3d != null:
+				continue
 		var child_xform := xform
 		if child is Node3D:
 			child_xform = xform * (child as Node3D).transform
