@@ -1,0 +1,24 @@
+{
+ "out_dir": "render_jobs/textures_default",
+ "timeout_s": 600,
+ "hang_s": 180,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 100, "seed": 1234, "landform": "valley"},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "place_seed", "seed": 1234},
+  {"op": "wind", "freeze": true},
+  {"op": "hide_ui"},
+  {"op": "home"},
+  {"op": "settle"},
+  {"op": "wait", "s": 1.0},
+  {"op": "capture", "name": "home", "desc": "Authoring home view, zoom 13.85, wind frozen"},
+  {"op": "zoom", "size": 4},
+  {"op": "settle"},
+  {"op": "wait", "s": 1.0},
+  {"op": "capture", "name": "close", "desc": "Authoring zoom 4 at the home centre, wind frozen"},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0}
+ ]
+}

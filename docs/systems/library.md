@@ -228,9 +228,13 @@ treecube is gone ("The core library"). Step S9 (2026-10-25): per-season override
   for, then about 18 ms a surface from the cache.
 - **The prebake lane** (`SurfacePrebake`, cards sysbake and authbake). `SurfaceStore.prebake(names,
   priority, kinds)` bakes maps ahead of their first use on ONE worker task, one compression at a
-  time process-wide (`SurfacePrebake.compress_lock`: two BC7 compressions at once gave different
-  bytes), with the main thread's own function, so maps and cache files are byte-identical
-  (`test_surface_prebake.gd`). Its queue is ordered by priority: `PRIORITY_LOAD` (a map load's
+  time process-wide (`SurfaceStore.compress_lock`, for load: a compression already uses every pool
+  thread), with the main thread's own function, so maps and cache files are the same maps, equal
+  once decompressed (`test_surface_prebake.gd`). Not the same bytes every time: the BC7 compressor
+  is not bit-reproducible (about 1 albedo bake in 100 differs in a few flat blocks that two modes
+  encode equally well, 0 to 2 levels apart; card bakedet, probe in `SurfaceBake.bake`'s doc), so
+  compare bakes by decompressed pixels. It does not matter for the cache: the key is the hash of
+  the source PNGs, each peer bakes its own maps, and nothing sends or hashes a baked file. Its queue is ordered by priority: `PRIORITY_LOAD` (a map load's
   ground layers, which it waits for under its sheet with `prebaking(names)`), `PRIORITY_SHOWN` (a
   panel's pictures: the authoring drawer's biome tiles), `PRIORITY_AHEAD` (the Paint swatches,
   warmed before their pane shows). A play load queues its layers as soon as its document is read,

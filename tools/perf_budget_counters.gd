@@ -48,7 +48,7 @@ const LIMITS := {
 	"default_shadow_tier": float(RenderingServer.SHADOW_QUALITY_SOFT_HIGH),
 	"default_shadow_cascades": float(ShadowCascades.BLENDED),
 	"default_foliage_edges": float(FoliageEdges.SMOOTH),
-	"ground_keep_far": 0.5,
+	"ground_keep_far": 0.65625,
 	"ground_keep_home": 1.0,
 }
 
@@ -281,9 +281,9 @@ static func token_rows(parent: Node) -> Array[Dictionary]:
 		_row(
 			"pop_in_span_s",
 			"Last pop-in delay of a 500-token load",
-			TokenSpawnQueue.pop_in_delay(499, 500),
+			_last_pop_in_delay(500),
 			"s",
-			"1.5 s; it was 0.05 s per index (25 s at 500)",
+			"1.5 s, the latest rippled pop of 500; it was 0.05 s per index (25 s at 500)",
 			"F-tokens-4, 3355e42c"
 		),
 		_row(
@@ -530,7 +530,7 @@ static func render_rows() -> Array[Dictionary]:
 			"Share of ground cover drawn at camera size 20 (zoomed out)",
 			FoliageDensityController.keep_fraction(20.0),
 			"",
-			"0.5; the canopy hides most of the ground there: about 0.5 ms",
+			"21/32 (two thirds, the gentler ramp; it was 0.5); the canopy hides most of the ground there",
 			"F-foliage-4, foliagelod"
 		),
 		_row(
@@ -683,6 +683,14 @@ static func _net_state(count: int) -> Dictionary:
 		state.position = _grid_position(i)
 		tokens[state.network_id] = state.to_dict()
 	return {"tokens": tokens, "permissions": {}, "drag_locks": {}}
+
+
+## The latest pop-in delay among `total` tokens (the ripple makes it token-specific).
+static func _last_pop_in_delay(total: int) -> float:
+	var last := 0.0
+	for i in total:
+		last = maxf(last, TokenSpawnQueue.pop_in_delay(i, total))
+	return last
 
 
 ## Token `i`'s place on a 20-wide grid of 1.25 m cells.

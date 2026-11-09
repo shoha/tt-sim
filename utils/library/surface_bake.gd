@@ -190,6 +190,14 @@ static func relative_path(runtime_name: String, kind: String) -> String:
 
 ## `image` (a decoded PNG) as the imported texture of `kind` would be, or null when it is
 ## empty or over the size cap. A new Image; `image` is left as it was.
+##
+## Not bit-reproducible (card bakedet, 2026-11-09): the BC7 compressor (Image.compress, cvtt) bakes
+## the same input to different bytes about 1 time in 100 for ash albedo, on the main thread, on one
+## worker, serial or beside other work. The differing blocks are flat ones that two modes (6 and
+## 3) encode equally well; the choice moves from run to run, and with the pool limited to one
+## thread it moves with the thread that runs the bake (main and pool thread give two different,
+## each stable, results). Decompressed, the maps differ by 0 to 2 levels in a handful of blocks.
+## So compare two bakes by their decompressed pixels, never by their bytes.
 static func bake(image: Image, kind: String) -> Image:
 	if image == null or image.is_empty() or image.is_compressed():
 		return null

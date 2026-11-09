@@ -9,14 +9,16 @@ extends RefCounted
 ## A load names the surfaces it is about to draw (SurfaceStore.prebake); each map not in memory
 ## becomes a job, and ONE task on WorkerThreadPool works the jobs in order: the cache file when it
 ## holds the map, else the PNG decoded, baked and written to the cache, by the same function the
-## main thread uses (SurfaceStore.load_map), so the maps and the cache files are the same bytes.
+## main thread uses (SurfaceStore.load_map), so the maps and the cache files are the same maps
+## (equal once decompressed, not always the same bytes: see SurfaceBake.bake).
 ## A result stays here until the main thread asks for its map (take()), which moves it into the
 ## store: SurfaceStore's tables are never read or written off the main thread.
 ##
-## One compression at a time, process wide. Two at once do not give the same bytes (a BC7 albedo
-## compressed beside a BC1 or BC5 map differed in 6 of 48 bakes; serial bakes, on the main thread
-## or one worker, never did: probe sysbake), so the lane is a single task, and COMPRESS_LOCK,
-## which load_map holds around a bake, keeps a main-thread bake from overlapping the lane's.
+## One compression at a time, process wide: a compression already spreads over every pool thread,
+## so the lane is a single task, and SurfaceStore.compress_lock, which load_map holds around a
+## bake, keeps a main-thread bake from overlapping the lane's. This is for load, not for
+## determinism: card bakedet found that serial bakes differ too (the sysbake probe's "concurrent
+## compression" reading was this same noise, which is rare: about 1 bake in 100).
 ##
 ## A map asked for before the lane reached it leaves the queue (the main thread bakes it, as it
 ## always did); one the lane is baking is waited for by polling. Never wait on the lane with
