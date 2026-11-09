@@ -348,6 +348,37 @@ func test_the_budget_trims_the_extra_tokens_on_screen_and_restores_them() -> voi
 		assert_false(token.has_meta(TokenGhost.TRIMMED_META), "back within budget: all dressed")
 
 
+## A pass that would see what the last one saw (camera, tokens, highlights) is skipped: a mark
+## cleared by hand stays cleared until the camera or a token moves (perfaudit F-tokens-6).
+func test_the_budget_skips_a_pass_when_nothing_moved() -> void:
+	var camera := Camera3D.new()
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = 40.0
+	add_child_autofree(camera)
+	camera.global_position = Vector3(0, 10, 10)
+	camera.look_at(Vector3.ZERO)
+	camera.make_current()
+	var tokens: Array[BoardToken] = []
+	for i in TokenGhost.BUDGET_TOKENS + 2:
+		var token := _token([_pack_part(Color.RED)])
+		token.rigid_body.position = Vector3(float(i % 8) - 4.0, 0.0, float(i / 8) - 1.0)
+		tokens.append(token)
+	TokenGhost.apply_budget(get_tree(), camera)
+	var trimmed := func(t: BoardToken) -> bool: return t.has_meta(TokenGhost.TRIMMED_META)
+	var marked := tokens.filter(trimmed)
+	assert_eq(marked.size(), 2, "setup: two past the budget")
+	marked[0].remove_meta(TokenGhost.TRIMMED_META)
+	TokenGhost.apply_budget(get_tree(), camera)
+	assert_false(marked[0].has_meta(TokenGhost.TRIMMED_META), "nothing moved: the pass is skipped")
+	camera.global_position += Vector3(0.01, 0, 0)
+	TokenGhost.apply_budget(get_tree(), camera)
+	assert_true(marked[0].has_meta(TokenGhost.TRIMMED_META), "the camera moved: the pass runs")
+	marked[0].remove_meta(TokenGhost.TRIMMED_META)
+	tokens[0].rigid_body.position += Vector3(0.0, 0.0, 0.01)
+	TokenGhost.apply_budget(get_tree(), camera)
+	assert_true(marked[0].has_meta(TokenGhost.TRIMMED_META), "a token moved: the pass runs")
+
+
 # --- the saved setting -------------------------------------------------------------------
 
 
