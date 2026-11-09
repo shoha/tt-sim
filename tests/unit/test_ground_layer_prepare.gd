@@ -7,6 +7,7 @@ extends GutTest
 ## retable in the middle restarts the slot; the capacity step is never crossed.
 
 const FOREST := "temperate_forest_summer_s1"
+const MEADOW := "grassland_meadow_summer_s1"
 const ROUTING_UNIFORMS: PackedStringArray = ["biome_rules", "biome_extra", "paint_layer"]
 
 
@@ -91,6 +92,37 @@ func test_a_prepared_surface_is_bound_before_its_first_dab() -> void:
 	assert_eq(binding.arrays.layers, prepared, "and reads no image")
 	var id := terrain.document.surface_ids.find(surface)
 	assert_eq(binding.painted_layer(id), prepared.size() - 1, "the dab draws the prepared layer")
+
+
+func _dab_biome(terrain: AuthoredTerrain, biome_id: String) -> void:
+	var doc := terrain.document
+	doc.biome_ids.append(biome_id)
+	var slot := doc.biome_ids.size()
+	for z in 6:
+		for x in 6:
+			doc.biome_slots[doc.sample_index(x, z)] = slot
+	terrain.update_ground_region(Rect2i(0, 0, 6, 6))
+
+
+## The first dab of a biome on two equal maps, one prepared at the pick and one not: both end
+## with the same layers, so the prepare bound exactly what the stroke uses, no layer more (which
+## would bring the capacity step's recreate sooner) and none fewer.
+func test_a_prepared_biome_binds_exactly_what_its_first_dab_uses() -> void:
+	var prepared := _terrain()
+	var plain := _terrain()
+	var binding := prepared.layer_binding()
+	prepared.prepare_biome(MEADOW)
+	assert_true(binding.is_preparing(), "the meadow brings layers")
+	_finish(binding)
+	var before := prepared.ground_layers()
+	var albedo: Texture2DArray = binding.arrays.textures.albedo
+	_dab_biome(prepared, MEADOW)
+	_dab_biome(plain, MEADOW)
+	assert_eq(prepared.ground_layers(), before, "the first dab appends nothing")
+	assert_eq(binding.arrays.textures.albedo, albedo, "and recreates nothing")
+	assert_eq(prepared.ground_layers(), plain.ground_layers(), "no layer more and none fewer")
+	prepared.prepare_biome(MEADOW)
+	assert_false(binding.is_preparing(), "a biome the map has prepares none")
 
 
 func test_a_retable_mid_preparation_takes_the_slot_and_the_prepare_moves_on() -> void:

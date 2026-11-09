@@ -113,13 +113,14 @@ static func create(
 	return editor
 
 
-## Loads a biome's assets and ground surface in the background, so its first dab does not
-## wait on them.
+## Loads a biome's assets and ground surface in the background and binds the ground layers its
+## first dab brings (AuthoredTerrain.prepare_biome), so its first dab does not wait on them.
 func prepare_biome(biome_id: String) -> void:
 	if is_instance_valid(scatter):
 		scatter.prepare_biome(biome_id)
 	if is_instance_valid(terrain):
 		terrain.warm_biome_surface(biome_id)
+		terrain.prepare_biome(biome_id)
 
 
 # ============================================================================

@@ -50,6 +50,22 @@ Conventions on 2026-10-09).
   holds: the fire's surfaces (`AuthoredTerrain.fire_surfaces`: the burnt forest biome's and the
   ash), which a fire's op brings to every peer at once; appended there they cost 55 ms of
   texture reads in one frame (card F4b-2).
+  Authoring prepares layers ahead of their first use (`GroundLayerBinding.prepare`, perfaudit
+  card authfirst, 2026-11-08): a pick names the surfaces its edit will bring (the Paint tile's
+  surface, `use_surface`; a biome's, `AuthoredTerrain.prepare_biome`, exactly
+  `GroundLayers.wanted` of the biome list with it added, none for a biome drawn as the base; the
+  first water's beds and shores, `prepare_water` when the Water tool is picked; a Dress kit's
+  road, door path and plaza, `SettlementBarLink.prepare_dress` when the Street bar shows an
+  undressed street). `prepare_step` uploads one map at a time into the slot the next append takes
+  (`GroundLayerArrays.upload_ahead`, a padding layer nothing reads), from `AuthoredTerrain._process`
+  within `PREP_BUDGET_USEC` (4 ms) a frame, and binds the surface when its fourth map is in, like
+  a reserve layer: nothing routes to it until the document uses the surface, so the ground draws
+  as before, and the next load compacts it away if it stayed unused. The edit's retable then finds
+  the layer bound and sets only uniforms (the arrays' sync was 19 ms per new surface, 40 to 63 ms
+  for a biome's or the first water's two). A retable in the middle takes the slot and the prepare
+  starts the surface again past it; a prepare never crosses the capacity step (the edit's recreate
+  stays the edit's). Layer indices are local to each peer's binding, so a prepared layer changes
+  nothing another peer sees.
   The shader reads the document's own bytes as index maps (biome slots and density, R8; the
   painted surfaces' top-4 index and weight planes, RGBA8) with `textureGather` at the texel
   corner, weights each corner bilinearly, and keeps the four strongest (layer, weight)

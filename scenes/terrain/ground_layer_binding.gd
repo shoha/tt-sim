@@ -391,8 +391,13 @@ static func tint_tables(
 ## The GroundLayers inputs for `doc` (see GroundLayers.wanted), surfaces the palette at `root`
 ## cannot draw left out, plus "as_base": per document biome 1 when it draws as the base (its
 ## ground is the base surface or missing; its own rules and accents are then blanked, the base
-## row carries them as the slot table did).
-static func gather_inputs(doc: MapDocument, root: String, water: bool) -> Dictionary:
+## row carries them as the slot table did). `biome_ids`, when given, stands for the document's
+## biome list (AuthoredTerrain.prepare_biome: the list after a biome's first dab; a biome past
+## the document's own has no coverage yet).
+static func gather_inputs(
+	doc: MapDocument, root: String, water: bool, biome_ids := PackedStringArray()
+) -> Dictionary:
+	var ids := biome_ids if not biome_ids.is_empty() else doc.biome_ids
 	var available := func(surface: String) -> bool:
 		return surface != "" and GroundPalette.surface_available(surface, root)
 	var pick := func(biome: Dictionary, key: String) -> String:
@@ -404,7 +409,7 @@ static func gather_inputs(doc: MapDocument, root: String, water: bool) -> Dictio
 	var beds := PackedStringArray()
 	var shores := PackedStringArray()
 	var accents: Array = []
-	for biome_id in doc.biome_ids.slice(0, GroundLayers.MAX_BIOMES - 1):
+	for biome_id in ids.slice(0, GroundLayers.MAX_BIOMES - 1):
 		var biome := PaletteLibrary.biome(biome_id, root)
 		grounds.append(pick.call(biome, "ground_surface"))
 		cliffs.append(pick.call(biome, "cliff_surface"))

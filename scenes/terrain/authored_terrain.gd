@@ -508,11 +508,6 @@ func warm_biome_surface(biome_id: String) -> void:
 		if surface_name == "" or surface_name == document.base_surface or bound.has(surface_name):
 			continue
 		warm_surface(surface_name)
-	# A biome on the base surface (or with no drawable ground) draws as the base: none of its
-	# surfaces become layers (GroundLayerBinding.gather_inputs), so none is prepared.
-	var ground := String(biome.get("ground_surface", ""))
-	if ground != document.base_surface and GroundPalette.surface_available(ground, palette_root):
-		prepare_surfaces(PackedStringArray(names))
 
 
 ## Starts loading the textures of palette surface `surface_name` on background threads
@@ -549,10 +544,25 @@ func prepare_surfaces(surfaces: PackedStringArray) -> void:
 func prepare_water() -> void:
 	if _layers == null or document == null or _has_water():
 		return
-	var wants := GroundLayers.wanted(
-		GroundLayerBinding.gather_inputs(document, palette_root, true)
-	)
-	var names: PackedStringArray = wants.get("surfaces", PackedStringArray())
+	_prepare_wanted(GroundLayerBinding.gather_inputs(document, palette_root, true))
+
+
+## Prepares exactly the layers the first dab of palette biome `biome_id` brings
+## (GroundLayers.wanted of the document's biome list with the biome added: its ground, rules and
+## drawable accents, none for a biome drawn as the base), so a prepare never binds a layer the
+## stroke does not use. Nothing when the map already has the biome. The biome pick calls it.
+func prepare_biome(biome_id: String) -> void:
+	if _layers == null or document == null or biome_id == "" or biome_id in document.biome_ids:
+		return
+	var ids := document.biome_ids.duplicate()
+	ids.append(biome_id)
+	_prepare_wanted(GroundLayerBinding.gather_inputs(document, palette_root, _has_water(), ids))
+
+
+## prepare_surfaces() for every surface GroundLayers.wanted(`inputs`) names.
+func _prepare_wanted(inputs: Dictionary) -> void:
+	var wants := GroundLayers.wanted(inputs)
+	var names: PackedStringArray = wants.get("surfaces", PackedStringArray()).duplicate()
 	names.append_array(wants.get("accents", PackedStringArray()))
 	prepare_surfaces(names)
 
