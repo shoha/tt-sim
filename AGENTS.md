@@ -182,7 +182,7 @@ After editing files, format them so output matches project style. See `.cursor/r
   must lead PATH for the build. The exact local command (PowerShell, verified 2026-10-25, S12c;
   the incremental rebuild takes seconds, a first build with godot-cpp about a minute; the result
   is `native/bin/libttscatter.windows.template_debug.x86_64.dll`, whose `version()` must read
-  `ttscatter 6 curves water` or `test_scatter_native` fails):
+  `ttscatter 7 curves water chunk` or `test_scatter_native` fails):
   ```
   $env:PATH = "C:/Users/hshore/scoop/apps/mingw-mstorsjo-llvm-msvcrt/current/bin;" + $env:PATH
   scons -C D:/dev/tabletop/tt-sim/native -j8 use_mingw=yes use_llvm=yes mingw_prefix=C:/Users/hshore/scoop/apps/mingw-mstorsjo-llvm-msvcrt/current

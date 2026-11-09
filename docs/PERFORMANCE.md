@@ -1635,6 +1635,9 @@ first load in a process still has one 590-660 ms frame, Blender maps too.
   the per-call RenderingServer overhead the idea was meant to avoid is not where the time
   goes. Reverted in cfec47c. If the 52k-instance build ever needs to shrink, move the whole
   build onto the worker thread that already parses the GLB rather than changing the upload.
+  Still true for a buffer filled in GDScript (perfaudit 2026-11-09: 66.8 against 66.3 ms at 320
+  ft filled), but a buffer filled natively is the new evidence that overturns it for authored
+  scatter: "Scatter load: native instance buffers" (card scatterload).
 
 - **General triangle budgets.** 420x the geometry cost only 9.2x the frame time. Raw
   triangle count is not the binding constraint; foliage instance count is.
@@ -5200,3 +5203,45 @@ tokens up (200 distinct avatars: 19.3 against 24.6 KB); deflate is 40 B smaller 
 Largest single message after: an AssetStreamer map chunk (32 KB); the largest token message
 measured was a 16.6 KB reliable reconcile pair as 150 freshly placed tokens settled.
 `TokenStateWire.SEND_BUDGET_BYTES` (192 KB) is reached at 2,000 to 4,900 tokens.
+
+## Scatter load: native instance buffers (topic perfaudit, card scatterload, 2026-11-09)
+
+What changed (`docs/systems/scatter.md` "Native path"): a settled authored-scatter node (every
+node of a map load, and the settled part of a rebuild) is built from one native call per chunk,
+`TTScatterNative.chunk` through `ScatterRows.chunk`: the row keys, the instance order and the
+whole MultiMesh buffer (transforms and grass-mass custom data) come back together and the
+MultiMesh takes the buffer in one assignment (`ScatterGlbUtils.multimesh_from_chunk`). The bytes
+are the per-instance path's: on the real renderer every chunk's native buffer equals what
+`build_multimesh` (instance_order, transforms, custom data, `set_instance_transform`) leaves in
+the MultiMesh, read back through `MultiMesh.buffer`: 364 of 364, 1,329 of 1,329 and 2,727 of
+2,727 chunks byte-identical at 100, 200 and 320 ft (93, 340 and 594 with custom data). Without
+the library (or `ScatterNative.force_gdscript_chunks`) the GDScript path is the old one.
+
+Method: the foliage perf probe's `load` action (`tools/render_jobs/probes/foliage_perf_load.gd`),
+render job, real window, new map `temperate_forest_summer_s1` valley seed 1234 filled to density
+255 (`tools/map_size/dump.gd fill`), 6 reps, median [range], ms. "Spread load" replays
+MapSourceLoader's build synchronously: begin_build, one build_cells per cell while the frame is
+under the 8 ms budget, end_build; its frames are the frames the load takes, its longest frame the
+hitch. Baseline main ff8bed88, after the branch; both runs quiet (the lane held, no other gate
+running).
+
+| Filled map | 100 ft | 200 ft | 320 ft |
+| --- | --- | --- | --- |
+| chunks / instances / anchors | 364 / 9,254 / 5,952 | 1,329 / 38,111 / 24,005 | 2,727 / 95,825 / 60,270 |
+| spread load before | 58.9 [47.1-68.8] | 190.0 [184.5-201.1] | 425.9 [393.1-458.8] |
+| spread load after | 17.9 [17.5-19.4] | 73.9 [69.8-76.1] | 164.8 [155.1-245.2] |
+| frames before / after | 5 / 2 | 17 / 6 | 35 / 13 |
+| longest frame before / after | 11.3 / 8.3 | 12.3 / 9.0 | 12.5 / 9.1 |
+| longest cell before / after | 4.9 / 1.0 | 5.9 / 1.2 | 4.9 / 1.4 |
+| per-chunk steps before: keys / order / transforms / MultiMesh | 11.5 / 4.3 / 5.2 / 7.4 | 42.5 / 13.7 / 19.7 / 28.3 | 103.4 / 32.5 / 47.6 / 65.2 |
+| after: native call / call plus MultiMesh | 2.4 / 4.8 | 10.1 / 19.7 | 24.6 / 43.0 |
+
+The 245 ms top of the 320 ft range is one rep with an 89 ms frame (outside the build loop's
+cells). end_build (the density budget's map-wide apply, unchanged) is 1.5 / 5.5 / 12.4 ms and is
+now the load's longest single step at 320 ft. A later run under CPU contention (two other agents'
+sharded gates) read 1.9 times slower across every line, and there the forced-GDScript load was
+722 ms against the native 294 ms, the same ratio as the quiet baseline against the quiet native
+run. Not moved to workers: the remaining main-thread time is mostly node creation and tree
+insertion (165 ms of load at 320 ft against a 25 ms native call and about 15 ms of buffer
+assignment), so threading the call would save at most about 25 ms. Grow-ins, shrinks and the GLB
+path still use the per-instance path (they hold transforms for their animation).
