@@ -291,6 +291,12 @@ func _report(shards: Array, wall_s: float) -> bool:
 		failures.append_array(result.get("failures", PackedStringArray()))
 		var killed: bool = shard.get("killed", false)
 		var passed: bool = int(shard.exit) == 0 and not killed and result.has("tests")
+		# GUT drops a script that does not parse and still exits 0 (2026-11-09: two scripts, 14
+		# tests, ran for days unnoticed), so a dropped script fails its shard.
+		var dropped := ignored_scripts(str(shard.log))
+		for dropped_line in dropped:
+			failures.append("not run (GUT ignored the script): " + dropped_line)
+		passed = passed and dropped.is_empty()
 		ok = ok and passed
 		var line := (
 			"shard %d: %d scripts, %d tests, %d failing, %d pending, %.1f s, exit %d"
@@ -326,6 +332,18 @@ func _report(shards: Array, wall_s: float) -> bool:
 		)
 	)
 	return ok
+
+
+## The "Ignoring script ..." lines of a shard's GUT log (a script that failed to parse); empty when
+## the log is missing or has none.
+static func ignored_scripts(log_path: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	if not FileAccess.file_exists(log_path):
+		return out
+	for line in FileAccess.get_file_as_string(log_path).split("\n"):
+		if "Ignoring script" in line:
+			out.append(line.strip_edges())
+	return out
 
 
 ## A GUT JUnit file's counts (`tests`, `failing`, `pending`, `asserts`), its `failures` (one
