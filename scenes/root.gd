@@ -43,8 +43,6 @@ const APP_MENU_SCENE := preload("res://scenes/ui/app_menu.tscn")
 const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
 const PAUSE_OVERLAY_SCENE := preload("res://scenes/states/paused/pause_overlay.tscn")
 const UPDATE_DIALOG_SCENE := preload("res://scenes/ui/update_dialog.tscn")
-const NEW_MAP_DIALOG_SCENE := preload("res://scenes/states/authoring/new_map_dialog.tscn")
-const GRAPHICS_WARMUP_SCENE := preload("res://scenes/states/warmup/graphics_warmup_screen.tscn")
 ## Where leaving authoring returns to.
 const RETURN_TO_TITLE := &"title"
 const RETURN_TO_EDITOR := &"editor"
@@ -71,8 +69,10 @@ var _authoring_controller: AuthoringController = null
 ## What the next AUTHORING state opens: {"level": LevelData or null, "new_map": spec,
 ## "return_to": RETURN_TO_*}. See request_authoring().
 var _authoring_request: Dictionary = {}
-var _new_map_dialog: NewMapDialog = null
-var _warmup_screen: GraphicsWarmupScreen = null
+## The new-map dialog (NewMapDialog) and the warm-up screen (GraphicsWarmupScreen), made through
+## OnDemand on first use so neither is compiled at start-up.
+var _new_map_dialog: Node = null
+var _warmup_screen: Node = null
 var _warmup_entered: bool = false
 ## Whether the first entry into TITLE_SCREEN starts the startup update check (not for Steam,
 ## which updates the game itself). Consumed by _take_startup_update_check().
@@ -345,7 +345,7 @@ func _enter_state(state: State) -> void:
 				)
 			if _title_screen.has_signal("design_biome_requested"):
 				_title_screen.design_biome_requested.connect(
-					func() -> void: BiomeDesignerPicker.show_over(self)
+					func() -> void: OnDemand.show_biome_designer_picker(self)
 				)
 			if _title_screen.has_signal("edit_map_requested"):
 				_title_screen.edit_map_requested.connect(_on_edit_map_requested)
@@ -436,8 +436,7 @@ func _enter_warming_up_state() -> void:
 	_warmup_entered = true
 	if _app_menu:
 		_app_menu.hide()
-	_warmup_screen = GRAPHICS_WARMUP_SCENE.instantiate()
-	_warmup_screen.finished.connect(change_state.bind(State.TITLE_SCREEN), CONNECT_ONE_SHOT)
+	_warmup_screen = OnDemand.graphics_warmup_screen(change_state.bind(State.TITLE_SCREEN))
 	add_child(_warmup_screen)
 
 
@@ -518,9 +517,8 @@ func request_authoring(level: LevelData, return_to: StringName, preset := {}) ->
 		return
 	if is_instance_valid(_new_map_dialog):
 		return
-	_new_map_dialog = NEW_MAP_DIALOG_SCENE.instantiate()
-	_new_map_dialog.preset = preset
-	_new_map_dialog.map_chosen.connect(
+	_new_map_dialog = OnDemand.new_map_dialog(
+		preset,
 		func(spec: Dictionary) -> void:
 			_begin_authoring({"level": level, "new_map": spec, "return_to": return_to})
 	)
@@ -546,7 +544,7 @@ func _on_biome_designer_requested(library_id: String, biome_id: String) -> void:
 	if refusal != "":
 		UIManager.show_warning(refusal)
 		return
-	var prepared := BiomeDesignerEntry.prepare(library_id, biome_id)
+	var prepared := OnDemand.prepare_biome_designer(library_id, biome_id)
 	if not prepared["ok"]:
 		UIManager.show_error(String(prepared["error"]))
 		return
