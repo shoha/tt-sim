@@ -561,10 +561,7 @@ func set_bridge_available(available: bool, has_water: bool) -> void:
 	bridge_pane.set_has_water(has_water)
 
 
-## Makes the Paint swatches ahead of ensure_paint_tiles() (SwatchTextures.warm_async: each albedo's
-## file decoded and scaled on a worker, never baked; 39 in one frame were 1.4 s warm and 9.5 s
-## cold, perfaudit F-system-2, and waiting for their bakes on the prebake lane held a cold open's
-## sheet about 5 s, card coldopen). Stops when `is_superseded` says so.
+## Collects start_paint_swatches()'s warm-up ahead of ensure_paint_tiles(), starting one if none.
 func warm_paint_swatches_async(tree: SceneTree, is_superseded: Callable) -> void:
 	if _paint_tiles.is_empty():
 		if _swatch_job.is_empty():
@@ -574,19 +571,12 @@ func warm_paint_swatches_async(tree: SceneTree, is_superseded: Callable) -> void
 		await SwatchTextures.warm_finish_async(job, tree, is_superseded)
 
 
-## Starts making the Paint swatches on workers as an open begins (SwatchTextures.warm_start), so
-## they are ready when the palette is; warm_paint_swatches_async() collects them. A warm-up a
-## superseded open left is waited out first. Nothing once the tiles are built.
+## Starts the Paint swatches on workers as an open begins (SwatchTextures.warm_start, no bakes).
 func start_paint_swatches() -> void:
-	if not _paint_tiles.is_empty():
-		return
-	if not _swatch_job.is_empty() and int(_swatch_job["task"]) >= 0:
-		WorkerThreadPool.wait_for_group_task_completion(int(_swatch_job["task"]))
-	var roles := PackedStringArray()
-	for group in PAINT_GROUPS:
-		roles.append(String(group.role))
-	var albedos := SwatchTextures.paint_albedos(roles, palette_root)
-	_swatch_job = SwatchTextures.warm_start(albedos, PAINT_THUMB_PX, palette_root)
+	if _paint_tiles.is_empty():
+		SwatchTextures.drop(_swatch_job)
+		var albedos := SwatchTextures.paint_albedos(PAINT_GROUPS, palette_root)
+		_swatch_job = SwatchTextures.warm_start(albedos, PAINT_THUMB_PX, palette_root)
 
 
 ## Builds the Paint tiles once (palette surfaces by role, swatches from each surface's

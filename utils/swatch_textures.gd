@@ -114,13 +114,13 @@ static func square_tile(image: Image, size: int) -> Image:
 	return tile
 
 
-## The albedos (palette-relative) of the surfaces of `roles` under `root`, in role then palette
-## order: the Paint swatches' pictures.
-static func paint_albedos(roles: PackedStringArray, root: String) -> PackedStringArray:
+## The albedos (palette-relative) of the surfaces of `groups` (each {role}, as
+## AuthoringPanel.PAINT_GROUPS) under `root`, in group then palette order: the Paint swatches.
+static func paint_albedos(groups: Array, root: String) -> PackedStringArray:
 	var surfaces := PaletteLibrary.surfaces(root)
 	var albedos := PackedStringArray()
-	for role in roles:
-		for surface in PaletteLibrary.surfaces_with_role(role, root):
+	for group: Dictionary in groups:
+		for surface in PaletteLibrary.surfaces_with_role(String(group["role"]), root):
 			albedos.append(String(surfaces.get(surface, {}).get("albedo", "")))
 	return albedos
 
@@ -177,6 +177,13 @@ static func warm_start(albedos: PackedStringArray, size: int, root: String) -> D
 	return {
 		"task": task, "keys": keys, "tiles": tiles, "others": others, "size": size, "root": root
 	}
+
+
+## Waits out the workers of a warm-up `job` (warm_start's, or {}) that will not be finished, so a
+## new one can start. Blocks the calling thread for at most the job's last swatches.
+static func drop(job: Dictionary) -> void:
+	if int(job.get("task", -1)) >= 0:
+		WorkerThreadPool.wait_for_group_task_completion(int(job["task"]))
 
 
 ## Ends the warm-up `job` (warm_start's): the swatches that are not library maps are made a few a
