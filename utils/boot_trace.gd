@@ -27,6 +27,8 @@ const SETTLE_S := 3.0
 const HITCH_MS := 100.0
 const LOG_PATH := "user://boot_trace.jsonl"
 const MAP_TIMEOUT_S := 120
+## The level --boot-trace-prep saves and --boot-trace-play plays (a topic-named test level).
+const PLAY_FOLDER := "_boot2_play"
 
 static var enabled: bool = _detect()
 static var _marks: Array[Array] = []
@@ -65,6 +67,15 @@ static func title_ready(tree: SceneTree) -> void:
 	tree.process_frame.connect(_on_frame.bind(tree))
 
 
+## How long the title idles before the trace ends: SETTLE_S, or `--boot-trace-idle=<seconds>` (a
+## realistic idle of 10 s lets BootPrecompile finish; 0.3 is an immediate click).
+static func _settle_s() -> float:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--boot-trace-idle="):
+			return float(arg.get_slice("=", 1))
+	return SETTLE_S
+
+
 static func _on_first_draw() -> void:
 	mark("first title frame drawn")
 
@@ -82,7 +93,7 @@ static func _on_frame(tree: SceneTree) -> void:
 		_worst_ms = maxf(_worst_ms, frame_ms)
 		if frame_ms > HITCH_MS:
 			_settled_us = now
-	if now - _title_at_us < int(SETTLE_S * 1000000.0):
+	if now - _title_at_us < int(_settle_s() * 1000000.0):
 		return
 	tree.process_frame.disconnect(_on_frame)
 	_finish(tree)
@@ -137,14 +148,73 @@ static func _maps(tree: SceneTree) -> Dictionary:
 	return out
 
 
+## `--boot-trace-prep`: makes the level `--boot-trace-play` plays: opens a new map as _maps() does
+## and saves it as PLAY_FOLDER in the user levels (delete that folder when the topic closes).
+static func _prep(tree: SceneTree) -> void:
+	var root: Node = tree.current_scene
+	var dialog: Node = OnDemand.new_map_dialog({"seed": 7}, func(_spec: Dictionary) -> void: pass)
+	root.add_child(dialog)
+	await tree.process_frame
+	var spec: Dictionary = dialog.current_spec()
+	dialog.queue_free()
+	root.call("_begin_authoring", {"level": null, "new_map": spec, "return_to": &"title"})
+	var controller: Node = root.get("_authoring_controller")
+	var started := Time.get_ticks_usec()
+	while not bool(controller.get("_is_open")):
+		if Time.get_ticks_usec() - started > MAP_TIMEOUT_S * 1000000:
+			mark("prep: timed out")
+			return
+		await tree.process_frame
+	for i in 30:
+		await tree.process_frame
+	var path: String = LevelManager.folder_path(PLAY_FOLDER)
+	if DirAccess.dir_exists_absolute(path):
+		LevelManager.delete_level_folder(path)
+	DirAccess.make_dir_recursive_absolute(path)
+	var saved: Resource = controller.get("level").duplicate(true)
+	saved.set("level_name", PLAY_FOLDER)
+	saved.set("level_folder", PLAY_FOLDER)
+	controller.call("_sync_document")
+	var ok: Variant = controller.get_script().write_level(saved, controller.get("document"), null)
+	mark("prep: saved %s: %s" % [PLAY_FOLDER, str(ok)])
+
+
+## `--boot-trace-play`: after the title settles, plays the level --boot-trace-prep saved, as the
+## title's Play does: play_level_first_ms is the request until the table has loaded.
+static func _play(tree: SceneTree) -> Dictionary:
+	var root: Node = tree.current_scene
+	var level: Variant = LevelManager.load_level_folder(PLAY_FOLDER, false)
+	if level == null:
+		mark("first play: no %s level (run --boot-trace-prep first)" % PLAY_FOLDER)
+		return {}
+	var started := Time.get_ticks_usec()
+	mark("first play: requested")
+	root.call("_on_play_level_requested", level)
+	while true:
+		await tree.process_frame
+		var table: Node = root.get("_level_play_controller")
+		if root.get("pending_level") == null and table != null and bool(table.call("has_active_level")):
+			break
+		if Time.get_ticks_usec() - started > MAP_TIMEOUT_S * 1000000:
+			mark("first play: timed out")
+			return {}
+	mark("first play: loaded")
+	return {"first_play_ms": snappedf((Time.get_ticks_usec() - started) / 1000.0, 0.1)}
+
+
 static func _finish(tree: SceneTree) -> void:
 	if _settled_us == 0:
 		_settled_us = _marks[-1][1]
 	mark("settled (last frame over %d ms)" % int(HITCH_MS))
 	_marks[-1][1] = _settled_us
 	var maps := {}
-	if OS.get_cmdline_user_args().has("--boot-trace-map"):
+	var user_args := OS.get_cmdline_user_args()
+	if user_args.has("--boot-trace-prep"):
+		await _prep(tree)
+	if user_args.has("--boot-trace-map"):
 		maps = await _maps(tree)
+	if user_args.has("--boot-trace-play"):
+		maps = await _play(tree)
 	var rows: Array[Dictionary] = []
 	var prev_us := 0
 	print("boot_trace: %d marks, worst frame after the title %.1f ms" % [_marks.size(), _worst_ms])

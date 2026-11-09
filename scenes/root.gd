@@ -128,6 +128,10 @@ func _ready() -> void:
 
 	# Enter initial state
 	push_state(boot_state(GraphicsWarmup.should_run()))
+	# The play and authoring code compiles in slices while the title idles (BootPrecompile).
+	var precompile := BootPrecompile.new()
+	precompile.name = "BootPrecompile"
+	add_child(precompile)
 
 
 ## FoliageLibrary switched the palette: rebuild the open map so its scatter draws the new
@@ -197,6 +201,7 @@ func _setup_level_play_controller() -> void:
 func _ensure_table() -> void:
 	if _level_play_controller != null:
 		return
+	BootPrecompile.finish_current()
 	var table_script: GDScript = load(LEVEL_PLAY_CONTROLLER_PATH)
 	_level_play_controller = table_script.new()
 	add_child(_level_play_controller)

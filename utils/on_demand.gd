@@ -54,6 +54,8 @@ static func prepare_biome_designer(library_id: String, biome_id: String) -> Dict
 ## A new NewMapDialog with `preset` (the New map card's size and seed); `on_chosen` gets its
 ## map_chosen spec. Not yet in the tree.
 static func new_map_dialog(preset: Dictionary, on_chosen: Callable) -> Node:
+	# The dialog's previews name map code the background precompile may be compiling.
+	BootPrecompile.finish_current()
 	var dialog: Variant = (load(NEW_MAP_DIALOG) as PackedScene).instantiate()
 	dialog.preset = preset
 	dialog.map_chosen.connect(on_chosen)

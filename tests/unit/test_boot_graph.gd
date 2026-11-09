@@ -14,7 +14,7 @@ extends GutTest
 ## board token, game map, table (LevelPlayController), authoring editor or procgen evaluator,
 ## settlement, prop or ornament class; Root makes the table when a session or a map first needs it
 ## (Root._ensure_table), and StructureProcgen loads the procgen parts on the first build.
-const LIMIT_SCRIPTS := 341
+const LIMIT_SCRIPTS := 342
 
 var _classes: Dictionary = {}
 var _strings := RegEx.create_from_string(
@@ -57,6 +57,30 @@ func test_the_start_up_script_graph_stays_within_its_limit() -> void:
 		% [scripts, LIMIT_SCRIPTS]
 	)
 	gut.p("start-up script graph: %d scripts (limit %d)" % [scripts, LIMIT_SCRIPTS])
+
+
+## BootPrecompile's generated order (tools/boot_graph.gd --write-order) lists only scripts that
+## exist, each once, and covers what the three late roots reach: a stale list still works, but a
+## script it lacks is compiled by the first map instead of in the title's idle.
+func test_the_precompile_order_is_current() -> void:
+	var order: PackedStringArray = (load(BootPrecompile.ORDER_SCRIPT) as GDScript).SCRIPTS
+	assert_gt(order.size(), 300, "the order lists the play and authoring scripts")
+	var seen := {}
+	for path in order:
+		assert_true(ResourceLoader.exists(path), "%s exists" % path)
+		assert_false(seen.has(path), "%s is listed once" % path)
+		seen[path] = true
+	for must in [
+		"res://scenes/states/playing/game_map.gd",
+		"res://scenes/states/playing/level_play_controller.gd",
+		"res://scenes/states/authoring/authoring_controller.gd",
+	]:
+		assert_true(seen.has(must), "%s is in the order (run boot_graph --write-order)" % must)
+	assert_lt(
+		order.find("res://scenes/states/playing/camera_controller.gd"),
+		order.find("res://scenes/states/playing/game_map.gd"),
+		"dependencies come first"
+	)
 
 
 ## Settlement.KIND_NAMES copies procgen's list so the resource does not name ProcgenSettlement.

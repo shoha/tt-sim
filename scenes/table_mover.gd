@@ -512,7 +512,7 @@ func _settled_document() -> MapDocument:
 	var edits: Variant = _controller.live_edits
 	if not is_instance_valid(edits) or not edits.sends:
 		return null
-	var editor: Node = edits.editor
+	var editor: RefCounted = edits.editor
 	editor.finish_height_work()
 	while is_instance_valid(editor.scatter) and editor.scatter.is_regenerating():
 		await get_tree().process_frame
@@ -522,7 +522,7 @@ func _settled_document() -> MapDocument:
 
 
 ## `editor`'s document with its scatter and props rows as they stand.
-static func document_of(editor: Node) -> MapDocument:
+static func document_of(editor: RefCounted) -> MapDocument:
 	var doc: MapDocument = editor.document
 	if is_instance_valid(editor.scatter) and is_instance_valid(editor.props):
 		doc.scatter = editor.scatter.rows_by_asset()
@@ -533,7 +533,7 @@ static func document_of(editor: Node) -> MapDocument:
 
 ## Writes `editor`'s document, with its scatter and props rows as they stand, to `level`'s
 ## map.ttmap. False for a level without a folder or a document, or when the write failed.
-static func write_document(editor: Node, level: LevelData) -> bool:
+static func write_document(editor: RefCounted, level: LevelData) -> bool:
 	if level.level_folder == "" or level.map_document == "":
 		return false
 	var path := LevelManager.map_document_path(level.level_folder)
