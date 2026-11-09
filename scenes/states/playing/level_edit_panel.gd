@@ -18,6 +18,12 @@ extends DrawerContainer
 ## The rail's last item is the GM's Events pane (EventsPane, controlled by PlayEvents): live map
 ## changes for the whole table, undone rather than saved, so the foot steps out while it shows
 ## and it takes no part in the dirty state.
+##
+## Every pane is made the first time it is shown or read (PaneStack builders, the pane
+## properties below): the drawer is part of the game map, which play builds on every load and
+## authoring builds without ever showing it, and its panes were about 1500 Controls (perfaudit
+## F-system-8). A pane made later loads the state the drawer was last initialized with, and Save
+## starts from that state, so a pane never opened saves what it would have shown.
 
 signal save_requested(state: LevelVisualState)
 signal cancel_requested
@@ -44,6 +50,10 @@ signal drawer_opened
 ## The controller should revert changes if not saved.
 signal drawer_closed
 
+## Emitted when the Events pane is made (its first show or read of events_pane), so its
+## controller (PlayEvents) wires itself to it then.
+signal events_pane_built(pane: EventsPane)
+
 const PANE_IDS: Array[StringName] = [
 	&"sun", &"sky", &"color", &"weather", &"water", &"film", &"world"
 ]
@@ -65,17 +75,40 @@ const RAIL_FOOTER_ITEMS: Array[Dictionary] = [
 ## How long the foot takes to fade in when the first change stands.
 const FOOT_FADE_S := 0.18
 
-var sun_pane: SunPane
-var sky_pane: SkyPane
-var color_pane: ColorPane
-var weather_pane: WeatherPane
-var water_pane: WaterPane
-var film_pane: FilmPane
-var world_pane: WorldPane
-var events_pane: EventsPane
+## The panes, each made on its first read or show (see the header).
+var sun_pane: SunPane:
+	get:
+		return _stack.get_pane(&"sun") as SunPane
+var sky_pane: SkyPane:
+	get:
+		return _stack.get_pane(&"sky") as SkyPane
+var color_pane: ColorPane:
+	get:
+		return _stack.get_pane(&"color") as ColorPane
+var weather_pane: WeatherPane:
+	get:
+		return _stack.get_pane(&"weather") as WeatherPane
+var water_pane: WaterPane:
+	get:
+		return _stack.get_pane(&"water") as WaterPane
+var film_pane: FilmPane:
+	get:
+		return _stack.get_pane(&"film") as FilmPane
+var world_pane: WorldPane:
+	get:
+		return _stack.get_pane(&"world") as WorldPane
+var events_pane: EventsPane:
+	get:
+		return _stack.get_pane(EVENTS_ID) as EventsPane
 
 var _env_model := EnvironmentEditModel.new()
 var _stack: PaneStack
+## The state the drawer was last initialized with (initialize), or null before the first: a pane
+## made later loads it, and _build_state starts from it.
+var _state: LevelVisualState = null
+## initialize's map options for the Sky pane, kept for a Sky pane made later.
+var _has_map_defaults: bool = false
+var _has_map_sky: bool = false
 ## Whether every PropertyRow shows its numeric chip. Persisted per user.
 var _values_visible: bool = false
 ## True once a live edit has been made and neither saved nor cancelled.
@@ -116,7 +149,10 @@ func _on_ready() -> void:
 	_stack.slide_from_right = true
 	_stack.bar_in_margin = true
 	content_container.add_child(_stack)
-	_build_panes()
+	for id in PANE_IDS:
+		_stack.add_pane_builder(id, _make_pane.bind(id))
+	_stack.add_pane_builder(EVENTS_ID, EventsPane.new)
+	_stack.pane_built.connect(_on_pane_built)
 
 	# Pinned footer: the scene-defined ButtonsRow moves under the stack.
 	# remove_child() clears `owner` on the moved subtree, which breaks the
@@ -127,53 +163,81 @@ func _on_ready() -> void:
 
 	save_button.pressed.connect(_on_save_pressed)
 	revert_button.pressed.connect(_on_revert_pressed)
+	# The first open selects the rail's first item (DrawerContainer.open), which shows it.
 	pane_requested.connect(_on_pane_requested)
-	_stack.show_pane(_shown_pane, false)
 	_update_foot()
 	rail_footer_pressed.connect(_on_rail_footer_pressed)
 	_values_visible = UiPreferences.load_show_values()
 	_apply_values_visible()
 
 
-func _build_panes() -> void:
-	sun_pane = SunPane.new()
-	sky_pane = SkyPane.new()
-	color_pane = ColorPane.new()
-	weather_pane = WeatherPane.new()
-	water_pane = WaterPane.new()
-	film_pane = FilmPane.new()
-	world_pane = WorldPane.new()
-	sky_pane.set_model(_env_model)
-	color_pane.set_model(_env_model)
-	var panes := {
-		&"sun": sun_pane,
-		&"sky": sky_pane,
-		&"color": color_pane,
-		&"weather": weather_pane,
-		&"water": water_pane,
-		&"film": film_pane,
-		&"world": world_pane,
-	}
-	for id in PANE_IDS:
-		var pane: LevelEditPane = panes[id]
-		pane.name = String(id).capitalize() + "Pane"
-		_stack.add_pane(id, pane)
-		pane.changed.connect(_on_pane_changed.bind(id))
-	events_pane = EventsPane.new()
-	_stack.add_pane(EVENTS_ID, events_pane)
+## Look pane `id`, made on its first show or read (PaneStack builder) and wired to the panel's
+## relays; _on_pane_built loads it once it is in the tree.
+func _make_pane(id: StringName) -> LevelEditPane:
+	var pane: LevelEditPane
+	match id:
+		&"sun":
+			var sun := SunPane.new()
+			sun.sun_changed.connect(sun_changed.emit)
+			sun.aim_toggled.connect(aim_sun_toggled.emit)
+			pane = sun
+		&"sky":
+			var sky := SkyPane.new()
+			sky.set_model(_env_model)
+			pane = sky
+		&"color":
+			var color := ColorPane.new()
+			color.set_model(_env_model)
+			color.intensity_changed.connect(intensity_changed.emit)
+			pane = color
+		&"weather":
+			var weather := WeatherPane.new()
+			weather.weather_changed.connect(weather_changed.emit)
+			pane = weather
+		&"water":
+			var water := WaterPane.new()
+			water.water_changed.connect(water_changed.emit)
+			pane = water
+		&"film":
+			var film := FilmPane.new()
+			film.lofi_changed.connect(lofi_changed.emit)
+			pane = film
+		_:
+			var world := WorldPane.new()
+			world.scale_config_changed.connect(scale_config_changed.emit)
+			world.foliage_changed.connect(foliage_changed.emit)
+			pane = world
+	pane.name = String(id).capitalize() + "Pane"
+	pane.changed.connect(_on_pane_changed.bind(id))
+	return pane
 
-	sun_pane.sun_changed.connect(sun_changed.emit)
-	sun_pane.aim_toggled.connect(aim_sun_toggled.emit)
-	color_pane.intensity_changed.connect(intensity_changed.emit)
-	weather_pane.weather_changed.connect(weather_changed.emit)
-	film_pane.lofi_changed.connect(lofi_changed.emit)
-	world_pane.scale_config_changed.connect(scale_config_changed.emit)
-	water_pane.water_changed.connect(water_changed.emit)
-	world_pane.foliage_changed.connect(foliage_changed.emit)
+
+## A pane was made (its controls exist now): it takes the values toggle, a look pane loads the
+## state the drawer was last initialized with, and the Events pane is announced to its controller.
+func _on_pane_built(id: StringName, pane: Control) -> void:
+	_apply_values_to(pane)
+	if id == EVENTS_ID:
+		events_pane_built.emit(pane as EventsPane)
+		return
+	if _state == null:
+		return
+	if pane is SkyPane:
+		(pane as SkyPane).set_map_options(_has_map_defaults, _has_map_sky)
+	(pane as LevelEditPane).load_state(_state)
 
 
+## The look panes made so far (the others hold the initialized state unchanged).
 func _panes() -> Array[LevelEditPane]:
-	return [sun_pane, sky_pane, color_pane, weather_pane, water_pane, film_pane, world_pane]
+	var out: Array[LevelEditPane] = []
+	for id in PANE_IDS:
+		if _stack.is_built(id):
+			out.append(_stack.get_pane(id) as LevelEditPane)
+	return out
+
+
+## Whether pane `id` (a PANE_IDS entry or EVENTS_ID) has been made.
+func is_pane_built(id: StringName) -> bool:
+	return _stack.is_built(id)
 
 
 # ============================================================================
@@ -197,7 +261,8 @@ func _on_closed() -> void:
 
 
 func _on_pane_requested(id: StringName) -> void:
-	_stack.show_pane(id)
+	# The first pane shown comes in with the drawer, not crossfaded over it.
+	_stack.show_pane(id, _stack.current != &"")
 	_shown_pane = id
 	_update_foot()
 
@@ -228,12 +293,18 @@ func _on_rail_footer_pressed(id: StringName) -> void:
 	_apply_values_visible()
 
 
-## One toggle for every row in every pane, mirrored on the rail footer item.
+## One toggle for every row in every pane made so far (a pane made later takes it in
+## _on_pane_built), mirrored on the rail footer item.
 func _apply_values_visible() -> void:
-	for row in _stack.find_children("*", "PropertyRow", true, false):
-		row.values_visible = _values_visible
+	_apply_values_to(_stack)
 	set_footer_item_active(&"values", _values_visible)
 	set_footer_item_tooltip(&"values", "Hide values" if _values_visible else "Show values")
+
+
+## Every PropertyRow under `root` shows its numeric chip or not, per the toggle.
+func _apply_values_to(root: Node) -> void:
+	for row in root.find_children("*", "PropertyRow", true, false):
+		row.values_visible = _values_visible
 
 
 # ============================================================================
@@ -365,12 +436,18 @@ func initialize(
 	level_data: LevelData, map_defaults: Dictionary = {}, has_map_sky: bool = false
 ) -> void:
 	var state := LevelVisualState.from_level_data(level_data)
+	_state = state
+	_has_map_defaults = not map_defaults.is_empty()
+	_has_map_sky = has_map_sky
 	_env_model.load_from(state.environment_preset, state.environment_overrides, map_defaults)
-	sky_pane.set_map_options(not map_defaults.is_empty(), has_map_sky)
+	# Panes not made yet load the state when they are (_on_pane_built).
+	if _stack.is_built(&"sky"):
+		sky_pane.set_map_options(_has_map_defaults, _has_map_sky)
 	for pane in _panes():
 		pane.load_state(state)
 	# The gizmo does not survive a level change, so the toggle must not either.
-	sun_pane.set_aim_pressed(false)
+	if _stack.is_built(&"sun"):
+		sun_pane.set_aim_pressed(false)
 
 
 ## Apply new environment state from outside and refresh the Sky and Color panes without
@@ -379,9 +456,13 @@ func apply_environment_state(preset: String, overrides: Dictionary) -> void:
 	_env_model.load_from(preset, overrides, _env_model.map_defaults)
 
 
-## Everything the drawer currently shows, as one independent LevelVisualState.
+## Everything the drawer currently shows, as one independent LevelVisualState: the initialized
+## state (what a pane not made yet would show), the environment model the Sky and Color panes
+## edit, then each pane made so far.
 func _build_state() -> LevelVisualState:
-	var state := LevelVisualState.new()
+	var state := _state.copy() if _state != null else LevelVisualState.new()
+	state.environment_preset = _env_model.preset
+	state.environment_overrides = _env_model.overrides.duplicate()
 	for pane in _panes():
 		pane.write_state(state)
 	return state
