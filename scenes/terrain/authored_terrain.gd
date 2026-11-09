@@ -66,6 +66,12 @@ const SKIRT_SHADER := preload("res://shaders/authored_ground_skirt.gdshader")
 ## The same with the GROUND LOOK path compiled in (bound by set_looked).
 const GROUND_LOOKED_SHADER := preload("res://shaders/authored_ground_looked.gdshader")
 const SKIRT_LOOKED_SHADER := preload("res://shaders/authored_ground_skirt_looked.gdshader")
+## The ground's and the skirt's render_priority (GroundPalette.build_ground_material; the skirt
+## duplicates it). Above the foliage's 0, so the opaque passes sort the ground after the foliage
+## and the depth pre-pass runs the ground's fragment only where no card already covers it: 1.39
+## -> 1.09 ms pre-pass at the 100 ft forest's home view, 1080p, pixel-identical (card gpuprepass,
+## docs/PERFORMANCE.md "Ground pre-pass").
+const GROUND_RENDER_PRIORITY := 1
 ## The skirt fades out this far past the map edge (skirt_fade_m), the distance stretched
 ## by up to +-SKIRT_WOBBLE with noise; the ring is wide enough for the longest stretch.
 const SKIRT_FADE_M := 24.0
@@ -78,6 +84,9 @@ const FLAT_CHUNK_M := 0.02
 ## The palette maps of a ground surface, keyed as in the palette, and the ground shader's
 ## layer array of each (GroundLayerArrays).
 const LAYER_MAPS := GroundLayerArrays.UNIFORMS
+## Main-thread time a frame gives prepared layers' uploads (prepare_surfaces) before it stops;
+## one map (a raw-cache read and one layer upload) always goes.
+const PREP_BUDGET_USEC := 4000
 ## Albedo and ORM for a map whose surface is missing from the palette: a neutral earth so
 ## the map still reads as ground, fully rough, never metallic.
 const FALLBACK_ALBEDO := Color(0.36, 0.33, 0.26)
@@ -525,8 +534,48 @@ func warm_surface(surface_name: String) -> void:
 		set_process(true)
 
 
+## Binds the ground layers of palette surfaces `surfaces` ahead of their first use, a few maps
+## per frame (GroundLayerBinding.prepare: the first dab, landing or Dress that brings one then
+## sets only uniforms). Harmless for surfaces already bound, the base or unavailable ones.
+func prepare_surfaces(surfaces: PackedStringArray) -> void:
+	if _layers == null:
+		return
+	_layers.prepare(surfaces)
+	if _layers.is_preparing():
+		set_process(true)
+
+
+## Prepares the layers the map's first water brings (each biome's water bed and shore and the
+## base's; prepare_surfaces), when the map has none yet: the Water tool calls it when picked.
+func prepare_water() -> void:
+	if _layers == null or document == null or _has_water():
+		return
+	_prepare_wanted(GroundLayerBinding.gather_inputs(document, palette_root, true))
+
+
+## Prepares exactly the layers the first dab of palette biome `biome_id` brings
+## (GroundLayers.wanted of the document's biome list with the biome added: its ground, rules and
+## drawable accents, none for a biome drawn as the base), so a prepare never binds a layer the
+## stroke does not use. Nothing when the map already has the biome. The biome pick calls it.
+func prepare_biome(biome_id: String) -> void:
+	if _layers == null or document == null or biome_id == "" or biome_id in document.biome_ids:
+		return
+	var ids := document.biome_ids.duplicate()
+	ids.append(biome_id)
+	_prepare_wanted(GroundLayerBinding.gather_inputs(document, palette_root, _has_water(), ids))
+
+
+## prepare_surfaces() for every surface GroundLayers.wanted(`inputs`) names.
+func _prepare_wanted(inputs: Dictionary) -> void:
+	var wants := GroundLayers.wanted(inputs)
+	var names: PackedStringArray = wants.get("surfaces", PackedStringArray()).duplicate()
+	names.append_array(wants.get("accents", PackedStringArray()))
+	prepare_surfaces(names)
+
+
 ## Collects finished warm-up loads, holding each texture until the node goes, so the
-## resource cache keeps it for the layer bind.
+## resource cache keeps it for the layer bind; uploads prepared layers within PREP_BUDGET_USEC
+## a frame (at least one map).
 func _process(_delta: float) -> void:
 	for path in _warming.keys():
 		var status := ResourceLoader.load_threaded_get_status(path)
@@ -535,7 +584,11 @@ func _process(_delta: float) -> void:
 		_warming.erase(path)
 		if status == ResourceLoader.THREAD_LOAD_LOADED:
 			_warm_held.append(ResourceLoader.load_threaded_get(path))
-	if _warming.is_empty():
+	var started := Time.get_ticks_usec()
+	while _layers != null and _layers.prepare_step():
+		if Time.get_ticks_usec() - started >= PREP_BUDGET_USEC:
+			break
+	if _warming.is_empty() and (_layers == null or not _layers.is_preparing()):
 		set_process(false)
 
 

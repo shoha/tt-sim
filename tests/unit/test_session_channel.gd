@@ -144,7 +144,11 @@ func test_a_player_who_leaves_keeps_an_entry_with_no_peer() -> void:
 
 func test_a_new_peers_player_info_admits_it() -> void:
 	_session.open()
-	var info := {"name": "Cy", VersionGate.PLAYER_INFO_KEY: UpdateVersion.get_current()}
+	var info := {
+		"name": "Cy",
+		VersionGate.PLAYER_INFO_KEY: UpdateVersion.get_current(),
+		VersionGate.PLAYER_INFO_PROTOCOL_KEY: VersionGate.PROTOCOL,
+	}
 	NetworkManager._rpc_send_player_info(info)
 	# Outside a real RPC the sender reads as peer 0.
 	assert_has(_session.get_players(), SessionChannel.TEST_ID_PREFIX + "0")

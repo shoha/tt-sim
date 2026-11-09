@@ -37,7 +37,6 @@ signal level_loading_started
 signal level_loading_progress(progress: float, status: String)
 signal level_loading_completed
 
-const TOKENS_PER_FRAME: int = 3  # How many tokens to spawn per frame during progressive loading
 ## The authored-map lighting; see MapSourceLoader.AUTHORED_MAP_LIGHTING.
 const AUTHORED_MAP_LIGHTING := MapSourceLoader.AUTHORED_MAP_LIGHTING
 
@@ -200,32 +199,27 @@ func _play_level_async(level_data: LevelData) -> void:
 			return
 		cast_top = TokenGrounding.cast_top(_level_play_controller._game_map)
 
-	for placement in level_data.token_placements:
-		# Check validity before spawning each batch
+	# One job per placement on the shared spawn queue, which spends at most its frame budget a
+	# frame (a pack token costs about 4.4 ms): the jobs run in placement order, so GameState
+	# and every peer register the tokens in that order. This coroutine reports progress once a
+	# frame until they have all run.
+	var spawn := {"done": 0, "cascade_start": -1.0}
+	var queue := TokenSpawnQueue.shared()
+	for index in total_tokens:
+		queue.enqueue(
+			_spawn_placement.bind(
+				level_data.token_placements[index], index, total_tokens, generation, cast_top, spawn
+			)
+		)
+	while int(spawn.done) < total_tokens:
 		if _should_abort_load(generation):
 			return
-
-		var token = BoardTokenFactory.create_from_placement_async(placement).token
-		if token and is_instance_valid(drag_and_drop):
-			drag_and_drop.add_child(token)
-			# Before tracking, so GameState and every peer get the grounded position.
-			TokenGrounding.reground(token, cast_top)
-			_level_play_controller._token_spawner._track_token(token, placement)
-			_level_play_controller._connect_token_context_menu(token)
-			# Staggered pop-in animation — sequential cascade instead of random
-			token.play_spawn_animation(spawned_count * 0.05)
-			token_spawned.emit(token, placement)
-
-		spawned_count += 1
-
-		# Yield every batch of tokens to keep UI responsive
-		# With cached models, we can spawn more per frame
-		if spawned_count % (TOKENS_PER_FRAME * 2) == 0:
-			var progress = 0.6 + (0.4 * spawned_count / max(total_tokens, 1))
-			level_loading_progress.emit(
-				progress, "Spawning tokens... (%d/%d)" % [spawned_count, total_tokens]
-			)
-			await _level_play_controller.get_tree().process_frame
+		await _level_play_controller.get_tree().process_frame
+		spawned_count = int(spawn.done)
+		level_loading_progress.emit(
+			0.6 + (0.4 * spawned_count / max(total_tokens, 1)),
+			"Spawning tokens... (%d/%d)" % [spawned_count, total_tokens]
+		)
 
 	level_loading_progress.emit(1.0, "Complete")
 
@@ -246,6 +240,40 @@ func _play_level_async(level_data: LevelData) -> void:
 
 	# Check if another level was queued during loading
 	_process_queued_level()
+
+
+## One spawn-queue job of a level load: builds the token for `placement` (number `index` of
+## `total`), sets it on the ground below the `cast_top` ray start, tracks it and starts its
+## pop-in, the cascade timed from the first token so the last pops in at most
+## TokenSpawnQueue.POP_IN_SPAN_S after it. Does nothing once load `generation` is superseded or
+## the board is gone. `spawn` is the load's shared count ("done") and cascade start.
+func _spawn_placement(
+	placement: TokenPlacement,
+	index: int,
+	total: int,
+	generation: int,
+	cast_top: float,
+	spawn: Dictionary,
+) -> void:
+	# Counted first, so a job that fails still lets the load finish
+	spawn.done = int(spawn.done) + 1
+	if generation != _load_generation or not _is_valid_for_loading():
+		return
+	var drag_and_drop: Node = _level_play_controller._game_map.drag_and_drop_node
+	var token := BoardTokenFactory.create_from_placement_async(placement).token as BoardToken
+	if token == null or not is_instance_valid(drag_and_drop):
+		return
+	drag_and_drop.add_child(token)
+	# Before tracking, so GameState and every peer get the grounded position.
+	TokenGrounding.reground(token, cast_top)
+	_level_play_controller._token_spawner._track_token(token, placement)
+	_level_play_controller._connect_token_context_menu(token)
+	var now := Time.get_ticks_msec() / 1000.0
+	if float(spawn.cascade_start) < 0.0:
+		spawn.cascade_start = now
+	var due := float(spawn.cascade_start) + TokenSpawnQueue.pop_in_delay(index, total)
+	token.play_spawn_animation(maxf(0.0, due - now))
+	token_spawned.emit(token, placement)
 
 
 ## Load the map from level data (async: file reads, GLB parsing and the document read run

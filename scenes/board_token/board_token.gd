@@ -449,7 +449,7 @@ func play_spawn_animation(delay: float = 0.0) -> void:
 	)
 
 
-## Play a shrink-out removal animation, then queue_free() on completion.
+## Play a shrink-out removal animation, then leave the board and be freed (_finish_removal).
 func play_removal_animation() -> void:
 	if not rigid_body:
 		queue_free()
@@ -468,7 +468,18 @@ func play_removal_animation() -> void:
 		. set_trans(Tween.TRANS_BACK)
 		. set_ease(Tween.EASE_IN)
 	)
-	_removal_tween.tween_callback(queue_free)
+	_removal_tween.tween_callback(_finish_removal)
+
+
+## The removal tween's end: the token leaves the board at once (hidden, out of the token group,
+## no processing) and is freed by the shared spawn queue, so removals that end together (a
+## group deleted, a level's tokens going) are freed over frames instead of in one: freeing 500
+## pack tokens in one frame took about 100 ms.
+func _finish_removal() -> void:
+	visible = false
+	process_mode = Node.PROCESS_MODE_DISABLED
+	remove_from_group(GROUP_NAME)
+	TokenSpawnQueue.shared().enqueue(Callable(self, &"free"))
 
 
 ## Asynchronously load a model and upgrade this placeholder token.

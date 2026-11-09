@@ -5,6 +5,11 @@
 //   WIND_FOLIAGE_NO_AA      plain cutout: no alpha-to-coverage edge built-ins (the variant's
 //                           render_mode drops alpha_to_coverage to match).
 //   FOLIAGE_PAINTED_LIGHT   the painted crown light (wind_foliage_include.gdshaderinc).
+//   FOLIAGE_GROUND_LEAN     the ground-cover variant (wind_foliage_ground.gdshader and its no-AA
+//                           twin; docs/PERFORMANCE.md "Ground-cover lighting"): no ORM or normal
+//                           map fetch, no AO, specular or backlight (its render_mode is Lambert
+//                           with no specular lobe), and none of the canopy fades' inputs (rest
+//                           position, authored wind phase, eye light), all inert on ground cover.
 // wind_foliage_burn.gdshader keeps its own vertex() and fragment() and does not include this.
 
 #include "res://shaders/wind_foliage_include.gdshaderinc"
@@ -110,7 +115,9 @@ void vertex() {
 		VERTEX *= keep;
 		rest *= keep;
 	}
+#ifndef FOLIAGE_GROUND_LEAN
 	rest_view = (MODELVIEW_MATRIX * vec4(rest, 1.0)).xyz;
+#endif
 	zone_tuft = vec4(1.0);
 	zone_mass = vec2(0.0);
 	zone_mass_h = 0.0;
@@ -135,8 +142,15 @@ void fragment() {
 	float pbr_metallic;
 	vec3 pbr_normal_map;
 
+#ifdef FOLIAGE_GROUND_LEAN
+	// Ground cover takes no part in the canopy fades (canopy_part 0), so neither the rest
+	// position nor the authored wind phase reaches the fragment.
+	apply_wind_foliage_pbr(UV, INV_VIEW_MATRIX, NORMAL, VERTEX, VERTEX, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE, local_vertex_y, vec2(0.0),
+		pbr_albedo, pbr_alpha, pbr_ao, pbr_roughness, pbr_metallic, pbr_normal_map);
+#else
 	apply_wind_foliage_pbr(UV, INV_VIEW_MATRIX, NORMAL, VERTEX, rest_view, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE, local_vertex_y, COLOR.gb,
 		pbr_albedo, pbr_alpha, pbr_ao, pbr_roughness, pbr_metallic, pbr_normal_map);
+#endif
 	if (zone_tuft_strength > 0.0) {
 		pbr_albedo = zone_tuft_albedo(pbr_albedo, zone_tuft, vec3(zone_mass, zone_mass_h));
 	}
@@ -149,6 +163,7 @@ void fragment() {
 	// The eye light (wind_foliage_include CANOPY_EYE_SHADE_FLOOR): 0 off the eye's own pass and on
 	// grass, so those draw as before. A painted card keeps all of its ambient and hands the weight
 	// to light(); bark and plain cards gain a little emission instead.
+#ifndef FOLIAGE_GROUND_LEAN
 	float eye = eye_light_weight(INV_VIEW_MATRIX);
 #ifdef FOLIAGE_PAINTED_LIGHT
 	eye_light = eye;
@@ -156,9 +171,16 @@ void fragment() {
 #else
 	EMISSION = pbr_albedo * (CANOPY_EYE_BARK_LIFT * eye);
 #endif
+#endif
 
 	ALBEDO = pbr_albedo;
 	ALPHA = pbr_alpha;
+#ifdef FOLIAGE_GROUND_LEAN
+	// No AO, metallic, specular, backlight or normal map: the engine's defaults (rough, matte,
+	// the interpolated normal) are the ground card's whole shading.
+	ROUGHNESS = 1.0;
+	SPECULAR = 0.0;
+#else
 	AO = pbr_ao;
 	ROUGHNESS = pbr_roughness;
 	METALLIC = pbr_metallic;
@@ -173,6 +195,7 @@ void fragment() {
 		NORMAL_MAP = pbr_normal_map;
 		NORMAL_MAP_DEPTH = 1.0;
 	}
+#endif
 
 	ALPHA_SCISSOR_THRESHOLD = alpha_scissor_threshold;
 #ifndef WIND_FOLIAGE_NO_AA

@@ -95,6 +95,8 @@ static func build_ground_material(
 ) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = AuthoredTerrain.GROUND_SHADER
+	# Drawn after the foliage in the depth pre-pass (AuthoredTerrain.GROUND_RENDER_PRIORITY).
+	material.render_priority = AuthoredTerrain.GROUND_RENDER_PRIORITY
 	material.set_shader_parameter("breakup_seed", map_seed & 0x7fffffff)
 	var surface: Dictionary = PaletteLibrary.surfaces(root).get(
 		SurfaceStore.runtime_name(surface_name), {}

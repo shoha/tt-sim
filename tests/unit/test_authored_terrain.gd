@@ -261,6 +261,28 @@ func test_chunks_are_named_by_cell() -> void:
 	assert_eq(terrain.get_chunk(Vector2i(-1, 0)).name, &"TerrainChunk_c-1_0")
 
 
+## Card gpuprepass: the ground and the skirt sort after the foliage (render priority above 0), and
+## no shipped ground shader opts back into the full pre-pass (GROUND_PREPASS_FULL is probe-only).
+func test_ground_draws_after_foliage_with_the_cheap_prepass() -> void:
+	var terrain := AuthoredTerrain.create(_flat(20))
+	add_child_autofree(terrain)
+	assert_gt(AuthoredTerrain.GROUND_RENDER_PRIORITY, 0)
+	assert_eq(terrain.get_material().render_priority, AuthoredTerrain.GROUND_RENDER_PRIORITY)
+	var skirt_mat := terrain.get_skirt_material()
+	assert_not_null(skirt_mat, "the skirt material exists")
+	if skirt_mat != null:
+		assert_eq(skirt_mat.render_priority, AuthoredTerrain.GROUND_RENDER_PRIORITY)
+	for shader: Shader in [
+		AuthoredTerrain.GROUND_SHADER,
+		AuthoredTerrain.SKIRT_SHADER,
+		AuthoredTerrain.GROUND_LOOKED_SHADER,
+		AuthoredTerrain.SKIRT_LOOKED_SHADER
+	]:
+		assert_false(shader.code.contains("GROUND_PREPASS_FULL"), shader.resource_path)
+	var inc := FileAccess.get_file_as_string("res://shaders/authored_ground.gdshaderinc")
+	assert_true(inc.contains("void light()"), "the include shades through light()")
+
+
 func test_material_binds_the_palette_surface() -> void:
 	var surface: Dictionary = PaletteLibrary.surfaces()[GRASS]
 	var terrain := AuthoredTerrain.create(_flat(20))

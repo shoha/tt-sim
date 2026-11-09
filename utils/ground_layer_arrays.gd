@@ -75,6 +75,31 @@ func sync(wanted: PackedStringArray, root: String) -> bool:
 	return recreated
 
 
+## Uploads map `kind` of palette surface `surface` into layer layers.size(), the slot the next
+## append takes (a padding layer the shader never reads until then): one step of a layer bound
+## ahead of its first use (GroundLayerBinding.prepare; adopt() binds it once every kind is in).
+## False when the arrays have no room below their capacity or the image does not fit (the
+## append then reads and uploads it as before).
+func upload_ahead(surface: String, kind: String, root: String) -> bool:
+	var j := layers.size()
+	if textures.is_empty() or j >= capacity:
+		return false
+	var array: Texture2DArray = textures[kind]
+	var image := surface_image(surface, kind, root)
+	if array.get_format() == Image.FORMAT_RGBA8 and (image == null or not _fits(image, array)):
+		var size := Vector2i(array.get_width(), array.get_height())
+		image = _uncompressed(image, size, DEFAULTS[kind])
+	if image == null or not _fits(image, array):
+		return false
+	array.update_layer(image, j)
+	return true
+
+
+## Binds `surface` at layer layers.size() once upload_ahead() has put each of its KINDS there.
+func adopt(surface: String) -> void:
+	layers.append(surface)
+
+
 ## Sets the four array uniforms on `material`.
 func bind(material: ShaderMaterial) -> void:
 	for kind in KINDS:

@@ -97,9 +97,9 @@ static func create_from_config(config: Resource) -> BoardToken:
 static func _assemble_token(
 	rigid_body: RigidBody3D, collision_shape: CollisionShape3D
 ) -> BoardToken:
+	# The scene is one node (the BoardToken script); everything under it is built here
 	var instance = BoardTokenScene.instantiate() as BoardToken
 	instance._factory_created = true
-	_clear_placeholder_children(instance)
 
 	# Build selection glow component (added to rigid body so it moves with token)
 	var selection_glow = _build_selection_glow(collision_shape)
@@ -163,14 +163,6 @@ static func _extract_model_components(scene: Node3D) -> ModelComponents:
 		return null
 
 	return components
-
-
-## Clear placeholder children from the BoardToken scene
-static func _clear_placeholder_children(instance: BoardToken) -> void:
-	var children = instance.get_children()
-	for child in children:
-		instance.remove_child(child)
-		child.queue_free()
 
 
 ## Build and configure the RigidBody3D for the token

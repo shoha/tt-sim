@@ -104,6 +104,9 @@ const KNOWN_ENTRIES: Array[String] = [
 	MapAnchorsIO.ENTRY,
 ]
 const TEMP_SUFFIX := ".tmp"
+## rename_over(): tries and the wait between them (at most about 0.1 s for a held target).
+const RENAME_TRIES := 20
+const RENAME_RETRY_MS := 5
 
 ## Uncompressed bytes per entry. height.bin is exact at the sample cap. A PNG of the
 ## largest grid is under 2 MB even incompressible (641 x 641 x 4 for RGBA). The row entries
@@ -205,9 +208,25 @@ static func write_snapshot(snapshot: MapDocumentSnapshot, path: String) -> Error
 	var temp_path := path + TEMP_SUFFIX
 	var err := _write_zip(temp_path, packed["entries"])
 	if err == OK:
-		err = DirAccess.rename_absolute(temp_path, path)
+		err = rename_over(temp_path, path)
 	if err != OK and FileAccess.file_exists(temp_path):
 		DirAccess.remove_absolute(temp_path)
+	return err
+
+
+## Renames `temp` over `path`, trying again RENAME_TRIES times RENAME_RETRY_MS apart while it
+## fails: on Windows the rename fails while any handle holds the target open (see the header),
+## and a reader is usually brief (the main thread hashing the file, a peer's download, a test
+## reading it back), so a worker's save waits it out instead of failing (card authfirst: a
+## quit-during-write test that read the file while the worker renamed lost one save in three).
+## Either way the target stays a whole document. Any thread.
+static func rename_over(temp: String, path: String) -> Error:
+	var err := DirAccess.rename_absolute(temp, path)
+	var tries := 1
+	while err != OK and tries < RENAME_TRIES and FileAccess.file_exists(temp):
+		OS.delay_msec(RENAME_RETRY_MS)
+		err = DirAccess.rename_absolute(temp, path)
+		tries += 1
 	return err
 
 

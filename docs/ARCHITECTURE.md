@@ -1564,6 +1564,17 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   patches takes no projection: it is a 3D noise (the rules above; rockstretch), isotropic on
   every face, where blending planar projections of it would still stretch it about 1.3 to
   1.45 down a 44 to 51 degree face (measured; a planar projection's limit there).
+- **Ground lighting through light() (card gpuprepass 2026-11-08, look-pending):** with SSAO on,
+  the depth pre-pass writes normals and roughness, and the driver keeps every fragment line that
+  feeds NORMAL, NORMAL_MAP, ROUGHNESS, ALPHA or a discard (measured with a probe shader; ALBEDO,
+  AO, BENT_NORMAL_MAP and fragment-to-light varyings stay out). So the ground leaves NORMAL as the
+  interpolated normal, writes a ROUGHNESS that needs only the wet line, and passes the layer-blended
+  normal and roughness to a `light()` that is the engine's Burley and Schlick-GGX (within 1 level);
+  the layer blend no longer runs twice. The ambient and SSAO see the interpolated normal (mean
+  0.1-0.5 levels). The ground and skirt materials carry `render_priority` 1
+  (`AuthoredTerrain.GROUND_RENDER_PRIORITY`) so they sort after the foliage and the pre-pass
+  shades only uncovered ground. `GROUND_PREPASS_FULL` (probe-only) restores the old path.
+  Numbers: `docs/PERFORMANCE.md` "Ground pre-pass".
 - **Steep faces, the ground look (steepzones 2026-11-08, look-pending):** the look's zones and
   painted light are baked top-down, so on a face a zone edge ran down the fall line as a stripe
   and the strokes smeared along it (stripe number S, strike over dip luminance gradient on the
