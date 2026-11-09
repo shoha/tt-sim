@@ -1,9 +1,8 @@
 extends GutTest
 
-## Painted surfaces in the map document, format 2: the MapDocument entry helpers (slots,
+## Painted surfaces in the map document: the MapDocument entry helpers (slots,
 ## entries, the fifth-surface rule) and MapDocumentIO's surfaces.json / surfaces_index.png /
 ## surfaces_weight.png entries (round trips, caps, hostile input brought to canonical form).
-## Format 1 reading and its migration are in test_map_document_surfaces_format1.gd.
 ## Everything under DIR is removed in after_all.
 
 const Fixtures := preload("res://tests/unit/map_document_fixtures.gd")
@@ -93,9 +92,7 @@ func _color(bytes: Array) -> Color:
 
 
 func _parse(extra: Dictionary) -> Dictionary:
-	var entries := Fixtures.minimal_entries(extra)
-	entries[MapDocumentIO.MANIFEST_ENTRY] = Fixtures.manifest({"format": 2})
-	return MapDocumentIO.parse(entries)
+	return MapDocumentIO.parse(Fixtures.minimal_entries(extra))
 
 
 ## Sample `sample`'s entries as [[index, weight], ...] in entry order, unused ones included.
@@ -208,21 +205,19 @@ func test_trim_unused_surfaces_drops_trailing_slots() -> void:
 # --- round trips --------------------------------------------------------------------
 
 
-func test_round_trip_writes_format_2_entries() -> void:
+func test_round_trip_writes_the_surface_entries() -> void:
 	var doc := _painted_doc(3)
 	var entries := _entries(doc)
 	var manifest: Dictionary = JSON.parse_string(
 		(entries[MapDocumentIO.MANIFEST_ENTRY] as PackedByteArray).get_string_from_utf8()
 	)
-	assert_eq(int(manifest["format"]), 2)
+	assert_eq(int(manifest["format"]), MapDocument.FORMAT)
 	for entry_name in [
 		MapDocumentIO.SURFACES_JSON_ENTRY,
 		MapDocumentIO.SURFACES_INDEX_ENTRY,
 		MapDocumentIO.SURFACES_WEIGHT_ENTRY,
 	]:
 		assert_true(entries.has(entry_name), entry_name)
-	for entry_name in [MapDocumentIO.SURFACES_PNG_ENTRY, MapDocumentIO.SURFACES_B_PNG_ENTRY]:
-		assert_false(entries.has(entry_name), "format 1 entries are not written")
 	var result := MapDocumentIO.parse(entries)
 	assert_eq(result["warnings"], PackedStringArray())
 	var got: MapDocument = result["document"]
@@ -340,17 +335,6 @@ func test_images_without_ids_are_ignored() -> void:
 	var empty_list := _parse(images)
 	assert_true(empty_list["document"].surface_ids.is_empty())
 	assert_true(Fixtures.has_warning(empty_list, "lists no surfaces"))
-
-
-func test_format_1_images_in_a_format_2_document_are_ignored() -> void:
-	var result := _parse(
-		{
-			MapDocumentIO.SURFACES_JSON_ENTRY: _ids_json(["cobblestone"]),
-			MapDocumentIO.SURFACES_PNG_ENTRY: _png({Vector2i(0, 0): Color8(255, 0, 0, 0)}),
-		}
-	)
-	assert_true(result["document"].surface_ids.is_empty())
-	assert_true(Fixtures.has_warning(result, "without surfaces_index.png"))
 
 
 func test_malformed_surface_lists_drop_the_surfaces() -> void:

@@ -20,7 +20,7 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
 | `utils/scatter_mass.gd` | `ScatterMass` | Grass masses (a clump with `mass` 1, `ScatterPlan.MASS_FIELDS`): ellipse membership, core growth, zone keeps, bare openings, shoulders, and the mass anchors (collect, custom data, the level's anchors entry) |
 | `utils/ground_look.gd` | `GroundLook` | A biome's `ground_look`: `BASE` (every contract key) and the lenient merge `PaletteLibrary` keeps on the biome |
 | `utils/ground_zones.gd` | `GroundZones` | The per-biome, per-seed zone record (read-only, carried on each mass plan entry) and the CPU twin of the ground shader's zone functions |
-| `utils/map_anchors_io.gd` | `MapAnchorsIO` | The optional `mass_anchors.json` entry of `map.ttmap` |
+| `utils/map_anchors_io.gd` | `MapAnchorsIO` | The optional `mass_anchors.bin` entry of `map.ttmap` |
 
 ## Model
 
@@ -111,7 +111,7 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
   of its runs died silently; cause unconfirmed, 2026-10-14), `AuthoredScatter.mass_anchors`
   merges them and every MultiMesh it builds (settled, growing and shrinking nodes) writes
   `Color(0, dx, dz, 1)` into the instance's custom data (`.x` stays free for the burn shader).
-  A level saves them as the optional `mass_anchors.json` entry; `MapSourceLoader` validates it
+  A level saves them as the optional `mass_anchors.bin` entry (binary since format 4); `MapSourceLoader` validates it
   against the rows and each rule's reach and drops a bad asset's anchors with a warning. GLB
   scatter (`BaseScatterEraser`) and the pipeline warm-up never carry anchors. The generator
   snaps each offset to the 0.1 mm the entry is written with (`ScatterMass.collect`,

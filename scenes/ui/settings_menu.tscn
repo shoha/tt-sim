@@ -209,6 +209,20 @@ unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 
+[node name="IdleThrottle" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/IdleThrottle"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Idle throttle"
+
+[node name="IdleThrottleCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/IdleThrottle"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+
 [node name="LofiFilter" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
 layout_mode = 2
 

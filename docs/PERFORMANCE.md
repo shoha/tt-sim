@@ -147,8 +147,8 @@ From the register's rows that are not merged, with their measured size:
   map still takes 11.7 s and a cold play load 3.4 s, both waiting on the lane's serial bakes:
   decoding, hashing and cache writes could move off the serial lane, unmeasured); about 620 MB of texture memory stays at the title after a map (526 MB
   unattributed, engine-side); the first-launch warm-up; about 80 pipeline compiles per load;
-  surface PNGs 54 % of the download; process memory creeps 2.7 MB per map cycle; idle runs at full
-  rate (board perf-idle-throttle).
+  surface PNGs 54 % of the download; process memory creeps 2.7 MB per map cycle; the idle throttle (15 fps unfocused, 5 minimised, sysidle) is built:
+  see "Idle throttle".
 - **Look-pending** (the user's look is the gate): the occlusion fade tiles, render scale, ground-
   cover light and skirt commits; the gpuoptions defaults.
 - **Test hygiene found on the way.** GUT silently dropped two test scripts that did not parse
@@ -5427,7 +5427,48 @@ JSON 246 ms (`String.num` per float), surfaces 108 ms (`SurfaceEntries.canonical
 per sample), the writer's checks 64 ms (`row_ok` per row, the height scan), biomes 10 ms, deflate and
 write 184 ms. All of it is on the worker now. Format-neutral speedups were not taken: the frame no
 longer pays any of it, and the big one (binary rows) is a format change (board question
-perf-map-format).
+perf-map-format; done by the card below).
+
+## Map document format 4 (topic perfaudit, card mapformat, 2026-11-09)
+
+Scatter, props and mass anchors are binary integer columns on a 2^-10 m grid (`MapRowsCodec`,
+`docs/systems/map_document.md` "Rows as binary"); the board answered "binary". Lossless for the
+rows the generator makes (they were already snapped; the grid moved from 6 decimals to 2^-10 so
+every value is an exact float32), at most 0.49 mm and 0.2 degree for a row built by hand. No look
+changes intended: the instance transforms move by under a millimetre and 0.1 degree, and the
+generated row count shifts by a few instances per 85,000 (84,919 to 84,911 at 320 ft; the
+coarser grid changes a few rejection decisions, cause not isolated further).
+
+**How.** `tools/map_size/doc_probe.tscn` (headless, in this worktree and in a worktree of the base
+commit `92f6a036`, same probe, same seed): the perfaudit net forest valley (seed 3) at full paint,
+scattered to the end, then `capture`, `encode`, `write_snapshot` and 3 `read` runs (best). Late join:
+`perfaudit_net` (`net_launcher`, 3 peers, `size=320,fill=1`, ENet loopback), the map file's payload
+in the host's `late_join_200_tokens` window and client2's `to_table` window. Both under the lane,
+but the machine was shared with other agents (their gate shards ran at times), so ms are
+indicative; bytes are exact.
+
+| Map | File before | File after | Scatter entry (deflated) before / after | Worker encode before / after | `write_snapshot` before / after | `read` before / after |
+|---|---|---|---|---|---|---|
+| 100 ft, light | 58,024 B | 47,220 B | 16,139 / 5,896 B | 18 / 28 ms | 22 / 19 ms | 17 / 16 ms |
+| 100 ft, full | 337,017 B | 139,228 B | 273,507 / 83,657 B | 83 / 47 ms | 130 / 55 ms | 48 / 38 ms |
+| 200 ft, full | 1,424,784 B | 569,634 B | 1,165,496 / 340,478 B | 360 / 198 ms | 555 / 225 ms | 184 / 145 ms |
+| 320 ft, full | 3,595,339 B | 1,444,132 B | 2,915,751 / 837,483 B | 813 / 500 ms | 1,314 / 564 ms | 455 / 370 ms |
+
+The mass anchors shrink too (320 ft: 282,279 to 209,341 B deflated). `height.bin` (369,684 B at
+320 ft) is now the largest single entry after the rows; it is the next candidate. The main-thread
+save share is unchanged (capture 0.3-0.45 ms at every size; the file format only moves worker
+time). The file is sent as is (zstd gains 0.0-0.5 percent over the ZIP).
+
+Late join at 320 ft, full paint, 200 tokens (loopback, one run each): the map payload the host
+sent was 3,620,288 B before and 1,461,942 B after (the whole window, tokens included), client2's
+`received_ttmap_ms` 865 before and 335 after, and its join-to-table 3,120 ms before and 2,115 ms
+after (no bandwidth cap, so a real link gains more: at 1 MiB/s the file alone is 3.4 s before and
+1.4 s after). Not measured: 100 and 200 ft late joins (the payload is the file's size by
+construction, rows above) and the load's scatter phase on its own (`read` above is the document
+parse; the native `chunk()` path is unchanged and still receives the same flat rows).
+
+The guard: `perf_budget` counter `doc_row_bytes` (`tools/perf_budget_counters.gd`), the deflated
+bytes per row of a fixed 19,600-row field, 7.45 now, limit 11 (JSON was about 34).
 
 ## Collision tiles (topic perfaudit, card authcollide, 2026-11-08)
 
@@ -5824,3 +5865,100 @@ bytes mipped, +5,876,264 bytes (+33.3 percent: a full chain adds a third), raw R
 indistinguishable at a glance; the mipped zoom-out has slightly cleaner leaf edges. The "home"
 capture's framing is an upside-down terrain edge (a camera orientation of the shot, not of
 the change) and so says little. The eye pair shows no visible difference either.
+
+## Idle throttle (topic sysidle, card sysidle, 2026-11-09)
+
+Register S4 (board perf-idle-throttle, answered "cap"). An idle game ran at full rate and a
+minimised one drew nothing but still spun its main loop at 145 iterations a second (the 6.9 ms
+low-processor sleep), 0.20-0.22 of a core. `IdleThrottle` (`utils/idle_throttle.gd`, a Node Root
+adds once the title is up) caps `Engine.max_fps` at 15 while the window has lost the focus and at
+5 while it is minimised; Settings > Graphics > "Idle throttle" (`graphics/idle_throttle`, default
+on) turns it off for second-monitor use. Details in the class header; the rules that matter:
+
+- A load behind the sheet is never slowed: `LoadPacing.cover` calls `IdleThrottle.release()` before
+  it saves `Engine.max_fps` (so the player's cap is the one saved, not the throttled one) and
+  `uncover` calls `reapply()` after it restores. The throttle never touches vsync.
+- A host with a connected peer keeps 30 fps in either state (the network poll and the physics steps
+  run once a frame; the engine catches up at most 8 physics steps a frame, so 5 fps would run a
+  host's physics at two thirds speed). Not driven by a net scenario here: the peer test is the
+  tree's `SceneMultiplayer` (`is_server()` with a non-empty peer list), covered by the policy test
+  only.
+- Headless, scripted (render jobs, probes, GUT) and `--validation-bridge` runs get no node
+  (`IdleThrottle.runs_here()`): an agent's window is rarely focused and its timings must not
+  change. A probe that wants the real throttle sets `IdleThrottle.allow_scripted` (the
+  `perfaudit_system.gd` `throttle` action).
+- A window minimised by a script reported `focused true` throughout (measured), so the node reads
+  the window mode every frame (a few microseconds) and the minimised cap does not wait for a focus
+  loss.
+
+Measured 2026-11-09, the title screen of a dev run, a real 1280x720 or 1920x1080 window, process
+CPU time over 10 s (render job `cpu` action and a PowerShell driver that took the foreground away
+with a second window and minimised with `ShowWindow`; another agent's headless shards ran on the
+machine for part of the session, so absolute CPU is pessimistic, the ratios are the point):
+
+| State | Throttle off | Throttle on |
+|---|---|---|
+| Focused (title, vsync) | 0.058-0.092 cores, 60 fps | unchanged (0.058-0.069, 60 fps) |
+| Unfocused, visible | 0.053 cores, 60 fps | 0.030 cores, 15 fps |
+| Minimised | 0.200-0.217 cores, loop 145/s | 0.005-0.016 cores, loop 5.1/s |
+
+The title is cheap to draw, so the unfocused saving here is the small end: a loaded map costs a
+frame several times more (the audit's 3-4 ms GPU frame at home), and the 15 fps cap removes three
+quarters of those frames. The perf budget holds the two caps (`idle_unfocused_fps`,
+`idle_minimized_fps`). The boot graph limit rose by one script (343).
+
+## Boot splash (topic sysidle, card sysidle, 2026-11-09)
+
+Register S1 (board perf-boot-splash, answered "yes"). A launch waits about 3.5 s from a pack (7 s
+wall with the quit) before the first title frame with nothing on screen. The project now shows the
+orange d20 (`assets/icons/ui/ttsim-icon.png`, the app icon, the only logo the repo has: no new art)
+centred on the splash colour it already had (`application/boot_splash/bg_color`, which the icon's
+own background matches), `show_image` on, `fullsize` off. The image is a plain file in the pack
+(checked in an exported `--export-pack`: `res://assets/icons/ui/ttsim-icon.png` is stored as is, 0
+bytes of pack growth because the window icon already needed it), and the editor binary running the
+pack prints no splash error. Cost at the title, `tools/boot_rounds.gd --window`, packs with and
+without the splash alternated, n 5, same code otherwise: first title frame median 3,498 ms
+(3,443-3,606) without and 3,568 ms (3,347-3,613) with; process wall 7,091 without and 7,185 ms
+with (the pair's order alternated, ranges overlap), so the cost is inside the run-to-run noise
+(+70 ms median, the with-splash minimum is the lowest of all ten). What the player sees is not
+measurable headless: only a real window shows the splash.
+
+## Doubling pop-in (topic sysidle, card sysidle, 2026-11-09; look-pending)
+
+Board perf-popin-cap: the user kept the 1.5 s cap and asked, "maybe an exponential pop-in? like 1,
+then the next 2, then 4, then 8, etc?". `TokenSpawnQueue.pop_in_doubling` (default true) pops a
+load's tokens in beats of 1, 2, 4, 8, ... tokens in placement order (`pop_in_batch`), a beat every
+`POP_IN_BEAT_S` = 0.2 s, squeezed to fit `POP_IN_SPAN_S` = 1.5 s from first beat to last
+(`pop_in_delay`: 10 tokens 4 beats, last 0.6 s; 100 tokens 7 beats, 1.2 s; 500 tokens 9 beats at
+0.1875 s, 1.5 s). Two changes make the beats visible. (1) The loader builds every token held at
+near-zero scale (`BoardToken.hold_for_pop_in`, which `get_logical_scale` reports as the target so
+state snapshots stay right) and starts the beats when the load completes, on the revealed table: the
+old cascade was timed from the first token built, so at 500 tokens every pop had already played
+behind the loading sheet (see the table) and at 100 half of them had. (2) Each pop is a job on the
+shared `TokenSpawnQueue`, so the 4 ms frame budget holds for a beat of 244 tokens; the measured
+post-reveal worst frame is the same as the linear cascade's, so no beat needed splitting across
+frames in practice. `pop_in_doubling = false` is the old linear cascade (kept for the A/B and as
+the way back).
+
+Real load of a saved level with N pack tokens (Beasts pack), 1920x1080 window, 3 runs each (warm-up
+plus two rounds, alternated modes), a probe logging every frame, ms after the load completed
+(`level_loading_completed`, which starts the sheet's fade):
+
+| Tokens | Mode | First pop | Last pop | Worst frame after completion |
+|---|---|---|---|---|
+| 10 | doubling | 21-23 | 631-644 | 21.3-21.6 |
+| 10 | linear | -155 to -106 | 232-279 | 23.4-28.1 |
+| 100 | doubling | 23-28 | 1,236-1,244 | 22.2-22.4 |
+| 100 | linear | -743 to -672 | 660-750 | 21.7-23.5 |
+| 500 | doubling | 73-88 | 1,558-1,569 | 41.0-59.7 |
+| 500 | linear | -6,136 to -5,559 | -27 to -25 (all behind the sheet) | 43.8-55.8 |
+
+The whole load's worst frame (the table's entry frame, 103-154 ms) is the same in both modes. The
+machine was shared (another agent's headless shards ran during the 500-token rounds), so frame
+numbers are pessimistic. Frame strips of a 100-token load, a capture every 100 ms from the
+completion (21 frames, half size), contact sheets `sheet_old.png` and `sheet_new.png` in
+`%APPDATA%/TTSim_sysidle/render_jobs/sysidle_pop_strip/` (copied beside the handoff): old, about half
+the crowd is already up at the reveal and the rest dribbles in over 0.7 s; new, the reveal shows the
+bare table, then one animal, three, seven, fifteen, thirty-one, sixty-three, the rest, each beat
+0.2 s after the last. The doubling mode costs the load nothing and shows the whole 1.5 s; the cost
+to the player is that the table is bare for the first beat or two.

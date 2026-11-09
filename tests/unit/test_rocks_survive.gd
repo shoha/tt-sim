@@ -192,12 +192,14 @@ func test_a_kept_row_is_bedded_on_its_tilted_base() -> void:
 		[1.0, 1.0, 0.0, tilted.x, tilted.y, tilted.z, tilted.w, 1.5, 1.5, 1.5]
 	)
 	var kept := RockKeep.kept_row(row, doc.heights, grid, 0.4, true)
-	assert_almost_eq(kept[1], 1.0, 1e-4, "lying with the slope, its base floats nowhere")
+	# Kept rows are on the saved grid (MapDocumentIO.ROW_STEP), so these hold to a step.
+	var step := MapDocumentIO.ROW_STEP
+	assert_almost_eq(kept[1], 1.0, step, "lying with the slope, its base floats nowhere")
 	assert_eq(kept[7], 1.5, "scale kept")
-	var q := Quaternion(kept[3], kept[4], kept[5], kept[6])
-	assert_almost_eq((q * Vector3.UP).angle_to(Vector3.UP), PI / 4.0, 1e-4, "within the cap")
+	var q := Quaternion(kept[3], kept[4], kept[5], kept[6]).normalized()
+	assert_almost_eq((q * Vector3.UP).angle_to(Vector3.UP), PI / 4.0, 2e-3, "within the cap")
 	var upright := RockKeep.kept_row(row, doc.heights, grid, 0.4, false)
-	assert_almost_eq(upright[1], 1.0 - 0.4 * 1.5, 1e-4, "upright: the footprint's low side")
+	assert_almost_eq(upright[1], 1.0 - 0.4 * 1.5, step, "upright: the footprint's low side")
 	# Steeper than the cap: tilted back to 55 degrees, it sinks by what its base overhangs.
 	for z in doc.samples_z():
 		for x in doc.samples_x():
@@ -209,7 +211,7 @@ func test_a_kept_row_is_bedded_on_its_tilted_base() -> void:
 	row[6] = face.w
 	var capped := RockKeep.kept_row(row, doc.heights, grid, 0.4, true)
 	var sink := 0.6 * (2.5 - tan(RockKeep.MAX_TILT_RAD))
-	assert_almost_eq(capped[1], 2.5 - sink, 1e-3, "sunk by the overhang on the face")
+	assert_almost_eq(capped[1], 2.5 - sink, 4e-3, "sunk by the overhang on the face")
 
 
 func test_generation_skips_rocks_and_trees_inside_a_blocker_only() -> void:
@@ -287,12 +289,18 @@ func test_rocks_the_stroke_would_remove_become_bedded_tilted_props() -> void:
 			assert_true(before_rocks.get(asset_id, {}).has(keys[r]), "it was there: none added")
 			assert_false(after_rocks.get(asset_id, {}).has(keys[r]), "the scatter has no twin")
 			var p := Vector2(rows[b], rows[b + 2])
-			var q := Quaternion(rows[b + 3], rows[b + 4], rows[b + 5], rows[b + 6])
+			# A saved row's quaternion is on the 2^-10 grid, so it is unit only to about 1e-3.
+			var q := Quaternion(rows[b + 3], rows[b + 4], rows[b + 5], rows[b + 6]).normalized()
 			var bed := GroundSnap.bed_under(
 				_doc.heights, grid, p, GroundSnap.footing_radius(rule) * rows[b + 7], q * Vector3.UP
 			)
-			assert_almost_eq(rows[b + 1], bed, 1e-5, "bedded on its tilted base")
-			assert_lte(rows[b + 1], float(height_at.call(p)) + 1e-5, "never above its ground")
+			# Y is on the same grid: within half a step of the bed.
+			assert_almost_eq(rows[b + 1], bed, MapDocumentIO.ROW_STEP * 0.5 + 1e-5, "bedded")
+			assert_lte(
+				rows[b + 1],
+				float(height_at.call(p)) + MapDocumentIO.ROW_STEP * 0.5 + 1e-5,
+				"never above its ground"
+			)
 			var tilt := (q * Vector3.UP).angle_to(Vector3.UP)
 			assert_lt(tilt, RockKeep.MAX_TILT_RAD + 1e-3, "within the cap")
 			steepest = maxf(steepest, tilt)
@@ -427,4 +435,5 @@ func test_kept_rocks_survive_a_save_round_trip() -> void:
 		var worst := 0.0
 		for i in mini(got.size(), want.size()):
 			worst = maxf(worst, absf(got[i] - want[i]))
-		assert_lt(worst, 1e-5, "%s rows round trip" % asset_id)
+		assert_eq(got, want, "%s rows round trip bit for bit" % asset_id)
+		assert_eq(worst, 0.0, "%s worst deviation" % asset_id)

@@ -20,7 +20,8 @@ extends RefCounted
 ## encode() reads only the snapshot (its copy, its entries and the pond ids), so it runs on
 ## any thread: it checks the packed data against the reader's rules (heights, masks, biomes,
 ## surfaces, water grids, rows), builds the heavy entries (rows JSON, PNGs, surfaces, anchors)
-## and applies the caps. Its entries are byte-identical to the one-call serialize() it split.
+## and applies the caps. Its entries are byte-identical to the one-call serialize() it split. The
+## rows are encoded binary (MapRowsCodec), which snaps them to MapDocumentIO.ROW_STEP.
 
 ## The private copy encode() reads; its object lists are empty.
 var document: MapDocument = null
@@ -96,8 +97,9 @@ func encode() -> Dictionary:
 	var doc := document
 	out.assign(entries)
 	out[MapDocumentIO.HEIGHT_ENTRY] = doc.heights.to_byte_array()
-	out[MapDocumentIO.SCATTER_ENTRY] = MapDocumentIO._rows_json(doc.scatter).to_utf8_buffer()
-	out[MapDocumentIO.PROPS_ENTRY] = MapDocumentIO._rows_json(doc.props).to_utf8_buffer()
+	var codec: Variant = MapDocumentIO.codec()
+	out[MapDocumentIO.SCATTER_ENTRY] = codec.encode_rows(doc.scatter)
+	out[MapDocumentIO.PROPS_ENTRY] = codec.encode_rows(doc.props)
 	if not doc.erase_mask.is_empty():
 		out[MapDocumentIO.ERASE_ENTRY] = MapDocumentIO._png(doc.erase_mask, doc, Image.FORMAT_L8)
 	if not doc.biome_slots.is_empty():

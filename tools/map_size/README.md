@@ -1,9 +1,20 @@
 # Map size measurement (reference tooling)
 
-Kept as the starting point for a compact map document format and for re-measuring map size
-limits, not live tooling: nothing in the game or the test suite uses it. Findings are
-recorded in `docs/ARCHITECTURE.md`, "Map document (map.ttmap)", the **Size** bullet
-(measured 2026-10-09), and in `docs/PERFORMANCE.md`, "Map size sweep (2026-10-09)".
+Kept for re-measuring map size limits, not live tooling: nothing in the game or the test suite
+uses it. Findings are recorded in `docs/ARCHITECTURE.md`, "Map document (map.ttmap)", the
+**Size** bullet (measured 2026-10-09), and in `docs/PERFORMANCE.md`, "Map size sweep
+(2026-10-09)". The 2026-10-09 jobs and `measure.gd` were written for map format 1 to 3, whose
+rows were JSON (`scatter.json`, `props.json`); format 4 (2026-11-09, card mapformat) stores them
+as the binary `scatter.bin` and `props.bin` (`MapRowsCodec`), which replaced the prototype layout
+at the end of this file. The JSON comparison lines in `measure.gd` no longer describe a saved
+file. For format 4 numbers use `doc_probe.tscn` (below).
+
+`doc_probe.tscn` (topic mapformat): builds the perfaudit net forest valley (seed 3) at the sizes
+given, scatters it headless, and prints `MF|` lines: file bytes (and zstd, what `AssetStreamer`
+sends), the large entries, capture / encode / write_snapshot milliseconds and the read time.
+`godot --headless --path <project> res://tools/map_size/doc_probe.tscn -- 100:0 100:1 200:1 320:1`
+(`<size ft>:<fill>`, fill 1 is full paint). It writes under `user://_mapformat_/`; `-- clean`
+deletes those files. Timings count only under the lane and `docs/PERFORMANCE.md`'s procedure.
 
 ## What is here
 
@@ -55,9 +66,11 @@ found" compile errors; they are noise, the scripts still run to completion.
 - The y offset is computed against the float heights. If `height.bin` is quantized too,
   encode y against the decoded heights.
 
-## Prototype layout (binary scatter)
+## Prototype layout (binary scatter, superseded)
 
-Per asset: u8 id length, the id, u32 row count, a mode byte, then column-wise: z as uint16
+This offline prototype (smallest-three quaternion, uint16 positions) is not the shipped layout:
+format 4 chose a lossless integer-column form on a 2^-10 m grid (`utils/map_rows_codec.gd`)
+because the session and the reload must hold identical rows. Per asset: u8 id length, the id, u32 row count, a mode byte, then column-wise: z as uint16
 deltas (rows sorted by z, x), x as uint16 over the extent plus 1 m, y as an int16 mm offset
 from the height field (bilinear at the decoded x, z), rotation as a u32 smallest-three
 quaternion, scale as one uint16 log2 value (every measured row had uniform scale).

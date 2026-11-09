@@ -203,7 +203,7 @@ func _play_level_async(level_data: LevelData) -> void:
 	# frame (a pack token costs about 4.4 ms): the jobs run in placement order, so GameState
 	# and every peer register the tokens in that order. This coroutine reports progress once a
 	# frame until they have all run.
-	var spawn := {"done": 0, "cascade_start": -1.0}
+	var spawn := {"done": 0, "cascade_start": -1.0, "held": []}
 	var queue := TokenSpawnQueue.shared()
 	for index in total_tokens:
 		queue.enqueue(
@@ -234,6 +234,9 @@ func _play_level_async(level_data: LevelData) -> void:
 	_is_loading = false
 	level_loading_completed.emit()
 	level_loaded.emit(level_data)
+	# The tokens built held at near-zero scale land on the revealed table, in doubling beats.
+	if not (spawn.held as Array).is_empty():
+		_pop_in_beats(spawn.held, _level_play_controller.get_tree())
 
 	# Start reconciliation timer for networked games
 	_level_play_controller._network_token_sync.start_reconciliation_timer()
@@ -268,12 +271,38 @@ func _spawn_placement(
 	TokenGrounding.reground(token, cast_top)
 	_level_play_controller._token_spawner._track_token(token, placement)
 	_level_play_controller._connect_token_context_menu(token)
-	var now := Time.get_ticks_msec() / 1000.0
-	if float(spawn.cascade_start) < 0.0:
-		spawn.cascade_start = now
-	var due := float(spawn.cascade_start) + TokenSpawnQueue.pop_in_delay(index, total)
-	token.play_spawn_animation(maxf(0.0, due - now))
+	if TokenSpawnQueue.pop_in_doubling:
+		token.hold_for_pop_in()
+		(spawn.held as Array).append(token)
+	else:
+		var now := Time.get_ticks_msec() / 1000.0
+		if float(spawn.cascade_start) < 0.0:
+			spawn.cascade_start = now
+		var due := float(spawn.cascade_start) + TokenSpawnQueue.pop_in_delay(index, total)
+		token.play_spawn_animation(maxf(0.0, due - now))
 	token_spawned.emit(token, placement)
+
+
+## Pops the `held` tokens in on the doubling beats (TokenSpawnQueue.pop_in_batch): the first beat
+## now, the next ones at pop_in_delay, each pop a job on the shared spawn queue so a beat of
+## hundreds of tokens spends at most the frame budget a frame. A token freed meanwhile is skipped.
+func _pop_in_beats(held: Array, tree: SceneTree) -> void:
+	var total := held.size()
+	var start := Time.get_ticks_msec() / 1000.0
+	var queue := TokenSpawnQueue.shared()
+	for beat in TokenSpawnQueue.pop_in_beat_count(total):
+		var batch := TokenSpawnQueue.pop_in_batch(beat, total)
+		var wait := start + TokenSpawnQueue.pop_in_delay(batch.x, total) - Time.get_ticks_msec() / 1000.0
+		if wait > 0.0:
+			await tree.create_timer(wait).timeout
+		for i in range(batch.x, batch.x + batch.y):
+			queue.enqueue(_pop_token.bind(held[i]))
+
+
+## One pop-in job: starts the held token's pop-in animation if it is still on the table.
+static func _pop_token(token: Variant) -> void:
+	if is_instance_valid(token) and (token as BoardToken).is_inside_tree():
+		(token as BoardToken).play_spawn_animation()
 
 
 ## Load the map from level data (async: file reads, GLB parsing and the document read run

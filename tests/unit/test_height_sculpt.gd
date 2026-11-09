@@ -444,12 +444,14 @@ func test_snap_rows_follow_the_ground_and_keep_yaw_and_lean() -> void:
 	assert_eq(tilted.moved, PackedInt32Array([0]), "only the row on the hill")
 	var out: PackedFloat32Array = tilted.rows
 	var fields := ScatterGenerator.document_fields(doc, "")
-	assert_almost_eq(out[1], fields.height_at.call(Vector2(1.5, 0.5)), 1e-5, "on the ground")
-	var q_before := Quaternion(rows[3], rows[4], rows[5], rows[6])
-	var q_after := Quaternion(out[3], out[4], out[5], out[6])
+	# Moved rows are on the saved grid (MapDocumentIO.ROW_STEP), so values hold to about a step.
+	var step := MapDocumentIO.ROW_STEP
+	assert_almost_eq(out[1], fields.height_at.call(Vector2(1.5, 0.5)), step, "on the ground")
+	var q_before := Quaternion(rows[3], rows[4], rows[5], rows[6]).normalized()
+	var q_after := Quaternion(out[3], out[4], out[5], out[6]).normalized()
 	var ground: Vector3 = fields.normal_at.call(Vector2(1.5, 0.5))
 	var turned := Quaternion(Vector3.UP, ground)
-	assert_true((turned * q_before).is_equal_approx(q_after), "turned by the ground's arc")
+	assert_lt((turned * q_before).angle_to(q_after), 3e-3, "turned by the ground's arc")
 	assert_eq(out.slice(10), rows.slice(10), "the far row is untouched")
 	var upright := GroundSnap.snap_rows(rows, rows, before, doc.heights, grid, false, window)
 	var kept: PackedFloat32Array = upright.rows
@@ -469,7 +471,8 @@ func test_rebed_props_moves_only_props_whose_ground_changed() -> void:
 	assert_eq(bedded.moved, PackedInt32Array([0]))
 	var row := PropRows.row_at(bedded.rows, 0)
 	var fields := ScatterGenerator.document_fields(doc, "")
-	assert_almost_eq(row[1], fields.height_at.call(Vector2(1.0, 0.0)), 1e-5)
-	assert_almost_eq(PropRows.row_yaw(row), 1.1, 1e-4, "yaw kept")
+	# Rows are on the saved grid (MapDocumentIO.ROW_STEP): a step in Y, about 1e-3 rad in angles.
+	assert_almost_eq(row[1], fields.height_at.call(Vector2(1.0, 0.0)), MapDocumentIO.ROW_STEP)
+	assert_almost_eq(PropRows.row_yaw(row), 1.1, 3e-3, "yaw kept")
 	var normal: Vector3 = fields.normal_at.call(Vector2(1.0, 0.0))
-	assert_almost_eq(PropRows.row_up(row).angle_to(normal), 0.0, 1e-4, "stands on the new normal")
+	assert_almost_eq(PropRows.row_up(row).angle_to(normal), 0.0, 3e-3, "stands on the new normal")
