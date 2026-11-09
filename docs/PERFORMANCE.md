@@ -5856,14 +5856,15 @@ save). `FoliageDensityController` (`scenes/states/playing/`) writes
 `MultiMesh.visible_instance_count` on every ground-cover chunk (wind category "grass": cards, sprig
 clumps, litter and flowers; trees, bushes, rocks and structure decor are never thinned) from the
 camera size: 1.0 up to 14 (a map whose home is further out keeps its own home), a smoothstep
-to 0.5 at 20 (scaled with the home), quantised to 1/32, so a step drops about 3 percent of the
+to 0.5 at 20 (scaled with the home; since topic tweaks the far end is two thirds, 21/32, see "Gentler
+far end" below), quantised to 1/32, so a step drops about 3 percent of the
 ground cover while the zoom moves. `GroundThinner` (a child of the play map) reads the camera and
 calls `set_fraction`; the eye view never thins. Every chunk is already shuffled (seeded by its
 name), so a prefix is a spatially even sample and a thinner draw keeps the instances of a fuller
 one: nothing moves, so there is no shimmer. No per-instance fade: a step is one instance in
 thirty-two, scattered over every chunk at once, below what the eye resolves while the camera is
 moving; a fade would need a shader edit (the foliagefix card owns them). `perf_budget` holds
-`ground_keep_far` (0.5 at camera size 20) and `ground_keep_home` (1.0 at the 100 ft home).
+`ground_keep_far` (21/32 = 0.656 at camera size 20; it was 0.5) and `ground_keep_home` (1.0 at the 100 ft home).
 
 Direction note: the card says "zoomed in"; the thinning is for the far end of the zoom (camera
 size 14 and up). At zoom 4 and 10 and at home (13.85) nothing is thinned, as intended.
@@ -5895,6 +5896,27 @@ crop is a canopy blob, uninformative); at zoom 20 the right frame is visibly spa
 ground layer: fewer white and blue flower clumps, grass and moss beds thinner with the brown soil
 and rock showing through, but the meadow and the canopy read the same and nothing pops (the same
 instances stay). The decision: ship, since the saving is well over the 0.2 ms bar.
+
+### Gentler far end (topic tweaks, 2026-11-09; look-pending)
+
+Board perf-look-thin, answer "gentler": `GROUND_KEEP` is 2/3 instead of 1/2, which the 1/32
+quantisation makes 21/32 = 0.656 from camera size 20 out; the onset (14, scaled with the home), the
+smoothstep, the deterministic order and the eye view (never thinned) are unchanged. At the old
+numbers the saving at zoom 20 was -0.64 and -0.67 ms for 0.5 (drawn instances at zoom 20 down 40.6
+percent of the visible primitives); the draw cost follows the drawn ground cover almost linearly, so
+two thirds kept should save roughly 0.4 ms there on that map (inferred from the linear cost, not
+measured). NOT re-measured on the reference scene: the old filled map (render jobs
+`ab_thin2.json`/`ab_thin3.json`, 2.65 million visible primitives at zoom 20) was not rebuildable (the
+jobs were deleted with their worktree, and a 320 ft new map or a 100 ft map painted with forest
+strokes holds only 311,000 visible primitives and 5,000 instances at zoom 20). On that lighter 100 ft
+valley, forest strokes, home 13.85, camera 20.00, keep 0.6563, six-round in-run A/B (probe
+`foliage_perf.gd` key `thin`, the `tweaks.gd` job `thin.json`): full 3.168 / 3.206 (the two
+reference arms) and gentler 3.203 ms GPU, drift 1.000 to 1.012: no difference at this load (and the
+render info logged the same primitive count for both arms, 310,987, so the arm may not have thinned
+the counted nodes; the thinned count was not independently verified). Treat the gentler saving as
+unmeasured until the filled-map jobs are rebuilt. 1:1 pair at zoom 20 on that scene, full left,
+gentler right (`thin_gentler_z20.jpg`): the two read the same; at most a few fewer flower clumps
+and grass tufts on the right.
 
 ## Foliage mipmaps (topic foliagelod, 2026-11-09)
 
@@ -6035,3 +6057,39 @@ the crowd is already up at the reveal and the rest dribbles in over 0.7 s; new, 
 bare table, then one animal, three, seven, fifteen, thirty-one, sixty-three, the rest, each beat
 0.2 s after the last. The doubling mode costs the load nothing and shows the whole 1.5 s; the cost
 to the player is that the table is bare for the first beat or two.
+
+### Ripple inside each beat (topic tweaks, 2026-11-09; look-pending)
+
+Board perf-look-popin, answer "ripple": the doubling beat stays, but each token after the first beat
+pops up to `POP_IN_RIPPLE` = 0.3 of a beat (0.06 s at the 0.2 s beat) before or after its beat's
+time, so a beat reads as a soft wave. The offset is `pop_in_jitter(index)`, an integer hash of the
+placement index in [-1, 1] (no RNG state: every peer and every run gets the same times). The first
+beat (token 0) is not rippled, so the first token still pops at the reveal. The cap holds because
+`pop_in_beat_s` fits `(beats - 1 + ripple)` beats in `POP_IN_SPAN_S`: 10 and 100 tokens keep the 0.2 s
+beat (the last pop can now land up to 0.06 s later than its beat, at most 0.66 and 1.26 s), 500 tokens
+squeeze to 0.1807 s (was 0.1875) so the latest ripple lands at or before 1.5 s. The loader pops in
+time order of the rippled delays (`_pop_in_beats`), each pop still a `TokenSpawnQueue` job, so the 4 ms
+frame budget holds. `TokenSpawnQueue.pop_in_ripple` (static, 0 = the hard beat) is there for the A/B.
+
+Real load of a saved level with N Beasts-pack tokens (render job `popin.json`, probe `tweaks.gd`,
+`tools/render_jobs/local/tweaks/`, copied beside the handoff), 1920x1080 window, four loads per size
+alternated ripple, hard, hard, ripple, ms after the load landed:
+
+| Tokens | Mode | First pop | Last pop | Worst frame after landing |
+|---|---|---|---|---|
+| 10 | ripple | 18, 25 | 639, 644 | 21.7, 24.5 |
+| 10 | hard | 19, 19 | 633, 626 | 21.5, 21.2 |
+| 100 | ripple | 19, 18 | 1,274, 1,292 | 22.1, 21.5 |
+| 100 | hard | 24, 19 | 1,229, 1,228 | 23.7, 22.4 |
+| 500 | ripple | 56, 57 | 1,517, 1,544 | 55.7, 56.5 |
+| 500 | hard | 52, 55 | 1,525, 1,522 | 52.1, 55.1 |
+
+The worst frame is the same inside the noise (a 500-token beat is a few tens of ms either way; the
+table's entry frame is 4-30 ms here), and the last pop moves by at most the ripple (+45 to +60 ms at
+100 tokens, nothing at 500). Tokens popped per 100 ms at 100 tokens: hard 1, 1, 1, 3, 3, 7, 7, 15,
+15, 31, 31, 63, 63, 100; ripple 1, 1, 2, 3, 5, 7, 11, 15, 24, 31, 45, 63, 81, 100, so the hard
+beat's 16/32 token steps become ramps of 8 to 20 over two samples. Frame strip, ripple, 21 frames at
+100 ms of a 100-token load (`popin_ripple.jpg`; `popin_hardbeat.jpg` is the hard beat): the animals
+now come up as a thickening spray from 600 ms to 1,400 ms, not in blocks; no pop is visible as a
+jump. Capturing the strip costs a frame readback (the strip runs' worst frame, 89 and 95 ms, is the
+capture, not the pops).
