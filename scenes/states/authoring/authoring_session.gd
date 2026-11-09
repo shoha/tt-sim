@@ -28,17 +28,21 @@ func mark_edited() -> void:
 		dirty_changed.emit(true)
 
 
-## The current revision is on disk (a manual save); the autosave is superseded too.
-func mark_saved() -> void:
+## Revision `at` is on disk (a manual save; -1 = the current one); the autosave is superseded
+## too. A save written from a snapshot passes the revision it held, so edits made while it was
+## written keep the session dirty (AuthoringSaving).
+func mark_saved(at: int = -1) -> void:
 	var was_dirty := is_dirty()
-	saved_revision = revision
-	autosaved_revision = revision
-	if was_dirty:
+	var written := revision if at < 0 else at
+	saved_revision = written
+	autosaved_revision = maxi(autosaved_revision, written)
+	if was_dirty and not is_dirty():
 		dirty_changed.emit(false)
 
 
-func mark_autosaved() -> void:
-	autosaved_revision = revision
+## Revision `at` is in the autosave slot (-1 = the current one).
+func mark_autosaved(at: int = -1) -> void:
+	autosaved_revision = revision if at < 0 else at
 
 
 func is_dirty() -> bool:

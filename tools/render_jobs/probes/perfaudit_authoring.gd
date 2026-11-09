@@ -61,6 +61,9 @@ static func run(root: Node, step: Dictionary) -> String:
 			return row
 		"micro":
 			return _micro(c, int(step.get("reps", 5)), String(step.get("tag", "")))
+		"saves":
+			var reps := int(step.get("reps", 7))
+			return _saves(c, String(step.get("mode", "micro")), reps, String(step.get("tag", "")))
 		"mem":
 			return _mem(c, String(step.get("tag", "")))
 		"undo":
@@ -157,6 +160,89 @@ static func _micro(c: AuthoringController, reps: int, tag: String) -> String:
 		_rows.append(line)
 	# Returned whole, so the job's log.txt keeps it (the console output is filtered).
 	return " || ".join(lines)
+
+
+## Card authsave (saves on a worker): mode "micro" times, `reps` rounds interleaved, the main
+## thread's share of a save before (the scene sync, then serialize, deflate and write on the
+## frame, as the autosave did) and after (the sync, MapDocumentSnapshot.capture and the task's
+## start), the worker's own time, and whether both files hold the same entries. Modes
+## "old_tick" and "new_tick" run one autosave the old way (all on this frame) or through
+## AuthoringSaving, for an enclosing rec to see its frames; "cleanup" waits for a write in
+## flight and removes the files. The autosave slot is pointed under TMP_DIR first, so nothing
+## here touches user://levels/_autosave/.
+static func _saves(c: AuthoringController, mode: String, reps: int, tag: String) -> String:
+	var slot := TMP_DIR + "_authsave_slot/"
+	DirAccess.make_dir_recursive_absolute(slot)
+	AuthoringAutosave.directory = slot
+	var t := Time.get_ticks_usec()
+	match mode:
+		"old_tick":
+			c.mark_edited()
+			c._sync_document()
+			MapDocumentIO.write(c.document, AuthoringAutosave.document_path())
+			var f := FileAccess.open(AuthoringAutosave.level_path(), FileAccess.WRITE)
+			f.store_string(JSON.stringify(c.level.to_dict(), "\t"))
+			f.close()
+			return "saves old_tick %s: %.2f ms on the frame" % [tag, (Time.get_ticks_usec() - t) / 1000.0]
+		"new_tick":
+			c.mark_edited()
+			c.saving.autosave_tick()
+			return (
+				"saves new_tick %s: %.2f ms on the frame, writing %s"
+				% [tag, (Time.get_ticks_usec() - t) / 1000.0, c.saving.is_writing()]
+			)
+		"cleanup":
+			c.saving._wait_writer()
+			var last := c.saving.last_write
+			for name in ["old.ttmap", "new.ttmap"]:
+				DirAccess.remove_absolute(TMP_DIR + name)
+			AuthoringAutosave.discard()
+			DirAccess.remove_absolute(slot.trim_suffix("/"))
+			return "saves cleanup: last write %s" % str(last)
+	var times := {"old": PackedFloat64Array(), "new": PackedFloat64Array()}
+	times["capture"] = PackedFloat64Array()
+	times["worker"] = PackedFloat64Array()
+	var writer := MapDocumentWriter.new()
+	for r in reps:
+		t = Time.get_ticks_usec()
+		c._sync_document()
+		MapDocumentIO.write(c.document, TMP_DIR + "old.ttmap")
+		times["old"].append((Time.get_ticks_usec() - t) / 1000.0)
+		t = Time.get_ticks_usec()
+		c._sync_document()
+		var job := MapDocumentWriter.Job.new()
+		var tc := Time.get_ticks_usec()
+		job.snapshot = MapDocumentSnapshot.capture(c.document)
+		times["capture"].append((Time.get_ticks_usec() - tc) / 1000.0)
+		job.path = TMP_DIR + "new.ttmap"
+		writer.start(job)
+		times["new"].append((Time.get_ticks_usec() - t) / 1000.0)
+		writer.wait()
+		times["worker"].append(job.worker_usec / 1000.0)
+	var same := _zip_entries(TMP_DIR + "old.ttmap") == _zip_entries(TMP_DIR + "new.ttmap")
+	var parts := PackedStringArray()
+	for name in times:
+		var s: PackedFloat64Array = times[name].duplicate()
+		s.sort()
+		parts.append("%s %.2f [%.2f..%.2f]" % [name, _median(times[name]), s[0], s[s.size() - 1]])
+	var line := (
+		"saves %s: reps %d, ms median [min..max]: %s; files hold the same entries: %s"
+		% [tag, reps, ", ".join(parts), same]
+	)
+	_rows.append(line)
+	return line
+
+
+static func _zip_entries(path: String) -> Dictionary:
+	var reader := ZIPReader.new()
+	var out := {}
+	if reader.open(path) != OK:
+		return out
+	for name in reader.get_files():
+		if not name.ends_with("/"):
+			out[name] = reader.read_file(name)
+	reader.close()
+	return out
 
 
 ## Bytes held by a value: packed arrays by their element size, dictionaries summed.

@@ -4819,3 +4819,49 @@ a probe then reads them each frame with `get_captured_timestamps_count`,
 interval to the next timestamp by name. The flag also prints a one-second GPU PROFILE to stdout. The
 probe was a one-use job (not in the repo); `probes/eye_perf.gd`'s `perf` action is the committed
 neighbour with the same in-run A/B loop, to which the timestamp read adds about 30 lines.
+
+## Worker saves (topic perfaudit, card authsave, 2026-11-09)
+
+Every save and the 30 s autosave serialized, deflated and wrote the whole map on the main thread
+(finding F-authoring-1). Now the frame pays only the scene sync and a copy-on-write snapshot
+(`MapDocumentSnapshot.capture`); `MapDocumentWriter` encodes and writes on a pool task
+(`docs/systems/map_document.md`, `docs/systems/authoring.md`). No pixel changes.
+
+**How.** Real-window render job, one process, A and B interleaved, 7 rounds: a new
+`temperate_forest_summer_s1` map, seed 1234, at 320, 100 and 200 ft, one sculpt stroke, then
+`perfaudit_authoring.gd` action `saves` (mode `micro`): old = `_sync_document()` + the synchronous
+`MapDocumentIO.write` (what the autosave did on its frame), new = `_sync_document()` + capture +
+task start; then the worker's own time, and both files' ZIP entries compared. Then four 1.8 s
+`rec` windows per size, old tick / new tick / old / new, each logging every frame. The machine was
+shared with other perfaudit cards (CPU load), so absolute ms are pessimistic; old and new ran under
+the same load. Headless cross-check on synthetic documents (`tools/render_jobs/local/authsave/`,
+not committed): the base commit's `MapDocumentIO` against the new path in one process.
+
+| Map | Old, main thread ms | New, main thread ms (capture alone) | Worker ms | Old tick worst frame | New tick worst frame |
+|---|---|---|---|---|---|
+| 100 ft | 46.4 [35.9..47.9] | 1.25 [0.89..1.40] (0.29) | 36.1 [35.5..46.0] | 53.9, 65.1 | 15.6, 17.0 |
+| 200 ft | 162.6 [149.1..184.5] | 3.35 [2.29..4.05] (0.29) | 146.4 [135.5..155.5] | 172.1, 158.4 | 19.8, 14.7 |
+| 320 ft | 440.8 [370.2..478.0] | 7.91 [5.35..8.53] (0.26) | 460.1 [378.4..484.4] | 470.6, 490.0 | 23.1, 26.6 |
+
+Medians [min..max] of 7 rounds; the worst-frame columns are the two windows of each kind (idle p99
+in the same windows 5.6-9.1 ms). The new main-thread share is almost all `_sync_document`
+(`AuthoredScatter.rows_by_asset` and the grass-mass anchors: about 1 / 3 / 7.6 ms); the snapshot
+itself is 0.2-0.3 ms at every size. The written entries were identical old and new at every size
+(real maps and synthetic), and on synthetic 100 / 200 / 320 ft documents the new serialize is
+byte-identical to the old one entry by entry.
+
+Consistency: a stress loop (headless, synthetic) saved six times in a row per size while a "stroke"
+(a 17x17 dab of heights, biome density and erase, plus a row appended) landed every 16 ms: 25 / 93 /
+220 strokes during the writes, 0 torn files (each file equal, entry by entry, to the document at its
+capture) and the last save equal to the live document. Peak extra memory over the old path is one
+copy of each array a stroke touches during the write (copy-on-write: at 320 ft heights 0.6 MB, each
+mask 0.15 MB, each touched asset's rows); the encode's own buffers are the old path's, now on the
+worker. The static-memory counter could not isolate the copies (it read 0.0 MB), so that figure is
+reasoned, not measured.
+
+Where the old time went (headless, synthetic 320 ft document of 40k rows, 5 rounds, median): rows
+JSON 246 ms (`String.num` per float), surfaces 108 ms (`SurfaceEntries.canonical`, a GDScript loop
+per sample), the writer's checks 64 ms (`row_ok` per row, the height scan), biomes 10 ms, deflate and
+write 184 ms. All of it is on the worker now. Format-neutral speedups were not taken: the frame no
+longer pays any of it, and the big one (binary rows) is a format change (board question
+perf-map-format).

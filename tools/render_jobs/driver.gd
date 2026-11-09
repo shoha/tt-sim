@@ -240,7 +240,7 @@ func _process(delta: float) -> void:
 		"no_autosave":
 			var c := ctrl()
 			if c:
-				var timer: Timer = c.get("_autosave_timer")
+				var timer: Timer = c.saving.timer
 				timer.stop()
 				timer.paused = true
 				for conn in timer.timeout.get_connections():
