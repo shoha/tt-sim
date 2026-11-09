@@ -235,7 +235,7 @@ func _process_host() -> void:
 					_host_done()
 		"late":
 			var late := _peer_marks("client2")
-			if late.has("tokens") or _since_phase_s() >= LATE_WAIT_S:
+			if late.has("board") or _since_phase_s() >= LATE_WAIT_S:
 				_cut("late_join_%d_tokens" % _tokens.size())
 				_host_done()
 

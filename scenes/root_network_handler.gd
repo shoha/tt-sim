@@ -6,6 +6,15 @@ class_name RootNetworkHandler
 ## transitions while this class manages the token-level network updates.
 ## All methods are static-style helpers that take the dependencies they need,
 ## making them easy to test and keeping Root's footprint small.
+##
+## A client builds the tokens it lacks on the shared TokenSpawnQueue, a few a frame, never all
+## in the frame a state lands (a late joiner's full state at 500 avatars was one 740 ms frame).
+## A queued network id is built once: a second state or add for it while it waits only updates
+## GameState, and the job reads GameState when it runs, so the newest state is the one built.
+
+## Network ids whose build waits on the spawn queue, each with the ticket of its job
+static var _queued: Dictionary = {}
+static var _next_ticket: int = 0
 
 
 ## Connect client-side signals for receiving state updates
@@ -70,13 +79,9 @@ static func on_token_state_received(
 	var token = controller.find_token_by_network_id(network_id)
 	if token and is_instance_valid(token):
 		token_state.apply_to_token(token)
-	else:
-		# Token doesn't exist — create it
-		var new_token = create_token_from_state(token_state, controller)
-		if new_token and game_map:
-			game_map.drag_and_drop_node.add_child(new_token)
-			controller.track_network_token(new_token)
-			controller._connect_token_context_menu(new_token)
+	elif game_map:
+		# Token doesn't exist: build it (once, however many states arrive meanwhile)
+		queue_token_build(controller, game_map, network_id)
 
 
 ## Handle token removal (reliable channel)
@@ -95,8 +100,9 @@ static func apply_game_state_to_tokens(controller: LevelPlayController, game_map
 
 
 ## Apply GameState's tokens `network_ids` to the board: a token already there takes its state,
-## a missing one is created (keyed by network_id, so applying a token twice never duplicates
-## it). A full state passes every id; a token add (NetworkStateSync.tokens_added) its own.
+## a missing one is queued for building (queue_token_build; keyed by network_id, so applying a
+## token twice never duplicates it). A full state passes every id; a token add
+## (NetworkStateSync.tokens_added) its own.
 static func apply_tokens_to_board(
 	controller: LevelPlayController, game_map: Node, network_ids: Array
 ) -> void:
@@ -117,20 +123,64 @@ static func apply_tokens_to_board(
 
 		if token and is_instance_valid(token):
 			token_state.apply_to_token(token)
+			# Any active drag lock (for late joiners); a queued token takes its own when built
+			_apply_drag_lock(token, network_id)
 		else:
-			var new_token = create_token_from_state(token_state, controller)
-			if new_token:
-				drag_and_drop.add_child(new_token)
-				controller.track_network_token(new_token)
-				controller._connect_token_context_menu(new_token)
+			queue_token_build(controller, game_map, network_id)
 
-	# Apply any active drag locks to visual tokens (for late joiners)
-	for network_id in network_ids:
-		var lock_holder := GameState.get_drag_lock(network_id)
-		if lock_holder > 0:
-			var token = controller.find_token_by_network_id(network_id)
-			if token and is_instance_valid(token):
-				(token as BoardToken).set_drag_lock(lock_holder)
+
+## Queue the build of GameState's token `network_id` on the shared TokenSpawnQueue, unless its
+## build is already waiting there. The job reads GameState when it runs (the newest state, or
+## nothing if the token was removed meanwhile) and builds nothing if the token is on the board
+## by then, the board is gone or a table load has started (whose end applies the state again).
+static func queue_token_build(
+	controller: LevelPlayController, game_map: Node, network_id: String
+) -> void:
+	if _queued.has(network_id):
+		return
+	_next_ticket += 1
+	_queued[network_id] = _next_ticket
+	TokenSpawnQueue.shared().enqueue(
+		_build_queued.bind(
+			controller.get_instance_id(), game_map.get_instance_id(), network_id, _next_ticket
+		)
+	)
+
+
+## Whether `network_id`'s build waits on the spawn queue
+static func is_build_queued(network_id: String) -> bool:
+	return _queued.has(network_id)
+
+
+## One spawn-queue job of queue_token_build. The controller and map come as instance ids, so
+## a job outliving its table finds them gone instead of holding freed objects.
+static func _build_queued(controller_id: int, map_id: int, network_id: String, ticket: int) -> void:
+	if _queued.get(network_id, 0) != ticket:
+		return
+	_queued.erase(network_id)
+	var controller := instance_from_id(controller_id) as LevelPlayController
+	var game_map := instance_from_id(map_id) as Node
+	if controller == null or game_map == null or controller.is_loading():
+		return
+	var token_state: TokenState = GameState.get_token_state(network_id)
+	if token_state == null or is_instance_valid(controller.find_token_by_network_id(network_id)):
+		return
+	var drag_and_drop: Node = game_map.drag_and_drop_node
+	if not is_instance_valid(drag_and_drop):
+		return
+	var new_token := create_token_from_state(token_state, controller)
+	if new_token == null:
+		return
+	drag_and_drop.add_child(new_token)
+	controller.track_network_token(new_token)
+	controller._connect_token_context_menu(new_token)
+	_apply_drag_lock(new_token, network_id)
+
+
+static func _apply_drag_lock(token: BoardToken, network_id: String) -> void:
+	var lock_holder := GameState.get_drag_lock(network_id)
+	if lock_holder > 0:
+		token.set_drag_lock(lock_holder)
 
 
 ## Create a BoardToken from a TokenState (for network-spawned tokens)

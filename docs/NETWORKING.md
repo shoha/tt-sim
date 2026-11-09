@@ -869,6 +869,14 @@ updates, removes nothing, keyed by network_id) and `RootNetworkHandler.apply_tok
 those ids. The full state's merge runs the same per-token code, so an add that crosses a full state
 carrying the same token is harmless whichever lands first.
 
+A client builds a token it lacks on the shared `TokenSpawnQueue`, not in the frame the state lands
+(`RootNetworkHandler.queue_token_build`, since 2026-11-08, netjoin): the queue spends its frame
+budget a frame, so a late joiner's 500-token state no longer builds every avatar in one frame (740
+ms before). A network id waiting in the queue is queued once (`is_build_queued`): a second state,
+add or property update for it only changes GameState, and the job builds from GameState as it is
+when it runs, or builds nothing if the token was removed, is already on the board, or a table load
+has started meanwhile (the load's end applies the state again).
+
 Sizes (host to one client): one add 423 B on average in the harness (avatar tokens; about 430 B
 for a pack token, 730 B for an avatar with a full distinct recipe); the full state at 200 tokens
 4.6 to 19 KB (identical avatars to distinct full recipes; 154 to 302 KB as a Variant before).
