@@ -16,7 +16,8 @@ extends RefCounted
 ## The load-time pop-in is timed here too (user board item perf-popin-cap: the 1.5 s cap stays).
 ## Doubling mode (user's idea, 2026-11-09, sysidle; look-pending): the crowd lands in beats of 1, 2,
 ## 4, 8, ... tokens, in placement order, a beat every POP_IN_BEAT_S, squeezed to fit POP_IN_SPAN_S
-## from the first beat to the last (pop_in_delay, pop_in_batches). The loader builds every token
+## from the first beat to the last (pop_in_delay, pop_in_batches), each token rippled by up to
+## +-POP_IN_RIPPLE of a beat (a hash of its index). The loader builds every token
 ## held at near-zero scale (BoardToken.hold_for_pop_in) and runs the beats once the load is done,
 ## so they play on the revealed table and not behind the loading sheet; each pop is a job on this
 ## queue, so a beat of hundreds of tokens still costs at most the frame budget a frame. Linear
@@ -37,9 +38,15 @@ const POP_IN_SPAN_S := 1.5
 ## Doubling mode: the time between beats while the beats fit the span (10 tokens: 4 beats, the
 ## last at 0.6 s; 100: 7 beats, 1.2 s; 500 and more: squeezed to the span).
 const POP_IN_BEAT_S := 0.2
+## The ripple inside a beat (user board perf-look-popin, "ripple", 2026-11-09; look-pending): each
+## token after the first beat pops up to this share of a beat before or after its beat's time, so
+## a beat reads as a soft wave and not a hard stroke.
+const POP_IN_RIPPLE := 0.3
 
 ## Doubling beats (true) or the linear cascade (false, kept for the A/B and as the way back).
 static var pop_in_doubling := true
+## The ripple in use (POP_IN_RIPPLE; 0 is the hard beat, for the A/B).
+static var pop_in_ripple := POP_IN_RIPPLE
 
 static var _shared: TokenSpawnQueue = null
 
@@ -56,21 +63,38 @@ static func shared() -> TokenSpawnQueue:
 
 
 ## Seconds after the cascade's start that token `index` of `total` pops in. Doubling mode: the
-## time of its beat. Linear mode: POP_IN_STEP_S apart, closer when that would take longer than
+## time of its beat plus the token's ripple (pop_in_jitter times POP_IN_RIPPLE of a beat), none
+## for the first beat. Linear mode: POP_IN_STEP_S apart, closer when that would take longer than
 ## POP_IN_SPAN_S.
 static func pop_in_delay(index: int, total: int) -> float:
 	if total <= 1:
 		return 0.0
 	if pop_in_doubling:
-		return _beat_of(index) * pop_in_beat_s(total)
+		var beat := _beat_of(index)
+		var beat_s := pop_in_beat_s(total)
+		if beat == 0:
+			return 0.0
+		return (beat + pop_in_ripple * pop_in_jitter(index)) * beat_s
 	return index * minf(POP_IN_STEP_S, POP_IN_SPAN_S / float(total - 1))
 
 
-## The time between doubling beats for `total` tokens: POP_IN_BEAT_S, or less when the beats would
-## run past POP_IN_SPAN_S.
+## The time between doubling beats for `total` tokens: POP_IN_BEAT_S, or less when the beats and
+## the ripple of the last one would run past POP_IN_SPAN_S.
 static func pop_in_beat_s(total: int) -> float:
 	var beats := pop_in_beat_count(total)
-	return minf(POP_IN_BEAT_S, POP_IN_SPAN_S / float(beats - 1)) if beats > 1 else 0.0
+	if beats <= 1:
+		return 0.0
+	return minf(POP_IN_BEAT_S, POP_IN_SPAN_S / (float(beats - 1) + pop_in_ripple))
+
+
+## The ripple of token `index`, in [-1, 1]: an integer hash of the index alone, so every peer and
+## every run agrees and no random state is held.
+static func pop_in_jitter(index: int) -> float:
+	var h := (index + 1) & 0xFFFFFFFF
+	h = ((h ^ (h >> 16)) * 0x45D9F3B) & 0xFFFFFFFF
+	h = ((h ^ (h >> 16)) * 0x45D9F3B) & 0xFFFFFFFF
+	h = h ^ (h >> 16)
+	return float(h) / float(0xFFFFFFFF) * 2.0 - 1.0
 
 
 ## How many doubling beats `total` tokens make: 1, 2, 4, ... tokens, the last one the remainder.

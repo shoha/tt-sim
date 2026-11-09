@@ -88,17 +88,53 @@ func test_the_doubling_beats_are_1_2_4_8_and_fit_the_span() -> void:
 		for beat in beats:
 			var batch := TokenSpawnQueue.pop_in_batch(beat, total)
 			assert_eq(batch.x, covered, "%d tokens: beat %d starts where the last ended" % [total, beat])
-			assert_eq(
-				TokenSpawnQueue.pop_in_delay(batch.x, total),
-				TokenSpawnQueue.pop_in_delay(batch.x + batch.y - 1, total),
-				"a beat's tokens pop together"
-			)
 			covered += batch.y
 		assert_eq(covered, total, "every token is in a beat (%d)" % total)
-		assert_lte(TokenSpawnQueue.pop_in_delay(total - 1, total), TokenSpawnQueue.POP_IN_SPAN_S + 1e-6)
-	assert_almost_eq(TokenSpawnQueue.pop_in_delay(9, 10), 0.6, 1e-6)
-	assert_almost_eq(TokenSpawnQueue.pop_in_delay(99, 100), 1.2, 1e-6)
-	assert_almost_eq(TokenSpawnQueue.pop_in_delay(499, 500), 1.5, 1e-6)
+		for i in total:
+			assert_lte(
+				TokenSpawnQueue.pop_in_delay(i, total),
+				TokenSpawnQueue.POP_IN_SPAN_S + 1e-6,
+				"token %d of %d is inside the cap" % [i, total]
+			)
+	# The beat times themselves (a beat's tokens ripple around them, see the next test).
+	assert_almost_eq(TokenSpawnQueue.pop_in_beat_s(10), 0.2, 1e-6)
+	assert_almost_eq(TokenSpawnQueue.pop_in_beat_s(100), 0.2, 1e-6)
+	assert_lte(TokenSpawnQueue.pop_in_beat_s(500) * (8.0 + TokenSpawnQueue.POP_IN_RIPPLE), 1.5 + 1e-6)
+	assert_gt(TokenSpawnQueue.pop_in_beat_s(500), 0.17, "squeezed, but not by much")
+
+
+func test_the_ripple_is_a_deterministic_small_offset_inside_each_beat() -> void:
+	for total in [10, 100, 500]:
+		var beat_s := TokenSpawnQueue.pop_in_beat_s(total)
+		var spread := 0.0
+		var last := 0.0
+		for i in total:
+			var delay := TokenSpawnQueue.pop_in_delay(i, total)
+			assert_eq(delay, TokenSpawnQueue.pop_in_delay(i, total), "the same call, the same time")
+			last = maxf(last, delay)
+			if i == 0:
+				assert_eq(delay, 0.0, "the first token pops at the reveal")
+				continue
+			var beat := floorf(log(float(i + 1)) / log(2.0) + 1e-9)
+			var offset := delay - beat * beat_s
+			spread = maxf(spread, absf(offset))
+			assert_lte(
+				absf(offset),
+				TokenSpawnQueue.POP_IN_RIPPLE * beat_s + 1e-6,
+				"token %d of %d stays within the ripple of its beat" % [i, total]
+			)
+		assert_gt(spread, 0.15 * beat_s, "%d tokens: the ripple really moves tokens" % total)
+		assert_lte(last, TokenSpawnQueue.POP_IN_SPAN_S + 1e-6, "%d tokens: the cap holds" % total)
+	assert_lte(TokenSpawnQueue.pop_in_delay(9, 10), 0.6 + 0.3 * 0.2 + 1e-6)
+	assert_gte(TokenSpawnQueue.pop_in_delay(9, 10), 0.6 - 0.3 * 0.2 - 1e-6)
+	for i in 2000:
+		var j := TokenSpawnQueue.pop_in_jitter(i)
+		assert_gte(j, -1.0)
+		assert_lte(j, 1.0)
+	var mean := 0.0
+	for i in 2000:
+		mean += TokenSpawnQueue.pop_in_jitter(i)
+	assert_almost_eq(mean / 2000.0, 0.0, 0.05, "the ripple has no bias toward early or late")
 
 
 func test_the_pop_in_cascade_fits_its_span_whatever_the_count() -> void:

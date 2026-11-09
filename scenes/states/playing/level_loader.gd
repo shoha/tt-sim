@@ -283,20 +283,29 @@ func _spawn_placement(
 	token_spawned.emit(token, placement)
 
 
-## Pops the `held` tokens in on the doubling beats (TokenSpawnQueue.pop_in_batch): the first beat
-## now, the next ones at pop_in_delay, each pop a job on the shared spawn queue so a beat of
-## hundreds of tokens spends at most the frame budget a frame. A token freed meanwhile is skipped.
+## Pops the `held` tokens in on the doubling beats (TokenSpawnQueue.pop_in_delay): the first beat
+## now, every other token at its own rippled time, in time order. Each pop is a job on the shared
+## spawn queue so a beat of hundreds of tokens spends at most the frame budget a frame. A token
+## freed meanwhile is skipped.
 func _pop_in_beats(held: Array, tree: SceneTree) -> void:
 	var total := held.size()
 	var start := Time.get_ticks_msec() / 1000.0
 	var queue := TokenSpawnQueue.shared()
-	for beat in TokenSpawnQueue.pop_in_beat_count(total):
-		var batch := TokenSpawnQueue.pop_in_batch(beat, total)
-		var wait := start + TokenSpawnQueue.pop_in_delay(batch.x, total) - Time.get_ticks_msec() / 1000.0
+	var order: Array = range(total)
+	var due: Array[float] = []
+	for i in total:
+		due.append(TokenSpawnQueue.pop_in_delay(i, total))
+	order.sort_custom(func(a: int, b: int) -> bool: return due[a] < due[b] or (due[a] == due[b] and a < b))
+	var next := 0
+	while next < total:
+		var elapsed := Time.get_ticks_msec() / 1000.0 - start
+		var wait: float = due[order[next]] - elapsed
 		if wait > 0.0:
 			await tree.create_timer(wait).timeout
-		for i in range(batch.x, batch.x + batch.y):
-			queue.enqueue(_pop_token.bind(held[i]))
+			elapsed = Time.get_ticks_msec() / 1000.0 - start
+		while next < total and due[order[next]] <= elapsed:
+			queue.enqueue(_pop_token.bind(held[order[next]]))
+			next += 1
 
 
 ## One pop-in job: starts the held token's pop-in animation if it is still on the table.
