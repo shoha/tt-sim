@@ -30,6 +30,10 @@ extends RefCounted
 ##       GDScript-built 12-float buffer assigned at once, and that buffer prebuilt (the floor a
 ##       native row-to-buffer conversion would leave); then AuthoredScatter.build_all itself.
 ##   {action: "await"}  holds the job while a rig runs.
+##   {action: "shots", name, dir, configs, crop | cols, eye}  a sheet per config (see _shots).
+##   {action: "stack", dir, files, out}  strips joined into one sheet.
+## Card foliagelight added the variant key `swap` {class: shader path}: that class's wind
+## materials drawn on another shader (copies of the built materials, `_aa` twin under MSAA).
 
 const GROUP := "foliage_perf_rig"
 const INCLUDE_PATH := "res://shaders/wind_foliage_include.gdshaderinc"
@@ -39,6 +43,8 @@ const SWAY_HEAD := (
 )
 const NO_WIND := "FOLIAGE_PERF_NO_WIND"
 const PX_BINS: Array[float] = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0]
+## The `load` action, in its own file (the line cap).
+const LOAD := preload("res://tools/render_jobs/probes/foliage_perf_load.gd")
 
 
 static func blocker(base: Node, step: Dictionary) -> String:
@@ -56,7 +62,9 @@ static func run(base: Node, step: Dictionary) -> String:
 	if action == "census":
 		return _census(base, step)
 	if action == "load":
-		return _load(base, step)
+		return LOAD.run(base, step, _dir(step))
+	if action == "stack":
+		return _stack(step)
 	var rig := Rig.new()
 	rig.gm = base.get("_game_map")
 	rig.probe = load(String(step.get("script", "res://tools/render_jobs/probes/foliage_perf.gd")))
@@ -72,6 +80,32 @@ static func _dir(step: Dictionary) -> String:
 	)
 	DirAccess.make_dir_recursive_absolute(dir)
 	return dir
+
+
+## {action: "stack", dir, files: [png names in dir], out}: the files one above the other, with a
+## 4 px dark gutter, saved as <dir>/<out> (card foliagelight's contact sheet).
+static func _stack(step: Dictionary) -> String:
+	var dir := _dir(step)
+	var imgs: Array[Image] = []
+	var w := 0
+	var h := 0
+	for name in step.get("files", []):
+		var img := Image.load_from_file(dir.path_join(String(name)))
+		if img == null:
+			return "stack: %s missing" % name
+		img.convert(Image.FORMAT_RGBA8)
+		imgs.append(img)
+		w = maxi(w, img.get_width())
+		h += img.get_height() + 4
+	var sheet := Image.create(w, maxi(h - 4, 1), false, Image.FORMAT_RGBA8)
+	sheet.fill(Color(0.08, 0.08, 0.08))
+	var y := 0
+	for img in imgs:
+		sheet.blit_rect(img, Rect2i(Vector2i.ZERO, img.get_size()), Vector2i(0, y))
+		y += img.get_height() + 4
+	var out := dir.path_join(String(step.get("out", "stack.png")))
+	sheet.save_png(out)
+	return "stack: %d strips -> %s" % [imgs.size(), out]
 
 
 static func _write(path: String, lines: Array[String]) -> void:
@@ -314,138 +348,6 @@ static func _line(label: String, r: Dictionary, view_area: float, asset: bool) -
 	return text
 
 
-## The MultiMesh build, four ways (see the header), then build_all.
-static func _load(base: Node, step: Dictionary) -> String:
-	var gm: GameMap = base.get("_game_map")
-	var scatter: AuthoredScatter = null
-	var most := -1
-	for node in gm.find_children("*", "AuthoredScatter", true, false):
-		var cells: Dictionary = node.get("_cells")
-		if cells.size() > most:
-			most = cells.size()
-			scatter = node
-	if scatter == null:
-		return "load: no scatter"
-	var cells: Dictionary = scatter.get("_cells")
-	var species: Dictionary = scatter.get("_species")
-	var anchors: Dictionary = scatter.mass_anchors
-	var jobs: Array[Dictionary] = []
-	var instances := 0
-	for cell in cells:
-		for asset_id in cells[cell]:
-			var sp: Dictionary = species.get(asset_id, {})
-			if sp.is_empty():
-				continue
-			var rows: PackedFloat32Array = cells[cell][asset_id]
-			var n := rows.size() / MapDocument.ROW_STRIDE
-			if n == 0:
-				continue
-			var order := PackedInt32Array()
-			order.resize(n)
-			for i in n:
-				order[i] = i
-			jobs.append({"rows": rows, "mesh": sp.mesh, "order": order, "n": n})
-			instances += n
-	for j in jobs:
-		j["buffer"] = _buffer(j.rows, j.n)
-	var reps := int(step.get("reps", 5))
-	var methods: Array[String] = ["shipped", "shipped_nocustom", "gd_buffer", "prebuilt_buffer"]
-	var times := {}
-	for m in methods:
-		times[m] = []
-	var keys_ms: Array = []
-	for r in reps:
-		var order := methods.duplicate()
-		for k in r % order.size():
-			order.push_back(order.pop_front())
-		if r % 2 == 1:
-			order.reverse()
-		for m in order:
-			var hold: Array[MultiMesh] = []
-			var t0 := Time.get_ticks_usec()
-			for j in jobs:
-				hold.append(_build_one(m, j, anchors))
-			times[m].append((Time.get_ticks_usec() - t0) / 1000.0)
-			hold.clear()
-		var t1 := Time.get_ticks_usec()
-		for j in jobs:
-			var bits := (j.rows as PackedFloat32Array).to_byte_array().to_int32_array()
-			var keys := ScatterRows.row_keys(bits)
-			ScatterRows.instance_order(keys, j.order, "seed")
-		keys_ms.append((Time.get_ticks_usec() - t1) / 1000.0)
-	var rows_by_asset := scatter.rows_by_asset()
-	var t2 := Time.get_ticks_usec()
-	scatter.build_all(rows_by_asset)
-	var build_all_ms := (Time.get_ticks_usec() - t2) / 1000.0
-	var lines: Array[String] = []
-	lines.append(
-		(
-			"load %s: %d (cell, asset) MultiMeshes, %d instances, %d reps, %d anchors"
-			% [step.get("name", ""), jobs.size(), instances, reps, anchors.size()]
-		)
-	)
-	for m in methods:
-		var a: Array = times[m]
-		a.sort()
-		lines.append(
-			(
-				"load %-18s median %.2f ms [%.2f-%.2f], %.3f us per instance"
-				% [m, a[a.size() / 2], a[0], a[-1], 1000.0 * a[a.size() / 2] / maxf(1.0, instances)]
-			)
-		)
-	keys_ms.sort()
-	lines.append("load row_keys+instance_order median %.2f ms" % keys_ms[keys_ms.size() / 2])
-	lines.append("load AuthoredScatter.build_all (once, after) %.2f ms" % build_all_ms)
-	_write(_dir(step).path_join("%s_load.txt" % String(step.get("name", "load"))), lines)
-	for l in lines:
-		print("RJ| " + l)
-	return "load %s done" % step.get("name", "")
-
-
-static func _build_one(method: String, j: Dictionary, anchors: Dictionary) -> MultiMesh:
-	match method:
-		"shipped":
-			return ScatterGlbUtils.build_multimesh(
-				j.mesh, ScatterRows.transforms_from_rows(j.rows, j.order), anchors
-			)
-		"shipped_nocustom":
-			return ScatterGlbUtils.build_multimesh(
-				j.mesh, ScatterRows.transforms_from_rows(j.rows, j.order), {}
-			)
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.mesh = j.mesh
-	mm.instance_count = j.n
-	mm.buffer = _buffer(j.rows, j.n) if method == "gd_buffer" else j.buffer
-	return mm
-
-
-## The 12-float MultiMesh rows (basis rows with the origin) of `n` instance rows.
-static func _buffer(rows: PackedFloat32Array, n: int) -> PackedFloat32Array:
-	var out := PackedFloat32Array()
-	out.resize(n * 12)
-	var stride := MapDocument.ROW_STRIDE
-	for r in n:
-		var b := r * stride
-		var q := Quaternion(rows[b + 3], rows[b + 4], rows[b + 5], rows[b + 6])
-		q = q.normalized() if q.length_squared() > 0.0 else Quaternion()
-		var basis := Basis(q).scaled(Vector3(rows[b + 7], rows[b + 8], rows[b + 9]))
-		var o := r * 12
-		out[o] = basis.x.x
-		out[o + 1] = basis.y.x
-		out[o + 2] = basis.z.x
-		out[o + 3] = rows[b]
-		out[o + 4] = basis.x.y
-		out[o + 5] = basis.y.y
-		out[o + 6] = basis.z.y
-		out[o + 7] = rows[b + 1]
-		out[o + 8] = basis.x.z
-		out[o + 9] = basis.y.z
-		out[o + 10] = basis.z.z
-		out[o + 11] = rows[b + 2]
-	return out
-
-
 class Rig:
 	extends Node
 
@@ -469,6 +371,10 @@ class Rig:
 	## Merge size k -> the merged chunk nodes (_prepare_merge); asset id -> trivial material.
 	var _merged := {}
 	var _trivial_mat := {}
+	## `swap` (card foliagelight): source mesh -> its surface materials as built; and
+	## "<material id>|<shader path>" -> that material's copy on the other shader.
+	var _orig_surfaces := {}
+	var _swap_mat := {}
 
 	func _ready() -> void:
 		add_to_group(GROUP)
@@ -592,6 +498,7 @@ class Rig:
 				want = _lod_mesh.get(orig, orig)
 			if mm.mesh != want:
 				mm.mesh = want
+			_apply_swap(n, v.get("swap", {}))
 		var merge := int(v.get("merge", 0))
 		for k in _merged:
 			for m: MultiMeshInstance3D in _merged[k]:
@@ -599,6 +506,44 @@ class Rig:
 		gm.world_viewport.scaling_3d_scale = _orig_scale * float(v.get("scale3d", 1.0))
 		gm.world_viewport.mesh_lod_threshold = float(v.get("lod_px", _orig_lod_px))
 		_set_wind(not bool(v.get("nowind", false)))
+
+	## `swap` {class: shader path} (card foliagelight): every wind material of that class's
+	## meshes drawn on the shader at the path instead (a copy, every uniform carried over); an
+	## empty dictionary puts the built materials back. The mesh is shared by every chunk of its
+	## asset, so this is one switch per asset.
+	func _apply_swap(n: Dictionary, swap: Dictionary) -> void:
+		var mesh: Mesh = n.mesh
+		if not _orig_surfaces.has(mesh):
+			if swap.is_empty():
+				return
+			var mats: Array[Material] = []
+			for s in mesh.get_surface_count():
+				mats.append(mesh.surface_get_material(s))
+			_orig_surfaces[mesh] = mats
+		var path := String(swap.get(n.cls, swap.get(n.size_class, swap.get("all", ""))))
+		var origs: Array[Material] = _orig_surfaces[mesh]
+		for s in origs.size():
+			var want: Material = origs[s]
+			var src := want as ShaderMaterial
+			if path != "" and src != null and WindFoliage.is_wind_shader(src.shader):
+				# A source on an antialiased wind shader (the eye view's MSAA) takes the variant's
+				# `_aa` twin when there is one.
+				var use := path
+				var twin := path.replace(".gdshader", "_aa.gdshader")
+				if not src.shader.resource_path.contains("no_aa") and ResourceLoader.exists(twin):
+					use = twin
+				var key := "%d|%s" % [src.get_instance_id(), use]
+				if not _swap_mat.has(key):
+					var copy := ShaderMaterial.new()
+					copy.shader = load(use) as Shader
+					for u: Dictionary in copy.shader.get_shader_uniform_list():
+						var value: Variant = src.get_shader_parameter(u.name)
+						if value != null:
+							copy.set_shader_parameter(u.name, value)
+					_swap_mat[key] = copy
+				want = _swap_mat[key]
+			if mesh.surface_get_material(s) != want:
+				mesh.surface_set_material(s, want)
 
 	func _restore() -> void:
 		_apply({})
@@ -873,6 +818,9 @@ class Rig:
 		var configs: Array = step.get("configs", [{"name": "ref"}])
 		var variants := configs.duplicate()
 		_prepare_lods(variants)
+		if step.has("cols"):
+			await _shots_cols(configs)
+			return
 		var w := 640
 		var h := 360
 		var sheet := Image.create(w * 2, h * configs.size(), false, Image.FORMAT_RGBA8)
@@ -890,6 +838,42 @@ class Rig:
 		var path := _dir.path_join("%s_shots.png" % String(step.get("name", "shots")))
 		sheet.save_png(path)
 		_log("shots: rows %s -> %s" % [str(configs.map(func(c): return c.name)), path])
+
+	## The column layout (card foliagelight), `cols`: [w, h, x, y]: one strip, a column per config,
+	## each the w x h crop at 1:1 from (x, y) of the world viewport, with a 4 px dark gutter.
+	## Saved as <dir>/<name>_cols.png; `stack` joins strips into one sheet.
+	func _shots_cols(configs: Array) -> void:
+		var c: Array = step.cols
+		var w := int(c[0])
+		var h := int(c[1])
+		var gutter := 4
+		var strip := Image.create(
+			w * configs.size() + gutter * (configs.size() - 1), h, false, Image.FORMAT_RGBA8
+		)
+		strip.fill(Color(0.08, 0.08, 0.08))
+		if step.has("eye"):
+			# `eye`: {at: [x, z], yaw, pitch}: the street view at that ground point, entered with the
+			# built materials on so the eye's antialiasing swap sees them.
+			_apply({})
+			var e: Dictionary = step.eye
+			var cc := gm.get_camera_controller()
+			cc.set_view_mode(cc.eye)
+			cc.eye.frame_ground(Vector2(float(e.at[0]), float(e.at[1])), 0.0)
+			cc.finish_zoom()
+			await _frames(40)
+			cc.set_yaw_now(float(e.get("yaw", 0.0)))
+			cc.set_pitch_now(float(e.get("pitch", 0.0)))
+			await _frames(30)
+		for col in configs.size():
+			_apply(configs[col])
+			await _frames(int(step.get("settle", 20)))
+			await RenderingServer.frame_post_draw
+			var img := gm.world_viewport.get_texture().get_image()
+			img.convert(Image.FORMAT_RGBA8)
+			strip.blit_rect(img, Rect2i(int(c[2]), int(c[3]), w, h), Vector2i(col * (w + gutter), 0))
+		var path := _dir.path_join("%s_cols.png" % String(step.get("name", "shots")))
+		strip.save_png(path)
+		_log("shots: cols %s -> %s" % [str(configs.map(func(x): return x.name)), path])
 
 	# ---- overdraw ----
 

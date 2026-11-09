@@ -109,7 +109,9 @@ func test_apply_material_replaces_the_surface_material_with_the_wind_shader() ->
 
 	var wind_material := mesh.surface_get_material(0) as ShaderMaterial
 	assert_not_null(wind_material)
-	assert_eq(wind_material.shader, WindFoliage.get_shader())
+	# Ground cover (grass, not a flower) draws on the lean ground variant
+	# (test_wind_foliage_ground.gd); the textures and the preset reach it as on the plain one.
+	assert_eq(wind_material.shader, WindFoliage.get_shader_ground())
 	assert_eq(wind_material.get_shader_parameter("albedo_texture"), albedo)
 	assert_eq(wind_material.get_shader_parameter("orm_texture"), orm)
 	var grass_preset: Dictionary = WindFoliage.PRESETS["grass"]

@@ -539,7 +539,9 @@ void apply_wind_foliage_pbr(
 	out float out_metallic,
 	out vec3 out_normal_map
 ) {
+#ifndef FOLIAGE_GROUND_LEAN
 	apply_canopy_fade(rest_vertex_view, inv_view_matrix, wind, frag_coord);
+#endif
 	vec4 albedo_sample = texture(albedo_texture, uv);
 	out_albedo = albedo_sample.rgb;
 	out_alpha = albedo_sample.a;
@@ -555,6 +557,14 @@ void apply_wind_foliage_pbr(
 		inv_view_matrix, projection_matrix, normal, rest_vertex_view, out_albedo, out_alpha);
 #endif
 
+#ifdef FOLIAGE_GROUND_LEAN
+	// The ground-cover variant (wind_foliage_main.gdshaderinc FOLIAGE_GROUND_LEAN): no ORM or
+	// normal map fetch; a rough, non-metallic card.
+	out_ao = 1.0;
+	out_roughness = 1.0;
+	out_metallic = 0.0;
+	out_normal_map = vec3(0.0);
+#else
 	vec3 orm = texture(orm_texture, uv).rgb;
 	out_ao = mix(1.0, orm.r, baked_ao_strength);
 #ifdef FOLIAGE_PAINTED_LIGHT
@@ -571,6 +581,7 @@ void apply_wind_foliage_pbr(
 	} else {
 		out_normal_map = vec3(0.0);
 	}
+#endif
 
 	vec3 world_normal = mat3(inv_view_matrix) * normal;
 	apply_occlusion_fade(

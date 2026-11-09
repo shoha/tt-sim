@@ -4830,6 +4830,67 @@ Avatar 500 ran while the gate's GUT shards loaded the CPU: totals are not usable
   anchored to the orthographic camera's view plane in world units, so pans and zooms need no rebuild
   (only rotation and token moves); and a cached per-token collect.
 
+## Ground-cover lighting (topic perfaudit, card foliagelight)
+
+Ground cover (the wind category "grass" except flowers: grass cards, sprig clumps, litter) draws
+on its own lean variant, `shaders/wind_foliage_ground.gdshader` and its no-AA twin
+(`FOLIAGE_GROUND_LEAN` in `wind_foliage_main.gdshaderinc`; picked by `WindFoliage.is_ground_cover`
+in `apply_material`, kept across the antialiasing swap by `META_GROUND`). Lambert, no specular
+lobe, no ORM or normal map fetch, no backlight, and none of the canopy fades' inputs (rest
+position, authored wind phase, eye light). Kept: the sun and its cast shadow, the ambient and SSAO,
+the base darkening, the ground look's tuft colour and the eye view's near grass. The cards'
+normals all point up and they carry no ORM or normal map, so the dropped terms showed nothing.
+
+Measured on a filled 320 ft map (temperate forest, seed 1234, valley), RTX 3080, 1920x1080,
+the player's settings (MSAA off, SSAO on, lo-fi on, shadow High), in-run A/B, 6 rounds (first
+dropped), `--gpu-profile`, medians [range] of the world viewport's GPU ms, delta against ref.
+Variants applied to the ground class only through the foliage probe's `swap` key
+(`tools/render_jobs/probes/foliage_perf.gd`: each material copied onto the variant shader):
+
+| Variant (round 2) | Home (ref 5.35) | Zoom 20 (ref 6.93) | Look at 1:1 |
+|---|---|---|---|
+| ref again (noise) | +0.015 | -0.014 | - |
+| unshaded albedo only (floor) | -0.445 | -0.839 | - |
+| A: Lambert, no specular, no ORM / normal map | -0.213 | -0.305 | same as current |
+| B: A with `vertex_lighting` | -0.103 | -0.230 | same as current |
+| C: unshaded, one tone per tuft from the sun | -0.262 | -0.446 | fails: loses every cast shadow, flat lime |
+| D: A plus no canopy-fade inputs (shipped) | -0.267 | -0.521 | same as current |
+| D on flowers too | -0.263 | -0.508 | - |
+
+Round 1 split the lean light: received shadows off saved 0.007 / 0.05 ms more than A, the
+ambient off 0.012 / 0.04 more, so the light itself is cheap; the saving is the ORM fetch (it feeds
+the prepass's normal-roughness buffer for SSAO: A's prepass is 0.08 / 0.18 ms shorter), the
+specular lobe and, for D, the varyings and vertex work the canopy fades need. Vertex lighting
+(B) loses to A: its opaque pass is no cheaper than the current one at zoom 20 (2.075 vs 2.064
+ms), since a 12-triangle card has as many vertices as it has lit fragments at that zoom.
+
+The swap itself carries an offset, so the shipped number comes from a run with copies on both
+sides (round 4, after merging main with the occlusion fade tiles; ref is the shipped build):
+
+| Round 4 | Home (ref 5.06) | Zoom 20 (ref 6.63) |
+|---|---|---|
+| ref again (noise) | +0.019 | +0.009 |
+| copies on the old shader | +0.054 | +0.178 |
+| copies on the ground shader | -0.126 | -0.363 |
+
+The ground shader saves 0.180 ms at home and 0.541 ms at zoom 20 against the old one, copy
+against copy (0.18 / 0.54 ms of a 5.1 / 6.8 ms frame); about a third of that on a default map.
+The copies themselves run 0.13 / 0.36 ms faster than the built materials of the same shader, for
+a reason not found yet (suspects: a property the copy leaves at its default, such as render
+priority or next pass, or a parameter written to the built materials every frame); round 3's
+direct A/B (built ground shader against copies on the old shader: -0.137 / -0.114) and round 4's
+(-0.054 / -0.178) both fit a 0.18 / 0.54 ms gain less that offset. The offset is a lead for a
+later card: whatever it is costs the built ground cover up to 0.36 ms at zoom 20. Raw tables and
+the contact sheets (columns current, A, B, C, D; rows home, zoom 4, a sun 12 degrees up, the eye
+view) are in the card's handoff folder.
+
+The global shader uniform buffer (`rendering/limits/global_shader_variables/buffer_size`) is
+262,144 slots (4 MB): every instance whose material has an instance uniform (the wind shaders'
+`grow`) takes 16, so the default 65,536 overflowed between 4,000 and 4,500 such instances
+("Too many instances using shader instance variables", measured with MeshInstance3D nodes in a
+SubViewport, as the game draws its world), and a filled 320 ft map has 2,824 scatter nodes.
+At 262,144, 16,000 instances drew with a clean log. `test_project_limits.gd` pins it.
+
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
 What each Shadow quality tier (`directional_soft_shadow_filter_set_quality`) costs, and a "blur"
