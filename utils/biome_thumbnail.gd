@@ -168,7 +168,8 @@ static func bare_strip(
 ## The texture of the picture `paint` (func() -> Image) makes, `size` px, cached as `key`: painted
 ## now, or when `deferred` a placeholder (the low sky, the corners rounded) that SurfaceWait.later
 ## repaints, the picture cached once painted (a placeholder never is: a headless renderer drops
-## set_image, and a later caller must get the picture).
+## set_image, and a later caller must get the picture). A placeholder nothing shows any more (its
+## dialog closed first, perhaps with its library) is not painted.
 static func _painted(key: String, paint: Callable, size: Vector2i, deferred: bool) -> Texture2D:
 	if not deferred:
 		_cache[key] = ImageTexture.create_from_image(paint.call())
@@ -177,10 +178,14 @@ static func _painted(key: String, paint: Callable, size: Vector2i, deferred: boo
 	placeholder.fill(ThemeColors.SKY_LOW)
 	_round_corners(placeholder)
 	var shown := ImageTexture.create_from_image(placeholder)
+	var held: WeakRef = weakref(shown)
 	load(SurfaceStore.SURFACE_WAIT).later(
 		func() -> void:
+			var still := held.get_ref() as ImageTexture
+			if still == null:
+				return
 			var picture: Image = paint.call()
-			shown.set_image(picture)
+			still.set_image(picture)
 			if not _cache.has(key):
 				_cache[key] = ImageTexture.create_from_image(picture)
 	)
