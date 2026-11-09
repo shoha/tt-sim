@@ -17,12 +17,16 @@ extends RefCounted
 ## and "settled" (the end of the last frame over HITCH_MS in that span), so work moved past the
 ## first frame still shows up as a hitch.
 ##
+## `--boot-trace-map` then opens a new map and rebuilds it (first_map_ms, second_map_ms), and
+## `--boot-trace-precompile` loads the on-demand scripts before the title settles, so the two
+## together show what the on-demand doors moved from the start-up into the first map.
 ## At the end it prints the timeline and appends one JSON line to user://boot_trace.jsonl;
 ## `--boot-trace-quit` then quits, for scripted rounds (tools/render_jobs/local or a loop).
 
 const SETTLE_S := 3.0
 const HITCH_MS := 100.0
 const LOG_PATH := "user://boot_trace.jsonl"
+const MAP_TIMEOUT_S := 120
 
 static var enabled: bool = _detect()
 static var _marks: Array[Array] = []
@@ -51,6 +55,8 @@ static func title_ready(tree: SceneTree) -> void:
 	if not enabled or _watching:
 		return
 	mark("title _ready done")
+	if OS.get_cmdline_user_args().has("--boot-trace-precompile"):
+		_precompile()
 	_watching = true
 	_title_at_us = Time.get_ticks_usec()
 	_last_us = _title_at_us
@@ -82,11 +88,63 @@ static func _on_frame(tree: SceneTree) -> void:
 	_finish(tree)
 
 
+## `--boot-trace-precompile`: loads what the start-up leaves to first use (OnDemand,
+## StructureProcgen), as the start-up compiled it before those doors: an A/B of what moved from
+## the boot into the first map.
+static func _precompile() -> void:
+	for path: String in [
+		OnDemand.BIOME_DESIGNER_HOST,
+		OnDemand.LIBRARY_MANAGER,
+		OnDemand.BIOME_DESIGNER_PICKER,
+		OnDemand.BIOME_DESIGNER_ENTRY,
+		OnDemand.NEW_MAP_DIALOG,
+		OnDemand.GRAPHICS_WARMUP_SCREEN,
+		StructureProcgen.STRUCTURE_REGISTRY,
+		StructureProcgen.ROW_GEN,
+		StructureProcgen.ROW_NODE,
+	]:
+		ResourceLoader.load(path)
+	mark("precompiled the on-demand scripts")
+
+
+## `--boot-trace-map`: after the title settles, opens a new map (the new-map dialog's default
+## spec, seed 7) as the player would, then rebuilds it in place (a warm second open), timing both:
+## first_map_ms and second_map_ms. Gives up after MAP_TIMEOUT_S.
+static func _maps(tree: SceneTree) -> Dictionary:
+	var root: Node = tree.current_scene
+	var dialog: Node = OnDemand.new_map_dialog({"seed": 7}, func(_spec: Dictionary) -> void: pass)
+	root.add_child(dialog)
+	await tree.process_frame
+	var spec: Dictionary = dialog.current_spec()
+	dialog.queue_free()
+	await tree.process_frame
+	var out := {}
+	var started := Time.get_ticks_usec()
+	mark("first map: open requested")
+	root.call("_begin_authoring", {"level": null, "new_map": spec, "return_to": &"title"})
+	var controller: Node = root.get("_authoring_controller")
+	while controller != null and not bool(controller.get("_is_open")):
+		if Time.get_ticks_usec() - started > MAP_TIMEOUT_S * 1000000:
+			mark("first map: timed out")
+			return out
+		await tree.process_frame
+	out["first_map_ms"] = snappedf((Time.get_ticks_usec() - started) / 1000.0, 0.1)
+	mark("first map: open")
+	started = Time.get_ticks_usec()
+	await controller.call("reopen_async")
+	out["second_map_ms"] = snappedf((Time.get_ticks_usec() - started) / 1000.0, 0.1)
+	mark("second map (rebuilt in place): open")
+	return out
+
+
 static func _finish(tree: SceneTree) -> void:
 	if _settled_us == 0:
 		_settled_us = _marks[-1][1]
 	mark("settled (last frame over %d ms)" % int(HITCH_MS))
 	_marks[-1][1] = _settled_us
+	var maps := {}
+	if OS.get_cmdline_user_args().has("--boot-trace-map"):
+		maps = await _maps(tree)
 	var rows: Array[Dictionary] = []
 	var prev_us := 0
 	print("boot_trace: %d marks, worst frame after the title %.1f ms" % [_marks.size(), _worst_ms])
@@ -108,6 +166,9 @@ static func _finish(tree: SceneTree) -> void:
 		"worst_frame_ms": snappedf(_worst_ms, 0.1),
 		"marks": rows,
 	}
+	line.merge(maps)
+	for key: String in maps:
+		print("boot_trace: %s %.1f" % [key, maps[key]])
 	var f := FileAccess.open(LOG_PATH, FileAccess.READ_WRITE)
 	if f == null:
 		f = FileAccess.open(LOG_PATH, FileAccess.WRITE)
