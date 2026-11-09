@@ -219,6 +219,7 @@ func test_three_biomes_and_a_burnt_patch_draw_every_accent() -> void:
 	assert_true(drawn >= 6, "a crowded map: %d accents" % drawn)
 	assert_true(layers.has("ash"), "the painted ash")
 	assert_true(layers.has("dirt"), "the burnt forest's dirt accent (dropped by the slot table)")
+	assert_eq(AuthoredTerrain.layer_surfaces(doc), layers, "the planned layers are the bound ones")
 
 
 func test_a_reserve_fills_only_the_capacity_step() -> void:
@@ -260,6 +261,8 @@ func test_the_first_burn_binds_no_new_layer() -> void:
 	var bound := terrain.ground_layers()
 	for surface in reserved:
 		assert_true(bound.has(surface), "%s bound at load: %s" % [surface, bound])
+	# What a load bakes ahead is exactly what the build bound (sysbake).
+	assert_eq(AuthoredTerrain.layer_surfaces(doc), bound, "the planned layers are the bound ones")
 	var albedo: Texture2DArray = terrain.layer_binding().arrays.textures.albedo
 	# The fire's change: the burnt biome over a patch, then the ash (TerrainEvents' two strokes).
 	doc.biome_ids.append(FireSweep.burnt_biome())

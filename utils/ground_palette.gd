@@ -19,35 +19,7 @@ static func texture_paths(
 	root: String = PaletteLibrary.DEFAULT_ROOT,
 	extra: PackedStringArray = PackedStringArray()
 ) -> PackedStringArray:
-	return surface_texture_paths(surface_names(doc, root, extra), root)
-
-
-## The resource paths of the maps of palette surfaces `names` that the editor imported (a
-## library surface has none: SurfaceStore bakes it), each once.
-static func surface_texture_paths(
-	names: PackedStringArray, root: String = PaletteLibrary.DEFAULT_ROOT
-) -> PackedStringArray:
 	var surfaces := PaletteLibrary.surfaces(root)
-	var paths := PackedStringArray()
-	for surface_name in names:
-		var surface: Dictionary = surfaces.get(surface_name, {})
-		for key in AuthoredTerrain.LAYER_MAPS:
-			var relative: Variant = surface.get(key, "")
-			if relative is String and relative != "":
-				var path := root.path_join(relative)
-				if not path in paths and ResourceLoader.exists(path):
-					paths.append(path)
-	return paths
-
-
-## The palette surfaces whose maps AuthoredTerrain.build() binds for `doc` (see texture_paths),
-## each once, "" left out: what a load bakes ahead (SurfaceStore.prebake) or loads on background
-## threads.
-static func surface_names(
-	doc: MapDocument,
-	root: String = PaletteLibrary.DEFAULT_ROOT,
-	extra: PackedStringArray = PackedStringArray()
-) -> PackedStringArray:
 	var names := [doc.base_surface]
 	names.append_array(Array(extra))
 	names.append_array(Array(base_rule_surfaces(doc.base_surface, root)))
@@ -65,11 +37,16 @@ static func surface_names(
 		for key in keys:
 			names.append(biome.get(key, ""))
 		names.append_array(GroundAccents.surface_names(biome.get("ground_accents", [])))
-	var out := PackedStringArray()
-	for surface_name: Variant in names:
-		if surface_name is String and surface_name != "" and not surface_name in out:
-			out.append(surface_name)
-	return out
+	var paths := PackedStringArray()
+	for surface_name in names:
+		var surface: Dictionary = surfaces.get(surface_name, {})
+		for key in AuthoredTerrain.LAYER_MAPS:
+			var relative: Variant = surface.get(key, "")
+			if relative is String and relative != "":
+				var path := root.path_join(relative)
+				if not path in paths and ResourceLoader.exists(path):
+					paths.append(path)
+	return paths
 
 
 ## The cliff and scree surfaces [cliff, scree] that dress base surface `base` where no

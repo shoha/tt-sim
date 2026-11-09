@@ -179,17 +179,20 @@ static func create(
 static func texture_paths(
 	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> PackedStringArray:
-	return GroundPalette.surface_texture_paths(surface_names(doc, root), root)
-
-
-## The palette surfaces build() binds for `doc`, the fire's reserved ones included: what a load
-## bakes ahead (SurfaceStore.prebake) and whose imported maps texture_paths() names.
-static func surface_names(
-	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT
-) -> PackedStringArray:
-	return GroundPalette.surface_names(
+	return GroundPalette.texture_paths(
 		doc, root, fire_surfaces(doc, root, not doc.water_bodies.is_empty())
 	)
+
+
+## The palette surfaces build() will bind as ground layers for `doc`
+## (GroundLayerBinding.planned_layers: the map's own, then the fire's reserved ones the arrays'
+## capacity step holds): what a load bakes ahead (SurfaceStore.prebake). Water counts from the
+## water bodies too, since the wet dressing that decides it in build() may not be computed yet.
+static func layer_surfaces(
+	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT
+) -> PackedStringArray:
+	var water := not doc.water_bodies.is_empty() or not doc.water_dressing.is_empty()
+	return GroundLayerBinding.planned_layers(doc, root, water, fire_surfaces(doc, root, water))
 
 
 ## The surfaces a fire's change brings to `doc` at once (FireSweep.plan_for: the palette's

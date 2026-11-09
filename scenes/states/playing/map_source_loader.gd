@@ -347,11 +347,11 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	# Under the headless dummy renderer the material loads them in place instead
 	# (GlbUtils.threaded_loads_safe).
 	var threaded := GlbUtils.threaded_loads_safe()
-	var surfaces := AuthoredTerrain.surface_names(doc)
-	# A library surface's maps bake on the prebake lane meanwhile (a cold cache baked them in
-	# AuthoredTerrain.create's frame: 2.4 to 2.9 s, perfaudit sysopen); the load waits for them.
-	SurfaceStore.prebake(surfaces)
-	var paths := GroundPalette.surface_texture_paths(surfaces)
+	# The ground layers' library surface maps bake on the prebake lane meanwhile (a cold cache
+	# baked them in AuthoredTerrain.create's frame: 2.4 to 2.9 s, perfaudit sysopen); the load
+	# waits for them.
+	SurfaceStore.prebake(AuthoredTerrain.layer_surfaces(doc))
+	var paths := AuthoredTerrain.texture_paths(doc)
 	paths.append_array(AuthoredCrossings.texture_paths(doc))
 	paths.append_array(AuthoredWalls.texture_paths(doc))
 	paths.append_array(AuthoredStructures.texture_paths(doc))
