@@ -2,9 +2,10 @@ class_name AuthoredTerrain
 extends Node3D
 
 ## The ground of a map authored in tt-sim, built from a MapDocument: one MeshInstance3D per
-## 10 m chunk (ScatterChunker cells, so sculpting and scatter regeneration share keys), one
-## StaticBody3D with a HeightMapShape3D for every terrain raycast, and one ground
-## ShaderMaterial that tiles the document's base_surface from the palette.
+## 10 m chunk (ScatterChunker cells, so sculpting and scatter regeneration share keys), the
+## collision for every terrain raycast (TerrainCollision: square HeightMapShape3D tiles, one
+## StaticBody3D each), and one ground ShaderMaterial that tiles the document's base_surface from
+## the palette.
 ##
 ## The geometry rules (which samples a chunk owns, shared border vertices, normals across
 ## chunk borders, the collision transform) are pure functions in TerrainMeshBuilder; this
@@ -12,9 +13,9 @@ extends Node3D
 ##
 ## Collision sits on default layer 1 / mask 1 with input_ray_pickable off, exactly like the
 ## StaticBody3Ds GlbUtils makes for a Blender-made map, so token drag, the drop indicator,
-## DragPlaceController and MeasureTool all hit it unchanged. The shape is scaled on the
-## body by the document's real sample step (see TerrainMeshBuilder.collision_transform), so
-## every sample lands on its document world position.
+## DragPlaceController and MeasureTool all hit it unchanged. The tiles are scaled by the
+## document's real sample step (see TerrainMeshBuilder.collision_transform), so every sample
+## lands on its document world position.
 ##
 ## Sculpting (phase 3) edits doc.heights in place and hands the changed sample rectangle to
 ## queue_heights(). process_heights() then brings the chunks up to date within a
@@ -23,9 +24,9 @@ extends Node3D
 ## TerrainMeshBuilder.chunk_vertex_mirror), which is several times cheaper than rebuilding
 ## whole chunks (docs/PERFORMANCE.md "Sculpting"); after settle_heights() (stroke end, undo)
 ## it rebuilds each edited chunk once more so the mesh's own AABB, which the bounds walks
-## read and an in-place update cannot change, is exact again. update_collision() pushes the
-## heights into the collision shape (about 0.4 ms for a 200 ft map); refresh_skirt()
-## follows an edit on the map edge.
+## read and an in-place update cannot change, is exact again. update_collision_region() pushes
+## the heights of an edit into the collision tiles it touched (update_collision() into all of
+## them); refresh_skirt() follows an edit on the map edge.
 ##
 ## Ground layers (ground layers card G3; phase 3's eight-slot table before it). Every surface
 ## the map uses is a layer of the ground's Texture2DArrays, the base at layer 0, and the
@@ -99,8 +100,7 @@ var height_version: int = 0  ## Bumped per height texture refresh (GroundHeightF
 
 var _material: ShaderMaterial = null
 var _chunks: Dictionary[Vector2i, MeshInstance3D] = {}
-var _body: StaticBody3D = null
-var _shape: HeightMapShape3D = null
+var _collision: TerrainCollision = null
 ## The ground's layers, index maps, routing and broad edge.
 var _layers := GroundLayerBinding.new()
 ## The wet dressing texture (MapDocument.water_dressing; WaterDressing), null without water.
@@ -245,7 +245,7 @@ func build(
 	_prepared_chunks = prepared.get(AuthoredLoadPrep.CHUNKS, {}).duplicate()
 	if with_chunks:
 		rebuild_chunks(TerrainMeshBuilder.chunk_cells(doc))
-	_build_collision()
+	update_collision()
 	_build_skirt(prepared.get(AuthoredLoadPrep.SKIRT, {}))
 	_refresh_height_texture()
 	_sync_ground_look(true)
@@ -574,8 +574,9 @@ func get_chunk(cell: Vector2i) -> MeshInstance3D:
 	return _chunks.get(cell, null)
 
 
-func get_collision_body() -> StaticBody3D:
-	return _body
+## The collision's tile bodies (TerrainCollision), empty before build().
+func get_collision_bodies() -> Array[StaticBody3D]:
+	return _collision.bodies() if _collision != null else [] as Array[StaticBody3D]
 
 
 ## Rebuilds the meshes of the given chunk cells from the document's current heights,
@@ -845,25 +846,32 @@ static func chunk_shadow_casting(mesh: Mesh) -> GeometryInstance3D.ShadowCasting
 	return GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
 
-## Pushes the document's current heights into the collision shape.
+## Pushes the document's current heights into every collision tile (TerrainCollision).
 func update_collision() -> void:
-	if _shape == null:
-		_build_collision()
-		return
-	_shape.map_width = document.samples_x()
-	_shape.map_depth = document.samples_z()
-	_shape.map_data = TerrainMeshBuilder.collision_heights(document)
-	_body.transform = TerrainMeshBuilder.collision_transform(document)
+	if _collision == null:
+		_collision = TerrainCollision.new()
+		_collision.name = COLLISION_NAME
+		add_child(_collision)
+	_collision.build(document)
 
 
-func _build_collision() -> void:
-	if _body == null:
-		_body = StaticBody3D.new()
-		_body.name = COLLISION_NAME
-		_body.input_ray_pickable = false
-		var collision := CollisionShape3D.new()
-		_shape = HeightMapShape3D.new()
-		collision.shape = _shape
-		_body.add_child(collision)
-		add_child(_body)
-	update_collision()
+## Marks the collision tiles holding any sample of `sample_rect` (what a height edit changed)
+## for flush_collision().
+func mark_collision(sample_rect: Rect2i) -> void:
+	if _collision != null:
+		_collision.mark(sample_rect)
+
+
+## Pushes the document's heights into the marked collision tiles (every tile before the first
+## build or after the grid changed size). Returns the tiles rebuilt.
+func flush_collision() -> int:
+	if _collision == null:
+		update_collision()
+		return _collision.tile_count()
+	return _collision.flush(document)
+
+
+## mark_collision(`sample_rect`), then flush_collision().
+func update_collision_region(sample_rect: Rect2i) -> int:
+	mark_collision(sample_rect)
+	return flush_collision()

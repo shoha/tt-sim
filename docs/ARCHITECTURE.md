@@ -1344,10 +1344,12 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   edge; neighbours share that column bit for bit. Normals are central differences on the
   whole grid, so shared vertices light identically. The pure geometry is
   `TerrainMeshBuilder` (`utils/terrain_mesh_builder.gd`).
-- **Collision:** one `StaticBody3D` (layer 1 / mask 1, `input_ray_pickable = false`, like
-  GLB map bodies) with a `HeightMapShape3D` of the full grid, the body scaled by the real
-  sample step on X and Z so every sample lands on its document position (the shape is
-  centred like the document). Jolt triangulates each quad on the same diagonal as the mesh.
+- **Collision:** `TerrainCollision` (card authcollide, 2026-11-08): square `HeightMapShape3D`
+  tiles of 32 quads, one `StaticBody3D` each (layer 1 / mask 1, `input_ray_pickable = false`,
+  like GLB map bodies), under a node scaled by the real sample step on X and Z so every sample
+  lands on its document position. Tiles share border samples and the last on an axis ends on
+  the edge, overlapping its neighbour; square because Jolt makes a heightfield only of a square
+  shape. Jolt triangulates each quad on the same diagonal as the mesh.
 - **Sculpting (phase 3, P3-3a; the Sculpt tool and tier profile P3-5):** edit `doc.heights`
   in place (a `HeightStroke`, see "Authoring Flow" Brushes), then `queue_heights(sample_rect)` and `process_heights(budget_usec)`
   each frame. Live, a chunk is updated in place: `TerrainMeshBuilder.chunk_vertex_mirror()`
@@ -1364,14 +1366,14 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   lowest and highest point from the chunks (never narrower than the truth mid-stroke).
   An edit touching the map edge refreshes the skirt's geometry (`refresh_skirt()`, same
   node and material, no duplicate per call; in place for the boundary samples touched,
-  over a CPU copy of its vertex stream, `TerrainMeshBuilder.skirt_vertex_mirror`). The collision is one `HeightMapShape3D` as
-  before and is not touched mid-stroke: `update_collision()` rebuilds the whole
-  heightfield (2.3 ms on a 200 ft map in the running game), which the editor does once
-  the stroke ends; mid-stroke the brush finds the ground it is shaping with
-  `TerrainMeshBuilder.raycast()`, a CPU walk of the same triangles (see "Authoring Flow").
-  Splitting the collision per chunk was measured and rejected: Jolt rebuilds an edited
-  chunk's heightfield for about 0.45 ms however the shapes are grouped, 1.9 ms per frame
-  for a 4 m brush and 3.8 ms for a 12 m one (`PERFORMANCE.md` "Sculpting").
+  over a CPU copy of its vertex stream, `TerrainMeshBuilder.skirt_vertex_mirror`). The
+  collision is not touched mid-stroke: each edit marks the tiles holding its samples
+  (`mark_collision`) and the editor refills only those once the stroke ends
+  (`flush_collision`, 0.3-0.95 ms at any map size where the whole grid took 6.9 ms at 320 ft);
+  mid-stroke the brush finds the ground it is shaping with `TerrainMeshBuilder.raycast()`, a
+  CPU walk of the same triangles (see "Authoring Flow"). P3-3a had rejected per-chunk shapes
+  at about 0.45 ms per chunk; the 2026-11-08 tiles measured 0.05-0.07 ms each
+  (`PERFORMANCE.md` "Sculpting" and "Collision tiles").
 - **Shadows:** a flat chunk (height span <= `FLAT_CHUNK_M`) casts no shadow
   (`chunk_shadow_casting()`); it could only shadow itself, and that self-shadowing darkened
   flat ground about 10 % in steps along the cascade splits (a horizontal line across a

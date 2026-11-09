@@ -43,6 +43,8 @@ const LABELS := {
 ## Microseconds of the last frame of height work, by part, and rows moved, for measurement.
 var last_terrain_usec: int = 0
 var last_collision_usec: int = 0
+## Collision tiles the last collision update rebuilt (kept until the next one).
+var last_collision_tiles: int = 0
 var last_snap_usec: int = 0
 var last_snap_rows: int = 0
 
@@ -63,7 +65,8 @@ var _rocks: Dictionary = {}
 ## Props asset id -> _prop_bedding() (cached).
 var _prop_rules: Dictionary = {}
 ## True when heights changed since the collision was last updated (it is updated once no
-## sculpt stroke is in progress; see AuthoringEditor.raycast_ground).
+## sculpt stroke is in progress; see AuthoringEditor.raycast_ground). The terrain keeps which
+## tiles changed (AuthoredTerrain.mark_collision).
 var _collision_dirty: bool = false
 ## False while an undo, a redo or a live edit sets props from its record instead of snapping.
 var _snap_props: bool = true
@@ -206,8 +209,8 @@ func cancel_stroke() -> void:
 		e.set_prop_cell(cell, _prop_start[cell])
 	_snap_start.clear()
 	_prop_start.clear()
-	# The collision was never updated during the stroke, so it already has these heights.
-	_collision_dirty = false
+	# The collision was never updated during the stroke; the tiles it marked are refilled with
+	# the reverted heights (cheap, and right even when tiles were waiting from before the stroke).
 	if rect.has_area() and is_instance_valid(e.terrain):
 		e.terrain.queue_heights(rect)
 	work(true)
@@ -343,6 +346,7 @@ func queue_heights(sample_rect: Rect2i) -> void:
 	# Without a terrain there is no collision to update (nor would it ever be marked clean).
 	if is_instance_valid(e.terrain):
 		e.terrain.queue_heights(sample_rect)
+		e.terrain.mark_collision(sample_rect)
 		_collision_dirty = true
 	var grid := Rect2i(0, 0, doc.samples_x(), doc.samples_z())
 	# A row's height reads its triangle's corners and its normal their neighbours: two samples.
@@ -355,8 +359,8 @@ func queue_heights(sample_rect: Rect2i) -> void:
 
 ## One frame of height work within the budgets (at most once per frame; step() calls it on
 ## frames without a dab so the work drains). `everything` ignores the budgets. Spread over
-## frames, the collision (the whole heightfield: 2.3 ms on a 200 ft map in the running game)
-## waits for a frame the chunks and the snap left free, and a landing for the frame after.
+## frames, the collision (the tiles the edit marked, TerrainCollision: about 0.1 ms each) waits
+## for a frame the chunks and the snap left free, and a landing for the frame after.
 func work(everything: bool = false) -> void:
 	var e := _editor()
 	_worked_frame = Engine.get_process_frames()
@@ -377,7 +381,7 @@ func work(everything: bool = false) -> void:
 		and (everything or not busy)
 	)
 	if collide:
-		e.terrain.update_collision()
+		last_collision_tiles = e.terrain.flush_collision()
 		_collision_dirty = false
 	last_collision_usec = Time.get_ticks_usec() - started
 	_snap(-1 if everything else SNAP_BUDGET_USEC)

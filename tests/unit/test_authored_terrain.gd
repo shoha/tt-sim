@@ -194,10 +194,12 @@ func test_collision_matches_the_document_surface() -> void:
 	var doc := _sine(40)
 	var terrain := AuthoredTerrain.create(doc)
 	add_child_autofree(terrain)
-	var body := terrain.get_collision_body()
-	assert_eq(body.collision_layer, 1, "terrain layer 1, like GLB map bodies")
-	assert_eq(body.collision_mask, 1)
-	assert_false(body.input_ray_pickable, "not pickable, like GLB map bodies")
+	var bodies := terrain.get_collision_bodies()
+	assert_gt(bodies.size(), 1, "a 40-cell map has several collision tiles")
+	for body in bodies:
+		assert_eq(body.collision_layer, 1, "terrain layer 1, like GLB map bodies")
+		assert_eq(body.collision_mask, 1)
+		assert_false(body.input_ray_pickable, "not pickable, like GLB map bodies")
 	await wait_physics_frames(2)
 	var half := doc.extent_m() * 0.5 - Vector2(0.001, 0.001)
 	var points: Array[Vector2] = [
@@ -304,7 +306,7 @@ func test_missing_surface_falls_back_to_a_plain_ground() -> void:
 	assert_eq(
 		terrain.chunk_cells().size(), TerrainMeshBuilder.chunk_cells(doc).size(), "still built"
 	)
-	assert_not_null(terrain.get_collision_body(), "still collidable")
+	assert_false(terrain.get_collision_bodies().is_empty(), "still collidable")
 
 
 func test_skirt_rings_the_map_from_its_boundary_vertices() -> void:
