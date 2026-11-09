@@ -264,3 +264,18 @@ func test_a_client_takes_received_transforms_into_game_state() -> void:
 	assert_eq(got.rotation, Vector3(0.0, 1.5, 0.0))
 	assert_signal_not_emitted(GameState, "token_state_changed", "the mirror is quiet")
 	assert_false(GameState.has_token("gamesync_test_unknown"), "an unknown token is not made")
+
+
+## F-net-7: a single drag transform travels as a one-token TokenTransformPack message.
+func test_a_single_transform_is_packed_as_a_one_token_batch() -> void:
+	var id := "1762650000.123_45678"
+	var bytes := NetworkGameSync.pack_one(
+		id, Vector3(1.0, 2.0, 3.0), Vector3(0.0, 0.5, 0.0), Vector3.ONE
+	)
+	var want := TokenTransformPack.HEADER_BYTES + TokenTransformPack.ENTRY_FIXED_BYTES + id.length()
+	assert_eq(bytes.size(), want, "60 B for a factory id")
+	var decoded := TokenTransformPack.decode(bytes)
+	assert_eq(decoded.problem, "")
+	var batch := TokenTransformPack.to_batch(decoded.transforms)
+	assert_eq(batch[id].position, [1.0, 2.0, 3.0])
+	assert_true(NetworkGameSync.pack_one("", Vector3.ZERO, Vector3.ZERO, Vector3.ONE).is_empty())

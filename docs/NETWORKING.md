@@ -886,7 +886,11 @@ heals within 30 s. Before 2026-11 every tick sent one 128 B transform RPC per to
 f32 position, rotation, scale]`, 37 B plus the id (about 57 B). A drag's batch
 (`NetworkStateSync._flush_pending_transforms` -> `broadcast_transform_batch`, unreliable) uses the
 same layout, split under the MTU (`UNRELIABLE_BYTES`), in place of the Variant batch (180 B per
-token). Both arrive as `transform_batch_received` in the old dictionary shape.
+token). Both arrive as `transform_batch_received` in the old dictionary shape. So does a single
+drag transform since 2026-11-08 (netverify, F-net-7): `broadcast_token_transform` and
+`send_token_transform_to_peer` send a one-token pack (`NetworkGameSync.pack_one`, 63 B with the
+RPC header) through `_rpc_receive_transform_batch` instead of the Variant
+`_rpc_receive_token_transform` (128 B), which nothing sends any more.
 
 Every transform a client receives also goes into its GameState
 (`NetworkGameSync._mirror_transform`, quiet: no `token_state_changed`), for a token not on its board yet as well, so a token built from

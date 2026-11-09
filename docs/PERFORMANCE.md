@@ -4928,8 +4928,17 @@ placement counts matched the wave 1 runs to the byte). Host upload is that times
 Idle host upload at 200 tokens: 12,800 B/s and 100 messages/s per client before, so 12.8 / 38.4 /
 89.6 KB/s and 100 / 300 / 700 messages/s for 1 / 3 / 7 clients; after, 0 between heartbeats and
 157 B/s averaged (one 4.7 KB message per client per 30 s): 0.16 / 0.47 / 1.1 KB/s. The drag
-itself still sends one 128 B transform RPC per dragged token per 0.1 s (F-net-7's packed drag
-path is the remaining step; the batch flush is packed already).
+itself sent one 128 B transform RPC per dragged token per 0.1 s until card netverify (below).
+
+Single drag transforms packed (card netverify, F-net-7, 2026-11-08): the host's immediate send
+and its relay of a client's drag go as a one-token `TokenTransformPack` message through
+`_rpc_receive_transform_batch` (63 B with the RPC header, for a factory id) instead of the Variant
+`_rpc_receive_token_transform` (128 B). Same harness, `--peers=3 --opts=size=100,max_tokens=10`,
+drag of 10 tokens for 5 s with 10 on the board, host to one client: 430 messages 55,040 -> 27,047 B;
+the window (with one heartbeat chunk and one reconcile) 56,327 -> 28,340 B; ENet's own count with
+its headers 60,819 -> 32,824 B in 451 / 450 packets. Per dragged token per client: 1.28 -> 0.63
+KB/s. Message count unchanged (one per token per emit; folding a frame's tokens into one message
+would save only the per-message header).
 
 State size by token kind (`TokenStateWire`, a pure probe with random positions, so less
 compressible than the harness grid): 200 tokens 8.1 KB (identical avatars), 9.2 KB (pack

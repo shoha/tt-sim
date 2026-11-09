@@ -109,21 +109,36 @@ func _process(delta: float) -> void:
 # =============================================================================
 
 
-## Host: send a token's transform to every client (unreliable).
+## Host: send a token's transform to every client (unreliable), packed as a one-token batch
+## (pack_one: about 63 B on the wire against 128 B as the Variant transform RPC, perfaudit
+## F-net-7). Clients get transform_batch_received, as for a batch.
 func broadcast_token_transform(
 	network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
 ) -> void:
-	_rpc_receive_token_transform.rpc(network_id, _to_array(pos), _to_array(rot), _to_array(scl))
+	var bytes := pack_one(network_id, pos, rot, scl)
+	if not bytes.is_empty():
+		_rpc_receive_transform_batch.rpc(bytes)
 
 
-## Host: send a token's transform to one client (unreliable). Relays a client's drag to
-## the other clients.
+## Host: send a token's transform to one client (unreliable, packed as broadcast_token_transform
+## does). Relays a client's drag to the other clients.
 func send_token_transform_to_peer(
 	peer_id: int, network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
 ) -> void:
-	_rpc_receive_token_transform.rpc_id(
-		peer_id, network_id, _to_array(pos), _to_array(rot), _to_array(scl)
+	var bytes := pack_one(network_id, pos, rot, scl)
+	if not bytes.is_empty():
+		_rpc_receive_transform_batch.rpc_id(peer_id, bytes)
+
+
+## One token's transform as a TokenTransformPack message, or empty for an id no message
+## carries (empty, or past TokenTransformPack.MAX_ID_BYTES).
+static func pack_one(
+	network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
+) -> PackedByteArray:
+	var messages := TokenTransformPack.encode(
+		{network_id: TokenTransformPack.floats_of(pos, rot, scl)}
 	)
+	return messages[0] if not messages.is_empty() else PackedByteArray()
 
 
 ## Host: send a batch of queued transforms (network_id -> TokenTransformPack.floats_of) to
@@ -332,7 +347,7 @@ func _rpc_receive_token_transform(
 	var pos := SerializationUtils.array_to_vec3(pos_arr)
 	var rot := SerializationUtils.array_to_vec3(rot_arr)
 	var scl := SerializationUtils.array_to_vec3(scale_arr, Vector3.ONE)
-	GameState.mirror_transform(network_id, pos, rot, scl)
+	_mirror_transform(network_id, pos, rot, scl)
 	token_transform_received.emit(network_id, pos, rot, scl)
 
 
@@ -346,7 +361,22 @@ func _rpc_receive_reconcile(bytes: PackedByteArray) -> void:
 	_emit_transform_pack(bytes)
 
 
-## Decodes a TokenTransformPack message, takes it into GameState (mirror_transform, so a token
+## Takes a transform the host sent (a drag's update, a batch, a reconciliation) into this
+## client's GameState copy of the token, quietly: the board token takes it as its interpolation
+## target, so no token_state_changed. Without it a client's GameState kept each token where its
+## add or the last full state left it until the next heartbeat (netverify: 41 of 100 tokens
+## placed in a burst, up to 30 s), and anything built from GameState meanwhile (a table load's
+## apply_game_state_to_tokens) used those positions. A token GameState does not hold is ignored.
+func _mirror_transform(network_id: String, pos: Vector3, rot: Vector3, scl: Vector3) -> void:
+	var state := GameState.get_token_state(network_id)
+	if state == null:
+		return
+	state.position = pos
+	state.rotation = rot
+	state.scale = scl
+
+
+## Decodes a TokenTransformPack message, takes it into GameState (_mirror_transform, so a token
 ## not yet on this board, or built later from GameState, is where the host has it) and emits it
 ## as transform_batch_received; a refused one is dropped with a warning (the next
 ## reconciliation or heartbeat brings the tokens).
@@ -359,7 +389,7 @@ func _emit_transform_pack(bytes: PackedByteArray) -> void:
 		return
 	for network_id: String in decoded.transforms:
 		var f: PackedFloat32Array = decoded.transforms[network_id]
-		GameState.mirror_transform(
+		_mirror_transform(
 			network_id,
 			Vector3(f[0], f[1], f[2]),
 			Vector3(f[3], f[4], f[5]),
