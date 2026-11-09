@@ -12,7 +12,9 @@ system's map and the rules the code keeps (moved from `AGENTS.md` Key Convention
 | File | Class | Role |
 |------|-------|------|
 | `resources/map_document.gd` | `MapDocument` | The document: geometry, flat `PackedFloat32Array` rows per palette asset id, `PackedByteArray` masks on the height grid; `erase_filter()` |
-| `utils/map_document_io.gd` | `MapDocumentIO` | Reads and writes `map.ttmap`: `write()`, `read()`, `parse()` |
+| `utils/map_document_io.gd` | `MapDocumentIO` | Reads and writes `map.ttmap`: `write()`, `write_snapshot()`, `read()`, `parse()` |
+| `utils/map_document_snapshot.gd` | `MapDocumentSnapshot` | `serialize()` split in two: `capture()` (main thread, copy-on-write copies) and `encode()` (any thread) |
+| `utils/map_document_writer.gd` | `MapDocumentWriter` | One document write at a time on a `WorkerThreadPool` task; `write_atomic()` for side files |
 | `utils/map_surfaces_io.gd` | `MapSurfacesIO` | The painted-surface entries: format 2 read and write, format 1 read and migration |
 | `utils/surface_entries.gd` | `SurfaceEntries` | The entry byte rules: `canonical()`, `from_slots()` (format 1), `read_sample()`, `write_sample()`, `used_slots()` |
 | `resources/level_data.gd` | `LevelData` | `map_document` (`""` or `"map.ttmap"`) beside `map_path`; `has_map()` |
@@ -24,6 +26,23 @@ system's map and the rules the code keeps (moved from `AGENTS.md` Key Convention
 
 - `MapDocumentIO.write()` is atomic via a `.tmp` rename; `read()` and `parse()` return
   `{document, warnings}`.
+- Writing off the main thread (2026-11-09, perfaudit card authsave). `serialize()` is
+  `MapDocumentSnapshot.capture(doc).encode()`. `capture()` runs on the main thread: it checks the
+  geometry, scalars and object lists (water bodies, crossings, walls, structures, settlements),
+  writes their small entries and the manifest (which reads `LibraryRegistry`), and copies every
+  packed array and row dictionary with `duplicate()` / `duplicate(true)`. GDScript shares a
+  packed array between two variables or properties (an assignment is a reference; probed on
+  4.7.2), but `duplicate()` is copy-on-write: 1 us for a 16 MB array, and the live array copies
+  itself on its next write (2 ms for 16 MB), so a capture costs about 0.2-0.3 ms at any map size
+  and no later edit reaches it. `encode()` reads only the snapshot (heights, masks, biomes,
+  surfaces, water grids and rows checks; rows JSON, PNGs, anchors; the caps), so it runs on any
+  thread, and its entries are byte-identical to the one-call serialize it replaced (checked at
+  100 / 200 / 320 ft and on real authoring maps). `MapDocumentWriter` runs `write_snapshot()` (encode,
+  ZIP, rename) on a low-priority pool task, one job at a time, with side files written atomically
+  after the document; `poll()` / `wait()` hand the job back on the main thread, where
+  `MapFileHash.invalidate` runs. Freeing a writer blocks on its job. Authoring's save and
+  autosave use it (`AuthoringSaving`, [authoring.md](authoring.md)); every other caller still
+  writes synchronously through `write()`. Numbers: `docs/PERFORMANCE.md` "Worker saves".
 - The document is untrusted network input. Extend it by adding an entry the reader validates
   with caps before allocating, never by trusting sizes from the archive:
   `ZIPReader.read_file` allocates whatever the central directory claims, and `read()` checks

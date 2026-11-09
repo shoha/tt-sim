@@ -39,6 +39,7 @@ extends RefCounted
 const GROUP := "perfaudit_gpu_rig"
 const HIDE_LAYER := 1 << 19
 const DEFAULT_DIR := "user://render_jobs/perfaudit_gpu"
+const Util := preload("res://tools/render_jobs/probes/perfaudit_gpu_util.gd")
 
 
 static func blocker(base: Node, step: Dictionary) -> String:
@@ -100,6 +101,8 @@ class Rig:
 	var _q := -1
 	var _class_cache := {}
 	var _ground_shaders := {}
+	var _built_shaders := {}
+	var _ground_prios := {}
 
 	## class_of as first seen, before the rig swapped any material (a flat ground override
 	## would otherwise read as "std" and fall out of the ground globs).
@@ -325,18 +328,42 @@ class Rig:
 		_set_foliage_shader(String(cfg.get("fshader", "")))
 		_set_ground_flat(bool(cfg.get("ground_flat", false)))
 		_set_ground_shader(String(cfg.get("gshader", "")))
+		_set_ground_priority(int(cfg.get("gprio", 0)))
 
-	## Every ground chunk's ShaderMaterial (not the skirt) on the shader at `path`, or back.
+	## Every ground material's (chunks and skirt) render_priority, or back to what it was. The
+	## opaque passes sort by priority before shader and material, so it decides whether the ground
+	## draws before or after the foliage in the depth pre-pass.
+	func _set_ground_priority(prio: int) -> void:
+		for m: Material in _ground_prios:
+			m.render_priority = _ground_prios[m]
+		_ground_prios.clear()
+		if prio == 0:
+			return
+		for node in gm.world_viewport.find_children("*", "GeometryInstance3D", true, false):
+			var gi := node as GeometryInstance3D
+			if not _cls(gi).contains("authored_ground") or not gi is MeshInstance3D:
+				continue
+			var m := gi.material_override
+			if m == null:
+				m = (gi as MeshInstance3D).get_active_material(0)
+			if m != null and not _ground_prios.has(m):
+				_ground_prios[m] = m.render_priority
+				m.render_priority = prio
+
+	## Every ground chunk's ShaderMaterial on the shader at `path`, or back (see _define_shader).
 	func _set_ground_shader(path: String) -> void:
 		for m: ShaderMaterial in _ground_shaders:
 			m.shader = _ground_shaders[m]
 		_ground_shaders.clear()
 		if path.is_empty():
 			return
-		var target := load(path) as Shader
+		var target := _define_shader(path) if path.contains("#") else load(path) as Shader
+		# A define spec also swaps the skirt, with GROUND_SKIRT added.
+		var skirt_target := _define_shader(path + ",GROUND_SKIRT") if path.contains("#") else null
 		for node in gm.world_viewport.find_children("*", "GeometryInstance3D", true, false):
 			var gi := node as GeometryInstance3D
-			if not _cls(gi).begins_with("authored_ground_looked"):
+			var on_skirt := skirt_target != null and _cls(gi).begins_with("authored_ground_skirt")
+			if not _cls(gi).begins_with("authored_ground_looked") and not on_skirt:
 				continue
 			var mesh := (gi as MeshInstance3D).mesh if gi is MeshInstance3D else null
 			var m := gi.material_override as ShaderMaterial
@@ -344,7 +371,11 @@ class Rig:
 				m = (gi as MeshInstance3D).get_active_material(0) as ShaderMaterial
 			if m != null and not _ground_shaders.has(m):
 				_ground_shaders[m] = m.shader
-				m.shader = target
+				m.shader = skirt_target if on_skirt else target
+
+	## The opaque ground shader from an include and defines, "res://x.gdshaderinc#A,B" (Util).
+	func _define_shader(spec: String) -> Shader:
+		return Util.define_shader(spec, Util.GROUND_MODE, _built_shaders)
 
 	## Whether `key` matches one of the globs and none of the "!glob" exclusions.
 	func _matches(key: String, patterns: Array) -> bool:
@@ -398,12 +429,22 @@ class Rig:
 				target = WindFoliage.get_shader_debug_unshaded()
 			"cheap":
 				target = WindFoliage.get_shader_debug_cheap_lighting()
+		var only_no_aa := false
+		if kind.contains("#"):
+			# "res://x.gdshaderinc#A,B": the no-AA foliage materials only, on that include with
+			# the defines under the no-AA variant's render mode.
+			only_no_aa = true
+			target = Util.define_shader(kind, Util.FOLIAGE_NO_AA_MODE, _built_shaders)
 		if target == null:
 			for m: ShaderMaterial in _foliage_shaders:
 				m.shader = _foliage_shaders[m]
 			_foliage_shaders.clear()
 			return
 		for m in WindFoliage.collect_foliage_shader_materials(gm.map_container):
+			var orig: Shader = _foliage_shaders.get(m, m.shader)
+			var file := orig.resource_path.get_file() if orig != null else ""
+			if only_no_aa and file != "wind_foliage_no_aa.gdshader":
+				continue
 			if not _foliage_shaders.has(m):
 				_foliage_shaders[m] = m.shader
 			m.shader = target
@@ -850,15 +891,31 @@ class Rig:
 	## {action: "shots", name, sets: [{name, ..knobs}]}: the world viewport at its native size
 	## under each set's knobs, saved as <name>_<set>.png, so a timing can be checked against what
 	## was drawn (and a look change judged).
+	## A set with `diff: "<earlier set>"` is also compared with that set's image: per-channel
+	## 8-bit levels, the max, the mean, the share of channels off by more than 1, 2, 4 and 8
+	## levels, and <name>_<set>_diff.png (the difference times 16) when anything differs.
 	func _shots() -> void:
+		var taken := {}
 		for s: Dictionary in step.get("sets", []):
 			_apply(s)
-			await _frames(20)
+			await _frames(int(s.get("settle", 20)))
 			await RenderingServer.frame_post_draw
 			var img := gm.world_viewport.get_texture().get_image()
+			img.convert(Image.FORMAT_RGB8)
 			var path := _dir.path_join("%s_%s.png" % [step.get("name", "shot"), s.name])
-			img.save_png(path)
+			if bool(s.get("half", false)):
+				# A half-size copy for a before/after pair; the diff stays at full size.
+				var small := img.duplicate() as Image
+				small.resize(img.get_width() / 2, img.get_height() / 2, Image.INTERPOLATE_LANCZOS)
+				small.save_png(path)
+			else:
+				img.save_png(path)
+			taken[String(s.name)] = img
 			_log("shot %s: %s %s" % [s.name, str(img.get_size()), path])
+			if s.has("diff") and taken.has(String(s.diff)):
+				var diff_path := _dir.path_join("%s_%s_diff.png" % [step.get("name", "shot"), s.name])
+				var label := "%s vs %s" % [s.name, s.diff]
+				_log(Util.diff_line(label, taken[String(s.diff)], img, diff_path))
 
 	# ---- overdraw ----
 

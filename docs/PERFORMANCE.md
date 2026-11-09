@@ -4755,6 +4755,85 @@ one adds no draw and no triangle); drift home_end over home 1.016 (per round 1.0
 1348 flower instances in all, 103 within 9 m of the eye, about 60 of which the near grass term would
 have thinned (530 other grass tufts lie within that radius).
 
+## Ground pre-pass (topic perfaudit, card gpuprepass, 2026-11-08)
+
+With SSAO on, Forward+ draws the depth pre-pass in its normal-roughness mode, and the ground's
+NORMAL and ROUGHNESS needed its whole layer blend, so the ground shader ran twice per pixel. Two
+changes (`docs/ARCHITECTURE.md` "Ground lighting through light()"): the ground shades through a
+`light()` fed by fragment-to-light varyings (the pre-pass sees the interpolated normal and a
+wet-line roughness), and the ground and skirt materials sort after the foliage
+(`render_priority` 1), so the pre-pass runs the ground's fragment only where no card covers it.
+
+**How.** RTX 3080, nvidia-smi idle before each run (0-5 %, P8, 42-43 C), Vulkan Forward+, 4.7.2
+debug, the perfaudit_gpu render-job probe (`tools/render_jobs/probes/perfaudit_gpu.gd`) with
+`--gpu-profile`: in-run A/B, 6 rounds (first discarded), order rotated and reversed, 20 settle +
+60 measured frames per configuration, median of the round medians [range]; 100 ft
+temperate_forest_summer_s1, valley, seed 1234; SSAO on, lo-fi on, shadows High, MSAA off; 1440p
+and 4K = the world viewport resized in-run. "Before" is the old path rebuilt in-run
+(`gshader` spec `authored_ground.gdshaderinc#GROUND_LOOK,GROUND_PREPASS_FULL`, `gprio` -1 for the
+old order). Noise floor: the same configuration twice in a run, 0.002 ms; drift 0.99-1.07.
+
+Engine behaviour (probe shader: a 192-step hash loop feeding one output, swapped onto the
+ground; pre-pass ms at home with SSAO): none 0.57, ALBEDO 0.58, AO 0.57, light() varying 0.57,
+BENT_NORMAL_MAP 0.56, NORMAL 1.00, ROUGHNESS 0.99, NORMAL_MAP 0.99; SSAO off all 0.44. The loop
+cost 0.30 ms in the opaque pass in every case.
+
+| Committed vs before, home | 1080p | 1440p | 4K |
+|---|---|---|---|
+| Total, SSAO on | 3.94 [3.60-4.02] -> 3.27 [2.96-3.28] (-0.68) | 6.69 -> 5.42 (-1.27) | 13.61 -> 11.11 (-2.51) |
+| Depth pre-pass | 1.41 -> 0.72 | 2.50 -> 1.21 | 5.00 -> 2.55 |
+| Opaque pass | 2.06 -> 2.07 | 3.43 -> 3.49 | 6.79 -> 6.82 |
+| Total, SSAO off | 2.81 -> 2.82 (noise) | | |
+
+The two parts, each in-run against its own control (shader varyings: both arms rebuilt in-run;
+priority: both on the shipped shader):
+
+| Part | View | 1080p | 1440p | 4K |
+|---|---|---|---|---|
+| light() varyings | home | 3.67 -> 3.30 (-0.38) | 6.29 -> 5.50 (-0.79) | 12.80 -> 11.31 (-1.49) |
+| light() varyings | close (zoom 4) | 2.80 -> 2.38 (-0.41) | 4.57 -> 3.85 (-0.72) | 9.72 -> 8.06 (-1.66) |
+| light() varyings | steep face (zoom 8) | 3.55 -> 3.13 (-0.42) | 6.43 -> 5.47 (-0.97) | 12.74 -> 11.13 (-1.61) |
+| light() varyings, SSAO off | all three | -0.02 to +0.05 (noise) | -0.04 to -0.05 | -0.17 to +0.01 |
+| render_priority 1 | home | 3.87 -> 3.56 (-0.33; pre-pass 1.39 -> 1.09) | | |
+
+Look (8-bit levels, 1920x1080, foliage hidden so wind does not count): the light() replica with
+the detailed NORMAL still written differs from the engine's lighting by at most 1 level (mean
+0.02-0.06). The committed change: home max 12, mean 0.31, 0.6 % of channels over 2 levels; zoom 4
+max 2, mean 0.08; steep face max 25, mean 0.40-0.48, 0.5 % over 4 (the sky fill on rock-ledge lips,
+in blue). SSAO's part is nil (the same diff with SSAO off); about two thirds of the mean is the
+constant ambient roughness (0.85 in that run; the full roughness in the pre-pass gives mean 0.10
+home, 0.18 steep), the max is the ambient on the interpolated normal. Half-size before/after pairs
+at home and the steep face show no difference to the eye. render_priority is pixel-identical (max 0).
+
+Verification run (a blaze laid across the map centre; flames, foliage and particles hidden;
+`Engine.time_scale` 0 and the fire lights frozen, so the same configuration twice differs by 0 on
+every view). The light() replica with the normal still written is within 1 level under the fire's
+omni lights, the low sunset sun and the set night sun as under the day sun, so fire light needs no
+change. Mean levels [max] of the shipped path against the old one, by AMBIENT_ROUGHNESS:
+
+| View | 0.85 | 0.90 (shipped) | 0.95 | 1.0 |
+|---|---|---|---|---|
+| day, home | 0.32 [12] | 0.19 [12] | 0.30 [13] | 0.57 [13] |
+| outdoor_sunset, sun 19 h, home | 0.93 [15] | 0.61 [16] | 0.74 [17] | 1.22 [17] |
+| outdoor_night, sun 23 h, home | 0.40 [12] | 0.23 [13] | 0.35 [14] | 0.67 [14] |
+| outdoor_night, zoom 8 on the fire | 0.53 [12] | 0.35 [10] | 0.50 [11] | 0.94 [12] |
+| steep face, zoom 8 | 0.43 [25] | 0.30 [24] | 0.41 [23] | 0.65 [23] |
+| eye view, MSAA 4x | 0.26 [11] | | 0.21 [13] | |
+
+0.90 has the lowest mean everywhere; its share over 2 levels is within 1 point of 0.85's (steep
+2.6 % against 1.7 %, sunset 3.6 % against 6.4 %). The eye view (MSAA 4x, the shipped eye path):
+the ground draws correctly, and the pre-pass goes 1.42 -> 0.63 ms, the frame 5.14 [4.76-5.24] ->
+4.33 [4.06-4.51] (-0.80; SSAO off 3.90 -> 3.91, unchanged; the transparent pass 0.80 either way).
+
+Structure shaders: only `structure_wall.gdshader` has the pattern (NORMAL_MAP and ROUGHNESS from two
+texture fetches, so they run in the pre-pass); the painterly, style and roof shaders write NORMAL in
+vertex() or a constant ROUGHNESS. Left alone: two fetches on a small share of the screen.
+
+Negative: the foliage's ORM and normal-map fetches in the normal-roughness pre-pass cost nothing
+measurable (a probe variant without them: pre-pass 1.385 -> 1.377 ms, within noise); its alpha
+fetch is needed for the cutout. Bent normals (BENT_NORMAL_MAP from the blended normal) widen the
+ambient change (mean 0.89 at home), so they are not used.
+
 ## Occlusion fade tiles (topic perfaudit, card occfade)
 
 The occlusion fade (`occlusion_fade_include.gdshaderinc`) tested every token in every tree and
@@ -4959,6 +5038,52 @@ a probe then reads them each frame with `get_captured_timestamps_count`,
 interval to the next timestamp by name. The flag also prints a one-second GPU PROFILE to stdout. The
 probe was a one-use job (not in the repo); `probes/eye_perf.gd`'s `perf` action is the committed
 neighbour with the same in-run A/B loop, to which the timestamp read adds about 30 lines.
+
+## Worker saves (topic perfaudit, card authsave, 2026-11-09)
+
+Every save and the 30 s autosave serialized, deflated and wrote the whole map on the main thread
+(finding F-authoring-1). Now the frame pays only the scene sync and a copy-on-write snapshot
+(`MapDocumentSnapshot.capture`); `MapDocumentWriter` encodes and writes on a pool task
+(`docs/systems/map_document.md`, `docs/systems/authoring.md`). No pixel changes.
+
+**How.** Real-window render job, one process, A and B interleaved, 7 rounds: a new
+`temperate_forest_summer_s1` map, seed 1234, at 320, 100 and 200 ft, one sculpt stroke, then
+`perfaudit_authoring.gd` action `saves` (mode `micro`): old = `_sync_document()` + the synchronous
+`MapDocumentIO.write` (what the autosave did on its frame), new = `_sync_document()` + capture +
+task start; then the worker's own time, and both files' ZIP entries compared. Then four 1.8 s
+`rec` windows per size, old tick / new tick / old / new, each logging every frame. The machine was
+shared with other perfaudit cards (CPU load), so absolute ms are pessimistic; old and new ran under
+the same load. Headless cross-check on synthetic documents (`tools/render_jobs/local/authsave/`,
+not committed): the base commit's `MapDocumentIO` against the new path in one process.
+
+| Map | Old, main thread ms | New, main thread ms (capture alone) | Worker ms | Old tick worst frame | New tick worst frame |
+|---|---|---|---|---|---|
+| 100 ft | 46.4 [35.9..47.9] | 1.25 [0.89..1.40] (0.29) | 36.1 [35.5..46.0] | 53.9, 65.1 | 15.6, 17.0 |
+| 200 ft | 162.6 [149.1..184.5] | 3.35 [2.29..4.05] (0.29) | 146.4 [135.5..155.5] | 172.1, 158.4 | 19.8, 14.7 |
+| 320 ft | 440.8 [370.2..478.0] | 7.91 [5.35..8.53] (0.26) | 460.1 [378.4..484.4] | 470.6, 490.0 | 23.1, 26.6 |
+
+Medians [min..max] of 7 rounds; the worst-frame columns are the two windows of each kind (idle p99
+in the same windows 5.6-9.1 ms). The new main-thread share is almost all `_sync_document`
+(`AuthoredScatter.rows_by_asset` and the grass-mass anchors: about 1 / 3 / 7.6 ms); the snapshot
+itself is 0.2-0.3 ms at every size. The written entries were identical old and new at every size
+(real maps and synthetic), and on synthetic 100 / 200 / 320 ft documents the new serialize is
+byte-identical to the old one entry by entry.
+
+Consistency: a stress loop (headless, synthetic) saved six times in a row per size while a "stroke"
+(a 17x17 dab of heights, biome density and erase, plus a row appended) landed every 16 ms: 25 / 93 /
+220 strokes during the writes, 0 torn files (each file equal, entry by entry, to the document at its
+capture) and the last save equal to the live document. Peak extra memory over the old path is one
+copy of each array a stroke touches during the write (copy-on-write: at 320 ft heights 0.6 MB, each
+mask 0.15 MB, each touched asset's rows); the encode's own buffers are the old path's, now on the
+worker. The static-memory counter could not isolate the copies (it read 0.0 MB), so that figure is
+reasoned, not measured.
+
+Where the old time went (headless, synthetic 320 ft document of 40k rows, 5 rounds, median): rows
+JSON 246 ms (`String.num` per float), surfaces 108 ms (`SurfaceEntries.canonical`, a GDScript loop
+per sample), the writer's checks 64 ms (`row_ok` per row, the height scan), biomes 10 ms, deflate and
+write 184 ms. All of it is on the worker now. Format-neutral speedups were not taken: the frame no
+longer pays any of it, and the big one (binary rows) is a format change (board question
+perf-map-format).
 
 ## Render scale (topic perfaudit, card renderscale)
 
