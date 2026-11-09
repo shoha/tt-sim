@@ -35,11 +35,18 @@ extends RefCounted
 ##   key                  time GraphicsWarmup.cache_key()
 ##   drop_caches          at the title: clear the static caches one by one, logging what each frees
 ##   await                does nothing; its blocker holds the job while a node above runs
+##   pacing {on}          LoadPacing.enabled (vsync off and the raised budgets under a map load's
+##                        sheet), for an in-run A/B of load pacing
+##   vsync {on}           the window's vsync mode
+##   tokens {folder, count}  give a saved probe level `count` Beasts pack tokens on a grid
 
 const PREFIX := "_perfaudit_sys_"
+## The levels of the wave-2 load card (sysload) that reuses this probe.
+const CARD_PREFIX := "_sysload_"
 const NODE_PREFIX := "PerfauditSys"
 const SHAPES := preload("res://tools/render_jobs/probes/terrain_shapes.gd")
 const WATER := preload("res://tools/render_jobs/probes/water.gd")
+const DROP_CACHES := preload("res://tools/render_jobs/probes/perfaudit_drop_caches.gd")
 
 
 ## Holds an `await` step while any of this probe's frame-spanning nodes is still running.
@@ -105,8 +112,46 @@ static func run(base: Node, step: Dictionary) -> String:
 			var key := GraphicsWarmup.cache_key()
 			return "warm-up cache_key %s in %.1f ms" % [key.left(8), (Time.get_ticks_usec() - t0) / 1000.0]
 		"drop_caches":
-			return _add(base, DropCaches.new(), "drop_caches")
+			return _add(base, DROP_CACHES.new(), "drop_caches")
+		"pacing":
+			# An expand template substitutes "true" / "false" as strings.
+			LoadPacing.enabled = str(step.get("on", true)).to_lower() == "true"
+			return "load pacing %s" % ("on" if LoadPacing.enabled else "off")
+		"vsync":
+			var vsync_on := bool(step.get("on", true))
+			DisplayServer.window_set_vsync_mode(
+				DisplayServer.VSYNC_ENABLED if vsync_on else DisplayServer.VSYNC_DISABLED
+			)
+			return "vsync %s" % ("on" if vsync_on else "off")
+		"tokens":
+			return _tokens(String(step.get("folder", "")), int(step.get("count", 100)))
 	return "unknown action %s" % step.get("action", "")
+
+
+## Gives saved level `folder` (one of this probe's) `count` pack tokens (the shipped Beasts pack,
+## cycling eight animals) on a grid around the centre, replacing any it had.
+static func _tokens(folder: String, count: int) -> String:
+	if not _owned(folder):
+		return "not a probe folder: %s" % folder
+	var level := LevelManager.load_level_folder(folder, false)
+	if level == null:
+		return "no level %s" % folder
+	var beasts := ["cow", "horse", "sheep", "wolf", "fox", "pig", "deer", "llama"]
+	var side := ceili(sqrt(float(count)))
+	var spacing := 1.25
+	var placements: Array[TokenPlacement] = []
+	for i in count:
+		var p := TokenPlacement.new()
+		p.placement_id = "%s_tok_%d" % [folder, i]
+		p.pack_id = "beasts"
+		p.asset_id = beasts[i % beasts.size()]
+		p.position = Vector3(
+			(i % side - side * 0.5) * spacing, 0.0, (floori(i / float(side)) - side * 0.5) * spacing
+		)
+		placements.append(p)
+	level.token_placements = placements
+	var saved := LevelManager.save_level_in_place(level)
+	return "tokens %s: %d placements, saved %s" % [folder, count, saved]
 
 
 ## The nodes outside the tree that nothing has freed, counted by class, script and name.
@@ -432,7 +477,7 @@ static func _texture_info(tex: Texture) -> Dictionary:
 
 static func _save(base: Node, folder: String) -> String:
 	var ctrl: AuthoringController = base.get("_authoring_controller")
-	if ctrl == null or not folder.begins_with(PREFIX):
+	if ctrl == null or not _owned(folder):
 		return "no authoring controller, or not a %s folder" % PREFIX
 	var held := WATER.save_blocker(ctrl.scatter)
 	if held != "":
@@ -456,10 +501,15 @@ static func _cleanup() -> String:
 		return "no levels folder"
 	var removed := PackedStringArray()
 	for folder in dir.get_directories():
-		if folder.begins_with(PREFIX):
+		if _owned(folder):
 			if LevelManager.delete_level_folder(LevelManager.folder_path(folder)):
 				removed.append(folder)
 	return "removed %s" % str(removed)
+
+
+## Whether level `folder` is one this probe made (its own prefix, or a wave-2 card's).
+static func _owned(folder: String) -> bool:
+	return folder.begins_with(PREFIX) or folder.begins_with(CARD_PREFIX)
 
 
 # --- helpers -----------------------------------------------------------------------------------
@@ -774,56 +824,6 @@ class LoadWatch:
 			not scatter.call("has_prepared_species")
 			and not scatter.call("is_regenerating")
 			and not scatter.call("is_growing")
-		)
-
-
-## What the static caches hold: clears them one at a time (four frames apart, so freed RIDs
-## are gone from the monitors) and logs the texture, buffer and static memory each released.
-## Run at the title after a map; the next map rebuilds whatever it needs.
-class DropCaches:
-	extends Base
-	var steps: Array = [
-		["SurfaceStore.clear_memory", func() -> void: SurfaceStore.clear_memory()],
-		["AssetStore.clear_meshes", func() -> void: AssetStore.clear_meshes()],
-		["AssetThumbnails.clear", func() -> void: AssetThumbnails.clear()],
-		["WindFoliage.reset_caches", func() -> void: WindFoliage.reset_caches()],
-		["PaletteLibrary.clear_cache", func() -> void: PaletteLibrary.clear_cache()],
-	]
-	var index := -1
-	var wait := 4
-	var last := Vector3.ZERO
-	var rows := PackedStringArray()
-
-	func _ready() -> void:
-		process_mode = Node.PROCESS_MODE_ALWAYS
-		last = _read()
-		rows.append("start tex %.1f buf %.1f static %.1f MB" % [last.x, last.y, last.z])
-
-	func _process(_delta: float) -> void:
-		wait -= 1
-		if wait > 0:
-			return
-		wait = 4
-		if index >= 0:
-			var now := _read()
-			var d := now - last
-			rows.append(
-				"%s tex %+.1f buf %+.1f static %+.1f" % [steps[index][0], d.x, d.y, d.z]
-			)
-			last = now
-		index += 1
-		if index < steps.size():
-			(steps[index][1] as Callable).call()
-			return
-		rows.append("end tex %.1f buf %.1f static %.1f MB" % [last.x, last.y, last.z])
-		log_line(get_tree(), "drop_caches | " + ", ".join(rows))
-		queue_free()
-
-	static func _read() -> Vector3:
-		return Vector3(
-			Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1048576.0,
-			Performance.get_monitor(Performance.RENDER_BUFFER_MEM_USED) / 1048576.0,
-			OS.get_static_memory_usage() / 1048576.0
 		)
 
 
