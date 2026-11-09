@@ -18,6 +18,14 @@ var _controller: LevelPlayController
 var _game_map: GameMap
 
 
+func before_all() -> void:
+	# The play load goes through the library gate (MapLibraryGate), which checks the map's `core`
+	# against the libraries served: serve them here rather than rely on an earlier test in the
+	# shard having done it (alone, or in another shard, the gate opened its dialog, which a headless
+	# run never answers, and the load timed out at 30 s).
+	LibraryRegistry.apply()
+
+
 func before_each() -> void:
 	DirAccess.make_dir_recursive_absolute(Paths.get_level_folder(FOLDER))
 	var doc := MapDocument.create_flat(CELLS, "grass", "v", 7)
