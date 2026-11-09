@@ -18,6 +18,11 @@ extends RefCounted
 const STRUCTURE_REGISTRY := "res://procgen/graph/structure_registry.gd"
 const ROW_GEN := "res://procgen/gen/row_gen.gd"
 const ROW_NODE := "res://procgen/nodes/row_node.gd"
+const EVALUATOR := "res://procgen/graph/graph_evaluator.gd"
+const SETTLEMENT := "res://procgen/gen/settlement.gd"
+const PROPS := "res://procgen/gen/props.gd"
+const ORNAMENTS := "res://procgen/gen/ornaments.gd"
+const RECIPES_ORNAMENTS := "res://procgen/graph/recipes_ornaments.gd"
 ## ProcgenRow.PRESET_MODERN, the last street species.
 const ROW_PRESET_MODERN := 11
 ## ProcgenStructureRegistry.new().type_ids(), in its order.
@@ -122,3 +127,38 @@ static func row_lot_path(lot: Dictionary) -> String:
 static func new_row_node() -> PlantNode:
 	var script: Variant = load(ROW_NODE)
 	return script.new()
+
+
+## A new PlantGraphEvaluator over `registry`: it names every node type the recipe uses, so its
+## script is loaded at the first build, not at start-up. Its evaluate_structure() and errors are
+## called dynamically.
+static func new_evaluator(registry: ProcgenRegistry) -> RefCounted:
+	var script: Variant = load(EVALUATOR)
+	return script.new(registry)
+
+
+## The scripts of procgen's settlement, prop, ornament and building layout classes, for their
+## constants and static functions (ProcgenSettlement.VARIANTS, ProcgenProps.NAMES,
+## ProcgenOrnaments.anchors, ProcgenRecipesOrnaments.apply_to_document ...), loaded on first use.
+static func settlement() -> Variant:
+	return load(SETTLEMENT)
+
+
+static func props() -> Variant:
+	return load(PROPS)
+
+
+static func ornaments() -> Variant:
+	return load(ORNAMENTS)
+
+
+static func recipes_ornaments() -> Variant:
+	return load(RECIPES_ORNAMENTS)
+
+
+## Whether `layout` is a ProcgenBuildingLayout (a building's final layout), told by its script.
+static func is_building_layout(layout: Variant) -> bool:
+	if not layout is Object:
+		return false
+	var script: Script = (layout as Object).get_script()
+	return script != null and script.get_global_name() == &"ProcgenBuildingLayout"

@@ -51,7 +51,11 @@ extends RefCounted
 ## from the kit and the seed (the pane's Automatic). Saved as true, left out when false.
 
 ## The characters: procgen's settlement kits, in its order (a saved map stores the name).
-const KIND_NAMES: Array[String] = ProcgenSettlement.NAMES
+## A copy of ProcgenSettlement.NAMES that keeps procgen's settlement code off the start-up graph;
+## test_boot_graph.gd pins it.
+const KIND_NAMES: Array[String] = [
+	"farming_hamlet", "market_town", "harbour_town", "hill_fort_village", "modern_town"
+]
 const MAX_ID := 32
 const MAX_SEED := 1000000000
 const MAX_DENSITY := 1.5

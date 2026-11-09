@@ -150,7 +150,7 @@ static func build_one(doc: MapDocument, wall: Wall) -> Dictionary:
 	var recipe := recipe_for(wall)
 	if recipe == null or wall.points.size() < Wall.MIN_POINTS:
 		return parts
-	var evaluator := PlantGraphEvaluator.new(recipe.registry)
+	var evaluator := StructureProcgen.new_evaluator(recipe.registry)
 	var plant: Variant = evaluator.evaluate_structure(recipe, inputs_for(doc, wall))
 	if plant == null or not evaluator.errors.is_empty():
 		return parts

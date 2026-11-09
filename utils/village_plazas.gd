@@ -372,7 +372,8 @@ static func with_preview(state: Dictionary, radius: float) -> Dictionary:
 ## The ground block of kit `kit` ({"road", "door_path", "plaza"}: palette surface ids), cached.
 static func ground_of(kit: String) -> Dictionary:
 	if not _grounds.has(kit):
-		_grounds[kit] = ProcgenSettlement.ground_of(ProcgenSettlement.kit_named(kit))
+		var settlement: Variant = StructureProcgen.settlement()
+		_grounds[kit] = settlement.ground_of(settlement.kit_named(kit))
 	return _grounds[kit]
 
 

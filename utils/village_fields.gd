@@ -461,7 +461,7 @@ static func _prop(
 		"position": Vector2(snappedf(at.x, 0.01), snappedf(at.y, 0.01)),
 		"yaw": snappedf(wrapf(yaw, -PI, PI), 0.001),
 		"scale": scale,
-		"seed": absi(roll) % ProcgenSettlement.VARIANTS,
+		"seed": absi(roll) % int(StructureProcgen.settlement().VARIANTS),
 		"slot": slot,
 		"rule": "field",
 		"pinned": false,

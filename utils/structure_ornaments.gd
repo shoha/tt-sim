@@ -250,7 +250,7 @@ static func apply(recipe: PlantGraphDocument, params: Dictionary, seed_value: in
 	var asked := entries(params, seed_value)
 	if recipe == null or asked.is_empty() or problem_for(recipe, params) != "":
 		return 0
-	return ProcgenRecipesOrnaments.apply_to_document(recipe, asked)
+	return StructureProcgen.recipes_ornaments().apply_to_document(recipe, asked)
 
 
 ## Asks every Ornament node of `recipe` (the ones just added and the style's own, ivy_manor's ivy)
@@ -294,7 +294,7 @@ static func _enlarge_ivy(recipe: PlantGraphDocument, id: String, params: Diction
 ## Why `recipe` with `params` cannot take ornaments ("" when it can): a ruin (the recipe's own, or
 ## the Ruin stepper above nothing), a courtyard, a recipe with no walls.
 static func problem_for(recipe: PlantGraphDocument, params: Dictionary) -> String:
-	var why := ProcgenRecipesOrnaments.problem_of(recipe)
+	var why: String = StructureProcgen.recipes_ornaments().problem_of(recipe)
 	if why != "":
 		return why
 	var spec := StructureEdit.param_spec(recipe.interface, "ruin")
@@ -306,7 +306,11 @@ static func problem_for(recipe: PlantGraphDocument, params: Dictionary) -> Strin
 ## The kinds `recipe` already draws itself (its style's own ornaments); a chip for one shows on and
 ## cannot be taken off.
 static func built_in(recipe: PlantGraphDocument) -> Array[String]:
-	return ProcgenRecipesOrnaments.kinds_in(recipe) if recipe != null else ([] as Array[String])
+	if recipe == null:
+		return [] as Array[String]
+	var kinds: Array[String] = []
+	kinds.assign(StructureProcgen.recipes_ornaments().kinds_in(recipe))
+	return kinds
 
 
 ## The state of every chip for the building `recipe` + `params`: kind -> {"on", "enabled",

@@ -111,7 +111,7 @@ static func build(doc: MapDocument, crossing: Crossing, recipe: PlantGraphDocume
 	var out := {"surfaces": {}, "collision": PackedVector3Array(), "top": -INF, "errors": []}
 	if recipe == null or crossing.span_m() <= 0.0:
 		return out
-	var evaluator := PlantGraphEvaluator.new(recipe.registry)
+	var evaluator := StructureProcgen.new_evaluator(recipe.registry)
 	var plant: Variant = evaluator.evaluate_structure(recipe, inputs_for(doc, crossing))
 	out["errors"] = evaluator.errors
 	if plant == null:

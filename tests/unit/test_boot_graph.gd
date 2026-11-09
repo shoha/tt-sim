@@ -10,10 +10,11 @@ extends GutTest
 ## new part on first use (OnDemand, StructureProcgen) instead. When it shrinks, lower the limit.
 
 ## Measured 2026-11-09 after the boot cards' stages (812 at the start of the first card, 669 at
-## the start of boot2). 407 after boot2's play and authoring cut: the start-up names no board
-## token, game map, table (LevelPlayController) or authoring editor class; Root makes the table
-## when a session or a map first needs it (Root._ensure_table).
-const LIMIT_SCRIPTS := 407
+## the start of boot2). 341 after boot2's play, authoring and procgen cut: the start-up names no
+## board token, game map, table (LevelPlayController), authoring editor or procgen evaluator,
+## settlement, prop or ornament class; Root makes the table when a session or a map first needs it
+## (Root._ensure_table), and StructureProcgen loads the procgen parts on the first build.
+const LIMIT_SCRIPTS := 341
 
 var _classes: Dictionary = {}
 var _strings := RegEx.create_from_string(
@@ -56,6 +57,11 @@ func test_the_start_up_script_graph_stays_within_its_limit() -> void:
 		% [scripts, LIMIT_SCRIPTS]
 	)
 	gut.p("start-up script graph: %d scripts (limit %d)" % [scripts, LIMIT_SCRIPTS])
+
+
+## Settlement.KIND_NAMES copies procgen's list so the resource does not name ProcgenSettlement.
+func test_settlement_kind_names_follow_procgen() -> void:
+	assert_eq(Settlement.KIND_NAMES, ProcgenSettlement.NAMES, "the copy follows procgen's kits")
 
 
 func _path(path: String) -> String:
