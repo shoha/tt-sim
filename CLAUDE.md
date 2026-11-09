@@ -83,7 +83,10 @@ godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/gut_shards.g
 The third line is the sharded GUT runner (`tools/gut_shards.gd`), the gate's test run in place of
 the serial one (user, 2026-10-22): about 81 s at 8 shards against about 600 s serial. It prints
 one line per shard, each failing test and the totals, exits 1 on any failure, crash or a shard
-past 900 s, and keeps each shard's log under `user://gut_shards/`. If you stop it early its
+past 900 s, and keeps each shard's log under `user://gut_shards/` (a failed shard's log is also
+copied to `failed_shard_<n>.log`, which the next run does not delete; a crashed shard, an exit code
+other than 0 or 1, also prints its last 40 log lines, where the last GUT test started and the
+engine's backtrace are). If you stop it early its
 shards keep running: run the process check and stop them by id. The serial command (Godot CLI
 below) is for running one ordered process, for example when debugging an order-dependent failure.
 

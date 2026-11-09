@@ -44,6 +44,8 @@ const COMMIT_MIN_S := 1.0
 const POLL_S := 0.2
 const POLL_FPS := 10
 const HANG_S := 900.0
+## Lines of a crashed shard's log the runner prints.
+const CRASH_TAIL_LINES := 40
 ## Keys copied from the base config into every shard's config.
 const CONFIG_KEYS := [
 	"prefix", "suffix", "pre_run_script", "post_run_script", "log_level", "double_strategy"
@@ -312,9 +314,14 @@ func _report(shards: Array, wall_s: float) -> bool:
 		)
 		if killed:
 			line += ", killed after %d s" % int(HANG_S)
+		var crash := crashed(int(shard.exit), killed, result)
 		if not passed:
 			line += ", log " + str(shard.log)
+		if crash:
+			line += ", CRASHED (exit 0x%08X)" % (int(shard.exit) & 0xFFFFFFFF)
 		print(line)
+		if not passed:
+			_keep_failed_log(str(shard.log), i + 1, crash)
 	for line in failures:
 		print("FAILED " + line)
 	print(
@@ -332,6 +339,39 @@ func _report(shards: Array, wall_s: float) -> bool:
 		)
 	)
 	return ok
+
+
+## True when a shard ended without a verdict: killed, or an exit code that is neither GUT's pass
+## (0) nor its failure (1), or no JUnit file. A crash of the engine (an access violation is exit
+## 0xC0000005, -1073741819 as a signed code) lands here.
+static func crashed(exit_code: int, killed: bool, result: Dictionary) -> bool:
+	return killed or exit_code not in [0, 1] or not result.has("tests")
+
+
+## Keeps a failed shard's log where the next run does not delete it
+## (user://gut_shards/failed_shard_<n>.log, overwritten by the next failure of that shard
+## number) and, for a crash, prints its last CRASH_TAIL_LINES lines: the test GUT started last
+## and the engine's backtrace are there (an intermittent crash in test_authoring_open was lost
+## on 2026-11-09 because the next run removed the log).
+func _keep_failed_log(log_path: String, number: int, crash: bool) -> void:
+	if not FileAccess.file_exists(log_path):
+		return
+	var kept := ProjectSettings.globalize_path(OUT_DIR).path_join("failed_shard_%d.log" % number)
+	DirAccess.copy_absolute(log_path, kept)
+	if crash:
+		print("--- last %d lines of %s ---" % [CRASH_TAIL_LINES, kept])
+		for line in tail_lines(FileAccess.get_file_as_string(log_path), CRASH_TAIL_LINES):
+			print(line)
+		print("--- end of log ---")
+
+
+## The last `count` non-empty lines of `text`.
+static func tail_lines(text: String, count: int) -> PackedStringArray:
+	var lines := PackedStringArray()
+	for line in text.split("\n"):
+		if not line.strip_edges().is_empty():
+			lines.append(line.trim_suffix("\r"))
+	return lines.slice(maxi(0, lines.size() - count))
 
 
 ## The "Ignoring script ..." lines of a shard's GUT log (a script that failed to parse); empty when

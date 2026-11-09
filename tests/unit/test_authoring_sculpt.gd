@@ -79,12 +79,24 @@ func test_a_sculpt_stroke_moves_plants_and_props_and_undoes_as_one() -> void:
 	# A rock prop stands on the flank's normal and is re-bedded on its tilted base
 	# (GroundSnap.bed_under over GroundSnap.footing_radius), so no part of the boulder floats.
 	var base := GroundSnap.footing_radius(rule) * prop[7]
+	# The bed is taken from the flank's exact normal, as GroundSnap.rebed_props does, not from the
+	# row's own up axis: the row's quaternion is on the ROW_STEP grid, which turns its up axis by up
+	# to about a milliradian (by how much depends on the random yaw), and over a footing of up to a
+	# metre that moves the bed by more than one step (measured 2026-11-09: 23 of 300 yaws).
+	var grid := GroundSnap.grid_of(_doc)
+	var at: Vector2 = (Vector2(1, 1) + grid.half) / grid.step
+	var flank := ScatterGenerator.triangle_normal(_doc.heights, grid.columns, grid.rows, at, grid.step)
 	var bed := GroundSnap.bed_under(
-		_doc.heights, GroundSnap.grid_of(_doc), Vector2(1, 1), base, PropRows.row_up(prop)
+		_doc.heights,
+		grid,
+		Vector2(1, 1),
+		base,
+		RockKeep.capped_up(flank, RockKeep.MAX_TILT_RAD)
 	)
 	assert_gt(base, 0.0)
 	assert_gt(PropRows.row_up(prop).angle_to(Vector3.UP), 0.1, "tilted with the flank")
-	assert_almost_eq(prop[1], bed, step, "the prop is re-bedded")
+	# The row's height is that bed rounded to the grid: half a step at most (plus float slack).
+	assert_almost_eq(prop[1], bed, step * 0.5 + 1e-6, "the prop is re-bedded")
 	assert_lt(prop[1], _ground(Vector2(1, 1)), "below its origin's ground on the slope")
 	var raised_props := editor.props.rows_by_asset()
 	editor.finish_height_work()
@@ -99,6 +111,35 @@ func test_a_sculpt_stroke_moves_plants_and_props_and_undoes_as_one() -> void:
 	assert_eq(editor.props.rows_by_asset(), raised_props)
 	rows = editor.scatter.cell_rows(Vector2i.ZERO)[GRASS]
 	assert_almost_eq(rows[1], _ground(near), step)
+
+
+func test_a_rebedded_prop_sits_on_its_exact_bed_whatever_its_yaw() -> void:
+	var step := MapDocumentIO.ROW_STEP
+	for seed_value in 16:
+		# A fresh map each time, so every yaw is bedded from the same ground.
+		before_each()
+		var editor := _editor()
+		editor.seed_placement(seed_value)
+		var rule := editor.species_rule(BIOME, "boulder")
+		var handle := editor.place_prop(rule, Vector3(1, 0, 1), Vector3.UP)
+		editor.commit_prop_edit()
+		_raise(editor, Vector3.ZERO)
+		editor.end_stroke()
+		var prop: PackedFloat32Array = editor.props.rows_by_asset()[handle.asset_id]
+		var grid := GroundSnap.grid_of(_doc)
+		var at: Vector2 = (Vector2(1, 1) + grid.half) / grid.step
+		var flank := ScatterGenerator.triangle_normal(
+			_doc.heights, grid.columns, grid.rows, at, grid.step
+		)
+		var bed := GroundSnap.bed_under(
+			_doc.heights,
+			grid,
+			Vector2(1, 1),
+			GroundSnap.footing_radius(rule) * prop[7],
+			RockKeep.capped_up(flank, RockKeep.MAX_TILT_RAD)
+		)
+		assert_almost_eq(prop[1], bed, step * 0.5 + 1e-6, "re-bedded with yaw seed %d" % seed_value)
+		_map.free()
 
 
 func test_a_cancelled_sculpt_leaves_no_trace() -> void:
