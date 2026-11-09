@@ -2,11 +2,15 @@ class_name SurfaceBake
 extends RefCounted
 
 ## The pure half of the content library's surfaces (design doc 2.7): what a surface set is, how
-## its files are checked, and how a PNG becomes the texture the editor import would have made.
-## No files and no scene tree: the registry hands over text and PNG header bytes, SurfaceStore
+## its files are checked, and how a decoded map becomes the texture the editor import would have
+## made. No files and no scene tree: the registry hands over text and header bytes, SurfaceStore
 ## and SurfaceCache do the I/O.
 ##
-## A set is `surfaces/<name>/{albedo,normal,orm,height}.png` plus `surface.json`. The bake gives
+## A set is `surfaces/<name>/{albedo,normal,orm,height}.<webp|png>` plus `surface.json`. Each map
+## is a lossless (or lossy) WebP or an 8- or 16-bit PNG; when a folder holds both for one kind the
+## WebP is used (MAP_EXTENSIONS is the order). Core ships lossless WebP (card texwebp, 2026-11-09:
+## the same decoded 8-bit pixels as its old PNGs, 102 MB less download); user libraries may keep
+## PNG. A 16-bit PNG decodes to 8 bits, so 16 bits never reach the bake. The bake gives
 ## each map the format and mip chain the editor import gives the installed palette's surfaces
 ## (measured 2026-10-24 on Godot 4.7.2 against ash, cliff and grass_savanna): albedo BPTC
 ## (BC7, format 22) from sRGB, normal RGTC (BC5, format 21) renormalised on the mips, ORM S3TC
@@ -26,8 +30,14 @@ const MAX_SIZE := 2048
 const EXPECTED_SIZE := 1024
 const MAX_SURFACES := 64
 const MAX_INFO_BYTES := 16384
+## The map file extensions, preferred first.
+const MAP_EXTENSIONS: Array[String] = ["webp", "png"]
+## The bytes map_header reads: a PNG's signature and IHDR (33), a WebP's first chunk header (30).
+const HEADER_BYTES := 33
 const PNG_HEADER_BYTES := 33
 const PNG_SIGNATURE: PackedByteArray = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+## A WebP's first chunk starts at 12 and its frame header ends by 30 (VP8L by 25).
+const WEBP_HEADER_BYTES := 30
 const MAX_TEXT := 128
 const MIN_TILE_M := 0.001
 const MAX_TILE_M := 10000.0
@@ -64,8 +74,87 @@ static func _be32(bytes: PackedByteArray, at: int) -> int:
 	)
 
 
-## Problems with one map's PNG header (`header` from png_header, or absent: `{}` for a missing
-## file). `errors` block the set, `warnings` do not.
+## The header of a map file whose name ends in `extension` ("webp" or "png"), from its first
+## HEADER_BYTES bytes: png_header or webp_header. `length` is the file's size when known (a WebP
+## whose RIFF size runs past it is truncated), else -1. Never raises.
+static func map_header(bytes: PackedByteArray, extension: String, length: int = -1) -> Dictionary:
+	if extension.to_lower() == "webp":
+		return webp_header(bytes, length)
+	return png_header(bytes)
+
+
+## {ok, width, height, bit_depth, color_type, interlace} of a WebP's first WEBP_HEADER_BYTES
+## bytes, in png_header's terms so check_png reads both: bit_depth 8 and color_type 6 (RGBA) when
+## the file carries alpha, else 2 (RGB). A WebP always decodes to colour channels. Lossless
+## (VP8L), lossy (VP8) and extended (VP8X) files are read; an animated one is refused. `length`
+## as in map_header. {ok: false, error} otherwise. Never raises.
+static func webp_header(bytes: PackedByteArray, length: int = -1) -> Dictionary:
+	if bytes.size() < WEBP_HEADER_BYTES:
+		return {"ok": false, "error": "not a WebP (too short)"}
+	if (
+		bytes.slice(0, 4).get_string_from_ascii() != "RIFF"
+		or bytes.slice(8, 12).get_string_from_ascii() != "WEBP"
+	):
+		return {"ok": false, "error": "not a WebP (bad signature)"}
+	if length >= 0 and bytes.decode_u32(4) + 8 > length:
+		return {"ok": false, "error": "not a WebP (truncated)"}
+	var width := 0
+	var height := 0
+	var alpha := false
+	match bytes.slice(12, 16).get_string_from_ascii():
+		"VP8L":
+			var bits := bytes.decode_u32(21)
+			if bytes[20] != 0x2F or (bits >> 29) != 0:
+				return {"ok": false, "error": "not a WebP (bad lossless header)"}
+			width = (bits & 0x3FFF) + 1
+			height = ((bits >> 14) & 0x3FFF) + 1
+			alpha = ((bits >> 28) & 1) == 1
+		"VP8 ":
+			if bytes[23] != 0x9D or bytes[24] != 0x01 or bytes[25] != 0x2A:
+				return {"ok": false, "error": "not a WebP (bad lossy header)"}
+			width = bytes.decode_u16(26) & 0x3FFF
+			height = bytes.decode_u16(28) & 0x3FFF
+		"VP8X":
+			if (bytes[20] & 0x02) != 0:
+				return {"ok": false, "error": "an animated WebP is not a map"}
+			alpha = (bytes[20] & 0x10) != 0
+			width = _le24(bytes, 24) + 1
+			height = _le24(bytes, 27) + 1
+		_:
+			return {"ok": false, "error": "not a WebP (unknown first chunk)"}
+	return {
+		"ok": true,
+		"width": width,
+		"height": height,
+		"bit_depth": 8,
+		"color_type": 6 if alpha else 2,
+		"interlace": 0,
+	}
+
+
+static func _le24(bytes: PackedByteArray, at: int) -> int:
+	return int(bytes[at]) | (int(bytes[at + 1]) << 8) | (int(bytes[at + 2]) << 16)
+
+
+## True when `path` names a map file by its extension (MAP_EXTENSIONS, any case).
+static func is_map_file(path: String) -> bool:
+	return path.get_extension().to_lower() in MAP_EXTENSIONS
+
+
+## The Image the bytes of a map file ending in `extension` decode to (WebP or PNG, by extension,
+## never by sniffing), or null when they do not decode. A 16-bit PNG decodes to 8 bits a channel.
+static func decode(bytes: PackedByteArray, extension: String) -> Image:
+	var image := Image.new()
+	var err := (
+		image.load_webp_from_buffer(bytes)
+		if extension.to_lower() == "webp"
+		else image.load_png_from_buffer(bytes)
+	)
+	return image if err == OK and not image.is_empty() else null
+
+
+## Problems with one map's header (`header` from map_header, PNG or WebP, or absent: `{}` for a
+## missing file). `errors` block the set, `warnings` do not.
 static func check_png(
 	header: Dictionary, kind: String, label: String, errors: Array[String], warnings: Array[String]
 ) -> void:
@@ -170,22 +259,34 @@ static func pretty_name(name: String) -> String:
 ## The palette surface entry of a library surface: the four map paths relative to the palette
 ## root (SurfaceStore resolves them: they are unique per runtime name, so two libraries'
 ## surfaces of one local name never collide), tile_m, kind, role and the optional mean.
-## `maps` lists the kinds whose PNG exists.
-static func palette_entry(runtime_name: String, info: Dictionary, maps: Array) -> Dictionary:
+## `maps` lists the kinds whose map exists, `files` {kind: file name} the file each one is
+## (SurfaceReader's; a kind it does not name is a .png).
+static func palette_entry(
+	runtime_name: String, info: Dictionary, maps: Array, files: Dictionary = {}
+) -> Dictionary:
 	var entry := {
 		"tile_m": float(info.get("tile_m", 1.0)),
 		"kind": String(info.get("kind", "")),
 		"role": String(info.get("role", "ground")),
 	}
 	for kind in KINDS:
-		entry[kind] = relative_path(runtime_name, kind) if kind in maps else ""
+		entry[kind] = (
+			relative_path(runtime_name, kind, extension_of(files, kind)) if kind in maps else ""
+		)
 	if info.has("albedo_mean_linear"):
 		entry["albedo_mean_linear"] = (info["albedo_mean_linear"] as Array).duplicate()
 	return entry
 
 
-static func relative_path(runtime_name: String, kind: String) -> String:
-	return "surfaces/%s/%s.png" % [runtime_name, kind]
+## `surfaces/<runtime name>/<kind>.<extension>`: the palette-relative path of a library map.
+static func relative_path(runtime_name: String, kind: String, extension: String = "png") -> String:
+	return "surfaces/%s/%s.%s" % [runtime_name, kind, extension]
+
+
+## The extension of `kind`'s file in `files` ({kind: file name}), "png" when it names none.
+static func extension_of(files: Dictionary, kind: String) -> String:
+	var file := String(files.get(kind, ""))
+	return file.get_extension().to_lower() if file != "" else "png"
 
 
 ## `image` (a decoded PNG) as the imported texture of `kind` would be, or null when it is

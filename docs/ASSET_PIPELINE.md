@@ -396,6 +396,19 @@ them the manual round trip above remains the gate.
 > treecube path. The "Layout", "Import path" and "Refreshing the palette" parts below describe the
 > retired treecube install (editor-imported `.glb`/`.png`, `.import` sidecars, `build_palette.py
 > --install`) and are kept as history; core's files are `importer="keep"` raw files instead.
+>
+> **Surface map files (contract change 2026-11-09, card texwebp, board perf-texture-shipping).** A
+> library surface's maps are `surfaces/<name>/{albedo,normal,orm,height}.webp` or `.png`, per map;
+> when a folder holds both for one kind the consumer uses the WebP (and warns about the PNG). Core
+> ships LOSSLESS WebP for all four maps: the producer decodes each painted PNG the way the game does
+> (8 bits a channel; the 16-bit height PNG drops to 8) and encodes those pixels with Godot 4.7.2's
+> lossless encoder at `lossless_compression_factor` 100 (tt-sim `tools/texture_ab/webp_encode.gd`,
+> which refuses to write a map unless the WebP decodes to the same pixels, height bakes
+> byte-identically and a second encode gives the same bytes). In game the maps are pixel-identical
+> to the old PNGs; core's surfaces went from 151.2 MB to 45.2 MB. Lossy WebP is read too (user
+> libraries) but core does not ship it. The uniformity rules below (1024 px, 8-bit RGB, the bake's
+> formats) are unchanged: a WebP is always 8-bit colour. `LibraryContracts.EXTENSIONS` lists
+> `.webp`; plantgen's `LibrarySurfaces.check_folder` and vendored `contract.json` accept it.
 
 A second path from treecube into tt-sim that bypasses Blender maps entirely: treecube
 builds a palette of assets, ground surfaces and placement rules that ships inside the

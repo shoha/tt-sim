@@ -162,6 +162,7 @@
 		"res://tests/unit/test_submerged_cue.gd",
 		"res://tests/unit/test_surface_prebake.gd",
 		"res://tests/unit/test_surface_store.gd",
+		"res://tests/unit/test_surface_webp.gd",
 		"res://tests/unit/test_terrain_collision.gd",
 		"res://tests/unit/test_terrain_events.gd",
 		"res://tests/unit/test_terrain_fields_native.gd",

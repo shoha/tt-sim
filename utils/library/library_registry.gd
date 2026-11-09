@@ -922,8 +922,8 @@ static func read_sources(folder: String) -> Dictionary:
 			continue
 		if parts[2] == SurfaceReader.INFO_FILE:
 			surfaces[parts[1]] = _text(folder.path_join(relative), SurfaceBake.MAX_INFO_BYTES)
-		elif relative.get_extension().to_lower() == "png":
-			png[relative] = SurfaceStore.png_header_of(folder.path_join(relative))
+		elif SurfaceBake.is_map_file(relative):
+			png[relative] = SurfaceStore.map_header_of(folder.path_join(relative))
 	return {
 		"library":
 		_text(folder.path_join(LIBRARY_FILE), LibraryContracts.CAPS["library_json_bytes"]),

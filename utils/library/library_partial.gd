@@ -36,6 +36,7 @@ const FILE_CAPS := {
 	".json": 4 * 1024 * 1024,
 	".glb": 64 * 1024 * 1024,
 	".png": 16 * 1024 * 1024,
+	".webp": 16 * 1024 * 1024,
 	".jpg": 4 * 1024 * 1024,
 	".txt": 65536,
 	".md": 65536,
@@ -573,8 +574,10 @@ static func sources_of(files: Dictionary) -> Dictionary:
 		if parts.size() == 3 and parts[0] == "surfaces":
 			if parts[2] == SurfaceReader.INFO_FILE:
 				surfaces[parts[1]] = data.get_string_from_utf8()
-			elif relative.get_extension().to_lower() == "png":
-				png[relative] = SurfaceBake.png_header(data.slice(0, SurfaceBake.PNG_HEADER_BYTES))
+			elif SurfaceBake.is_map_file(relative):
+				png[relative] = SurfaceBake.map_header(
+					data.slice(0, SurfaceBake.HEADER_BYTES), relative.get_extension(), data.size()
+				)
 	var library: PackedByteArray = files.get(LIBRARY_FILE, PackedByteArray())
 	var catalog: PackedByteArray = files.get(CATALOG_FILE, PackedByteArray())
 	return {
@@ -719,7 +722,8 @@ static func _check_extra(files: Dictionary, read: Dictionary, errors: Array) -> 
 	for name: String in read.get("surfaces", {}):
 		allowed["surfaces/%s/%s" % [name, SurfaceReader.INFO_FILE]] = true
 		for kind: String in (read["surfaces"][name] as Dictionary).get("maps", []):
-			allowed["surfaces/%s/%s.png" % [name, kind]] = true
+			for extension in SurfaceBake.MAP_EXTENSIONS:
+				allowed["surfaces/%s/%s.%s" % [name, kind, extension]] = true
 	var structures: Array = read.get("structures", [])
 	if not structures.is_empty():
 		allowed[LibraryStructures.INDEX_FILE] = true

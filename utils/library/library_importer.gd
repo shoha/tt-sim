@@ -576,7 +576,7 @@ static func extension_cap(name: String) -> int:
 	match extension:
 		"glb":
 			return limit_of("glb_bytes")
-		"png", "jpg":
+		"png", "webp", "jpg":
 			return limit_of("image_bytes")
 		"json":
 			if name == "assets/catalog.json":

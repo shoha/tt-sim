@@ -6,20 +6,21 @@ extends GutTest
 ## sysopen, 2026-11-09), so it proves that hoist changed no byte, and it catches any later change
 ## that moves a new map's bytes by accident. A change meant to move them (the recipe, the core
 ## library's biome or surfaces, the document format: re-pinned for format 4 on 2026-11-09, the
-## manifest's number and the row entries' names) refreshes the digests: run each case and paste
-## what it prints.
+## manifest's number and the row entries' names; re-pinned on 2026-11-09 for card texwebp, whose
+## core rebuild moves the core library's hash in the manifest) refreshes the digests: run each case
+## and paste what it prints.
 
 const BIOME := "temperate_forest_summer_s1"
 const SEED := 1234
 ## [size_ft, landform, the first 16 hex digits of the digest].
 const CASES: Array = [
-	[100, "flat", "b8c9242bc0a23619"],
-	[100, "valley", "64b2918b873c57b7"],
-	[100, "hilltop", "45b7ff3e73496b83"],
-	[100, "terraces", "7afd0a07e43bac9f"],
-	[100, "lakeshore", "2ac8c91dff3f0bd2"],
-	[100, "gorge", "0f05f9f810f85592"],
-	[200, "valley", "30411ef3e06b25e1"],
+	[100, "flat", "5e52e0594ba8c9f8"],
+	[100, "valley", "c8af70660bc766fd"],
+	[100, "hilltop", "c3ca922246bd4c7d"],
+	[100, "terraces", "0becb3b9a192ce53"],
+	[100, "lakeshore", "d3a8126b4438ae95"],
+	[100, "gorge", "fbf162fd80c3f25e"],
+	[200, "valley", "3d2fa5134bd20e9c"],
 ]
 
 
