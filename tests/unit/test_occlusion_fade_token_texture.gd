@@ -1,8 +1,9 @@
 extends GutTest
 
 ## Tests for OcclusionFadeManager's token data path: instead of pushing three uniform
-## arrays to every converted material at 30 Hz, the manager packs tokens into one shared
-## 32x1 RGBAF texture (xyz = world centre, w = fade radius) and one global int count.
+## arrays to every converted material at 30 Hz, the manager packs tokens, their screen
+## tiles and the tile lists into one shared RGBAF texture (OcclusionTiles; a token texel is
+## xyz = world centre, w = fade radius) and three globals.
 ## Under --headless GPU state does not round-trip, so these tests assert on the Image the
 ## manager builds, never on texture contents read back. They also cannot assert on
 ## RenderingServer.global_shader_parameter_get(): confirmed via a direct probe that it is
@@ -18,29 +19,34 @@ func after_each() -> void:
 	RenderingServer.global_shader_parameter_set(OcclusionFadeManager.GLOBAL_TOKEN_COUNT, 0)
 
 
-func test_build_token_image_packs_entries_and_pads_to_max() -> void:
+func _no_bins() -> Array[PackedInt32Array]:
+	return OcclusionFadeManager._empty_bins()
+
+
+func test_build_image_packs_the_plain_loop_tokens_first() -> void:
 	var entries: Array[Vector4] = [Vector4(1.0, 2.0, 3.0, 0.5), Vector4(-4.0, 0.25, 6.0, 1.5)]
 
-	var image := OcclusionFadeManager.build_token_image(entries)
+	var image := OcclusionTiles.build_image(entries, _no_bins(), OcclusionTiles.TILES)
 
-	assert_eq(image.get_width(), OcclusionFadeManager.MAX_TOKENS)
-	assert_eq(image.get_height(), 1)
+	assert_eq(image.get_width(), OcclusionTiles.TEXTURE_WIDTH)
 	assert_eq(image.get_format(), Image.FORMAT_RGBAF)
 	assert_eq(image.get_pixel(0, 0), Color(1.0, 2.0, 3.0, 0.5))
 	assert_eq(image.get_pixel(1, 0), Color(-4.0, 0.25, 6.0, 1.5))
 	assert_eq(image.get_pixel(2, 0), Color(0, 0, 0, 0), "Unused slots are zero (radius 0)")
-	assert_eq(image.get_pixel(OcclusionFadeManager.MAX_TOKENS - 1, 0), Color(0, 0, 0, 0))
+	assert_eq(image.get_pixel(OcclusionTiles.FALLBACK_TOKENS - 1, 0), Color(0, 0, 0, 0))
 
 
-func test_build_token_image_truncates_beyond_max() -> void:
+func test_the_plain_loop_keeps_the_first_32_tokens() -> void:
 	var entries: Array[Vector4] = []
-	for i in range(OcclusionFadeManager.MAX_TOKENS + 5):
+	for i in range(OcclusionTiles.FALLBACK_TOKENS + 5):
 		entries.append(Vector4(float(i), 0.0, 0.0, 1.0))
 
-	var image := OcclusionFadeManager.build_token_image(entries)
+	var image := OcclusionTiles.build_image(entries, _no_bins(), OcclusionTiles.TILES)
 
-	assert_eq(image.get_width(), OcclusionFadeManager.MAX_TOKENS)
-	assert_eq(image.get_pixel(OcclusionFadeManager.MAX_TOKENS - 1, 0).r, 31.0)
+	assert_eq(image.get_pixel(OcclusionTiles.FALLBACK_TOKENS - 1, 0).r, 31.0)
+	assert_eq(OcclusionTiles.fallback_count(entries), OcclusionTiles.FALLBACK_TOKENS)
+	var header := image.get_pixel(OcclusionTiles.HEADER_BASE, 0)
+	assert_eq(header.g, 0.0, "the first header follows the plain loop's tokens, empty here")
 
 
 func _make_token(position: Vector3, scale: float = 1.0) -> BoardToken:
@@ -70,7 +76,9 @@ func test_update_pushes_count_to_global_and_centre_to_image() -> void:
 	var camera: Camera3D = autofree(Camera3D.new())
 	manager.setup(camera, map_container, tokens_container)
 
-	manager._update_token_uniforms()
+	assert_true(manager._update_token_uniforms(), "new tokens")
+	assert_true(manager._publish_if_needed(), "published before the next frame")
+	assert_false(manager._publish_if_needed(), "nothing changed since")
 
 	assert_eq(manager._last_token_count, 2)
 	var px0 := manager._token_image.get_pixel(0, 0)
@@ -90,6 +98,24 @@ func test_update_pushes_count_to_global_and_centre_to_image() -> void:
 	assert_almost_eq(px1.a, 1.5, 0.0001, "Scale 2 doubles the footprint radius")
 
 
+func test_collect_takes_tokens_past_32_up_to_the_cap() -> void:
+	var manager := OcclusionFadeManager.new()
+	add_child_autofree(manager)
+	var tokens_container := Node3D.new()
+	add_child_autofree(tokens_container)
+	for i in OcclusionFadeManager.MAX_TOKENS + 3:
+		tokens_container.add_child(_make_token(Vector3(i, 0, 0)))
+	var map_container: Node3D = autofree(Node3D.new())
+	var camera: Camera3D = autofree(Camera3D.new())
+	manager.setup(camera, map_container, tokens_container)
+
+	var entries := manager._collect_token_entries()
+
+	assert_gt(OcclusionFadeManager.MAX_TOKENS, OcclusionTiles.FALLBACK_TOKENS, "past the old 32")
+	assert_eq(entries.size(), OcclusionFadeManager.MAX_TOKENS)
+	assert_almost_eq(entries[-1].x, float(OcclusionFadeManager.MAX_TOKENS - 1), 0.0001)
+
+
 func test_clear_resets_global_count() -> void:
 	var manager := OcclusionFadeManager.new()
 	add_child_autofree(manager)
@@ -100,6 +126,7 @@ func test_clear_resets_global_count() -> void:
 	var camera: Camera3D = autofree(Camera3D.new())
 	manager.setup(camera, map_container, tokens_container)
 	manager._update_token_uniforms()
+	manager._publish_if_needed()
 	assert_eq(manager._last_token_count, 1)
 
 	manager.clear()

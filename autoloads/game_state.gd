@@ -473,16 +473,53 @@ func clear_all_tokens() -> void:
 
 ## Get the full state as a dictionary (for network transmission)
 func get_full_state_dict() -> Dictionary:
-	var result: Dictionary = {}
-	var tokens: Dictionary = {}
-	for network_id in _token_states:
-		tokens[network_id] = _token_states[network_id].to_dict()
-	result["tokens"] = tokens
+	var result := get_tokens_state_dict(_token_states.keys())
 	result["permissions"] = TokenPermissions.to_dict(_token_permissions)
 	# Include active drag locks so late joiners know which tokens are in use
 	if not _drag_locks.is_empty():
 		result["drag_locks"] = _drag_locks.duplicate()
 	return result
+
+
+## The tokens `ids` in get_full_state_dict()'s shape, with only their permission entries and
+## no drag locks: a token add's payload (TokenStateWire.Kind.ADD), applied by
+## upsert_state_dict(). Ids this state does not hold are left out.
+func get_tokens_state_dict(ids: Array) -> Dictionary:
+	var tokens: Dictionary = {}
+	var permissions: Dictionary = {}
+	for network_id in ids:
+		if not _token_states.has(network_id):
+			continue
+		tokens[network_id] = _token_states[network_id].to_dict()
+		if _token_permissions.has(network_id):
+			permissions[network_id] = _token_permissions[network_id]
+	return {"tokens": tokens, "permissions": TokenPermissions.to_dict(permissions)}
+
+
+## Adds or updates the tokens of `data` (get_tokens_state_dict()'s shape) and replaces their
+## permission entries, removing nothing (for network reception on clients: a token add). An
+## add for a token this state already holds only updates its values, so it is safe whichever
+## of an add and a full state arrives first. Returns the ids applied.
+func upsert_state_dict(data: Dictionary) -> Array[String]:
+	var ids := _upsert_tokens(data.get("tokens", {}))
+	var incoming := TokenPermissions.from_dict(data.get("permissions", {}))
+	for network_id in ids:
+		if incoming.has(network_id):
+			_token_permissions[network_id] = incoming[network_id]
+		else:
+			_token_permissions.erase(network_id)
+		permissions_changed.emit(network_id, 0)
+	return ids
+
+
+## Sets every token of `token_data` (network_id -> TokenState dict) through set_token_state's
+## signals (token_added for a new one, token_state_changed "_all" otherwise). Returns the ids.
+func _upsert_tokens(token_data: Dictionary) -> Array[String]:
+	var ids: Array[String] = []
+	for network_id in token_data:
+		set_token_state(network_id, TokenState.from_dict(token_data[network_id]))
+		ids.append(String(network_id))
+	return ids
 
 
 ## Apply a full state dictionary (for network reception on clients)
@@ -534,15 +571,8 @@ func merge_full_state_dict(data: Dictionary) -> void:
 			clear_permissions_for_token(network_id)
 			token_removed.emit(network_id)
 
-	# Update existing and add new tokens
-	for network_id in token_data:
-		var state = TokenState.from_dict(token_data[network_id])
-		var is_new = not _token_states.has(network_id)
-		_token_states[network_id] = state
-		if is_new:
-			token_added.emit(network_id, state)
-		else:
-			token_state_changed.emit(network_id, "_all", null, state)
+	# Update existing and add new tokens (the same path as a token add)
+	_upsert_tokens(token_data)
 
 	# Update permissions if present (non-destructive)
 	if data.has("permissions"):
