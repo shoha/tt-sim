@@ -4834,6 +4834,41 @@ measurable (a probe variant without them: pre-pass 1.385 -> 1.377 ms, within noi
 fetch is needed for the cutout. Bent normals (BENT_NORMAL_MAP from the blended normal) widen the
 ambient change (mean 0.89 at home), so they are not used.
 
+## Ground skirt shadows (topic perfaudit, card groundskirt, 2026-11-08)
+
+The skirt (the ring of ground round the map, `authored_ground_skirt*.gdshader`) receives no
+shadows: both skirt shaders declare `shadows_disabled`. Its directional shadow filter was about
+half its cost at full zoom-out; its layer blend was under a tenth.
+
+**How.** As "Ground pre-pass" (RTX 3080, nvidia-smi idle, Vulkan Forward+, 4.7.2, perfaudit_gpu
+`perf`, 6 rounds, the first discarded, median of round medians, 1080p, SSAO on, lo-fi on, shadows
+High, MSAA off; 100 ft temperate_forest_summer_s1, valley, seed 1234). "Before" is the skirt
+rebuilt in-run without the render mode (`gshader` `authored_ground.gdshaderinc#GROUND_LOOK`).
+Noise floor: the same configuration twice 0.00-0.05 ms. Views: home; zoom 4 framed on the middle
+of an edge; full zoom-out (the skirt rasterizes 83 % of the screen, 30 % at home, 5 % in the
+eye view); the eye view at the map centre.
+
+| View | Before | After | Saved | Skirt cost before -> after (vs hidden) |
+|---|---|---|---|---|
+| home | 3.07 | 2.94 | -0.13 | 0.30 -> 0.17 |
+| zoom 4 on an edge | 2.16 | 1.89 | -0.26 | 0.68 -> 0.42 |
+| full zoom-out | 2.43 | 1.94 | -0.49 | 1.08 -> 0.59 |
+| eye | 4.19 | 4.16 | noise | about 0 |
+
+What the skirt's cost is, at full zoom-out in a first run (probe defines on the include, since
+removed): the skirt 1.19 ms; its texture work with the normal and ORM fetches dropped -0.04 to
+-0.10; no texture work at all (the layer's mean colour) -0.20; every fragment discarded right after
+the fade -1.18 (rasterizing the ring and the fade's noise cost 0.03); shadows off -0.58, and -0.61
+with the albedo-only blend too. So a baked or simplified skirt blend buys little: the rest of the
+skirt's cost is the engine's per-pixel lighting (ambient, SSAO, light loop) on a lit material. An
+unshaded skirt lit by hand would be the next step, at a look risk.
+
+Look (8-bit levels against before, foliage and particles hidden): max 0 at zoom 4, full zoom-out
+and the eye view, max 2 (mean 0.000) at home: the terrain casts nothing onto the skirt. With the
+foliage shown the only differences in the skirt's area are the trees' wind sway (the
+same-configuration control differs as much), also under a sun lowered to 12 degrees. A shadow cast
+across the map edge would stop at the edge line; none did on this map.
+
 ## Occlusion fade tiles (topic perfaudit, card occfade)
 
 The occlusion fade (`occlusion_fade_include.gdshaderinc`) tested every token in every tree and
