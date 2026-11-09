@@ -77,8 +77,10 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
   `ScatterTerrain.wet_sampler`, and `Ground::water_dist_at` mirrors `sample_grid` over the grid
   `ScatterNative.pack` adds to the job's `source` as `water_dist`, only for a job with a
   `water_dist` curve; the cap travels in the constants table as `water_dist_max_m`) and
-  `version()` is `ttscatter 6 curves water` (6: the rule noise went 3D, rockstretch
-  2026-11-08). The plan keys
+  `version()` is `ttscatter 7 curves water fields` (6: the rule noise went 3D, rockstretch
+  2026-11-08; 7 and `fields`: `rule_fields`, TerrainRules.sample_fields for every caller through
+  `ScatterNative.rule_fields`, card terrainrules 2026-11-08, `native/src/terrain_fields.cpp`; its
+  scatter-window twin in `scatter_grids.cpp` stays until the two are merged). The plan keys
   (`slope_min`, `slope_min_cos`, `curve_slope`, `curve_height`, `curve_wet`, `curve_water_dist`,
   `has_response`) are keyed reads with neutral defaults, so a legacy plan loads as before. A
   library without the word `curves` (built before S12b; `native/bin` is gitignored and survives

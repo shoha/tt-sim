@@ -5141,9 +5141,32 @@ before). Real window, same map and recorder as above, the `broad` part's largest
 | 200 ft | 6.53 [3.52..7.75] | 0.71 [0.69..0.80] | 17.8-23.4 | 14.1-17.8 |
 | 320 ft | 7.07 [3.71..8.55] | 0.73 [0.69..0.79] | 22.4-34.9 | 18.8-19.9 |
 
-The sculpt and carve stroke end still runs the rule fields (`TerrainRules.sample_fields`, 4.5-4.7 ms
-at every size for a 12 m stroke): the next step there is the native port the finding proposes. The machine was shared with other perfaudit cards; before
-and after ran under similar load, minutes apart.
+The sculpt and carve stroke end still ran the rule fields (`TerrainRules.sample_fields`, 4.5-4.7 ms
+at every size for a 12 m stroke) until card terrainrules (below). The machine was shared with other
+perfaudit cards; before and after ran under similar load, minutes apart.
+
+### Sculpt stroke end: native rule fields (card terrainrules, 2026-11-08)
+
+`TerrainRules.sample_fields` runs in the native library (`ScatterNative.rule_fields`,
+`native/src/terrain_fields.cpp`, version `ttscatter 7 curves water fields`), bit for bit with the
+GDScript (`test_terrain_fields_native`: 4941 asserts on random grids and rects), which stays the
+fallback without the library. Every caller gains: the stroke end (`AuthoredTerrain.settle_heights`),
+the map open's whole-grid fields and the scatter's GDScript fallbacks. In-run A/B in a real window
+(`ScatterNative.force_gdscript_fields` flipped stroke by stroke; job `local/terrainrules/ab.json`,
+temperate forest seed 1234, a 20 m sculpt stroke of r 4 m, 3 raise and 3 smooth per side per size),
+the `fields` part of the release (`last_fields_usec`: sample_fields, store_fields, the mirrors' UV2
+copy) in ms, median [min..max] of 6 releases:
+
+| Map | GDScript | Native | sample_fields alone, GDScript / native (7 rounds, ~6000 samples) | store_fields | mirrors (8) |
+|---|---|---|---|---|---|
+| 100 ft | 7.15 [5.80..10.03] | 1.20 [0.85..1.29] | 8.24 / 0.141 | 0.48 | 0.70 |
+| 200 ft | 9.28 [9.22..9.84] | 1.32 [1.00..1.43] | 8.57 / 0.147 | 0.50 | 0.74 |
+| 320 ft | 5.76 [5.54..6.04] | 0.83 [0.80..0.86] | 5.13 / 0.073 | 0.30 | 0.43 |
+
+The pass itself is 58-70 times faster; what is left of the part (0.8-1.3 ms) is the GDScript copy
+into the whole-grid arrays and the vertex mirrors, which a native call cannot do in place (a packed
+array crosses the Variant call as a copy-on-write copy). The worst tail frames of these strokes
+(17-27 ms) name no part either way, as in the collision card's runs.
 
 ## Render scale (topic perfaudit, card renderscale)
 
