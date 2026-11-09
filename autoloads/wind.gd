@@ -37,6 +37,10 @@ var _published: Array[Vector4] = []
 var _weather: Dictionary = WeatherSettings.default().to_dict()
 
 
+func _init() -> void:
+	BootTrace.mark("Wind loaded (last autoload)")
+
+
 func _ready() -> void:
 	load_settings()
 	_reduced = UiMotion.reduced()

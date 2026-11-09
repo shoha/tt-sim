@@ -79,7 +79,12 @@ var _warmup_entered: bool = false
 var _update_check_on_title: bool = false
 
 
+func _init() -> void:
+	BootTrace.mark("main scene loaded")
+
+
 func _ready() -> void:
+	BootTrace.mark("Root _ready (autoloads ready)")
 	# Check the saved renderer preference first -- it may relaunch the process
 	# entirely (see its own doc comment), so there is no reason to do any other
 	# startup work first.
@@ -87,10 +92,12 @@ func _ready() -> void:
 
 	# Apply saved graphics settings (fullscreen, vsync) before any UI is shown
 	SettingsMenu.apply_startup_graphics_settings()
+	BootTrace.mark("startup settings applied")
 
 	# The saved foliage library (a dev setting) before anything reads the palette, the graphics
 	# warm-up included.
 	FoliageLibrary.apply_saved()
+	BootTrace.mark("foliage library served")
 
 	# Setup core systems
 	_setup_level_play_controller()
@@ -98,6 +105,7 @@ func _ready() -> void:
 	_setup_download_notifications()
 	# Network signals (hosting, the room, disconnects and player events while in-game)
 	_setup_session_flow()
+	BootTrace.mark("root controllers and app menu built")
 
 	# Connect to level manager signals
 	LevelManager.level_loaded.connect(_on_level_loaded)

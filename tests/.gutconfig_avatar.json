@@ -18,6 +18,7 @@
 		"res://tests/unit/test_perf_budget.gd",
 		"res://tests/unit/test_token_ghost.gd",
 		"res://tests/unit/test_token_grounding.gd",
+		"res://tests/unit/test_token_scale.gd",
 		"res://tests/unit/test_token_spawn_queue.gd",
 		"res://tests/unit/test_token_edge_arrows.gd",
 		"res://tests/unit/test_token_markers.gd",

@@ -77,7 +77,7 @@ func _show(report: Dictionary, host: Node) -> void:
 func _manage() -> void:
 	_settle(false)
 	var open_manager := func() -> void:
-		LibraryManager.open((Engine.get_main_loop() as SceneTree).root)
+		OnDemand.open_library_manager((Engine.get_main_loop() as SceneTree).root)
 	open_manager.call_deferred()
 
 

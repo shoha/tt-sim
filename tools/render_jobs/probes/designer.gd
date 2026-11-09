@@ -50,7 +50,8 @@ static func run(base: Node, step: Dictionary) -> String:
 	var controller: AuthoringController = base.get("_authoring_controller")
 	if controller == null or controller.designer == null:
 		return "no designer open"
-	var session := controller.designer.session
+	var host: BiomeDesignerHost = controller.designer
+	var session := host.session
 	var model := session.model
 	match action:
 		"report":
@@ -95,13 +96,13 @@ static func run(base: Node, step: Dictionary) -> String:
 		"click_rule":
 			return _click_rule(controller, session, step)
 		"save":
-			controller.designer.save()
+			host.save()
 			return "saved, dirty %s" % model.is_dirty()
 		"leave":
-			controller.designer.request_leave()
+			host.request_leave()
 			return "leaving"
 		"picture":
-			controller.designer.update_thumbnail()
+			host.update_thumbnail()
 			return "taking the picture"
 		"picture_check":
 			var on_disk: Variant = JSON.parse_string(
@@ -267,7 +268,8 @@ static func _click_rule(
 	controller: AuthoringController, session: BiomeDesignerSession, step: Dictionary
 ) -> String:
 	var wanted := String(step.rule)
-	var camera: Camera3D = controller.designer._game_map.camera_node
+	var host: BiomeDesignerHost = controller.designer
+	var camera: Camera3D = host._game_map.camera_node
 	if camera == null:
 		return "no camera"
 	var best := Vector3.INF
@@ -293,5 +295,5 @@ static func _click_rule(
 	if best == Vector3.INF:
 		return "no plant of rule %s on the map" % wanted
 	var pointer := camera.unproject_position(best)
-	var key := controller.designer.pick_at(pointer)
+	var key := host.pick_at(pointer)
 	return "clicked %s at %s: selected '%s'" % [best_asset, str(pointer), key]
