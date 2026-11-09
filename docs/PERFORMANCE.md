@@ -5427,7 +5427,48 @@ JSON 246 ms (`String.num` per float), surfaces 108 ms (`SurfaceEntries.canonical
 per sample), the writer's checks 64 ms (`row_ok` per row, the height scan), biomes 10 ms, deflate and
 write 184 ms. All of it is on the worker now. Format-neutral speedups were not taken: the frame no
 longer pays any of it, and the big one (binary rows) is a format change (board question
-perf-map-format).
+perf-map-format; done by the card below).
+
+## Map document format 4 (topic perfaudit, card mapformat, 2026-11-09)
+
+Scatter, props and mass anchors are binary integer columns on a 2^-10 m grid (`MapRowsCodec`,
+`docs/systems/map_document.md` "Rows as binary"); the board answered "binary". Lossless for the
+rows the generator makes (they were already snapped; the grid moved from 6 decimals to 2^-10 so
+every value is an exact float32), at most 0.49 mm and 0.2 degree for a row built by hand. No look
+changes intended: the instance transforms move by under a millimetre and 0.1 degree, and the
+generated row count shifts by a few instances per 85,000 (84,919 to 84,911 at 320 ft; the
+coarser grid changes a few rejection decisions, cause not isolated further).
+
+**How.** `tools/map_size/doc_probe.tscn` (headless, in this worktree and in a worktree of the base
+commit `92f6a036`, same probe, same seed): the perfaudit net forest valley (seed 3) at full paint,
+scattered to the end, then `capture`, `encode`, `write_snapshot` and 3 `read` runs (best). Late join:
+`perfaudit_net` (`net_launcher`, 3 peers, `size=320,fill=1`, ENet loopback), the map file's payload
+in the host's `late_join_200_tokens` window and client2's `to_table` window. Both under the lane,
+but the machine was shared with other agents (their gate shards ran at times), so ms are
+indicative; bytes are exact.
+
+| Map | File before | File after | Scatter entry (deflated) before / after | Worker encode before / after | `write_snapshot` before / after | `read` before / after |
+|---|---|---|---|---|---|---|
+| 100 ft, light | 58,024 B | 47,220 B | 16,139 / 5,896 B | 18 / 28 ms | 22 / 19 ms | 17 / 16 ms |
+| 100 ft, full | 337,017 B | 139,228 B | 273,507 / 83,657 B | 83 / 47 ms | 130 / 55 ms | 48 / 38 ms |
+| 200 ft, full | 1,424,784 B | 569,634 B | 1,165,496 / 340,478 B | 360 / 198 ms | 555 / 225 ms | 184 / 145 ms |
+| 320 ft, full | 3,595,339 B | 1,444,132 B | 2,915,751 / 837,483 B | 813 / 500 ms | 1,314 / 564 ms | 455 / 370 ms |
+
+The mass anchors shrink too (320 ft: 282,279 to 209,341 B deflated). `height.bin` (369,684 B at
+320 ft) is now the largest single entry after the rows; it is the next candidate. The main-thread
+save share is unchanged (capture 0.3-0.45 ms at every size; the file format only moves worker
+time). The file is sent as is (zstd gains 0.0-0.5 percent over the ZIP).
+
+Late join at 320 ft, full paint, 200 tokens (loopback, one run each): the map payload the host
+sent was 3,620,288 B before and 1,461,942 B after (the whole window, tokens included), client2's
+`received_ttmap_ms` 865 before and 335 after, and its join-to-table 3,120 ms before and 2,115 ms
+after (no bandwidth cap, so a real link gains more: at 1 MiB/s the file alone is 3.4 s before and
+1.4 s after). Not measured: 100 and 200 ft late joins (the payload is the file's size by
+construction, rows above) and the load's scatter phase on its own (`read` above is the document
+parse; the native `chunk()` path is unchanged and still receives the same flat rows).
+
+The guard: `perf_budget` counter `doc_row_bytes` (`tools/perf_budget_counters.gd`), the deflated
+bytes per row of a fixed 19,600-row field, 7.45 now, limit 11 (JSON was about 34).
 
 ## Collision tiles (topic perfaudit, card authcollide, 2026-11-08)
 
