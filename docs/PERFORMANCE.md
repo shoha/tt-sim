@@ -4751,6 +4751,61 @@ one adds no draw and no triangle); drift home_end over home 1.016 (per round 1.0
 1348 flower instances in all, 103 within 9 m of the eye, about 60 of which the near grass term would
 have thinned (530 other grass tufts lie within that radius).
 
+## Ground pre-pass (topic perfaudit, card gpuprepass, 2026-11-08)
+
+With SSAO on, Forward+ draws the depth pre-pass in its normal-roughness mode, and the ground's
+NORMAL and ROUGHNESS needed its whole layer blend, so the ground shader ran twice per pixel. Two
+changes (`docs/ARCHITECTURE.md` "Ground lighting through light()"): the ground shades through a
+`light()` fed by fragment-to-light varyings (the pre-pass sees the interpolated normal and a
+wet-line roughness), and the ground and skirt materials sort after the foliage
+(`render_priority` 1), so the pre-pass runs the ground's fragment only where no card covers it.
+
+**How.** RTX 3080, nvidia-smi idle before each run (0-5 %, P8, 42-43 C), Vulkan Forward+, 4.7.2
+debug, the perfaudit_gpu render-job probe (`tools/render_jobs/probes/perfaudit_gpu.gd`) with
+`--gpu-profile`: in-run A/B, 6 rounds (first discarded), order rotated and reversed, 20 settle +
+60 measured frames per configuration, median of the round medians [range]; 100 ft
+temperate_forest_summer_s1, valley, seed 1234; SSAO on, lo-fi on, shadows High, MSAA off; 1440p
+and 4K = the world viewport resized in-run. "Before" is the old path rebuilt in-run
+(`gshader` spec `authored_ground.gdshaderinc#GROUND_LOOK,GROUND_PREPASS_FULL`, `gprio` -1 for the
+old order). Noise floor: the same configuration twice in a run, 0.002 ms; drift 0.99-1.07.
+
+Engine behaviour (probe shader: a 192-step hash loop feeding one output, swapped onto the
+ground; pre-pass ms at home with SSAO): none 0.57, ALBEDO 0.58, AO 0.57, light() varying 0.57,
+BENT_NORMAL_MAP 0.56, NORMAL 1.00, ROUGHNESS 0.99, NORMAL_MAP 0.99; SSAO off all 0.44. The loop
+cost 0.30 ms in the opaque pass in every case.
+
+| Committed vs before, home | 1080p | 1440p | 4K |
+|---|---|---|---|
+| Total, SSAO on | 3.94 [3.60-4.02] -> 3.27 [2.96-3.28] (-0.68) | 6.69 -> 5.42 (-1.27) | 13.61 -> 11.11 (-2.51) |
+| Depth pre-pass | 1.41 -> 0.72 | 2.50 -> 1.21 | 5.00 -> 2.55 |
+| Opaque pass | 2.06 -> 2.07 | 3.43 -> 3.49 | 6.79 -> 6.82 |
+| Total, SSAO off | 2.81 -> 2.82 (noise) | | |
+
+The two parts, each in-run against its own control (shader varyings: both arms rebuilt in-run;
+priority: both on the shipped shader):
+
+| Part | View | 1080p | 1440p | 4K |
+|---|---|---|---|---|
+| light() varyings | home | 3.67 -> 3.30 (-0.38) | 6.29 -> 5.50 (-0.79) | 12.80 -> 11.31 (-1.49) |
+| light() varyings | close (zoom 4) | 2.80 -> 2.38 (-0.41) | 4.57 -> 3.85 (-0.72) | 9.72 -> 8.06 (-1.66) |
+| light() varyings | steep face (zoom 8) | 3.55 -> 3.13 (-0.42) | 6.43 -> 5.47 (-0.97) | 12.74 -> 11.13 (-1.61) |
+| light() varyings, SSAO off | all three | -0.02 to +0.05 (noise) | -0.04 to -0.05 | -0.17 to +0.01 |
+| render_priority 1 | home | 3.87 -> 3.56 (-0.33; pre-pass 1.39 -> 1.09) | | |
+
+Look (8-bit levels, 1920x1080, foliage hidden so wind does not count): the light() replica with
+the detailed NORMAL still written differs from the engine's lighting by at most 1 level (mean
+0.02-0.06). The committed change: home max 12, mean 0.31, 0.6 % of channels over 2 levels; zoom 4
+max 2, mean 0.08; steep face max 25, mean 0.40-0.48, 0.5 % over 4 (the sky fill on rock-ledge lips,
+in blue). SSAO's part is nil (the same diff with SSAO off); about two thirds of the mean is the
+constant ambient roughness (0.85; the full roughness in the pre-pass gives mean 0.10 home, 0.18
+steep), the max is the ambient on the interpolated normal. Half-size before/after pairs at home
+and the steep face show no difference to the eye. render_priority is pixel-identical (max 0).
+
+Negative: the foliage's ORM and normal-map fetches in the normal-roughness pre-pass cost nothing
+measurable (a probe variant without them: pre-pass 1.385 -> 1.377 ms, within noise); its alpha
+fetch is needed for the cutout. Bent normals (BENT_NORMAL_MAP from the blended normal) widen the
+ambient change (mean 0.89 at home), so they are not used.
+
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
 What each Shadow quality tier (`directional_soft_shadow_filter_set_quality`) costs, and a "blur"

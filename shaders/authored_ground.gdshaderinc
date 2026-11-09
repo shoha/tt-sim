@@ -117,7 +117,21 @@
  * tangents: top-down, +u is map +X, +v is map +Z, and OpenGL green (+y, "up" in the
  * image) is -v; the sampled xy is rotated back out of each cell's rotation. Each surface's
  * perturbed normal is built in the map frame, surfaces and projections are blended, and the
- * result is written to NORMAL.
+ * result goes to light() (see LIGHTING), not to NORMAL.
+ *
+ * LIGHTING (card gpuprepass, 2026-11-08; docs/PERFORMANCE.md "Ground pre-pass"): with SSAO on,
+ * Forward+ draws the depth pre-pass in its normal-roughness mode, and the driver keeps every
+ * fragment line that feeds NORMAL, NORMAL_MAP, ROUGHNESS, ALPHA or a discard there (a probe
+ * shader measured it; ALBEDO, AO, EMISSION, BENT_NORMAL_MAP and fragment-to-light varyings stay
+ * out). Written to NORMAL and ROUGHNESS, the layer blend ran twice per pixel, 0.4 ms of a 3.7 ms
+ * frame at home. So fragment() leaves NORMAL as the interpolated normal and writes a ROUGHNESS
+ * that needs only the wet line (AMBIENT_ROUGHNESS), and hands the blended view-space normal,
+ * its roughness (through the engine's roughness limiter, replicated) and the specular amount
+ * to light() through varyings; light() is Godot 4.7's Burley diffuse and Schlick-GGX specular
+ * (within 1 level of the engine's on every pixel, checked with the normal still written). Direct
+ * light is unchanged; the ambient (sky irradiance and reflection) and SSAO now see the
+ * interpolated normal and AMBIENT_ROUGHNESS, a mean change of 0.1-0.5 levels, at most 12 at home
+ * and 25 on rock-ledge lips at zoom 8 (look-pending).
  *
  * LAYERS (ground layers card G3, 2026-10-13; the index form replaced eight weight-map slots):
  * the map's surfaces are the layers of four Texture2DArrays (layer_*_array: albedo, normal,
@@ -430,6 +444,18 @@ uniform int skirt_shore_layer = -1;
 varying vec3 v_normal;
 varying vec3 v_position;
 varying vec2 v_fields;
+// GROUND_PREPASS_FULL (defined only by a probe) restores the engine's lighting from NORMAL and
+// ROUGHNESS, which runs the layer blend in the depth pre-pass too (see LIGHTING).
+#ifndef GROUND_PREPASS_FULL
+#define GROUND_LIT_VARYINGS
+#endif
+#ifdef GROUND_LIT_VARYINGS
+// Fragment to light (see LIGHTING): the layer-blended view-space normal, its roughness (after
+// the engine's roughness limiter) and the specular amount.
+varying vec3 v_lit_normal;
+varying float v_lit_roughness;
+varying float v_lit_specular;
+#endif
 
 const float INV_UINT_MAX = 1.0 / 4294967295.0;
 // A weight at or below this is treated as absent (under half an 8-bit step).
@@ -1316,6 +1342,28 @@ float skirt_alpha(vec2 world_xz) {
 }
 #endif
 
+#ifdef GROUND_LIT_VARYINGS
+// The roughness the pre-pass and the ambient light see (see LIGHTING), pulled to WET_ROUGHNESS
+// on the wet line as the full roughness is.
+const float AMBIENT_ROUGHNESS = 0.85;
+
+float lit_schlick(float u) {
+	float m = 1.0 - u;
+	float m2 = m * m;
+	return m2 * m2 * m;
+}
+
+// The engine's screen-space roughness limiter (project defaults: amount 0.25, limit 0.18), which
+// it applies to the fragment's ROUGHNESS from NORMAL's derivatives.
+float limited_roughness(float r, vec3 n) {
+	vec3 dndu = dFdx(n);
+	vec3 dndv = dFdy(n);
+	float variance = 0.25 * (dot(dndu, dndu) + dot(dndv, dndv));
+	float kernel = min(2.0 * variance, 0.18);
+	return sqrt(min(1.0, r * r + kernel));
+}
+#endif
+
 void vertex() {
 	v_normal = NORMAL;
 	v_position = VERTEX;
@@ -1713,7 +1761,8 @@ void fragment() {
 	ALBEDO = lit_albedo * (1.0 - WET_DARKEN * wet_line);
 	AO = ground.orm.r;
 	AO_LIGHT_AFFECT = 0.0;
-	ROUGHNESS = mix(ground.orm.g, WET_ROUGHNESS, WET_GLOSS * gloss);
+	float roughness = mix(ground.orm.g, WET_ROUGHNESS, WET_GLOSS * gloss);
+	float specular = 0.5;
 	METALLIC = ground.orm.b;
 #ifndef GROUND_SKIRT
 	// FIRE (fire_glow.gdshaderinc): the burn turns the ground to matte char and glows on it (a
@@ -1722,8 +1771,8 @@ void fragment() {
 	float charred = 0.0;
 	EMISSION = fire_glow(world_xz, TIME, fire_albedo, charred);
 	ALBEDO = fire_albedo;
-	ROUGHNESS = mix(ROUGHNESS, 1.0, charred);
-	SPECULAR = 0.5 - 0.45 * charred;
+	roughness = mix(roughness, 1.0, charred);
+	specular = 0.5 - 0.45 * charred;
 #endif
 
 	vec3 n_map = normalize(ground.normal + n_geom * 1e-4);
@@ -1731,13 +1780,61 @@ void fragment() {
 	// Char's normals lean up, so the ground's facets do not show through its even near-black.
 	n_map = normalize(mix(n_map, vec3(0.0, 1.0, 0.0), FIRE_FLATTEN * charred));
 #endif
-	NORMAL = normalize(mat3(VIEW_MATRIX) * (mat3(MODEL_MATRIX) * n_map));
+	vec3 n_view = normalize(mat3(VIEW_MATRIX) * (mat3(MODEL_MATRIX) * n_map));
 #ifdef GROUND_SKIRT
 	// The fade in colour (see SKIRT): lit ground * a + backdrop * (1 - a), and the fog the map's
 	// ground gets, times a.
 	ALBEDO *= skirt_a;
-	SPECULAR = 0.5 * skirt_a;
+	specular = 0.5 * skirt_a;
 	EMISSION = skirt_backdrop_color(INV_VIEW_MATRIX) * (1.0 - skirt_a);
 	FOG = skirt_fog_at(VERTEX, INV_VIEW_MATRIX) * vec4(1.0, 1.0, 1.0, skirt_a);
 #endif
+	SPECULAR = specular;
+#ifdef GROUND_LIT_VARYINGS
+	// LIGHTING: the pre-pass sees the interpolated normal (NORMAL is not written) and a roughness
+	// that needs only the wet line; light() shades with the layer-blended values.
+	v_lit_normal = n_view;
+	v_lit_roughness = limited_roughness(roughness, n_view);
+	v_lit_specular = specular;
+	ROUGHNESS = mix(AMBIENT_ROUGHNESS, WET_ROUGHNESS, WET_GLOSS * wet_line);
+#else
+	ROUGHNESS = roughness;
+	NORMAL = n_view;
+#endif
 }
+
+#ifdef GROUND_LIT_VARYINGS
+// Burley diffuse and Schlick-GGX specular as Godot 4.7's light_compute does them, with the
+// layer-blended normal and roughness from fragment().
+void light() {
+	vec3 n = v_lit_normal;
+	float rough = v_lit_roughness;
+	float ndl = min(dot(n, LIGHT), 1.0);
+	float cndv = max(dot(n, VIEW), 1e-4);
+	float cndl = max(ndl, 0.0);
+	vec3 h = normalize(VIEW + LIGHT);
+	float cldh = clamp(dot(LIGHT, h), 0.0, 1.0);
+	if (METALLIC < 1.0) {
+		float fd90m1 = 2.0 * cldh * cldh * rough - 0.5;
+		float fdv = 1.0 + fd90m1 * lit_schlick(cndv);
+		float fdl = 1.0 + fd90m1 * lit_schlick(cndl);
+		DIFFUSE_LIGHT += LIGHT_COLOR * ((1.0 / PI) * fdv * fdl * cndl) * ATTENUATION;
+	}
+	if (rough > 0.0) {
+		float cndh = clamp(dot(n, h), 0.0, 1.0);
+		float a2 = rough * rough;
+		float a = cndh * a2;
+		float k = a2 / (1.0 - cndh * cndh + a * a);
+		float d = k * k * (1.0 / PI);
+		float g = 0.5 / mix(2.0 * cndl * cndv, cndl + cndv, a2);
+		vec3 f0 = mix(vec3(0.16 * v_lit_specular * v_lit_specular), ALBEDO, vec3(METALLIC));
+		float f90 = clamp(dot(f0, vec3(50.0 * 0.33)), METALLIC, 1.0);
+		vec3 f = f0 + (f90 - f0) * lit_schlick(cldh);
+		vec4 r4 = rough * vec4(-1.0, -0.0275, -0.572, 0.022) + vec4(1.0, 0.0425, 1.04, -0.04);
+		float a004 = min(r4.x * r4.x, exp2(-9.28 * cndv)) * r4.x + r4.y;
+		vec2 dfg = vec2(-1.04, 1.04) * a004 + r4.zw;
+		vec3 ec = 1.0 + f0 * (1.0 / max(dfg.x + dfg.y, 1e-3) - 1.0);
+		SPECULAR_LIGHT += ec * (cndl * d * g) * f * LIGHT_COLOR * ATTENUATION * SPECULAR_AMOUNT;
+	}
+}
+#endif

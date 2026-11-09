@@ -65,6 +65,12 @@ const SKIRT_SHADER := preload("res://shaders/authored_ground_skirt.gdshader")
 ## The same with the GROUND LOOK path compiled in (bound by set_looked).
 const GROUND_LOOKED_SHADER := preload("res://shaders/authored_ground_looked.gdshader")
 const SKIRT_LOOKED_SHADER := preload("res://shaders/authored_ground_skirt_looked.gdshader")
+## The ground's and the skirt's render_priority (GroundPalette.build_ground_material; the skirt
+## duplicates it). Above the foliage's 0, so the opaque passes sort the ground after the foliage
+## and the depth pre-pass runs the ground's fragment only where no card already covers it: 1.39
+## -> 1.09 ms pre-pass at the 100 ft forest's home view, 1080p, pixel-identical (card gpuprepass,
+## docs/PERFORMANCE.md "Ground pre-pass").
+const GROUND_RENDER_PRIORITY := 1
 ## The skirt fades out this far past the map edge (skirt_fade_m), the distance stretched
 ## by up to +-SKIRT_WOBBLE with noise; the ring is wide enough for the longest stretch.
 const SKIRT_FADE_M := 24.0
