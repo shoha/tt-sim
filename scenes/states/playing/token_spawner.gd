@@ -325,7 +325,9 @@ func spawn_avatar(
 
 
 ## The shared tail of spawn_asset and spawn_avatar: adds the new token to the board at
-## `spawn_position`, tracks it in the level and plays its arrival.
+## `spawn_position`, tracks it in the level and plays its arrival. It runs at once, since the
+## caller gets the token back (one token is one pack token's 4.4 ms); work that places many
+## goes through TokenSpawnQueue instead, a job per token.
 func _place_new_token(
 	token: BoardToken,
 	pack_id: String,

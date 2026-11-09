@@ -24,9 +24,10 @@ extends Node
 ## (MapSourceLoader.fit_dressing_ground_async, which a play-time load runs too), so painted
 ## plants stand on the GLB ground and the grid overlay draws on it.
 ##
-## Saving writes map.ttmap atomically (MapDocumentIO), then level.json with map_document
-## set (LevelManager), then a thumbnail of the current view. Unsaved edits are counted by
-## AuthoringSession and autosaved every AUTOSAVE_INTERVAL seconds.
+## Saving writes map.ttmap atomically on a worker from a snapshot (AuthoringSaving, the child
+## that owns save and autosave), then level.json with map_document set (LevelManager), then a
+## thumbnail of the view. Unsaved edits are counted by AuthoringSession and autosaved every
+## AuthoringSaving.AUTOSAVE_INTERVAL seconds.
 ##
 ## Brushes (phase 2 T6). GameMap's BrushTool does the gestures and the cursor, and an
 ## AuthoringEditor made per opened map does the edits (masks, ground, scatter, props,
@@ -44,7 +45,6 @@ signal loading_completed
 ## level_folder is set), or null when the session never had one.
 signal exit_requested(level: LevelData)
 
-const AUTOSAVE_INTERVAL := 30.0
 ## Longest the loading screen waits for the first palette species (see _await_palette_warm).
 const PALETTE_WARM_TIMEOUT_MS := 2000
 ## Frames drawn after the first species resolves before the loading screen goes, so its
@@ -73,6 +73,8 @@ var ground_fit: Dictionary = {}
 ## The biome designer when this session is one (BiomeDesignerHost; docs/systems/biome_designer.md):
 ## the proving ground instead of a map, the designer's panels instead of the tool drawer.
 var designer: BiomeDesignerHost = null
+## Save and autosave (a child; this controller is its host).
+var saving: AuthoringSaving = null
 
 var _game_map: GameMap = null
 var _designer_config: Dictionary = {}
@@ -82,11 +84,9 @@ var _ui_layer: CanvasLayer = null
 var _view_fit := MapViewFit.new()
 ## Whether an edit may have moved the ground the camera and the tokens were fit to.
 var _bounds_stale: bool = false
-var _autosave_timer: Timer = null
 ## Bumped by every open and by teardown, so a load still awaiting drops its result.
 var _generation: int = 0
 var _is_open: bool = false
-var _saving: bool = false
 var _leave_prompt: Node = null
 var _recovery_prompt: Node = null
 ## True once the open map's crossing textures were warmed (warm_crossings).
@@ -129,11 +129,8 @@ func setup(game_map: GameMap) -> void:
 		func() -> void: panel.water_pane.select_shape(WaterTool.of(brush).shape)
 	)
 	_show_brush_values()
-	_autosave_timer = Timer.new()
-	_autosave_timer.name = "AutosaveTimer"
-	_autosave_timer.wait_time = AUTOSAVE_INTERVAL
-	_autosave_timer.timeout.connect(_on_autosave_timeout)
-	add_child(_autosave_timer)
+	saving = AuthoringSaving.new(self)
+	add_child(saving)
 	history.changed.connect(_on_history_changed)
 
 
@@ -331,7 +328,7 @@ func _open_async(
 		panel.begin_session()
 	_is_open = true
 	if _designer_config.is_empty():
-		_autosave_timer.start()
+		saving.start_autosave()
 	set_process(true)
 	if not _designer_config.is_empty() and designer == null:
 		designer = BiomeDesignerHost.attach(self, _game_map, _designer_config)
@@ -353,7 +350,7 @@ func _open_async(
 ## are then not copied into the old document first.
 ## Returns false when no map is open or a save is running.
 func reopen_async(replacement: MapDocument = null) -> bool:
-	if not _is_open or _saving:
+	if not _is_open or saving.is_saving():
 		return false
 	_is_open = false
 	var deadline := Time.get_ticks_msec() + REOPEN_WAIT_MS
@@ -830,14 +827,38 @@ func _sync_document() -> void:
 # ============================================================================
 
 
-## Saves the map into its level folder (a new folder named after the map the first time):
-## map.ttmap atomically, then level.json with map_document set, then a thumbnail of the
-## current view. Waits for any scatter regeneration to land first so what is saved is what
-## is shown. Keeps the drawer open. Returns true on success.
+## Saves the map into its level folder (AuthoringSaving.save_async: a snapshot written on a
+## worker, then level.json and a thumbnail). Keeps the drawer open. Returns true on success.
 func save_async() -> bool:
-	if not _is_open or _saving:
-		return false
-	_saving = true
+	return await saving.save_async()
+
+
+## Writes `doc` and `saved` into the level's folder on the calling thread (render jobs and
+## tests; AuthoringSaving.write_level documents it).
+static func write_level(saved: LevelData, doc: MapDocument, thumbnail: Image) -> bool:
+	return AuthoringSaving.write_level(saved, doc, thumbnail)
+
+
+# --- AuthoringSaving's host -----------------------------------------------------------
+
+
+func is_session_open() -> bool:
+	return _is_open
+
+
+func sync_document() -> void:
+	_sync_document()
+
+
+## False while half-regenerated rows or height work would be autosaved.
+func can_autosave() -> bool:
+	var regenerating := is_instance_valid(scatter) and scatter.is_regenerating()
+	return not regenerating and not (editor and editor.has_height_work())
+
+
+## A manual save's waits and fixes before it syncs: the height work and any scatter
+## regeneration land first, so what is saved is what is shown.
+func prepare_save_async() -> void:
 	if editor:
 		# A sculpt stroke's kept rocks and its regeneration request come with its height work.
 		editor.finish_height_work()
@@ -846,52 +867,12 @@ func save_async() -> bool:
 	# Every token is saved standing on the ground as it is now (TokenGrounding).
 	await get_tree().physics_frame
 	if not is_inside_tree():
-		return false
+		return
 	tokens.reground_all()
 	var terrain := _terrain()
 	if terrain:
 		# A reload plans the ground layer slots afresh; past 8 that can differ, so show it now.
 		terrain.replan_ground_layers()
-	_sync_document()
-	var ok := write_level(level, document, capture_thumbnail())
-	_saving = false
-	if not ok:
-		UIManager.show_error("The map could not be saved.")
-		return false
-	session.mark_saved()
-	AuthoringAutosave.discard()
-	UIManager.show_success("Saved “%s”" % level.level_name)
-	return true
-
-
-## Writes `doc` and `saved` into the level's folder, making the folder first for a level that
-## has none. The document goes first, so level.json never names a document that is not on
-## disk; a failure leaves a new level folder-less again. Best-effort thumbnail. Returns true
-## when both files were written.
-static func write_level(saved: LevelData, doc: MapDocument, thumbnail: Image) -> bool:
-	var folder := saved.level_folder
-	var is_new := folder == ""
-	if is_new:
-		folder = LevelManager.new_folder_name(saved.level_name)
-		if DirAccess.make_dir_recursive_absolute(LevelManager.folder_path(folder)) != OK:
-			return false
-	if MapDocumentIO.write(doc, LevelManager.map_document_path(folder)) != OK:
-		if is_new:
-			DirAccess.remove_absolute(LevelManager.folder_path(folder).trim_suffix("/"))
-		return false
-	var previous_document := saved.map_document
-	saved.level_folder = folder
-	saved.map_document = Paths.LEVEL_MAP_DOCUMENT_NAME
-	if LevelManager.save_level_folder(saved, folder) == "":
-		saved.map_document = previous_document
-		if is_new:
-			saved.level_folder = ""
-			DirAccess.remove_absolute(LevelManager.map_document_path(folder))
-			DirAccess.remove_absolute(LevelManager.folder_path(folder).trim_suffix("/"))
-		return false
-	if thumbnail != null:
-		LevelManager.save_thumbnail(saved, thumbnail)
-	return true
 
 
 ## The world viewport as it is now (no drawer: that lives on its own layer), or null.
@@ -899,19 +880,6 @@ func capture_thumbnail() -> Image:
 	if not is_instance_valid(_game_map):
 		return null
 	return LevelThumbnail.capture(_game_map.world_viewport)
-
-
-func _on_autosave_timeout() -> void:
-	if not _is_open or _saving or not session.needs_autosave():
-		return
-	if (
-		(is_instance_valid(scatter) and scatter.is_regenerating())
-		or (editor and editor.has_height_work())
-	):
-		return  # Next tick: half-regenerated rows are not worth recovering.
-	_sync_document()
-	if AuthoringAutosave.write(document, level) == OK:
-		session.mark_autosaved()
 
 
 # ============================================================================
@@ -922,7 +890,7 @@ func _on_autosave_timeout() -> void:
 ## Leave authoring: at once when everything is saved, else after asking whether to save,
 ## discard, or keep editing.
 func request_leave() -> void:
-	if is_instance_valid(_leave_prompt) or _saving:
+	if is_instance_valid(_leave_prompt) or saving.is_saving():
 		return
 	if not _is_open or not session.is_dirty():
 		_leave()
@@ -952,7 +920,7 @@ func _save_and_leave() -> void:
 
 
 func _discard_and_leave() -> void:
-	AuthoringAutosave.discard()
+	saving.discard_autosave()
 	_leave()
 
 
@@ -963,7 +931,7 @@ func leave_now() -> void:
 
 func _leave() -> void:
 	_is_open = false
-	_autosave_timer.stop()
+	saving.teardown()
 	exit_requested.emit(level)
 
 
@@ -980,8 +948,8 @@ func teardown() -> void:
 		editor.rock_keeper.release()
 	if tokens:
 		tokens.clear()
-	if _autosave_timer:
-		_autosave_timer.stop()
+	if saving:
+		saving.teardown()
 	if panel:
 		panel.end_session()
 	for prompt in [_leave_prompt, _recovery_prompt]:
