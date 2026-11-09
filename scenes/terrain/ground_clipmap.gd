@@ -54,7 +54,7 @@ const NO_FLAG := "--no-ground-clipmap"
 ## Whether a map the player plays gets the clipmap without a flag (the Ground detail setting,
 ## GroundClipmapSetting, can still turn it off). Authoring never does: the editor needs the
 ## live ground, and the clipmap there is only for tests (FLAG).
-const ON_BY_DEFAULT := false
+const ON_BY_DEFAULT := true
 
 var terrain: AuthoredTerrain = null
 ## Kept in authoring and with Ground detail off (a render job or a test attached it).
