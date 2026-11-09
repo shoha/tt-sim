@@ -46,10 +46,12 @@ func test_every_instance_is_drawn_up_to_the_full_size() -> void:
 	assert_eq(FoliageDensityController.keep_fraction(14.0), 1.0)
 
 
-func test_half_is_drawn_from_zoom_20_out() -> void:
-	assert_eq(FoliageDensityController.keep_fraction(20.0), 0.5)
-	assert_eq(FoliageDensityController.keep_fraction(30.0), 0.5)
-	assert_eq(FoliageDensityController.keep_fraction(400.0), 0.5)
+func test_two_thirds_are_drawn_from_zoom_20_out() -> void:
+	# 2/3 quantised to 1/32 is 21/32.
+	assert_eq(FoliageDensityController.keep_fraction(20.0), 21.0 / 32.0)
+	assert_eq(FoliageDensityController.keep_fraction(30.0), 21.0 / 32.0)
+	assert_eq(FoliageDensityController.keep_fraction(400.0), 21.0 / 32.0)
+	assert_almost_eq(FoliageDensityController.keep_fraction(20.0), 2.0 / 3.0, 1.0 / 32.0)
 
 
 func test_the_ramp_between_is_monotone_and_stepped() -> void:
@@ -71,14 +73,14 @@ func test_the_ramp_between_is_monotone_and_stepped() -> void:
 func test_a_map_whose_home_is_further_out_keeps_all_of_it_at_home() -> void:
 	# Home 25: the ramp starts there, and spans 25 * (20 / 14 - 1) = 10.7 m of camera size.
 	assert_eq(FoliageDensityController.keep_fraction(25.0, 25.0), 1.0)
-	assert_eq(FoliageDensityController.keep_fraction(25.0 * 20.0 / 14.0, 25.0), 0.5)
+	assert_eq(FoliageDensityController.keep_fraction(25.0 * 20.0 / 14.0, 25.0), 21.0 / 32.0)
 	assert_lt(FoliageDensityController.keep_fraction(30.0, 25.0), 1.0)
 
 
 func test_a_home_closer_in_than_the_full_size_does_not_pull_the_ramp_in() -> void:
 	# A tiny map's home at 8 still draws everything up to 14: zoomed in, a card is large on screen.
 	assert_eq(FoliageDensityController.keep_fraction(12.0, 8.0), 1.0)
-	assert_eq(FoliageDensityController.keep_fraction(20.0, 8.0), 0.5)
+	assert_eq(FoliageDensityController.keep_fraction(20.0, 8.0), 21.0 / 32.0)
 
 
 func test_a_chunk_is_never_emptied() -> void:
