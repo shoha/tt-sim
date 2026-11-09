@@ -1,12 +1,16 @@
 extends GutTest
 
 ## SurfaceStore.prebake (SurfacePrebake, card sysbake): maps baked on the worker lane are the
-## same bytes as main-thread bakes, and so are the cache files they write; a map asked for while
-## the lane holds it is taken over or waited for, never baked twice; forgetting drops the lane's
-## results. Real core surfaces, each run with its own scratch cache so every bake is cold.
+## same maps as main-thread bakes (same format, size and mips, the same pixels once decompressed:
+## the BC7 compressor is not bit-reproducible, card bakedet), and so are the cache files they
+## write, which read back valid; a map asked for while the lane holds it is taken over or
+## waited for, never baked twice; forgetting drops the lane's results. Real core surfaces, each
+## run with its own scratch cache so every bake is cold.
 
 const ROOT := "user://test_surface_prebake"
 const KINDS: Array[String] = ["albedo", "normal", "orm", "height"]
+## The most one channel of a decompressed block may move between two bakes of the same map.
+const MAX_LEVEL_DIFF := 4
 
 var _saved_cache_root: String = ""
 var _names: PackedStringArray = PackedStringArray()
@@ -50,18 +54,20 @@ func _wait_lane() -> void:
 		frames += 1
 
 
-## {"<surface> <kind>": SHA-256 of the baked map's data} through image_of.
-func _digests() -> Dictionary:
+## {"<surface> <kind>": the baked map} through image_of (null when there is none).
+func _maps() -> Dictionary:
 	var out := {}
 	for name in _names:
 		for kind in KINDS:
-			var image := SurfaceStore.image_of(PaletteLibrary.DEFAULT_ROOT, name, kind)
-			out["%s %s" % [name, kind]] = _sha(image.get_data()) if image != null else ""
+			out["%s %s" % [name, kind]] = SurfaceStore.image_of(
+				PaletteLibrary.DEFAULT_ROOT, name, kind
+			)
 	return out
 
 
-## {path under the cache root: SHA-256 of the file} of every cache file.
-func _cache_files(cache: String) -> Dictionary:
+## {path under the cache root: the map the cache file reads back as} of every cache file
+## (SurfaceCache.read checks the header and the file's own SHA-256; null means an invalid file).
+func _cache_maps(cache: String) -> Dictionary:
 	var out := {}
 	_collect(ROOT.path_join(cache), ROOT.path_join(cache), out)
 	return out
@@ -71,9 +77,56 @@ func _collect(base: String, path: String, out: Dictionary) -> void:
 	for file_name in DirAccess.get_files_at(path):
 		if file_name.get_extension() == SurfaceCache.FILE_EXTENSION:
 			var full := path.path_join(file_name)
-			out[full.substr(base.length())] = _sha(FileAccess.get_file_as_bytes(full))
+			out[full.substr(base.length())] = SurfaceCache.read(full)
 	for sub in DirAccess.get_directories_at(path):
 		_collect(base, path.path_join(sub), out)
+
+
+## {key: why} of every key where `got` and `expected` (dictionaries of key -> Image) are not the
+## same map; empty when they match. Same key set, format, size and mip count are exact. The BC7
+## compressor is not bit-reproducible (card bakedet): a flat block that two modes encode equally
+## well is sometimes written in one mode and sometimes in the other, from run to run and thread to
+## thread, so a compressed map is compared by its decompressed pixels, within MAX_LEVEL_DIFF per
+## channel (the differences measured were 0 to 2). An uncompressed map is compared exactly.
+func _differences(got: Dictionary, expected: Dictionary) -> Dictionary:
+	var out := {}
+	for key: String in expected:
+		if not got.has(key):
+			out[key] = "missing"
+			continue
+		var why := _difference(got[key] as Image, expected[key] as Image)
+		if why != "":
+			out[key] = why
+	for key: String in got:
+		if not expected.has(key):
+			out[key] = "unexpected"
+	return out
+
+
+func _difference(a: Image, b: Image) -> String:
+	if a == null or b == null:
+		return "no image" if a == b else "one side has no image"
+	if (
+		a.get_format() != b.get_format()
+		or a.get_size() != b.get_size()
+		or a.get_mipmap_count() != b.get_mipmap_count()
+		or a.get_data().size() != b.get_data().size()
+	):
+		return "format, size or mip count differ"
+	if not a.is_compressed():
+		return "" if a.get_data() == b.get_data() else "pixels differ"
+	var pa := a.duplicate() as Image
+	var pb := b.duplicate() as Image
+	if pa.decompress() != OK or pb.decompress() != OK:
+		return "does not decompress"
+	var da := pa.get_data()
+	var db := pb.get_data()
+	if da == db:
+		return ""
+	var worst := 0
+	for i in da.size():
+		worst = maxi(worst, absi(int(da[i]) - int(db[i])))
+	return "" if worst <= MAX_LEVEL_DIFF else "decompressed pixels differ by %d" % worst
 
 
 func _sha(bytes: PackedByteArray) -> String:
@@ -83,22 +136,24 @@ func _sha(bytes: PackedByteArray) -> String:
 	return hashing.finish().hex_encode()
 
 
-func test_lane_bakes_the_same_bytes_and_cache_files_as_the_main_thread() -> void:
+func test_lane_bakes_the_same_maps_and_cache_files_as_the_main_thread() -> void:
 	assert_eq(_names.size(), 2, "two core library surfaces")
 	_cold("main")
-	var main := _digests()
+	var main := _maps()
 	assert_eq(SurfaceStore.stats["bakes"], 8, "the main thread baked every map")
-	var main_files := _cache_files("main")
+	var main_files := _cache_maps("main")
 	_cold("lane")
 	SurfaceStore.prebake(_names)
 	assert_true(SurfaceStore.is_prebaking(), "the lane is working")
 	await _wait_lane()
 	assert_false(SurfaceStore.is_prebaking(), "the lane finished")
-	var lane := _digests()
+	var lane := _maps()
 	assert_eq(SurfaceStore.stats["bakes"], 0, "nothing baked on the main thread")
 	assert_eq(SurfaceStore.stats["prebakes"], 8, "every map came from the lane")
-	assert_eq(lane, main, "byte-identical maps")
-	assert_eq(_cache_files("lane"), main_files, "byte-identical cache files at the same paths")
+	assert_eq(_differences(lane, main), {}, "the same maps")
+	assert_eq(
+		_differences(_cache_maps("lane"), main_files), {}, "the same valid cache files at the same paths"
+	)
 	assert_eq(main_files.size(), 8)
 	# A second prebake of maps in memory queues nothing.
 	SurfaceStore.prebake(_names)
@@ -107,16 +162,16 @@ func test_lane_bakes_the_same_bytes_and_cache_files_as_the_main_thread() -> void
 
 func test_a_map_asked_for_while_queued_or_baking_is_baked_once() -> void:
 	_cold("main")
-	var main := _digests()
+	var main := _maps()
 	_cold("claim")
 	SurfaceStore.prebake(_names)
 	# At once: the first albedo is baking or queued, the last height queued.
-	var claimed := _digests()
+	var claimed := _maps()
 	await _wait_lane()
-	assert_eq(claimed, main, "the same bytes whoever baked them")
+	assert_eq(_differences(claimed, main), {}, "the same maps whoever baked them")
 	var stats := SurfaceStore.stats
 	assert_eq(int(stats["bakes"]) + int(stats["prebakes"]), 8, "each map baked once")
-	assert_eq(_cache_files("claim").size(), 8)
+	assert_eq(_cache_maps("claim").size(), 8)
 
 
 func test_forget_drops_the_lane_results() -> void:
@@ -148,8 +203,8 @@ func _wait_panels() -> void:
 ## a load asks for it, and the bytes and cache files stay the main thread's.
 func test_loads_pass_pictures_and_the_bytes_stay_the_same() -> void:
 	_cold("main")
-	var main := _digests()
-	var main_files := _cache_files("main")
+	var main := _maps()
+	var main_files := _cache_maps("main")
 	_cold("order")
 	SurfaceStore.prebake(
 		PackedStringArray([_names[0]]), SurfaceStore.PRIORITY_AHEAD, PackedStringArray(["albedo"])
@@ -168,9 +223,9 @@ func test_loads_pass_pictures_and_the_bytes_stay_the_same() -> void:
 	assert_true(SurfaceStore.prebaking(PackedStringArray([_names[1]])), "the shown maps wait")
 	await _wait_lane()
 	assert_false(SurfaceStore.prebaking(_names), "the lane finished")
-	assert_eq(_digests(), main, "byte-identical maps whatever the order")
+	assert_eq(_differences(_maps(), main), {}, "the same maps whatever the order")
 	assert_eq(SurfaceStore.stats["bakes"], 0, "nothing baked on the main thread")
-	assert_eq(_cache_files("order"), main_files, "byte-identical cache files")
+	assert_eq(_differences(_cache_maps("order"), main_files), {}, "the same valid cache files")
 
 
 ## Card authbake: a panel's work on a cold map waits for the lane instead of baking in its frame,

@@ -65,8 +65,10 @@ static var _hashes: Dictionary = {}
 static var stats: Dictionary = _zero_stats()
 ## The lane that bakes maps ahead of their first use (prebake()), made on the first prebake.
 static var _prebake: Variant = null  # a SurfacePrebake, loaded on first use (start-up size)
-## Held around every bake (compression and cache write), on any thread: two compressions at once
-## differ in their bytes. Lives here, not in SurfacePrebake, so start-up never loads that script.
+## Held around every bake (compression and cache write), on any thread, so two bakes never compete
+## for the worker pool (a compression already spreads over every pool thread). It does not make
+## the bytes reproducible: see SurfaceBake.bake. Lives here, not in SurfacePrebake, so start-up
+## never loads that script.
 static var compress_lock := Mutex.new()
 ## False turns prebake() into a no-op (every map bakes where it is first asked for): the
 ## performance harness's in-run A/B switch (perfaudit_system.gd `prebake`).
@@ -567,7 +569,8 @@ static func _count(loaded: Dictionary, baked_key: String, hit_key: String) -> vo
 ## ("baked"); image null and outcome "failed" when the PNG is missing, hostile or unreadable;
 ## rejected true when a cache file was there but unusable. It reads and writes no table of the
 ## store, so the prebake lane runs it on its worker; the bake and the cache write hold
-## compress_lock (two compressions at once differ in their bytes).
+## compress_lock (one compression at a time). Two bakes of one PNG can differ in a few BC7 block
+## bytes (SurfaceBake.bake), and the cache and memory then hold valid, equivalent maps.
 static func load_map(
 	file: String, kind: String, library_id: String, name: String, hash_text: String
 ) -> Dictionary:
