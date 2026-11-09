@@ -108,6 +108,8 @@ var _selection_glow: SelectionGlowRenderer
 var _spawn_tween: Tween
 var _removal_tween: Tween
 var _spawn_target_scale: Vector3 = Vector3.ONE
+# True between hold_for_pop_in() and the pop-in that follows it: the token waits at near-zero scale.
+var _pop_in_held := false
 
 
 func _enter_tree() -> void:
@@ -420,9 +422,20 @@ func clear_drag_lock() -> void:
 ## running rigid_body.scale is transient (it starts near zero), so state
 ## snapshots taken mid-tween must report the tween's target instead.
 func get_logical_scale() -> Vector3:
-	if _spawn_tween and _spawn_tween.is_valid() and _spawn_tween.is_running():
+	if _pop_in_held or (_spawn_tween and _spawn_tween.is_valid() and _spawn_tween.is_running()):
 		return _spawn_target_scale
 	return rigid_body.scale if rigid_body else scale
+
+
+## Keeps the token at near-zero scale until play_spawn_animation() runs, so a batch built behind a
+## loading sheet can be popped in later, on a beat, once the table is on screen. The scale it will
+## grow to is the current one (get_logical_scale reports it meanwhile).
+func hold_for_pop_in() -> void:
+	if not rigid_body or _pop_in_held:
+		return
+	_spawn_target_scale = rigid_body.scale
+	rigid_body.scale = Vector3(0.01, 0.01, 0.01)
+	_pop_in_held = true
 
 
 ## Play a bouncy pop-in spawn animation.
@@ -431,9 +444,11 @@ func play_spawn_animation(delay: float = 0.0) -> void:
 	if not rigid_body:
 		return
 
-	# Remember the intended scale and start at near-zero
-	_spawn_target_scale = rigid_body.scale
-	rigid_body.scale = Vector3(0.01, 0.01, 0.01)
+	# Remember the intended scale and start at near-zero (a held token already did both)
+	if not _pop_in_held:
+		_spawn_target_scale = rigid_body.scale
+		rigid_body.scale = Vector3(0.01, 0.01, 0.01)
+	_pop_in_held = false
 
 	if _spawn_tween and _spawn_tween.is_valid():
 		_spawn_tween.kill()

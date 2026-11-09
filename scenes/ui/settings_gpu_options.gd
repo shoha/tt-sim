@@ -1,11 +1,13 @@
 class_name SettingsGpuOptions
 extends RefCounted
 
-## The Graphics tab's two GPU-cost options, split out of settings_menu.gd to keep that file under
-## the lint budget: "Foliage edges" (graphics/foliage_edges, FoliageEdges, beside Antialiasing) and
-## "Shadow cascades" (graphics/shadow_cascades, ShadowCascades, beside Shadow quality). Both default
-## to the game as it shipped before them. Like the other graphics options they apply on Apply,
-## with no restart: the foliage re-picks its shader variant and the sun its cascades at once.
+## The Graphics tab's three cost options, split out of settings_menu.gd to keep that file under
+## the lint budget: "Foliage edges" (graphics/foliage_edges, FoliageEdges, beside Antialiasing),
+## "Shadow cascades" (graphics/shadow_cascades, ShadowCascades, beside Shadow quality) and "Idle
+## throttle" (graphics/idle_throttle, IdleThrottle, beside VSync: a checkbox, on by default, that
+## caps the frame rate while the window is in the background). The first two default to the game as
+## it shipped before them. Like the other graphics options they apply on Apply, with no restart:
+## the foliage re-picks its shader variant, the sun its cascades and the throttle its cap at once.
 
 const FOLIAGE_EDGES_TOOLTIP := (
 	"How leaf and grass edges look while antialiasing is on (an Antialiasing setting, or the eye "
@@ -17,21 +19,30 @@ const SHADOW_CASCADES_TOOLTIP := (
 	+ "faster; far tree shadows may pop as the camera tilts. Single is the fastest and softens "
 	+ "distant shadows."
 )
+const IDLE_THROTTLE_TOOLTIP := (
+	"Slows the game down while its window is in the background (15 frames a second when another "
+	+ "window has the focus, 5 when minimised) to save power and heat. Turn it off to keep the "
+	+ "table at full speed on a second monitor. Never slows a map that is loading, or a host "
+	+ "with players connected."
+)
 
 
 ## Reads both choices from the settings file at startup (Root, before any map loads).
 static func apply_startup(config: ConfigFile) -> void:
 	FoliageEdges.current = FoliageEdges.stored(config)
 	ShadowCascades.current = ShadowCascades.stored(config)
+	IdleThrottle.enabled = IdleThrottle.stored(config)
 
 
 ## Puts the saved choices on the options without applying them (Root applied them at startup).
 static func show_saved(menu: SettingsMenu, config: ConfigFile) -> void:
 	_select(menu.foliage_edges_option, FoliageEdges.stored(config))
 	_select(menu.shadow_cascades_option, ShadowCascades.stored(config))
+	menu.idle_throttle_check.set_pressed_no_signal(IdleThrottle.stored(config))
 
 
 static func save(menu: SettingsMenu, config: ConfigFile) -> void:
+	config.set_value("graphics", IdleThrottle.KEY, menu.idle_throttle_check.button_pressed)
 	config.set_value(
 		"graphics",
 		FoliageEdges.KEY,
@@ -45,6 +56,7 @@ static func save(menu: SettingsMenu, config: ConfigFile) -> void:
 
 
 static func show_defaults(menu: SettingsMenu) -> void:
+	menu.idle_throttle_check.set_pressed_no_signal(IdleThrottle.DEFAULT)
 	_select(menu.foliage_edges_option, FoliageEdges.DEFAULT)
 	_select(menu.shadow_cascades_option, ShadowCascades.DEFAULT)
 
@@ -55,6 +67,7 @@ static func show_defaults(menu: SettingsMenu) -> void:
 static func apply(menu: SettingsMenu, game_map: Node3D) -> void:
 	FoliageEdges.current = FoliageEdges.sanitize(menu.foliage_edges_option.get_selected_id())
 	ShadowCascades.current = ShadowCascades.sanitize(menu.shadow_cascades_option.get_selected_id())
+	IdleThrottle.set_enabled(menu.idle_throttle_check.button_pressed)
 	if game_map == null:
 		return
 	game_map.set_foliage_antialiasing_level(menu.antialiasing_option.selected)
@@ -65,6 +78,7 @@ static func apply(menu: SettingsMenu, game_map: Node3D) -> void:
 static func apply_tooltips(menu: SettingsMenu) -> void:
 	menu.foliage_edges_option.tooltip_text = FOLIAGE_EDGES_TOOLTIP
 	menu.shadow_cascades_option.tooltip_text = SHADOW_CASCADES_TOOLTIP
+	menu.idle_throttle_check.tooltip_text = IDLE_THROTTLE_TOOLTIP
 
 
 static func _select(option: OptionButton, choice: int) -> void:

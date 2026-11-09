@@ -22,6 +22,24 @@ func test_logical_scale_matches_the_body_when_idle() -> void:
 	assert_eq(token.get_logical_scale(), Vector3(2, 2, 2))
 
 
+func test_a_held_token_waits_small_reports_its_target_and_pops_in_from_there() -> void:
+	var token := _make_token()
+	token.rigid_body.scale = Vector3(2, 2, 2)
+
+	token.hold_for_pop_in()
+	token.hold_for_pop_in()
+
+	assert_almost_eq(token.rigid_body.scale.x, 0.01, 0.001, "held at near-zero scale")
+	assert_eq(token.get_logical_scale(), Vector3(2, 2, 2), "a second hold keeps the target")
+	assert_eq(TokenState.from_board_token(token).scale, Vector3(2, 2, 2))
+
+	token.play_spawn_animation()
+
+	assert_eq(token.get_logical_scale(), Vector3(2, 2, 2), "the tween keeps the target")
+	await wait_seconds(BoardToken.SPAWN_ANIM_DURATION + 0.2)
+	assert_almost_eq(token.rigid_body.scale.x, 2.0, 0.01, "popped in to the held target")
+
+
 func test_logical_scale_reports_the_tween_target_mid_spawn() -> void:
 	var token := _make_token()
 	token.rigid_body.scale = Vector3(2, 2, 2)

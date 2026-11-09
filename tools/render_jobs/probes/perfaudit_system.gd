@@ -37,6 +37,7 @@ extends RefCounted
 ##   await                does nothing; its blocker holds the job while a node above runs
 ##   pacing {on}          LoadPacing.enabled (vsync off and the raised budgets under a map load's
 ##                        sheet), for an in-run A/B of load pacing
+##   throttle {on}        installs (true) or frees (false) the IdleThrottle node (off when scripted)
 ##   vsync {on}           the window's vsync mode
 ##   tokens {folder, count}  give a saved probe level `count` Beasts pack tokens on a grid
 ##   prebake {on}         SurfaceStore.prebake_enabled, MapSourceLoader.early_prebake and
@@ -55,6 +56,8 @@ const OPEN_CARD_PREFIX := "_sysopen_"
 const BAKE_CARD_PREFIX := "_sysbake_"
 ## The card after that (authbake: the authoring open's pictures on the lane, earlier prebakes).
 const AUTHBAKE_PREFIX := "_authbake_"
+## The pop-in card (sysidle): token levels for the pop-in probe (local/sysidle).
+const IDLE_CARD_PREFIX := "_sysidle_"
 const NODE_PREFIX := "PerfauditSys"
 const SHAPES := preload("res://tools/render_jobs/probes/terrain_shapes.gd")
 const WATER := preload("res://tools/render_jobs/probes/water.gd")
@@ -135,6 +138,18 @@ static func run(base: Node, step: Dictionary) -> String:
 				DisplayServer.VSYNC_ENABLED if vsync_on else DisplayServer.VSYNC_DISABLED
 			)
 			return "vsync %s" % ("on" if vsync_on else "off")
+		"throttle":
+			# The idle throttle is off in a scripted run; this installs it (on) or frees it (off),
+			# for an in-run A/B of the background frame cap (sysidle).
+			var existing := base.get_node_or_null("IdleThrottle")
+			if str(step.get("on", true)).to_lower() == "true":
+				IdleThrottle.allow_scripted = true
+				IdleThrottle.enabled = true
+				if existing == null:
+					IdleThrottle.install(base)
+			elif existing != null:
+				existing.free()
+			return "idle throttle %s" % str(step.get("on", true))
 		"tokens":
 			return _tokens(String(step.get("folder", "")), int(step.get("count", 100)))
 		"prebake":
@@ -574,7 +589,9 @@ static func _cleanup() -> String:
 
 ## Whether level `folder` is one this probe made (its own prefix, or a wave-2 card's).
 static func _owned(folder: String) -> bool:
-	for prefix in [PREFIX, CARD_PREFIX, OPEN_CARD_PREFIX, BAKE_CARD_PREFIX, AUTHBAKE_PREFIX]:
+	for prefix in [
+		PREFIX, CARD_PREFIX, OPEN_CARD_PREFIX, BAKE_CARD_PREFIX, AUTHBAKE_PREFIX, IDLE_CARD_PREFIX
+	]:
 		if folder.begins_with(prefix):
 			return true
 	return false
@@ -929,9 +946,11 @@ class CpuWindow:
 	var start_us := 0
 	var start_cpu := 0.0
 	var start_frames := 0
+	var start_loop := 0
 
 	func _ready() -> void:
 		process_mode = Node.PROCESS_MODE_ALWAYS
+		start_loop = Engine.get_process_frames()
 		start_cpu = float(_process_stats().get("cpu_ms", 0.0))
 		start_us = Time.get_ticks_usec()
 		start_frames = Engine.get_frames_drawn()
@@ -956,7 +975,7 @@ class CpuWindow:
 			(
 				(
 					"cpu %s | wall %.0f ms, process cpu %.0f ms (%.2f cores), "
-					+ "frames drawn %d (%.1f fps), mode %d, focused %s, gpu %s"
+					+ "frames drawn %d (%.1f fps), loop %.1f/s (max_fps %d), mode %d, focused %s, gpu %s"
 				)
 				% [
 					label,
@@ -965,6 +984,8 @@ class CpuWindow:
 					cpu / wall,
 					frames,
 					frames * 1000.0 / wall,
+					(Engine.get_process_frames() - start_loop) * 1000.0 / wall,
+					Engine.max_fps,
 					DisplayServer.window_get_mode(),
 					str(DisplayServer.window_is_focused()),
 					String(res[0] if not res.is_empty() else "").strip_edges()

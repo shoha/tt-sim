@@ -32,6 +32,8 @@ const LIMITS := {
 	"pop_in_span_s": 1.5,
 	"fade_token_cap": 256.0,
 	"covered_max_fps": 240.0,
+	"idle_unfocused_fps": 15.0,
+	"idle_minimized_fps": 5.0,
 	"stroke_tiles": 12.0,
 	"dab_tiles": 6.0,
 	"doc_row_bytes": 11.0,
@@ -287,6 +289,22 @@ static func token_rows(parent: Node) -> Array[Dictionary]:
 			"fps",
 			"240; uncapped, the cover spun 3,500 frames of 0.5 ms",
 			"F-system-3, 42a1dfe9"
+		),
+		_row(
+			"idle_unfocused_fps",
+			"Frame cap while the window is unfocused (idle throttle)",
+			IdleThrottle.cap_for(true, false, false, false),
+			"fps",
+			"15; an idle game ran at full rate",
+			"S4, sysidle"
+		),
+		_row(
+			"idle_minimized_fps",
+			"Frame cap while the window is minimised (idle throttle)",
+			IdleThrottle.cap_for(true, false, true, false),
+			"fps",
+			"5; a minimised game drew nothing yet used 0.18-0.23 cores",
+			"S4, sysidle"
 		),
 	]
 
