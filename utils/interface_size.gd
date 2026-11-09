@@ -16,9 +16,9 @@ extends RefCounted
 ## window, and nothing can pass MAX_FACTOR. 1.5 keeps the virtual canvas at 1280x720 or more on
 ## any window, the canvas every screen must fit (test_interface_size_fit.gd).
 ##
-## Only the canvas scales. The board renders at its 100% size (GameMap scales its world
-## viewport's 3D render back up by the factor, world_render_scale, times the player's Render
-## scale, RenderScale), so the camera's framing,
+## Only the canvas scales. The board renders at its 100% size (WorldView sizes the world viewport
+## in output pixels from this factor, world_render_scale, and the player's Render scale,
+## RenderScale, is a share of that), so the camera's framing,
 ## the render resolution and pixel-sized 3D details such as grid lines are unchanged. Overlays
 ## drawn on the canvas over the board (measure labels, gizmo handles) are UI and follow it.
 ##

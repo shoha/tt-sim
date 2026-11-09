@@ -32,6 +32,8 @@ uniform float swim : hint_range(0.0, 1.0) = 0.0;
 
 // Where the ring sits, as a share of the quad's half size (the rest is room for the ripple).
 const float RING_R = 0.7;
+// The world viewport's pixel height over 1080 (WorldView), for widths authored in 1080p pixels.
+global uniform float world_px_scale;
 // Ring and keyline half widths in metres, and their floors in pixels.
 const float RING_HALF_M = 0.028;
 const float RING_HALF_PX = 1.1;
@@ -63,11 +65,12 @@ void fragment() {
 	float px = max(fwidth(r), 1e-5);
 	// Metres per unit of r: the quad's half size.
 	float half_size = radius_m / RING_R;
-	float ring_half = max(RING_HALF_M / half_size, RING_HALF_PX * px);
+	// The floors are 1080p pixels: they grow with the world viewport (world_px_scale).
+	float ring_half = max(RING_HALF_M / half_size, RING_HALF_PX * world_px_scale * px);
 	float soft = mix(px, max(SWIM_SOFT_M / half_size, px), swim);
 
 	float core = band(r, RING_R, ring_half, soft) * mix(1.0, SWIM_RING_ALPHA, swim);
-	float keyline = band(r, RING_R, ring_half + KEYLINE_PX * px, px) * 0.55 * (1.0 - swim);
+	float keyline = band(r, RING_R, ring_half + KEYLINE_PX * world_px_scale * px, px) * 0.55 * (1.0 - swim);
 	float shadow = (1.0 - smoothstep(RING_R * 0.35, RING_R, r)) * SHADOW_ALPHA * (1.0 - swim);
 
 	float t = fract(TIME / RIPPLE_PERIOD_S);

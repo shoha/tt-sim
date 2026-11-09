@@ -117,7 +117,7 @@ static func eye_centre(game_map: Node3D) -> Variant:
 	var camera: Camera3D = game_map.camera_node
 	if camera.projection != Camera3D.PROJECTION_PERSPECTIVE:
 		return null
-	var centre := Vector2(game_map.world_viewport.size as Vector2i) * 0.5
+	var centre := WorldView.canvas_size(game_map.world_viewport) * 0.5
 	return eye_point(
 		camera.project_ray_origin(centre),
 		camera.project_ray_normal(centre),

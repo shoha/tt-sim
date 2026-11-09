@@ -4,24 +4,23 @@ extends RefCounted
 ## Render scale: how many pixels the 3D board renders, as a share (per axis) of its full
 ## resolution, upscaled with AMD FSR 1.0 (Settings > Graphics, per player, never networked).
 ##
-## The model. GameMap draws the world in a SubViewport inside a stretched SubViewportContainer,
-## and the project stretches canvas_items on a 1920x1080 base canvas, so that viewport is sized
-## in canvas units: 1920x1080 on every 16:9 window from 720p to 4K (measured, renderscale
-## 2026-11-08). Its full render is therefore the 100% canvas (Interface size scales the canvas
-## and GameMap scales the render back up by the same factor, InterfaceSize.world_render_scale).
-## On a 1440p or 4K screen the canvas enlarges that 1920x1080 image to the window (bilinear);
-## below 1080p the window shows fewer pixels than are rendered (a supersample of up to 2.25x at
-## 720p). The 2D layer (menus, text, overlays) always draws at the window's own resolution.
+## The model. GameMap draws the world in a SubViewport sized in output pixels (WorldView): the
+## window's own pixels from 1080p up to 4K (1920x1080 at 1080p, 2560x1440 at 1440p, 3840x2160 at
+## 4K), and the 1080p-class size below that, where the window shows fewer pixels than are
+## rendered (a supersample of up to 2.25x at 720p). That is the full render. Before rendersize
+## (2026-11-09) the viewport was sized in canvas units, so 1440p and 4K screens showed a
+## 1920x1080 render enlarged by the canvas. The 2D layer (menus, text, overlays) always draws at
+## the window's own resolution.
 ##
-## A fixed choice renders that percent of the full render: viewport.scaling_3d_scale is the
-## Interface size factor times percent / 100, and FSR 1.0 upscales a render under the
-## viewport's size (its RCAS pass sharpens at FSR_SHARPNESS; the engine lowers the texture mip
-## bias by log2(scale) on its own, so textures keep their detail). 100 % is the full render,
-## exactly the game before this setting, and the default until the owner has judged Auto.
+## A fixed choice renders that percent of the full render: viewport.scaling_3d_scale is
+## percent / 100, and FSR 1.0 upscales a render under the viewport's size (its RCAS pass sharpens
+## at FSR_SHARPNESS; the engine lowers the texture mip bias by log2(scale) on its own, so textures
+## keep their detail). 100 % is the full render, the default: a player who cannot hold the
+## frame rate on a 4K screen lowers it themselves (FSR 50 % at 4K draws 1920x1080 pixels, the
+## cost the game had before rendersize).
 ##
 ## Auto renders no more pixels than the screen shows: the full render while the window is 1080p
-## or larger (1440p and 4K keep their 1920x1080-class render, which matches FSR 0.75 and 0.5 of
-## the output), and the window's own size below it. When that lands within AUTO_SNAP of the
+## or larger, and the window's own size below it. When that lands within AUTO_SNAP of the
 ## viewport's own size Auto renders at the viewport's size instead, since an upscale pass over a
 ## nearly equal size costs more than the pixels it saves. GameMap re-applies it on every resize.
 
@@ -70,22 +69,19 @@ static func fraction_for(
 	return picked / 100.0
 
 
-## The world viewport's scaling_3d_scale for [param choice]: the Interface size factor
-## [param content_factor] (which keeps the full render at the 100% canvas) times the share.
+## The world viewport's scaling_3d_scale for [param choice]: the share of the full render (the
+## viewport itself is already sized in output pixels, WorldView).
 static func scale_3d(
-	choice: int,
-	window_size: Vector2,
-	content_factor: float = 1.0,
-	base: Vector2 = InterfaceSize.BASE_SIZE
+	choice: int, window_size: Vector2, base: Vector2 = InterfaceSize.BASE_SIZE
 ) -> float:
-	var scale := content_factor * fraction_for(choice, window_size, base)
+	var scale := fraction_for(choice, window_size, base)
 	if sanitize(choice) == AUTO and scale >= AUTO_SNAP and scale < 1.0:
 		return 1.0
 	return scale
 
 
-## The scaling_3d_mode for a viewport scale: UPSCALER under 1, bilinear at or above it (the
-## Interface size supersample; FSR 1.0 cannot downsample).
+## The scaling_3d_mode for a viewport scale: UPSCALER under 1, bilinear at 1 (no scaling; FSR 1.0
+## cannot downsample).
 static func mode_for(scale: float) -> Viewport.Scaling3DMode:
 	return UPSCALER if scale < 1.0 else Viewport.SCALING_3D_MODE_BILINEAR
 
@@ -97,7 +93,7 @@ static func apply_to(viewport: Viewport, window: Window, choice: int) -> float:
 	var base := Vector2(window.content_scale_size) if window else InterfaceSize.BASE_SIZE
 	if base.x <= 0.0 or base.y <= 0.0:
 		base = InterfaceSize.BASE_SIZE
-	var scale := scale_3d(choice, window_size, InterfaceSize.world_render_scale(window), base)
+	var scale := scale_3d(choice, window_size, base)
 	viewport.scaling_3d_mode = mode_for(scale)
 	viewport.scaling_3d_scale = scale
 	viewport.fsr_sharpness = FSR_SHARPNESS
@@ -121,27 +117,15 @@ static func label_for(
 
 
 ## The 3D render's size in pixels for [param choice] on a window of [param window_size]: the
-## world viewport (the full render shrunk by the Interface size factor) times its 3D scale.
+## world viewport (WorldView.pixel_size) times its 3D scale.
 static func render_size(
 	choice: int,
 	window_size: Vector2,
 	content_factor: float = 1.0,
 	base: Vector2 = InterfaceSize.BASE_SIZE
 ) -> Vector2:
-	var factor := content_factor if content_factor > 0.0 else 1.0
-	var viewport_size := full_render_size(window_size, base) / factor
-	return viewport_size * scale_3d(choice, window_size, factor, base)
-
-
-## The full render's size on a window of [param window_size]: the base canvas expanded to the
-## window's aspect (aspect expand keeps the whole base canvas visible).
-static func full_render_size(
-	window_size: Vector2, base: Vector2 = InterfaceSize.BASE_SIZE
-) -> Vector2:
-	var scale := InterfaceSize.window_scale(window_size, base)
-	if scale <= 0.0:
-		return base
-	return window_size / scale
+	var viewport_size := Vector2(WorldView.pixel_size(window_size, content_factor, base))
+	return viewport_size * scale_3d(choice, window_size, base)
 
 
 ## Fills a Settings [param option] with CHOICES (item ids are the stored values), labelled for
