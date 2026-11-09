@@ -45,18 +45,17 @@ func _rpc_send_level_data(level_dict: Dictionary) -> void:
 **Godot RPCs do not serialize `Vector3` directly.** Convert to `Array` for transport:
 
 ```gdscript
-# Sending (host)
-var pos_arr := [pos.x, pos.y, pos.z]
-_rpc_receive_token_transform.rpc(network_id, pos_arr, rot_arr, scale_arr)
+# Sending (client)
+_rpc_client_token_transform.rpc_id(1, network_id, [pos.x, pos.y, pos.z], rot_arr, scale_arr)
 
-# Receiving (client)
-@rpc("authority", "call_remote", "unreliable")
-func _rpc_receive_token_transform(net_id: String, pos_arr: Array, rot_arr: Array, scale_arr: Array) -> void:
+# Receiving (host)
+@rpc("any_peer", "call_remote", "unreliable")
+func _rpc_client_token_transform(net_id: String, pos_arr: Array, rot_arr: Array, scale_arr: Array) -> void:
     var pos := Vector3(pos_arr[0], pos_arr[1], pos_arr[2])
-    token_transform_received.emit(net_id, pos, rot, scale)
+    client_token_transform_received.emit(sender_id, net_id, pos, rot, scale)
 ```
 
-This applies to `Vector3`, `Color`, and other engine types. Use `Array` or `Dictionary` for RPC arguments.
+This applies to `Vector3`, `Color`, and other engine types. Use `Array` or `Dictionary` for RPC arguments. A high-rate or bulk message goes as one `PackedByteArray` argument instead (SceneMultiplayer copies it raw): the host's token transforms are `TokenTransformPack` messages, half the bytes of the Array form.
 
 ### Signal Emission Pattern
 
@@ -122,8 +121,8 @@ For nodes that persist across states (like `Root`), disconnect when exiting the 
 ```gdscript
 func _exit_playing_state() -> void:
     # Disconnect signals that were connected in _enter_playing_state()
-    if NetworkManager.game_sync.token_transform_received.is_connected(_on_token_transform):
-        NetworkManager.game_sync.token_transform_received.disconnect(_on_token_transform)
+    if NetworkManager.game_sync.transform_batch_received.is_connected(_on_transform_batch):
+        NetworkManager.game_sync.transform_batch_received.disconnect(_on_transform_batch)
 ```
 
 `RootNetworkHandler` provides static helpers `connect_client_signals()` / `disconnect_client_signals()` for this pattern.

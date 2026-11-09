@@ -10,7 +10,8 @@ Conventions on 2026-10-09).
 
 | File | Class | Role |
 |------|-------|------|
-| `scenes/terrain/authored_terrain.gd` | `AuthoredTerrain` | `create(doc)`: one `MeshInstance3D` per 10 m `ScatterChunker` cell, the collision body and the ground material; `queue_heights`, `process_heights`, `settle_heights`, `update_collision`, `update_ground_region`, `update_biome_region` |
+| `scenes/terrain/authored_terrain.gd` | `AuthoredTerrain` | `create(doc)`: one `MeshInstance3D` per 10 m `ScatterChunker` cell, the collision and the ground material; `queue_heights`, `process_heights`, `settle_heights`, `update_collision`, `mark_collision` / `flush_collision`, `update_ground_region`, `update_biome_region` |
+| `scenes/terrain/terrain_collision.gd` | `TerrainCollision` | The collision: square `HeightMapShape3D` tiles of 32 quads, one `StaticBody3D` each; `mark(rect)` and `flush(doc)` refill only the tiles an edit touched |
 | `utils/terrain_mesh_builder.gd` | `TerrainMeshBuilder` | Pure geometry; `raycast` |
 | `utils/scatter_chunker.gd` | `ScatterChunker` | The 10 m cells |
 | `shaders/authored_ground.gdshader` | | The opaque ground: tiles the palette `base_surface` with triangle-grid anti-tiling |
@@ -37,7 +38,16 @@ Conventions on 2026-10-09).
 
 - Geometry: shared border vertices and grid-wide normals; it lives in the pure
   `TerrainMeshBuilder`.
-- Collision: a layer-1 `StaticBody3D` with a `HeightMapShape3D` scaled by the sample step.
+- Collision (`TerrainCollision`, card authcollide): square `HeightMapShape3D` tiles of 32 quads
+  (8 m), one layer-1 `StaticBody3D` each, under a `TerrainCollision` node scaled by the sample
+  step. Tiles share border samples and the last tile on an axis ends on the map edge (overlapping
+  its neighbour), so rays on a border hit the same triangles. Square because Jolt builds a
+  heightfield only for a square shape. A height edit marks the tiles holding its changed samples
+  (`HeightEditor.queue_heights` -> `mark_collision`); `HeightEditor.work()` refills only those once
+  the stroke has ended (0.3-0.95 ms at any map size, against 0.7 / 2.9 / 6.9 ms for the whole grid
+  at 100 / 200 / 320 ft: `docs/PERFORMANCE.md` "Collision tiles"). Code that excludes the ground
+  from a query takes every tile body (`get_collision_bodies()`; the eye view reads the node's
+  children).
 - Scatter row identity is X, Z and scale, never Y (`ScatterRows.row_keys`), and the generator
   reads heights on the terrain's triangles (`ScatterGenerator.triangle_height`).
 - Ground layers (index form since ground layers G3, 2026-10-13; design in
@@ -50,6 +60,22 @@ Conventions on 2026-10-09).
   holds: the fire's surfaces (`AuthoredTerrain.fire_surfaces`: the burnt forest biome's and the
   ash), which a fire's op brings to every peer at once; appended there they cost 55 ms of
   texture reads in one frame (card F4b-2).
+  Authoring prepares layers ahead of their first use (`GroundLayerBinding.prepare`, perfaudit
+  card authfirst, 2026-11-08): a pick names the surfaces its edit will bring (the Paint tile's
+  surface, `use_surface`; a biome's, `AuthoredTerrain.prepare_biome`, exactly
+  `GroundLayers.wanted` of the biome list with it added, none for a biome drawn as the base; the
+  first water's beds and shores, `prepare_water` when the Water tool is picked; a Dress kit's
+  road, door path and plaza, `SettlementBarLink.prepare_dress` when the Street bar shows an
+  undressed street). `prepare_step` uploads one map at a time into the slot the next append takes
+  (`GroundLayerArrays.upload_ahead`, a padding layer nothing reads), from `AuthoredTerrain._process`
+  within `PREP_BUDGET_USEC` (4 ms) a frame, and binds the surface when its fourth map is in, like
+  a reserve layer: nothing routes to it until the document uses the surface, so the ground draws
+  as before, and the next load compacts it away if it stayed unused. The edit's retable then finds
+  the layer bound and sets only uniforms (the arrays' sync was 19 ms per new surface, 40 to 63 ms
+  for a biome's or the first water's two). A retable in the middle takes the slot and the prepare
+  starts the surface again past it; a prepare never crosses the capacity step (the edit's recreate
+  stays the edit's). Layer indices are local to each peer's binding, so a prepared layer changes
+  nothing another peer sees.
   The shader reads the document's own bytes as index maps (biome slots and density, R8; the
   painted surfaces' top-4 index and weight planes, RGBA8) with `textureGather` at the texel
   corner, weights each corner bilinearly, and keeps the four strongest (layer, weight)
@@ -168,9 +194,10 @@ ground of grassland and savanna at seed 1234 renders bit-identical to main's).
 ## Authoring
 
 - After a height edit call `queue_heights(sample_rect)` + `process_heights(budget)` (in-place
-  vertex updates), `settle_heights()` when the edit ends, and `update_collision()` once (not
-  per frame: 2.3 ms; mid-stroke the brush uses `TerrainMeshBuilder.raycast` through
-  `AuthoringEditor.raycast_ground`).
+  vertex updates), `settle_heights()` when the edit ends, and `mark_collision(sample_rect)` per
+  edit plus `flush_collision()` once when it ends (HeightEditor does both; mid-stroke the brush
+  uses `TerrainMeshBuilder.raycast` through `AuthoringEditor.raycast_ground`). `update_collision()`
+  refills every tile (build, tests).
 - Sculpt strokes are `AuthoringEditor.begin_height_stroke()` (`HeightStroke`, rules in
   `HeightBrush`); plants and props follow through `GroundSnap` + `AuthoredScatter.move_rows`.
   The Sculpt tool's operations are in [authoring.md](authoring.md).

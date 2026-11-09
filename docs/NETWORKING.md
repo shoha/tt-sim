@@ -170,13 +170,33 @@ RPC by its node path and by the method's index among that node's RPC names, sort
 removing or moving an RPC changes what an older peer would send and expect. Moving the table-play
 RPCs from `/root/NetworkManager` to `/root/NetworkManager/GameSync` (2026-10-09) is one such
 change. It is safe because both peers always run the same build. The gate RPCs themselves stay
-on `NetworkManager`, but their indices shift with every change to its RPC list too. Two builds
-that report the same version (two dev checkouts) pass both checks, so nothing catches an RPC
-layout difference between them: test two peers on the same commit.
+on `NetworkManager`, but their indices shift with every change to its RPC list too.
+
+**Network protocol.** Development builds share one version string (every build of a cycle is
+0.4.2 until the release bump), so the version alone let two dev builds with different wire
+formats into one room. `VersionGate.PROTOCOL` is compared beside the version at both checks:
+the host publishes it as lobby data `tt_protocol` (a decimal string; `VersionGate.lobby_protocol`
+reads it, missing or not a number is 0) and clients report it as `"protocol"` (an int) in
+`_local_player_info`. Bump it in any change to what crosses the wire: an RPC added, removed,
+renamed or given other arguments, a message layout (`TokenStateWire`, `TokenTransformPack`,
+`LiveEditCodec`), or the meaning of a field. History: 1 was everything before the number
+(implicit, never published, so it reads as 0); 2 (2026-11-08) is perfaudit netspawn's token add,
+compressed state chunks and packed reconcile with netverify's packed single drag transform.
+Messages: with equal versions, the lobby check says "The host is running a different build of
+TTSim 0.4.2 (network protocol 1, yours is 2). Both of you need the same build to play
+together.", or "an older build of TTSim 0.4.2, from before network protocol 2" for a host
+that published none. The host's rejection carries only its version (the RPC keeps one
+argument, so a rejected same-version build still reads it), so a client on an equal version
+explains it as a different build (`VersionGate.rejection_message`). Over ENet (the test
+scenarios, no lobby) only the host's check runs. The rejection RPC reaches the client only
+while `NetworkManager`'s own RPC list is the same on both builds (Godot refuses a call to a node
+whose RPC list checksum differs); the lobby check, which runs before connecting, does not
+depend on it.
 
 Clients send their version under `"version"` in `_local_player_info`. A host from before the
 gate publishes no lobby version, which the client reads as `""` and reports as "an older
-version"; a client from before the gate sends no version and the host rejects it.
+version"; a client from before the gate (or before the protocol number) sends no version (or
+no protocol) and the host rejects it.
 
 On `_rpc_version_rejected` the client leaves on its own (deferred `_handle_connection_error`)
 with the version message, before the host's delayed disconnect lands, so the player sees the
@@ -810,11 +830,16 @@ NetworkStateSync.broadcast_token_properties(token)
 Clients use interpolation for smooth movement:
 
 ```gdscript
-# In token handler
-NetworkManager.game_sync.token_transform_received.connect(func(id, pos, rot, scale):
-    var token = get_token_by_network_id(id)
-    if token:
-        token.set_interpolation_target(pos, rot, scale)
+# In token handler (RootNetworkHandler.on_transform_batch_received): every host transform,
+# one token or many, arrives as a batch, network_id -> {"position", "rotation", "scale"}
+NetworkManager.game_sync.transform_batch_received.connect(func(batch):
+    for id in batch:
+        var token = get_token_by_network_id(id)
+        if token:
+            token.set_interpolation_target(
+                SerializationUtils.array_to_vec3(batch[id].position),
+                SerializationUtils.array_to_vec3(batch[id].rotation),
+                SerializationUtils.array_to_vec3(batch[id].scale, Vector3.ONE))
 )
 ```
 
@@ -866,7 +891,18 @@ heals within 30 s. Before 2026-11 every tick sent one 128 B transform RPC per to
 f32 position, rotation, scale]`, 37 B plus the id (about 57 B). A drag's batch
 (`NetworkStateSync._flush_pending_transforms` -> `broadcast_transform_batch`, unreliable) uses the
 same layout, split under the MTU (`UNRELIABLE_BYTES`), in place of the Variant batch (180 B per
-token). Both arrive as `transform_batch_received` in the old dictionary shape.
+token). Both arrive as `transform_batch_received` in the old dictionary shape. So does a single
+drag transform since 2026-11-08 (netverify, F-net-7): `broadcast_token_transform` and
+`send_token_transform_to_peer` send a one-token pack (`NetworkGameSync.pack_one`, 63 B with the
+RPC header) through `_rpc_receive_transform_batch` instead of the Variant
+`_rpc_receive_token_transform` (128 B), which is gone with its `token_transform_received` signal.
+
+Every transform a client receives also goes into its GameState
+(`NetworkGameSync._mirror_transform`, quiet: no `token_state_changed`), for a token not on its board yet as well, so a token built from
+GameState later (a table load's `apply_game_state_to_tokens`) is where the host has it. Before
+2026-11-08 only adds and full states wrote a client's GameState; once a placement stopped sending
+the full state, a client's copy lagged up to the 30 s heartbeat (`enet_token_consistency`: 41 of
+100 burst-placed tokens).
 
 **Important:** Reconciliation skips tokens that are currently under client authority:
 - Tokens drag-locked by a non-host peer (the client is actively dragging)
@@ -1127,6 +1163,16 @@ on every peer on 2026-10-10 with the card's path; the launcher flagged only anot
   unlocked with dragging allowed, and a GM drag claims and releases the lock. With the old
   leave path the host's copy stayed locked to the departed peer (`host_token_unlocked_ok` and
   `host_drag_allowed_ok` false).
+- `enet_token_consistency` (`--opts=mode=heal|burst|reconnect`, two peers, `--timeout-s=150`):
+  the client ends with exactly the host's tokens (ids on its board and in GameState, no
+  duplicates, positions within 5 cm of the host's board). heal: the client's CountingPeer
+  drops one `_rpc_receive_reconcile` after the host moved six tokens without a drag; every
+  token is 2.5 m off until the heartbeat's full state, then 0. burst: the client joins when 10
+  of 100 avatars placed at 20 per second are down. reconnect: the client leaves (Pause > Main
+  menu) and joins again after the host removed two tokens, moved two and added three. All three
+  passed on 2026-11-08 (topic netverify); before `NetworkGameSync._mirror_transform` the boards
+  matched but a client's GameState kept 41 of the burst's 100 positions (2 in reconnect) where
+  the add left them, until the heartbeat ("Periodic Reconciliation").
 
 - `enet_session_room` (`--peers=5 --timeout-s=420`): the session room, its party and the
   table moves (TableMover). Each client reports its role as its session key. Table A is a flat
@@ -1448,10 +1494,9 @@ func request_live_edit_log() -> void
 
 ```gdscript
 # Clients, from the host
-signal token_transform_received(network_id, position, rotation, scale)
 signal token_state_received(network_id, token_dict)
 signal token_removed_received(network_id)
-signal transform_batch_received(batch: Dictionary)
+signal transform_batch_received(batch: Dictionary)   # every host transform, one token or many
 signal visual_settings_received(settings: Dictionary)
 signal drag_lock_denied(network_id)      # the denied client only
 signal drag_lock_released(network_id)
@@ -1473,8 +1518,8 @@ signal live_edit_log_requested(sender_id)            # rate-limited, players onl
 
 | RPC | Direction | Channel | Emits |
 |-----|-----------|---------|-------|
-| `_rpc_receive_token_transform` | host -> clients | unreliable | `token_transform_received` |
-| `_rpc_receive_transform_batch` | host -> clients | unreliable | `transform_batch_received` |
+| `_rpc_receive_transform_batch` | host -> clients | unreliable (a drag's single update or batch, `TokenTransformPack`) | `transform_batch_received` |
+| `_rpc_receive_reconcile` | host -> clients | reliable (moved tokens, `TokenTransformPack`) | `transform_batch_received` |
 | `_rpc_receive_token_state` | host -> clients | reliable | `token_state_received` |
 | `_rpc_receive_token_removed` | host -> clients | reliable | `token_removed_received` |
 | `_rpc_receive_visual_settings` | host -> clients | reliable | `visual_settings_received` |

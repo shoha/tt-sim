@@ -24,6 +24,21 @@ extends MultiplayerPeerExtension
 ## crossed a link of that one-way delay (rtt / 2) and rate, PACKET_OVERHEAD bytes each. Both
 ## peers apply it to what they receive, so each direction sees the delay once. The sender is
 ## not slowed (its queue is unbounded), so it models a deep buffer, not loss or back pressure.
+##
+## Loss play (drop_next): a received packet whose message name has a count left in drop_next is
+## counted and then thrown away before SceneMultiplayer sees it, as a message lost past the
+## transport would be (tests/net/enet_token_consistency.gd drops one reliable reconcile).
+## `dropped` counts what was thrown away, by name.
+##
+## Leaves. SceneMultiplayer tells the other clients of a leave from inside peer_disconnected
+## (its server relay, SYS_DEL_PEER, one packet per remaining peer). When two clients close in
+## one ENet poll, the second one's channels are already freed, and the relay to it fails with
+## ENet's "Unable to send packet on channel"; without this wrapper that error comes from the
+## engine alone, which tests/net/net_log_check.gd reports and does not fail, but through
+## _put_packet_script it carries a GDScript backtrace and failed every run with two clients.
+## A system relay to a peer whose ENet channels are gone is therefore counted
+## (~relay_to_closed) and not forwarded; everything else goes through, so a game script's own
+## send to a closed peer still logs and still fails the run.
 
 ## The bytes a packet costs below this layer that link play charges: IPv4 20, UDP 8, an ENet
 ## header and send command about 16.
@@ -40,6 +55,12 @@ var kbps := 0.0
 var counters: Dictionary = {}
 ## The longest a received packet waited in the link play queue, ms.
 var max_wait_ms := 0.0
+## Loss play: message name -> how many more received packets of it to throw away.
+var drop_next: Dictionary = {}
+## Message name -> received packets thrown away by drop_next.
+var dropped: Dictionary = {}
+## System relays not forwarded because their peer's ENet channels were gone (see the header).
+var relays_to_closed := 0
 var _target := 0
 var _mode := MultiplayerPeer.TRANSFER_MODE_RELIABLE
 var _channel := 0
@@ -87,6 +108,12 @@ func _poll() -> void:
 		var mode := inner.get_packet_mode()
 		var channel := inner.get_packet_channel()
 		var data := inner.get_packet()
+		var msg := _name_of(data, "in", peer)
+		_count_named("in", msg, data, mode, 1)
+		if int(drop_next.get(msg, 0)) > 0:
+			drop_next[msg] = int(drop_next[msg]) - 1
+			dropped[msg] = int(dropped.get(msg, 0)) + 1
+			continue
 		var ready := now
 		if rtt_ms > 0.0 or kbps > 0.0:
 			var serialise := (data.size() + PACKET_OVERHEAD) * 8.0 / kbps if kbps > 0.0 else 0.0
@@ -102,7 +129,6 @@ func _poll() -> void:
 				"ready": ready,
 			}
 		)
-		_count("in", data, peer, mode, 1)
 
 
 func _get_available_packet_count() -> int:
@@ -141,8 +167,27 @@ func _put_packet_script(buffer: PackedByteArray) -> Error:
 		recipients = _peers.size()
 	elif _target < 0:
 		recipients = maxi(_peers.size() - 1, 0)
+	if _is_relay_to_closed(buffer):
+		relays_to_closed += 1
+		print("CountingPeer: a system relay to closed peer %d not forwarded" % _target)
+		_count_named("out", "~relay_to_closed", buffer, _mode, 1)
+		return OK
 	_count("out", buffer, _target, _mode, recipients)
 	return inner.put_packet(buffer)
+
+
+## True for a system packet (SceneMultiplayer's relay of a join or leave) addressed to one
+## peer whose ENet channels are already freed (it closed in this poll, not yet reported).
+func _is_relay_to_closed(buffer: PackedByteArray) -> bool:
+	if _target <= 0 or buffer.is_empty() or (buffer[0] & 7) != 7:
+		return false
+	var enet := inner as ENetMultiplayerPeer
+	if enet == null:
+		return false
+	if not _peers.has(_target):
+		return true
+	var packet_peer := enet.get_peer(_target)
+	return packet_peer == null or not packet_peer.is_active() or packet_peer.get_channels() == 0
 
 
 func _set_transfer_mode(mode: MultiplayerPeer.TransferMode) -> void:
@@ -210,7 +255,13 @@ func _close() -> void:
 
 
 func _count(dir: String, data: PackedByteArray, peer: int, mode: int, recipients: int) -> void:
-	var key := "%s|%s|%s" % [dir, _name_of(data, dir, peer), MODE_NAMES[clampi(mode, 0, 2)]]
+	_count_named(dir, _name_of(data, dir, peer), data, mode, recipients)
+
+
+func _count_named(
+	dir: String, msg: String, data: PackedByteArray, mode: int, recipients: int
+) -> void:
+	var key := "%s|%s|%s" % [dir, msg, MODE_NAMES[clampi(mode, 0, 2)]]
 	var c: PackedInt64Array = counters.get(key, PackedInt64Array([0, 0, 0]))
 	c[0] += 1
 	c[1] += data.size()

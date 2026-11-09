@@ -45,7 +45,12 @@ class Job:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE and _job != null:
+		# Freed with a write in flight (a teardown or quit that did not wait()): the write
+		# finishes, and the file's cached hash goes as _finish() would drop it, else a session
+		# that goes on (leaving authoring is not quitting) would hash the old document.
 		WorkerThreadPool.wait_for_task_completion(_task)
+		if _job.error == OK:
+			MapFileHash.invalidate(_job.path)
 
 
 ## True while a job's task runs or waits to be polled.
@@ -123,7 +128,7 @@ static func write_atomic(path: String, bytes: PackedByteArray) -> Error:
 	var err := file.get_error()
 	file.close()
 	if err == OK:
-		err = DirAccess.rename_absolute(temp, path)
+		err = MapDocumentIO.rename_over(temp, path)
 	if err != OK and FileAccess.file_exists(temp):
 		DirAccess.remove_absolute(temp)
 	return err

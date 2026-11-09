@@ -100,12 +100,13 @@ var _players: Dictionary = {}
 ## "info"} (see _on_peer_disconnected())
 var _leaves: Array[Dictionary] = []
 
-## Local player info. "version" is what the host checks against its own version
+## Local player info. "version" and "protocol" are what the host checks against its own
 ## (VersionGate.is_player_info_accepted) when this client's info arrives.
 var _local_player_info: Dictionary = {
 	"name": "Player",
 	"role": PlayerRole.PLAYER,
 	VersionGate.PLAYER_INFO_KEY: UpdateVersion.get_current(),
+	VersionGate.PLAYER_INFO_PROTOCOL_KEY: VersionGate.PROTOCOL,
 }
 
 ## The level snapshot served to late joiners (host side). Opaque here: it is whatever
@@ -327,6 +328,7 @@ func _on_lobby_created(result: int, lobby_id: int) -> void:
 	# Publish our version so a joining client can refuse a mismatch before it connects
 	# (see VersionGate). The host still re-checks each client's reported version.
 	Steam.setLobbyData(lobby_id, VersionGate.LOBBY_DATA_KEY, UpdateVersion.get_current())
+	Steam.setLobbyData(lobby_id, VersionGate.LOBBY_PROTOCOL_KEY, str(VersionGate.PROTOCOL))
 
 	# Create SteamMultiplayerPeer as host
 	var peer := SteamMultiplayerPeer.new()
@@ -390,7 +392,12 @@ func _on_lobby_joined(lobby_id: int, _lobby_permissions: int, _locked: bool, res
 	# the version gate publishes no version and reads as "", which is a mismatch.
 	# _handle_connection_error() leaves the lobby through disconnect_game().
 	var host_version: String = Steam.getLobbyData(lobby_id, VersionGate.LOBBY_DATA_KEY)
-	var mismatch := VersionGate.mismatch_message(host_version, UpdateVersion.get_current())
+	var host_protocol := VersionGate.lobby_protocol(
+		Steam.getLobbyData(lobby_id, VersionGate.LOBBY_PROTOCOL_KEY)
+	)
+	var mismatch := VersionGate.mismatch_message(
+		host_version, UpdateVersion.get_current(), host_protocol
+	)
 	if not mismatch.is_empty():
 		_handle_connection_error(mismatch)
 		return
@@ -523,7 +530,9 @@ func _rpc_send_player_info(info: Dictionary) -> void:
 		# published version, but lobby data is advisory, so the host re-checks the version
 		# the client reports and never admits a mismatch (see VersionGate).
 		if not VersionGate.is_player_info_accepted(info, UpdateVersion.get_current()):
-			_reject_peer_version(sender_id, VersionGate.reported_version(info))
+			_reject_peer_version(
+				sender_id, VersionGate.reported_version(info), VersionGate.reported_protocol(info)
+			)
 			return
 		# Only the host receives this RPC from an untrusted remote peer (when a
 		# client receives it, the sender is the host, which is already
@@ -553,11 +562,20 @@ func _rpc_send_player_info(info: Dictionary) -> void:
 ## Host side of a version rejection: tell the client why, then drop it after
 ## VERSION_REJECT_DISCONNECT_DELAY. The peer is never added to _players, so no
 ## player_joined/player_left fires for it.
-func _reject_peer_version(peer_id: int, reported_version: String) -> void:
+func _reject_peer_version(peer_id: int, reported_version: String, reported_protocol := 0) -> void:
 	push_warning(
 		(
-			"NetworkManager: Peer %d reported version '%s', host is '%s' -- rejected"
-			% [peer_id, reported_version, UpdateVersion.get_current()]
+			(
+				"NetworkManager: Peer %d reported version '%s' protocol %d, "
+				+ "host is '%s' protocol %d -- rejected"
+			)
+			% [
+				peer_id,
+				reported_version,
+				reported_protocol,
+				UpdateVersion.get_current(),
+				VersionGate.PROTOCOL,
+			]
 		)
 	)
 	# Peer ids 0 (a direct call outside a real RPC, as in tests) and 1 (ourselves) are
@@ -584,11 +602,9 @@ func _disconnect_rejected_peer(peer_id: int) -> void:
 ## this RPC.
 @rpc("authority", "reliable")
 func _rpc_version_rejected(host_version: String) -> void:
-	var message := VersionGate.mismatch_message(host_version, UpdateVersion.get_current())
-	if message.is_empty():
-		# The host only sends this on a mismatch; if the strings somehow agree, still
-		# leave with an honest reason rather than an empty one.
-		message = "The host rejected this game version."
+	# Equal versions mean the protocol differed (VersionGate.rejection_message). The RPC keeps
+	# its one argument so a rejected build of the same version still reads it.
+	var message := VersionGate.rejection_message(host_version, UpdateVersion.get_current())
 	_handle_connection_error.call_deferred(message)
 
 

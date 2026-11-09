@@ -13,7 +13,7 @@ extends Node
 ## Usage:
 ##   NetworkStateSync.broadcast_token_transform(token)  # Host sends position
 ##   NetworkStateSync.broadcast_token_properties(token)  # Host sends health/visibility
-##   NetworkManager.game_sync.token_transform_received.connect(_on_transform)  # Client
+##   NetworkManager.game_sync.transform_batch_received.connect(_on_transforms)  # Client
 ##
 ## Note: Client-side receive signals live on NetworkManager.game_sync (NetworkGameSync),
 ## which also carries the RPCs; this autoload only decides what to send and when
