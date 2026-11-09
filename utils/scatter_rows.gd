@@ -3,7 +3,8 @@ extends RefCounted
 
 ## Pure helpers over flat instance rows (MapDocument.ROW_STRIDE floats each, [lx, ly, lz,
 ## qx, qy, qz, qw, sx, sy, sz]) that AuthoredScatter builds its cells from: each row's
-## identity, the order a cell's instances are written in, and row-to-transform conversion.
+## identity, the order a cell's instances are written in, row-to-transform conversion, and a
+## settled chunk node's data in one call (chunk: its MultiMesh buffer, where the library has it).
 ## Pure and static, so the math is testable headless, where MultiMesh reads every transform
 ## back as identity.
 
@@ -42,7 +43,60 @@ static func row_keys(bits: PackedInt32Array) -> PackedInt64Array:
 static func instance_order(
 	keys: PackedInt64Array, indices: PackedInt32Array, seed_source: String
 ) -> PackedInt32Array:
-	var seed_value := seed_source.md5_buffer().decode_u32(0)
+	return _order_seeded(keys, indices, order_seed(seed_source))
+
+
+## The 32-bit seed instance_order draws from `seed_source` (a node name).
+static func order_seed(seed_source: String) -> int:
+	return seed_source.md5_buffer().decode_u32(0)
+
+
+## Everything a settled chunk node is built from, in one call (card scatterload): {"keys":
+## row_keys of every row, "order": instance_order of `indices` (null: every row) seeded by
+## `seed_source`}, plus, natively (ScatterNative.chunk, where the library has it), "buffer", the
+## MultiMesh buffer of those rows in that order, and "custom", whether it carries custom data;
+## or, in GDScript (chunk_gdscript), "transforms" for the per-instance path. Either way
+## ScatterGlbUtils.multimesh_from_chunk builds the same MultiMesh, byte for byte
+## (test_scatter_native_chunk, and the foliage_perf `load` probe on the real renderer).
+## `keys`, when the caller has them, spare the GDScript path computing them again.
+static func chunk(
+	rows: PackedFloat32Array,
+	indices: Variant,
+	seed_source: String,
+	anchors: Dictionary,
+	keys: Variant = null
+) -> Dictionary:
+	var seed_value := order_seed(seed_source)
+	var built := ScatterNative.chunk(rows, indices, seed_value, anchors)
+	if built.is_empty():
+		built = chunk_gdscript(rows, indices, seed_value, keys)
+	return built
+
+
+## chunk() in GDScript, wherever the library is absent: keys, order and the transforms in that
+## order (a buffer filled in GDScript is slower than build_multimesh's per-instance calls).
+## `seed_value` is order_seed's word.
+@warning_ignore("integer_division")
+static func chunk_gdscript(
+	rows: PackedFloat32Array, indices: Variant, seed_value: int, keys: Variant = null
+) -> Dictionary:
+	var all_keys: PackedInt64Array = (
+		keys if keys != null else row_keys(rows.to_byte_array().to_int32_array())
+	)
+	var chosen := PackedInt32Array()
+	if indices == null:
+		chosen.resize(rows.size() / MapDocument.ROW_STRIDE)
+		for i in chosen.size():
+			chosen[i] = i
+	else:
+		chosen = indices
+	var order := _order_seeded(all_keys, chosen, seed_value)
+	return {"keys": all_keys, "order": order, "transforms": transforms_from_rows(rows, order)}
+
+
+static func _order_seeded(
+	keys: PackedInt64Array, indices: PackedInt32Array, seed_value: int
+) -> PackedInt32Array:
 	var packed := PackedInt64Array()
 	packed.resize(indices.size())
 	for i in indices.size():

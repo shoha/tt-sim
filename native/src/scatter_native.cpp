@@ -15,10 +15,11 @@ void TTScatterNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("generate", "job"), &TTScatterNative::generate);
 	ClassDB::bind_method(D_METHOD("noise_2d", "seed", "frequency", "octaves", "xz"), &TTScatterNative::noise_2d);
 	ClassDB::bind_method(D_METHOD("grids", "source"), &TTScatterNative::grids);
+	ClassDB::bind_method(D_METHOD("chunk", "rows", "indices", "seed", "anchors"), &TTScatterNative::chunk);
 }
 
 String TTScatterNative::version() const {
-	return String("ttscatter 6 curves water");
+	return String("ttscatter 7 curves water chunk");
 }
 
 int64_t TTScatterNative::ping(int64_t value) const {

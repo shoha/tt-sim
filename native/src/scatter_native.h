@@ -8,6 +8,7 @@
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
 #include <godot_cpp/variant/packed_float64_array.hpp>
+#include <godot_cpp/variant/variant.hpp>
 
 namespace godot {
 
@@ -32,6 +33,11 @@ public:
 	/// whole-grid arrays keyed as ScatterNative.grids_for keys them, or {"error"}: the grid
 	/// parity check's call.
 	Dictionary grids(const Dictionary &source) const;
+	/// A settled chunk node's data from its saved rows (scatter_chunk.cpp; ScatterRows.chunk):
+	/// {"keys": PackedInt64Array of every row, "order": PackedInt32Array of `indices` (null: every
+	/// row) in instance order under `seed`, "buffer": the MultiMesh buffer in that order,
+	/// "custom": whether it carries custom data (`anchors`, ScatterMass's table)}, or {"error"}.
+	Dictionary chunk(const PackedFloat32Array &rows, const Variant &indices, int64_t seed, const Dictionary &anchors) const;
 };
 
 } // namespace godot

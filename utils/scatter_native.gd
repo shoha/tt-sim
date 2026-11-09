@@ -6,7 +6,9 @@ extends RefCounted
 ## GDScript, about fifty times faster; this wrapper packs a ScatterRegen job's biome once (the
 ## plan as ScatterPlan.build makes it, the window's grids as document_fields and
 ## ScatterGround.sampler build them, each species' pattern-noise settings, the cells and the
-## blockers), makes the one call, and hands back rows in generate_species_cells' form.
+## blockers), makes the one call, and hands back rows in generate_species_cells' form. It also
+## builds a settled chunk node's instance buffer in one call (chunk, card scatterload; see
+## ScatterRows.chunk).
 ##
 ## No script names the native class: a checkout without the built library (CI's tests, a fresh
 ## clone, an export without it) has no such class, and an identifier would fail to parse. The
@@ -27,14 +29,20 @@ const CLASS_NAME := "TTScatterNative"
 const CAPABILITY_CURVES := "curves"
 ## ... and the water_dist axis (S12c): its distance grid in the job's source, ScatterTerrain.
 const CAPABILITY_WATER := "water"
+## ... and builds a chunk's settled-node data, its instance buffer included (card scatterload).
+const CAPABILITY_CHUNK := "chunk"
 
 ## True: every job runs in GDScript (A/B measurements, tests of the GDScript path).
 static var force_gdscript := false
+## True: chunk_active() is false, so ScatterRows.chunk builds in GDScript (A/B runs, tests).
+static var force_gdscript_chunks := false
 
 static var _mutex := Mutex.new()
 static var _native: Object = null
 static var _consts: Dictionary = {}
 static var _counts: Dictionary = {}
+## Whether the loaded library reports CAPABILITY_CHUNK: -1 not asked yet, 0 no, 1 yes.
+static var _chunk_capable: int = -1
 
 
 ## Whether the native library is loaded (the class exists).
@@ -465,6 +473,30 @@ static func noise_2d(
 	if native == null:
 		return PackedFloat32Array()
 	return native.call("noise_2d", seed_value, frequency, octaves, xz)
+
+
+## Whether ScatterRows.chunk runs natively: the library is loaded, reports CAPABILITY_CHUNK (an
+## older build has no chunk method), and chunks are not forced into GDScript.
+static func chunk_active() -> bool:
+	if force_gdscript_chunks:
+		return false
+	if _chunk_capable < 0:  # asked once: the loaded library does not change in a run
+		_chunk_capable = 1 if version().contains(CAPABILITY_CHUNK) else 0
+	return _chunk_capable == 1
+
+
+## A settled chunk node's data from its saved rows, natively (TTScatterNative.chunk, the
+## load path's one call per chunk): {"keys", "order", "buffer", "custom"} as
+## ScatterRows.chunk_gdscript returns them, or {} when the library cannot (absent, too old, or
+## an index out of range). `indices` null takes every row; `seed_value` is the node name's md5
+## word (ScatterRows.instance_order). Thread-safe: the call reads only its arguments.
+static func chunk(
+	rows: PackedFloat32Array, indices: Variant, seed_value: int, anchors: Dictionary
+) -> Dictionary:
+	if not chunk_active():
+		return {}
+	var built: Dictionary = _instance().call("chunk", rows, indices, seed_value, anchors)
+	return {} if built.has("error") else built
 
 
 static func _instance() -> Object:
