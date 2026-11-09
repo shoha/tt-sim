@@ -32,7 +32,7 @@ treecube is gone ("The core library"). Step S9 (2026-10-25): per-season override
 | `utils/library/biome_compiler.gd` | `BiomeCompiler` | `compile(read, options)`: one palette biome per season and the asset table, with `role`, `habit`, `weight` and `library` riding on each rule; the palette's `surfaces` are the base table plus the library's own (S3); runs `validate_palette` and returns its warnings |
 | `utils/library/surface_bake.gd`, `surface_reader.gd` | `SurfaceBake`, `SurfaceReader` | (S3, pure) `surface.json` and map-header checks (`check_info`, `map_header` = `png_header` or `webp_header`, `check_png`: sizes 4 to 2048, bit depth 8 or 16, a normal map with colour channels), the decode of a map's bytes by extension (`decode`: WebP or PNG), the bake of a decoded map to the imported formats (`bake`, `format_of`, `data_size`), the palette entry of a library surface (`palette_entry`), and the reader of the `surfaces/` folder (WebP preferred over PNG per kind, `MAP_EXTENSIONS`) |
 | `utils/library/surface_cache.gd` | `SurfaceCache` | (S3) The raw `TTIMG` cache under `user://library_cache/<library id>/<hash>/<surface>_<map>.ttimg`: header (magic, version, engine string, format, size, mips, length, SHA-256) plus `Image.get_data()`; never a resource |
-| `utils/library/surface_store.gd` | `SurfaceStore` | (S3) The one place the ground, crossings, swatches and biome thumbnails get a surface's maps: `texture(root, relative)`, `image(root, relative)`, `available`, `texture_of` / `image_of(root, name or lib:// ref, kind)`, `runtime_name` / `ref_of` (the `lib://<library id>/<name>` convention), `register_library`, `label_of`, `load_set(folder)` and `load_installed(root, name)` (the two forms, for the equality test) |
+| `utils/library/surface_store.gd` | `SurfaceStore` | (S3) The one place the ground, crossings, swatches and biome thumbnails get a surface's maps: `texture(root, relative)`, `image(root, relative)`, `picture_image` / `decode_picture` (a picture's pixels: the decoded file, never a bake), `available`, `texture_of` / `image_of(root, name or lib:// ref, kind)`, `runtime_name` / `ref_of` (the `lib://<library id>/<name>` convention), `register_library`, `label_of`, `load_set(folder)` and `load_installed(root, name)` (the two forms, for the equality test) |
 | `utils/library/library_bindings.gd` | `LibraryBindings` | (S3) The named things code needs (`fire.ash_surface`, `fire.ash_fallback`, `fire.burnt_biome`, `crossings.planks/moss/gravel/stone_default/paving`, `paint.default`, `water.bed/shore`, `default_biome`) with the legacy values as defaults; `value(key)` answers from the served libraries, else the default |
 | `utils/library/library_query.gd` | `LibraryQuery` | (S8a, pure) The asset query of a rule: filter clauses, shared tag and size filters, the season mode, group order by FNV-1a hash, `count`, `pin`, lock files and the 64-asset cap; the compiler asks it for everything but explicit `ref`s ([biome_designer.md](biome_designer.md) "Model") |
 | `utils/library/biome_seasons.gd` | `BiomeSeasons` | (S9, pure) A biome-def as one season sees it (`effective`, `rule_in`): the season's `overrides` and the rules' `seasons` laid over it, the density scale applied; `check` is the reader's words for them; `BiomeCompiler` calls it for every season |
@@ -241,13 +241,22 @@ treecube is gone ("The core library"). Step S9 (2026-10-25): per-season override
   encode equally well, 0 to 2 levels apart; card bakedet, probe in `SurfaceBake.bake`'s doc), so
   compare bakes by decompressed pixels. It does not matter for the cache: the key is the hash of
   the source PNGs, each peer bakes its own maps, and nothing sends or hashes a baked file. Its queue is ordered by priority: `PRIORITY_LOAD` (a map load's
-  ground layers, which it waits for under its sheet with `prebaking(names)`), `PRIORITY_SHOWN` (a
-  panel's pictures: the authoring drawer's biome tiles), `PRIORITY_AHEAD` (the Paint swatches,
-  warmed before their pane shows). A play load queues its layers as soon as its document is read,
-  a new map before its recipe runs (`NewMap.planned_surfaces`). Panels never bake in their frame:
-  `SurfaceWait.call_when_ready` runs their work once the lane has the maps, and
-  `BiomeThumbnail.of(..., deferred)` shows a placeholder that repaints itself in place
-  (`ImageTexture.set_image` keeps the texture; the headless dummy renderer drops the replace).
+  ground layers, which it waits for under its sheet with `prebaking(names)`), `PRIORITY_SHOWN`
+  (work a panel waits on with `SurfaceWait.call_when_ready`), `PRIORITY_AHEAD` (maps warmed
+  before anyone asks: the new-map dialog's chosen place's ground, queued a frame after it opens
+  and on every pick, card coldopen). A play load queues its layers as soon as its document is
+  read, a new map before its recipe runs (`NewMap.planned_surfaces`), which moves the dialog's
+  queued maps up.
+- **Pictures never bake** (card coldopen). A Paint swatch, a biome picture's ground colour and
+  the dialog's strips read a library map's decoded file (`SurfaceStore.picture_image`,
+  `decode_picture`: 9.3 ms an albedo against a 208.5 ms BC7 bake), not the baked map; they match
+  the baked map's pictures within the compression's error (all 39 core albedos: swatches at most
+  3 levels, mean colours at most half a level; `test_surface_pictures.gd`). An authoring open
+  decodes its swatches on workers from its first frame (`SwatchTextures.warm_start`, collected by
+  `warm_finish_async`). `BiomeThumbnail.of(..., deferred)` and the dialog's `strip` /
+  `bare_strip(..., deferred)` show a placeholder that repaints itself in place a frame or more
+  later within the frame budget (`SurfaceWait.later`; `ImageTexture.set_image` keeps the texture;
+  the headless dummy renderer drops the replace, so a placeholder is never cached).
 - **The raw cache.** `user://library_cache/<library id>/<hash>/<surface>_<map>.ttimg`: `TTIMG`,
   version, the engine version string and hash (a different engine ignores the file, bakes anew
   and replaces it), format, size, mips, data length, the data's SHA-256, then

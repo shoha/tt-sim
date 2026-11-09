@@ -162,6 +162,7 @@
 		"res://tests/unit/test_structure_tool.gd",
 		"res://tests/unit/test_stroke_sound.gd",
 		"res://tests/unit/test_submerged_cue.gd",
+		"res://tests/unit/test_surface_pictures.gd",
 		"res://tests/unit/test_surface_prebake.gd",
 		"res://tests/unit/test_surface_store.gd",
 		"res://tests/unit/test_surface_webp.gd",

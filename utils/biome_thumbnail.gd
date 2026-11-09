@@ -58,14 +58,15 @@ const STRIP_CORNER := 0.12
 const STUDIO_GREY := Color(0.71, 0.71, 0.71)
 
 static var _cache := {}
+## "<root>|<palette-relative path>" -> the mean colour _mean() measured.
+static var _means := {}
 
 
 ## The painted picture of `biome` (a palette biome entry with its "id", "thumbnail" and
 ## "ground_surface") at `size` px square. A biome whose thumbnail cannot be read falls back
-## to the plain palette thumbnail. `deferred` never bakes in this frame: while the ground
-## surface's albedo is not baked the picture is a placeholder of the same size that repaints
-## itself once the prebake lane has the map (SurfaceWait; the authoring panel's tiles, card
-## authbake).
+## to the plain palette thumbnail. `deferred` paints in a later frame: the picture is a
+## placeholder of the same size that repaints itself within that frame's budget (SurfaceWait;
+## the authoring panel's tiles, cards authbake and coldopen).
 static func of(
 	biome: Dictionary, size: int, root: String = PaletteLibrary.DEFAULT_ROOT, deferred := false
 ) -> Texture2D:
@@ -79,10 +80,7 @@ static func of(
 		var shown := ImageTexture.create_from_image(placeholder)
 		_cache[key] = shown
 		var waits: Variant = load(SurfaceStore.SURFACE_WAIT)
-		waits.call_when_ready(
-			root,
-			PackedStringArray([_ground_albedo(biome, root)]),
-			SurfaceStore.PRIORITY_SHOWN,
+		waits.later(
 			func() -> void:
 				var painted := _square(biome, size, root)
 				if painted == null:
@@ -114,36 +112,84 @@ static func _square(biome: Dictionary, size: int, root: String) -> Image:
 
 ## The picture of `biome` as a wide strip `size` px (wider than tall): the landscape across
 ## the whole strip, the assets in its middle, the corners rounded. A biome whose thumbnail
-## cannot be read paints its ground alone.
+## cannot be read paints its ground alone. `deferred` paints it in a later frame over a
+## placeholder, as of() does (the new-map dialog: its ten strips took about 0.4 s of its first
+## frame, card coldopen).
 static func strip(
-	biome: Dictionary, size: Vector2i, root: String = PaletteLibrary.DEFAULT_ROOT
+	biome: Dictionary,
+	size: Vector2i,
+	root: String = PaletteLibrary.DEFAULT_ROOT,
+	deferred := false
 ) -> Texture2D:
 	var id := String(biome.get("id", ""))
 	var key := "%s:%s:%dx%d" % [root, id, size.x, size.y]
 	if not _cache.has(key):
-		var high := size * SUPERSAMPLE
-		var side := int(round(float(high.y) / (STRIP_BAND.y - STRIP_BAND.x)))
-		var square := _studio(root, String(biome.get("thumbnail", "")), side)
-		var studio: Image = null
-		if square != null:
-			var top := int(round(STRIP_BAND.x * side))
-			studio = square.get_region(Rect2i(0, top, side, mini(high.y, side - top)))
-		var ground := ground_colour(biome, root)
-		_cache[key] = _strip_texture(studio, size, ground, MapPlaceholder.seed_of(id))
+		return _painted(
+			key,
+			func() -> Image:
+				var high := size * SUPERSAMPLE
+				var side := int(round(float(high.y) / (STRIP_BAND.y - STRIP_BAND.x)))
+				var square := _studio(root, String(biome.get("thumbnail", "")), side)
+				var studio: Image = null
+				if square != null:
+					var top := int(round(STRIP_BAND.x * side))
+					studio = square.get_region(Rect2i(0, top, side, mini(high.y, side - top)))
+				var ground := ground_colour(biome, root)
+				return _strip_image(studio, size, ground, MapPlaceholder.seed_of(id)),
+			size,
+			deferred
+		)
 	return _cache[key]
 
 
 ## Plain ground with nothing on it as a strip `size` px (the new-map dialog's Bare ground): the
 ## same painted landscape, its ground `surface`'s own (a palette surface entry), lifted.
+## `deferred` as strip().
 static func bare_strip(
-	surface: Dictionary, size: Vector2i, root: String = PaletteLibrary.DEFAULT_ROOT
+	surface: Dictionary,
+	size: Vector2i,
+	root: String = PaletteLibrary.DEFAULT_ROOT,
+	deferred := false
 ) -> Texture2D:
 	var albedo := String(surface.get("albedo", ""))
 	var key := "%s:bare:%s:%dx%d" % [root, albedo, size.x, size.y]
 	if not _cache.has(key):
-		var ground := _luminous(_mean(root, albedo))
-		_cache[key] = _strip_texture(null, size, ground, MapPlaceholder.seed_of("bare_ground"))
+		return _painted(
+			key,
+			func() -> Image:
+				var ground := _luminous(_mean(root, albedo))
+				return _strip_image(null, size, ground, MapPlaceholder.seed_of("bare_ground")),
+			size,
+			deferred
+		)
 	return _cache[key]
+
+
+## The texture of the picture `paint` (func() -> Image) makes, `size` px, cached as `key`: painted
+## now, or when `deferred` a placeholder (the low sky, the corners rounded) that SurfaceWait.later
+## repaints, the picture cached once painted (a placeholder never is: a headless renderer drops
+## set_image, and a later caller must get the picture). A placeholder nothing shows any more (its
+## dialog closed first, perhaps with its library) is not painted.
+static func _painted(key: String, paint: Callable, size: Vector2i, deferred: bool) -> Texture2D:
+	if not deferred:
+		_cache[key] = ImageTexture.create_from_image(paint.call())
+		return _cache[key]
+	var placeholder := Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
+	placeholder.fill(ThemeColors.SKY_LOW)
+	_round_corners(placeholder)
+	var shown := ImageTexture.create_from_image(placeholder)
+	var held: WeakRef = weakref(shown)
+	load(SurfaceStore.SURFACE_WAIT).later(
+		func() -> void:
+			var still := held.get_ref() as ImageTexture
+			if still == null:
+				return
+			var picture: Image = paint.call()
+			still.set_image(picture)
+			if not _cache.has(key):
+				_cache[key] = ImageTexture.create_from_image(picture)
+	)
+	return shown
 
 
 ## The biome's ground as the picture paints it: the mean of its ground surface's albedo,
@@ -222,11 +268,18 @@ static func paint(
 
 ## A strip `size` px painted at SUPERSAMPLE over `studio` (a band of the studio square at that
 ## resolution, or null for empty ground), downsampled, its corners rounded.
-static func _strip_texture(
+static func _strip_image(
 	studio: Image, size: Vector2i, ground: Color, skyline_seed: float
-) -> Texture2D:
+) -> Image:
 	var image := paint(studio, ground, skyline_seed, size * SUPERSAMPLE)
 	image.resize(size.x, size.y, Image.INTERPOLATE_LANCZOS)
+	_round_corners(image)
+	return image
+
+
+## Cuts `image`'s corners round (alpha), STRIP_CORNER of its height.
+static func _round_corners(image: Image) -> void:
+	var size := image.get_size()
 	var radius := STRIP_CORNER * size.y
 	for y in size.y:
 		for x in size.x:
@@ -238,7 +291,6 @@ static func _strip_texture(
 			var pixel := image.get_pixel(x, y)
 			pixel.a = clampf(0.5 - outside, 0.0, 1.0)
 			image.set_pixel(x, y, pixel)
-	return ImageTexture.create_from_image(image)
 
 
 ## The square of the studio render at `relative` under palette `root` (SurfaceStore.texture) the
@@ -260,20 +312,24 @@ static func _studio(root: String, relative: String, side: int) -> Image:
 	return image
 
 
-## The mean colour of the texture at `relative` under palette `root` (alpha 0 when there is
-## none).
+## The mean colour of the image at `relative` under palette `root` (alpha 0 when there is none),
+## cached. A library surface's albedo is its decoded file (SurfaceStore.picture_image), never a
+## bake: the new-map dialog's strips baked their nine ground albedos in its first frame, about
+## 2 s on a cold cache (card coldopen).
 static func _mean(root: String, relative: String) -> Color:
-	var source := SurfaceStore.texture(root, relative)
-	var image: Image = source.get_image() if source != null else null
-	if image == null or image.is_empty():
-		return Color(0, 0, 0, 0)
-	if image.is_compressed():
-		image.decompress()
-	image.resize(8, 8, Image.INTERPOLATE_LANCZOS)
-	var sum := Vector3.ZERO
-	for y in 8:
-		for x in 8:
-			var pixel := image.get_pixel(x, y)
-			sum += Vector3(pixel.r, pixel.g, pixel.b)
-	sum /= 64.0
-	return Color(sum.x, sum.y, sum.z)
+	var key := "%s|%s" % [root, relative]
+	if _means.has(key):
+		return _means[key]
+	var image := SurfaceStore.picture_image(root, relative) if relative != "" else null
+	var mean := Color(0, 0, 0, 0)
+	if image != null and not image.is_empty():
+		image.resize(8, 8, Image.INTERPOLATE_LANCZOS)
+		var sum := Vector3.ZERO
+		for y in 8:
+			for x in 8:
+				var pixel := image.get_pixel(x, y)
+				sum += Vector3(pixel.r, pixel.g, pixel.b)
+		sum /= 64.0
+		mean = Color(sum.x, sum.y, sum.z)
+	_means[key] = mean
+	return mean

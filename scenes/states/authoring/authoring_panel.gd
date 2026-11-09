@@ -191,6 +191,8 @@ var _place_foldouts: Dictionary = {}
 ## Paint tile buttons by surface, and the tooltip each has when it can be picked.
 var _paint_tiles: Dictionary = {}
 var _paint_tooltips: Dictionary = {}
+## The Paint swatches' warm-up an open started (SwatchTextures.warm_start), {} when none.
+var _swatch_job: Dictionary = {}
 var _paint_surface: String = LibraryBindings.paint_default()
 ## True once the author picked a Paint tile; until then ordering may change the default.
 var _paint_picked: bool = false
@@ -559,23 +561,22 @@ func set_bridge_available(available: bool, has_water: bool) -> void:
 	bridge_pane.set_has_water(has_water)
 
 
-## Makes the Paint swatches ahead of ensure_paint_tiles() (SwatchTextures.warm_async: a few a
-## frame within the load's budget, waiting for a map still on the prebake lane; 39 in one frame
-## were 1.4 s warm and 9.5 s cold, perfaudit F-system-2). Stops when `is_superseded` says so.
+## Collects start_paint_swatches()'s warm-up ahead of ensure_paint_tiles(), starting one if none.
 func warm_paint_swatches_async(tree: SceneTree, is_superseded: Callable) -> void:
 	if _paint_tiles.is_empty():
-		var albedos := prebake_paint_swatches()
-		await SwatchTextures.warm_async(albedos, PAINT_THUMB_PX, palette_root, tree, is_superseded)
+		if _swatch_job.is_empty():
+			start_paint_swatches()
+		var job := _swatch_job
+		_swatch_job = {}
+		await SwatchTextures.warm_finish_async(job, tree, is_superseded)
 
 
-## Queues the Paint swatches' albedos on the prebake lane behind the maps a load waits for and the
-## pictures shown (SwatchTextures.prebake_albedos, card authbake) until the tiles are built; an
-## open calls it as it starts. Returns the albedos in tile order.
-func prebake_paint_swatches() -> PackedStringArray:
-	var roles := PackedStringArray()
-	for group in PAINT_GROUPS:
-		roles.append(String(group.role))
-	return SwatchTextures.prebake_albedos(roles, palette_root, _paint_tiles.is_empty())
+## Starts the Paint swatches on workers as an open begins (SwatchTextures.warm_start, no bakes).
+func start_paint_swatches() -> void:
+	if _paint_tiles.is_empty():
+		SwatchTextures.drop(_swatch_job)
+		var albedos := SwatchTextures.paint_albedos(PAINT_GROUPS, palette_root)
+		_swatch_job = SwatchTextures.warm_start(albedos, PAINT_THUMB_PX, palette_root)
 
 
 ## Builds the Paint tiles once (palette surfaces by role, swatches from each surface's

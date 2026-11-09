@@ -6157,3 +6157,60 @@ map chunks on the flat material -0.36; clipmap read off -0.02. A baked read stil
 geometry and lights it, so it cannot reach the 0.3 ms bar there; a coarse level for the map at far
 zoom would save at most part of the 0.36 (the clip read cost about half of the per-pixel premium over
 flat at home). Not built.
+
+## Cold first open of a new map (topic coldopen, 2026-11-09)
+
+The first open of a new 100 ft temperate forest map with core's baked surface maps deleted.
+Measured with the open trace (`utils/open_trace.gd`, off unless `--boot-trace-cold=<biome,size,
+landform,seed>` is passed with `--boot-trace`): a fresh process per run, windowed 1920x1080 on an
+RTX 3080, the title idles 10 s, `--boot-trace-clear-cache` deletes core's cached maps at the title
+(`SurfaceCache.remove_library`), the dialog opens, 1 s on it, Create with
+temperate_forest_summer_s1, valley, seed 1234. Two worktrees in their own user folders, arms
+alternated per round, round 1 of each arm dropped (a dev run skips GraphicsWarmup, so the first
+windowed run in a user folder is shader-cold: 9.1 s to the sheet, frames up to 4 s). Times are ms
+after Create, three measured rounds per arm (over six runs of the new arm, including two from an
+earlier round: sheet 2480 to 2630 in five, settled 5807 to 5952; the over-100 ms row leaves out
+the outlier run).
+
+| Stage | Before | After |
+|---|---|---|
+| Dialog's first frame (after the request) | 2790 to 2836 | 158 to 160 |
+| Authoring scene built (the entry frame) | 784 to 801 (a 928 to 944 ms frame) | 205 to 224 (a 274 to 296 ms frame) |
+| Ground's surface maps ready | 3154 to 3177 | 1601 to 1691 |
+| Map built | 3493 to 3515 | 1864 to 1958 |
+| Paint swatches warmed | 8135 to 8158 | 1982 to 2075 (at once) |
+| Sheet dropped | 8165 to 8188 | 2556 to 2630; one run 4363 |
+| Cover settled, lane idle | 11481 to 11496 | 5885 to 5952; one run 7712 |
+| Frames over 100 ms in the open | 6 to 7, 2548 to 2629 ms | 5 to 6, 1490 to 1570 ms |
+| Bakes (lane, main thread) | 53 (6.4 s), 10 (2.0 s) | 32 (2.1 s), 0 |
+
+What was cut:
+
+- **Pictures never bake.** The 31 Paint swatches and the biome pictures' ground colours were made
+  from baked albedos: the sheet waited about 4.4 s for 31 BC7 bakes on the serial lane, and the
+  dialog's first frame baked 10 albedos on the main thread (about 2 s). They now come from the
+  map's decoded file (`SurfaceStore.picture_image`, `decode_picture`), within the compression's
+  error: a swatch at most 3 levels apart (39 core albedos), a mean colour at most 0.002.
+- **Swatches decode on workers** (`SwatchTextures.warm_start`, a WorkerThreadPool group task
+  started at the open's start; `warm_finish_async` polls it, never blocks).
+- **The dialog bakes its place's ground ahead** (`NewMapDialog._prebake_ground`, PRIORITY_AHEAD,
+  a frame after it is built and again on each pick): the 1 s on the dialog is 1 s of the ground's
+  bakes done before Create.
+- **The dialog's biome pictures paint deferred** (`BiomeThumbnail.strip(deferred)`, through
+  `SurfaceWait.later`), so the first frame shows the dialog.
+
+What is left, worst first (main-thread frames of the final code):
+
+- 470 to 490 ms: the frame after "open: biomes prepared", the authoring panel and the palette's
+  asset loads (47 ms headless, so mostly GPU-side uploads). One run of six had 2363 ms here,
+  cause not found (no bakes on the main thread in that run; the lane's numbers were normal).
+- 281 to 315 ms the sheet's own frame, 274 to 296 ms the entry frame, 257 to 272 ms "load: ground
+  created".
+- The lane after the sheet: 3.3 s to the cover with the remaining 32-map lane (2.1 s of
+  compression, plus decode 270, hash 37, write 185 ms that could run beside the compression on
+  another worker; the compression holds `compress_lock`).
+- The recipe step took 417 to 439 ms in the final runs against 143 to 177 ms in two earlier runs
+  where the swatch workers started later: the workers overlap the recipe. The sheet came out the same
+  (2480 to 2567 ms then), so the start point is a wash; untried: starting them after the recipe.
+- Not measured here: an exported build (GraphicsWarmup runs there), and the library serve at boot
+  (368 ms headless, before the title).
