@@ -22,6 +22,11 @@ extends RefCounted
 ## always did); one the lane is baking is waited for by polling. Never wait on the lane with
 ## WorkerThreadPool.wait_for_task_completion before it is done: a main thread blocked that way on
 ## bake tasks hung for minutes (probe sysbake).
+##
+## The queue is ordered by priority (SurfaceStore.PRIORITY_*: lower first), first come first
+## served within one, so the maps a load waits for under its sheet pass the pictures a panel
+## asked for, and those pass the ones it only warms ahead (card authbake). A job queued again at
+## a higher priority moves up; the one baking is never interrupted.
 
 enum State { QUEUED, RUNNING, DONE }
 
@@ -42,17 +47,52 @@ var _generation: int = 0
 
 
 ## Queues `job` ({file, kind, library, name, runtime, files, hash}: hash "" when the surface is
-## not hashed yet) unless the lane already knows its file. Main thread.
-func add(job: Dictionary) -> void:
+## not hashed yet) at `priority` (lower bakes first) unless the lane already knows its file; a
+## file still queued at a lower priority moves up to this one. Main thread.
+func add(job: Dictionary, priority: int = 0) -> void:
 	var file := String(job["file"])
 	_mutex.lock()
 	if not _entries.has(file):
-		_entries[file] = {"state": State.QUEUED, "job": job, "result": {}}
-		_queue.append(file)
+		_entries[file] = {"state": State.QUEUED, "job": job, "result": {}, "priority": priority}
+		_enqueue(file, priority)
 		if not _running:
 			_running = true
 			_tasks.append(WorkerThreadPool.add_task(_work, false, "Surface prebake"))
+	else:
+		var entry: Dictionary = _entries[file]
+		if entry["state"] == State.QUEUED and priority < int(entry["priority"]):
+			_queue.erase(file)
+			entry["priority"] = priority
+			_enqueue(file, priority)
 	_mutex.unlock()
+
+
+## Puts `file` behind every queued job of `priority` or a higher one (a lower number). Under the
+## mutex.
+func _enqueue(file: String, priority: int) -> void:
+	for i in _queue.size():
+		if int(_entries[_queue[i]]["priority"]) > priority:
+			_queue.insert(i, file)
+			return
+	_queue.append(file)
+
+
+## The queued files in the order the lane will take them (a copy; tests and diagnostics).
+func queued() -> PackedStringArray:
+	_mutex.lock()
+	var files := PackedStringArray(_queue)
+	_mutex.unlock()
+	return files
+
+
+## True while `file` is queued or baking (not when its result waits for take(), nor when the
+## lane does not hold it).
+func is_pending(file: String) -> bool:
+	_mutex.lock()
+	var entry: Dictionary = _entries.get(file, {})
+	var pending: bool = not entry.is_empty() and entry["state"] != State.DONE
+	_mutex.unlock()
+	return pending
 
 
 ## True while a job is queued or baking (a finished one waits for take()). Main thread.

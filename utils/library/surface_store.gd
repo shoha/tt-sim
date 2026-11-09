@@ -38,6 +38,14 @@ const MAX_PNG_BYTES := 48 * 1024 * 1024
 const MAX_THUMB_BYTES := 4 * 1024 * 1024
 const MAX_THUMB_PX := 1024
 const SCHEME := LibraryIds.SURFACE_SCHEME
+## The prebake lane's priorities, first to last: the maps a load waits for under its sheet, the
+## pictures a panel shows (a biome tile), the ones it warms ahead of their first show (the Paint
+## swatches).
+const PRIORITY_LOAD := 0
+const PRIORITY_SHOWN := 1
+const PRIORITY_AHEAD := 2
+## SurfaceWait's script, loaded on first use by start-up code (the start-up script graph).
+const SURFACE_WAIT := "res://utils/library/surface_wait.gd"
 
 ## "<root>|<palette-relative path>" -> {surface: runtime name, kind}.
 static var _paths: Dictionary = {}
@@ -176,9 +184,16 @@ static func _zero_stats() -> Dictionary:
 ## Starts baking the maps of the library surfaces `names` (palette names or lib:// references; a
 ## plain palette's or an unknown name is skipped) on the prebake lane (SurfacePrebake: one worker
 ## task, the same bytes as a main-thread bake), so their first texture() or image() finds them
-## baked instead of baking in its frame. Maps in memory or already queued are left alone. A map
-## asked for before the lane reached it is baked by the asker, as without a prebake.
-static func prebake(names: PackedStringArray) -> void:
+## baked instead of baking in its frame. `priority` places them in the lane's queue
+## (PRIORITY_LOAD first); `kinds` limits the maps (all four when empty: a swatch needs only the
+## albedo). Maps in memory or already queued are left alone, but a queued one moves up to a
+## higher priority. A map asked for before the lane reached it is baked by the asker, as without a
+## prebake.
+static func prebake(
+	names: PackedStringArray,
+	priority: int = PRIORITY_LOAD,
+	kinds: PackedStringArray = PackedStringArray()
+) -> void:
 	if not prebake_enabled:
 		return
 	for ref in names:
@@ -188,6 +203,8 @@ static func prebake(names: PackedStringArray) -> void:
 			continue
 		var files := _surface_files(found)
 		for kind: String in files:
+			if not kinds.is_empty() and not kind in kinds:
+				continue
 			var file := String(files[kind])
 			if _images.has(file):
 				continue
@@ -202,13 +219,54 @@ static func prebake(names: PackedStringArray) -> void:
 					"runtime": runtime,
 					"files": files,
 					"hash": String(_hashes.get(runtime, "")),
-				}
+				},
+				priority
 			)
 
 
-## True while the prebake lane has maps queued or baking (a load waits on it under its sheet).
+## prebake() for the maps at the palette-relative paths `relatives` under `root` (a swatch's or a
+## biome picture's albedo); a path that is not a registered library map is skipped.
+static func prebake_paths(root: String, relatives: PackedStringArray, priority: int) -> void:
+	for relative in relatives:
+		var entry: Dictionary = _paths.get(_key(root, relative), {})
+		if not entry.is_empty():
+			prebake(
+				PackedStringArray([String(entry["surface"])]),
+				priority,
+				PackedStringArray([String(entry["kind"])])
+			)
+
+
+## True while the prebake lane has maps queued or baking.
 static func is_prebaking() -> bool:
 	return _prebake != null and _prebake.is_busy()
+
+
+## True while any map of the library surfaces `names` is queued or baking on the lane (a load
+## waits for its own maps under its sheet, not for pictures queued behind them).
+static func prebaking(names: PackedStringArray) -> bool:
+	if _prebake == null:
+		return false
+	# Releases the lane tasks that have ended (the pool keeps a task until it is waited on).
+	_prebake.is_busy()
+	for ref in names:
+		var found: Dictionary = _surfaces.get(runtime_name(ref), {})
+		if found.is_empty():
+			continue
+		var dir := String(found.get("dir", ""))
+		for kind in SurfaceBake.KINDS:
+			if _prebake.is_pending(dir.path_join(kind + ".png")):
+				return true
+	return false
+
+
+## True while the map at palette-relative `relative` under `root` is queued or baking on the lane:
+## its texture() or image() would wait for the bake (or bake it, when still queued).
+static func is_pending(root: String, relative: String) -> bool:
+	if _prebake == null:
+		return false
+	var entry: Dictionary = _paths.get(_key(root, relative), {})
+	return not entry.is_empty() and _prebake.is_pending(_file_of(entry))
 
 
 static func _forget_prebaked() -> void:

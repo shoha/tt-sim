@@ -62,23 +62,54 @@ static var _cache := {}
 
 ## The painted picture of `biome` (a palette biome entry with its "id", "thumbnail" and
 ## "ground_surface") at `size` px square. A biome whose thumbnail cannot be read falls back
-## to the plain palette thumbnail.
+## to the plain palette thumbnail. `deferred` never bakes in this frame: while the ground
+## surface's albedo is not baked the picture is a placeholder of the same size that repaints
+## itself once the prebake lane has the map (SurfaceWait; the authoring panel's tiles, card
+## authbake).
 static func of(
-	biome: Dictionary, size: int, root: String = PaletteLibrary.DEFAULT_ROOT
+	biome: Dictionary, size: int, root: String = PaletteLibrary.DEFAULT_ROOT, deferred := false
 ) -> Texture2D:
 	var id := String(biome.get("id", ""))
 	var key := "%s:%s:%d" % [root, id, size]
 	if _cache.has(key):
 		return _cache[key]
-	var thumbnail := String(biome.get("thumbnail", ""))
-	var studio := _studio(root, thumbnail, size * SUPERSAMPLE)
-	if studio == null:
-		return SwatchTextures.palette_thumbnail(thumbnail, size, root)
-	var image := paint(studio, ground_colour(biome, root), MapPlaceholder.seed_of(id))
-	image.resize(size, size, Image.INTERPOLATE_LANCZOS)
+	if deferred:
+		var placeholder := Image.create(size, size, false, Image.FORMAT_RGBA8)
+		placeholder.fill(ThemeColors.SKY_LOW)
+		var shown := ImageTexture.create_from_image(placeholder)
+		_cache[key] = shown
+		var waits: Variant = load(SurfaceStore.SURFACE_WAIT)
+		waits.call_when_ready(
+			root,
+			PackedStringArray([_ground_albedo(biome, root)]),
+			SurfaceStore.PRIORITY_SHOWN,
+			func() -> void:
+				var painted := _square(biome, size, root)
+				if painted == null:
+					var plain := SwatchTextures.palette_thumbnail(
+						String(biome.get("thumbnail", "")), size, root
+					)
+					painted = plain.get_image()
+				shown.set_image(painted)
+		)
+		return shown
+	var image := _square(biome, size, root)
+	if image == null:
+		return SwatchTextures.palette_thumbnail(String(biome.get("thumbnail", "")), size, root)
 	var texture := ImageTexture.create_from_image(image)
 	_cache[key] = texture
 	return texture
+
+
+## of()'s picture as an image, or null when the biome's thumbnail cannot be read.
+static func _square(biome: Dictionary, size: int, root: String) -> Image:
+	var studio := _studio(root, String(biome.get("thumbnail", "")), size * SUPERSAMPLE)
+	if studio == null:
+		return null
+	var id := String(biome.get("id", ""))
+	var image := paint(studio, ground_colour(biome, root), MapPlaceholder.seed_of(id))
+	image.resize(size, size, Image.INTERPOLATE_LANCZOS)
+	return image
 
 
 ## The picture of `biome` as a wide strip `size` px (wider than tall): the landscape across
@@ -118,10 +149,15 @@ static func bare_strip(
 ## The biome's ground as the picture paints it: the mean of its ground surface's albedo,
 ## lifted to GROUND_SATURATION and into the GROUND_LIGHTNESS band at the same hue.
 static func ground_colour(biome: Dictionary, root: String = PaletteLibrary.DEFAULT_ROOT) -> Color:
+	return _luminous(_mean(root, _ground_albedo(biome, root)))
+
+
+## The palette-relative albedo of `biome`'s ground surface ("" when it has none).
+static func _ground_albedo(biome: Dictionary, root: String) -> String:
 	var surface: Dictionary = PaletteLibrary.surfaces(root).get(
 		SurfaceStore.runtime_name(String(biome.get("ground_surface", ""))), {}
 	)
-	return _luminous(_mean(root, String(surface.get("albedo", ""))))
+	return String(surface.get("albedo", ""))
 
 
 ## `mean` lifted to GROUND_SATURATION and into the GROUND_LIGHTNESS band at its own hue (moss

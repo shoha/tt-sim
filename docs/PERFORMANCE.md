@@ -59,6 +59,7 @@ GPU.
 | Network | Reconciliation sends only tokens that moved, full state every 30 s (F-net-2) | idle at 200 tokens 12,800 B/s per client -> 0 between heartbeats (157 B/s averaged); 7 clients 89.6 -> 1.1 KB/s | 7a96ccd4 |
 | Network | A single drag update travels packed (F-net-7) | 128 -> 63 B per token per update; a 5 s drag of 10 tokens 55,040 -> 27,047 B | 835d75b7, 00f944dd |
 | System | Loads covered by the loading sheet: vsync off, 240 fps cap, 12 ms slices (F-system-3) | 100 ft + 100 pack tokens 2,429 -> 1,435 ms; 320 ft + 500 tokens 14,867 -> 8,832 ms; 100 ft play 422 -> 350 ms | 42a1dfe9 |
+| System | Surface maps bake on one priority-ordered worker lane, byte-identical (sysbake, authbake); the authoring drawer's biome tiles and Paint swatches take theirs from it (`SurfaceWait`) | cold 200 ft play: worst frame 2,437-2,500 -> 84-123 ms, wall unchanged; cold new 200 ft map: entry frame 2,805-3,136 -> 207-215 ms, wall 14,192-15,545 -> 11,719-11,781 ms | 817a0f1e, authbake |
 
 Correctness found on the way: a client's GameState never took transforms, so after per-token adds
 it lagged up to the heartbeat (fixed, three ENet consistency scenarios, 8fd3af5e); two dev builds
@@ -130,7 +131,9 @@ From the register's rows that are not merged, with their measured size:
   smaller (board perf-map-format); a join runs in series behind main-thread blocks (about 1.4 s to
   overlap).
 - **System.** Boot 6.4-7.7 s to the title from a pack; the first authoring open 2.3 s warm and 10.2 s
-  cold (UI built up front); about 620 MB of texture memory stays at the title after a map (526 MB
+  cold (UI built up front; since authbake no cold bake runs in its frames, but a cold new 200 ft
+  map still takes 11.7 s and a cold play load 3.4 s, both waiting on the lane's serial bakes:
+  decoding, hashing and cache writes could move off the serial lane, unmeasured); about 620 MB of texture memory stays at the title after a map (526 MB
   unattributed, engine-side); the first-launch warm-up; about 80 pipeline compiles per load;
   surface PNGs 54 % of the download; process memory creeps 2.7 MB per map cycle; idle runs at full
   rate (board perf-idle-throttle).

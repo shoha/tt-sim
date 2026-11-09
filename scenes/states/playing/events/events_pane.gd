@@ -450,7 +450,7 @@ func _biome_field() -> TileField:
 			AuthoringPanel.short_name(String(biome["name"])),
 			"",
 			String(biome["name"]),
-			BiomeThumbnail.of(biome, AuthoringPanel.BIOME_THUMB_PX, palette_root)
+			BiomeThumbnail.of(biome, AuthoringPanel.BIOME_THUMB_PX, palette_root, true)
 		)
 	field.tiles.selection_changed.connect(
 		func(id: StringName) -> void: biome_selected.emit(String(id))

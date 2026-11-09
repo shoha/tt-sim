@@ -226,6 +226,18 @@ treecube is gone ("The core library"). Step S9 (2026-10-25): per-season override
   same 8-bit colours. Bake cost (1024 px, S0): about 0.21 s a surface, BC7 95 percent of it;
   nothing is baked when a library is served, only the maps a ground, a swatch or a thumbnail asks
   for, then about 18 ms a surface from the cache.
+- **The prebake lane** (`SurfacePrebake`, cards sysbake and authbake). `SurfaceStore.prebake(names,
+  priority, kinds)` bakes maps ahead of their first use on ONE worker task, one compression at a
+  time process-wide (`SurfacePrebake.compress_lock`: two BC7 compressions at once gave different
+  bytes), with the main thread's own function, so maps and cache files are byte-identical
+  (`test_surface_prebake.gd`). Its queue is ordered by priority: `PRIORITY_LOAD` (a map load's
+  ground layers, which it waits for under its sheet with `prebaking(names)`), `PRIORITY_SHOWN` (a
+  panel's pictures: the authoring drawer's biome tiles), `PRIORITY_AHEAD` (the Paint swatches,
+  warmed before their pane shows). A play load queues its layers as soon as its document is read,
+  a new map before its recipe runs (`NewMap.planned_surfaces`). Panels never bake in their frame:
+  `SurfaceWait.call_when_ready` runs their work once the lane has the maps, and
+  `BiomeThumbnail.of(..., deferred)` shows a placeholder that repaints itself in place
+  (`ImageTexture.set_image` keeps the texture; the headless dummy renderer drops the replace).
 - **The raw cache.** `user://library_cache/<library id>/<hash>/<surface>_<map>.ttimg`: `TTIMG`,
   version, the engine version string and hash (a different engine ignores the file, bakes anew
   and replaces it), format, size, mips, data length, the data's SHA-256, then
