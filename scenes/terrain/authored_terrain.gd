@@ -184,6 +184,17 @@ static func texture_paths(
 	)
 
 
+## The palette surfaces build() will bind as ground layers for `doc`
+## (GroundLayerBinding.planned_layers: the map's own, then the fire's reserved ones the arrays'
+## capacity step holds): what a load bakes ahead (SurfaceStore.prebake). Water counts from the
+## water bodies too, since the wet dressing that decides it in build() may not be computed yet.
+static func layer_surfaces(
+	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT
+) -> PackedStringArray:
+	var water := not doc.water_bodies.is_empty() or not doc.water_dressing.is_empty()
+	return GroundLayerBinding.planned_layers(doc, root, water, fire_surfaces(doc, root, water))
+
+
 ## The surfaces a fire's change brings to `doc` at once (FireSweep.plan_for: the palette's
 ## burnt forest biome's ground, cliff, scree and accent surfaces, its water bed and shore on a
 ## map with water, and the ash), drawable ones other than the base; none of the biome's when it

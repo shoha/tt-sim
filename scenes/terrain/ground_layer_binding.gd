@@ -232,6 +232,22 @@ func prepare_step() -> bool:
 	return is_preparing()
 
 
+## The palette surfaces build() binds as layers for `doc` from palette `root` with `water` and
+## the `reserved` surfaces, in layer order, reading no texture: what a load bakes ahead
+## (AuthoredTerrain.layer_surfaces, SurfaceStore.prebake). Past MAX_LAYERS the fallbacks are
+## picked without mean colours (those read the albedo), so a plan there may differ from build's.
+static func planned_layers(
+	doc: MapDocument, root: String, water: bool, reserved: PackedStringArray
+) -> PackedStringArray:
+	var surfaces := PaletteLibrary.surfaces(root)
+	var role_of := func(surface: String) -> String:
+		return String(surfaces.get(surface, {}).get("role", "ground"))
+	var no_color := func(_surface: String) -> Variant: return null
+	var wanted := GroundLayers.wanted(gather_inputs(doc, root, water))
+	var planned := GroundLayers.extend(PackedStringArray(), wanted, role_of, no_color)
+	return with_reserve(planned, reserved).get("layers", PackedStringArray())
+
+
 ## `from_table` (GroundLayers.extend) with the surfaces of `reserved` it lacks appended, as many
 ## as its capacity step (GroundLayers.capacity) still holds, so the arrays keep their size. Pure.
 static func with_reserve(from_table: Dictionary, reserved: PackedStringArray) -> Dictionary:
