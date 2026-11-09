@@ -169,7 +169,9 @@ static func planned_surfaces(
 		stand_in.base_surface = BARE_SURFACE
 	if not biome.is_empty():
 		stand_in.biome_ids = PackedStringArray([biome_id])
-	return AuthoredTerrain.layer_surfaces(stand_in, root)
+	# By path: naming AuthoredTerrain would put the terrain and authoring code on the start-up graph.
+	var terrain: Variant = load("res://scenes/terrain/authored_terrain.gd")
+	return terrain.layer_surfaces(stand_in, root)
 
 
 ## create() from the new-map spec NewMapDialog emits and AuthoringController opens:
