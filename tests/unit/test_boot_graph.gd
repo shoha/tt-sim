@@ -14,7 +14,9 @@ extends GutTest
 ## board token, game map, table (LevelPlayController), authoring editor or procgen evaluator,
 ## settlement, prop or ornament class; Root makes the table when a session or a map first needs it
 ## (Root._ensure_table), and StructureProcgen loads the procgen parts on the first build.
-const LIMIT_SCRIPTS := 342
+## 343 with IdleThrottle (sysidle): a 130-line Node Root adds after the title is up; LoadPacing and
+## the Settings graphics helper name it, so it is in the graph (one script, no web behind it).
+const LIMIT_SCRIPTS := 343
 
 var _classes: Dictionary = {}
 var _strings := RegEx.create_from_string(

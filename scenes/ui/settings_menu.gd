@@ -81,7 +81,6 @@ var _reset_tween: Tween
 @onready var ui_slider: HSlider = %UIVolumeSlider
 @onready var ui_label: Label = %UIVolumeLabel
 
-# Tab container for cross-fade transitions
 @onready var tab_container: TabContainer = %TabContainer
 @onready var section_rail: IconRail = %SectionRail
 
@@ -89,6 +88,7 @@ var _reset_tween: Tween
 @onready var fullscreen_check: CheckButton = %FullscreenCheck
 @onready var interface_size_option: OptionButton = %InterfaceSizeOption
 @onready var vsync_check: CheckButton = %VSyncCheck
+@onready var idle_throttle_check: CheckButton = %IdleThrottleCheck
 @onready var lofi_check: CheckButton = %LofiCheck
 @onready var token_shading_option: OptionButton = %TokenShadingOption
 @onready var token_ghost_check: CheckButton = %TokenGhostCheck

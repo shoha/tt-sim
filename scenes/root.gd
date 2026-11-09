@@ -132,6 +132,8 @@ func _ready() -> void:
 	var precompile := BootPrecompile.new()
 	precompile.name = "BootPrecompile"
 	add_child(precompile)
+	# Slows the frame rate while the window is in the background (Settings > Graphics).
+	IdleThrottle.install(self)
 
 
 ## FoliageLibrary switched the palette: rebuild the open map so its scatter draws the new
