@@ -4819,3 +4819,44 @@ a probe then reads them each frame with `get_captured_timestamps_count`,
 interval to the next timestamp by name. The flag also prints a one-second GPU PROFILE to stdout. The
 probe was a one-use job (not in the repo); `probes/eye_perf.gd`'s `perf` action is the committed
 neighbour with the same in-run A/B loop, to which the timestamp read adds about 30 lines.
+
+## Token sync bytes (topic perfaudit, card netspawn, 2026-11-08)
+
+What changed (NETWORKING.md "Token adds and the table state on the wire", "Periodic
+Reconciliation"): a placement sends that token alone (`TokenStateWire` ADD) instead of the whole
+state; every state message is zstd-compressed and cut into 64 KB chunks; the 2 s reconciliation
+sends only tokens that moved (`TokenTransformPack`, packed, reliable) with the full state every
+30 s as the heartbeat; a drag's batch is packed under the MTU.
+
+Method: the perfaudit net harness (`tests/net/perfaudit_net.gd`, branch perfaudit-net), 100 ft
+map, `--peers=3`, ENet on loopback, avatar tokens with identical recipes; bytes are the
+application payload the host hands the transport for ONE client, exact and repeatable (the
+placement counts matched the wave 1 runs to the byte). Host upload is that times the clients
+(`rpc()` sends one copy per peer). Steam itself was not driven.
+
+| Scenario (host to one client) | Before | After |
+| --- | --- | --- |
+| One placement at 200 tokens | 96,448 B | 423 B (228x) |
+| Placing tokens 51 to 200 (state messages) | 14,467,200 B | 63,438 B |
+| Spawn window to 1 / 10 / 50 / 200 tokens (all messages) | 1,088 / 45,760 / 951,040 / 14,537,600 B | 609 / 5,455 / 23,570 / 99,247 B |
+| Late join, the state at 200 tokens | 153,664 B | 4,715 B (33x) |
+| Late join window, 200 tokens (map, state, transforms) | 328,842 B | 71,516 B |
+| Idle 10 s at 1 / 10 / 50 / 200 tokens | 640 / 6,400 / 32,000 / 128,000 B | 0 / 0 / 0 / 0 B (plus the heartbeat) |
+| Heartbeat at 200 tokens | none | 4,715 B every 30 s (157 B/s) |
+| Drag 10 tokens 5 s, 200 on the board | 107,304 B in 812 msgs | 56,188 B in 432 msgs |
+| Drop tail 1 s | 27,412 B | 5,289 B (of it the heartbeat 4,715) |
+
+Idle host upload at 200 tokens: 12,800 B/s and 100 messages/s per client before, so 12.8 / 38.4 /
+89.6 KB/s and 100 / 300 / 700 messages/s for 1 / 3 / 7 clients; after, 0 between heartbeats and
+157 B/s averaged (one 4.7 KB message per client per 30 s): 0.16 / 0.47 / 1.1 KB/s. The drag
+itself still sends one 128 B transform RPC per dragged token per 0.1 s (F-net-7's packed drag
+path is the remaining step; the batch flush is packed already).
+
+State size by token kind (`TokenStateWire`, a pure probe with random positions, so less
+compressible than the harness grid): 200 tokens 8.1 KB (identical avatars), 9.2 KB (pack
+tokens), 19.3 KB (avatars with distinct full recipes); 670 tokens 26.9 / 30.2 / 63.1 KB, all one
+chunk (the Variant was 512 KB to 1 MB, past Steam's 512 KB queue). zstd beat deflate from 10
+tokens up (200 distinct avatars: 19.3 against 24.6 KB); deflate is 40 B smaller for one token.
+Largest single message after: an AssetStreamer map chunk (32 KB); the largest token message
+measured was a 16.6 KB reliable reconcile pair as 150 freshly placed tokens settled.
+`TokenStateWire.SEND_BUDGET_BYTES` (192 KB) is reached at 2,000 to 4,900 tokens.

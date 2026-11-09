@@ -33,7 +33,7 @@ const TRANSFORM_BATCH_INTERVAL := 0.033  # ~30fps batch rate
 var _transform_throttle: Dictionary = {}  # network_id -> last_send_time (float)
 
 ## Pending transform updates (for batching)
-var _pending_transforms: Dictionary = {}  # network_id -> {position, rotation, scale}
+var _pending_transforms: Dictionary = {}  # network_id -> TokenTransformPack.floats_of()
 var _transform_batch_timer: Timer = null
 
 
@@ -98,11 +98,9 @@ func _queue_transform_update(token: BoardToken) -> void:
 	# Keep GameState in step with the wire, exactly as _send_transform_update does.
 	GameState.sync_from_board_token(token)
 
-	_pending_transforms[token.network_id] = {
-		"position": _vector3_to_array(state.position),
-		"rotation": _vector3_to_array(state.rotation),
-		"scale": _vector3_to_array(state.scale),
-	}
+	_pending_transforms[token.network_id] = TokenTransformPack.floats_of(
+		state.position, state.rotation, state.scale
+	)
 
 
 ## Send a single token's transform immediately
@@ -237,11 +235,6 @@ func _on_tokens_added_received(state_dict: Dictionary) -> void:
 # =============================================================================
 # HELPERS
 # =============================================================================
-
-
-## Convert Vector3 to array for network transmission (more compact than dict)
-func _vector3_to_array(v: Vector3) -> Array:
-	return [v.x, v.y, v.z]
 
 
 ## Clear rate limiting state (call when level changes)
