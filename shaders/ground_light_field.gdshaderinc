@@ -12,7 +12,7 @@
 // (wind_foliage_main) read it with one fetch; nothing here costs frame time but that fetch.
 //
 // Sections, by define before the include:
-//   (none)              the shared decode and the cap, for the ground.
+//   (none)              the shared decode, the cap and the OKLab conversions, for the ground.
 //   LIGHT_FIELD_BAKE    the bake's uniforms and the zone and light functions.
 //   LIGHT_FIELD_TUFT    the grass tuft's uniforms and zone_tuft_albedo (wind_foliage_main).
 // Every uniform defaults off: a material nobody sets draws as before the ground ship.
@@ -45,6 +45,39 @@ vec3 light_field_capped_by(vec3 c, float knee, float cap, float sat_cap) {
 		c = mix(vec3(v), c, (v - floor_lo) / max(v - lo, 1e-5));
 	}
 	return c;
+}
+
+// Linear sRGB to OKLab and back (Ottosson), for zone_oklab (the bake) and the steep faces' zone
+// mix (ground_steep_zones.gdshaderinc).
+vec3 zone_oklab_from(vec3 c) {
+	vec3 lms = vec3(
+		dot(c, vec3(0.4122214708, 0.5363325363, 0.0514459929)),
+		dot(c, vec3(0.2119034982, 0.6806995451, 0.1073969566)),
+		dot(c, vec3(0.0883024619, 0.2817188376, 0.6299787005))
+	);
+	lms = pow(max(lms, vec3(0.0)), vec3(1.0 / 3.0));
+	return vec3(
+		dot(lms, vec3(0.2104542553, 0.7936177850, -0.0040720468)),
+		dot(lms, vec3(1.9779984951, -2.4285922050, 0.4505937099)),
+		dot(lms, vec3(0.0259040371, 0.7827717662, -0.8086757660))
+	);
+}
+
+vec3 zone_oklab_to(vec3 lab) {
+	vec3 lms = vec3(
+		dot(lab, vec3(1.0, 0.3963377774, 0.2158037573)),
+		dot(lab, vec3(1.0, -0.1055613458, -0.0638541728)),
+		dot(lab, vec3(1.0, -0.0894841775, -1.2914855480))
+	);
+	lms = lms * lms * lms;
+	return max(
+		vec3(
+			dot(lms, vec3(4.0767416621, -3.3077115913, 0.2309699292)),
+			dot(lms, vec3(-1.2684380046, 2.6097574011, -0.3413193965)),
+			dot(lms, vec3(-0.0041960863, -0.7034186147, 1.7076147010))
+		),
+		vec3(0.0)
+	);
 }
 
 #ifdef LIGHT_FIELD_BAKE
@@ -233,38 +266,6 @@ float zone_edge_at(vec2 xz, float edge, float k) {
 	vec2 q = xz / max(zone_edge_vary_m, 0.5) + vec2(k * 7.31, -k * 3.17);
 	float n = smoothstep(0.3, 0.7, light_field_noise(q) * 0.75 + light_field_noise(q * 2.3) * 0.25);
 	return edge * mix(1.0 - zone_edge_vary, 1.0 + 1.5 * zone_edge_vary, n);
-}
-
-// Linear sRGB to OKLab and back (Ottosson), for zone_oklab.
-vec3 zone_oklab_from(vec3 c) {
-	vec3 lms = vec3(
-		dot(c, vec3(0.4122214708, 0.5363325363, 0.0514459929)),
-		dot(c, vec3(0.2119034982, 0.6806995451, 0.1073969566)),
-		dot(c, vec3(0.0883024619, 0.2817188376, 0.6299787005))
-	);
-	lms = pow(max(lms, vec3(0.0)), vec3(1.0 / 3.0));
-	return vec3(
-		dot(lms, vec3(0.2104542553, 0.7936177850, -0.0040720468)),
-		dot(lms, vec3(1.9779984951, -2.4285922050, 0.4505937099)),
-		dot(lms, vec3(0.0259040371, 0.7827717662, -0.8086757660))
-	);
-}
-
-vec3 zone_oklab_to(vec3 lab) {
-	vec3 lms = vec3(
-		dot(lab, vec3(1.0, 0.3963377774, 0.2158037573)),
-		dot(lab, vec3(1.0, -0.1055613458, -0.0638541728)),
-		dot(lab, vec3(1.0, -0.0894841775, -1.2914855480))
-	);
-	lms = lms * lms * lms;
-	return max(
-		vec3(
-			dot(lms, vec3(4.0767416621, -3.3077115913, 0.2309699292)),
-			dot(lms, vec3(-1.2684380046, 2.6097574011, -0.3413193965)),
-			dot(lms, vec3(-0.0041960863, -0.7034186147, 1.7076147010))
-		),
-		vec3(0.0)
-	);
 }
 
 // `a` toward `b` by `t`, in OKLab when zone_oklab is set (linear RGB otherwise). At zone_oklab 2

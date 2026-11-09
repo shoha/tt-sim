@@ -1562,6 +1562,30 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   patches takes no projection: it is a 3D noise (the rules above; rockstretch), isotropic on
   every face, where blending planar projections of it would still stretch it about 1.3 to
   1.45 down a 44 to 51 degree face (measured; a planar projection's limit there).
+- **Steep faces, the ground look (steepzones 2026-11-08, look-pending):** the look's zones and
+  painted light are baked top-down, so on a face a zone edge ran down the fall line as a stripe
+  and the strokes smeared along it (stripe number S, strike over dip luminance gradient on the
+  zone-only texel, 1.3 to 1.7 on 40 to 50 degree faces, 2 to 3.2 on a 70 degree cliff). A face
+  now reads the look's fields in 3D (`shaders/ground_steep_zones.gdshaderinc`,
+  `GroundSteepZones`): `GroundLookBake` also bakes, in one `SteepBake` SubViewport for every slot
+  (`ground_steep_bake.gdshader`), each slot's fields before their thresholds (the three zone
+  shapes and the light's field, and the zones' ragged-edge octave in a second row) in three
+  height layers, each the same fields at a far XZ shift, at 5 texels/m, RGBA8. A fragment blends
+  the layers along its height with each field's own layer length, its own scale (`zones.scale_m`
+  per zone, `light.scale_m`, `zones.rag_m`), so it varies as fast up a face as across it, with
+  half a layer of phase so no field is flat in height at height 0 (without it the savanna valley
+  walls read S 1.3 to 3.6), then thresholds and lights them like the bake: no strokes, no edge
+  variation, no light streaks or ripples on faces. Three layers, not two: two would mirror the
+  pattern at every layer plane. The weight `1 - smoothstep(0.71, 0.87, n.y)` (exactly 0 under
+  29.5 degrees, 1 over 44.8) mixes it into the top-down texel, so flat ground takes the old path
+  (the flat frame diff is at most 1 level). Measured S: valley walls 0.89 to 1.15, the 50 degree
+  mesa 0.84 to 1.09, a 70 degree cliff 0.81 and 1.20; opaque pass +0.06 ms home, +0.08 a valley
+  wall view, +0.13 a face-filling mesa view. Memory: per slot 3 x 2 cells of the bake rect at
+  5 texels/m, 3.7 MB on a 100 ft map, 7.1 MB on 200 ft, at most 25.2 MB (cells capped at 1024 px;
+  100.7 MB for four slots); the look bake beside it is RGBA8 too (measured), 16.8 MB a slot at its
+  2048 px cap. The grass's CPU twin (`GroundZones`, read by `ScatterMass` to keep mass swathes by
+  zone) and the grass tufts (the top-down bake) stay top-down: on a face over 30 degrees a grass
+  mass may sit on a zone colour the ground no longer shows there.
 - **Two-scale edge (T7):** that frayed edge is decimetres wide and alone read like a decal
   beside a Blender map's layers, which fade over metres. A second, broad scale:
   `GroundLayerTable.broad_image()` box-filters each weight mirror by `BROAD_FACTOR` (14

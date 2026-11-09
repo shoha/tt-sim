@@ -14,7 +14,9 @@ extends Node
 ## by the share of their biome components that carry a look, so a map of several biomes draws
 ## each with its own look and a biome without one (a fire's burnt forest included) as today. The
 ## grass of a looked biome (its palette species of kind grass) takes the tuft and mass shading
-## and reads its biome's bake.
+## and reads its biome's bake. One more SubViewport, the steep bake, holds every slot's fields
+## in height layers for steep faces (GroundSteepZones, shaders/ground_steep_bake.gdshader), baked
+## with the slots and never restamped.
 ##
 ## When: build() calls sync(true) (map open, resize); update_ground_region() calls sync(false)
 ## (biome paint, fire), which only re-tables the slots unless the set of looked biomes changed;
@@ -27,6 +29,8 @@ extends Node
 
 const NODE_NAME := "GroundLookBake"
 const BAKE_SHADER := preload("res://shaders/ground_light_field_bake.gdshader")
+const STEEP_SHADER := preload("res://shaders/ground_steep_bake.gdshader")
+const STEEP_NODE := "SteepBake"
 ## The bake's density and the margin past the map edge it covers (the skirt reads the edge
 ## texel beyond), as round 20 baked.
 const TEXELS_PER_M := 10.0
@@ -51,6 +55,8 @@ var _plan: Dictionary = {}
 var _looks: Array[Dictionary] = []
 var _refs: Array[Color] = []
 var _viewports: Array[SubViewport] = []
+## The steep faces' bake (GroundSteepZones), one rect per slot; null with no look.
+var _steep: SubViewport = null
 var _rect := Vector4.ZERO
 var _px := Vector2i.ZERO
 var _seed_m := Vector2.ZERO
@@ -242,8 +248,42 @@ func _bake_all() -> void:
 			mat.set_shader_parameter(key, params[key])
 		GroundMassStamps.draw(vp, sums, _rect, _px, _looks[s].mass, _sun_dir)
 		vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	_bake_steep()
 	bakes += 1
 	_await_draw()
+
+
+## The steep bake: one rect per slot, each a band of GroundSteepZones.LAYERS by ROWS cells over
+## the bake rect, with its slot's bake uniforms; rendered once with the slots.
+func _bake_steep() -> void:
+	if _steep == null:
+		_steep = SubViewport.new()
+		_steep.name = STEEP_NODE
+		_steep.disable_3d = true
+		_steep.transparent_bg = true
+		_steep.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		add_child(_steep)
+	var cell := GroundSteepZones.cell_px(_rect)
+	var band := Vector2(cell.x * GroundSteepZones.LAYERS, cell.y * GroundSteepZones.ROWS)
+	_steep.size = GroundSteepZones.atlas_px(cell, biomes().size())
+	var rects := _steep.get_children()
+	for i in range(biomes().size(), rects.size()):
+		rects[i].queue_free()
+	for s in biomes().size():
+		var rect: ColorRect = rects[s] if s < rects.size() else null
+		if rect == null:
+			rect = ColorRect.new()
+			rect.name = "Slot%d" % s
+			var shader_mat := ShaderMaterial.new()
+			shader_mat.shader = STEEP_SHADER
+			rect.material = shader_mat
+			_steep.add_child(rect)
+		rect.position = Vector2(0.0, band.y * s)
+		rect.size = band
+		var params := GroundLookUniforms.bake_params(_looks[s], _refs[s], _seed_m, _rect)
+		for key: String in params:
+			(rect.material as ShaderMaterial).set_shader_parameter(key, params[key])
+	_steep.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
 ## Redraws every slot's mass stamps from the scatter now (and the bake under them).
@@ -291,6 +331,8 @@ func _enter_tree() -> void:
 		_bind_pending = false
 		for vp in _viewports:
 			vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+		if _steep != null:
+			_steep.render_target_update_mode = SubViewport.UPDATE_ONCE
 		_await_draw()
 
 
@@ -307,7 +349,8 @@ func _bind_ground() -> void:
 	var tables := GroundLookUniforms.OFF.duplicate()
 	if not biomes().is_empty() and _viewports.size() == biomes().size():
 		var textures := _viewports.map(func(vp: SubViewport) -> Texture2D: return vp.get_texture())
-		tables = GroundLookUniforms.ground_tables(_plan, _looks, _refs, textures, _rect)
+		var steep: Texture2D = _steep.get_texture() if _steep != null else null
+		tables = GroundLookUniforms.ground_tables(_plan, _looks, _refs, textures, _rect, steep)
 	terrain.set_looked(int(tables.get("look_present", 0)) != 0)
 	for mat in [terrain.get_material(), terrain.get_skirt_material()]:
 		if mat != null:
@@ -350,6 +393,9 @@ func _unbind() -> void:
 	for vp in _viewports:
 		vp.queue_free()
 	_viewports.clear()
+	if _steep != null:
+		_steep.queue_free()
+		_steep = null
 	_bind_ground()
 	_bind_grass()
 	_stamp_wait = -1.0

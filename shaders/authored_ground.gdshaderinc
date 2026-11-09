@@ -365,6 +365,8 @@ const float ACCENT_EDGE_WAVE_M = 9.0;
 //   look_rim_more    (gap, path_blend_width, accent_core_m, core_dark)
 //   look_rim_color, look_accent_tint (rgb, linear)
 //   look_rim_layers  the layers that draw a rim, -1 none
+// look_steep, look_steep_atlas, look_steep_params: the look on steep faces
+// (ground_steep_zones.gdshaderinc, read through look_texel).
 // A pixel mixes today's ground and the looked one by the share of its biome components that
 // carry a look; the pixel-wide values (the cap, the rims, the path band) are its dominant looked
 // component's, the per-sample ones (brush, reference) the zoned layer's own.
@@ -1203,6 +1205,9 @@ vec4 look_fetch(int slot, vec2 world_xz) {
 	return zone_decode(t);
 }
 
+// GROUND LOOK on steep faces: look_texel, look_fetch read in 3D on a face.
+#include "res://shaders/ground_steep_zones.gdshaderinc"
+
 // GROUND LOOK: one ground sample's albedo `a` under slot `s`'s look, from its texel `zone`. A
 // zoned layer's sample (`zoned`) takes the zone colour and keeps its brush: its luminance over
 // the light reference, raised to the brush contrast (mean-preserving around the brush key when
@@ -1520,7 +1525,7 @@ void fragment() {
 	// path_blend_width where a stroke is partial).
 	bool look_any = dom >= 0;
 	float look_share = look_any ? look_w / max(comp_w, 1e-5) : 0.0;
-	vec4 zone_dom = look_any ? look_fetch(dom, world_xz) : vec4(1.0);
+	vec4 zone_dom = look_any ? look_texel(dom, world_xz, v_position.y, n_geom.y) : vec4(1.0);
 	float rim_path = 0.0;
 	int rim_path_layer = -1;
 	if (look_present != 0) {
@@ -1617,7 +1622,7 @@ void fragment() {
 					vec3 a = (ground.albedo - before) / b;
 					plain_albedo += b * a;
 					int zs = look_layer_slot(cl[k]);
-					vec4 zone = zs >= 0 && zs != dom ? look_fetch(zs, world_xz) : zone_dom;
+					vec4 zone = zs >= 0 && zs != dom ? look_texel(zs, world_xz, v_position.y, n_geom.y) : zone_dom;
 					ground.albedo = before + b * look_albedo(a, zone, zs >= 0, zs >= 0 ? zs : dom);
 					rim_share_accent += (cl[k] == rim_accent_layer) ? b : 0.0;
 					rim_share_path += (cl[k] == rim_path_layer) ? b : 0.0;

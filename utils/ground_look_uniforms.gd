@@ -243,10 +243,15 @@ static func plan(rows: Array, looks: Dictionary, layer_of: Callable) -> Dictiona
 
 ## The ground (and skirt) material's GROUND LOOK uniforms for `the_plan` (plan()), the merged
 ## looks of its slots (`looks`, in slot order), each slot's light reference (`refs`, linear) and
-## bake texture (`textures`, null before the first bake), over `rect`. OFF when no slot is
-## bound. Pure.
+## bake texture (`textures`, null before the first bake), over `rect`, with the steep faces'
+## bake `steep` and uniforms (GroundSteepZones.tables). OFF when no slot is bound. Pure.
 static func ground_tables(
-	the_plan: Dictionary, looks: Array, refs: Array, textures: Array, rect: Vector4
+	the_plan: Dictionary,
+	looks: Array,
+	refs: Array,
+	textures: Array,
+	rect: Vector4,
+	steep: Texture2D = null
 ) -> Dictionary:
 	if (the_plan.get("biomes", PackedStringArray()) as PackedStringArray).is_empty():
 		return OFF.duplicate()
@@ -304,6 +309,7 @@ static func ground_tables(
 	}
 	for s in SLOTS:
 		out["look_tex_%d" % s] = textures[s] if s < textures.size() else null
+	out.merge(GroundSteepZones.tables(looks, refs, rect, steep))
 	return out
 
 
