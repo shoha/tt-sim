@@ -4983,7 +4983,26 @@ remain, process 13-17 ms). In place on the open map (7 rounds, call plus one ray
 (4) 0.26 ms and a 20 m x 8 m stroke's (10) 0.50 ms at every size; `update_collision()` over all tiles
 0.97 / 3.84 / 10.4 ms (map open and tests only). That is 0.05-0.07 ms per tile, where "Sculpting"
 (P3-3a, 2026-09-26) measured 0.45 ms per 41 x 41 chunk shape and rejected per-chunk collision; the
-gap was not re-investigated (that pass also tiled finer, 64 shapes at 200 ft). The machine was shared with other perfaudit cards; before
+gap was not re-investigated (that pass also tiled finer, 64 shapes at 200 ft).
+
+### Paint stroke end: no second tint pass (card authcollide)
+
+A Paint stroke's end refreshed the ground over the whole stroke's rectangle (finding
+F-authoring-3: the broad tint, `GroundBroadTint.tint_plane` in GDScript per sample), although every
+frame's flush had already refreshed the samples its dabs changed; `SurfaceStroke.finish()` changes no
+weights, only trims unused trailing slots. The end now only re-plans the tables
+(`update_ground_region(Rect2i())`; a drawn tint that changed still rebuilds the broad map whole, as
+before). Real window, same map and recorder as above, the `broad` part's largest value per stroke
+(the release before, a dab frame after) and the stroke's worst frame:
+
+| Map | Broad before (6 cobblestone strokes, 2 runs) | Broad after (5: 3 cobblestone, 2 gravel) | Worst frame before | Worst frame after |
+|---|---|---|---|---|
+| 100 ft | 2.84 [2.52..4.47] | 0.53 [0.48..0.61] | 11.3-13.8 | 8.8-10.8 |
+| 200 ft | 6.53 [3.52..7.75] | 0.71 [0.69..0.80] | 17.8-23.4 | 14.1-17.8 |
+| 320 ft | 7.07 [3.71..8.55] | 0.73 [0.69..0.79] | 22.4-34.9 | 18.8-19.9 |
+
+The sculpt and carve stroke end still runs the rule fields (`TerrainRules.sample_fields`, 4.5-4.7 ms
+at every size for a 12 m stroke): the next step there is the native port the finding proposes. The machine was shared with other perfaudit cards; before
 and after ran under similar load, minutes apart.
 
 ## Render scale (topic perfaudit, card renderscale)
