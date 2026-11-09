@@ -39,7 +39,10 @@ extends RefCounted
 ##                        sheet), for an in-run A/B of load pacing
 ##   vsync {on}           the window's vsync mode
 ##   tokens {folder, count}  give a saved probe level `count` Beasts pack tokens on a grid
-##   prebake {on}         SurfaceStore.prebake_enabled, for an in-run A/B of the bake lane
+##   prebake {on}         SurfaceStore.prebake_enabled, MapSourceLoader.early_prebake and
+##                        SurfaceWait.enabled, for an in-run A/B of the bake lane ("off", "late",
+##                        "early", "..._nopanel")
+##   pictures             the authoring drawer's biome pictures read back: painted or placeholder
 ##   cold_surfaces {tag}  a new empty surface cache folder (`user://library_cache__sysbake_<tag>`)
 ##                        and the store's memory and swatches dropped: the next load bakes cold
 
@@ -50,6 +53,8 @@ const CARD_PREFIX := "_sysload_"
 const OPEN_CARD_PREFIX := "_sysopen_"
 ## The card after that (sysbake: surface bakes off the main thread, the play drawer).
 const BAKE_CARD_PREFIX := "_sysbake_"
+## The card after that (authbake: the authoring open's pictures on the lane, earlier prebakes).
+const AUTHBAKE_PREFIX := "_authbake_"
 const NODE_PREFIX := "PerfauditSys"
 const SHAPES := preload("res://tools/render_jobs/probes/terrain_shapes.gd")
 const WATER := preload("res://tools/render_jobs/probes/water.gd")
@@ -133,9 +138,20 @@ static func run(base: Node, step: Dictionary) -> String:
 		"tokens":
 			return _tokens(String(step.get("folder", "")), int(step.get("count", 100)))
 		"prebake":
-			# An expand template substitutes a string: "true" or "true_<tag>" turns it on.
-			SurfaceStore.prebake_enabled = str(step.get("on", true)).to_lower().begins_with("true")
-			return "surface prebake %s" % ("on" if SurfaceStore.prebake_enabled else "off")
+			# An expand template substitutes a string such as "early_panel_<tag>": "off..." or
+			# "false..." turns the lane off; "late..." starts the loads' prebake where sysbake did
+			# (MapSourceLoader.early_prebake off), anything else where authbake does; "nopanel"
+			# anywhere leaves the panels' pictures baking in place (SurfaceWait.enabled off).
+			var mode := str(step.get("on", true)).to_lower()
+			SurfaceStore.prebake_enabled = not (mode.begins_with("off") or mode.begins_with("false"))
+			MapSourceLoader.early_prebake = not mode.begins_with("late")
+			SurfaceWait.enabled = not "nopanel" in mode
+			return (
+				"surface prebake %s, early %s, panel pictures on the lane %s"
+				% [SurfaceStore.prebake_enabled, MapSourceLoader.early_prebake, SurfaceWait.enabled]
+			)
+		"pictures":
+			return _pictures(base)
 		"cold_surfaces":
 			# A surface cache of its own (empty) and nothing baked in memory: the next load bakes
 			# every map as a first run does (sysbake), the pipelines staying warm.
@@ -145,6 +161,36 @@ static func run(base: Node, step: Dictionary) -> String:
 			BiomeThumbnail._cache.clear()
 			return "surface cache now %s" % SurfaceCache.root
 	return "unknown action %s" % step.get("action", "")
+
+
+## The authoring drawer's biome tiles and Place foldout icons read back from the GPU: how many are
+## painted and how many are still a deferred placeholder (one flat colour), and the panel work
+## still waiting for the lane (card authbake: BiomeThumbnail.of's `deferred` repaints in place).
+static func _pictures(base: Node) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.panel == null:
+		return "pictures: no authoring panel"
+	var textures: Array[Texture2D] = []
+	for tile in ctrl.panel.biome_field.tiles.get_children():
+		if tile is Button and (tile as Button).icon != null:
+			textures.append((tile as Button).icon)
+	for foldout: Foldout in (ctrl.panel.get("_place_foldouts") as Dictionary).values():
+		if foldout.icon != null:
+			textures.append(foldout.icon)
+	var flat := 0
+	for texture in textures:
+		var image := texture.get_image()
+		if image.is_compressed():
+			image.decompress()
+		var w := image.get_width() - 1
+		var h := image.get_height() - 1
+		var corners := [image.get_pixel(0, 0), image.get_pixel(w, h), image.get_pixel(w / 2, h)]
+		if corners.all(func(c: Color) -> bool: return c.is_equal_approx(corners[0])):
+			flat += 1
+	return (
+		"pictures: %d read, %d painted, %d flat placeholders, panel work waiting %d"
+		% [textures.size(), textures.size() - flat, flat, SurfaceWait.waiting()]
+	)
 
 
 ## Gives saved level `folder` (one of this probe's) `count` pack tokens (the shipped Beasts pack,
@@ -528,7 +574,7 @@ static func _cleanup() -> String:
 
 ## Whether level `folder` is one this probe made (its own prefix, or a wave-2 card's).
 static func _owned(folder: String) -> bool:
-	for prefix in [PREFIX, CARD_PREFIX, OPEN_CARD_PREFIX, BAKE_CARD_PREFIX]:
+	for prefix in [PREFIX, CARD_PREFIX, OPEN_CARD_PREFIX, BAKE_CARD_PREFIX, AUTHBAKE_PREFIX]:
 		if folder.begins_with(prefix):
 			return true
 	return false

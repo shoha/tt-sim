@@ -359,8 +359,9 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	var threaded := GlbUtils.threaded_loads_safe()
 	# The ground layers' library surface maps bake on the prebake lane meanwhile (a cold cache
 	# baked them in AuthoredTerrain.create's frame: 2.4 to 2.9 s, perfaudit sysopen); the load
-	# waits for them.
-	SurfaceStore.prebake(AuthoredTerrain.layer_surfaces(doc))
+	# waits for them, and only for them (pictures a panel queued behind them bake on).
+	var layers := AuthoredTerrain.layer_surfaces(doc)
+	SurfaceStore.prebake(layers)
 	var paths := AuthoredTerrain.texture_paths(doc)
 	paths.append_array(AuthoredCrossings.texture_paths(doc))
 	paths.append_array(AuthoredWalls.texture_paths(doc))
@@ -372,7 +373,7 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 			pending.append(path)
 	var loading := true
 	while loading:
-		loading = not prep.is_done() or SurfaceStore.is_prebaking()
+		loading = not prep.is_done() or SurfaceStore.prebaking(layers)
 		for path in pending:
 			if (
 				ResourceLoader.load_threaded_get_status(path)

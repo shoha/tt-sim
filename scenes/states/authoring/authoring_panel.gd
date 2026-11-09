@@ -332,7 +332,9 @@ func _build_biome_pane(tool: ToolDescriptor) -> Control:
 			short_name(String(biome["name"])),
 			"",
 			String(biome["name"]),
-			BiomeThumbnail.of(biome, BIOME_THUMB_PX, palette_root)
+			# Deferred: the drawer is built in the open's first frame, and a cold ground albedo
+			# bakes on the prebake lane instead (card authbake).
+			BiomeThumbnail.of(biome, BIOME_THUMB_PX, palette_root, true)
 		)
 	biome_field.tiles.selection_changed.connect(
 		func(id: StringName) -> void: biome_selected.emit(String(id))
@@ -392,7 +394,7 @@ func _build_place_pane(tool: ToolDescriptor) -> Control:
 		var foldout := Foldout.new()
 		foldout.name = "Place_" + biome_id.validate_node_name()
 		foldout.title = String(biome["name"])
-		foldout.icon = BiomeThumbnail.of(biome, 28, palette_root)
+		foldout.icon = BiomeThumbnail.of(biome, 28, palette_root, true)
 		var row := TileRow.new()
 		row.name = "PlaceTiles"
 		row.tile_min_size = PLACE_TILE_SIZE
@@ -557,26 +559,23 @@ func set_bridge_available(available: bool, has_water: bool) -> void:
 	bridge_pane.set_has_water(has_water)
 
 
-## Decodes the Paint swatches (SwatchTextures.palette_thumbnail, cached for the process) a few a
-## frame, within the load's frame budget, so the open's ensure_paint_tiles() finds them ready:
-## about 23 ms a swatch with warm caches and a bake each on a first-ever open (39 of them were
-## one 1.4 s frame warm and 9.5 s cold, perfaudit F-system-2). Stops early when `is_superseded`
-## (func() -> bool) says the open is over.
+## Makes the Paint swatches ahead of ensure_paint_tiles() (SwatchTextures.warm_async: a few a
+## frame within the load's budget, waiting for a map still on the prebake lane; 39 in one frame
+## were 1.4 s warm and 9.5 s cold, perfaudit F-system-2). Stops when `is_superseded` says so.
 func warm_paint_swatches_async(tree: SceneTree, is_superseded: Callable) -> void:
-	if not _paint_tiles.is_empty():
-		return
-	var surfaces := PaletteLibrary.surfaces(palette_root)
-	var started := Time.get_ticks_usec()
+	if _paint_tiles.is_empty():
+		var albedos := prebake_paint_swatches()
+		await SwatchTextures.warm_async(albedos, PAINT_THUMB_PX, palette_root, tree, is_superseded)
+
+
+## Queues the Paint swatches' albedos on the prebake lane behind the maps a load waits for and the
+## pictures shown (SwatchTextures.prebake_albedos, card authbake) until the tiles are built; an
+## open calls it as it starts. Returns the albedos in tile order.
+func prebake_paint_swatches() -> PackedStringArray:
+	var roles := PackedStringArray()
 	for group in PAINT_GROUPS:
-		for surface in PaletteLibrary.surfaces_with_role(String(group.role), palette_root):
-			if Time.get_ticks_usec() - started >= MapSourceLoader.frame_budget_usec():
-				await tree.process_frame
-				if is_superseded.call():
-					return
-				started = Time.get_ticks_usec()
-			SwatchTextures.palette_thumbnail(
-				surfaces.get(surface, {}).get("albedo", ""), PAINT_THUMB_PX, palette_root
-			)
+		roles.append(String(group.role))
+	return SwatchTextures.prebake_albedos(roles, palette_root, _paint_tiles.is_empty())
 
 
 ## Builds the Paint tiles once (palette surfaces by role, swatches from each surface's

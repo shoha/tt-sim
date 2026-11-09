@@ -24,7 +24,8 @@ func before_all() -> void:
 
 
 func after_all() -> void:
-	for cache in ["main", "lane", "claim", "forget"]:
+	BiomeThumbnail._cache.clear()
+	for cache in ["main", "lane", "claim", "forget", "order", "wait", "thumb"]:
 		SurfaceCache.root = ROOT.path_join(cache)
 		SurfaceCache.remove_library(LibraryContracts.CORE_ID)
 		DirAccess.remove_absolute(ROOT.path_join(cache))
@@ -134,3 +135,92 @@ func test_unknown_and_plain_names_are_skipped() -> void:
 	_cold("forget")
 	SurfaceStore.prebake(PackedStringArray(["", "no_such_surface", "lib://nolib/none"]))
 	assert_false(SurfaceStore.is_prebaking())
+
+
+func _wait_panels() -> void:
+	var frames := 0
+	while SurfaceWait.waiting() > 0 and frames < 1200:
+		await wait_frames(1)
+		frames += 1
+
+
+## Card authbake: a load's maps pass the pictures queued before them, a queued map moves up when
+## a load asks for it, and the bytes and cache files stay the main thread's.
+func test_loads_pass_pictures_and_the_bytes_stay_the_same() -> void:
+	_cold("main")
+	var main := _digests()
+	var main_files := _cache_files("main")
+	_cold("order")
+	SurfaceStore.prebake(
+		PackedStringArray([_names[0]]), SurfaceStore.PRIORITY_AHEAD, PackedStringArray(["albedo"])
+	)
+	SurfaceStore.prebake(PackedStringArray([_names[1]]), SurfaceStore.PRIORITY_SHOWN)
+	SurfaceStore.prebake(PackedStringArray([_names[0]]), SurfaceStore.PRIORITY_LOAD)
+	var order := SurfaceStore._prebake.queued()
+	var last_load := -1
+	var first_shown := order.size()
+	for i in order.size():
+		if "/%s/" % _names[0] in order[i]:
+			last_load = maxi(last_load, i)
+		elif "/%s/" % _names[1] in order[i]:
+			first_shown = mini(first_shown, i)
+	assert_true(last_load < first_shown, "the load's maps are queued ahead: %s" % order)
+	assert_true(SurfaceStore.prebaking(PackedStringArray([_names[1]])), "the shown maps wait")
+	await _wait_lane()
+	assert_false(SurfaceStore.prebaking(_names), "the lane finished")
+	assert_eq(_digests(), main, "byte-identical maps whatever the order")
+	assert_eq(SurfaceStore.stats["bakes"], 0, "nothing baked on the main thread")
+	assert_eq(_cache_files("order"), main_files, "byte-identical cache files")
+
+
+## Card authbake: a panel's work on a cold map waits for the lane instead of baking in its frame,
+## and runs at once on a map in memory.
+func test_panel_work_waits_for_the_lane() -> void:
+	_cold("wait")
+	var root := PaletteLibrary.DEFAULT_ROOT
+	var albedo := String(PaletteLibrary.surfaces(root)[_names[0]]["albedo"])
+	var ran: Array = []
+	var at_once := SurfaceWait.call_when_ready(
+		root,
+		PackedStringArray([albedo]),
+		SurfaceStore.PRIORITY_SHOWN,
+		func() -> void: ran.append(SurfaceStore.image(root, albedo))
+	)
+	assert_false(at_once, "a cold map waits for the lane")
+	assert_true(SurfaceStore.is_pending(root, albedo))
+	assert_eq(ran.size(), 0)
+	await _wait_panels()
+	assert_eq(ran.size(), 1, "the work ran once its map was baked")
+	assert_not_null(ran[0])
+	assert_eq(SurfaceStore.stats["bakes"], 0, "nothing baked in a panel's frame")
+	assert_eq(SurfaceStore.stats["prebakes"], 1, "the map came from the lane")
+	var again := SurfaceWait.call_when_ready(
+		root, PackedStringArray([albedo]), SurfaceStore.PRIORITY_SHOWN, func() -> void: ran.append(1)
+	)
+	assert_true(again, "a map in memory runs the work at once")
+	assert_eq(ran.size(), 2)
+
+
+## Card authbake: a deferred biome picture is a placeholder that repaints itself to exactly the
+## picture of() paints at once.
+func test_a_deferred_biome_picture_repaints_to_the_same_pixels() -> void:
+	_cold("thumb")
+	BiomeThumbnail._cache.clear()
+	var root := PaletteLibrary.DEFAULT_ROOT
+	var biome: Dictionary = PaletteLibrary.biomes(root)[0]
+	var shown := BiomeThumbnail.of(biome, 28, root, true)
+	assert_eq(SurfaceStore.stats["bakes"], 0, "nothing baked in the caller's frame")
+	assert_eq(SurfaceWait.waiting(), 1, "the picture waits for its ground map")
+	await _wait_panels()
+	assert_eq(SurfaceStore.stats["prebakes"], 1, "the ground map came from the lane")
+	BiomeThumbnail._cache.clear()
+	var direct := BiomeThumbnail.of(biome, 28, root).get_image()
+	assert_eq(SurfaceStore.stats["bakes"], 0, "nothing baked on the main thread")
+	# The headless dummy renderer drops ImageTexture.set_image's texture_replace, so the repaint
+	# itself is read back only under a real renderer (the windowed probe checks the drawer's
+	# tiles: perfaudit_system.gd `pictures`).
+	if RenderingServer.get_rendering_device() != null:
+		assert_eq(_sha(shown.get_image().get_data()), _sha(direct.get_data()), "the same pixels")
+	else:
+		assert_eq(shown.get_size(), Vector2(28, 28), "the placeholder has the picture's size")
+	BiomeThumbnail._cache.clear()
