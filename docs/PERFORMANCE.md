@@ -60,6 +60,12 @@ GPU.
 | Network | A single drag update travels packed (F-net-7) | 128 -> 63 B per token per update; a 5 s drag of 10 tokens 55,040 -> 27,047 B | 835d75b7, 00f944dd |
 | System | Loads covered by the loading sheet: vsync off, 240 fps cap, 12 ms slices (F-system-3) | 100 ft + 100 pack tokens 2,429 -> 1,435 ms; 320 ft + 500 tokens 14,867 -> 8,832 ms; 100 ft play 422 -> 350 ms | 42a1dfe9 |
 | System | Surface maps bake on one priority-ordered worker lane, byte-identical (sysbake, authbake); the authoring drawer's biome tiles and Paint swatches take theirs from it (`SurfaceWait`) | cold 200 ft play: worst frame 2,437-2,500 -> 84-123 ms, wall unchanged; cold new 200 ft map: entry frame 2,805-3,136 -> 207-215 ms, wall 14,192-15,545 -> 11,719-11,781 ms | 817a0f1e, authbake |
+| System | Start-up compiles only what the title needs: play, authoring, procgen and the table load on first use, and a worker compiles the 13 door scripts while the title idles (boot, boot2) | scripts before the first frame 812 -> 341; title interactive from a pack 5,536 -> 2,790 ms (alternated, n 6); first play load after 10 s at the title 1,008 -> 705 ms, first authoring map 2,076 -> 1,790 ms; clicking at once costs +0.1 s (authoring) to +0.35 s (play) | 4a82f4e3, ffc17c43 |
+| System | The new-map recipe's accessors hoisted out of the per-cell loops, bit-identical (sysopen); play drawer panes build on first open | recipe 2.3-2.9 times faster | 7af7c793 |
+| Load | Scatter rows to buffers in native `chunk()` (scatterload) | 320 ft filled load 426 -> 165 ms | 8341d790 |
+| Authoring | Rule fields sampled natively, `ttscatter 8` (terrainrules) | fields part of a stroke end 5.8-9.3 -> 0.8-1.3 ms | 7e36ddbf |
+| Network | A level save at rest sends 0 bytes; a client's join spawns through the queue (netjoin) | 500 avatars, late joiner worst frame 657 -> 90 ms | 52d9bbfa |
+| GPU | Options, defaults unchanged (gpuoptions): Shadow cascades Unblended / Single, Foliage edges Fast | Unblended -0.31 ms home, -0.48 eye (pixel-identical at the table views); Single -0.35 / -0.97; Fast -0.59 home with MSAA 4x, -0.65 eye | 110ae84f |
 
 Correctness found on the way: a client's GameState never took transforms, so after per-token adds
 it lagged up to the heartbeat (fixed, three ENet consistency scenarios, 8fd3af5e); two dev builds
@@ -113,9 +119,11 @@ From the register's rows that are not merged, with their measured size:
 
 - **GPU.** A camera-centred clipmap bake of the ground, about 1 ms at 1080p on every view, 4-6
   cards (board perf-ground-bake; groundbake Phase 1 only). One sun shadow split fewer, 0.41-0.45
-  ms. MSAA draws foliage twice in the eye view, 1.0 ms. Foliage and rock textures RGBA8 without
+  ms and the MSAA foliage cost (1.0 ms in the eye view) are now player options (gpuoptions; the
+  defaults are the board's question perf-gpu-options). Foliage and rock textures RGBA8 without
   mips, layer arrays padded to 16 (board perf-foliage-mips). 71 % of drawn instances off screen at
-  home: a GPU-driven cull, 0.35-0.6 ms GPU and 0.7 ms render CPU (probe queued). Zoom-keyed ground
+  home: a GPU-driven or finer cull was probed and dropped (cullprobe: the best cull with shadows
+  kept saves 0.32-0.34 ms on a filled 320 ft map; finer chunks lose). Zoom-keyed ground
   thinning, about 0.5 ms zoomed in (board perf-ground-thin), with FoliageBudget counting triangles
   instead of the cost. Built ground-cover materials run 0.13 / 0.36 ms slower than copies of
   themselves (cause not found). Render scale's Auto as the default (board perf-render-scale).
@@ -130,7 +138,9 @@ From the register's rows that are not merged, with their measured size:
 - **Network.** Steam not driven; scatter rows are 80 % of `map.ttmap` and binary rows 3.5 times
   smaller (board perf-map-format); a join runs in series behind main-thread blocks (about 1.4 s to
   overlap).
-- **System.** Boot 6.4-7.7 s to the title from a pack; the first authoring open 2.3 s warm and 10.2 s
+- **System.** Boot reaches the title in 2.8 s from a pack (was 4.8 s after boot part 1, 6.4-7.7 s at the
+  start of the audit; the library serve in `Root._ready`, about 245 ms, is the next lever, and no
+  non-editor export-template build was measured); the first authoring open 2.3 s warm and 10.2 s
   cold (UI built up front; since authbake no cold bake runs in its frames, but a cold new 200 ft
   map still takes 11.7 s and a cold play load 3.4 s, both waiting on the lane's serial bakes:
   decoding, hashing and cache writes could move off the serial lane, unmeasured); about 620 MB of texture memory stays at the title after a map (526 MB
@@ -138,7 +148,9 @@ From the register's rows that are not merged, with their measured size:
   surface PNGs 54 % of the download; process memory creeps 2.7 MB per map cycle; idle runs at full
   rate (board perf-idle-throttle).
 - **Look-pending** (the user's look is the gate): the occlusion fade tiles, render scale, ground-
-  cover light and skirt commits.
+  cover light and skirt commits; the gpuoptions defaults.
+- **Test hygiene found on the way.** GUT silently dropped two test scripts that did not parse
+  (14 tests, for days); `tools/gut_shards.gd` now fails a shard whose log says "Ignoring script".
 
 ### The guard
 
@@ -180,6 +192,8 @@ is a decision to measure first.
 | Ground and skirt render_priority | 1 | at least 1 | F-gpu-2 |
 | Global shader uniform buffer slots | 262,144 | at least 262,144 | F-foliage-5 |
 | Default shadow quality tier | High | at most High | shadowtier |
+| Default Shadow cascades / Foliage edges | Blended / Smooth | the shipped look | gpuoptions |
+| Scripts compiled before the first frame (`tests/unit/test_boot_graph.gd`) | 341 | 341 | boot, boot2 |
 
 What it cannot see: milliseconds. A shader that gets dearer without writing a new output, a frame
 slowed by work no counter reads, or a hitch in a path these counters do not drive passes here; the
