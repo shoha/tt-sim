@@ -66,7 +66,15 @@ var broad_texture: ImageTexture = null
 ## Microseconds the last broad refresh took.
 var last_broad_usec: int = 0
 
+## Microseconds the last prepare_step() took.
+var last_prep_usec: int = 0
+
 var _tint_stale: bool = true
+## Surfaces waiting to be bound ahead of their first use (prepare()), the first one being
+## uploaded: `_prep_kinds` of its maps are in the arrays at layer `_prep_at`.
+var _prep_queue := PackedStringArray()
+var _prep_kinds: int = 0
+var _prep_at: int = -1
 var _index: Dictionary = {}
 var _index_images: Dictionary = {}
 var _planned_biomes := PackedStringArray()
@@ -86,6 +94,8 @@ func build(doc: MapDocument, ground: ShaderMaterial, root: String, water: bool) 
 	paint_tints = PackedColorArray()
 	_index.clear()
 	_warned.clear()
+	_prep_queue.clear()
+	_prep_kinds = 0
 	retable(water)
 	upload_index()
 	_build_broad()
@@ -162,6 +172,64 @@ func retable(water: bool) -> bool:
 ## The palette surface of each layer, in layer order (the base first).
 func layers() -> PackedStringArray:
 	return table.get("layers", PackedStringArray())
+
+
+## Queues palette surfaces an edit is about to bring (a picked Paint tile, biome, Water tool or
+## Dress kit) to be bound ahead of their first use, one map per prepare_step(): the edit's
+## retable then finds their layers in place and sets only uniforms, where it read four images
+## and uploaded them in its own frame (19 ms per surface, perfaudit authfirst). A prepared layer
+## is appended like a `reserve` one: nothing routes to it until the document uses the surface,
+## so the ground draws exactly as before, and the next build() compacts it away if unused.
+## Surfaces already bound, unavailable, or past the arrays' capacity step are left to the edit.
+func prepare(surfaces: PackedStringArray) -> void:
+	var bound := layers()
+	for surface in surfaces:
+		if surface == "" or surface in bound or surface in _prep_queue:
+			continue
+		if GroundPalette.surface_available(surface, palette_root):
+			_prep_queue.append(surface)
+
+
+## True while prepare() has surfaces left to upload.
+func is_preparing() -> bool:
+	return not _prep_queue.is_empty()
+
+
+## Uploads one map of the first queued surface (see prepare()); binds the surface once its last
+## map is in. Returns is_preparing() after the step.
+func prepare_step() -> bool:
+	var started := Time.get_ticks_usec()
+	var bound := layers()
+	while not _prep_queue.is_empty() and _prep_queue[0] in bound:
+		_prep_queue.remove_at(0)
+		_prep_kinds = 0
+	if _prep_queue.is_empty() or material == null:
+		return false
+	if overflowed() or arrays.layers != bound or bound.size() >= arrays.capacity:
+		# No room below the capacity step (the edit recreates the arrays) or a list the arrays do
+		# not hold: the edit binds these as it always did.
+		_prep_queue.clear()
+		_prep_kinds = 0
+		return false
+	if _prep_at != bound.size():
+		# A retable appended layers since the uploads began: they took this slot.
+		_prep_at = bound.size()
+		_prep_kinds = 0
+	var surface := _prep_queue[0]
+	if not arrays.upload_ahead(surface, GroundLayerArrays.KINDS[_prep_kinds], palette_root):
+		_prep_queue.remove_at(0)
+		_prep_kinds = 0
+	else:
+		_prep_kinds += 1
+		if _prep_kinds == GroundLayerArrays.KINDS.size():
+			arrays.adopt(surface)
+			var names := bound.duplicate()
+			names.append(surface)
+			table["layers"] = names
+			_prep_queue.remove_at(0)
+			_prep_kinds = 0
+	last_prep_usec = Time.get_ticks_usec() - started
+	return is_preparing()
 
 
 ## `from_table` (GroundLayers.extend) with the surfaces of `reserved` it lacks appended, as many
@@ -323,8 +391,13 @@ static func tint_tables(
 ## The GroundLayers inputs for `doc` (see GroundLayers.wanted), surfaces the palette at `root`
 ## cannot draw left out, plus "as_base": per document biome 1 when it draws as the base (its
 ## ground is the base surface or missing; its own rules and accents are then blanked, the base
-## row carries them as the slot table did).
-static func gather_inputs(doc: MapDocument, root: String, water: bool) -> Dictionary:
+## row carries them as the slot table did). `biome_ids`, when given, stands for the document's
+## biome list (AuthoredTerrain.prepare_biome: the list after a biome's first dab; a biome past
+## the document's own has no coverage yet).
+static func gather_inputs(
+	doc: MapDocument, root: String, water: bool, biome_ids := PackedStringArray()
+) -> Dictionary:
+	var ids := biome_ids if not biome_ids.is_empty() else doc.biome_ids
 	var available := func(surface: String) -> bool:
 		return surface != "" and GroundPalette.surface_available(surface, root)
 	var pick := func(biome: Dictionary, key: String) -> String:
@@ -336,7 +409,7 @@ static func gather_inputs(doc: MapDocument, root: String, water: bool) -> Dictio
 	var beds := PackedStringArray()
 	var shores := PackedStringArray()
 	var accents: Array = []
-	for biome_id in doc.biome_ids.slice(0, GroundLayers.MAX_BIOMES - 1):
+	for biome_id in ids.slice(0, GroundLayers.MAX_BIOMES - 1):
 		var biome := PaletteLibrary.biome(biome_id, root)
 		grounds.append(pick.call(biome, "ground_surface"))
 		cliffs.append(pick.call(biome, "cliff_surface"))
@@ -345,13 +418,20 @@ static func gather_inputs(doc: MapDocument, root: String, water: bool) -> Dictio
 		shores.append(pick.call(biome, "shore_surface"))
 		accents.append(GroundAccents.drawable(biome.get("ground_accents", []), available))
 	var base := doc.base_surface
-	var coverage := GroundLayerTable.biome_coverage(
-		doc.biome_slots, doc.biome_density, grounds.size()
-	)
-	var base_biome := -1
+	# The coverage (a walk over every sample: about 20 ms on a 320 ft map) decides only between
+	# two or more biomes on the base surface, so it is counted only then.
+	var base_grounds: Array[int] = []
 	for b in grounds.size():
-		if grounds[b] == base and (base_biome < 0 or coverage[b] > coverage[base_biome]):
-			base_biome = b
+		if grounds[b] == base:
+			base_grounds.append(b)
+	var base_biome := base_grounds[0] if not base_grounds.is_empty() else -1
+	if base_grounds.size() > 1:
+		var coverage := GroundLayerTable.biome_coverage(
+			doc.biome_slots, doc.biome_density, grounds.size()
+		)
+		for b in base_grounds:
+			if coverage[b] > coverage[base_biome]:
+				base_biome = b
 	var base_rules := PackedStringArray()
 	var base_accents: Array = []
 	if base_biome >= 0:

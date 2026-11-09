@@ -631,8 +631,9 @@ func _on_paint_selected(surface: String) -> void:
 	_select_tool(AuthoringPanel.TOOL_PAINT)
 
 
-## Makes `surface` the Paint brush's surface and ring tint, starts loading its textures (so
-## the first dab binds them from the cache) and shows its tile as picked, without a signal.
+## Makes `surface` the Paint brush's surface and ring tint, starts loading its textures and
+## binding its ground layer (so the first dab sets only uniforms) and shows its tile as
+## picked, without a signal.
 func use_surface(surface: String) -> void:
 	if brush == null:
 		return
@@ -641,7 +642,15 @@ func use_surface(surface: String) -> void:
 	var terrain := _terrain()
 	if terrain:
 		terrain.warm_surface(surface)
+		terrain.prepare_surfaces(PackedStringArray([surface]))
 	panel.select_paint_surface(surface)
+
+
+## Binds the ground layers a Dress in `kit` paints (its road, door path and plaza surfaces)
+## ahead of the Dress (SettlementBarLink.prepare_dress; the Street tool's bar calls it when it
+## shows an undressed street).
+func prepare_dress(kit: String) -> void:
+	SettlementBarLink.prepare_dress(editor, kit)
 
 
 ## A picked Water tile (River or Pond) becomes the Water brush's shape and switches to it.
@@ -756,6 +765,9 @@ func _select_tool(tool_id: StringName) -> void:
 		brush.deactivate()
 		return
 	tool.prepare(self)
+	if tool_id == AuthoringPanel.TOOL_WATER and _terrain() != null:
+		# The map's first water brings bed and shore layers: bound while the author draws.
+		_terrain().prepare_water()
 	brush.activate()
 	panel.set_active_tool(tool_id)
 	refresh_tool_hints()

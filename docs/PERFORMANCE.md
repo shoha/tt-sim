@@ -5085,6 +5085,66 @@ write 184 ms. All of it is on the worker now. Format-neutral speedups were not t
 longer pays any of it, and the big one (binary rows) is a format change (board question
 perf-map-format).
 
+## Collision tiles (topic perfaudit, card authcollide, 2026-11-08)
+
+Every sculpt stroke end, carve, undo and redo rebuilt the terrain's one `HeightMapShape3D` over the
+whole grid (finding F-authoring-4). The collision is now square tiles of 32 quads (8 m), one
+`StaticBody3D` each (`TerrainCollision`, `docs/systems/authored_terrain.md`); a height edit marks
+the tiles holding its changed samples and `HeightEditor.work()` refills only those, once per frame
+as before. No pixel changes; rays hit the tiles where they hit the whole shape (within 0.2 mm,
+`test_terrain_collision.gd`).
+
+**Tile size.** Headless probe (Jolt, `map_data` set plus one ray, 7 rounds, median): the whole grid
+1.06 / 4.26 / 11.39 ms at 123^2 / 245^2 / 391^2 samples; one square tile of 32 / 48 / 64 / 96 / 128
+quads 0.10 / 0.19-0.24 / 0.35-0.37 / 0.65-0.71 / 1.32-1.35 ms whatever the map size. The cost
+follows the samples rebuilt, so the smallest tile wastes least past a stroke's edge (169 bodies at
+320 ft, 16 at 100 ft). Tiles are square because Jolt builds a heightfield only for a square shape
+(anything else becomes a triangle mesh, slower to build and, as the test found, leaky: an oblong
+map's old whole shape let vertical rays through on two whole sample rows). One body per tile: in one
+body of many shapes Jolt rebuilds the compound on every change, so four tile updates in a 49-tile
+body cost 2.92 ms against 1.37 ms in four bodies.
+
+**Strokes.** Real-window render job (`tools/render_jobs/local/authcollide/strokes.json`, not
+committed; one process per run, the before run on the base commit), a new
+`temperate_forest_summer_s1` map, seed 1234, at 320, 100 and 200 ft: five raise and two smooth
+strokes (r 4 m, 12 m at 4 m/s), three cobblestone paint strokes, three rivers (20 m), each in a
+`perfaudit_authoring.gd` `rec`. The collision part at the stroke end, median [min..max]:
+
+| Map | Sculpt before (7) | Sculpt after (7) | River before (3) | River after (3) | Paint |
+|---|---|---|---|---|---|
+| 100 ft | 0.71 [0.71..0.73] | 0.56 [0.31..0.61] | 0.75 [0.73..0.79] | 0.29 [0.29..0.56] | no collision work |
+| 200 ft | 2.86 [2.67..4.11] | 0.50 [0.30..0.57] | 3.26 [2.71..3.62] | 0.57 [0.39..0.59] | no collision work |
+| 320 ft | 6.87 [6.72..7.18] | 0.61 [0.60..0.95] | 6.84 [6.71..6.85] | 0.48 [0.31..0.56] | no collision work |
+
+The sculpt release frame carried the rule fields (4.5-4.7 ms) and the collision: its worst frame was
+19.9-21.4 ms at 320 ft and 15.5-21.5 ms at 200 ft; after, the 200 ft worst is 12.6-14.8 ms, and at
+320 ft the release frame is no longer the stroke's worst (19.4-20.1 ms tail frames that name no part
+remain, process 13-17 ms). In place on the open map (7 rounds, call plus one ray): a 4 m dab's tiles
+(4) 0.26 ms and a 20 m x 8 m stroke's (10) 0.50 ms at every size; `update_collision()` over all tiles
+0.97 / 3.84 / 10.4 ms (map open and tests only). That is 0.05-0.07 ms per tile, where "Sculpting"
+(P3-3a, 2026-09-26) measured 0.45 ms per 41 x 41 chunk shape and rejected per-chunk collision; the
+gap was not re-investigated (that pass also tiled finer, 64 shapes at 200 ft).
+
+### Paint stroke end: no second tint pass (card authcollide)
+
+A Paint stroke's end refreshed the ground over the whole stroke's rectangle (finding
+F-authoring-3: the broad tint, `GroundBroadTint.tint_plane` in GDScript per sample), although every
+frame's flush had already refreshed the samples its dabs changed; `SurfaceStroke.finish()` changes no
+weights, only trims unused trailing slots. The end now only re-plans the tables
+(`update_ground_region(Rect2i())`; a drawn tint that changed still rebuilds the broad map whole, as
+before). Real window, same map and recorder as above, the `broad` part's largest value per stroke
+(the release before, a dab frame after) and the stroke's worst frame:
+
+| Map | Broad before (6 cobblestone strokes, 2 runs) | Broad after (5: 3 cobblestone, 2 gravel) | Worst frame before | Worst frame after |
+|---|---|---|---|---|
+| 100 ft | 2.84 [2.52..4.47] | 0.53 [0.48..0.61] | 11.3-13.8 | 8.8-10.8 |
+| 200 ft | 6.53 [3.52..7.75] | 0.71 [0.69..0.80] | 17.8-23.4 | 14.1-17.8 |
+| 320 ft | 7.07 [3.71..8.55] | 0.73 [0.69..0.79] | 22.4-34.9 | 18.8-19.9 |
+
+The sculpt and carve stroke end still runs the rule fields (`TerrainRules.sample_fields`, 4.5-4.7 ms
+at every size for a 12 m stroke): the next step there is the native port the finding proposes. The machine was shared with other perfaudit cards; before
+and after ran under similar load, minutes apart.
+
 ## Render scale (topic perfaudit, card renderscale)
 
 Settings > Graphics > Render scale (`RenderScale`, `utils/render_scale.gd`): Auto, 100 % (the

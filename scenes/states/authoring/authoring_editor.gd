@@ -113,13 +113,14 @@ static func create(
 	return editor
 
 
-## Loads a biome's assets and ground surface in the background, so its first dab does not
-## wait on them.
+## Loads a biome's assets and ground surface in the background and binds the ground layers its
+## first dab brings (AuthoredTerrain.prepare_biome), so its first dab does not wait on them.
 func prepare_biome(biome_id: String) -> void:
 	if is_instance_valid(scatter):
 		scatter.prepare_biome(biome_id)
 	if is_instance_valid(terrain):
 		terrain.warm_biome_surface(biome_id)
+		terrain.prepare_biome(biome_id)
 
 
 # ============================================================================
@@ -343,8 +344,12 @@ func _end_surface_stroke() -> bool:
 		# Nothing painted; a slot the stroke claimed is given back (the list changed).
 		_refresh_ground(Rect2i(0, 0, 1, 1))
 		return false
-	# A trimmed slot list re-plans the layer table on this update.
-	_refresh_ground(diff.rect)
+	# Each frame's flush refreshed the samples its dabs changed (the take_pending() above was the
+	# last), so only the slot list finish() may have trimmed is left: re-plan the tables over no
+	# samples (a drawn tint that changed still rebuilds the broad map whole). Refreshing the whole
+	# stroke's rectangle again cost 8-9 ms of GDScript tint at a 320 ft release (authcollide).
+	if is_instance_valid(terrain):
+		terrain.update_ground_region(Rect2i())
 	_regenerate_paint(diff)
 	(
 		history
