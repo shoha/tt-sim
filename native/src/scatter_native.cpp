@@ -6,6 +6,7 @@
 #include <godot_cpp/core/class_db.hpp>
 
 #include "scatter_gen.h"
+#include "terrain_fields.h"
 
 using namespace godot;
 
@@ -16,10 +17,12 @@ void TTScatterNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("noise_2d", "seed", "frequency", "octaves", "xz"), &TTScatterNative::noise_2d);
 	ClassDB::bind_method(D_METHOD("grids", "source"), &TTScatterNative::grids);
 	ClassDB::bind_method(D_METHOD("chunk", "rows", "indices", "seed", "anchors"), &TTScatterNative::chunk);
+	ClassDB::bind_method(D_METHOD("rule_fields", "heights", "columns", "rows", "step", "rect", "radius", "start_cos", "end_cos"),
+			&TTScatterNative::rule_fields);
 }
 
 String TTScatterNative::version() const {
-	return String("ttscatter 7 curves water chunk");
+	return String("ttscatter 8 curves water chunk fields");
 }
 
 int64_t TTScatterNative::ping(int64_t value) const {
@@ -70,6 +73,33 @@ Dictionary TTScatterNative::grids(const Dictionary &source) const {
 	out["paint_ash"] = packed(grids.paint_ash);
 	out["fringe"] = packed(grids.fringe);
 	return out;
+}
+
+Dictionary TTScatterNative::rule_fields(const PackedFloat32Array &heights, int64_t columns, int64_t rows, const Vector2 &step,
+		const Rect2i &rect, int64_t radius, double start_cos, double end_cos) const {
+	Rect2i out = rect.intersection(Rect2i(0, 0, (int32_t)columns, (int32_t)rows));
+	PackedFloat32Array curvature;
+	PackedFloat32Array steep;
+	if (out.has_area() && columns > 0 && rows > 0 && heights.size() >= columns * rows) {
+		const int64_t count = (int64_t)out.size.x * (int64_t)out.size.y;
+		curvature.resize(count);
+		steep.resize(count);
+		ttscatter::FieldsInput in;
+		in.heights = heights.ptr();
+		in.columns = columns;
+		in.rows = rows;
+		in.step_x = (double)step.x;
+		in.step_y = (double)step.y;
+		in.r = radius;
+		in.start_cos = start_cos;
+		in.end_cos = end_cos;
+		ttscatter::rule_fields(in, out, curvature.ptrw(), steep.ptrw());
+	}
+	Dictionary result;
+	result["rect"] = out;
+	result["curvature"] = curvature;
+	result["steep"] = steep;
+	return result;
 }
 
 PackedFloat32Array TTScatterNative::noise_2d(int64_t seed, double frequency, int64_t octaves, const PackedFloat64Array &xz) const {

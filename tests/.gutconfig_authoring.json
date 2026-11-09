@@ -162,6 +162,7 @@
 		"res://tests/unit/test_surface_store.gd",
 		"res://tests/unit/test_terrain_collision.gd",
 		"res://tests/unit/test_terrain_events.gd",
+		"res://tests/unit/test_terrain_fields_native.gd",
 		"res://tests/unit/test_terrain_rules.gd",
 		"res://tests/unit/test_token_grounding.gd",
 		"res://tests/unit/test_tool_registry.gd",
