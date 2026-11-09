@@ -452,16 +452,20 @@ class Runner:
 			entries = ofm.call("_collect_token_entries")
 		var t1 := Time.get_ticks_usec()
 		var image: Image = null
+		var view := cam.get_camera_transform().affine_inverse()
+		var proj := cam.get_camera_projection()
+		var tiles := OcclusionTiles.TILES
 		for i in 200:
-			image = OcclusionFadeManager.build_token_image(entries)
+			var bins := OcclusionTiles.bin(entries, view, proj, tiles, Vector2(0.001, 0.002))
+			image = OcclusionTiles.build_image(entries, bins, tiles)
 		var t2 := Time.get_ticks_usec()
-		var texture := ofm.get("_token_texture") as ImageTexture
+		var texture := ImageTexture.create_from_image(image)
 		for i in 100:
 			texture.update(image)
 		var t3 := Time.get_ticks_usec()
 		out.append(
 			(
-				"occl collect %.1f us (%d entries), image %.1f us, upload %.1f us"
+				"occl collect %.1f us (%d entries), tiles and image %.1f us, upload %.1f us"
 				% [
 					(t1 - t0) / 200.0,
 					entries.size(),
