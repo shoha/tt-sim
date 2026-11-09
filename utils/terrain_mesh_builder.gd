@@ -33,9 +33,12 @@ const EDGE_EPSILON_SAMPLES := 1e-4
 ## the map where the fall-off curves most.
 const SKIRT_RINGS := 8
 const SKIRT_RING_SPACING_POWER := 1.5
-## The first this many ring steps of the skirt (about 16 m on the shipped width) are its shadow
+## The first this many ring steps of the skirt (10.4 m on the shipped width) are its shadow
 ## receiving inner ring, a second surface (TerrainSkirt, card skirtring); the rest receives none.
-const SKIRT_SHADOW_RINGS := 4
+## 3, not 4 (16.1 m) or 2 (5.7 m): the ring's cost grows with its width at full zoom-out (+0.16,
+## +0.29, +0.42 ms over the shadowless skirt for 2, 3, 4 rings) and the shadow it keeps reaches
+## about 7 m of visible ground past the edge (PERFORMANCE.md "Inner ring").
+const SKIRT_SHADOW_RINGS := 3
 
 
 ## Index of the first sample at or past world coordinate `edge_m` on an axis of `samples`

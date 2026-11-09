@@ -38,7 +38,7 @@ const LIMITS := {
 	"ground_blend_roughness": 0.0,
 	"skirt_shadowed": 0.0,
 	"skirt_ring_unshadowed": 0.0,
-	"skirt_ring_m": 16.5,
+	"skirt_ring_m": 10.5,
 	"ground_cover_fetches": 0.0,
 	"ground_priority": 1.0,
 	"global_uniform_slots": 262144.0,
@@ -406,8 +406,11 @@ static func render_rows() -> Array[Dictionary]:
 			"Width of the skirt's shadow-receiving inner ring",
 			snappedf(TerrainSkirt.ring_edge_m(AuthoredTerrain.skirt_width_m()), 0.01),
 			"m",
-			"16.5; the ring's pixels pay the shadow filter, so its width is its cost",
-			"skirtring"
+			(
+				"10.5; the ring's pixels pay the shadow filter: 2, 3, 4 rings cost"
+				+ " +0.16, +0.29, +0.42 ms at full zoom-out"
+			),
+			"skirtring, ring vs shadowless skirt vs full skirt"
 		),
 		_row(
 			"ground_cover_fetches",
