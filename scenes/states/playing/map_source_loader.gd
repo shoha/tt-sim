@@ -335,7 +335,8 @@ static func authored_root_shell() -> Node3D:
 
 
 ## create_authored_root() spread over frames: the ground and crossing textures load on
-## background threads while workers compute the pure data (AuthoredLoadPrep: the wet dressing,
+## background threads (a library surface's maps bake on SurfaceStore's prebake lane) while
+## workers compute the pure data (AuthoredLoadPrep: the wet dressing,
 ## the water and crossing geometry, the rule fields, the skirt and every chunk's arrays), then
 ## the material,
 ## biome weights, collision and skirt are built in one frame and the chunk meshes within the
@@ -346,7 +347,11 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	# Under the headless dummy renderer the material loads them in place instead
 	# (GlbUtils.threaded_loads_safe).
 	var threaded := GlbUtils.threaded_loads_safe()
-	var paths := AuthoredTerrain.texture_paths(doc)
+	var surfaces := AuthoredTerrain.surface_names(doc)
+	# A library surface's maps bake on the prebake lane meanwhile (a cold cache baked them in
+	# AuthoredTerrain.create's frame: 2.4 to 2.9 s, perfaudit sysopen); the load waits for them.
+	SurfaceStore.prebake(surfaces)
+	var paths := GroundPalette.surface_texture_paths(surfaces)
 	paths.append_array(AuthoredCrossings.texture_paths(doc))
 	paths.append_array(AuthoredWalls.texture_paths(doc))
 	paths.append_array(AuthoredStructures.texture_paths(doc))
@@ -357,7 +362,7 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 			pending.append(path)
 	var loading := true
 	while loading:
-		loading = not prep.is_done()
+		loading = not prep.is_done() or SurfaceStore.is_prebaking()
 		for path in pending:
 			if (
 				ResourceLoader.load_threaded_get_status(path)

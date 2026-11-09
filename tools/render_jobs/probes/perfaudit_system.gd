@@ -39,12 +39,17 @@ extends RefCounted
 ##                        sheet), for an in-run A/B of load pacing
 ##   vsync {on}           the window's vsync mode
 ##   tokens {folder, count}  give a saved probe level `count` Beasts pack tokens on a grid
+##   prebake {on}         SurfaceStore.prebake_enabled, for an in-run A/B of the bake lane
+##   cold_surfaces {tag}  a new empty surface cache folder (`user://library_cache__sysbake_<tag>`)
+##                        and the store's memory and swatches dropped: the next load bakes cold
 
 const PREFIX := "_perfaudit_sys_"
 ## The levels of the wave-2 load card (sysload) that reuses this probe.
 const CARD_PREFIX := "_sysload_"
 ## The levels of the card after it (sysopen: authoring open and new maps).
 const OPEN_CARD_PREFIX := "_sysopen_"
+## The card after that (sysbake: surface bakes off the main thread, the play drawer).
+const BAKE_CARD_PREFIX := "_sysbake_"
 const NODE_PREFIX := "PerfauditSys"
 const SHAPES := preload("res://tools/render_jobs/probes/terrain_shapes.gd")
 const WATER := preload("res://tools/render_jobs/probes/water.gd")
@@ -127,6 +132,18 @@ static func run(base: Node, step: Dictionary) -> String:
 			return "vsync %s" % ("on" if vsync_on else "off")
 		"tokens":
 			return _tokens(String(step.get("folder", "")), int(step.get("count", 100)))
+		"prebake":
+			# An expand template substitutes a string: "true" or "true_<tag>" turns it on.
+			SurfaceStore.prebake_enabled = str(step.get("on", true)).to_lower().begins_with("true")
+			return "surface prebake %s" % ("on" if SurfaceStore.prebake_enabled else "off")
+		"cold_surfaces":
+			# A surface cache of its own (empty) and nothing baked in memory: the next load bakes
+			# every map as a first run does (sysbake), the pipelines staying warm.
+			SurfaceCache.root = "user://library_cache_%s%s" % [BAKE_CARD_PREFIX, step.get("tag", "x")]
+			SurfaceStore.clear_memory()
+			SwatchTextures._cache.clear()
+			BiomeThumbnail._cache.clear()
+			return "surface cache now %s" % SurfaceCache.root
 	return "unknown action %s" % step.get("action", "")
 
 
@@ -511,7 +528,7 @@ static func _cleanup() -> String:
 
 ## Whether level `folder` is one this probe made (its own prefix, or a wave-2 card's).
 static func _owned(folder: String) -> bool:
-	for prefix in [PREFIX, CARD_PREFIX, OPEN_CARD_PREFIX]:
+	for prefix in [PREFIX, CARD_PREFIX, OPEN_CARD_PREFIX, BAKE_CARD_PREFIX]:
 		if folder.begins_with(prefix):
 			return true
 	return false
@@ -734,6 +751,7 @@ class LoadWatch:
 	var open_us := 0
 	var last_bakes := 0
 	var last_hits := 0
+	var last_lane := 0
 
 	func _ready() -> void:
 		process_mode = Node.PROCESS_MODE_ALWAYS
@@ -741,6 +759,9 @@ class LoadWatch:
 		mem_before = _monitors(false)
 		last_bakes = int(SurfaceStore.stats.get("bakes", 0))
 		last_hits = int(SurfaceStore.stats.get("cache_hits", 0))
+		last_lane = (
+			int(SurfaceStore.stats.get("prebakes", 0)) + int(SurfaceStore.stats.get("prebake_hits", 0))
+		)
 		# The clock starts before the request: entering a state builds its scene synchronously
 		# here, and that frame (the first one in ms) is often the worst of the load (wave 1 left
 		# it out of every load's wall and frames).
@@ -783,11 +804,17 @@ class LoadWatch:
 		# open's long frames are).
 		var bakes := int(SurfaceStore.stats.get("bakes", 0))
 		var hits := int(SurfaceStore.stats.get("cache_hits", 0))
+		# Maps the prebake lane baked or read, handed over in the frame (sysbake).
+		var stats := SurfaceStore.stats
+		var lane := int(stats.get("prebakes", 0)) + int(stats.get("prebake_hits", 0))
 		var surf := ""
 		if bakes != last_bakes or hits != last_hits:
 			surf = " bakes+%d hits+%d" % [bakes - last_bakes, hits - last_hits]
+		if lane != last_lane:
+			surf += " lane+%d" % (lane - last_lane)
 		last_bakes = bakes
 		last_hits = hits
+		last_lane = lane
 		comp.append(compile_text(last_comp, c) + surf)
 		last_comp = c
 		last_us = now

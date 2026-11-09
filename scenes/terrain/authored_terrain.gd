@@ -179,7 +179,15 @@ static func create(
 static func texture_paths(
 	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> PackedStringArray:
-	return GroundPalette.texture_paths(
+	return GroundPalette.surface_texture_paths(surface_names(doc, root), root)
+
+
+## The palette surfaces build() binds for `doc`, the fire's reserved ones included: what a load
+## bakes ahead (SurfaceStore.prebake) and whose imported maps texture_paths() names.
+static func surface_names(
+	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT
+) -> PackedStringArray:
+	return GroundPalette.surface_names(
 		doc, root, fire_surfaces(doc, root, not doc.water_bodies.is_empty())
 	)
 
