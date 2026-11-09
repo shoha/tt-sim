@@ -5260,6 +5260,30 @@ judge. Look: the frozen-clock pixel diff (ground_parity `freeze`) did not hold t
 against built was not proven by pixels; it is the same shader with the same uniforms. Tables and
 the jobs: `docs/plans/handoffs/matcopy/`.
 
+## Flowers in shade (topic foliagefix, 2026-11-09, look-pending)
+
+The report "flowers don't seem to be in shadow anymore" was not an audit regression: a white
+daisy's luminance under a cast shadow (a hidden slab or the trees' shadows, same camera) is the same
+on a6efb6c1 (11-07), 31d08dbd (before the audit) and main to three digits (slab frame 0.971 / 0.971
+/ 0.970). Flowers are on the painted shader, not the lean one. The cause is the painted light:
+a shadow pulls the sun tone only `foliage_paint_shadow` (0.7) of the way to the shade floor, and the
+core library authors the flowers' floors (`tt_foliage_shade`) at luminance 0.30 to 0.45 against the
+shader default's 0.15 (Daisy 0.431, 0.42, 0.513; BellCluster 0.307, 0.3, 0.551), so pale petals tone-map
+back to near white in shade. A floor cap alone moved a daisy's in-shade luminance from 0.85 to 0.79
+of its lit value; the pull is the larger lever.
+
+`FoliageLight.FLOWER_SHADE_STRENGTH` (0.65, the one number to change) drives both for painted
+flowers only (`WindFoliage._cap_flower_shade`, at build): the floor's luminance eases to
+`SHADE_DEFAULT`'s keeping its hue with the saturation pushed (`FLOWER_SHADE_SATURATION` 1.8, so a
+shaded bluebell stays a cool deep blue), and the cast-shadow pull rises from 0.7 to 1.0. Painted
+grass, trees and the lit side of a flower are untouched, and it is a uniform write at build: the home
+GPU A/B (6 rounds) read 3.907 capped against 3.986 authored (ref again 3.964, noise).
+
+Daisy pixels that stand in a shadow (the ground around them dark), luminance in shade over lit, by
+strength (0 authored, 0.35, 0.65, 1.0): close view 0.85, 0.79, 0.72, 0.60; home view 0.86, 0.79,
+0.72, 0.60; slab frame 0.84, 0.77, 0.69, 0.56. Share of them below 0.75: 0, 12-29, 75-92, 78-90 %.
+0.65 reads clearly shaded and keeps a cool lilac; at 1.0 the petals dull to a grey-lilac.
+
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
 What each Shadow quality tier (`directional_soft_shadow_filter_set_quality`) costs, and a "blur"

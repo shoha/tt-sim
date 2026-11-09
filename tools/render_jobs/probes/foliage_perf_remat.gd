@@ -95,6 +95,11 @@ static func make(src: ShaderMaterial, mode: String) -> Material:
 			value = RenderingServer.material_get_param(src.get_rid(), u.name)
 		if value != null:
 			copy.set_shader_parameter(u.name, value)
+	if mode == "uncapped_flower":
+		# Card foliagefix: a flower's authored shade floor and the shader's cast shadow pull, the
+		# state before FoliageLight.flower_shade.
+		copy.set_shader_parameter("foliage_paint_shade", Vector3(0.431, 0.42, 0.513))
+		copy.set_shader_parameter("foliage_paint_shadow", FoliageLight.PAINT_SHADOW_DEFAULT)
 	if mode == "copy_prio":
 		copy.render_priority = src.render_priority
 		copy.next_pass = src.next_pass
