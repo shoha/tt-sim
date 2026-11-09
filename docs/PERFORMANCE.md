@@ -4797,9 +4797,33 @@ the detailed NORMAL still written differs from the engine's lighting by at most 
 0.02-0.06). The committed change: home max 12, mean 0.31, 0.6 % of channels over 2 levels; zoom 4
 max 2, mean 0.08; steep face max 25, mean 0.40-0.48, 0.5 % over 4 (the sky fill on rock-ledge lips,
 in blue). SSAO's part is nil (the same diff with SSAO off); about two thirds of the mean is the
-constant ambient roughness (0.85; the full roughness in the pre-pass gives mean 0.10 home, 0.18
-steep), the max is the ambient on the interpolated normal. Half-size before/after pairs at home
-and the steep face show no difference to the eye. render_priority is pixel-identical (max 0).
+constant ambient roughness (0.85 in that run; the full roughness in the pre-pass gives mean 0.10
+home, 0.18 steep), the max is the ambient on the interpolated normal. Half-size before/after pairs
+at home and the steep face show no difference to the eye. render_priority is pixel-identical (max 0).
+
+Verification run (a blaze laid across the map centre; flames, foliage and particles hidden;
+`Engine.time_scale` 0 and the fire lights frozen, so the same configuration twice differs by 0 on
+every view). The light() replica with the normal still written is within 1 level under the fire's
+omni lights, the low sunset sun and the set night sun as under the day sun, so fire light needs no
+change. Mean levels [max] of the shipped path against the old one, by AMBIENT_ROUGHNESS:
+
+| View | 0.85 | 0.90 (shipped) | 0.95 | 1.0 |
+|---|---|---|---|---|
+| day, home | 0.32 [12] | 0.19 [12] | 0.30 [13] | 0.57 [13] |
+| outdoor_sunset, sun 19 h, home | 0.93 [15] | 0.61 [16] | 0.74 [17] | 1.22 [17] |
+| outdoor_night, sun 23 h, home | 0.40 [12] | 0.23 [13] | 0.35 [14] | 0.67 [14] |
+| outdoor_night, zoom 8 on the fire | 0.53 [12] | 0.35 [10] | 0.50 [11] | 0.94 [12] |
+| steep face, zoom 8 | 0.43 [25] | 0.30 [24] | 0.41 [23] | 0.65 [23] |
+| eye view, MSAA 4x | 0.26 [11] | | 0.21 [13] | |
+
+0.90 has the lowest mean everywhere; its share over 2 levels is within 1 point of 0.85's (steep
+2.6 % against 1.7 %, sunset 3.6 % against 6.4 %). The eye view (MSAA 4x, the shipped eye path):
+the ground draws correctly, and the pre-pass goes 1.42 -> 0.63 ms, the frame 5.14 [4.76-5.24] ->
+4.33 [4.06-4.51] (-0.80; SSAO off 3.90 -> 3.91, unchanged; the transparent pass 0.80 either way).
+
+Structure shaders: only `structure_wall.gdshader` has the pattern (NORMAL_MAP and ROUGHNESS from two
+texture fetches, so they run in the pre-pass); the painterly, style and roof shaders write NORMAL in
+vertex() or a constant ROUGHNESS. Left alone: two fetches on a small share of the screen.
 
 Negative: the foliage's ORM and normal-map fetches in the normal-roughness pre-pass cost nothing
 measurable (a probe variant without them: pre-pass 1.385 -> 1.377 ms, within noise); its alpha

@@ -130,8 +130,9 @@
  * to light() through varyings; light() is Godot 4.7's Burley diffuse and Schlick-GGX specular
  * (within 1 level of the engine's on every pixel, checked with the normal still written). Direct
  * light is unchanged; the ambient (sky irradiance and reflection) and SSAO now see the
- * interpolated normal and AMBIENT_ROUGHNESS, a mean change of 0.1-0.5 levels, at most 12 at home
- * and 25 on rock-ledge lips at zoom 8 (look-pending).
+ * interpolated normal and AMBIENT_ROUGHNESS, a mean change of 0.2-0.6 levels (day to sunset), at
+ * most 16 at home and 24 on rock-ledge lips at zoom 8 (look-pending). Fire's omni lights go
+ * through light() too, within 1 level.
  *
  * LAYERS (ground layers card G3, 2026-10-13; the index form replaced eight weight-map slots):
  * the map's surfaces are the layers of four Texture2DArrays (layer_*_array: albedo, normal,
@@ -1344,8 +1345,12 @@ float skirt_alpha(vec2 world_xz) {
 
 #ifdef GROUND_LIT_VARYINGS
 // The roughness the pre-pass and the ambient light see (see LIGHTING), pulled to WET_ROUGHNESS
-// on the wet line as the full roughness is.
-const float AMBIENT_ROUGHNESS = 0.85;
+// on the wet line as the full roughness is. 0.9 came closest to the full roughness's ambient in
+// day, sunset, night and steep views (0.85, 0.95 and 1.0 measured; a probe may define another).
+#ifndef GROUND_AMBIENT_ROUGHNESS
+#define GROUND_AMBIENT_ROUGHNESS 0.9
+#endif
+const float AMBIENT_ROUGHNESS = GROUND_AMBIENT_ROUGHNESS;
 
 float lit_schlick(float u) {
 	float m = 1.0 - u;
@@ -1797,6 +1802,12 @@ void fragment() {
 	v_lit_roughness = limited_roughness(roughness, n_view);
 	v_lit_specular = specular;
 	ROUGHNESS = mix(AMBIENT_ROUGHNESS, WET_ROUGHNESS, WET_GLOSS * wet_line);
+#ifdef GROUND_LIT_KEEP_NORMAL
+	// Probe only: the full normal and roughness written as before, so a diff against
+	// GROUND_PREPASS_FULL measures light() alone.
+	NORMAL = n_view;
+	ROUGHNESS = roughness;
+#endif
 #else
 	ROUGHNESS = roughness;
 	NORMAL = n_view;

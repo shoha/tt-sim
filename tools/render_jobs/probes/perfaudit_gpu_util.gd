@@ -10,7 +10,7 @@ const GROUND_MODE := (
 const FOLIAGE_NO_AA_MODE := "cull_disabled, diffuse_burley, specular_schlick_ggx"
 
 
-## A spatial shader from "res://x.gdshaderinc#A,B": `render_mode` and `#define A`, `#define B`
+## A spatial shader from "res://x.gdshaderinc#A,B=v": `render_mode` and `#define A`, `#define B v`
 ## before the include, cached in `cache` per spec and mode.
 static func define_shader(spec: String, render_mode: String, cache: Dictionary) -> Shader:
 	var key := spec + "|" + render_mode
@@ -19,7 +19,7 @@ static func define_shader(spec: String, render_mode: String, cache: Dictionary) 
 	var parts := spec.split("#")
 	var code := "shader_type spatial;\nrender_mode %s;\n" % render_mode
 	for d in parts[1].split(",", false):
-		code += "#define %s\n" % d
+		code += "#define %s\n" % d.replace("=", " ")
 	code += '#include "%s"\n' % parts[0]
 	var sh := Shader.new()
 	sh.code = code
