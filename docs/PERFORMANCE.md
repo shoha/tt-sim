@@ -5754,17 +5754,33 @@ moving; a fade would need a shader edit (the foliagefix card owns them). `perf_b
 Direction note: the card says "zoomed in"; the thinning is for the far end of the zoom (camera
 size 14 and up). At zoom 4 and 10 and at home (13.85) nothing is thinned, as intended.
 
-Measured (render job `tools/render_jobs/local/foliagelod/ab_thin.json`, probe `foliage_perf.gd`,
-key `thin`, six-round in-run A/B, ref_start / thinned / full_again / ref_end, real window, the
-reference map, lane held): home, zoom 4 and zoom 10 are unchanged to the noise (4.397 / 4.446,
-3.278 / 3.292, 4.253 / 4.261 ms; the draw counts are identical). The first build thinned
-only the non-flower grass: zoom 17 5.166 to 5.125 (-0.04), zoom 20 5.724 to 5.656 (-0.071 ms
-GPU, visible primitives 2,648,390 to 2,491,814, -5.9 percent). That is far below the half
-millisecond the audit expected, because the audit's "ground" class included the flowers, each
-about four cards of cost (352-400 triangles, three surfaces, the full shader). The shipped rule
-therefore includes flowers (category "grass"); its GPU time and the 1:1 pairs at zoom 4, 10 and 20
-were NOT re-measured in that commit (lane busy): see the handoff
-`docs/plans/handoffs/foliagelod.md`.
+Measured (render jobs `ab_thin2.json` and `ab_thin3.json` under `tools/render_jobs/local/foliagelod/`,
+probe `foliage_perf.gd`, keys `thin` and `cards_only`, six-round in-run A/B, real window, lane held,
+a new `temperate_forest_summer_s1` valley map of 320 ft filled to density 255, seed 1234, home view
+and zoom 4, 10 and 20). Arms: full (ref), thinned as shipped (cards, sprigs, litter and flowers),
+cards only (the flowers kept in full, `cards_only`), full again:
+
+| View | full | thinned (flowers too) | cards only | visible primitives full / thinned |
+| --- | --- | --- | --- | --- |
+| home | 4.56 | 4.61 (+0.04, nothing thinned) | 4.60 | 1,386,158 both |
+| zoom 4 | 3.35 | 3.34 | 3.36 | 458,410 both |
+| zoom 10 | 4.35 | 4.31 | 4.37 | 1,026,215 both |
+| zoom 20, run 1 | 5.82 | 5.18 (-0.64, -10.9 percent) | (arm not working in this run, see below) | 2,648,390 / 1,572,098 |
+| zoom 20, run 2 | 5.77 (mean of three) | 5.10 (-0.67, -11.6 percent) | 5.65 (-0.12) | 2,648,390 / 1,572,098; cards only 2,491,814 |
+
+At zoom 20 the flowers are most of the saving: thinning the cards alone is -0.07 to -0.12 ms
+(visible primitives -5.9 percent), the same rule with the flowers is -0.64 and -0.67 ms (-40.6
+percent of the visible primitives). A flower is about four cards of cost (352-400 triangles, three
+surfaces, the full shader). The first run's `cards_only` arm tested the node class "flower", which
+authored scatter does not set, so it equalled the shipped arm; run 2 tests the ground material
+(`WindFoliage.META_GROUND`) and matches the earlier cards-only run (zoom 20 5.724 to 5.656, -0.071).
+Home, zoom 4 and zoom 10 are unchanged, as intended (thinning starts at camera size 14; this
+map's home is within it, a map with a further-out home keeps its own home). Zoom 17 (earlier run,
+cards only) -0.04. The 1:1 pairs (full left, thinned right): zoom 4 and 10 are identical (zoom 4's
+crop is a canopy blob, uninformative); at zoom 20 the right frame is visibly sparser in the
+ground layer: fewer white and blue flower clumps, grass and moss beds thinner with the brown soil
+and rock showing through, but the meadow and the canopy read the same and nothing pops (the same
+instances stay). The decision: ship, since the saving is well over the 0.2 ms bar.
 
 ## Foliage mipmaps (topic foliagelod, 2026-11-09)
 
@@ -5790,9 +5806,10 @@ A/B, ref_start / mipped / flat_again / ref_end, GPU ms, the flat runs about 4.7,
 | zoom 4 | 3.33 | 3.29 | -0.04 (inside the noise) |
 | full zoom-out (83.8) | 8.57 | 8.15 | -0.42 (-5 percent) |
 
-Eye view: only the 1:1 pair was taken, no GPU time (not measured). The drift of the reference
-across a table is up to 6 percent per round, so home and zoom 4 are indicative; the zoom-out
-and home gains are consistent in sign across the three flat runs.
+Eye view (`ab_thin2.json`, eye at (5, 5), yaw 225, pitch 0): flat 7.764 / 7.795 / 7.826, mipped
+7.543, so -0.25 ms (-3.2 percent); visible primitives 1,917,452 in all arms. The drift of the
+reference across a table is up to 6 percent per round, so home and zoom 4 are indicative; the
+zoom-out, home and eye gains are consistent in sign across the flat runs.
 
 Shimmer (the probe's `shimmer` action: the same view shifted by a fraction of a pixel, the mean
 and rms of the difference, `Image.compute_image_metrics`; lower is steadier), 41 meshes: at
