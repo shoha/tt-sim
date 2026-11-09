@@ -209,7 +209,6 @@ func _client_ready_check() -> void:
 	game_sync.token_state_received.connect(_on_client_token_state)
 	game_sync.token_removed_received.connect(_on_client_token_removed)
 	game_sync.visual_settings_received.connect(_on_client_visual_settings)
-	game_sync.token_transform_received.connect(_on_client_transform)
 	game_sync.transform_batch_received.connect(_on_client_batch)
 	_log("client: both tokens on the board; peer id %d" % _my_peer())
 	_write_json(_rv + ".client.json", {"stage": "ready", "peer_id": _my_peer()})
@@ -261,16 +260,10 @@ func _on_client_visual_settings(settings: Dictionary) -> void:
 		_seen["visual"] = float(settings["light_intensity"])
 
 
-## Host transforms arrive one by one or batched (NetworkStateSync queues a token sent again
-## within its send interval). Either counts once the drag lock is released: the host then
-## broadcasts the moved token's resting position to every client.
-func _on_client_transform(network_id: String, pos: Vector3, _rot: Vector3, _scl: Vector3) -> void:
-	_seen["transforms"] = int(_seen.get("transforms", 0)) + 1
-	if network_id == _avatar_id and _seen.has("released"):
-		_log("client: token_transform_received %s at %s" % [network_id, str(pos)])
-		_seen["host_transform"] = pos
-
-
+## Host transforms arrive as packed messages, one token or a batch (NetworkStateSync queues a
+## token sent again within its send interval), both as transform_batch_received. One counts
+## once the drag lock is released: the host then broadcasts the moved token's resting
+## position to every client.
 func _on_client_batch(batch: Dictionary) -> void:
 	_seen["batches"] = int(_seen.get("batches", 0)) + 1
 	if batch.has(_avatar_id) and _seen.has("released"):
@@ -291,7 +284,6 @@ func _client_final_check() -> void:
 	_result["renamed_on_board"] = movable != null and movable.token_name == NEW_NAME
 	_result["removed_from_board"] = lpc.find_token_by_network_id(_removable_id) == null
 	_result["light_applied"] = is_equal_approx(lpc.active_level_data.light_intensity_scale, LIGHT)
-	_result["host_transforms_received"] = int(_seen.get("transforms", 0))
 	_result["host_batches_received"] = int(_seen.get("batches", 0))
 	_result["resting_position"] = str(_seen["host_transform"])
 	var ok := true

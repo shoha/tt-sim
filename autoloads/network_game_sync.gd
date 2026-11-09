@@ -27,10 +27,6 @@ extends Node
 ## live at /root/NetworkManager/GameSync, the same path on every peer of one build (the
 ## version gate keeps builds from mixing).
 
-## Emitted on clients for a host transform update (unreliable channel)
-signal token_transform_received(
-	network_id: String, position: Vector3, rotation: Vector3, scale: Vector3
-)
 ## Emitted on clients when a token's full state arrives (reliable channel)
 signal token_state_received(network_id: String, token_dict: Dictionary)
 ## Emitted on clients when the host removed a token
@@ -341,17 +337,6 @@ func request_live_edit_log() -> void:
 
 
 @rpc("authority", "unreliable")
-func _rpc_receive_token_transform(
-	network_id: String, pos_arr: Array, rot_arr: Array, scale_arr: Array
-) -> void:
-	var pos := SerializationUtils.array_to_vec3(pos_arr)
-	var rot := SerializationUtils.array_to_vec3(rot_arr)
-	var scl := SerializationUtils.array_to_vec3(scale_arr, Vector3.ONE)
-	_mirror_transform(network_id, pos, rot, scl)
-	token_transform_received.emit(network_id, pos, rot, scl)
-
-
-@rpc("authority", "unreliable")
 func _rpc_receive_transform_batch(bytes: PackedByteArray) -> void:
 	_emit_transform_pack(bytes)
 
@@ -361,7 +346,8 @@ func _rpc_receive_reconcile(bytes: PackedByteArray) -> void:
 	_emit_transform_pack(bytes)
 
 
-## Takes a transform the host sent (a drag's update, a batch, a reconciliation) into this
+## Takes a transform the host sent (a drag's update, a batch, a reconciliation, every one a
+## TokenTransformPack message since the Variant transform RPC went) into this
 ## client's GameState copy of the token, quietly: the board token takes it as its interpolation
 ## target, so no token_state_changed. Without it a client's GameState kept each token where its
 ## add or the last full state left it until the next heartbeat (netverify: 41 of 100 tokens
@@ -533,8 +519,3 @@ func _take_log_request(sender_id: int) -> bool:
 	_live_log_requests[sender_id] = now
 	live_edit_log_requested.emit(sender_id)
 	return true
-
-
-## Vector3 as the compact [x, y, z] array the transform RPCs carry.
-static func _to_array(v: Vector3) -> Array:
-	return [v.x, v.y, v.z]

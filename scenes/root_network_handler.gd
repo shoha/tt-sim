@@ -16,8 +16,6 @@ static func connect_client_signals(handler: Node) -> void:
 		NetworkStateSync.tokens_added.connect(handler._on_tokens_added)
 
 	var game_sync := NetworkManager.game_sync
-	if not game_sync.token_transform_received.is_connected(handler._on_token_transform_received):
-		game_sync.token_transform_received.connect(handler._on_token_transform_received)
 	if not game_sync.transform_batch_received.is_connected(handler._on_transform_batch_received):
 		game_sync.transform_batch_received.connect(handler._on_transform_batch_received)
 	if not game_sync.token_state_received.is_connected(handler._on_token_state_received):
@@ -33,8 +31,6 @@ static func disconnect_client_signals(handler: Node) -> void:
 	if NetworkStateSync.tokens_added.is_connected(handler._on_tokens_added):
 		NetworkStateSync.tokens_added.disconnect(handler._on_tokens_added)
 	var game_sync := NetworkManager.game_sync
-	if game_sync.token_transform_received.is_connected(handler._on_token_transform_received):
-		game_sync.token_transform_received.disconnect(handler._on_token_transform_received)
 	if game_sync.transform_batch_received.is_connected(handler._on_transform_batch_received):
 		game_sync.transform_batch_received.disconnect(handler._on_transform_batch_received)
 	if game_sync.token_state_received.is_connected(handler._on_token_state_received):
@@ -43,16 +39,8 @@ static func disconnect_client_signals(handler: Node) -> void:
 		game_sync.token_removed_received.disconnect(handler._on_token_removed_received)
 
 
-## Handle individual token transform update (unreliable channel, high frequency)
-static func on_token_transform_received(
-	controller: LevelPlayController, network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
-) -> void:
-	var token = controller.find_token_by_network_id(network_id)
-	if token and is_instance_valid(token):
-		token.set_interpolation_target(pos, rot, scl)
-
-
-## Handle batch transform update (unreliable channel)
+## Handle a transform message: a drag's single update or batch (unreliable) or a
+## reconciliation (reliable), all TokenTransformPack messages decoded by NetworkGameSync
 static func on_transform_batch_received(controller: LevelPlayController, batch: Dictionary) -> void:
 	for network_id in batch:
 		var data = batch[network_id]

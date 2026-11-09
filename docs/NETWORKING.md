@@ -830,11 +830,16 @@ NetworkStateSync.broadcast_token_properties(token)
 Clients use interpolation for smooth movement:
 
 ```gdscript
-# In token handler
-NetworkManager.game_sync.token_transform_received.connect(func(id, pos, rot, scale):
-    var token = get_token_by_network_id(id)
-    if token:
-        token.set_interpolation_target(pos, rot, scale)
+# In token handler (RootNetworkHandler.on_transform_batch_received): every host transform,
+# one token or many, arrives as a batch, network_id -> {"position", "rotation", "scale"}
+NetworkManager.game_sync.transform_batch_received.connect(func(batch):
+    for id in batch:
+        var token = get_token_by_network_id(id)
+        if token:
+            token.set_interpolation_target(
+                SerializationUtils.array_to_vec3(batch[id].position),
+                SerializationUtils.array_to_vec3(batch[id].rotation),
+                SerializationUtils.array_to_vec3(batch[id].scale, Vector3.ONE))
 )
 ```
 
@@ -890,7 +895,7 @@ token). Both arrive as `transform_batch_received` in the old dictionary shape. S
 drag transform since 2026-11-08 (netverify, F-net-7): `broadcast_token_transform` and
 `send_token_transform_to_peer` send a one-token pack (`NetworkGameSync.pack_one`, 63 B with the
 RPC header) through `_rpc_receive_transform_batch` instead of the Variant
-`_rpc_receive_token_transform` (128 B), which nothing sends any more.
+`_rpc_receive_token_transform` (128 B), which is gone with its `token_transform_received` signal.
 
 Every transform a client receives also goes into its GameState
 (`NetworkGameSync._mirror_transform`, quiet: no `token_state_changed`), for a token not on its board yet as well, so a token built from
@@ -1489,10 +1494,9 @@ func request_live_edit_log() -> void
 
 ```gdscript
 # Clients, from the host
-signal token_transform_received(network_id, position, rotation, scale)
 signal token_state_received(network_id, token_dict)
 signal token_removed_received(network_id)
-signal transform_batch_received(batch: Dictionary)
+signal transform_batch_received(batch: Dictionary)   # every host transform, one token or many
 signal visual_settings_received(settings: Dictionary)
 signal drag_lock_denied(network_id)      # the denied client only
 signal drag_lock_released(network_id)
@@ -1514,8 +1518,8 @@ signal live_edit_log_requested(sender_id)            # rate-limited, players onl
 
 | RPC | Direction | Channel | Emits |
 |-----|-----------|---------|-------|
-| `_rpc_receive_token_transform` | host -> clients | unreliable | `token_transform_received` |
-| `_rpc_receive_transform_batch` | host -> clients | unreliable | `transform_batch_received` |
+| `_rpc_receive_transform_batch` | host -> clients | unreliable (a drag's single update or batch, `TokenTransformPack`) | `transform_batch_received` |
+| `_rpc_receive_reconcile` | host -> clients | reliable (moved tokens, `TokenTransformPack`) | `transform_batch_received` |
 | `_rpc_receive_token_state` | host -> clients | reliable | `token_state_received` |
 | `_rpc_receive_token_removed` | host -> clients | reliable | `token_removed_received` |
 | `_rpc_receive_visual_settings` | host -> clients | reliable | `visual_settings_received` |

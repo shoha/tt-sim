@@ -152,16 +152,7 @@ func _on_tokens_added(network_ids: Array[String]) -> void:
 	RootNetworkHandler.apply_tokens_to_board(_controller, _root.get_game_map(), network_ids)
 
 
-## Handle individual token transform update (unreliable channel, high frequency)
-func _on_token_transform_received(
-	network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
-) -> void:
-	if not _controller or not _root.get_game_map():
-		return
-	RootNetworkHandler.on_token_transform_received(_controller, network_id, pos, rot, scl)
-
-
-## Handle batch transform update (unreliable channel)
+## Handle a transform message (a drag's single update or batch, or a reconciliation)
 func _on_transform_batch_received(batch: Dictionary) -> void:
 	if not _controller or not _root.get_game_map():
 		return
