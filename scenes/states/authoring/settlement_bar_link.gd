@@ -15,7 +15,23 @@ static func show(pane: WallToolPane, editor: AuthoringEditor, wall_id: int) -> v
 	var settlement: Settlement = null
 	if held != null:
 		settlement = editor.settlements.of_street(wall_id)
+		if settlement == null and held.is_row():
+			# The Dress button is one press away: its paving's layers are bound meanwhile.
+			prepare_dress(editor, pane.settlement_section.kit())
 	pane.show_selection(held.copy() if held != null else null, settlement)
+
+
+## Binds the ground layers of the surfaces a Dress in `kit` paints on `editor`'s map
+## (ProcgenSettlement.ground_of: road, door path, plaza) ahead of the Dress, so its paving sets
+## only uniforms (AuthoredTerrain.prepare_surfaces).
+static func prepare_dress(editor: AuthoringEditor, kit: String) -> void:
+	if editor == null or not is_instance_valid(editor.terrain):
+		return
+	var ground := ProcgenSettlement.ground_of(ProcgenSettlement.kit_named(kit))
+	var names := PackedStringArray()
+	for role: String in ground:
+		names.append(String(ground[role]))
+	editor.terrain.prepare_surfaces(names)
 
 
 ## Connects `pane`'s dress requests to `controller`'s editor, for the street `mode` has picked.

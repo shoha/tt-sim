@@ -77,6 +77,9 @@ const FLAT_CHUNK_M := 0.02
 ## The palette maps of a ground surface, keyed as in the palette, and the ground shader's
 ## layer array of each (GroundLayerArrays).
 const LAYER_MAPS := GroundLayerArrays.UNIFORMS
+## Main-thread time a frame gives prepared layers' uploads (prepare_surfaces) before it stops;
+## one map (a raw-cache read and one layer upload) always goes.
+const PREP_BUDGET_USEC := 4000
 ## Albedo and ORM for a map whose surface is missing from the palette: a neutral earth so
 ## the map still reads as ground, fully rough, never metallic.
 const FALLBACK_ALBEDO := Color(0.36, 0.33, 0.26)
@@ -505,6 +508,11 @@ func warm_biome_surface(biome_id: String) -> void:
 		if surface_name == "" or surface_name == document.base_surface or bound.has(surface_name):
 			continue
 		warm_surface(surface_name)
+	# A biome on the base surface (or with no drawable ground) draws as the base: none of its
+	# surfaces become layers (GroundLayerBinding.gather_inputs), so none is prepared.
+	var ground := String(biome.get("ground_surface", ""))
+	if ground != document.base_surface and GroundPalette.surface_available(ground, palette_root):
+		prepare_surfaces(PackedStringArray(names))
 
 
 ## Starts loading the textures of palette surface `surface_name` on background threads
@@ -525,8 +533,33 @@ func warm_surface(surface_name: String) -> void:
 		set_process(true)
 
 
+## Binds the ground layers of palette surfaces `surfaces` ahead of their first use, a few maps
+## per frame (GroundLayerBinding.prepare: the first dab, landing or Dress that brings one then
+## sets only uniforms). Harmless for surfaces already bound, the base or unavailable ones.
+func prepare_surfaces(surfaces: PackedStringArray) -> void:
+	if _layers == null:
+		return
+	_layers.prepare(surfaces)
+	if _layers.is_preparing():
+		set_process(true)
+
+
+## Prepares the layers the map's first water brings (each biome's water bed and shore and the
+## base's; prepare_surfaces), when the map has none yet: the Water tool calls it when picked.
+func prepare_water() -> void:
+	if _layers == null or document == null or _has_water():
+		return
+	var wants := GroundLayers.wanted(
+		GroundLayerBinding.gather_inputs(document, palette_root, true)
+	)
+	var names: PackedStringArray = wants.get("surfaces", PackedStringArray())
+	names.append_array(wants.get("accents", PackedStringArray()))
+	prepare_surfaces(names)
+
+
 ## Collects finished warm-up loads, holding each texture until the node goes, so the
-## resource cache keeps it for the layer bind.
+## resource cache keeps it for the layer bind; uploads prepared layers within PREP_BUDGET_USEC
+## a frame (at least one map).
 func _process(_delta: float) -> void:
 	for path in _warming.keys():
 		var status := ResourceLoader.load_threaded_get_status(path)
@@ -535,7 +568,11 @@ func _process(_delta: float) -> void:
 		_warming.erase(path)
 		if status == ResourceLoader.THREAD_LOAD_LOADED:
 			_warm_held.append(ResourceLoader.load_threaded_get(path))
-	if _warming.is_empty():
+	var started := Time.get_ticks_usec()
+	while _layers != null and _layers.prepare_step():
+		if Time.get_ticks_usec() - started >= PREP_BUDGET_USEC:
+			break
+	if _warming.is_empty() and (_layers == null or not _layers.is_preparing()):
 		set_process(false)
 
 
