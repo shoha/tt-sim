@@ -496,7 +496,7 @@ func _on_avatars_pressed() -> void:
 
 ## Collections: the manager over the title (list, import, switch, verify, remove).
 func _on_libraries_pressed() -> void:
-	LibraryManager.open(get_tree().root)
+	OnDemand.open_library_manager(get_tree().root)
 
 
 func _on_settings_pressed() -> void:
