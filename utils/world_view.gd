@@ -27,42 +27,26 @@ extends RefCounted
 ## by [method px_scale], P.y / 1080: unchanged at 1080p, twice as wide at 4K.
 
 ## The most render pixels per canvas unit per axis, times the Interface size factor: 2 is 4K.
-const MAX_OUTPUT_SCALE := 2.0
+const MAX_OUTPUT_SCALE := InterfaceSize.MAX_OUTPUT_SCALE
 ## The height the pixel-authored effects were tuned at.
 const REFERENCE_HEIGHT := 1080.0
 ## The global shader parameter pixel-authored effects read (project.godot [shader_globals]).
 const PX_SCALE_PARAM := "world_px_scale"
 
 
-## The share of the output (window pixels per base-canvas unit) the render uses: the window's
-## own scale, kept in [1, MAX_OUTPUT_SCALE].
-static func output_scale(window_size: Vector2, base: Vector2 = InterfaceSize.BASE_SIZE) -> float:
-	return clampf(InterfaceSize.window_scale(window_size, base), 1.0, MAX_OUTPUT_SCALE)
-
-
-## The canvas the window shows, in units (V).
+## The canvas the window shows, in units (V). The sizing maths lives in InterfaceSize, which the
+## settings code already loads at start-up (the boot graph test counts scripts).
 static func canvas_units(
 	window_size: Vector2, factor: float = 1.0, base: Vector2 = InterfaceSize.BASE_SIZE
 ) -> Vector2:
-	var scale := InterfaceSize.window_scale(window_size, base)
-	if scale <= 0.0 or factor <= 0.0:
-		return base
-	return window_size / (scale * factor)
-
-
-## Render pixels per canvas unit at Interface size factor [param factor].
-static func density(
-	window_size: Vector2, factor: float = 1.0, base: Vector2 = InterfaceSize.BASE_SIZE
-) -> float:
-	return maxf(factor, 0.01) * output_scale(window_size, base)
+	return InterfaceSize.canvas_units(window_size, factor, base)
 
 
 ## The world viewport's pixel size (P) for a window of [param window_size].
 static func pixel_size(
 	window_size: Vector2, factor: float = 1.0, base: Vector2 = InterfaceSize.BASE_SIZE
 ) -> Vector2i:
-	var size := canvas_units(window_size, factor, base) * density(window_size, factor, base)
-	return Vector2i(maxi(roundi(size.x), 1), maxi(roundi(size.y), 1))
+	return InterfaceSize.world_pixel_size(window_size, factor, base)
 
 
 ## The multiplier for effects authored in 1080p render pixels at a viewport of height

@@ -124,7 +124,7 @@ static func render_size(
 	content_factor: float = 1.0,
 	base: Vector2 = InterfaceSize.BASE_SIZE
 ) -> Vector2:
-	var viewport_size := Vector2(WorldView.pixel_size(window_size, content_factor, base))
+	var viewport_size := Vector2(InterfaceSize.world_pixel_size(window_size, content_factor, base))
 	return viewport_size * scale_3d(choice, window_size, base)
 
 

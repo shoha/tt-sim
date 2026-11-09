@@ -51,7 +51,7 @@ func test_auto_renders_the_window_size_below_1080p() -> void:
 	# A 720p window at Interface size 100 % shows 1280x720 of a 1920x1080 viewport: Auto draws
 	# 1280x720 (two thirds) and FSR enlarges it, instead of the 2.25x supersample.
 	assert_almost_eq(RenderScale.fraction_for(RenderScale.AUTO, Vector2(1280, 720)), 2.0 / 3.0, 1e-4)
-	var scale := RenderScale.scale_3d(RenderScale.AUTO, Vector2(1280, 720), 1.0)
+	var scale := RenderScale.scale_3d(RenderScale.AUTO, Vector2(1280, 720))
 	assert_almost_eq(scale, 2.0 / 3.0, 1e-4)
 	assert_eq(RenderScale.mode_for(scale), Viewport.SCALING_3D_MODE_FSR)
 	assert_eq(

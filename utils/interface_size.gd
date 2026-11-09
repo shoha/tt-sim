@@ -39,6 +39,9 @@ const CAPTION_FLOOR_PX := 13.0
 const SNAP_SLACK := 0.001
 ## The canvas every screen is laid out on, when no window says otherwise.
 const BASE_SIZE := Vector2(1920.0, 1080.0)
+## The most render pixels per canvas unit per axis, times the factor, the world viewport uses: 2
+## is 4K on a 16:9 window (WorldView).
+const MAX_OUTPUT_SCALE := 2.0
 
 
 ## How much the stretch scales the base canvas onto a window of `window_size` at factor 1:
@@ -117,3 +120,24 @@ static func apply(window: Window, choice: int) -> float:
 ## resolution: the canvas is 1 / factor of its 100% size, so the render scales back up by it.
 static func world_render_scale(window: Window) -> float:
 	return window.content_scale_factor if window else 1.0
+
+
+## The canvas a window of `window_size` shows at factor `factor`, in units (WorldView's V).
+static func canvas_units(
+	window_size: Vector2, factor: float = 1.0, base: Vector2 = BASE_SIZE
+) -> Vector2:
+	var scale := window_scale(window_size, base)
+	if scale <= 0.0 or factor <= 0.0:
+		return base
+	return window_size / (scale * factor)
+
+
+## The world viewport's pixel size for a window of `window_size` (WorldView's P, here so the
+## settings code that labels Render scale needs no further script at start-up): the canvas times
+## the render pixels per unit, factor x the window's own scale kept in [1, MAX_OUTPUT_SCALE].
+static func world_pixel_size(
+	window_size: Vector2, factor: float = 1.0, base: Vector2 = BASE_SIZE
+) -> Vector2i:
+	var density := maxf(factor, 0.01) * clampf(window_scale(window_size, base), 1.0, MAX_OUTPUT_SCALE)
+	var size := canvas_units(window_size, factor, base) * density
+	return Vector2i(maxi(roundi(size.x), 1), maxi(roundi(size.y), 1))
