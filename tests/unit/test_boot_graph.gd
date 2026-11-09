@@ -9,8 +9,10 @@ extends GutTest
 ## When it fails, run tools/boot_graph.gd (--show=<script> names who brought it in) and load the
 ## new part on first use (OnDemand, StructureProcgen) instead. When it shrinks, lower the limit.
 
-## Measured 2026-11-09 after the boot card's stages (812 at the start of the card).
-const LIMIT_SCRIPTS := 666
+## Measured 2026-11-09 after the boot card's stages (812 at the start of the card). 669 since the
+## gpuoptions card: shadow_cascades.gd, foliage_edges.gd and settings_gpu_options.gd apply a saved
+## setting when a map's environment is built, so they are start-up code, not first-use code.
+const LIMIT_SCRIPTS := 669
 
 var _classes: Dictionary = {}
 var _strings := RegEx.create_from_string(
