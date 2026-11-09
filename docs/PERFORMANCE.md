@@ -193,7 +193,7 @@ is a decision to measure first.
 | Global shader uniform buffer slots | 262,144 | at least 262,144 | F-foliage-5 |
 | Default shadow quality tier | High | at most High | shadowtier |
 | Default Shadow cascades / Foliage edges | Blended / Smooth | the shipped look | gpuoptions |
-| Scripts compiled before the first frame (`tests/unit/test_boot_graph.gd`) | 341 | 341 | boot, boot2 |
+| Scripts compiled before the first frame (`tests/unit/test_boot_graph.gd`) | 341 | 342 | boot, boot2 |
 
 What it cannot see: milliseconds. A shader that gets dearer without writing a new output, a frame
 slowed by work no counter reads, or a hitch in a path these counters do not drive passes here; the
