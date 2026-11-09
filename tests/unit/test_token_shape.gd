@@ -137,6 +137,28 @@ func test_every_built_in_model_has_a_shape_that_fits_it() -> void:
 		token.free()
 
 
+## board_token.tscn is the BoardToken script on one node (it was a 5.9 MB placeholder with an
+## armature, 60 animations and a tree that every token instanced and threw away): a pack token
+## holds only what the factory built, and its model and tree are the pack model's own.
+func test_the_token_scene_is_one_node_and_a_pack_token_holds_only_the_factorys_parts() -> void:
+	var bare := BoardTokenFactory.BoardTokenScene.instantiate()
+	assert_true(bare is BoardToken, "the scene's root is a BoardToken")
+	assert_eq(bare.get_child_count(), 0, "the scene has no placeholder children")
+	bare.free()
+	var token := _pack_token("beasts", "cow")
+	var names: Array[String] = []
+	for child in token.get_children():
+		names.append(String(child.name))
+	assert_eq(names, ["Draggable3D", "BoardTokenController"], "the factory's parts only")
+	var trees := token.rigid_body.find_children("*", "AnimationTree", true, false)
+	assert_eq(trees.size(), 1, "one animation tree, the factory's")
+	var tree := trees[0] as AnimationTree
+	var player := tree.get_node_or_null(tree.anim_player)
+	assert_true(player is AnimationPlayer, "the tree plays an animation player")
+	assert_true(token.rigid_body.is_ancestor_of(player), "the model's own player")
+	token.free()
+
+
 func test_the_shape_follows_the_scale_of_the_nodes_above_the_mesh() -> void:
 	# The cause: the mesh is 100 x 0.01 = 1 times its data, 0.5 times, and 20 times.
 	var cases: Array[Array] = [[1.0], [0.5], [100.0, 0.2], [0.01, 4.0, 0.25]]

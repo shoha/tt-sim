@@ -29,10 +29,11 @@ func _patch_snapshot(net_settings: Dictionary) -> void:
 
 
 ## Player info as a same-version client sends it; the host rejects info without a
-## matching version before any other check runs (see VersionGate).
+## matching version and protocol before any other check runs (see VersionGate).
 func _info(fields: Dictionary) -> Dictionary:
 	var info := fields.duplicate()
 	info[VersionGate.PLAYER_INFO_KEY] = UpdateVersion.get_current()
+	info[VersionGate.PLAYER_INFO_PROTOCOL_KEY] = VersionGate.PROTOCOL
 	return info
 
 
@@ -88,11 +89,26 @@ func test_player_info_without_a_version_is_rejected_when_hosting() -> void:
 	assert_engine_error(1, "the host logs one warning per rejected peer")
 
 
+func test_player_info_from_another_protocol_is_rejected_when_hosting() -> void:
+	# A dev build of the same version with another wire format.
+	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
+	var info := _info({"name": "Other build"})
+	info[VersionGate.PLAYER_INFO_PROTOCOL_KEY] = VersionGate.PROTOCOL + 1
+	NetworkManager._rpc_send_player_info(info)
+	assert_true(NetworkManager._players.is_empty(), "A client on another protocol is rejected")
+	assert_engine_error(1, "the host logs one warning per rejected peer")
+
+
 func test_local_player_info_reports_the_game_version() -> void:
 	assert_eq(
 		NetworkManager._local_player_info.get(VersionGate.PLAYER_INFO_KEY),
 		UpdateVersion.get_current(),
 		"Clients must send their version so the host can enforce the same-version rule"
+	)
+	assert_eq(
+		NetworkManager._local_player_info.get(VersionGate.PLAYER_INFO_PROTOCOL_KEY),
+		VersionGate.PROTOCOL,
+		"and their network protocol"
 	)
 
 

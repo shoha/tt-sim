@@ -103,8 +103,14 @@ const BAKED_AO_STRENGTH: float = 0.0
 const CANOPY_BARK := 1
 const CANOPY_CARD := 2
 
+## Metadata on a wind ShaderMaterial built on the ground-cover variant (is_ground_cover), so the
+## antialiasing swap (shader_for) keeps it there.
+const META_GROUND := "foliage_ground"
+
 static var _shader: Shader = null
 static var _shader_no_aa: Shader = null
+static var _shader_ground: Shader = null
+static var _shader_ground_no_aa: Shader = null
 static var _shader_debug_trivial: Shader = null
 static var _shader_debug_unshaded: Shader = null
 static var _shader_debug_cheap_lighting: Shader = null
@@ -150,6 +156,29 @@ static func get_shader_no_aa() -> Shader:
 	if _shader_no_aa == null:
 		_shader_no_aa = load("res://shaders/wind_foliage_no_aa.gdshader")
 	return _shader_no_aa
+
+
+## The ground-cover variant (shaders/wind_foliage_ground.gdshader, the lean light; alpha-to-
+## coverage cutout), loaded once.
+static func get_shader_ground() -> Shader:
+	if _shader_ground == null:
+		_shader_ground = load("res://shaders/wind_foliage_ground.gdshader")
+	return _shader_ground
+
+
+## The ground-cover variant's plain-cutout twin for Antialiasing None, loaded once.
+static func get_shader_ground_no_aa() -> Shader:
+	if _shader_ground_no_aa == null:
+		_shader_ground_no_aa = load("res://shaders/wind_foliage_ground_no_aa.gdshader")
+	return _shader_ground_no_aa
+
+
+## True for a material of the ground cover, which draws on the lean ground variant: the wind
+## category "grass" (grass cards, sprig clumps, litter) except flowers, which keep the full
+## shader for their petals' normal maps (measured: moving them too saved nothing,
+## docs/PERFORMANCE.md "Ground-cover lighting").
+static func is_ground_cover(category: String, flower: bool) -> bool:
+	return category == "grass" and not flower
 
 
 ## Get the debug-only trivial Shader (unshaded, albedo-only, no PBR/occlusion-fade
@@ -294,7 +323,7 @@ static func orm_texture_of(source: BaseMaterial3D) -> Texture2D:
 ## ever accumulate stale per-map texture references for no benefit, since this runs
 ## once per unique instance_name per load anyway.
 static func _build_shader_material(
-	source: BaseMaterial3D, preset: Dictionary, category: String
+	source: BaseMaterial3D, preset: Dictionary, category: String, ground: bool = false
 ) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = get_shader()
@@ -304,6 +333,9 @@ static func _build_shader_material(
 		var shade: Variant = FoliageLight.shade_floor(source)
 		if shade != null:
 			material.set_shader_parameter(FoliageLight.SHADE_UNIFORM, shade)
+	elif ground:
+		material.shader = get_shader_ground()
+		material.set_meta(META_GROUND, true)
 	# Tagged so LevelEnvironmentManager.store_wind_materials() can find and re-tune
 	# this exact material instance later without re-walking or reloading the scene.
 	material.set_meta("wind_category", category)
@@ -363,7 +395,9 @@ static func apply_material(
 		var source_material := mesh.surface_get_material(i)
 		if not source_material is BaseMaterial3D:
 			continue
-		var wind_material := _build_shader_material(source_material, preset, category)
+		var wind_material := _build_shader_material(
+			source_material, preset, category, is_ground_cover(category, flower)
+		)
 		wind_material.set_shader_parameter("baked_ao_strength", BAKED_AO_STRENGTH)
 		# Authored wind weights (treecube's COLOR_0 convention) are only trusted when
 		# the surface really carries a colour array -- Godot substitutes white for a
@@ -410,18 +444,26 @@ static func is_leaf_cutout(source: BaseMaterial3D) -> bool:
 static func shader_for(material: ShaderMaterial, antialiased: bool) -> Shader:
 	if material.has_meta(FoliageLight.META_PAINTED):
 		return FoliageLight.get_shader() if antialiased else FoliageLight.get_shader_no_aa()
+	if material.has_meta(META_GROUND):
+		return get_shader_ground() if antialiased else get_shader_ground_no_aa()
 	return get_shader() if antialiased else get_shader_no_aa()
 
 
-## True for any of the four real wind shaders (plain or painted, either antialiasing variant).
+## True for any of the six real wind shaders (plain, painted or ground cover, either
+## antialiasing variant).
 static func is_wind_shader(shader: Shader) -> bool:
 	return shader != null and wind_shaders().has(shader)
 
 
-## The four real wind shaders: plain AA, plain no-AA, painted AA, painted no-AA.
+## The six real wind shaders: plain, painted and ground cover, each AA and no-AA.
 static func wind_shaders() -> Array[Shader]:
 	return [
-		get_shader(), get_shader_no_aa(), FoliageLight.get_shader(), FoliageLight.get_shader_no_aa()
+		get_shader(),
+		get_shader_no_aa(),
+		FoliageLight.get_shader(),
+		FoliageLight.get_shader_no_aa(),
+		get_shader_ground(),
+		get_shader_ground_no_aa(),
 	]
 
 
@@ -492,9 +534,9 @@ static func _is_stemmed_flower(id: String) -> bool:
 	return file.begins_with("Flower_") and not file.begins_with("Flower_Carpet")
 
 
-## GraphicsWarmup samples: for each of the four wind shaders (wind_shaders(): the antialiased
+## GraphicsWarmup samples: for each of the six wind shaders (wind_shaders(): the antialiased
 ## one and the no-AA variant VisualEffectsController.apply_foliage_antialiasing() swaps to, each
-## plain and painted, FoliageLight), the wind-material surfaces
+## plain, painted (FoliageLight) and ground cover), the wind-material surfaces
 ## of the representative assets, with each surface's own layout flags. The first representative
 ## gives all its wind surfaces, a later one only surfaces with a layout none of the earlier ones
 ## has. Names are "foliage<representative>_<surface>_<shader>". Runs on the warm-up's worker

@@ -4755,6 +4755,85 @@ one adds no draw and no triangle); drift home_end over home 1.016 (per round 1.0
 1348 flower instances in all, 103 within 9 m of the eye, about 60 of which the near grass term would
 have thinned (530 other grass tufts lie within that radius).
 
+## Ground pre-pass (topic perfaudit, card gpuprepass, 2026-11-08)
+
+With SSAO on, Forward+ draws the depth pre-pass in its normal-roughness mode, and the ground's
+NORMAL and ROUGHNESS needed its whole layer blend, so the ground shader ran twice per pixel. Two
+changes (`docs/ARCHITECTURE.md` "Ground lighting through light()"): the ground shades through a
+`light()` fed by fragment-to-light varyings (the pre-pass sees the interpolated normal and a
+wet-line roughness), and the ground and skirt materials sort after the foliage
+(`render_priority` 1), so the pre-pass runs the ground's fragment only where no card covers it.
+
+**How.** RTX 3080, nvidia-smi idle before each run (0-5 %, P8, 42-43 C), Vulkan Forward+, 4.7.2
+debug, the perfaudit_gpu render-job probe (`tools/render_jobs/probes/perfaudit_gpu.gd`) with
+`--gpu-profile`: in-run A/B, 6 rounds (first discarded), order rotated and reversed, 20 settle +
+60 measured frames per configuration, median of the round medians [range]; 100 ft
+temperate_forest_summer_s1, valley, seed 1234; SSAO on, lo-fi on, shadows High, MSAA off; 1440p
+and 4K = the world viewport resized in-run. "Before" is the old path rebuilt in-run
+(`gshader` spec `authored_ground.gdshaderinc#GROUND_LOOK,GROUND_PREPASS_FULL`, `gprio` -1 for the
+old order). Noise floor: the same configuration twice in a run, 0.002 ms; drift 0.99-1.07.
+
+Engine behaviour (probe shader: a 192-step hash loop feeding one output, swapped onto the
+ground; pre-pass ms at home with SSAO): none 0.57, ALBEDO 0.58, AO 0.57, light() varying 0.57,
+BENT_NORMAL_MAP 0.56, NORMAL 1.00, ROUGHNESS 0.99, NORMAL_MAP 0.99; SSAO off all 0.44. The loop
+cost 0.30 ms in the opaque pass in every case.
+
+| Committed vs before, home | 1080p | 1440p | 4K |
+|---|---|---|---|
+| Total, SSAO on | 3.94 [3.60-4.02] -> 3.27 [2.96-3.28] (-0.68) | 6.69 -> 5.42 (-1.27) | 13.61 -> 11.11 (-2.51) |
+| Depth pre-pass | 1.41 -> 0.72 | 2.50 -> 1.21 | 5.00 -> 2.55 |
+| Opaque pass | 2.06 -> 2.07 | 3.43 -> 3.49 | 6.79 -> 6.82 |
+| Total, SSAO off | 2.81 -> 2.82 (noise) | | |
+
+The two parts, each in-run against its own control (shader varyings: both arms rebuilt in-run;
+priority: both on the shipped shader):
+
+| Part | View | 1080p | 1440p | 4K |
+|---|---|---|---|---|
+| light() varyings | home | 3.67 -> 3.30 (-0.38) | 6.29 -> 5.50 (-0.79) | 12.80 -> 11.31 (-1.49) |
+| light() varyings | close (zoom 4) | 2.80 -> 2.38 (-0.41) | 4.57 -> 3.85 (-0.72) | 9.72 -> 8.06 (-1.66) |
+| light() varyings | steep face (zoom 8) | 3.55 -> 3.13 (-0.42) | 6.43 -> 5.47 (-0.97) | 12.74 -> 11.13 (-1.61) |
+| light() varyings, SSAO off | all three | -0.02 to +0.05 (noise) | -0.04 to -0.05 | -0.17 to +0.01 |
+| render_priority 1 | home | 3.87 -> 3.56 (-0.33; pre-pass 1.39 -> 1.09) | | |
+
+Look (8-bit levels, 1920x1080, foliage hidden so wind does not count): the light() replica with
+the detailed NORMAL still written differs from the engine's lighting by at most 1 level (mean
+0.02-0.06). The committed change: home max 12, mean 0.31, 0.6 % of channels over 2 levels; zoom 4
+max 2, mean 0.08; steep face max 25, mean 0.40-0.48, 0.5 % over 4 (the sky fill on rock-ledge lips,
+in blue). SSAO's part is nil (the same diff with SSAO off); about two thirds of the mean is the
+constant ambient roughness (0.85 in that run; the full roughness in the pre-pass gives mean 0.10
+home, 0.18 steep), the max is the ambient on the interpolated normal. Half-size before/after pairs
+at home and the steep face show no difference to the eye. render_priority is pixel-identical (max 0).
+
+Verification run (a blaze laid across the map centre; flames, foliage and particles hidden;
+`Engine.time_scale` 0 and the fire lights frozen, so the same configuration twice differs by 0 on
+every view). The light() replica with the normal still written is within 1 level under the fire's
+omni lights, the low sunset sun and the set night sun as under the day sun, so fire light needs no
+change. Mean levels [max] of the shipped path against the old one, by AMBIENT_ROUGHNESS:
+
+| View | 0.85 | 0.90 (shipped) | 0.95 | 1.0 |
+|---|---|---|---|---|
+| day, home | 0.32 [12] | 0.19 [12] | 0.30 [13] | 0.57 [13] |
+| outdoor_sunset, sun 19 h, home | 0.93 [15] | 0.61 [16] | 0.74 [17] | 1.22 [17] |
+| outdoor_night, sun 23 h, home | 0.40 [12] | 0.23 [13] | 0.35 [14] | 0.67 [14] |
+| outdoor_night, zoom 8 on the fire | 0.53 [12] | 0.35 [10] | 0.50 [11] | 0.94 [12] |
+| steep face, zoom 8 | 0.43 [25] | 0.30 [24] | 0.41 [23] | 0.65 [23] |
+| eye view, MSAA 4x | 0.26 [11] | | 0.21 [13] | |
+
+0.90 has the lowest mean everywhere; its share over 2 levels is within 1 point of 0.85's (steep
+2.6 % against 1.7 %, sunset 3.6 % against 6.4 %). The eye view (MSAA 4x, the shipped eye path):
+the ground draws correctly, and the pre-pass goes 1.42 -> 0.63 ms, the frame 5.14 [4.76-5.24] ->
+4.33 [4.06-4.51] (-0.80; SSAO off 3.90 -> 3.91, unchanged; the transparent pass 0.80 either way).
+
+Structure shaders: only `structure_wall.gdshader` has the pattern (NORMAL_MAP and ROUGHNESS from two
+texture fetches, so they run in the pre-pass); the painterly, style and roof shaders write NORMAL in
+vertex() or a constant ROUGHNESS. Left alone: two fetches on a small share of the screen.
+
+Negative: the foliage's ORM and normal-map fetches in the normal-roughness pre-pass cost nothing
+measurable (a probe variant without them: pre-pass 1.385 -> 1.377 ms, within noise); its alpha
+fetch is needed for the cutout. Bent normals (BENT_NORMAL_MAP from the blended normal) widen the
+ambient change (mean 0.89 at home), so they are not used.
+
 ## Occlusion fade tiles (topic perfaudit, card occfade)
 
 The occlusion fade (`occlusion_fade_include.gdshaderinc`) tested every token in every tree and
@@ -4829,6 +4908,67 @@ Avatar 500 ran while the gate's GUT shards loaded the CPU: totals are not usable
 - **Next.** A light-space tile grid for the sun's shadow pass (0.47 ms at 32+ tokens); a grid
   anchored to the orthographic camera's view plane in world units, so pans and zooms need no rebuild
   (only rotation and token moves); and a cached per-token collect.
+
+## Ground-cover lighting (topic perfaudit, card foliagelight)
+
+Ground cover (the wind category "grass" except flowers: grass cards, sprig clumps, litter) draws
+on its own lean variant, `shaders/wind_foliage_ground.gdshader` and its no-AA twin
+(`FOLIAGE_GROUND_LEAN` in `wind_foliage_main.gdshaderinc`; picked by `WindFoliage.is_ground_cover`
+in `apply_material`, kept across the antialiasing swap by `META_GROUND`). Lambert, no specular
+lobe, no ORM or normal map fetch, no backlight, and none of the canopy fades' inputs (rest
+position, authored wind phase, eye light). Kept: the sun and its cast shadow, the ambient and SSAO,
+the base darkening, the ground look's tuft colour and the eye view's near grass. The cards'
+normals all point up and they carry no ORM or normal map, so the dropped terms showed nothing.
+
+Measured on a filled 320 ft map (temperate forest, seed 1234, valley), RTX 3080, 1920x1080,
+the player's settings (MSAA off, SSAO on, lo-fi on, shadow High), in-run A/B, 6 rounds (first
+dropped), `--gpu-profile`, medians [range] of the world viewport's GPU ms, delta against ref.
+Variants applied to the ground class only through the foliage probe's `swap` key
+(`tools/render_jobs/probes/foliage_perf.gd`: each material copied onto the variant shader):
+
+| Variant (round 2) | Home (ref 5.35) | Zoom 20 (ref 6.93) | Look at 1:1 |
+|---|---|---|---|
+| ref again (noise) | +0.015 | -0.014 | - |
+| unshaded albedo only (floor) | -0.445 | -0.839 | - |
+| A: Lambert, no specular, no ORM / normal map | -0.213 | -0.305 | same as current |
+| B: A with `vertex_lighting` | -0.103 | -0.230 | same as current |
+| C: unshaded, one tone per tuft from the sun | -0.262 | -0.446 | fails: loses every cast shadow, flat lime |
+| D: A plus no canopy-fade inputs (shipped) | -0.267 | -0.521 | same as current |
+| D on flowers too | -0.263 | -0.508 | - |
+
+Round 1 split the lean light: received shadows off saved 0.007 / 0.05 ms more than A, the
+ambient off 0.012 / 0.04 more, so the light itself is cheap; the saving is the ORM fetch (it feeds
+the prepass's normal-roughness buffer for SSAO: A's prepass is 0.08 / 0.18 ms shorter), the
+specular lobe and, for D, the varyings and vertex work the canopy fades need. Vertex lighting
+(B) loses to A: its opaque pass is no cheaper than the current one at zoom 20 (2.075 vs 2.064
+ms), since a 12-triangle card has as many vertices as it has lit fragments at that zoom.
+
+The swap itself carries an offset, so the shipped number comes from a run with copies on both
+sides (round 4, after merging main with the occlusion fade tiles; ref is the shipped build):
+
+| Round 4 | Home (ref 5.06) | Zoom 20 (ref 6.63) |
+|---|---|---|
+| ref again (noise) | +0.019 | +0.009 |
+| copies on the old shader | +0.054 | +0.178 |
+| copies on the ground shader | -0.126 | -0.363 |
+
+The ground shader saves 0.180 ms at home and 0.541 ms at zoom 20 against the old one, copy
+against copy (0.18 / 0.54 ms of a 5.1 / 6.8 ms frame); about a third of that on a default map.
+The copies themselves run 0.13 / 0.36 ms faster than the built materials of the same shader, for
+a reason not found yet (suspects: a property the copy leaves at its default, such as render
+priority or next pass, or a parameter written to the built materials every frame); round 3's
+direct A/B (built ground shader against copies on the old shader: -0.137 / -0.114) and round 4's
+(-0.054 / -0.178) both fit a 0.18 / 0.54 ms gain less that offset. The offset is a lead for a
+later card: whatever it is costs the built ground cover up to 0.36 ms at zoom 20. Raw tables and
+the contact sheets (columns current, A, B, C, D; rows home, zoom 4, a sun 12 degrees up, the eye
+view) are in the card's handoff folder.
+
+The global shader uniform buffer (`rendering/limits/global_shader_variables/buffer_size`) is
+262,144 slots (4 MB): every instance whose material has an instance uniform (the wind shaders'
+`grow`) takes 16, so the default 65,536 overflowed between 4,000 and 4,500 such instances
+("Too many instances using shader instance variables", measured with MeshInstance3D nodes in a
+SubViewport, as the game draws its world), and a filled 320 ft map has 2,824 scatter nodes.
+At 262,144, 16,000 instances drew with a clean log. `test_project_limits.gd` pins it.
 
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
@@ -5040,8 +5180,17 @@ placement counts matched the wave 1 runs to the byte). Host upload is that times
 Idle host upload at 200 tokens: 12,800 B/s and 100 messages/s per client before, so 12.8 / 38.4 /
 89.6 KB/s and 100 / 300 / 700 messages/s for 1 / 3 / 7 clients; after, 0 between heartbeats and
 157 B/s averaged (one 4.7 KB message per client per 30 s): 0.16 / 0.47 / 1.1 KB/s. The drag
-itself still sends one 128 B transform RPC per dragged token per 0.1 s (F-net-7's packed drag
-path is the remaining step; the batch flush is packed already).
+itself sent one 128 B transform RPC per dragged token per 0.1 s until card netverify (below).
+
+Single drag transforms packed (card netverify, F-net-7, 2026-11-08): the host's immediate send
+and its relay of a client's drag go as a one-token `TokenTransformPack` message through
+`_rpc_receive_transform_batch` (63 B with the RPC header, for a factory id) instead of the Variant
+`_rpc_receive_token_transform` (128 B). Same harness, `--peers=3 --opts=size=100,max_tokens=10`,
+drag of 10 tokens for 5 s with 10 on the board, host to one client: 430 messages 55,040 -> 27,047 B;
+the window (with one heartbeat chunk and one reconcile) 56,327 -> 28,340 B; ENet's own count with
+its headers 60,819 -> 32,824 B in 451 / 450 packets. Per dragged token per client: 1.28 -> 0.63
+KB/s. Message count unchanged (one per token per emit; folding a frame's tokens into one message
+would save only the per-message header).
 
 State size by token kind (`TokenStateWire`, a pure probe with random positions, so less
 compressible than the harness grid): 200 tokens 8.1 KB (identical avatars), 9.2 KB (pack
