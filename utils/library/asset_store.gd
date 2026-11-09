@@ -363,8 +363,7 @@ static func _parse(buffer: PackedByteArray, path: String, node_name: String) -> 
 			push_warning("AssetStore: node '%s' in %s is not at the origin" % [node_name, path])
 	scene.free()
 	# The runtime parse builds textures without mipmaps; the foliage shaders sample mipmapped.
-	# Loaded here, not named, so the start-up's script graph (test_boot_graph) does not grow.
+	# Loaded on first use, not named, so the start-up's script graph (test_boot_graph) does not grow.
 	if found != null and mips_enabled:
-		var mips: GDScript = load("res://utils/foliage_mips.gd")
-		mips.apply(found)
+		OnDemand.foliage_mips(found)
 	return found
