@@ -11,8 +11,8 @@ extends RefCounted
 ## that zoomed out the canopy hides most of the ground the cards lie on while each card is
 ## smaller on screen. Thinning to two thirds at the far end (it was half; measured numbers in
 ## PERFORMANCE.md) costs less GPU there and nothing at the zoom the table is played at, where
-## the ground cover is all visible at 1:1. The triangle budget this replaced counted triangles, which are not what foliage costs,
-## and never engaged on a reference map.
+## the ground cover is all visible at 1:1. The triangle budget this replaced counted triangles,
+## which are not what foliage costs, and never engaged on a reference map.
 ##
 ## No instance moves or fades: every chunk is shuffled at build (ScatterGlbUtils for a GLB's
 ## scatter, ScatterRows.instance_order for an authored map's, both deterministic and seeded by the

@@ -295,7 +295,9 @@ func _pop_in_beats(held: Array, tree: SceneTree) -> void:
 	var due: Array[float] = []
 	for i in total:
 		due.append(TokenSpawnQueue.pop_in_delay(i, total))
-	order.sort_custom(func(a: int, b: int) -> bool: return due[a] < due[b] or (due[a] == due[b] and a < b))
+	order.sort_custom(
+		func(a: int, b: int) -> bool: return due[a] < due[b] or (due[a] == due[b] and a < b)
+	)
 	var next := 0
 	while next < total:
 		var elapsed := Time.get_ticks_msec() / 1000.0 - start
