@@ -16,7 +16,8 @@ extends RefCounted
 
 ## Main-thread time per frame the authored scatter build (species resolution, then cells)
 ## and the terrain chunk build may take before yielding, so a painted map loads without a
-## long stall.
+## long stall. While the loading sheet covers the table the budget rises to
+## LoadPacing.COVERED_BUDGET_USEC (frame_budget_usec()).
 const FRAME_BUDGET_USEC: int = 8000
 ## Map-default lighting for a map with no GLB, written as the same scene extras a
 ## terrain-paint GLB carries (GlbUtils.extract_lighting_config reads them into the
@@ -90,6 +91,12 @@ var _prepared_water: Dictionary = {}
 
 func _init(scene_tree: SceneTree = null) -> void:
 	tree = scene_tree
+
+
+## The main-thread time a load slice may take this frame: FRAME_BUDGET_USEC, or more while the
+## loading sheet covers the table (LoadPacing).
+static func frame_budget_usec() -> int:
+	return LoadPacing.budget_usec(FRAME_BUDGET_USEC)
 
 
 ## Builds the map root from its files: the GLB (with its scatter filtered by the document's
@@ -381,7 +388,8 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 			return null
 		var start := Time.get_ticks_usec()
 		var batch: Array[Vector2i] = []
-		while next < chunk_cells.size() and Time.get_ticks_usec() - start < FRAME_BUDGET_USEC:
+		var budget := frame_budget_usec()
+		while next < chunk_cells.size() and Time.get_ticks_usec() - start < budget:
 			batch.assign([chunk_cells[next]])
 			terrain.rebuild_chunks(batch)
 			next += 1
@@ -480,7 +488,7 @@ func _build_authored_scatter_async(
 			assets[asset_id] = true
 	scatter.prepare_assets(assets.keys())
 	while scatter.has_prepared_species():
-		scatter.resolve_prepared(FRAME_BUDGET_USEC)
+		scatter.resolve_prepared(frame_budget_usec())
 		await tree.process_frame
 		if is_superseded.call():
 			return false
@@ -490,7 +498,8 @@ func _build_authored_scatter_async(
 	var next := 0
 	while next < keys.size():
 		var start := Time.get_ticks_usec()
-		while next < keys.size() and Time.get_ticks_usec() - start < FRAME_BUDGET_USEC:
+		var budget := frame_budget_usec()
+		while next < keys.size() and Time.get_ticks_usec() - start < budget:
 			scatter.build_cells({keys[next]: rows_by_cell[keys[next]]})
 			next += 1
 		await tree.process_frame
@@ -530,7 +539,7 @@ func fit_grid_ground_async(map: Node3D, game_map: GameMap) -> Dictionary:
 		grid.rows,
 		WaterSurface.WALKABLE_MASK
 	)
-	while not sampler.step(FRAME_BUDGET_USEC):
+	while not sampler.step(frame_budget_usec()):
 		await tree.process_frame
 		if not _still_installed(map, game_map):
 			return {}
@@ -583,7 +592,7 @@ func fit_dressing_ground_async(map: Node3D, game_map: GameMap, doc: MapDocument)
 	var sampler := DressingGround.begin(
 		doc, map.get_world_3d(), map.global_transform, top, excluded
 	)
-	while not sampler.step(FRAME_BUDGET_USEC):
+	while not sampler.step(frame_budget_usec()):
 		await tree.process_frame
 		if not _still_installed(map, game_map):
 			return {}
@@ -603,7 +612,7 @@ func fit_dressing_ground_async(map: Node3D, game_map: GameMap, doc: MapDocument)
 			doc.samples_z(),
 			WaterSurface.WALKABLE_MASK
 		)
-		while not grid.step(FRAME_BUDGET_USEC):
+		while not grid.step(frame_budget_usec()):
 			await tree.process_frame
 			if not _still_installed(map, game_map):
 				return {}

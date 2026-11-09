@@ -13,7 +13,8 @@ extends RefCounted
 ## frame installs at least one structure, so 128 structures need 128 frames at the very worst; the
 ## cap is above that and only guards against a node that stopped processing.
 const MAX_FRAMES: int = 600
-## Milliseconds of furnishing bakes a load frame spends (the layer's own _process spends 3).
+## Milliseconds of furnishing bakes a load frame spends (the layer's own _process spends 3);
+## more while the loading sheet covers the table (LoadPacing).
 const SETTLEMENT_BUDGET_MS: float = 8.0
 ## "No limit" for AuthoredStructures.install_pending.
 const NO_BUDGET_MS: float = 1.0e9
@@ -74,7 +75,7 @@ static func wait_settlements_async(
 		if frames >= MAX_FRAMES or not layer.is_inside_tree():
 			layer.flush()
 			break
-		layer.bake_for(SETTLEMENT_BUDGET_MS)
+		layer.bake_for(LoadPacing.budget_usec(int(SETTLEMENT_BUDGET_MS * 1000.0)) / 1000.0)
 		frames += 1
 		await tree.process_frame
 		if not is_instance_valid(root):

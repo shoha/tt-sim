@@ -10,7 +10,8 @@ Conventions on 2026-10-09).
 
 | File | Class | Role |
 |------|-------|------|
-| `scenes/terrain/authored_terrain.gd` | `AuthoredTerrain` | `create(doc)`: one `MeshInstance3D` per 10 m `ScatterChunker` cell, the collision body and the ground material; `queue_heights`, `process_heights`, `settle_heights`, `update_collision`, `update_ground_region`, `update_biome_region` |
+| `scenes/terrain/authored_terrain.gd` | `AuthoredTerrain` | `create(doc)`: one `MeshInstance3D` per 10 m `ScatterChunker` cell, the collision and the ground material; `queue_heights`, `process_heights`, `settle_heights`, `update_collision`, `mark_collision` / `flush_collision`, `update_ground_region`, `update_biome_region` |
+| `scenes/terrain/terrain_collision.gd` | `TerrainCollision` | The collision: square `HeightMapShape3D` tiles of 32 quads, one `StaticBody3D` each; `mark(rect)` and `flush(doc)` refill only the tiles an edit touched |
 | `utils/terrain_mesh_builder.gd` | `TerrainMeshBuilder` | Pure geometry; `raycast` |
 | `utils/scatter_chunker.gd` | `ScatterChunker` | The 10 m cells |
 | `shaders/authored_ground.gdshader` | | The opaque ground: tiles the palette `base_surface` with triangle-grid anti-tiling |
@@ -37,7 +38,16 @@ Conventions on 2026-10-09).
 
 - Geometry: shared border vertices and grid-wide normals; it lives in the pure
   `TerrainMeshBuilder`.
-- Collision: a layer-1 `StaticBody3D` with a `HeightMapShape3D` scaled by the sample step.
+- Collision (`TerrainCollision`, card authcollide): square `HeightMapShape3D` tiles of 32 quads
+  (8 m), one layer-1 `StaticBody3D` each, under a `TerrainCollision` node scaled by the sample
+  step. Tiles share border samples and the last tile on an axis ends on the map edge (overlapping
+  its neighbour), so rays on a border hit the same triangles. Square because Jolt builds a
+  heightfield only for a square shape. A height edit marks the tiles holding its changed samples
+  (`HeightEditor.queue_heights` -> `mark_collision`); `HeightEditor.work()` refills only those once
+  the stroke has ended (0.3-0.95 ms at any map size, against 0.7 / 2.9 / 6.9 ms for the whole grid
+  at 100 / 200 / 320 ft: `docs/PERFORMANCE.md` "Collision tiles"). Code that excludes the ground
+  from a query takes every tile body (`get_collision_bodies()`; the eye view reads the node's
+  children).
 - Scatter row identity is X, Z and scale, never Y (`ScatterRows.row_keys`), and the generator
   reads heights on the terrain's triangles (`ScatterGenerator.triangle_height`).
 - Ground layers (index form since ground layers G3, 2026-10-13; design in
@@ -184,9 +194,10 @@ ground of grassland and savanna at seed 1234 renders bit-identical to main's).
 ## Authoring
 
 - After a height edit call `queue_heights(sample_rect)` + `process_heights(budget)` (in-place
-  vertex updates), `settle_heights()` when the edit ends, and `update_collision()` once (not
-  per frame: 2.3 ms; mid-stroke the brush uses `TerrainMeshBuilder.raycast` through
-  `AuthoringEditor.raycast_ground`).
+  vertex updates), `settle_heights()` when the edit ends, and `mark_collision(sample_rect)` per
+  edit plus `flush_collision()` once when it ends (HeightEditor does both; mid-stroke the brush
+  uses `TerrainMeshBuilder.raycast` through `AuthoringEditor.raycast_ground`). `update_collision()`
+  refills every tile (build, tests).
 - Sculpt strokes are `AuthoringEditor.begin_height_stroke()` (`HeightStroke`, rules in
   `HeightBrush`); plants and props follow through `GroundSnap` + `AuthoredScatter.move_rows`.
   The Sculpt tool's operations are in [authoring.md](authoring.md).

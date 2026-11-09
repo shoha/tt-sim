@@ -1,0 +1,21 @@
+{
+  "out_dir": "render_jobs/perfaudit_system_soak",
+  "timeout_s": 1800,
+  "hang_s": 150,
+  "steps": [
+    {"op": "wait_title"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "load", "new": {"biome": "temperate_forest_summer_s1", "size": 150, "seed": 1234, "landform": "valley"}},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "await"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "await"},
+    {"op": "no_autosave"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "save", "folder": "_perfaudit_sys_soak"},
+    {"op": "title"},
+    {"op": "wait", "s": 1.0},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "soak", "minutes": 6.0, "folders": ["_perfaudit_sys_soak"], "tokens": 8},
+    {"op": "expand", "values": ["1", "2", "3", "4", "5", "6", "7", "8"], "template": [
+      {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "await"}
+    ]},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "orphans"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perfaudit_system.gd", "action": "cleanup"}
+  ]
+}

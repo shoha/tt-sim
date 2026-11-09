@@ -223,8 +223,13 @@ static func _dress_mesh(mi: MeshInstance3D, highlighted: bool, bounds: Dictionar
 ## material (its first surface's), or null for neither.
 static func source_of(mi: MeshInstance3D) -> Variant:
 	var own := mi.material_override
-	if own is ShaderMaterial:
-		var palette: Variant = (own as ShaderMaterial).get_shader_parameter("palette")
+	# An avatar's baked figure (AvatarTokenView) carries its parts' materials as surface
+	# overrides; every part of a figure shares its palette.
+	var first: Material = own
+	if first == null and mi.get_surface_override_material_count() > 0:
+		first = mi.get_surface_override_material(0)
+	if first is ShaderMaterial:
+		var palette: Variant = (first as ShaderMaterial).get_shader_parameter("palette")
 		if palette != null:
 			return palette
 	var src: Material = own
