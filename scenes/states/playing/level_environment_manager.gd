@@ -426,7 +426,10 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		# switching away from SHADOW_ORTHOGONAL is what made shadows appear,
 		# most likely because the single-frustum fit degenerates against this
 		# project's orthogonal Camera3D (see the "Near-plane culling fix" note
-		# in game_map.gd for its unusual near=0.001/far=1000 range).
+		# in game_map.gd for its unusual near=0.001/far=1000 range). That no longer holds
+		# with today's camera rig: the Shadow cascades setting's Single choice
+		# (ShadowCascades.SINGLE) uses SHADOW_ORTHOGONAL and draws shadows at the home view
+		# and zoom 20 (card gpuoptions, 2026-11-09), only softer and fainter far away.
 		#
 		# Godot's engine defaults for the biases (shadow_bias=0.1,
 		# shadow_normal_bias=2.0) are tuned for room/building-scale geometry.
@@ -444,6 +447,9 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		_sun_light.shadow_normal_bias = SUN_SHADOW_NORMAL_BIAS
 		_sun_light.directional_shadow_max_distance = SUN_SHADOW_MAX_DISTANCE
 		_sun_light.directional_shadow_blend_splits = SUN_SHADOW_BLEND_SPLITS
+		# The Shadow cascades setting: its default (Blended) is exactly the two lines above
+		# (four splits, SUN_SHADOW_BLEND_SPLITS); the other choices drop the blend or the splits.
+		ShadowCascades.apply_to(_sun_light, ShadowCascades.current)
 		world_viewport.add_child(_sun_light)
 	_configure_sun_light(level_data.visual_settings.sun)
 	_sun_azimuth_deg = level_data.visual_settings.sun.azimuth_degrees

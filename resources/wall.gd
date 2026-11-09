@@ -37,7 +37,7 @@ const ROW_SIDES := 3
 ## index into it and a saved map stores the index, so the order never changes): 0 mixed, 1 terrace,
 ## 2 guild houses, 3 village, 4 cottages, 5 pueblo village, 6 villa street, 7 alpine hamlet,
 ## 8 canal row, 9 tudor lane, 10 minka village, 11 modern row (StreetSpeciesInfo).
-const ROW_PRESETS := ProcgenRow.PRESET_MODERN + 1
+const ROW_PRESETS := StructureProcgen.ROW_PRESET_MODERN + 1
 const MAX_SEED := 1000000000
 ## A segment shorter than this is not a wall; the whole line may not exceed MAX_LENGTH_M.
 const MIN_SEGMENT_M := 0.3

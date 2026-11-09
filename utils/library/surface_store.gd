@@ -62,7 +62,10 @@ static var _hashes: Dictionary = {}
 ## imports.
 static var stats: Dictionary = _zero_stats()
 ## The lane that bakes maps ahead of their first use (prebake()), made on the first prebake.
-static var _prebake: SurfacePrebake = null
+static var _prebake: Variant = null  # a SurfacePrebake, loaded on first use (start-up size)
+## Held around every bake (compression and cache write), on any thread: two compressions at once
+## differ in their bytes. Lives here, not in SurfacePrebake, so start-up never loads that script.
+static var compress_lock := Mutex.new()
 ## False turns prebake() into a no-op (every map bakes where it is first asked for): the
 ## performance harness's in-run A/B switch (perfaudit_system.gd `prebake`).
 static var prebake_enabled: bool = true
@@ -204,7 +207,7 @@ static func prebake(
 			if _images.has(file):
 				continue
 			if _prebake == null:
-				_prebake = SurfacePrebake.new()
+				_prebake = (load("res://utils/library/surface_prebake.gd") as GDScript).new()
 			_prebake.add(
 				{
 					"file": file,
@@ -503,7 +506,7 @@ static func _baked(entry: Dictionary) -> Image:
 		return _images[file]
 	var runtime := String(entry["surface"])
 	if _prebake != null:
-		var lane := _prebake.take(file)
+		var lane: Dictionary = _prebake.take(file)
 		if not lane.is_empty():
 			if not _hashes.has(runtime):
 				_hashes[runtime] = String(lane["hash"])
@@ -562,7 +565,7 @@ static func _count(loaded: Dictionary, baked_key: String, hit_key: String) -> vo
 ## ("baked"); image null and outcome "failed" when the PNG is missing, hostile or unreadable;
 ## rejected true when a cache file was there but unusable. It reads and writes no table of the
 ## store, so the prebake lane runs it on its worker; the bake and the cache write hold
-## SurfacePrebake.compress_lock (two compressions at once differ in their bytes).
+## compress_lock (two compressions at once differ in their bytes).
 static func load_map(
 	file: String, kind: String, library_id: String, name: String, hash_text: String
 ) -> Dictionary:
@@ -586,11 +589,11 @@ static func load_map(
 	var decoded := Image.new()
 	if decoded.load_png_from_buffer(FileAccess.get_file_as_bytes(file)) != OK:
 		decoded = null
-	SurfacePrebake.compress_lock.lock()
+	compress_lock.lock()
 	var baked := SurfaceBake.bake(decoded, kind)
 	if baked != null:
 		SurfaceCache.write(cache_path, baked)
-	SurfacePrebake.compress_lock.unlock()
+	compress_lock.unlock()
 	if baked == null:
 		push_warning("SurfaceStore: %s could not be decoded" % file)
 		return out

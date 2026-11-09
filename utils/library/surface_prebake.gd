@@ -30,9 +30,6 @@ extends RefCounted
 
 enum State { QUEUED, RUNNING, DONE }
 
-## Held around every bake (compression and cache write), on any thread: see the header.
-static var compress_lock := Mutex.new()
-
 var _mutex := Mutex.new()
 ## Absolute PNG -> {state, job, result}: `job` as add() took it, `result` load_map's plus "hash".
 var _entries: Dictionary = {}

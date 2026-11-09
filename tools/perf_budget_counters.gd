@@ -41,6 +41,8 @@ const LIMITS := {
 	"ground_priority": 1.0,
 	"global_uniform_slots": 262144.0,
 	"default_shadow_tier": float(RenderingServer.SHADOW_QUALITY_SOFT_HIGH),
+	"default_shadow_cascades": float(ShadowCascades.BLENDED),
+	"default_foliage_edges": float(FoliageEdges.SMOOTH),
 }
 
 ## Tokens on the table for the net counters, laid out on the perfaudit net harness's 1.25 m grid.
@@ -410,6 +412,22 @@ static func render_rows() -> Array[Dictionary]:
 			"",
 			"High; Ultra costs 0.53-0.63 ms more for no visible gain",
 			"shadowtier"
+		),
+		_row(
+			"default_shadow_cascades",
+			"Default shadow cascades (Blended = 0)",
+			ShadowCascades.DEFAULT,
+			"",
+			"Blended, the shipped look; Unblended saves 0.4-0.5 ms, Single 0.5-1.0, board first",
+			"gpuoptions"
+		),
+		_row(
+			"default_foliage_edges",
+			"Default foliage edges under MSAA (Smooth = 0)",
+			FoliageEdges.DEFAULT,
+			"",
+			"Smooth, the shipped look; Fast saves about 0.6 ms with MSAA on, board first",
+			"gpuoptions"
 		),
 	]
 

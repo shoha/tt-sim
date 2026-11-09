@@ -820,6 +820,10 @@ independent layers.
   resolution. Auto draws no more pixels than the screen shows (the full render at
   1080p and up, the window's size below). Costs, look and the picking check:
   `docs/PERFORMANCE.md` "Render scale (topic perfaudit, card renderscale)".
+- Shadow cascades (`ShadowCascades`, default Blended, the sun described below) and Foliage edges
+  (`FoliageEdges`, default Smooth) are two lower tiers for slow GPUs: Unblended drops the cascade
+  blend, Single uses one cascade, and Fast keeps the foliage's plain cutout under MSAA. Costs and
+  look: `docs/PERFORMANCE.md` "Shadow cascades and foliage edges".
 
 The sun blends its shadow cascades (`directional_shadow_blend_splits`, `SUN_SHADOW_BLEND_SPLITS` in
 `level_environment_manager.gd`, 2026-11-02). Without it, far trees' shadows were missing at the
