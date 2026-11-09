@@ -2,10 +2,11 @@
 // authored terrain's rule fields, curvature and steepness nearby, over a rectangle of the height
 // grid. AuthoredTerrain.settle_heights runs it at every sculpt stroke end, carve and undo over the
 // edit grown by the curvature radius (4.4-4.8 ms in GDScript at every map size), and the load and
-// the scatter's GDScript fallbacks run it over whole grids and windows. Ported line for line from
-// the GDScript, as scatter_grids.cpp's copy for the scatter window was, so the values are the same
-// bit for bit: every sum and quotient in double, every stored value rounded to float, expressions
-// grouped as GDScript groups them (test_terrain_fields_native checks it on random maps and rects).
+// the scatter's GDScript fallbacks run it over whole grids and windows; the native scatter job's
+// window grids (scatter_grids.cpp) call it too. Ported line for line from the GDScript, so the
+// values are the same bit for bit: every sum and quotient in double, every stored value rounded to
+// float, expressions grouped as GDScript groups them (test_terrain_fields_native checks it on
+// random maps and rects, test_scatter_native's grid parity through the scatter window).
 #pragma once
 
 #include <cstdint>

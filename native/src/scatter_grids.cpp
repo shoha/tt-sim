@@ -9,6 +9,7 @@
 // GDScript computed these in about 24 ms of a 44 ms job on the probe cell; here they cost well
 // under a millisecond.
 #include "scatter_core.h"
+#include "terrain_fields.h"
 
 #include <godot_cpp/variant/packed_int32_array.hpp>
 #include <godot_cpp/variant/rect2i.hpp>
@@ -53,93 +54,33 @@ struct Doc {
 	double start_cos = 0.0, end_cos = 0.0;
 };
 
-/// TerrainRules.sample_fields: curvature and steepness over `rect` (row-major over its
-/// intersection with the grid), written into the whole-grid arrays as store_fields does. Either
-/// output may be null.
+/// TerrainRules.sample_fields (terrain_fields.cpp, the one port of it) over `rect` clipped to the
+/// grid, written into the whole-grid arrays as store_fields does. Either output may be null.
 void sample_fields(const Doc &doc, Rect2i rect, std::vector<float> *curvature_grid, std::vector<float> *steep_grid) {
 	const int64_t columns = doc.columns, rows = doc.rows;
-	const float *heights = doc.heights;
 	Rect2i out = rect.intersection(Rect2i(0, 0, (int32_t)columns, (int32_t)rows));
 	if (!out.has_area()) {
 		return;
 	}
-	const int64_t r = doc.r;
-	const int64_t x_lo = out.position.x - r;
-	const int64_t x_hi = out.position.x + out.size.x - 1 + r;
-	const int64_t z_lo = out.position.y - r;
-	const int64_t z_hi = out.position.y + out.size.y - 1 + r;
-	const int64_t in_rows = z_hi - z_lo + 1;
+	FieldsInput in;
+	in.heights = doc.heights;
+	in.columns = columns;
+	in.rows = rows;
+	in.step_x = doc.step.x;
+	in.step_y = doc.step.y;
+	in.r = doc.r;
+	in.start_cos = doc.start_cos;
+	in.end_cos = doc.end_cos;
 	const int64_t width = out.size.x;
-	const int64_t in_cols = x_hi - x_lo + 1;
-	std::vector<float> ny_window((size_t)(in_rows * in_cols));
-	const double start_cos = doc.start_cos;
-	const double inv_span = 1.0 / (doc.end_cos - start_cos);
-	const double step_x = doc.step.x, step_y = doc.step.y;
-	for (int64_t wz = 0; wz < in_rows; wz++) {
-		int64_t sz = clampi(z_lo + wz, 0, rows - 1);
-		int64_t z0 = imax(sz - 1, 0);
-		int64_t z1 = imin(sz + 1, rows - 1);
-		double inv_dz = 1.0 / ((double)(z1 - z0) * step_y);
-		int64_t here = sz * columns;
-		for (int64_t wx = 0; wx < in_cols; wx++) {
-			int64_t sx = clampi(x_lo + wx, 0, columns - 1);
-			int64_t x0 = imax(sx - 1, 0);
-			int64_t x1 = imin(sx + 1, columns - 1);
-			double slope_x = ((double)heights[here + x1] - (double)heights[here + x0]) / ((double)(x1 - x0) * step_x);
-			double slope_z = ((double)heights[z1 * columns + sx] - (double)heights[z0 * columns + sx]) * inv_dz;
-			ny_window[wz * in_cols + wx] = (float)(1.0 / std::sqrt(1.0 + slope_x * slope_x + slope_z * slope_z));
+	std::vector<float> curvature((size_t)(width * out.size.y)), steep((size_t)(width * out.size.y));
+	rule_fields(in, out, curvature.data(), steep.data());
+	for (int64_t oz = 0; oz < out.size.y; oz++) {
+		const int64_t g = (out.position.y + oz) * columns + out.position.x;
+		if (curvature_grid != nullptr) {
+			std::memcpy(curvature_grid->data() + g, curvature.data() + oz * width, (size_t)width * sizeof(float));
 		}
-	}
-	auto tail = [&](int64_t i) -> double {
-		return gclamp(((double)ny_window[i] - start_cos) * inv_span, 0.0, 1.0);
-	};
-	// Horizontal pass: per window row, box sums of h and of the slope tail per output column.
-	std::vector<float> h_rows((size_t)(in_rows * width)), t_rows((size_t)(in_rows * width));
-	for (int64_t wz = 0; wz < in_rows; wz++) {
-		int64_t sz = clampi(z_lo + wz, 0, rows - 1);
-		int64_t here = sz * columns;
-		int64_t base = wz * in_cols;
-		double sum_h = 0.0, sum_t = 0.0;
-		for (int64_t k = 0; k < 2 * r + 1; k++) {
-			sum_h += (double)heights[here + clampi(x_lo + k, 0, columns - 1)];
-			sum_t += tail(base + k);
-		}
-		for (int64_t ox = 0; ox < width; ox++) {
-			h_rows[wz * width + ox] = (float)sum_h;
-			t_rows[wz * width + ox] = (float)sum_t;
-			if (ox + 1 < width) {
-				int64_t drop = ox;
-				int64_t add = ox + 2 * r + 1;
-				sum_h += ((double)heights[here + clampi(x_lo + add, 0, columns - 1)] -
-						(double)heights[here + clampi(x_lo + drop, 0, columns - 1)]);
-				sum_t += (tail(base + add) - tail(base + drop));
-			}
-		}
-	}
-	// Vertical pass, stored into the whole grid (store_fields).
-	const double inv_area = 1.0 / (double)((2 * r + 1) * (2 * r + 1));
-	for (int64_t ox = 0; ox < width; ox++) {
-		double sum_h = 0.0, sum_t = 0.0;
-		for (int64_t k = 0; k < 2 * r + 1; k++) {
-			sum_h += (double)h_rows[k * width + ox];
-			sum_t += (double)t_rows[k * width + ox];
-		}
-		for (int64_t oz = 0; oz < out.size.y; oz++) {
-			int64_t wz = oz + r;
-			int64_t sx = out.position.x + ox;
-			int64_t sz = out.position.y + oz;
-			double ny = (double)ny_window[wz * in_cols + (sx - x_lo)];
-			int64_t g = sz * columns + sx;
-			if (curvature_grid != nullptr) {
-				(*curvature_grid)[g] = (float)(((double)heights[g] - sum_h * inv_area) * ny);
-			}
-			if (steep_grid != nullptr) {
-				(*steep_grid)[g] = (float)(sum_t * inv_area);
-			}
-			if (oz + 1 < out.size.y) {
-				sum_h += (double)h_rows[(oz + 2 * r + 1) * width + ox] - (double)h_rows[oz * width + ox];
-				sum_t += (double)t_rows[(oz + 2 * r + 1) * width + ox] - (double)t_rows[oz * width + ox];
-			}
+		if (steep_grid != nullptr) {
+			std::memcpy(steep_grid->data() + g, steep.data() + oz * width, (size_t)width * sizeof(float));
 		}
 	}
 }
