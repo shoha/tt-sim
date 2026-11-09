@@ -403,9 +403,9 @@ func add_token_to_level(
 	if GameState.has_authority():
 		GameState.register_token_from_board_token(token)
 		_connect_token_state_signals(token)
-		# Broadcast new token to clients (use full state so clients can create the token)
+		# Send clients this token alone (its state and permissions), not the whole table
 		if NetworkManager.is_host():
-			NetworkStateSync.broadcast_full_state()
+			NetworkStateSync.broadcast_token_added(token.network_id)
 
 
 ## Sync placement data from a token's current state
@@ -541,7 +541,7 @@ func _on_removal_undo_requested(action: Dictionary) -> void:
 	_connect_token_context_menu(token)
 	token.play_spawn_animation()
 	if NetworkManager.is_host():
-		NetworkStateSync.broadcast_full_state()
+		NetworkStateSync.broadcast_token_added(token.network_id)
 
 
 ## Track a token re-created by undo. Similar to add_token_to_level but

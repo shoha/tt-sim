@@ -825,17 +825,58 @@ NetworkManager.game_sync.token_transform_received.connect(func(id, pos, rot, sca
 NetworkStateSync.broadcast_token_removed(network_id)
 ```
 
+### Token adds and the table state on the wire (perfaudit netspawn, 2026-11)
+
+A placement (and an undone removal) sends that token alone:
+`NetworkStateSync.broadcast_token_added(network_id)` sends
+`GameState.get_tokens_state_dict([id])`, the token's full-state entry with its permission
+entries. Until 2026-11 every placement re-sent the whole state to every client (96 KB per click at
+200 avatars, past Steam's 512 KB queue in four quick clicks).
+
+Every token state message, the full state and an add alike, is one `TokenStateWire` message:
+`[u8 format][u8 kind FULL or ADD][u32 raw size][zstd of var_to_bytes(state)]`, cut into chunks of
+at most 64 KB (`NetworkManager._rpc_receive_state_chunk(serial, part, parts, data)`, reliable) and
+reassembled by `TokenStateWire.Assembler`. All chunks of a message leave in one call, so no other
+token message comes between them on the ordered reliable channel: an add or a removal sent after
+a state was taken always arrives after it. A FULL message emits `game_state_received` (merged as
+before); an ADD emits `tokens_added_received`, applied by `GameState.upsert_state_dict` (adds or
+updates, removes nothing, keyed by network_id) and `RootNetworkHandler.apply_tokens_to_board` for
+those ids. The full state's merge runs the same per-token code, so an add that crosses a full state
+carrying the same token is harmless whichever lands first.
+
+Sizes (host to one client): one add 423 B on average in the harness (avatar tokens; about 430 B
+for a pack token, 730 B for an avatar with a full distinct recipe); the full state at 200 tokens
+4.6 to 19 KB (identical avatars to distinct full recipes; 154 to 302 KB as a Variant before).
+`TokenStateWire.SEND_BUDGET_BYTES` (192 KB: the 512 KB queue less AssetStreamer's 256 KB window and
+one 64 KB live edit chunk) logs a warning past it; at 40 to 97 B per token compressed that is
+2,000 to 4,900 tokens. `docs/PERFORMANCE.md` "Token sync bytes" has the before and after table.
+
 ### Periodic Reconciliation
 
-The host runs a 2-second reconciliation timer that syncs token positions to all clients. This catches any drift between GameState and the visual tokens.
+The host ticks every 2 s (`NetworkTokenSync.RECONCILIATION_INTERVAL`). GameState takes each
+token's transform and clients get only the tokens that moved by more than
+`TokenTransformPack.EPSILON` since the last tick (`TokenTransformPack.DirtySet`), in one packed
+reliable message (`NetworkGameSync.broadcast_reconcile` -> `_rpc_receive_reconcile`); a table at
+rest sends nothing. Every 15th tick (`HEARTBEAT_TICKS`, 30 s) the full state goes instead, the
+safety net: a transform lost on the unreliable channel, or anything a dropped message left stale,
+heals within 30 s. Before 2026-11 every tick sent one 128 B transform RPC per token per client
+(200 tokens and 7 clients: 89.6 KB/s and 700 messages/s of host upload at rest).
+
+`TokenTransformPack`: `[u8 format][u16 count]` then per token `[u8 id length][network_id UTF-8][9 x
+f32 position, rotation, scale]`, 37 B plus the id (about 57 B). A drag's batch
+(`NetworkStateSync._flush_pending_transforms` -> `broadcast_transform_batch`, unreliable) uses the
+same layout, split under the MTU (`UNRELIABLE_BYTES`), in place of the Variant batch (180 B per
+token). Both arrive as `transform_batch_received` in the old dictionary shape.
 
 **Important:** Reconciliation skips tokens that are currently under client authority:
 - Tokens drag-locked by a non-host peer (the client is actively dragging)
 - Tokens still network-interpolating on the host (client just dropped, host visual hasn't converged)
 
-This prevents the host's interpolating visual position from overwriting GameState with stale data, which would cause tokens to snap back on the client.
+This prevents the host's interpolating visual position from overwriting GameState with stale data, which would cause tokens to snap back on the client. A client ignores network targets for a token it is dragging or settling (`DraggableToken.set_network_target`), so the heartbeat never yanks a live drag.
 
-Reconciliation uses per-token transform broadcasts (unreliable channel) rather than full state blasts, avoiding the destructive clear-and-rebuild path that would reset client-side permissions and drag locks.
+Still sent whole, unchanged (found while here, not changed): `LevelLoader` broadcasts the full state
+on every level save (`level_loader.gd`, now compressed); a party's set-out sends it once
+(`SessionParty._ground_and_send`, a table change).
 
 ---
 
