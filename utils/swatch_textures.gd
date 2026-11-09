@@ -118,8 +118,9 @@ static func prebake_albedos(
 	for role in roles:
 		for surface in PaletteLibrary.surfaces_with_role(role, root):
 			albedos.append(String(surfaces.get(surface, {}).get("albedo", "")))
-	if queue and SurfaceWait.enabled:
-		SurfaceStore.prebake_paths(root, albedos, SurfaceStore.PRIORITY_AHEAD)
+	if queue:
+		var waits: Variant = load(SurfaceStore.SURFACE_WAIT)
+		waits.queue(root, albedos, SurfaceStore.PRIORITY_AHEAD)
 	return albedos
 
 

@@ -44,6 +44,8 @@ const SCHEME := LibraryIds.SURFACE_SCHEME
 const PRIORITY_LOAD := 0
 const PRIORITY_SHOWN := 1
 const PRIORITY_AHEAD := 2
+## SurfaceWait's script, loaded on first use by start-up code (the start-up script graph).
+const SURFACE_WAIT := "res://utils/library/surface_wait.gd"
 
 ## "<root>|<palette-relative path>" -> {surface: runtime name, kind}.
 static var _paths: Dictionary = {}

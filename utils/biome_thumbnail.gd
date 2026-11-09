@@ -78,7 +78,8 @@ static func of(
 		placeholder.fill(ThemeColors.SKY_LOW)
 		var shown := ImageTexture.create_from_image(placeholder)
 		_cache[key] = shown
-		SurfaceWait.call_when_ready(
+		var waits: Variant = load(SurfaceStore.SURFACE_WAIT)
+		waits.call_when_ready(
 			root,
 			PackedStringArray([_ground_albedo(biome, root)]),
 			SurfaceStore.PRIORITY_SHOWN,

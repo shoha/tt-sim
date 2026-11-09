@@ -12,6 +12,9 @@ extends RefCounted
 ## (MapSourceLoader.frame_budget_usec) and at least one piece. A picture made this way is shown
 ## at once as a placeholder texture the work repaints in place (ImageTexture.set_image keeps the
 ## texture, so every control showing it updates): BiomeThumbnail.of's `deferred`.
+##
+## Start-up code reaches it by path (SURFACE_WAIT, load() on first use), not by class name, so the
+## start-up script graph does not grow (test_boot_graph.gd).
 
 ## False runs every piece of work at once, its bakes in the caller's frame as before card
 ## authbake: the performance harness's in-run A/B switch (perfaudit_system.gd `prebake`
@@ -38,6 +41,13 @@ static func call_when_ready(
 			return false
 	work.call()
 	return true
+
+
+## Queues the maps of `relatives` (palette-relative paths under `root`) on the lane at `priority`
+## while panels' pictures use it (enabled), for work that waits on them itself (the swatches).
+static func queue(root: String, relatives: PackedStringArray, priority: int) -> void:
+	if enabled:
+		SurfaceStore.prebake_paths(root, relatives, priority)
 
 
 ## How many pieces of work wait.
