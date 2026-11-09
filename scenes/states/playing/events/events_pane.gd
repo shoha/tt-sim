@@ -136,11 +136,18 @@ var fire_pane: FireToolPane
 var water_pane: WaterToolPane
 var bridge_pane: BridgeToolPane
 var wall_pane: WallToolPane
-var structure_pane: StructureToolPane
+## The Building brush's tiles, built on first use (show_tool or this property): 101 structure
+## thumbnails, about a second of the first authoring open's first frame for a pane authoring never
+## shows (the game map's play drawer is built in authoring too; perfaudit F-system-2).
+var structure_pane: StructureToolPane:
+	get:
+		_ensure_structure_options()
+		return _structure_pane
 ## Start a fire's Shape field (IGNITE_SHAPE_TILES), and the shape it shows.
 var ignite_shape_field: TileField
 var ignite_shape: int = IgniteMode.Shape.CIRCLE
 
+var _structure_pane: StructureToolPane = null
 ## Each brush's controls by tool id; only the picked brush's show, in _options_holder.
 var _options: Dictionary = {}
 var _options_holder: VBoxContainer
@@ -197,6 +204,8 @@ func preset_ids() -> Array[StringName]:
 ## field, its tile pressed while `pressed` (it is out, or waits on a pick in its controls).
 ## A preset's Advanced holds the size alone (no strength: an event has none). Silent.
 func show_tool(tool_id: StringName, pressed: bool = true) -> void:
+	if tool_id == StructureTool.ID:
+		_ensure_structure_options()
 	for id in tool_ids():
 		tool_field.tiles.set_tile_on(id, pressed and id == tool_id)
 	for id in preset_ids():
@@ -333,10 +342,22 @@ func _build_options() -> void:
 	var listed: Array[ToolDescriptor] = EventPresets.all().duplicate()
 	listed.append_array(ToolRegistry.tools(ToolDescriptor.PLAY))
 	for tool in listed:
+		if tool.id == StructureTool.ID:
+			continue  # built on first use (structure_pane)
 		var box := _build_tool_options(tool.id)
 		if box != null:
 			holder.add_child(box)
 			_options[tool.id] = box
+
+
+## Builds the Building brush's options into the holder, hidden, the first time they are needed.
+func _ensure_structure_options() -> void:
+	if _structure_pane != null or _options_holder == null:
+		return
+	var box := _build_tool_options(StructureTool.ID)
+	box.visible = false
+	_options_holder.add_child(box)
+	_options[StructureTool.ID] = box
 
 
 func _build_tool_options(tool_id: StringName) -> Control:
@@ -374,12 +395,13 @@ func _build_tool_options(tool_id: StringName) -> Control:
 			wall_pane.preset_selected.connect(wall_preset_selected.emit)
 			return wall_pane
 		StructureTool.ID:
-			structure_pane = StructureToolPane.new()
-			structure_pane.get_node("StructureHeader").visible = false
-			(structure_pane.get_node("StructureHint") as Label).text = String(TOOL_HINTS[tool_id])
-			structure_pane.structure_selected.connect(structure_selected.emit)
-			structure_pane.reroll_requested.connect(structure_reroll_requested.emit)
-			return structure_pane
+			var made := StructureToolPane.new()
+			made.get_node("StructureHeader").visible = false
+			(made.get_node("StructureHint") as Label).text = String(TOOL_HINTS[tool_id])
+			made.structure_selected.connect(structure_selected.emit)
+			made.reroll_requested.connect(structure_reroll_requested.emit)
+			_structure_pane = made
+			return made
 	var box := VBoxContainer.new()
 	box.name = String(tool_id).to_pascal_case() + "Options"
 	# The gesture line belongs to the group under it (S2), but its tiles' heading still has
