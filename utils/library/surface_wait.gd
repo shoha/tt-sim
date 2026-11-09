@@ -43,11 +43,18 @@ static func call_when_ready(
 	return true
 
 
-## Queues the maps of `relatives` (palette-relative paths under `root`) on the lane at `priority`
-## while panels' pictures use it (enabled), for work that waits on them itself (the swatches).
-static func queue(root: String, relatives: PackedStringArray, priority: int) -> void:
-	if enabled:
-		SurfaceStore.prebake_paths(root, relatives, priority)
+## Runs `work` (func() -> void) in a later frame, within that frame's budget, behind the work
+## already waiting: a picture painted from the maps' files (SurfaceStore.picture_image, which
+## never bakes) still costs a few ms, so a panel of them spreads over frames (card coldopen).
+## Runs it at once when not enabled.
+static func later(work: Callable) -> void:
+	if not enabled:
+		work.call()
+		return
+	_waiting.append({"root": "", "relatives": PackedStringArray(), "work": work})
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and not tree.process_frame.is_connected(_poll):
+		tree.process_frame.connect(_poll)
 
 
 ## How many pieces of work wait.

@@ -288,7 +288,8 @@ func test_panel_work_waits_for_the_lane() -> void:
 
 
 ## Card authbake: a deferred biome picture is a placeholder that repaints itself to exactly the
-## picture of() paints at once.
+## picture of() paints at once. Card coldopen: in a later frame, from the ground albedo's file,
+## with nothing baked or queued on the lane.
 func test_a_deferred_biome_picture_repaints_to_the_same_pixels() -> void:
 	_cold("thumb")
 	BiomeThumbnail._cache.clear()
@@ -296,9 +297,10 @@ func test_a_deferred_biome_picture_repaints_to_the_same_pixels() -> void:
 	var biome: Dictionary = PaletteLibrary.biomes(root)[0]
 	var shown := BiomeThumbnail.of(biome, 28, root, true)
 	assert_eq(SurfaceStore.stats["bakes"], 0, "nothing baked in the caller's frame")
-	assert_eq(SurfaceWait.waiting(), 1, "the picture waits for its ground map")
+	assert_eq(SurfaceWait.waiting(), 1, "the picture is painted in a later frame")
+	assert_false(SurfaceStore.is_prebaking(), "nothing queued on the lane")
 	await _wait_panels()
-	assert_eq(SurfaceStore.stats["prebakes"], 1, "the ground map came from the lane")
+	assert_eq(SurfaceStore.stats["prebakes"], 0, "no ground map baked for the picture")
 	BiomeThumbnail._cache.clear()
 	var direct := BiomeThumbnail.of(biome, 28, root).get_image()
 	assert_eq(SurfaceStore.stats["bakes"], 0, "nothing baked on the main thread")

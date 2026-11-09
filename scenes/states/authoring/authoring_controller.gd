@@ -257,9 +257,8 @@ func _open_async(
 	loader.is_superseded = func() -> bool: return _superseded(generation)
 	var glb := opened.get_absolute_map_path() if opened.map_path != "" else ""
 	var root: Node3D = null
-	# The Paint swatches' albedos bake on the prebake lane behind the map's own maps, so the lane
-	# keeps working through the open (card authbake).
-	panel.prebake_paint_swatches()
+	# The Paint swatches are decoded on workers while the map builds (card coldopen).
+	panel.start_paint_swatches()
 	if reopen:
 		# Rows whose assets the active foliage library lacks are regenerated from the biome
 		# painting first (FoliageLibrary.adapt_async), then the map is built from the document.
@@ -315,8 +314,8 @@ func _open_async(
 	for biome in PaletteLibrary.biomes(scatter.palette_root):
 		scatter.prepare_biome(String(biome.get("id", "")))
 	BootTrace.mark("open: biomes prepared")
-	# The Paint swatches decode each surface's albedo once; better here than on first click, and
-	# a few a frame so the bar keeps moving.
+	# The Paint swatches decode each surface's albedo once, on workers; better here than on first
+	# click.
 	await panel.warm_paint_swatches_async(get_tree(), func() -> bool: return _superseded(generation))
 	if _superseded(generation):
 		return

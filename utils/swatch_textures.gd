@@ -77,57 +77,56 @@ static func water_swatch(palette_name: String) -> ImageTexture:
 
 
 ## A `size` x `size` tile of a palette image (a biome thumbnail, or a ground surface's
-## albedo for "bare ground"), `relative_path` being relative to the palette root: loaded
-## through the import (an export ships no raw image), centre-cropped square and scaled
-## down once. A missing image paints the neutral grey.
+## albedo for "bare ground" and the Paint swatches), `relative_path` being relative to the
+## palette root, centre-cropped square and scaled down once. A library surface's map is its
+## decoded file (SurfaceStore.picture_image), never a bake: a swatch neither waits for nor
+## queues the 200 ms compression a cold albedo costs (card coldopen). A missing image paints the
+## neutral grey.
 static func palette_thumbnail(
 	relative_path: String, size: int, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> Texture2D:
-	var key := "palette:%s:%s:%d" % [root, relative_path, size]
+	var key := _palette_key(relative_path, size, root)
 	if _cache.has(key):
 		return _cache[key]
 	var image: Image = null
 	if relative_path != "":
-		var source := SurfaceStore.texture(root, relative_path)
-		if source:
-			image = source.get_image()
-	if image == null or image.is_empty():
-		image = Image.create(size, size, false, Image.FORMAT_RGBA8)
-		image.fill(FALLBACK)
-	else:
-		if image.is_compressed():
-			image.decompress()
-		var side := mini(image.get_width(), image.get_height())
-		var offset := Vector2i(image.get_width() - side, image.get_height() - side) / 2
-		image = image.get_region(Rect2i(offset, Vector2i(side, side)))
-		image.resize(size, size, Image.INTERPOLATE_LANCZOS)
-	var texture := ImageTexture.create_from_image(image)
+		image = SurfaceStore.picture_image(root, relative_path)
+	var texture := ImageTexture.create_from_image(square_tile(image, size))
 	_cache[key] = texture
 	return texture
 
 
+static func _palette_key(relative_path: String, size: int, root: String) -> String:
+	return "palette:%s:%s:%d" % [root, relative_path, size]
+
+
+## `image` (uncompressed) centre-cropped square and scaled to `size` px (Lanczos), or the neutral
+## grey when it is null or empty. Pure: workers call it.
+static func square_tile(image: Image, size: int) -> Image:
+	if image == null or image.is_empty():
+		var grey := Image.create(size, size, false, Image.FORMAT_RGBA8)
+		grey.fill(FALLBACK)
+		return grey
+	var side := mini(image.get_width(), image.get_height())
+	var offset := Vector2i(image.get_width() - side, image.get_height() - side) / 2
+	var tile := image.get_region(Rect2i(offset, Vector2i(side, side)))
+	tile.resize(size, size, Image.INTERPOLATE_LANCZOS)
+	return tile
+
+
 ## The albedos (palette-relative) of the surfaces of `roles` under `root`, in role then palette
-## order, queued on the prebake lane behind the maps a load waits for and the pictures shown
-## (SurfaceStore.PRIORITY_AHEAD) when `queue` is true and panels' pictures use the lane
-## (SurfaceWait.enabled; card authbake).
-static func prebake_albedos(
-	roles: PackedStringArray, root: String, queue: bool = true
-) -> PackedStringArray:
+## order: the Paint swatches' pictures.
+static func paint_albedos(roles: PackedStringArray, root: String) -> PackedStringArray:
 	var surfaces := PaletteLibrary.surfaces(root)
 	var albedos := PackedStringArray()
 	for role in roles:
 		for surface in PaletteLibrary.surfaces_with_role(role, root):
 			albedos.append(String(surfaces.get(surface, {}).get("albedo", "")))
-	if queue:
-		var waits: Variant = load(SurfaceStore.SURFACE_WAIT)
-		waits.queue(root, albedos, SurfaceStore.PRIORITY_AHEAD)
 	return albedos
 
 
-## palette_thumbnail() of each of `albedos` at `size` under `root` (cached for the process), a few
-## a frame within the load's frame budget (about 23 ms a swatch with the map in memory). A swatch
-## whose albedo is still on the prebake lane is waited for a frame at a time instead of baked
-## here (card authbake). Stops early when `is_superseded` (func() -> bool) says so.
+## palette_thumbnail() of each of `albedos` at `size` under `root` (cached for the process):
+## warm_start() then warm_finish_async(). Stops early when `is_superseded` (func() -> bool) says so.
 static func warm_async(
 	albedos: PackedStringArray,
 	size: int,
@@ -135,17 +134,73 @@ static func warm_async(
 	tree: SceneTree,
 	is_superseded: Callable
 ) -> void:
-	var started := Time.get_ticks_usec()
+	await warm_finish_async(warm_start(albedos, size, root), tree, is_superseded)
+
+
+## Starts warming the swatches of `albedos` at `size` under `root`: the library maps' files are
+## decoded and scaled down on worker threads, all at once (about 10 ms a swatch, card coldopen),
+## so an open starts them as it begins and only collects them later. Returns the job for
+## warm_finish_async(). Main thread.
+static func warm_start(albedos: PackedStringArray, size: int, root: String) -> Dictionary:
+	var sources: Array[Dictionary] = []
+	var keys: Array[String] = []
+	var others := PackedStringArray()
 	for albedo in albedos:
-		while (
-			Time.get_ticks_usec() - started >= MapSourceLoader.frame_budget_usec()
-			or SurfaceStore.is_pending(root, albedo)
-		):
+		var key := _palette_key(albedo, size, root)
+		if albedo == "" or _cache.has(key) or keys.has(key):
+			continue
+		var source := SurfaceStore.picture_source(root, albedo)
+		if source.is_empty():
+			others.append(albedo)
+			continue
+		sources.append(source)
+		keys.append(key)
+	var tiles: Array = []
+	tiles.resize(sources.size())
+	var lock := Mutex.new()
+	var task := -1
+	if not sources.is_empty():
+		task = WorkerThreadPool.add_group_task(
+			func(i: int) -> void:
+				var source: Dictionary = sources[i]
+				var tile := square_tile(
+					SurfaceStore.decode_picture(String(source["file"]), String(source["kind"])), size
+				)
+				lock.lock()
+				tiles[i] = tile
+				lock.unlock(),
+			sources.size(),
+			-1,
+			false,
+			"Paint swatches"
+		)
+	return {
+		"task": task, "keys": keys, "tiles": tiles, "others": others, "size": size, "root": root
+	}
+
+
+## Ends the warm-up `job` (warm_start's): the swatches that are not library maps are made a few a
+## frame within the load's frame budget, the workers' are waited for a frame at a time (the main
+## thread never blocks on pool work) and cached. When `is_superseded` (func() -> bool) says so
+## the workers' results are dropped.
+static func warm_finish_async(job: Dictionary, tree: SceneTree, is_superseded: Callable) -> void:
+	var started := Time.get_ticks_usec()
+	for albedo: String in job["others"]:
+		if Time.get_ticks_usec() - started >= MapSourceLoader.frame_budget_usec():
 			await tree.process_frame
-			if is_superseded.call():
-				return
 			started = Time.get_ticks_usec()
-		palette_thumbnail(albedo, size, root)
+		palette_thumbnail(albedo, int(job["size"]), String(job["root"]))
+	var task := int(job["task"])
+	if task >= 0:
+		while not WorkerThreadPool.is_group_task_completed(task):
+			await tree.process_frame
+		WorkerThreadPool.wait_for_group_task_completion(task)
+	if is_superseded.call():
+		return
+	var keys: Array[String] = job["keys"]
+	for i in keys.size():
+		if not _cache.has(keys[i]):
+			_cache[keys[i]] = ImageTexture.create_from_image(job["tiles"][i])
 
 
 static func _sky_texture(

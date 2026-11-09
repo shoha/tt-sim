@@ -8,7 +8,8 @@ extends RefCounted
 ## starting cover has grown in and the surface prebake lane is idle. Off unless the command line
 ## asks for it (BootTrace's `--boot-trace-cold=<biome>,<size ft>,<landform>,<seed>`); with
 ## `--boot-trace-clear-cache` the core library's baked surface maps are deleted at the title
-## first (SurfaceCache.remove_library), so the open bakes every map as a new player's first does.
+## first (SurfaceCache.remove_library), so the open bakes every map as a new player's first does;
+## `--boot-trace-dialog=<s>` sets the time on the dialog (DIALOG_S by default).
 ##
 ##   godot --path <project> -- --boot-trace --boot-trace-idle=10 --boot-trace-clear-cache
 ##       --boot-trace-cold=temperate_forest_summer_s1,100,valley,1234 --boot-trace-quit
@@ -53,7 +54,13 @@ static func run(tree: SceneTree, spec_text: String) -> Dictionary:
 	await tree.process_frame
 	BootTrace.mark("dialog: first frame")
 	var shown_at := Time.get_ticks_usec()
-	while Time.get_ticks_usec() - shown_at < int(DIALOG_S * 1000000.0):
+	var dwell := DIALOG_S
+	if BootTrace.arg_value("boot-trace-dialog") != "":
+		dwell = float(BootTrace.arg_value("boot-trace-dialog"))
+	# The player's pick, as a click on the tile would make it (the default place is preselected).
+	if String(dialog.get("_biome_id")) != parts[0]:
+		dialog.call("_on_biome_selected", StringName(parts[0]))
+	while Time.get_ticks_usec() - shown_at < int(dwell * 1000000.0):
 		await tree.process_frame
 	dialog.set("_biome_id", parts[0])
 	dialog.set("_size_ft", int(parts[1]))

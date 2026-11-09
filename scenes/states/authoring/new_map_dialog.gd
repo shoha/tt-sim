@@ -137,6 +137,7 @@ func _on_panel_ready() -> void:
 	ground_caption.theme_type_variation = &"Caption"
 	_fields.add_child(ground_caption)
 	_refresh_ground_caption()
+	_prebake_ground()
 
 	landform_field = TileField.new()
 	landform_field.name = "LandformField"
@@ -220,7 +221,7 @@ func _build_biome_fields(keep: String) -> void:
 		"Bare ground",
 		"",
 		"Plain ground to paint on",
-		BiomeThumbnail.bare_strip(bare, BIOME_STRIP_PX, palette_root)
+		BiomeThumbnail.bare_strip(bare, BIOME_STRIP_PX, palette_root, true)
 	)
 	var still_there := keep == NewMap.BARE_BIOME
 	for biome in biomes:
@@ -251,6 +252,7 @@ func _on_libraries_changed(_library: String) -> void:
 	_build_biome_fields(keep)
 	if ground_caption != null:
 		_refresh_ground_caption()
+		_prebake_ground()
 	_fit_to_canvas.call_deferred()
 
 
@@ -349,7 +351,7 @@ func _add_biome_tiles(field: TileField, group: Dictionary) -> void:
 			AuthoringPanel.short_name(label),
 			"",
 			tip,
-			BiomeThumbnail.strip(biome, BIOME_STRIP_PX, palette_root)
+			BiomeThumbnail.strip(biome, BIOME_STRIP_PX, palette_root, true)
 		)
 
 
@@ -433,6 +435,7 @@ func _on_biome_selected(id: StringName) -> void:
 		if field.tiles.selected != id:
 			field.tiles.select(id)
 	_refresh_ground_caption()
+	_prebake_ground()
 	if _biome_id == NewMap.BARE_BIOME and not was_bare:
 		_biome_landform = _landform
 		_auto_flat = true
@@ -456,6 +459,20 @@ func _set_landform(kind: String) -> void:
 
 func _refresh_landform_caption() -> void:
 	landform_caption.text = String(StartingLandform.CAPTIONS.get(_landform, ""))
+
+
+## Starts baking the ground maps a map from the chosen place binds (NewMap.planned_surfaces) on
+## the prebake lane while the author looks, behind any map a load waits for
+## (SurfaceStore.PRIORITY_AHEAD; Create's open moves them up). A cold first open then rarely waits
+## for its ground's bakes, about 2.4 s of compression for a forest map (card coldopen). A frame
+## later, so the dialog's first frame stays light.
+func _prebake_ground() -> void:
+	await get_tree().process_frame
+	if is_inside_tree() and not _closing:
+		SurfaceStore.prebake(
+			NewMap.planned_surfaces({"biome_id": _biome_id}, palette_root),
+			SurfaceStore.PRIORITY_AHEAD
+		)
 
 
 ## "Ground: forest floor" -- the surface the map will start on, derived from the biome.

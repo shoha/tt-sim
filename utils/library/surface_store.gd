@@ -377,6 +377,46 @@ static func image_of(root: String, ref: String, kind: String) -> Image:
 	return image(root, _relative_of(root, ref, kind))
 
 
+# ---- pictures ----
+
+
+## The map at palette-relative `relative` under `root` as uncompressed pixels for a picture (a
+## Paint swatch, a biome picture's ground colour): a library map's own file decoded
+## (decode_picture), else the imported texture's image, decompressed; null when there is none.
+## Main thread.
+static func picture_image(root: String, relative: String) -> Image:
+	var source := picture_source(root, relative)
+	if not source.is_empty():
+		return decode_picture(String(source["file"]), String(source["kind"]))
+	var picture := _texture_image(texture(root, relative))
+	if picture != null and picture.is_compressed():
+		picture.decompress()
+	return picture
+
+
+## {file, kind} of the library map at palette-relative `relative` under `root`, {} for a path that
+## is not a registered library map (a legacy import, a biome's own thumbnail). Main thread.
+static func picture_source(root: String, relative: String) -> Dictionary:
+	var entry: Dictionary = _paths.get(_key(root, relative), {})
+	if entry.is_empty():
+		return {}
+	return {"file": _file_of(entry), "kind": String(entry["kind"])}
+
+
+## The pixels of the library map file `file` of `kind`, decoded for a picture and never baked:
+## about 10 ms for a 1024 px albedo where its BC7 bake takes 200 (card coldopen), so a picture
+## never queues or waits for a bake. They are what the bake compresses, so a picture made from
+## them differs from one made from the baked map only by the compression's error, a level or two
+## once scaled down. Null for a missing, hostile or undecodable file (the checks load_map makes).
+## Reads the file only, so any thread may call it.
+static func decode_picture(file: String, kind: String) -> Image:
+	var problems: Array[String] = []
+	SurfaceBake.check_png(map_header_of(file), kind, file.get_file(), problems, [] as Array[String])
+	if not problems.is_empty():
+		return null
+	return SurfaceBake.decode(FileAccess.get_file_as_bytes(file), file.get_extension())
+
+
 ## The surface set in `folder` (a `surfaces/<name>` folder: surface.json plus the maps), loaded
 ## and baked without registering anything: {ok, errors, warnings, info, images: {kind: Image},
 ## mean_albedo_linear (info's when given, else measured from the albedo)}. `library_id` names the
