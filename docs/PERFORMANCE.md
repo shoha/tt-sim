@@ -1393,6 +1393,63 @@ not timed after a long title idle. A fix would precompile those scripts on a wor
 authoring map opens, if BootPrecompile has not finished them; it needs its own card and has to
 be measured with this job.
 
+### The first view's draw-time compiles (topic firstview, 2026-11-09)
+
+Audit S7: after the warm-up, a map's first view still compiled pipelines at draw time, on the
+main thread, in the frame the player first sees the map: 3 in a new map (100 ft temperate
+forest, valley, seed 1234) and 7 in a played one (test_map), inside its 395 to 458 ms frame.
+They were not variants the warm-up's samples miss. They were the weather's rain collision.
+
+**How it was found.** Dev runs in a real window (editor binary, `--warm-graphics`, RTX 3080,
+1920x1080, caches warm, which changes compile times but not compile counts), a render-job probe
+counting the pipeline compiles of each draw (`frame_pre_draw` to `frame_post_draw`) from after
+the warm-up to the map's settled state. The counts matched the exported true-cold runs above:
+cv8+me15+su61+dr3+sp38 for the new map, cv9+me12+su82+dr7+sp45 for the play load, and every draw
+compile landed in one frame ("open: paint swatches warmed" and "load: scatter built"). The
+attribution, step by step:
+
+- Hiding every world mesh at the RenderingServer level and letting one new mesh signature
+  (viewport, class, shadow, mirror, surface formats, material identity) through per frame: no
+  draw compile at all (dr0, su62). The hiding itself removed them, so the frame mattered.
+- Hiding everything but the ground (chunks, skirt, ring): dr3 again, in that frame. The ground's
+  shaders and vertex format were the ones the warm-up had drawn (same Shader RIDs, format
+  0x800001037 in both); drawing the warm-up's terrain samples again after the warm-up, in a fresh
+  viewport set up like the warm-up's at 256x144 and at 1920x1080, compiled nothing.
+- The level reflection probe's cull mask held at 0: still dr3.
+- A dump of the world's render state against the warm-up viewport's showed the same viewport,
+  environment and sun settings, plus two things the warm-up has not: the reflection probe and
+  WeatherRenderer's `GPUParticlesCollisionHeightField3D` (follows the camera, renders whenever it
+  moves, every visual layer). With its `heightfield_mask` held at 0: dr0 in both cases (new map
+  cv8+me15+su62+sp35, play cv9+me12+su87+sp36).
+- The same heightfield added later compiled nothing: rain started 2 s after the play load
+  settled (the collision going in with it) and a level saved with rain (collision in from the
+  load, two frames late) both gave dr0. So the heightfield's render, in the frame the map's meshes
+  first drew, met surfaces whose pipelines were not compiled yet and compiled them itself (an
+  inference from these runs; the engine's order inside a frame was not read).
+
+**The change.** The heightfield exists only while rain or snow falls, the only particles that
+collide with it (`WeatherRenderer._sync_rain_collision`): it goes in COLLISION_DELAY_FRAMES (2)
+drawn frames after they start and leaves one particle lifetime after they stop. Without weather
+the map's first view compiles nothing at draw time (both maps above, dev runs), and the
+heightfield no longer renders the scene under it on every camera move. Same pixels: the
+heightfield draws nothing and only stops rain and snow. Rain or snow starting adds it again
+(dr0 in both runs above). Nothing was added to the warm-up, so its time and pixels are unchanged.
+
+**The play load's Controls (audit S8).** A headless play of test_map, timed with node_added
+and the boot trace's marks: 222 Controls enter the tree, 220 of them in the hand-over frame (80
+ms headless), not about 1,500. The table's add_child (159 Controls, 158 of them the
+GameplayMenu) takes 55.7 ms with everything else the table's nodes do in their _ready, its setup
+(61: the HintBar's 36, an unnamed VBoxContainer's 15, the camera compass and a few small
+panels) 11.2 ms. A lazy build cannot cut 50 ms, so nothing was changed. The 1,500 may count a
+window run's or another path's Controls; this run had no tokens and drew nothing.
+
+Not measured yet: the exported true-cold A/B (n 4, arms alternated: first-view worst frame,
+frames over 100 ms, draw compiles; new 100 ft map, 200 ft lakeshore map, Play) waits for the
+lane; a 200 ft map with water was not attributed in a dev run. Not verified here: macOS (Metal,
+Forward Mobile), a minimum-spec GPU, AMD or Intel drivers, a release export (no ttscatter
+release DLL), a camera pan during rain while new meshes appear (the heightfield renders on every
+move then, as before).
+
 ## Mobile renderer hang (2026-09-26): one occurrence, not reproduced
 
 macOS runs the Mobile renderer (`rendering_method.macos="mobile"`), so a load that hangs
