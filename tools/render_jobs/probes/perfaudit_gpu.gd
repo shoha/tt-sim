@@ -245,6 +245,7 @@ class Rig:
 			"debug": vp.debug_draw,
 			"lofi_mat": gm.viewport_container.material,
 			"stretch": gm.viewport_container.stretch,
+			"vp_size": vp.size,
 			"q": 4,
 			"atlas": int(
 				ProjectSettings.get_setting("rendering/lights_and_shadows/directional_shadow/size", 4096)
@@ -267,6 +268,7 @@ class Rig:
 	func _apply(cfg: Dictionary) -> void:
 		if _knobs != null:
 			_knobs.restore_foliage()
+			_knobs.restore_casts()
 		var vp := gm.world_viewport
 		var env := _env()
 		ProjectSettings.set_setting(
@@ -330,8 +332,13 @@ class Rig:
 		if cfg.has("size"):
 			gm.viewport_container.stretch = false
 			vp.size = Vector2i(int(cfg.size[0]), int(cfg.size[1]))
-		elif not gm.viewport_container.stretch:
-			gm.viewport_container.stretch = _orig.stretch
+		else:
+			# The output-sized viewport (WorldView, rendersize) is never stretched, so the size
+			# itself goes back, not only the stretch flag (card minspec2).
+			if gm.viewport_container.stretch != _orig.stretch:
+				gm.viewport_container.stretch = _orig.stretch
+			if vp.size != _orig.vp_size:
+				vp.size = _orig.vp_size
 		_set_hidden(cfg.get("hide", []))
 		_set_foliage_shader(String(cfg.get("fshader", "")))
 		var flat: Variant = cfg.get("ground_flat", false)

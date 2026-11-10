@@ -18,6 +18,10 @@ extends RefCounted
 ##                       (the skirt before that card); absent = the shipped ring and shadowless rest
 ##   clip (bool)         the ground clipmap's read (clipmap.gd "on" made one): false = the plain
 ##                       per-pixel ground, windows kept; absent = true
+##   mipbias (float)     the world viewport's texture_mipmap_bias (card minspec2): a positive bias
+##                       samples smaller mips, so a pass that speeds up with it is texture-bound
+##   nocast ([class globs])  matching instances drawn as before but casting no shadow (card
+##                       minspec2): what their shadow-map draws and the shadows they throw cost
 
 const Util := preload("res://tools/render_jobs/probes/perfaudit_gpu_util.gd")
 const GROUND := "res://shaders/authored_ground.gdshaderinc"
@@ -30,6 +34,8 @@ var _suns := {}
 var _shaders := {}
 var _built := {}
 var _skirt_shaders := {}
+var _mip_bias := NAN
+var _casts := {}
 
 
 func apply(gm: GameMap, cfg: Dictionary) -> void:
@@ -37,6 +43,31 @@ func apply(gm: GameMap, cfg: Dictionary) -> void:
 	_apply_foliage(gm, cfg)
 	_apply_skirt(gm, String(cfg.get("skirt", "")))
 	_apply_clip(gm, bool(cfg.get("clip", true)))
+	if is_nan(_mip_bias):
+		_mip_bias = gm.world_viewport.texture_mipmap_bias
+	gm.world_viewport.texture_mipmap_bias = float(cfg.get("mipbias", _mip_bias))
+	_apply_nocast(gm, cfg.get("nocast", []))
+
+
+## Every instance the nocast knob turned off back to its own shadow casting. The rig calls it at
+## the start of its _apply, before its hide knob stores and changes the same setting.
+func restore_casts() -> void:
+	for gi: GeometryInstance3D in _casts:
+		if is_instance_valid(gi):
+			gi.cast_shadow = _casts[gi]
+	_casts.clear()
+
+
+func _apply_nocast(gm: GameMap, globs: Array) -> void:
+	if globs.is_empty():
+		return
+	for node in gm.world_viewport.find_children("*", "GeometryInstance3D", true, false):
+		var gi := node as GeometryInstance3D
+		if gi.layers == 1 << 19 or _casts.has(gi):
+			continue  # hidden by the rig, which owns its casting while hidden
+		if rig._matches(rig._cls(gi), globs):
+			_casts[gi] = gi.cast_shadow
+			gi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 ## The ground clipmap's read (card clipmap1): `clip` false draws the plain per-pixel ground while

@@ -6828,3 +6828,183 @@ What is left, worst first (main-thread frames of the final code):
   (2480 to 2567 ms then), so the start point is a wash; untried: starting them after the recipe.
 - Not measured here: an exported build (GraphicsWarmup runs there), and the library serve at boot
   (368 ms headless, before the title).
+
+## Minimum-spec estimate (topic minspec2, 2026-11-10)
+
+The target (board answer perf-minspec, "1060"): a GTX 1060 / RX 580 / Iris Xe class GPU at 1080p,
+60 fps (16.7 ms), with the Low settings and render scale as the levers. Every number below is an
+ESTIMATE built from an RTX 3080 (Ryzen 9 5900X); no weak GPU was measured. Treat it as a ranking of
+views and levers with honest error bars, not a guarantee. The steps to replace it with a real
+capture are in "Measuring on a real weak GPU" below.
+
+**The proxy.** Pinned clocks (`nvidia-smi -lgc/-lmc`) need an elevated shell, which the session did
+not have, and the machine has no second GPU (the 5900X has no iGPU), so the proxy is a split instead:
+the GPU audit's in-run A/B (`perfaudit_gpu.gd perf`, per-pass timestamps with `--gpu-profile`) at
+960x540, 1920x1080, 2560x1440 and 3840x2160 in one run. The 540p row against the 1080p row splits
+each view into a fixed part F = t540 - (t1080 - t540) / 3 (vertex, raster, draws, shadow-map
+rendering: it does not grow with pixels) and a pixel part P = t1080 - F. The 1060 estimate is
+3.5 F + 3.7 P; the Iris Xe estimate 8 F + 9 P. The factors are from memory of public figures, not
+checked here (no web access): Time Spy graphics about 17,500 (3080), 4,200 (1060 6 GB), 4,400
+(RX 580), 1,400 to 1,900 (Iris Xe 96 EU); 3080 over 1060 is 3.96x in bandwidth, 3.4x in texture
+rate, 2.0x in ROP rate, 6.8x in nominal FP32 (about half of Ampere's doubled FP32 is usable), about
+3x in raster rate (6 GPCs against 2). Ranges: the pixel factor 3.2 to 4.4 and the fixed one 2.5 to 5
+for the 1060; 7 to 12 and 5 to 12 for the Iris Xe, whose shared LPDDR4x memory (about 68 GB/s) and
+power limit make it the least certain. AMD and Intel drivers were not seen at all. At 540p small
+triangles overshade, so F also holds some raster cost that a weak GPU pays at its fill rate.
+
+**Not texture-bound.** A mip bias of +1 and anisotropic 0 move every view by -0.07 to +0.04 ms,
+inside the noise. The frame is pixel shading (the opaque pass: the ground's composite and the sun's
+PCF) plus, on filled maps, foliage geometry (the depth pre-pass and the shadow-map render).
+
+Measured (RTX 3080, world viewport GPU ms, defaults: shadows Soft High, Blended cascades, SSAO on,
+glow on, lo-fi on, MSAA off, render scale 100 %; drift 0.97 to 1.06 except where noted):
+
+| View | 540p | 1080p | F | P | render CPU | dominating passes at 1080p |
+|---|---|---|---|---|---|---|
+| f100 home (new 100 ft map) | 0.93 | 2.57 | 0.38 | 2.19 | 0.35 | opaque 1.51, pre-pass 0.59 |
+| f100f home (100 ft, filled to 255) | 1.61 | 3.95 | 0.83 | 3.12 | | |
+| f200f home | 2.16 | 4.79 | 1.28 | 3.51 | | |
+| f320f home | 2.19 | 4.52 | 1.41 | 3.11 | | opaque 1.76, pre-pass 1.63, sun shadows 0.43 |
+| f100 zoom 4 / zoom 20 / full zoom-out | 0.70 / 1.20 / 0.96 | 2.09 / 2.68 / 2.24 | 0.24 / 0.71 / 0.53 | | | |
+| f320f zoom 4 / zoom 20 | 1.39 / 2.74 | 3.61 / 5.35 | 0.65 / 1.87 | | 1.73 at zoom 20 | |
+| f200f full zoom-out (drift up to 1.15) | 2.60 | 5.00 | 1.80 | 3.20 | 2.11 | opaque 2.45, pre-pass 1.52, shadows 0.34 |
+| f320f full zoom-out | 4.65 | 7.28 | 3.77 | 3.51 | 4.31 | opaque 3.48, pre-pass 2.46, shadows 0.73 |
+| f100 eye view (forced MSAA 4x) | 1.77 | 3.79 | 1.10 | 2.69 | 0.41 | opaque 0.96, transparent 0.92, pre-pass 0.61, shadows 0.56 |
+| f100 home, rain 1.0 and wind | 0.93 | 2.62 | | | | as dry (2.63): rain costs nothing measurable |
+
+At the f320f full zoom-out 5.45 M primitives in 4,942 foliage chunks are visible and 2.44 M cast;
+hiding the foliage takes the view from 7.28 to 3.09 ms and its render CPU from 4.31 to 0.35 ms.
+
+Estimated 1080p GPU ms (1060 class, with the range from the factor ranges; Low here is Shadows Soft
+Low (q2), Unblended cascades and SSAO off, the cheapest set that keeps the look's structure):
+
+| View | 1060, defaults | 1060, Low | 1060, Low + FSR 75 % | Iris Xe, defaults | Iris Xe, Low + FSR 75 % |
+|---|---|---|---|---|---|
+| f100 home | 9.4 [8.0-11.5] | 6.1 | 4.4 | 23 [17-31] | 10.5 |
+| f100f home | 14.5 [12.1-17.9] | 10.4 | 7.4 | 35 | 17 |
+| f200f home | 17.5 [14.4-21.9] | 12.9 | 9.4 | 42 | 22 |
+| f320f home | 16.4 [13.5-20.7] | 11.4 | 8.7 | 39 | 20 |
+| f100 zoom 4 / zoom 20 / full zoom-out | 7.7 / 9.8 / 8.2 | 4.8 / 6.6 / 6.2 | | 19 / 23 / 20 | |
+| f320f zoom 4 / zoom 20 | 13.2 / 19.4 [15.8-24.7] | 9.5 / 13.4 | | 32 / 46 | |
+| f200f full zoom-out | 18.1 [14.7-23.1] | 13.6 | 10.6 | 43 | 25 |
+| f320f full zoom-out | 26.2 [20.6-34.3] | 20.4 | about 17 | 62 | about 40 |
+| f100 eye view | 13.8 [11.4-17.3] | 8.4 (with Foliage edges Fast) | | 33 | |
+| f100 home in rain | 9.6 | 6.3 | | 23 | |
+| f100 home, 100 tokens | 12 to 14 | 8.7 to 10.7 | | 30 to 34 | |
+
+- **A 1060 holds 60 fps at the shipped defaults only on standard maps.** Filled maps at home and
+  every filled full zoom-out miss at defaults (14 to 26 ms). Low brings every view under 16.7 ms
+  except the filled 320 ft full zoom-out (20 ms), which with FSR 75 % reaches about 17 ms (Low and
+  FSR 75 % summed there, 7 % taken off as the f200f pair measured): the worst case on the list. The
+  RX 580 should land near the 1060 (Time Spy within 5 %), unverified.
+- **Iris Xe misses 60 fps everywhere at defaults** (19 to 62 ms) and reaches it only on standard
+  maps at Low with FSR 75 %; filled maps need Low and FSR 50 % (about 15 ms at f200f home, Low and
+  FSR 50 % not measured as one configuration) and the filled full zoom-out stays near 30 fps.
+- **Tokens:** 100 pack tokens on the f100 home view cost 0.73 to 1.25 ms of GPU on the 3080 (the
+  token sweep, `perfaudit_tokens.gd`, ran under vsync, so its absolute GPU ms may sit at lower
+  clocks; the low end is its ratio applied to the pinned base) and 0.83 ms of render CPU; 100 avatars
+  0.62 to 1.08 ms and 0.16 ms. On a 1060 that is about 2.6 to 4.6 ms.
+- **CPU:** the render CPU (draw-list build) is 0.35 ms at the f100 home and 4.31 ms at the f320f
+  full zoom-out on the 5900X; a min-spec CPU at 1.6 to 1.8 times that is 7 to 8 ms at the worst
+  view, under the GPU's 20 to 26 ms, so the GPU binds first. Game-logic CPU was not measured here.
+- **VRAM fits:** Godot's counters read 949 to 1,085 MB in play (textures 833 to 947, buffers 47 to
+  68; 703 MB at the title), plus what the driver keeps, which they do not count. A 3 GB card fits
+  with room, and the Iris Xe needs it from shared system memory (8 GB dual-channel laptops are fine).
+
+**Levers** (delta ms against the defaults in the same run; the 1060 column is the 3080 delta times
+3.7, the pixel factor, since every lever below acts on shaded pixels except where noted):
+
+| Lever (player setting) | f100 home | f320f home | f320f full zoom-out | f100 eye | 1060 weight at home | Visible? |
+|---|---|---|---|---|---|---|
+| Shadow quality Soft Low (q2) | -0.51 | -0.61 | -0.54 | -0.60 | -1.9 to -2.3 | softer penumbra steps |
+| Hard shadows (q0) | -0.67 | -0.72 | | | -2.5 to -2.7 | hard edges |
+| Unblended cascades | -0.35 | -0.58 | -0.62 (casters 4,012 to 1,876) | -0.44 | -1.3 to -2.1 | seams; far-tree shadows drop at low pitch (camerarig-3) |
+| Single cascade | -0.41 | -0.70 | | -0.96 | -1.5 to -2.6 | blurrier near shadows |
+| Sun shadows off | -0.77 | -1.21 | -1.49 | | -2.8 to -4.5 | yes, strongly |
+| SSAO off | -0.29 | -0.55 | -0.82 | -0.32 | -1.1 to -2.0 | contact darkening goes |
+| Glow off | -0.20 | -0.22 | | | -0.7 to -0.8 | the bloom on lit water and highlights |
+| Render scale FSR 85 % | -0.47 | -0.71 | | | -1.7 to -2.6 | slight softening |
+| Render scale FSR 75 % | -0.82 | -1.19 | -1.23 | -1.04 | -3.0 to -4.4 | soft at 1080p |
+| Render scale FSR 50 % | -1.50 | -2.21 | | | -5.6 to -8.2 | blurry |
+| Foliage edges Fast (eye view) | | | | -0.61 | -2.3 | cutout edges in the eye view |
+| Low (q2 + Unblended + SSAO off) | -0.89 | -1.36 | -1.56 | | -3.3 to -5.0 | as its parts |
+| Low + FSR 75 % | -1.37 | -2.10 | | | -5.1 to -7.8 | as its parts |
+| MSAA (Settings) | | | | +0.02 | 0 | the eye view forces 4x anyway |
+| Ground clipmap off (per-pixel ground) | +0.65 | +0.28 | | | the clipmap saves 1.0 to 2.4 | none (pixel-identical bake) |
+| Mip bias +1, anisotropic 0 | -0.07 to +0.04 | | | | none | |
+| Lo-fi off | +0.02 | -0.02 | | | none | |
+
+- **SSAO costs more than its own pass.** The SSAO pass is 0.10 ms, but with SSAO on the depth
+  pre-pass also writes the normal-roughness buffer: SSAO off takes the pre-pass from 0.57 to 0.45 ms
+  at the f100 home and from 2.46 to 1.91 ms at the f320f full zoom-out. That part is bandwidth, where
+  the 1060 is 4x slower.
+- **The sun's PCF is the largest single default cost** (Soft High against Soft Low: about 2 ms on a
+  1060 at home); its shadow-map render is geometry and only matters on filled maps (0.43 ms on the
+  3080 at the f320f home, 0.73 ms at its full zoom-out).
+- **Foliage geometry rules the full zoom-out** of filled maps: F is half the frame there, so render
+  scale buys less (FSR 75 % saves 17 % at the f320f full zoom-out against 26 % at home).
+
+**What a weak-GPU player gets by default.** No quality tier and no detection exist: nothing reads
+the adapter (`RenderingServer.get_video_adapter_name` has no caller), and without a `settings.cfg`
+`apply_startup_graphics_settings` returns early, so the first run uses the project defaults listed
+above (plus the ground clipmap at 5 levels, water Medium, anisotropic 2x). That is the 9 to 26 ms
+column on a 1060 and 19 to 62 ms on an Iris Xe. Every lever in the table is a separate Settings row;
+a player must know to pick four of them. Board questions (open): an automatic first-run pick (a GPU
+name list, or a short measured benchmark reusing `minspec.gd`'s machinery), what a Low preset holds
+(Unblended cascades drop far-tree shadows), the eye view's forced MSAA 4x, and a render scale default
+below 100 % for weak GPUs.
+
+**Fix not made, next card.** No change here is both invisible and worth its risk. The best invisible
+lever is a baked-only ground material: the clipmap's composite read compiled without the per-pixel
+layer blend (the `CLIP_ONLY` measurement define) saves 0.23 to 0.31 ms on the 3080 at the f100
+views and 0.19 to 0.26 at the f320f ones (about 0.8 to 1.1 ms on a 1060), the blend's registers
+alone, since every pixel at those views already reads the bake. Shipping it needs a twin material per
+terrain chunk, swapped per chunk only where the bake covers the whole chunk (the window's valid
+rect, steep faces, the hole, octave and far rules) and kept in step with the shared material's
+uniforms; the `clip_ctrl` twin with the blend kept measured -0.02 to +0.07, so the twin itself is
+free.
+
+
+## Measuring on a real weak GPU
+
+Every estimate above comes from an RTX 3080. A real capture on a weak machine beats all of them, and
+takes one command, one job and one file. It runs from the source tree (an exported game holds none
+of the tools), so it needs no build, only a copy.
+
+What to copy to the borrowed machine (Windows; Linux works the same with its Godot binary):
+
+1. The Godot 4.7.2 editor binary (`Godot_v4.7.2-stable_win64.exe`, the official build in
+   `D:/Apps/Godot/`; a single file).
+2. A tt-sim checkout at the commit to measure, with what a clone does not bring: the Git LFS
+   content (`libraries/core`, `git lfs pull`), the `procgen/` submodule's files, and
+   `native/bin/` and `native/tt_scatter.gdextension` (gitignored: copy them from the dev machine).
+   Copying the `.godot/` folder as well skips the import; without it, run
+   `Godot_v4.7.2-stable_win64.exe --headless --import --path <folder>` once (about 2 minutes).
+
+Then, with games and other GPU work closed and a laptop on mains power:
+
+```
+Godot_v4.7.2-stable_win64.exe --path <folder> --windowed --resolution 1920x1080 --position 0,0 --gpu-profile --script res://tools/render_jobs/run.gd -- minspec_capture
+```
+
+It builds two maps (a new 100 ft temperate forest valley, seed 1234, and the same at 200 ft filled to
+density 255), plays each and runs the in-run A/B of the GPU audit (`perfaudit_gpu.gd perf`, 5 rounds,
+the first discarded) at home, at the eye view and at the 200 ft map's full zoom-out: the shipped
+defaults against each Low lever and render scale, at 960x540 and 1920x1080 (2560x1440 at home too).
+It quits by itself (94 s on the RTX 3080 and Ryzen 9 5900X; the timed parts are frame counts, so
+expect 3 to 10 minutes on a weak machine) and deletes its `_minspec_` levels; an interrupted run
+leaves them, and `-- minspec_cleanup` removes them.
+
+Send back one file: `%APPDATA%/TTSim/render_jobs/minspec_capture/minspec_report.txt` (Linux:
+`~/.local/share/TTSim/render_jobs/minspec_capture/`). Its head names the GPU, driver, API, CPU,
+memory, OS and video memory in use; each table gives per configuration the world viewport's GPU ms
+(median of the round medians, with their range), the root viewport, render CPU and wall ms, every
+engine pass, and the drift of the base across each round. Compare it table by table with the RTX 3080
+run of the same job (the f100 home, f200f full zoom-out and eye rows of "Minimum-spec estimate"
+above; this job's 2026-11-10 bases: f100 home 2.49, f100 eye 3.95, f200f home 4.96 and f200f full
+zoom-out 5.00 ms, within 4 % of the audit runs; rerun the job on the dev machine to
+refresh them): the base's ratio is the machine's real slowdown at that view,
+the 960x540 row against the 1920x1080 row splits the fixed from the per-pixel cost, and the levers'
+deltas say which setting a weak GPU needs. A drift outside 0.95 to 1.05 means something else used the
+GPU during the run. The window must fit the screen at 1920x1080: on a smaller screen the tables'
+`world (w, h)` shows the size that was really drawn.

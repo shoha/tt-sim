@@ -1055,6 +1055,19 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
 - `designer_s9_misc.json`: Lock all and a stale lock (a changed query: the chip's warning mark, "Lock again"), "Show only this" on the oak, the picker's empty state with its suggestions and Request asset at 1600x900 and 1280x800.
 - `designer_s9_perf.json`: windowed, vsync off, debounce 0: A/B on and off, five divider moves, a look colour, light and zone-shape edit, a season switch with the same ground and with another, a tree edit with three seasons. Numbers in `docs/systems/biome_designer.md` "Verification".
 
+### Minimum-spec capture (card minspec2; probe `probes/minspec.gd`)
+
+- `minspec_capture.json` (94 s on the RTX 3080, 2026-11-10; expect 3 to 10 minutes on a weak machine; keeps no level): the
+  capture to run on a borrowed weak machine, with `--gpu-profile` before `--script`
+  (`docs/PERFORMANCE.md` "Measuring on a real weak GPU"). Builds a new 100 ft temperate forest valley and
+  the same map at 200 ft filled to density 255 as `_minspec_` levels, plays each and runs the GPU audit's
+  in-run A/B (`perfaudit_gpu.gd perf`, 5 rounds) at home, the eye view and the 200 ft full zoom-out: the
+  shipped defaults against the Low levers and render scale, at 960x540 and 1920x1080 (and 2560x1440 at
+  home) so each pass splits into a fixed and a per-pixel part. Ends by writing one file,
+  `user://render_jobs/minspec_capture/minspec_report.txt` (the machine, then every table), and deleting
+  its `_minspec_` levels.
+- `minspec_cleanup.json` (seconds): deletes any `_minspec_` level an interrupted capture left behind.
+
 ## Caveats
 
 - **The judgment set assumes palette content.** Its composition strokes use the palette ids
