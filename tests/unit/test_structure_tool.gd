@@ -462,6 +462,37 @@ func test_the_pane_lists_the_librarys_buildings_by_family_with_pictures() -> voi
 	assert_signal_emitted(pane, "reroll_requested")
 
 
+## The tool's first open decodes no picture (card structopen): the pictures an authoring open warms
+## on workers (StructureTool.warm_ahead, collected before its sheet drops) are every one the pane's
+## first build shows, and a worker's picture is the main thread's, pixel for pixel.
+func test_warmed_pictures_cover_the_panes_first_build() -> void:
+	StructureThumbnail._cache.clear()
+	StructureTool.warm_ahead()
+	var job: Dictionary = StructureTool._ahead
+	var served := LibraryStructureStore.structures()
+	assert_eq((job["keys"] as Array).size(), served.size() + 1, "a tile each, and the first pick's")
+	await StructureTool.collect_ahead_async(get_tree(), func() -> bool: return false)
+	assert_true(StructureTool._ahead.is_empty(), "collected")
+	var before := StructureThumbnail.made_on_main
+	var pane := StructureToolPane.new()
+	add_child_autofree(pane)
+	assert_eq(pane.refs().size(), served.size())
+	assert_eq(StructureThumbnail.made_on_main, before, "the pane's first build made no picture")
+	var small := UiPreferences.load_structure_tiles_small()
+	var px := int(StructurePalette.tile_metrics(small, StructureToolPane.FALLBACK_WIDTH_PX)["thumb"])
+	var path := String(served[0]["thumb"])
+	var from_worker: Array = [null]
+	var task := WorkerThreadPool.add_task(
+		func() -> void: from_worker[0] = StructureThumbnail.picture(path, px)
+	)
+	WorkerThreadPool.wait_for_task_completion(task)
+	var on_main := StructureThumbnail.picture(path, px)
+	assert_eq(on_main.get_width(), px)
+	assert_eq((from_worker[0] as Image).get_data(), on_main.get_data(), "the same pixels")
+	var nothing := StructureToolPane.warm_pictures()
+	assert_eq(int(nothing["task"]), -1, "a second open finds them all cached")
+
+
 func test_a_pick_in_the_pane_reaches_the_brush_and_the_first_pick_is_the_panes() -> void:
 	var tool := ToolRegistry.find(StructureTool.ID)
 	var brush := tool.brush_mode.new() as StructureBrush

@@ -16,6 +16,9 @@ const LABEL := "Buildings"
 const WATCH_META := &"tt_missing_watch"
 const UNAVAILABLE_TOOLTIP := "Building: not on a Blender map, whose ground is the map file's"
 
+## The pane's pictures warming on workers (warm_ahead), {} once collected.
+static var _ahead: Dictionary = {}
+
 
 func _init() -> void:
 	id = ID
@@ -53,6 +56,27 @@ func can_select(controller: AuthoringController) -> bool:
 
 func works_on(editor: AuthoringEditor) -> bool:
 	return editor.can_paint()
+
+
+## Warms, as an authoring open begins, what the tool's first open made in its own frames: the
+## pane's pictures on workers (StructureToolPane.warm_pictures: 100 decodes, a 700 ms frame) and
+## the planks of its first building material on the prebake lane (StructureWarmup.prebake_surfaces:
+## a 267 ms MAKE unit), card structopen. The open collects the pictures before its sheet drops
+## (collect_ahead_async). StructureWarmup.ahead_enabled false skips both.
+static func warm_ahead() -> void:
+	StructureThumbnail.drop(_ahead)
+	_ahead = {}
+	if not StructureWarmup.ahead_enabled:
+		return
+	_ahead = StructureToolPane.warm_pictures()
+	StructureWarmup.prebake_surfaces()
+
+
+## Collects warm_ahead()'s pictures into their cache; `is_superseded` (func() -> bool) drops them.
+static func collect_ahead_async(tree: SceneTree, is_superseded: Callable) -> void:
+	var job := _ahead
+	_ahead = {}
+	await StructureThumbnail.warm_finish_async(job, tree, is_superseded)
 
 
 ## The first building's decor GLBs, masonry and shaders warm up now, before the place
