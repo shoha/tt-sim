@@ -14,6 +14,9 @@ const RAIN_VELOCITY_MIN := 12.0
 const RAIN_VELOCITY_MAX := 16.0
 const WIND_ALPHA := 0.4  # wind streak colour alpha in a lull; brightens with gustiness
 const FOG_DENSITY_PER_INTENSITY := 0.05  # density added at base per unit of fog intensity
+## Drawn frames between rain or snow starting and their collision heightfield going in
+## (_sync_rain_collision); a drop takes about 0.6 s to reach the ground.
+const COLLISION_DELAY_FRAMES := 2
 
 # Baseline (local-space) visibility_aabb half-extents, matching the AABB each
 # emitter is created with. _grow_visibility_aabb() never shrinks below these.
@@ -45,8 +48,10 @@ var _rain_emitter: GPUParticles3D = null
 var _snow_emitter: GPUParticles3D = null
 var _wind_emitter: GPUParticles3D = null
 
-# Rain collision
+# Rain collision (_sync_rain_collision): the heightfield while rain or snow falls, and the
+# Engine.get_frames_drawn() it goes in at (-1: none due).
 var _rain_collision: GPUParticlesCollisionHeightField3D = null
+var _collision_due_frame := -1
 
 # References
 var _camera: Camera3D = null
@@ -74,6 +79,7 @@ func setup(camera: Camera3D, environment_manager: LevelEnvironmentManager) -> vo
 
 
 func _process(delta: float) -> void:
+	_add_rain_collision_when_due()
 	if not _camera or not is_instance_valid(_camera):
 		return
 	_update_emitter_positions()
@@ -126,6 +132,60 @@ func _refresh_process_state() -> void:
 		or (_wind_emitter and _wind_emitter.emitting)
 	)
 	set_process(any_active)
+	_sync_rain_collision()
+
+
+## Whether rain or snow is falling (their particles stop on the collision heightfield).
+func is_falling() -> bool:
+	return bool(
+		(_rain_emitter and _rain_emitter.emitting) or (_snow_emitter and _snow_emitter.emitting)
+	)
+
+
+## The heightfield rain and snow stop on exists only while one of them falls (and for one
+## particle lifetime after), and goes in COLLISION_DELAY_FRAMES drawn frames after they start.
+## It renders the meshes under it from above whenever it moves (it follows the camera); in the
+## frame a map first draws, that render compiled pipelines on the main thread, at draw time: 3 in
+## a new map's first view, 7 in a played map's. The same heightfield added seconds later compiled
+## none, so it met surfaces whose pipelines were not compiled yet (inferred: card firstview,
+## docs/PERFORMANCE.md "The first view's draw-time compiles").
+func _sync_rain_collision() -> void:
+	if is_falling():
+		if _rain_collision == null and _collision_due_frame < 0:
+			_collision_due_frame = Engine.get_frames_drawn() + COLLISION_DELAY_FRAMES
+		return
+	_collision_due_frame = -1
+	if _rain_collision != null and is_inside_tree():
+		# The last drops still fall after emitting stops; let them land first.
+		var linger := maxf(_rain_emitter.lifetime, _snow_emitter.lifetime)
+		get_tree().create_timer(linger).timeout.connect(_drop_rain_collision)
+
+
+## Adds the collision heightfield once its frame is due (_sync_rain_collision). Called each
+## frame while weather runs.
+func _add_rain_collision_when_due() -> void:
+	if _collision_due_frame < 0 or Engine.get_frames_drawn() < _collision_due_frame:
+		return
+	_collision_due_frame = -1
+	if not is_falling() or _rain_collision != null:
+		return
+	_rain_collision = GPUParticlesCollisionHeightField3D.new()
+	_rain_collision.name = "RainCollision"
+	_rain_collision.size = Vector3(40, 20, 40)
+	_rain_collision.follow_camera_enabled = true
+	add_child(_rain_collision)
+
+
+func _drop_rain_collision() -> void:
+	if is_falling() or _rain_collision == null:
+		return
+	_rain_collision.queue_free()
+	_rain_collision = null
+
+
+## The rain and snow collision heightfield while it exists (null with no rain or snow falling).
+func rain_collision() -> GPUParticlesCollisionHeightField3D:
+	return _rain_collision
 
 
 func _create_emitters() -> void:
@@ -137,11 +197,6 @@ func _create_emitters() -> void:
 
 	_wind_emitter = _create_wind_emitter()
 	add_child(_wind_emitter)
-
-	_rain_collision = GPUParticlesCollisionHeightField3D.new()
-	_rain_collision.size = Vector3(40, 20, 40)
-	_rain_collision.follow_camera_enabled = true
-	add_child(_rain_collision)
 
 
 func _create_rain_emitter() -> GPUParticles3D:
