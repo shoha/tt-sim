@@ -82,6 +82,7 @@ GPU.
 | Authoring | The Structure pane's first open: its pictures decode on workers and its planks bake on the prebake lane as the open begins (structopen) | first open 685-721 ms plus a 256-304 ms bake -> one 54-58 ms frame | f12e08fa |
 | System | A map's first-view pipelines compiled in the warm-up instead of at draw (firstview) | draw-time compiles gone on the new 100 ft, Play and 200 ft lakeshore maps; the first view's 400-440 ms frame is unchanged, so they were not its cost | c381eacf |
 | Download | Exported games ship core's BC7/BC5/BC1 surface maps in the pack, because an export has no texture compressor (exportbake; board perf-export-size: keep) | export texture memory 988.9 -> 782.3 MB (= the editor), 27 compress errors per open -> 0, cache hits 8 -> 32 of 32 and no writes on a second launch, cold sheet 1.42-1.47 -> 1.25 s; zip 161 -> 228 MB (+67 MB) | 437164eb |
+| System | A map's first-view frame: the warm-up also draws the ground look bakes' canvas pipelines, and a later launch compiles the covered shaders on a low-priority thread behind the title (viewdraw) | exported true-cold, n 4 alternated: first view 394.7 -> 113.1 ms on a first launch (draw 287-295 -> 8-9 ms) and 384.0 -> 96.1 ms on a second; same pixels (mean change -0.000, 0.010 % of pixels moved); the cost moved behind the title (warm-up draw frame 217-224 -> 315-326 ms; later launches' title frames 81-91 ms for about 1.3 s) | 9b9586cb |
 
 Correctness found on the way: a client's GameState never took transforms, so after per-token adds
 it lagged up to the heartbeat (fixed, three ENet consistency scenarios, 8fd3af5e); two dev builds
@@ -156,9 +157,12 @@ From the register's rows that are not merged, with their measured size:
   themselves (cause not found). A lean ground-cover shader variant saves 0.04-0.16 ms and was
   skipped (board perf-flower-lean: skip; branch foliagefix keeps it). Every audit board question
   is answered.
-- **First view and exports.** A map's first-view frame still costs 400-440 ms with its draw at
-  280-320 ms unattributed (the draw-time compiles were not it). The first street and Dress take
-  about 566-604 ms. Not verified in an export: macOS (Metal), a minimum-spec GPU, a release
+- **First view and exports.** A map's first-view frame is now 96-117 ms (viewdraw: it was the
+  main thread compiling at first use; what is left is the map install, the weather particles and
+  biome preparation). The worst frame on a first launch is now the hand-over, 306-319 ms, with
+  four canvas-pipeline compiles not yet identified. The first street and Dress take about
+  566-604 ms. `Shader.get_rid()` from the compile thread is not checked against the engine
+  source (the door stops the thread, limiting any overlap to one shader). Not verified in an export: macOS (Metal), a minimum-spec GPU, a release
   template, CI's headless Linux export running the surface-bake plugin, and a user-imported
   library in a real export (the uncompressed fallback is unit-tested only). Dropping the core WebP
   sources from the pack would win back about 34 MB (they are still read at runtime).
