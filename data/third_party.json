@@ -111,6 +111,7 @@
 	"not_shipped": [
 		{"name": "GUT", "path": "addons/gut", "reason": "test framework, left out of the export"},
 		{"name": "Icon Explorer", "path": "addons/icon_explorer", "reason": "editor tool, left out of the export"},
+		{"name": "surface_bake_export", "path": "addons/surface_bake_export", "reason": "this project's own export plugin (bakes the official libraries' surface maps into the pack), left out of the export"},
 		{"name": "theme_gen", "path": "addons/theme_gen", "reason": "editor tool, left out of the export"},
 		{"name": "theme_gen_save_sync", "path": "addons/theme_gen_save_sync", "reason": "editor tool, left out of the export"},
 		{"name": "validation_bridge", "path": "addons/validation_bridge", "reason": "this project's own test bridge, left out of the export"}

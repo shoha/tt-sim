@@ -16,7 +16,8 @@ const CACHE := ROOT + "/cache"
 const LIBRARY_ID := "shiplib"
 const SURFACE := "stone"
 const SIDE := 16
-## SurfaceBake.compressor: ask the binary (the editor here: it compresses), or forbid it (an export).
+## SurfaceBake.compressor: ask the binary (the editor here, which compresses), or forbid it (an
+## export).
 const AUTO := 0
 const NONE := -1
 
