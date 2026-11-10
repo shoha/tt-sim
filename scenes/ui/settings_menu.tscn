@@ -168,6 +168,42 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"BoxContainerSpaced"
 
+[node name="Quality" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Quality"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Quality"
+
+[node name="QualityOption" type="OptionButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Quality"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="QualityRedetectButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/Quality"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Re-detect"
+
+[node name="QualityNoteRow" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/QualityNoteRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Caption"
+
+[node name="QualityNote" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/QualityNoteRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Caption"
+autowrap_mode = 3
+
 [node name="Fullscreen" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
 layout_mode = 2
 
@@ -360,6 +396,20 @@ selected = 0
 popup/item_0/text = "Smooth"
 popup/item_1/text = "Fast"
 popup/item_1/id = 1
+
+[node name="EyeSmoothing" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/EyeSmoothing"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Eye view smoothing"
+
+[node name="EyeSmoothingCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/EyeSmoothing"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
 
 [node name="ShadowQuality" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
 layout_mode = 2

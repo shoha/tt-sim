@@ -279,8 +279,9 @@ func apply_foliage_antialiasing() -> void:
 ## The Antialiasing level in effect: the saved setting, raised to MSAA 4x while the eye view is
 ## on (a perspective view at eye height stair-steps fences, roof edges and thin foliage with MSAA
 ## off, card eyeprobe 2026-11-02; the orthographic view does not). A setting above 4x is kept.
+## Eye view smoothing off (FoliageEdges.eye_smoothing, Settings > Graphics) keeps the setting.
 func effective_antialiasing_level() -> int:
-	if _eye_view_active:
+	if _eye_view_active and FoliageEdges.eye_smoothing:
 		return maxi(_foliage_antialiasing_level, Viewport.MSAA_4X)
 	return _foliage_antialiasing_level
 

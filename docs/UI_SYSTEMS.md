@@ -1067,6 +1067,13 @@ live one ends the silence; see `docs/SOUND_EFFECTS.md`.
 
 **Graphics Tab:**
 
+- **Quality** (first row, `SettingsQuality`, `scenes/ui/settings_quality.gd`, loaded by path from
+  `settings_menu.gd`): High, Low or Lowest set Shadow quality, Shadow cascades, Ambient occlusion and
+  Render scale at once; the rows stay editable and any other mix reads Custom (a disabled item).
+  **Re-detect** beside it measures this computer again (`QualityBench`, no popup) and picks a preset;
+  a one-line note under the row says "Chosen for this computer." while the rows match the recorded
+  pick, "Measuring this computer..." while it runs and when a measurement failed. The first-run pick
+  behind the title and its flag: `docs/systems/graphics_quality.md`.
 - Fullscreen toggle, VSync toggle
 - Lo-fi filter toggle
 - "See tokens through scenery" rows (`SettingsSeeThrough`, `graphics/*` keys, applied at once by
@@ -1081,6 +1088,8 @@ live one ends the silence; see `docs/SOUND_EFFECTS.md`.
   `Wind` autoload as the slider moves (Apply saves it); 0 holds everything still, and the OS
   reduce-motion setting also holds it still and wins. Not a level field and never networked.
 - Antialiasing, shadow quality, water quality option buttons
+- **Eye view smoothing** (`graphics/eye_smoothing`, below Foliage edges, default on): the eye view's
+  MSAA 4x raise; off keeps the Antialiasing setting there (`SettingsGpuOptions`)
 - Advanced (`Foldout`): foliage density slider, SSAO/SSR/SDFGI toggles, renderer method option button
 
 **Grid Tab:**

@@ -9,16 +9,19 @@ const MENU_SCENE := preload("res://scenes/ui/settings_menu.tscn")
 
 var _saved_cascades: int
 var _saved_edges: int
+var _saved_eye: bool
 
 
 func before_each() -> void:
 	_saved_cascades = ShadowCascades.current
 	_saved_edges = FoliageEdges.current
+	_saved_eye = FoliageEdges.eye_smoothing
 
 
 func after_each() -> void:
 	ShadowCascades.current = _saved_cascades
 	FoliageEdges.current = _saved_edges
+	FoliageEdges.eye_smoothing = _saved_eye
 	if FileAccess.file_exists(TMP_SETTINGS):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SETTINGS))
 
@@ -129,6 +132,43 @@ func test_settings_menu_offers_saves_and_shows_both_choices() -> void:
 	SettingsGpuOptions.apply(menu, null)
 	assert_eq(ShadowCascades.current, ShadowCascades.SINGLE)
 	assert_eq(FoliageEdges.current, FoliageEdges.FAST)
+
+
+## Eye view smoothing (card autoquality, 2026-11-10): on by default, saved and shown by the menu,
+## and off keeps the eye view at the saved Antialiasing level instead of raising it to 4x.
+func test_eye_smoothing_is_saved_and_off_keeps_the_saved_level() -> void:
+	assert_true(FoliageEdges.EYE_DEFAULT, "the eye view raised MSAA before the setting")
+	assert_true(FoliageEdges.stored_eye_smoothing(ConfigFile.new()))
+	var garbage := ConfigFile.new()
+	garbage.set_value("graphics", FoliageEdges.EYE_KEY, 3)
+	assert_true(FoliageEdges.stored_eye_smoothing(garbage), "a non-bool reads the default")
+	var menu: SettingsMenu = MENU_SCENE.instantiate()
+	add_child_autofree(menu)
+	var check := menu.get_node("%EyeSmoothingCheck") as CheckButton
+	assert_false(check.tooltip_text.is_empty(), "eye smoothing tooltip")
+	SettingsGpuOptions.show_defaults(menu)
+	assert_true(check.button_pressed)
+	check.set_pressed_no_signal(false)
+	menu._save_settings(TMP_SETTINGS)
+	var config := ConfigFile.new()
+	assert_eq(config.load(TMP_SETTINGS), OK)
+	assert_eq(config.get_value("graphics", FoliageEdges.EYE_KEY), false)
+	SettingsGpuOptions.show_defaults(menu)
+	SettingsGpuOptions.show_saved(menu, config)
+	assert_false(check.button_pressed, "the saved choice is shown")
+	SettingsGpuOptions.apply(menu, null)
+	assert_false(FoliageEdges.eye_smoothing)
+	var vfx := VisualEffectsController.new()
+	vfx._foliage_antialiasing_level = Viewport.MSAA_DISABLED
+	vfx._eye_view_active = true
+	assert_eq(vfx.effective_antialiasing_level(), Viewport.MSAA_DISABLED, "off: the saved level")
+	FoliageEdges.eye_smoothing = true
+	assert_eq(vfx.effective_antialiasing_level(), Viewport.MSAA_4X, "on: raised to 4x")
+	vfx._foliage_antialiasing_level = Viewport.MSAA_8X
+	assert_eq(vfx.effective_antialiasing_level(), Viewport.MSAA_8X, "a setting above 4x is kept")
+	vfx.free()
+	SettingsGpuOptions.apply_startup(config)
+	assert_false(FoliageEdges.eye_smoothing, "startup reads the saved choice")
 
 
 func test_ground_detail_is_a_saved_level_cap_with_an_off() -> void:

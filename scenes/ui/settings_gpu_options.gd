@@ -5,9 +5,11 @@ extends RefCounted
 ## the lint budget: "Foliage edges" (graphics/foliage_edges, FoliageEdges, beside Antialiasing),
 ## "Shadow cascades" (graphics/shadow_cascades, ShadowCascades, beside Shadow quality) and "Idle
 ## throttle" (graphics/idle_throttle, IdleThrottle, beside VSync: a checkbox, on by default, that
-## caps the frame rate while the window is in the background). The first two default to the game as
-## it shipped before them. Like the other graphics options they apply on Apply, with no restart:
-## the foliage re-picks its shader variant, the sun its cascades and the throttle its cap at once.
+## caps the frame rate while the window is in the background), and "Eye view smoothing"
+## (graphics/eye_smoothing, FoliageEdges.eye_smoothing, below Foliage edges: the eye view's MSAA 4x
+## raise, on by default). The first two default to the game as it shipped before them. Like the
+## other graphics options they apply on Apply, with no restart: the foliage re-picks its shader
+## variant, the sun its cascades and the throttle its cap at once.
 
 const FOLIAGE_EDGES_TOOLTIP := (
 	"How leaf and grass edges look while antialiasing is on (an Antialiasing setting, or the eye "
@@ -28,6 +30,11 @@ const GROUND_DETAIL_TOOLTIP := (
 	+ "Off and a level count take effect at once; turning it back on takes effect when the "
 	+ "next map loads."
 )
+const EYE_SMOOTHING_TOOLTIP := (
+	"Smooths edges in the eye view (antialiasing, whatever the Antialiasing row says). Turn it "
+	+ "off if walking the table at eye level runs slowly: edges of trunks, rocks and leaves "
+	+ "show small steps."
+)
 const IDLE_THROTTLE_TOOLTIP := (
 	"Slows the game down while its window is in the background (15 frames a second when another "
 	+ "window has the focus, 5 when minimised) to save power and heat. Turn it off to keep the "
@@ -39,6 +46,7 @@ const IDLE_THROTTLE_TOOLTIP := (
 ## Reads both choices from the settings file at startup (Root, before any map loads).
 static func apply_startup(config: ConfigFile) -> void:
 	FoliageEdges.current = FoliageEdges.stored(config)
+	FoliageEdges.eye_smoothing = FoliageEdges.stored_eye_smoothing(config)
 	ShadowCascades.current = ShadowCascades.stored(config)
 	GroundClipmapSetting.current = GroundClipmapSetting.stored(config)
 	IdleThrottle.enabled = IdleThrottle.stored(config)
@@ -47,6 +55,7 @@ static func apply_startup(config: ConfigFile) -> void:
 ## Puts the saved choices on the options without applying them (Root applied them at startup).
 static func show_saved(menu: SettingsMenu, config: ConfigFile) -> void:
 	_select(menu.foliage_edges_option, FoliageEdges.stored(config))
+	_eye_check(menu).set_pressed_no_signal(FoliageEdges.stored_eye_smoothing(config))
 	_select(menu.shadow_cascades_option, ShadowCascades.stored(config))
 	_select(menu.ground_detail_option, GroundClipmapSetting.stored(config))
 	menu.idle_throttle_check.set_pressed_no_signal(IdleThrottle.stored(config))
@@ -54,6 +63,7 @@ static func show_saved(menu: SettingsMenu, config: ConfigFile) -> void:
 
 static func save(menu: SettingsMenu, config: ConfigFile) -> void:
 	config.set_value("graphics", IdleThrottle.KEY, menu.idle_throttle_check.button_pressed)
+	config.set_value("graphics", FoliageEdges.EYE_KEY, _eye_check(menu).button_pressed)
 	config.set_value(
 		"graphics",
 		FoliageEdges.KEY,
@@ -73,6 +83,7 @@ static func save(menu: SettingsMenu, config: ConfigFile) -> void:
 
 static func show_defaults(menu: SettingsMenu) -> void:
 	menu.idle_throttle_check.set_pressed_no_signal(IdleThrottle.DEFAULT)
+	_eye_check(menu).set_pressed_no_signal(FoliageEdges.EYE_DEFAULT)
 	_select(menu.foliage_edges_option, FoliageEdges.DEFAULT)
 	_select(menu.shadow_cascades_option, ShadowCascades.DEFAULT)
 	_select(menu.ground_detail_option, GroundClipmapSetting.DEFAULT)
@@ -83,6 +94,7 @@ static func show_defaults(menu: SettingsMenu) -> void:
 ## the sun on screen takes its cascades, and later maps read both.
 static func apply(menu: SettingsMenu, game_map: Node3D) -> void:
 	FoliageEdges.current = FoliageEdges.sanitize(menu.foliage_edges_option.get_selected_id())
+	FoliageEdges.eye_smoothing = _eye_check(menu).button_pressed
 	ShadowCascades.current = ShadowCascades.sanitize(menu.shadow_cascades_option.get_selected_id())
 	GroundClipmapSetting.current = GroundClipmapSetting.sanitize(
 		menu.ground_detail_option.get_selected_id()
@@ -100,6 +112,12 @@ static func apply_tooltips(menu: SettingsMenu) -> void:
 	menu.shadow_cascades_option.tooltip_text = SHADOW_CASCADES_TOOLTIP
 	menu.ground_detail_option.tooltip_text = GROUND_DETAIL_TOOLTIP
 	menu.idle_throttle_check.tooltip_text = IDLE_THROTTLE_TOOLTIP
+	_eye_check(menu).tooltip_text = EYE_SMOOTHING_TOOLTIP
+
+
+## The Eye view smoothing toggle (found by its unique name, so settings_menu.gd stays as it is).
+static func _eye_check(menu: SettingsMenu) -> CheckButton:
+	return menu.get_node("%EyeSmoothingCheck") as CheckButton
 
 
 static func _select(option: OptionButton, choice: int) -> void:

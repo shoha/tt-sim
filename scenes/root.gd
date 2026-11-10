@@ -83,6 +83,8 @@ var _warmup_screen: Node = null
 var _warmup_pending: bool = false
 ## What runs once the warm-up is done (the latest title action that had to wait), or null.
 var _warmup_action: Callable = Callable()
+## The first-run quality pick while it runs behind the title (OnDemand.quality_pick), or null.
+var _quality_pick: Node = null
 ## Whether the first entry into TITLE_SCREEN starts the startup update check (not for Steam,
 ## which updates the game itself). Consumed by _take_startup_update_check().
 var _update_check_on_title: bool = false
@@ -164,6 +166,14 @@ func _exit_tree() -> void:
 func _compile_shaders_behind() -> void:
 	if is_inside_tree() and GraphicsWarmup.compile_behind():
 		BootTrace.mark("shaders: compiling behind the title")
+	_start_quality_pick()
+
+
+## Starts the first-run quality pick behind the quiet title (it waits for the shaders compiling
+## behind it, and a door into a map stops it: _ensure_table). Loads nothing while its flag is off.
+func _start_quality_pick() -> void:
+	if is_inside_tree() and _level_play_controller == null and not is_instance_valid(_quality_pick):
+		_quality_pick = OnDemand.quality_pick(self)
 
 
 ## Starts the first launch's graphics warm-up behind the title (GraphicsWarmupScreen with its bar
@@ -183,6 +193,7 @@ func _on_warmup_finished() -> void:
 	if not _warmup_action.is_valid():
 		if screen:
 			screen.queue_free()
+		_start_quality_pick()
 		return
 	var action := _warmup_action
 	_warmup_action = Callable()
@@ -305,6 +316,9 @@ func _ensure_table() -> void:
 	if _level_play_controller != null:
 		return
 	GraphicsWarmup.stop_behind()
+	if is_instance_valid(_quality_pick):
+		_quality_pick.call("abort")
+	_quality_pick = null
 	BootPrecompile.finish_current()
 	var table_script: GDScript = load(LEVEL_PLAY_CONTROLLER_PATH)
 	_level_play_controller = table_script.new()

@@ -828,6 +828,12 @@ independent layers.
   (`FoliageEdges`, default Smooth) are two lower tiers for slow GPUs: Unblended drops the cascade
   blend, Single uses one cascade, and Fast keeps the foliage's plain cutout under MSAA. Costs and
   look: `docs/PERFORMANCE.md` "Shadow cascades and foliage edges".
+- Quality (the first Graphics row, `QualityPreset`) sets four of the rows above at once: High is the
+  defaults, Low turns Blended cascades and ambient occlusion off (Soft High shadows kept), Lowest
+  adds render scale 75 %; any other mix reads Custom. A first-run pick behind the title can choose
+  it by measuring the GPU (off by default, project setting `tt_sim/graphics/auto_quality`). Eye view
+  smoothing (`FoliageEdges.eye_smoothing`, default on) is the eye view's MSAA 4x raise; off keeps
+  the Antialiasing setting there. Model and switches: `docs/systems/graphics_quality.md`.
 
 The sun blends its shadow cascades (`directional_shadow_blend_splits`, `SUN_SHADOW_BLEND_SPLITS` in
 `level_environment_manager.gd`, 2026-11-02). Without it, far trees' shadows were missing at the

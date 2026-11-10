@@ -65,6 +65,9 @@ Documents here:
 - [ground_clipmap.md](ground_clipmap.md): the camera-following bake of the composited ground
   (`GroundClipmap`, `GroundClipmapPlan`): levels, windows, strips, edits, fallbacks, the Ground
   detail setting and what it costs.
+- [graphics_quality.md](graphics_quality.md): the Quality presets in Settings > Graphics
+  (`QualityPreset`: High, Low, Lowest over four existing rows, Custom), the first-run pick behind
+  the title (`QualityAuto`, `QualityBench`, its flag) and Eye view smoothing.
 - [map_document.md](map_document.md): `map.ttmap` (`MapDocument`, `MapDocumentIO`), levels
   with `map.glb`, `map.ttmap` or both, the play-time load and map downloads.
 - [scatter.md](scatter.md): the scatter generator (region independence, thinning, density

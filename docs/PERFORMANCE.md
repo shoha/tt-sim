@@ -6965,6 +6965,110 @@ uniforms; the `clip_ctrl` twin with the blend kept measured -0.02 to +0.07, so t
 free.
 
 
+## Quality presets and the first-run pick (topic autoquality, 2026-11-10)
+
+The board answer perf-weak-gpu-defaults ("auto"): a weak-GPU player who never opens Settings should
+still get about 60 fps. Built: a Quality row in Settings > Graphics (High, Low, Lowest over four
+existing rows; Custom when they match none), a first-run pick that measures the GPU behind the title
+and chooses the preset, a Re-detect button, and an Eye view smoothing row. The pick ships OFF (project
+setting `tt_sim/graphics/auto_quality`, default false; flip it with `[tt_sim] graphics/auto_quality=true`
+in `project.godot`), so the game is unchanged until the board has seen the Low look. Model:
+`docs/systems/graphics_quality.md`. All numbers from an RTX 3080 at 1920x1080 (editor binary, lane
+held, `perfaudit_gpu.gd perf` in-run A/B, drift 0.97 to 1.06); no weak GPU was measured.
+
+**What Low holds, chosen by measurement** (delta GPU ms against the defaults in the same run; look:
+mean absolute difference over the frame against High, then the share of pixels moved by more than 8
+of 255, `aq_imgdiff.gd`):
+
+| Lever set | f100 home | f200f home | f200f full zoom-out | look at home (f100 / f200f) |
+|---|---|---|---|---|
+| SSAO off | -0.27 | -0.67 | -0.57 | 0.19 / 0.30, 0.1 / 0.7 % |
+| SSAO + Unblended (Low) | -0.61 | -1.07 | -0.97 | same as SSAO alone at home and at pitch 25 |
+| SSAO + Soft Low (q2) | -0.81 | -1.07 | -0.98 | 0.48 / 0.70, 1.7 / 2.2 %: a fine hatch in the penumbrae |
+| SSAO + Hard | -0.91 | -1.13 | | 1.03 / 1.67, 5.3 / 10.2 %: hard edges |
+| minspec2 Low (q2 + Unblended + SSAO) | -0.87 | -1.29 | -1.14 | as q2 |
+| FSR 75 % alone | -0.79 | -1.32 | -0.90 | |
+| minspec2 Low + FSR 75 % | | -2.19 | | |
+| SSAO + q2 + FSR 75 % / SSAO + FSR 75 % | | -2.04 / -1.78 | -1.61 / | |
+
+Unblended cascades halve the shadow casters (954 to 465 at the f200f home) and were pixel-identical
+to Blended at the home pitch and at pitch 25 on both maps: the far-tree shadow drop of 2026-11-02
+(lighting-and-environment.md) did not show. So Low keeps Soft High shadows and drops the cascade
+blend and SSAO; Soft Low buys another 4 to 6 % for a visible hatch and Hard for 5 to 10 % of the
+pixels, neither worth it.
+
+The verdict run (full-size captures, same run, delta against High):
+
+| View | High | Low | Lowest | Low look | Lowest look |
+|---|---|---|---|---|---|
+| f100 home | 2.269 | 1.705 (-24.9 %) | 1.183 (-47.9 %) | 0.18, 0.15 % | 1.84, 6.5 % (1.4 % > 24) |
+| f100 full zoom-out | 1.951 | 1.578 (-19 %) | 1.255 (-36 %) | 0.85, 2.7 % | 1.96 |
+| f200f home | 4.541 (two reads 4.483 / 4.599) | 3.558 (-22.6 %) | 2.567 (-44 %) | 0.30, 0.8 % | 3.09, 13.4 % (3.4 % > 24) |
+| f200f full zoom-out | 4.470 | 3.564 (-20.4 %) | 2.938 (-34 %) | 1.49, 7.0 % (3.1 % > 24; +1.1 brighter) | 4.20, 16.7 % |
+| f200f pitch 35 / 55 | | | | 0.43 / 0.44, 1.4 / 1.5 % | |
+
+Read: Low is indistinguishable from High at the home views; at the full zoom-out of the filled map
+some forest floor between trees reads a little brighter and flatter (the AO's contact darkening goes),
+the one place the board should judge. Lowest keeps the painterly masses and has no artifacts; flowers,
+grass and the dirt slope are a little softer at 1:1. Captures (downscaled for the board):
+`D:/dev/tabletop/docs/review_board/decisions/img/autoquality_{f100_home,f100_far,f200f_home,f200f_far}.jpg`
+(High | Low | Lowest, half size) and `autoquality_{f200f_home,f200f_far}_crop.jpg` (1:1 centre crops).
+
+**On a 1060** (minspec2's factors on these deltas): Low takes the f200f home from about 17.5 to 13.6
+ms and Lowest to about 10; the filled 320 ft full zoom-out stays the worst view (about 17 at Lowest).
+
+**The bench and its calibration.** `QualityBench` (a fixed forest at the window's size, median GPU
+ms of at least 30 frames after a 500 ms ramp, vsync off) at the title:
+
+| Scale (pixels per axis) | runs (ms) | predicted f200f home (x 2.28) | pick |
+|---|---|---|---|
+| 1 (1920x1080) | 2.056 / 2.152 / 2.208; 2.084 / 2.097 / 2.071 cold; 2.114 / 2.328 / 2.336 after 150 s of load | 4.7 to 5.3 | High |
+| 1.9 | 6.449 / 6.713 / 7.070 | 14.7 to 16.1 | Low |
+| 2 (3840x2160) | 6.992 / 7.261 / 7.181 cold; 8.0 to 8.4 warm | 15.9 to 19.1 | Low |
+| 3 | 14.767 / 14.891 / 16.478 | 33.7 to 37.6 | Lowest |
+
+Run-to-run noise 3 to 7 %, heat up to +15 %. `GAME_PER_BENCH` = 4.757 / 2.084 = 2.28 (f200f home and
+the bench in one run); at 4K the game measured 14.49 against a prediction of 15.9 to 16.6, so the
+prediction errs toward a lower preset. The emulation (`--quality-bench-scale`) picks High, Low and
+Lowest at 1, 2 and 3, as a card 1x, about 3.5x and about 7x slower than the 3080 should get. The first
+bench of a launch takes 2.9 s of wall time (meshes built on a thread), later ones about 1.5 s.
+
+**Eye view smoothing** (minspec2's open question 3). The eye view's forced MSAA 4x costs 0.90 of 3.65
+ms at the f100 eye view (25 %; about 3 ms on a 1060), more than Foliage edges Fast (0.61). Off moves
+2.2 % of the pixels by more than 8 (stepped edges on trunks, conifers and leaves; acceptable, not
+invisible). It is now a row, default on, and not part of the presets: Low alone brings the eye view
+near 8.4 ms on the 1060 estimate. Capture: `autoquality_eye_aa_crop.jpg` (on | off, 1:1).
+
+**Launch cost** (exported debug builds, true cold: a fresh user folder and a fresh NVIDIA shader
+cache per run, `--boot-trace-idle=34` so the trace covers the pick; before = main 8e943a57, after =
+this branch with the flag on, off = this branch as committed). Two sessions, arms alternated, n 4
+each:
+
+| Session, arm | title drawn (ms) | worst frame (ms) | frames over 100 ms (their total) |
+|---|---|---|---|
+| 1, before | 4608 / 4784 / 4569 / 4664 | 317.8 / 331.1 / 320.1 / 319.0 | 7 / 8 / 9 / 9 (1369 to 1583) |
+| 1, after | 4718 / 4563 / 4597 / 4513 | 320.5 / 319.8 / 318.2 / 328.2 | 9 / 7 / 9 / 8 (1365 to 1583) |
+| 1, off | 4658 / 4687 / 4559 / 4527 | 319.9 / 308.3 / 315.0 / 333.2 | 9 / 9 / 8 / 8 (1447 to 1630) |
+| 2, before | 4551 / 4548 / 4569 / 4572 | 315.5 / 329.4 / 322.3 / 326.4 | 9 / 9 / 7 / 8 (1351 to 1668) |
+| 2, after (compile-quiet bench) | 4576 / 4520 / 4562 / 4609 | 336.2 / 317.4 / 321.8 / 327.8 | 8 / 8 / 9 / 7 (1340 to 1562) |
+
+No difference: the worst frame is the warm-up's DRAW (about 320 ms) in every arm, and no bench
+frame is among any run's 12 worst (the 12th is 67 to 78 ms). The pick starts 1.5 s after the
+warm-up ends (about 25 s after the process start on a first launch) and takes about 2.5 s. It picked
+High in all 8 runs. Flag off loads nothing (771 of 962 scripts at the end, as main's 771 of 957;
+with the flag on 775).
+
+**Open: the first-run bench reads high.** In those launches the bench read 2.74 to 3.09 ms, against
+2.06 to 2.34 in the editor-run render jobs, so the prediction (6.3 to 7.1 ms) sits about 35 % above
+the calibration. The sampled frames took about 14 ms each (49 samples in 800 ms; the render jobs
+got 192, about 4 ms frames), so the GPU idled most of each frame and its clocks stayed low. No
+pipeline compiled while it sampled (0 restarts of the compile-quiet gate). What holds the frame
+there (vsync not off in that window, or Windows throttling a window that is not in front) is not
+found. On the 3080 the pick is still High with room; a card near a threshold would get one preset
+lower. Before the flag is flipped: find the cap, or calibrate `GAME_PER_BENCH` from the exported
+first-run reading (4.757 / 2.95 = 1.6).
+
+
 ## Measuring on a real weak GPU
 
 Every estimate above comes from an RTX 3080. A real capture on a weak machine beats all of them, and

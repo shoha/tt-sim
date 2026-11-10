@@ -64,6 +64,7 @@
 		"res://tests/unit/test_pause_overlay_change_level.gd",
 		"res://tests/unit/test_play_together_card.gd",
 		"res://tests/unit/test_property_row.gd",
+		"res://tests/unit/test_quality_auto.gd",
 		"res://tests/unit/test_render_scale.gd",
 		"res://tests/unit/test_resume_entry.gd",
 		"res://tests/unit/test_room_panel.gd",

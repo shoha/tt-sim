@@ -25,6 +25,11 @@ const NEW_MAP_DIALOG := "res://scenes/states/authoring/new_map_dialog.tscn"
 const GRAPHICS_WARMUP_SCREEN := "res://scenes/states/warmup/graphics_warmup_screen.tscn"
 ## The mip chain builder for a parsed library mesh (FoliageMips, called from AssetStore).
 const FOLIAGE_MIPS := "res://utils/foliage_mips.gd"
+## The first-run quality pick (quality_pick.gd with QualityAuto, QualityBench and QualityPreset)
+## and the project setting that turns it on (QualityAuto.FLAG_SETTING; off until the board's
+## answer on the Low preset's look).
+const QUALITY_PICK := "res://utils/quality/quality_pick.gd"
+const QUALITY_FLAG := "tt_sim/graphics/auto_quality"
 
 
 ## BiomeDesignerHost.attach(): puts the biome designer into the open authoring session and
@@ -68,6 +73,18 @@ static func new_map_dialog(preset: Dictionary, on_chosen: Callable) -> Node:
 static func foliage_mips(mesh: Mesh) -> void:
 	var mips: Variant = load(FOLIAGE_MIPS)
 	mips.apply(mesh)
+
+
+## Starts the first-run quality pick under `parent` (QualityPick: it frees itself, and does
+## nothing when the settings file already holds a pick or a graphics row) and returns it; null,
+## loading nothing, while QUALITY_FLAG is off.
+static func quality_pick(parent: Node) -> Node:
+	if not bool(ProjectSettings.get_setting(QUALITY_FLAG, false)):
+		return null
+	var pick: Node = (load(QUALITY_PICK) as GDScript).new()
+	pick.name = "QualityPick"
+	parent.add_child(pick)
+	return pick
 
 
 ## A new GraphicsWarmupScreen; `on_finished` runs once when it is done. Not yet in the tree.

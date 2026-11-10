@@ -22,6 +22,8 @@ extends RefCounted
 ##                       samples smaller mips, so a pass that speeds up with it is texture-bound
 ##   nocast ([class globs])  matching instances drawn as before but casting no shadow (card
 ##                       minspec2): what their shadow-map draws and the shadows they throw cost
+##   eye_aa (bool)       GameMap.eye_view_antialiasing (card autoquality): false drops the eye
+##                       view's MSAA 4x raise (and with it the foliage's antialiased twin)
 
 const Util := preload("res://tools/render_jobs/probes/perfaudit_gpu_util.gd")
 const GROUND := "res://shaders/authored_ground.gdshaderinc"
@@ -36,9 +38,15 @@ var _built := {}
 var _skirt_shaders := {}
 var _mip_bias := NAN
 var _casts := {}
+var _eye_aa := -1
 
 
 func apply(gm: GameMap, cfg: Dictionary) -> void:
+	if _eye_aa < 0:
+		_eye_aa = 1 if gm.eye_view_antialiasing else 0
+	var eye_aa := bool(cfg.get("eye_aa", _eye_aa == 1))
+	if gm.eye_view_antialiasing != eye_aa:
+		gm.eye_view_antialiasing = eye_aa
 	_apply_suns(gm, cfg)
 	_apply_foliage(gm, cfg)
 	_apply_skirt(gm, String(cfg.get("skirt", "")))

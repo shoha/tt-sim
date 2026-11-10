@@ -178,6 +178,11 @@ static func compile_shaders(shaders: Array[Shader]) -> int:
 	return done
 
 
+## Whether the compile behind the title is running now (the first-run quality pick waits for it).
+static func behind_running() -> bool:
+	return _behind != null and _behind.is_alive()
+
+
 ## Stops the compile behind the title after its current shader (or keeps it from starting): Root
 ## calls it at the doors into a map, which then compile what is left on first use.
 static func stop_behind() -> void:

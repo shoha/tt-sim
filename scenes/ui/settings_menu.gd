@@ -40,6 +40,10 @@ const _RELAUNCH_SENTINEL_ARG := "--renderer-relaunched"
 ## Shows the Music volume row. Off until the game plays music.
 const SHOW_MUSIC_VOLUME := false
 
+## The Graphics tab's Quality row (SettingsQuality), loaded by path when the menu opens so the
+## quality scripts stay off the start-up graph that this file is on.
+const QUALITY_ROW := "res://scenes/ui/settings_quality.gd"
+
 ## The Shadow quality for a player with no saved choice; project.godot's
 ## directional soft_shadow_filter_quality matches it, since a fresh install keeps that one.
 ## Godot rotates its soft-shadow taps per pixel and, with no TAA, nothing averages them, so
@@ -70,6 +74,8 @@ var _resetting := false
 ## The live Reset tween. A second Reset kills it and starts its own, and only the live
 ## tween's end clears _resetting, so the first tween ending cannot let the second tick.
 var _reset_tween: Tween
+## The Quality row's helper (SettingsQuality, made in _on_panel_ready).
+var _quality: RefCounted = null
 
 # Audio controls
 @onready var master_slider: HSlider = %MasterVolumeSlider
@@ -334,6 +340,7 @@ func _on_panel_ready() -> void:
 	SettingsRenderScale.fill(self)
 	get_tree().root.size_changed.connect(_refill_window_labels)
 	SettingsGpuOptions.apply_tooltips(self)
+	_quality = (load(QUALITY_ROW) as GDScript).new(self)
 
 	# Grid visuals
 	cell_tint_opacity_slider.value_changed.connect(_on_cell_tint_opacity_changed)
@@ -478,6 +485,8 @@ func _load_settings() -> void:
 	var renderer_method_value: String = config.get_value("graphics", "rendering_method", "")
 	var renderer_method_idx := _RENDERING_METHOD_VALUES.find(renderer_method_value)
 	renderer_method_option.select(renderer_method_idx if renderer_method_idx >= 0 else 0)
+	if _quality:
+		_quality.call("show_saved", config)
 
 	# Input device profile (reads from InputProfile autoload, not config)
 	input_device_option.selected = InputProfile.get_selected_profile() as int
@@ -843,6 +852,8 @@ func _show_defaults() -> void:
 	sdfgi_check.set_pressed_no_signal(Constants.RENDERING_TOGGLES_DEFAULTS["sdfgi_enabled"])
 	renderer_method_option.select(0)
 	p2p_enabled_check.set_pressed_no_signal(true)
+	if _quality:
+		_quality.call("refresh")
 
 
 ## Lets the sliders tick again once the live Reset tween lands; a killed one's end is ignored.
