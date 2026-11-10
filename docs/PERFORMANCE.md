@@ -1499,12 +1499,49 @@ GameplayMenu) takes 55.7 ms with everything else the table's nodes do in their _
 panels) 11.2 ms. A lazy build cannot cut 50 ms, so nothing was changed. The 1,500 may count a
 window run's or another path's Controls; this run had no tokens and drew nothing.
 
-Not measured yet: the exported true-cold A/B (n 4, arms alternated: first-view worst frame,
-frames over 100 ms, draw compiles; new 100 ft map, 200 ft lakeshore map, Play) waits for the
-lane; a 200 ft map with water was not attributed in a dev run. Not verified here: macOS (Metal,
-Forward Mobile), a minimum-spec GPU, AMD or Intel drivers, a release export (no ttscatter
-release DLL), a camera pan during rain while new meshes appear (the heightfield renders on every
-move then, as before).
+**Exported true-cold A/B.** Debug exports of main 5f2c32bf's WeatherRenderer (before) and the
+change (after), each run with a fresh user folder (override.cfg beside the exe) and a fresh
+NVIDIA shader cache (`__GL_SHADER_DISK_CACHE_PATH` with backslashes: with forward slashes the
+driver ignored it and kept its warm cache), 1920x1080 window, n 4 per arm, arms alternated,
+lane held. The new map opens 25 s after start (`--boot-trace-cold`, after the warm-up), Play
+clicks at 25 s (`--boot-trace-doors=play@25`). "First view" is the frame the map first draws
+("open: paint swatches warmed", "load: scatter built"); it was the worst frame of the open or
+load in every run.
+
+| Case | Arm | Draw compiles | First view, ms (mean) | Its draw, ms | Frames over 100 ms |
+|---|---|---|---|---|---|
+| New 100 ft forest | before | dr3 every run | 404.7, 404.0, 398.9, 408.9 (404.1) | 282 to 304 | 4, 4, 4, 3 |
+| | after | dr0 | 395.6, 391.2, 414.0, 415.1 (404.0) | 281 to 297 | 4, 4, 3, 4 |
+| Play test_map | before | dr7 every run | 445.9, 438.1, 428.4, 445.3 (439.4) | 300 to 319 | 4 each (2, 3, 2, 3 over 250) |
+| | after | dr0 | 434.5, 432.5, 426.9, 432.3 (431.6) | 296 to 306 | 4 each (3, 3, 2, 2 over 250) |
+| New 200 ft lakeshore | before | dr3 (3 runs) | 444.1, 439.9, 436.6 (440.2) | 294 to 297 | 3, 4, 3 |
+| | after | dr0 | 437.9, 467.3, 422.2, 432.6 (440.0) | 284 to 297 | 3, 3, 3, 4 |
+
+The draw-time compiles are gone on all three maps (the lakeshore map with water had the same
+dr3 and needed nothing more), but the first view's frame did not get shorter: unchanged on new
+maps, about 8 ms shorter in Play with overlapping ranges. The dr compiles were not that frame's
+cost. Its draw takes 280 to 320 ms with or without them; the compiles left in it (su14+sp7 new
+map, su32+sp23 Play) are surface and specialization compiles, which do not block the draw. What
+the draw spends that time on is not attributed; it is the next lead for this frame. One before run of the lakeshore
+map hung after "Applied map default environment" and was killed at 150 s (main's code, not this
+change; log kept with the card's handoff). Every exported run logs 24 to 30 "_image_compress_bc_func
+is null" errors from `SurfaceBake.bake` (the export has no BC or BPTC compressor), before and
+after alike.
+
+**Look and rain.** Home-view pairs, before and after, one user folder (so one settings.cfg),
+dev runs: the new 100 ft forest map's mean level moved -0.000 of 255 (mean absolute difference
+0.085, 0.011% of pixels by more than 2 of 255): same pixels. A level saved with rain moved +0.060
+and a close view of rain started after load +0.021, the rest being where the random rain streaks
+and the unfrozen wind put things; both read the same by eye. Rain started after load found no
+heightfield before it and the RainCollision after it; its first 3 s had a worst frame of 21.1 ms
+against 21.2 ms before (median 14.0 and 13.9 ms, warm caches), so the lazy heightfield costs no
+hitch and needs no pre-warm. Whether the drops stop on contact cannot be seen in a near-top-down
+still; the node and its settings are the same as before.
+
+Not verified here: macOS (Metal, Forward Mobile), a minimum-spec GPU, AMD or Intel drivers, a
+release export (no ttscatter release DLL), rain starting on a cold shader cache in an export, a
+camera pan during rain while new meshes appear (the heightfield renders on every move then, as
+before).
 
 ## Mobile renderer hang (2026-09-26): one occurrence, not reproduced
 
