@@ -18,6 +18,7 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	IdleThrottle.focus_source = Callable()
 	IdleThrottle.busy = false
 	IdleThrottle.focused = true
 	IdleThrottle.minimized = false
@@ -81,6 +82,27 @@ func test_focus_out_caps_and_focus_in_restores_the_cap_that_stood() -> void:
 	assert_eq(Engine.max_fps, expected)
 	node.notification(Node.NOTIFICATION_APPLICATION_FOCUS_IN)
 	assert_eq(Engine.max_fps, 144, "the player's own cap is put back")
+
+
+## The launch case (card arrivalchop): Root installs the throttle before the window's activation is
+## handled, so the install reads no focus, and the activation sends no application focus-in. The
+## next frame's read of the window lifts the cap; losing the window's focus later caps again.
+func test_a_window_focused_after_the_install_is_uncapped_without_a_notification() -> void:
+	var window_focused := [false]
+	IdleThrottle.focus_source = func() -> bool: return window_focused[0]
+	var node := IdleThrottle.new()
+	add_child_autofree(node)
+	assert_false(IdleThrottle.focused, "the install read the window before its activation")
+	assert_eq(Engine.max_fps, IdleThrottle.UNFOCUSED_FPS)
+	window_focused[0] = true
+	node._process(0.016)
+	assert_true(IdleThrottle.focused, "the window's own focus is read every frame")
+	assert_eq(Engine.max_fps, 0, "a focused window runs uncapped")
+	node.notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	assert_eq(Engine.max_fps, 0, "the window's own state wins over a notification it contradicts")
+	window_focused[0] = false
+	node.notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
+	assert_eq(Engine.max_fps, IdleThrottle.UNFOCUSED_FPS, "a window that loses the focus is capped")
 
 
 func test_a_lower_player_cap_stands_in_the_background() -> void:
