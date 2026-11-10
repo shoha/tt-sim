@@ -69,15 +69,17 @@ preset itself. Card autoquality (2026-11-10); the numbers and the captures are i
 
 ## Switches
 
-- **The flag: `tt_sim/graphics/auto_quality`** (project setting, default false = the game as before:
-  no measurement, no pick, the presets and Re-detect still in Settings). To ship the pick, add to
-  `project.godot`:
+- **The flag: `tt_sim/graphics/auto_quality`** (project setting, default false in code; SHIPPED ON
+  in `project.godot` since 2026-11-10, board perf-look-quality-low: ship). Off = the game as before:
+  no measurement, no pick, the presets and Re-detect still in Settings. To turn the pick off, set
+  `graphics/auto_quality=false` under `[tt_sim]` in `project.godot`, or put
   ```
   [tt_sim]
 
-  graphics/auto_quality=true
+  graphics/auto_quality=false
   ```
-  For one exported build, the same lines in an `override.cfg` beside the exe.
+  in an `override.cfg` beside one exported exe. A player whose `settings.cfg` already holds graphics
+  keys is never measured or changed.
 - `--quality-bench-scale=<f>` (user argument) multiplies the bench's viewport size, to emulate a
   slower card on a fast one: on an RTX 3080 at 1920x1080, 1 picks High, 1.9 to 2 Low, 3 Lowest.
 

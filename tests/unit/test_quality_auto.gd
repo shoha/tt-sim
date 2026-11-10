@@ -160,13 +160,17 @@ func test_apply_rows_sets_what_later_maps_read() -> void:
 	assert_eq(RenderScale.current, RenderScale.DEFAULT)
 
 
-func test_the_pick_is_off_by_default_and_loads_nothing() -> void:
+func test_the_flag_is_shipped_on_and_off_loads_nothing() -> void:
 	assert_eq(OnDemand.QUALITY_FLAG, QualityAuto.FLAG_SETTING)
-	assert_false(QualityAuto.applies_automatically(), "shipped off until the board answers")
+	assert_true(QualityAuto.applies_automatically(), "shipped on (board perf-look-quality-low: ship)")
+	var saved: Variant = ProjectSettings.get_setting(QualityAuto.FLAG_SETTING)
+	ProjectSettings.set_setting(QualityAuto.FLAG_SETTING, false)
 	var parent := Node.new()
 	add_child_autofree(parent)
+	assert_false(QualityAuto.applies_automatically())
 	assert_null(OnDemand.quality_pick(parent))
 	assert_eq(parent.get_child_count(), 0)
+	ProjectSettings.set_setting(QualityAuto.FLAG_SETTING, saved)
 
 
 func test_bench_pure_parts() -> void:

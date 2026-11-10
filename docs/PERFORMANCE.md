@@ -6970,9 +6970,9 @@ free.
 The board answer perf-weak-gpu-defaults ("auto"): a weak-GPU player who never opens Settings should
 still get about 60 fps. Built: a Quality row in Settings > Graphics (High, Low, Lowest over four
 existing rows; Custom when they match none), a first-run pick that measures the GPU behind the title
-and chooses the preset, a Re-detect button, and an Eye view smoothing row. The pick ships OFF (project
-setting `tt_sim/graphics/auto_quality`, default false; flip it with `[tt_sim] graphics/auto_quality=true`
-in `project.godot`), so the game is unchanged until the board has seen the Low look. Model:
+and chooses the preset, a Re-detect button, and an Eye view smoothing row. The pick was built behind a
+project setting (`tt_sim/graphics/auto_quality`, default false) and is SHIPPED ON since 2026-11-10 (board
+perf-look-quality-low: ship; `[tt_sim] graphics/auto_quality=true` in `project.godot`). Model:
 `docs/systems/graphics_quality.md`. All numbers from an RTX 3080 at 1920x1080 (editor binary, lane
 held, `perfaudit_gpu.gd perf` in-run A/B, drift 0.97 to 1.06); no weak GPU was measured.
 
