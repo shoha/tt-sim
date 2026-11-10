@@ -409,6 +409,17 @@ them the manual round trip above remains the gate.
 > libraries) but core does not ship it. The uniformity rules below (1024 px, 8-bit RGB, the bake's
 > formats) are unchanged: a WebP is always 8-bit colour. `LibraryContracts.EXTENSIONS` lists
 > `.webp`; plantgen's `LibrarySurfaces.check_folder` and vendored `contract.json` accept it.
+>
+> **How an exported game gets the BC formats (consumer only, 2026-11-09, card exportbake).** An
+> exported Godot game has no image compressor (the editor registers BC, BPTC, ETC and ASTC
+> compression only in editor builds; measured with the 4.7.2 template, every `Image.compress`
+> returns `ERR_UNAVAILABLE`), so the game cannot bake the formats below from a library's WebP or PNG
+> at run time. tt-sim's export plugin (`addons/surface_bake_export`) bakes every official library's
+> albedo, normal and ORM maps in the exporting editor and adds them to the pack under
+> `res://library_bake/` (SurfaceCache's layout); the game reads them first. Heights bake to L8 in
+> game, exactly as in the editor. A user library's maps in an exported game are drawn uncompressed
+> (albedo and ORM RGBA8, normal RG8, height L8, full mips), and cached like any bake. Nothing changes
+> for the producer: the library folder, its files and this contract stay as they are.
 
 A second path from treecube into tt-sim that bypasses Blender maps entirely: treecube
 builds a palette of assets, ground surfaces and placement rules that ships inside the

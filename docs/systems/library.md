@@ -265,6 +265,27 @@ treecube is gone ("The core library"). Step S9 (2026-10-25): per-season override
   surface once per user, to the same pixels; the old folders stay until the cache is cleared). Read with `FileAccess` and `Image.create_from_data` after the
   header, the size the format implies and the digest all check; never a `.res`, never loaded with
   `ResourceLoader` (a `.res` can carry a script). Old hash folders are not pruned yet.
+- **Exported games cannot compress; core's maps ship baked** (card exportbake, 2026-11-09). Godot
+  registers its image compressors in editor builds only: in an exported game every
+  `Image.compress` fails with `ERR_UNAVAILABLE` and logs an error (4.7.2 debug template, headless
+  and windowed; decompression works). Until this card an export therefore drew every surface
+  uncompressed (albedo, normal and ORM as RGB8, which Vulkan expands to RGBA8: +207 MB of texture
+  memory on a 16-layer map), logged 27 errors per forest open, and re-baked most maps on every
+  open, since the cache rejected its RGB8 files. Now: `SurfaceBake.can_compress()` (the `editor`
+  feature; `compressor` forces it in tests) chooses BC or the uncompressed fallback
+  (`fallback_format_of`: albedo and ORM RGBA8, normal RG8, height L8, full mips) without calling a
+  compressor that is not there; `SurfaceBake.accepts` lets an export take a BC or fallback cache
+  file and an editor only BC (it re-bakes a fallback an export left in a shared folder). The
+  export plugin `addons/surface_bake_export` (enabled in project.godot, excluded from the pack)
+  bakes every official library's albedo, normal and ORM maps in the exporting editor (its own cache
+  first, else a fresh bake: about 8 s for core with a partly warm cache), and adds them to the pack
+  as `res://library_bake/<library>/<hash>/<surface>_<kind>.ttimg`; `SurfaceStore.load_map` reads
+  that shipped bake first (`SurfaceCache.read_shipped`: any engine string, format, size and digest
+  still checked) and writes nothing for it. The export grows by 136 MB (39 sets x 3.49 MB);
+  numbers and the A/B in `docs/PERFORMANCE.md` "Exported games and the surface bake". A user
+  library's maps in an export stay uncompressed (no runtime compressor exists in a template; a
+  map mixing them with core's BC layers draws that kind's array uncompressed, GroundLayerArrays'
+  fallback). A dev run never has `res://library_bake` and bakes as before.
 - **Bindings (S3).** `library.json` `bindings` (and `default_biome`) replace the constants that
   named surfaces and biomes in code: `LibraryBindings.TABLE` lists each key with its legacy value
   (`fire.ash_surface` `ash`, `fire.ash_fallback` `dirt_peat`, `fire.burnt_biome` `burnt_forest`,

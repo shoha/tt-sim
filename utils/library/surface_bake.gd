@@ -19,6 +19,14 @@ extends RefCounted
 ## different (the import's BC7 encoder and ours disagree on a few ties), decoding to the same
 ## 8-bit colours. S0 had ORM at GENERIC source, which picks RGTC for an ORM whose blue is empty
 ## (format 21): the source must be sRGB (or channels RGB) to match the import.
+##
+## Only an editor binary can compress (card exportbake, 2026-11-09): Godot registers its BC, BPTC,
+## ETC and ASTC compressors in editor builds only, so in an exported game every Image.compress
+## returns ERR_UNAVAILABLE and logs an error (4.7.2 debug template, headless and windowed). There
+## the bake makes the same maps uncompressed instead (fallback_format_of: albedo and ORM RGBA8,
+## normal RG8, the channels BC5 keeps, height L8, full mip chains), which the cache keeps like any
+## bake. Core never gets there in an export: the export plugin (addons/surface_bake_export) ships
+## its BC maps in the pack (SurfaceCache.shipped_root); a user library's maps do.
 
 const KINDS: Array[String] = ["albedo", "normal", "orm", "height"]
 const INFO_KEYS: Array[String] = ["label", "kind", "role", "tile_m", "albedo_mean_linear"]
@@ -44,6 +52,11 @@ const MAX_TILE_M := 10000.0
 
 ## PNG colour types that carry at least a red and a green channel (a normal map needs both).
 const _COLOUR_TYPES: Array[int] = [2, 3, 6]
+
+## Whether bake() compresses: 0 asks the binary (can_compress), 1 forces compression, -1 forbids it
+## (tests). Zero is the default on purpose: it is also what this static var holds in the editor,
+## where a non-tool script's static initialisers do not run (the export plugin calls bake there).
+static var compressor: int = 0
 
 
 ## {ok, width, height, bit_depth, color_type, interlace} of the first PNG_HEADER_BYTES bytes of
@@ -290,7 +303,8 @@ static func extension_of(files: Dictionary, kind: String) -> String:
 
 
 ## `image` (a decoded PNG) as the imported texture of `kind` would be, or null when it is
-## empty or over the size cap. A new Image; `image` is left as it was.
+## empty or over the size cap. A new Image; `image` is left as it was. Where nothing can compress
+## (can_compress) the same mip chain in fallback_format_of(kind), without calling a compressor.
 ##
 ## Not bit-reproducible (card bakedet, 2026-11-09): the BC7 compressor (Image.compress, cvtt) bakes
 ## the same input to different bytes about 1 time in 100 for ash albedo, on the main thread, on one
@@ -306,19 +320,29 @@ static func bake(image: Image, kind: String) -> Image:
 		return null
 	var out := image.duplicate() as Image
 	out.clear_mipmaps()
+	var compressing := can_compress()
 	match kind:
 		"albedo":
 			_to_colour(out)
+			if not compressing:
+				out.convert(Image.FORMAT_RGBA8)
 			out.generate_mipmaps()
-			out.compress(Image.COMPRESS_BPTC, Image.COMPRESS_SOURCE_SRGB)
+			if compressing:
+				out.compress(Image.COMPRESS_BPTC, Image.COMPRESS_SOURCE_SRGB)
 		"normal":
 			_to_colour(out)
 			out.generate_mipmaps(true)
-			out.compress(Image.COMPRESS_S3TC, Image.COMPRESS_SOURCE_NORMAL)
+			if compressing:
+				out.compress(Image.COMPRESS_S3TC, Image.COMPRESS_SOURCE_NORMAL)
+			else:
+				out.convert(Image.FORMAT_RG8)
 		"orm":
 			_to_colour(out)
+			if not compressing:
+				out.convert(Image.FORMAT_RGBA8)
 			out.generate_mipmaps()
-			out.compress_from_channels(Image.COMPRESS_S3TC, Image.USED_CHANNELS_RGB)
+			if compressing:
+				out.compress_from_channels(Image.COMPRESS_S3TC, Image.USED_CHANNELS_RGB)
 		"height":
 			if out.get_format() != Image.FORMAT_L8:
 				out.convert(Image.FORMAT_L8)
@@ -337,7 +361,35 @@ static func _to_colour(image: Image) -> void:
 		)
 
 
-## The format a baked map of `kind` has.
+## True when this binary has Image compressors (an editor build; see the class doc), or as
+## `compressor` forces it.
+static func can_compress() -> bool:
+	if compressor != 0:
+		return compressor > 0
+	return OS.has_feature("editor")
+
+
+## The format a map of `kind` baked where nothing can compress has (an exported game): albedo and
+## ORM RGBA8 (what the GPU would expand RGB8 to on upload anyway), normal RG8 (BC5's two channels;
+## every reader takes red and green and rebuilds blue), height L8.
+static func fallback_format_of(kind: String) -> int:
+	match kind:
+		"albedo", "orm":
+			return Image.FORMAT_RGBA8
+		"normal":
+			return Image.FORMAT_RG8
+		_:
+			return Image.FORMAT_L8
+
+
+## True when a baked or cached map of `kind` in `format` can be used here: the compressed format
+## anywhere, the uncompressed fallback only where nothing can compress (an editor run re-bakes a
+## fallback map an exported game left in a shared cache).
+static func accepts(kind: String, format: int) -> bool:
+	return format == format_of(kind) or (not can_compress() and format == fallback_format_of(kind))
+
+
+## The format a map of `kind` baked by an editor (and the import) has.
 static func format_of(kind: String) -> int:
 	match kind:
 		"albedo":
@@ -352,12 +404,17 @@ static func format_of(kind: String) -> int:
 
 ## The byte size of a `width` x `height` image of `format` with a full mip chain, or -1 for a
 ## format the bake does not produce. Block formats cost one block per 4x4 pixels, at least one
-## block per mip.
+## block per mip; the uncompressed ones (L8, RG8, RGBA8) their bytes per pixel.
 static func data_size(format: int, width: int, height: int) -> int:
 	var block := 0
+	var pixel := 1
 	match format:
 		Image.FORMAT_L8:
 			block = 0
+		Image.FORMAT_RG8:
+			pixel = 2
+		Image.FORMAT_RGBA8:
+			pixel = 4
 		Image.FORMAT_DXT1:
 			block = 8
 		Image.FORMAT_RGTC_RG, Image.FORMAT_BPTC_RGBA:
@@ -369,7 +426,7 @@ static func data_size(format: int, width: int, height: int) -> int:
 	var h := height
 	while true:
 		if block == 0:
-			total += w * h
+			total += w * h * pixel
 		else:
 			total += maxi(1, (w + 3) / 4) * maxi(1, (h + 3) / 4) * block
 		if w == 1 and h == 1:

@@ -56,7 +56,7 @@ window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray()
+enabled=PackedStringArray("res://addons/surface_bake_export/plugin.cfg")
 
 [gui]
 

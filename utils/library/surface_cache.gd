@@ -12,15 +12,25 @@ extends RefCounted
 ##
 ## Layout (little endian): "TTIMG" | u8 version | u16 engine length | engine | u32 format |
 ## u32 width | u32 height | u8 mip flag | u32 data length | 32 bytes SHA-256 of the data | data.
+##
+## The shipped bakes (card exportbake): an exported game cannot compress (SurfaceBake), so the
+## export plugin (addons/surface_bake_export) bakes every official library's BC maps in the editor
+## and adds them to the pack under shipped_root, laid out as the cache is. SurfaceStore reads
+## them first and never writes them; they are pack content, so any engine string is accepted
+## (read_shipped) while the format, size and digest still check. A developer run has none.
 
 const MAGIC := "TTIMG"
 const VERSION := 1
 const FILE_EXTENSION := "ttimg"
 const HASH_LENGTH := 16
 const MAX_ENGINE_LENGTH := 128
+## Where an export's pack holds the shipped bakes.
+const SHIPPED_ROOT := "res://library_bake"
 
 ## Where the caches live; tests point it at a scratch folder.
 static var root: String = "user://library_cache"
+## Where the shipped bakes are read from; tests point it at a scratch folder.
+static var shipped_root: String = SHIPPED_ROOT
 
 
 ## The engine version string written into, and required of, every cache file.
@@ -34,9 +44,45 @@ static func engine_id() -> String:
 static func path_for(
 	library_id: String, hash_text: String, surface: String, kind: String
 ) -> String:
-	return root.path_join(library_id).path_join(hash_text).path_join(
+	return _path_under(root, library_id, hash_text, surface, kind)
+
+
+## The shipped bake of one map: path_for's layout under shipped_root (or `under`).
+static func shipped_path_for(
+	library_id: String, hash_text: String, surface: String, kind: String, under: String = ""
+) -> String:
+	return _path_under(
+		under if under != "" else shipped_root, library_id, hash_text, surface, kind
+	)
+
+
+static func _path_under(
+	base: String, library_id: String, hash_text: String, surface: String, kind: String
+) -> String:
+	return base.path_join(library_id).path_join(hash_text).path_join(
 		"%s_%s.%s" % [surface, kind, FILE_EXTENSION]
 	)
+
+
+## The shipped bake at `path`, or null when there is none or it does not decode. Unlike read(),
+## a file from any engine is taken: the editor that exported the game made it.
+static func read_shipped(path: String) -> Image:
+	if not FileAccess.file_exists(path):
+		return null
+	var bytes := FileAccess.get_file_as_bytes(path)
+	var engine := engine_of(bytes)
+	return decode(bytes, engine) if engine != "" else null
+
+
+## The engine string in a cache file's header, "" when the bytes have no readable header.
+static func engine_of(bytes: PackedByteArray) -> String:
+	var head := MAGIC.length() + 1 + 2
+	if bytes.size() < head or bytes.slice(0, MAGIC.length()).get_string_from_ascii() != MAGIC:
+		return ""
+	var length := bytes.decode_u16(MAGIC.length() + 1)
+	if length == 0 or length > MAX_ENGINE_LENGTH or bytes.size() < head + length:
+		return ""
+	return bytes.slice(head, head + length).get_string_from_utf8()
 
 
 ## The bytes of `image` (a baked map: a format SurfaceBake produces, with its mip chain).

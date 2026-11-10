@@ -15,7 +15,9 @@ extends RefCounted
 ##   formats the import gives (SurfaceBake: BC7
 ##   albedo, BC5 normal, BC1 ORM, L8 height, full mip chains), keeps the result in memory and
 ##   in the raw cache (SurfaceCache, user://library_cache/<library id>/<hash>/), and hands out an
-##   Image or an ImageTexture. A
+##   Image or an ImageTexture. An exported game cannot compress: it reads an official library's
+##   maps from the pack's shipped bakes (SurfaceCache.read_shipped) and bakes the rest to the
+##   uncompressed fallback (SurfaceBake.fallback_format_of). A
 ##   library file is NEVER loaded through ResourceLoader (it does not work on a keep file in a
 ##   pack, and would fail in the editor). A map load can have the maps it is about to draw baked
 ##   ahead on a worker (prebake(), SurfacePrebake): the first texture() or image() then takes
@@ -653,8 +655,10 @@ static func _time(key: String, amount: int) -> void:
 	timings[key] = int(timings.get(key, 0)) + amount
 
 
-## The map of `file` as {image, outcome, rejected}: the raw cache's when it holds a valid entry for
-## this engine (outcome "hit"), else decoded from the WebP or PNG, baked and written to the cache
+## The map of `file` as {image, outcome, rejected}: the pack's shipped bake when an export carries
+## one (outcome "hit"), else the raw cache's when it holds a valid entry for this engine in a
+## format this binary takes (SurfaceBake.accepts; outcome "hit"), else decoded from the WebP or
+## PNG, baked and written to the cache
 ## ("baked"); image null and outcome "failed" when the file is missing, hostile or unreadable;
 ## rejected true when a cache file was there but unusable. It reads and writes no table of the
 ## store, so the prebake lane runs it on its worker; the bake and the cache write hold
@@ -667,10 +671,20 @@ static func load_map(
 	# The open trace's step timers (timing_enabled): microseconds per step, in out["us"].
 	var timed := timing_enabled
 	var at := Time.get_ticks_usec() if timed else 0
+	# An exported game's pack carries the official libraries' BC maps (SurfaceCache.read_shipped).
+	var shipped := SurfaceCache.read_shipped(
+		SurfaceCache.shipped_path_for(library_id, hash_text, name, kind)
+	)
+	if shipped != null and shipped.get_format() == SurfaceBake.format_of(kind):
+		out["image"] = shipped
+		out["outcome"] = "hit"
+		if timed:
+			out["us"] = {"read": Time.get_ticks_usec() - at}
+		return out
 	var cache_path := SurfaceCache.path_for(library_id, hash_text, name, kind)
 	if FileAccess.file_exists(cache_path):
 		var cached := SurfaceCache.read(cache_path)
-		if cached != null and cached.get_format() == SurfaceBake.format_of(kind):
+		if cached != null and SurfaceBake.accepts(kind, cached.get_format()):
 			out["image"] = cached
 			out["outcome"] = "hit"
 			if timed:

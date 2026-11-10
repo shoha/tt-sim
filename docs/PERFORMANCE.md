@@ -1449,6 +1449,56 @@ cache then holds them), and keeps about 2.5 MB of 80 px textures. Not verified: 
 a minimum-spec machine, the Small tiles preference (48 px; warmed the same way, not timed), and an
 open whose library serves more structures.
 
+### Exported games and the surface bake (topic exportbake, 2026-11-09)
+
+Every surface-bake number above came from editor-binary runs. An exported game cannot compress:
+a scratch project exported with the 4.7.2 debug template gets `ERR_UNAVAILABLE` from
+`Image.compress` for S3TC, ETC, ETC2, BPTC and ASTC, headless and windowed (RenderingDevice
+present), while decompression of all of them works; this RTX 3080 samples BC (s3tc, bptc, rgtc)
+but not ETC2 or ASTC. So before this card an export drew core's surfaces as the decoded RGB8 with
+mips (normal RGB8 too), logged 27 errors per forest open, and the cache rejected those files on
+the next launch. Measured with real exports (job run through an override.cfg autoload, since an
+exported exe ignores `--script`), RTX 3080, 1920x1080, same settings.cfg (vsync off,
+`idle_throttle=false`: an unfocused export is capped at 15 fps and its GPU clocks down, which
+first read as 21 ms GPU frames), GPU idle (P8) before each batch; logs in
+`docs/plans/handoffs/exportbake_files/`.
+
+| 100 ft forest, valley 1234 | dev (editor) | export before | export after |
+|---|---|---|---|
+| ground arrays (16 layers, 1024) | BC7 / BC5 / BC1 / L8 | RGB8 / RGB8 / RGB8 / L8 | BC7 / BC5 / BC1 / L8 |
+| texture memory (monitor) | 782.3 MB | 988.9 MB | 782.3 MB |
+| video memory (monitor) | 895.6 MB | 1097.5 MB | 891.3 MB |
+| cold open, sheet (n 3) | 2236-2290 ms | 1418-1471 ms | 1249-1306 ms |
+| cold open, settled | 4091-4161 ms | 3341-3459 ms | 3168-3298 ms |
+| second launch, sheet | 1247-1260 ms | 1436-1543 ms | 1242-1280 ms |
+| second launch, worst frame | 243-247 ms (ground created) | 428-491 ms (ground created) | 375-390 ms (swatches) |
+| maps re-baked per open | 0 (cache) | 24 of 32, every open | 8 heights once, then 0 |
+
+The before export's cold open is faster than dev's cold one because it skips BC7 (2.1 s of lane
+bake), but it pays that open on every launch, rewrites about 100 MB of cache each time and builds
+its arrays from RGB8 in the "ground created" frame (+200 ms). test_map (played) shows the same
++206.6 MB of texture memory before and the dev figure after (911.7 vs 905.0 MB). GPU cost of the
+uncompressed arrays, in-run A/B with the scatter hidden: dev BC 3.23-3.27 ms against RGBA8
+3.37 ms; the before export RGB8 3.00-3.05 against BC 2.98 and RGBA8 3.08: +0.05 to +0.17 ms (2-5 %)
+on this GPU, more where bandwidth is short (not measurable here). Look: export after against dev,
+whole frame, mean abs 0.327 levels with 0.052 % of pixels over 2/255 (forest) and 0.277 / 0.027 %
+(test_map), against 0.362 / 0.663 % and 0.335 / 1.024 % for the before export; read by eye the
+same forest.
+
+The fix: the export plugin `addons/surface_bake_export` bakes core's albedo, normal and ORM maps in
+the exporting editor and adds them to the pack (`res://library_bake/`, 117 maps, 130 MB, 8 s
+with a partly warm editor cache); `SurfaceStore.load_map` reads them first; a binary without a
+compressor bakes an uncompressed fallback that its cache keeps (docs/systems/library.md). Price: the
+Windows export grows from 247.5 to 383.8 MB, the zip (deflate) from 161.0 to 228.1 MB (+67 MB);
+the pack still carries the albedo, normal and ORM WebP sources (about 34 MB, read today for the
+cache key, the header checks and the pictures), which a pack-only key could drop (not done). Alternatives weighed: a Godot texture import of the core maps ships the same bytes
+but breaks Route K's one loader path and adds about 150 maps to every fresh import; ETC2/ASTC
+cannot be produced either and do not sample on desktop NVIDIA; a native BC encoder in ttscatter
+would serve user libraries too but bakes different bytes from cvtt (a look change) and needs the
+native build on three platforms. Not verified: macOS (Metal BC support; a GPU without it gets
+Godot's decompress-on-upload, so no worse than before), a minimum-spec GPU, a release template,
+CI's headless Linux export running the plugin (it ran in a headless Windows export here).
+
 ### The first view's draw-time compiles (topic firstview, 2026-11-09)
 
 Audit S7: after the warm-up, a map's first view still compiled pipelines at draw time, on the

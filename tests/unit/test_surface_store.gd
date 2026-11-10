@@ -331,7 +331,7 @@ func test_data_size_matches_a_baked_core_surface() -> void:
 	assert_eq(SurfaceBake.data_size(image.get_format(), 1024, 1024), image.get_data().size())
 	assert_eq(SurfaceBake.data_size(Image.FORMAT_DXT1, 1024, 1024), 699064)
 	assert_eq(SurfaceBake.data_size(Image.FORMAT_L8, 1024, 1024), 1398101)
-	assert_eq(SurfaceBake.data_size(Image.FORMAT_RGBA8, 4, 4), -1, "not a baked format")
+	assert_eq(SurfaceBake.data_size(Image.FORMAT_RGB8, 4, 4), -1, "not a baked format")
 
 
 func test_a_real_png_set_bakes_to_the_imported_formats_and_uses_the_given_mean() -> void:
