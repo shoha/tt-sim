@@ -6117,6 +6117,48 @@ with (the pair's order alternated, ranges overlap), so the cost is inside the ru
 (+70 ms median, the with-splash minimum is the lowest of all ten). What the player sees is not
 measurable headless: only a real window shows the splash.
 
+### The d20 splash (topic splash, 2026-11-09; look-pending)
+
+The user: the icon splash is "very low quality (meant for an icon)". Cause: Godot 4.7's
+`application/boot_splash/stretch_mode` defaults to 1, Keep (fit the window, keep the aspect; the
+others are Disabled, Keep Width, Keep Height, Cover, Ignore; read from ProjectSettings), and the
+project never set it, so the 400 px icon was scaled up 2.7x to the full window height, not shown at
+its native size as the note above assumed. A real 1920x1080 window of an exported debug build shows
+the die from y 35 to 1045 with soft, stair-stepped edges.
+
+Now `assets/splash/boot_splash.png` (2160 x 2160 RGB, 1.06 MB) is rendered by `tools/render_splash.gd`
+from the real d20 model (`assets/models/dice/d20.glb`, the die of the old title screen): a custom
+unshaded shader (warm key ramp from rose shadow to pale gold, violet fill, a wash across each face,
+light worn edges from per-corner barycentrics) over an amber glow in a dusk-indigo haze with three
+gold glints, 2x supersampled with 4x MSAA and Lanczos-downsampled. Keep (the default, no key) fits
+the square to the window height: 1:1 at 2160 rows, halved at 1080p, so it is never upscaled up to
+4K; the die is 34 % of the height and the haze fades to exactly `bg_color` inside the square, so the
+bars beside it are seamless. The file is `importer="keep"` (no texture import) and `assets/splash/*`
+is in every preset's exclude filter: the exporter stores the splash image raw by itself, bypassing
+the filters, and without the exclusion the pack held it twice (+2.12 MB measured, now one copy).
+Nothing at start-up loads it from a script, so the boot graph is unchanged.
+
+Timeline of a launch (exported debug build, RTX 3080, warm user folder, outside clock from
+Process.Start through screen reads, inside from the boot trace; two runs): window 649-650 ms, the
+window painted `bg_color` 753-785 ms, splash image on screen 1,072-1,098 ms, first autoload loaded
+2,126-2,185 (the start-up graph compiles on the main thread), last autoload 2,571-2,605, main scene
+loaded 3,001-3,016, library serve +193-208, title `_ready` 3,442-3,449, title interactive 3,459-3,466
+(on screen 3,509-3,526 outside). The first launch in a user folder ran GraphicsWarmup (14.2 s) and
+showed the title at 10.7 s. So the splash is on screen about 2.4 s of a warm launch.
+
+Motion: the engine draws the splash once in Main::setup2 and has no animation setting; no project
+code runs a frame before every autoload is loaded. A probe first scene (a turning d20 on the splash
+colour that loads root.tscn with `load_threaded_request`, then `change_scene_to_packed`; dev run,
+windowed, three runs alternated with plain runs) drew its first frame only after the last autoload,
+then 48-52 frames over 751-830 ms (worst 22-23 ms) while root.tscn loaded on the worker, then froze
+about 450 ms in Root's `_ready` (library serve, title build) before the title; title interactive
+5,146-5,459 against 5,187-5,345 plain (no regression). In an exported build the same stretch is the
+main scene load, 410-430 ms by the boot trace, so a turning die would show for about 0.4 s of the
+2.4 s, after 1.5 s of still splash, and stop dead for 0.45 s before the title. Not built: it reads as
+a stutter more than as progress, and it would move the main scene. Real motion during the wait needs
+the start-up graph compiled off the main thread behind a light first scene (the boot2 BootPrecompile
+pattern applied to the autoloads), which is boot work, not splash work.
+
 ## Doubling pop-in (topic sysidle, card sysidle, 2026-11-09; look-pending)
 
 Board perf-popin-cap: the user kept the 1.5 s cap and asked, "maybe an exponential pop-in? like 1,
