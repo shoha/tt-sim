@@ -22,11 +22,21 @@ extends Node
 ##   whose window is rarely focused; install() adds no node there.
 ##
 ## Root installs the node after the title is up. The cap policy is a pure function (cap_for) over
-## the focus, the minimised state and whether a host has peers; the node feeds it from the
-## application focus notifications and, once a frame, the window's focus and mode and the peer
-## list (a few microseconds: there is no notification for a minimise, and a window minimised by
-## a script reports no focus change, measured 2026-11-09: focused stayed true while minimised, so
-## the minimised cap does not wait for the focus to go).
+## the focus, the minimised state and whether a host has peers; the node feeds it once a frame,
+## and on every focus notification, from the windows' own focus and mode and the peer list (a few
+## microseconds: there is no notification for a minimise, and a window minimised by a script
+## reports no focus change, measured 2026-11-09: focused stayed true while minimised, so the
+## minimised cap does not wait for the focus to go).
+##
+## The focus is read from the windows every frame, never kept from a notification alone (card
+## arrivalchop, 2026-11-10). Root installs the node before the first main-loop iteration has
+## handled the window's activation, so the install reads "not focused"; the activation that follows
+## sends the window a focus-in but the application no NOTIFICATION_APPLICATION_FOCUS_IN (measured:
+## a real launch logged window_focus_in at 6.8 s and no application focus event at all). Trusting
+## the notifications left a focused window capped at 15 fps from the title on: invisible on the
+## still title, the first map ran at 66.7 ms frames (process 0.5 ms, GPU 4 ms, the rest the cap's
+## sleep) until an alt-tab sent the application pair. The application notifications still set the
+## focus where no window can be read (a headless display: the unit tests).
 
 ## The frame cap while the window is unfocused but visible.
 const UNFOCUSED_FPS := 15
@@ -51,6 +61,8 @@ static var allow_scripted := false
 ## graphics warm-up behind the title, whose threads hand their RenderingServer calls to the main
 ## thread once a frame: at 15 fps its gathering took 8.7 s against 3.4 s uncapped). No cap then.
 static var busy := false
+## For tests: a func() -> bool read in place of the windows' focus (a headless display has none).
+static var focus_source: Callable = Callable()
 ## Engine.max_fps before the throttle lowered it; -1 while the throttle holds no cap.
 static var _base_fps := -1
 
@@ -120,6 +132,19 @@ static func reapply() -> void:
 	_set_cap(cap_for(enabled and not busy, focused, minimized, _hosting_peers()))
 
 
+## Whether the game has the focus now: focus_source when set, else whether any of this app's
+## windows is focused; null on a headless display, which has no focus to read.
+static func read_focus() -> Variant:
+	if focus_source.is_valid():
+		return bool(focus_source.call())
+	if DisplayServer.get_name() == "headless":
+		return null
+	for id in DisplayServer.get_window_list():
+		if DisplayServer.window_is_focused(id):
+			return true
+	return false
+
+
 ## The cap the throttle holds now, 0 when none.
 static func held_cap() -> int:
 	return Engine.max_fps if _base_fps >= 0 else 0
@@ -146,7 +171,6 @@ static func _hosting_peers() -> bool:
 
 
 func _enter_tree() -> void:
-	focused = DisplayServer.window_is_focused()
 	_refresh()
 
 
@@ -163,18 +187,24 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_APPLICATION_FOCUS_IN:
 		focused = true
 		_refresh()
+	elif what == NOTIFICATION_WM_WINDOW_FOCUS_IN or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		_refresh()
 
 
 func _process(_delta: float) -> void:
 	_refresh()
 
 
-## Reads the window mode (a minimise sends no notification) and re-applies the cap for the focus,
-## the mode and the host's peers.
+## Reads the windows' focus and mode (a minimise sends no notification, and a launch's first
+## activation no application focus-in) and re-applies the cap for the focus, the mode and the
+## host's peers.
 func _refresh() -> void:
 	# A headless display reports its window minimised, so it is never read there.
 	minimized = (
 		DisplayServer.get_name() != "headless"
 		and DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_MINIMIZED
 	)
+	var now: Variant = read_focus()
+	if now != null:
+		focused = now
 	reapply()

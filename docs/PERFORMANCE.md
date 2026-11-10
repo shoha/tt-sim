@@ -86,7 +86,9 @@ reader holding its file (4c56da38); the title leaked six orphan nodes per visit 
 BC7 compressor is not bit-reproducible (about 1 block in 100 differs, thread-dependent: bakedet), so
 tests compare baked maps by decompressed pixels within a tolerance; the sculpt re-bed test was random
 per run (a random prop yaw against the row quaternion's 2^-10 rounding; the product was right,
-gateflakes); wall-time budget tests fail under heavy load by design (`test_live_map_edits`).
+gateflakes); wall-time budget tests fail under heavy load by design (`test_live_map_edits`); the
+idle throttle held a focused window at 15 fps from launch until an alt-tab, because a launch sends no
+application focus-in (fixed: the windows' focus is read every frame, arrivalchop, "Idle throttle").
 
 ### Found false
 
@@ -6254,6 +6256,57 @@ The title is cheap to draw, so the unfocused saving here is the small end: a loa
 frame several times more (the audit's 3-4 ms GPU frame at home), and the 15 fps cap removes three
 quarters of those frames. The perf budget holds the two caps (`idle_unfocused_fps`,
 `idle_minimized_fps`). The boot graph limit rose by one script (343).
+
+### A focused window held at 15 fps (card arrivalchop, 2026-11-10)
+
+The user: the first map of a session ran at about 15 fps while the window had the focus (zooming
+and panning), then 60 for the rest of the session. Cause: the throttle took its focus from the
+application notifications alone, and a launch never sends the first one. Root installs the node in
+`_ready`, before the first main-loop iteration has handled the window's activation, so
+`window_is_focused()` reads false at the install; the activation then sends the window a focus-in
+(`NOTIFICATION_WM_WINDOW_FOCUS_IN`) but the application no `NOTIFICATION_APPLICATION_FOCUS_IN` (every
+probe launch below logged `window_focus_in` 1.3 to 2.1 s after the probe's init and no application
+focus-in at all; an application focus-out does arrive when another window takes the foreground). So
+`focused` stayed false and the cap stood at 15 from the title on: invisible on the still title, the
+sheet's own 240 fps cap hid it during the load, and `LoadPacing.uncover` put it back on the revealed
+table. It lasted until an alt-tab sent the application pair, which is why only the first map of a
+session showed it. The measurement in the section above installed the throttle from a render job 3 s
+into the run, after the activation, so it never saw the launch.
+
+Fix: `IdleThrottle._refresh()` reads the windows' own focus every frame and on every window or
+application focus notification (`read_focus()`: any of the app's windows focused), as it already
+read the window mode; the application notifications still set it where no window can be read
+(headless). Test `test_a_window_focused_after_the_install_is_uncapped_without_a_notification`.
+
+Measured with an autoload probe added through an untracked `override.cfg` (so the game runs its own
+main loop and Root installs the throttle as for a player; dev run, `godot --path`, no warm-up), the
+player's `settings.cfg` (vsync on, SSAO, shadows High, lo-fi), a maximised window on the 1440p
+monitor (world viewport 2560x1369), three play loads in one process, frames in the 3 s after
+`level_loading_completed`, wall ms mean / median / p95 / worst, `Engine.max_fps` read every frame.
+test_map is the 200 ft valley (format 4); "old map" is the same biome, landform, size and seed made
+by bfc8adc0 (format 3), since commits before mapformat cannot read format 4:
+
+| Build | Map | Loads 1 / 2 / 3: ms to loaded | Frames in 3 s | Wall ms | max_fps after the sheet |
+|---|---|---|---|---|---|
+| bfc8adc0 (before sysidle) | old map | 1,591 / 482 / 484 | 180 / 179 / 179 | 16.8-16.9 / 14.0 / 20.9-21.0 / 51-56 | 0 |
+| 9025ca23 (sysidle merged) | old map | 1,696 / 483 / 494 | 46 / 46 / 46 | 65.4-65.8 / 66.7 / 66.7 / 66.7-66.9 | 15 |
+| main f12e08fa | test_map | 7,001 (cold user folder) / 573 / 642 | 45 / 46 / 46 | 65.5-73.1 / 66.7 / 66.7-66.8 / 67-308 | 15 |
+| fix | test_map | 1,888 / 521 / 503 | 179 / 178 / 178 | 16.9-17.4 / 14.3-14.4 / 21.2-21.4 / 56-127 | 0 |
+
+In the capped frames the process part was 0.5 ms, the draw 2 ms and the rest (the frame cap's sleep)
+64 ms; the world viewport's GPU time read 4 ms right after the reveal and 13 to 20 ms later, the
+GPU clocking down under the cap (the note in "Ground clipmap"). With the fix, a second window taking
+the foreground still caps the game at 15 fps at once (app focus-out, window focus-out, max_fps 15,
+a load behind the sheet at 240), so the unfocused saving above stands.
+
+Two things in these traces that are not this regression: the 60 fps frames alternate 13.9 and 20.8
+ms, two and three refreshes of the 144 Hz display averaging 16.67 ms, in every build including
+bfc8adc0 (so "frames over 20 ms" counts about 40 percent of any steady second); and a session's first
+load takes 1.6 to 1.9 s against 0.5 s later, with one long main-thread frame on test_map (91 ms of
+process in the fixed build), also before sysidle. Not measured: a game embedded in the editor's Game
+workspace (the fix reads the embedded window's focus as Godot reports it), an exported build (the
+same install order, so it had the bug too), authoring (the cap is global: the title was already at
+15 fps).
 
 ## Boot splash (topic sysidle, card sysidle, 2026-11-09)
 
