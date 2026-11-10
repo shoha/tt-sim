@@ -83,6 +83,7 @@ GPU.
 | System | A map's first-view pipelines compiled in the warm-up instead of at draw (firstview) | draw-time compiles gone on the new 100 ft, Play and 200 ft lakeshore maps; the first view's 400-440 ms frame is unchanged, so they were not its cost | c381eacf |
 | Download | Exported games ship core's BC7/BC5/BC1 surface maps in the pack, because an export has no texture compressor (exportbake; board perf-export-size: keep) | export texture memory 988.9 -> 782.3 MB (= the editor), 27 compress errors per open -> 0, cache hits 8 -> 32 of 32 and no writes on a second launch, cold sheet 1.42-1.47 -> 1.25 s; zip 161 -> 228 MB (+67 MB) | 437164eb |
 | System | A map's first-view frame: the warm-up also draws the ground look bakes' canvas pipelines, and a later launch compiles the covered shaders on a low-priority thread behind the title (viewdraw) | exported true-cold, n 4 alternated: first view 394.7 -> 113.1 ms on a first launch (draw 287-295 -> 8-9 ms) and 384.0 -> 96.1 ms on a second; same pixels (mean change -0.000, 0.010 % of pixels moved); the cost moved behind the title (warm-up draw frame 217-224 -> 315-326 ms; later launches' title frames 81-91 ms for about 1.3 s) | 9b9586cb |
+| GPU | Quality presets (High = the defaults, Low, Lowest) and a measured first-run pick behind the title, shipped on; a weak GPU's first run no longer gets the project defaults (minspec2, autoquality; board perf-weak-gpu-defaults: auto, perf-look-quality-low: ship) | RTX 3080: Low saves 19-25 % of the frame (filled 200 ft home 4.54 -> 3.56 ms), Lowest 34-48 %; estimated on a GTX 1060 at 1080p: filled maps 14.5-17.5 ms home at defaults, 10.4-12.9 at Low, 7.4-9.4 at Low + FSR 75 %; launch watch unchanged (title 4.49-4.73 s); the pick is emulation-validated only | 9da5d7af, 4abd0b16 |
 
 Correctness found on the way: a client's GameState never took transforms, so after per-token adds
 it lagged up to the heartbeat (fixed, three ENet consistency scenarios, 8fd3af5e); two dev builds
@@ -144,8 +145,16 @@ against 1.37 ms) or oblong tiles (Jolt's triangle-mesh fallback, which also leak
 
 From the register's rows that are not merged, with their measured size:
 
-- **GPU.** The ground clipmap is merged and on (see Wins); not measured: a 1060-class GPU,
-  1440p/4K with it on, the skirt on a 320 ft map, and the clipmap's regrowth patch in play or over
+- **Weak GPUs.** No weak GPU was ever measured: the 1060 and Iris Xe numbers are estimates from an
+  RTX 3080 proxy ("Minimum-spec estimate"), and the first-run pick is validated by emulation only.
+  The exported benchmark reads 17-21 % above the editor's (the driver holds an exported frame at two
+  refreshes, so the GPU idles at low clocks; residual cause unknown), so a card near a threshold may
+  land one preset low (the shipped constant keeps that error toward Low). One real capture on a
+  borrowed machine ("Measuring on a real weak GPU", one command, one file) would replace every
+  estimate and should be the next step on this line. Unbuilt: the ground material that reads only
+  the baked composite (about 0.25 ms on the 3080, about 0.9 on a 1060; needs camera-dependent
+  per-chunk material swaps).
+- **GPU.** The ground clipmap is merged and on (see Wins); not measured: 1440p/4K with it on, the skirt on a 320 ft map, and the clipmap's regrowth patch in play or over
   the network. A skirt clipmap was evaluated and not built (at the far view the plain ground shader
   saves nothing, +0.084 ms; hiding the skirt saves 0.369 ms but that is its geometry and shadows).
   The baked-only material for fully covered flat chunks (about 0.24 ms at home) is unbuilt, and
@@ -185,13 +194,14 @@ From the register's rows that are not merged, with their measured size:
   stays at the title after a map (526 MB unattributed, engine-side); the first-launch warm-up
   (done; a first launch still has 8 frames over 100 ms, the worst 228 ms: the warm-up's first draws, a 214 ms
   wind-shader build on the main thread, the 156 ms first title frame; Host / Join / Resume clicked
-  during the warm-up are tested in units only, and the structure tool's first open is about 690 ms,
-  was 67-71 ms on 2026-10-31: card firstlaunch2 is on these); about 80 pipeline compiles per load;
+  during the warm-up are tested in units only; the structure tool's first open is fixed, 54-58 ms
+  by structopen; a first launch's worst frame is now the hand-over, 306-319 ms); about 80 pipeline compiles per load;
   1,500 Controls rebuilt per play load; process memory creeps 2.7 MB per map cycle. Real motion in
   the boot splash needs the autoload scripts compiled off the main thread (a rotating die measured:
   0.4 s of turning in an export, then a 450 ms freeze in `Root._ready`; not built).
-- **Look-pending** (the user's look is the gate): cleared by the board's answers on 2026-11-09,
-  except perf-look-rendersize. Texture shipping is lossless, so it has no look to judge.
+- **Look-pending** (the user's look is the gate): none; every audit board question is answered
+  (the last, perf-look-quality-low, on 2026-11-10). Texture shipping is lossless, so it has no look
+  to judge.
 - **Test hygiene found on the way.** GUT silently dropped two test scripts that did not parse
   (14 tests, for days); `tools/gut_shards.gd` now fails a shard whose log says "Ignoring script",
   and keeps and prints a crashed shard's log (an access violation in `test_authoring_open` was seen
