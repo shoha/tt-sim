@@ -6146,6 +6146,24 @@ loaded 3,001-3,016, library serve +193-208, title `_ready` 3,442-3,449, title in
 (on screen 3,509-3,526 outside). The first launch in a user folder ran GraphicsWarmup (14.2 s) and
 showed the title at 10.7 s. So the splash is on screen about 2.4 s of a warm launch.
 
+Before and after, exported debug builds of main d5839419 (icon splash) and c8f538d6 (this splash), real
+1920x1080 window, four rounds, each round the icon build first (not alternated in order; round 1 of
+the icon build was cold, title 3,979 ms, dropped):
+
+| | icon splash (n 3) | d20 splash (n 4) |
+|---|---|---|
+| window appears (outside) | 597-609 | 648-735 |
+| splash on screen (outside) | 1,018-1,035 | 1,100-1,237 |
+| window to splash | 421-426 | 442-502 |
+| title interactive (inside), median (range) | 3,325 (3,298-3,429) | 3,393 (3,368-3,455) |
+
+The d20 build's title comes about 70 ms later at the median; about 30 ms of it shows as a longer
+window-to-splash step, decoding the 2160 px PNG (1.06 MB) against the 400 px icon. A 1440 px image
+would decode faster but blur at 4K. The real capture of the new splash (`docs/plans/handoffs/splash/`,
+gitignored) shows the die sharp, 34 % of the height, no seam at the square's edge, no banding. These
+timings predate the first-launch warm-up change (branch firstlaunch, which shows the title at once and
+runs the warm-up behind it), so the title times after that merge will differ.
+
 Motion: the engine draws the splash once in Main::setup2 and has no animation setting; no project
 code runs a frame before every autoload is loaded. A probe first scene (a turning d20 on the splash
 colour that loads root.tscn with `load_threaded_request`, then `change_scene_to_packed`; dev run,
@@ -6153,7 +6171,9 @@ windowed, three runs alternated with plain runs) drew its first frame only after
 then 48-52 frames over 751-830 ms (worst 22-23 ms) while root.tscn loaded on the worker, then froze
 about 450 ms in Root's `_ready` (library serve, title build) before the title; title interactive
 5,146-5,459 against 5,187-5,345 plain (no regression). In an exported build the same stretch is the
-main scene load, 410-430 ms by the boot trace, so a turning die would show for about 0.4 s of the
+main scene load, 401-431 ms by the boot trace in eight export runs (the probe itself cannot run in an
+export: a release or debug template refuses a scene path on the command line, "compiled without
+support for path overrides"), so a turning die would show for about 0.4 s of the
 2.4 s, after 1.5 s of still splash, and stop dead for 0.45 s before the title. Not built: it reads as
 a stutter more than as progress, and it would move the main scene. Real motion during the wait needs
 the start-up graph compiled off the main thread behind a light first scene (the boot2 BootPrecompile
