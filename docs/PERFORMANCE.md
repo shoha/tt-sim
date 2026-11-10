@@ -78,6 +78,10 @@ GPU.
 | Tokens | Pack idle animation at 30 Hz on screen, none off screen (tokenmesh; board perf-token-anim: 30) | 500 tokens 8.09 -> 0.67 ms headless | tokenmesh |
 | Network | Map document format 4 and 5: scatter rows in a binary codec (mapformat; board perf-map-format: binary) | 320 ft `map.ttmap` 3.60 -> 1.44 MB; late-join state 3.62 -> 1.46 MB; join to table 3.12 -> 2.12 s | mapformat |
 | Download | Surface maps shipped as lossless WebP, the loader reads WebP or PNG (texwebp; board perf-texture-shipping: webp) | surfaces in the zip 150.4 -> 45.1 MB (deflate 6, about -105 MB of the 269 MB); pixel-identical (156 of 156 maps; a home frame byte-identical); cold open +78 ms inside the spread | 57f62b34, core-library c67e39f, plantgen baa95df |
+| System | The doors during the warm-up: the pool's queued compiles drain before a door runs, so Play / Edit / New map no longer freeze the hand-over (firstlaunch2) | hand-over frame 3,992-4,107 -> 180-385 ms; worst door frames are the map's own first view (395-458 ms) | firstlaunch2 |
+| Authoring | The Structure pane's first open: its pictures decode on workers and its planks bake on the prebake lane as the open begins (structopen) | first open 685-721 ms plus a 256-304 ms bake -> one 54-58 ms frame | f12e08fa |
+| System | A map's first-view pipelines compiled in the warm-up instead of at draw (firstview) | draw-time compiles gone on the new 100 ft, Play and 200 ft lakeshore maps; the first view's 400-440 ms frame is unchanged, so they were not its cost | c381eacf |
+| Download | Exported games ship core's BC7/BC5/BC1 surface maps in the pack, because an export has no texture compressor (exportbake; board perf-export-size: keep) | export texture memory 988.9 -> 782.3 MB (= the editor), 27 compress errors per open -> 0, cache hits 8 -> 32 of 32 and no writes on a second launch, cold sheet 1.42-1.47 -> 1.25 s; zip 161 -> 228 MB (+67 MB) | 437164eb |
 
 Correctness found on the way: a client's GameState never took transforms, so after per-token adds
 it lagged up to the heartbeat (fixed, three ENet consistency scenarios, 8fd3af5e); two dev builds
@@ -88,7 +92,9 @@ tests compare baked maps by decompressed pixels within a tolerance; the sculpt r
 per run (a random prop yaw against the row quaternion's 2^-10 rounding; the product was right,
 gateflakes); wall-time budget tests fail under heavy load by design (`test_live_map_edits`); the
 idle throttle held a focused window at 15 fps from launch until an alt-tab, because a launch sends no
-application focus-in (fixed: the windows' focus is read every frame, arrivalchop, "Idle throttle").
+application focus-in (fixed: the windows' focus is read every frame, arrivalchop, "Idle throttle");
+an exported game has no texture compressor at all, so exports ran the ground uncompressed and
+dev-run texture numbers did not describe them (fixed by shipping the baked maps, exportbake).
 
 ### Found false
 
@@ -148,8 +154,14 @@ From the register's rows that are not merged, with their measured size:
   0.32-0.34 ms on a filled 320 ft map; finer chunks lose). FoliageBudget still counts triangles
   instead of the cost. Built ground-cover materials run 0.13 / 0.36 ms slower than copies of
   themselves (cause not found). A lean ground-cover shader variant saves 0.04-0.16 ms and was
-  skipped (board perf-flower-lean: skip; branch foliagefix keeps it). The user's one unanswered
-  look question is perf-look-rendersize (1440p at the output-sized viewport).
+  skipped (board perf-flower-lean: skip; branch foliagefix keeps it). Every audit board question
+  is answered.
+- **First view and exports.** A map's first-view frame still costs 400-440 ms with its draw at
+  280-320 ms unattributed (the draw-time compiles were not it). The first street and Dress take
+  about 566-604 ms. Not verified in an export: macOS (Metal), a minimum-spec GPU, a release
+  template, CI's headless Linux export running the surface-bake plugin, and a user-imported
+  library in a real export (the uncompressed fallback is unit-tested only). Dropping the core WebP
+  sources from the pack would win back about 34 MB (they are still read at runtime).
 - **Tokens.** The shadow pass's plain fade loop, 0.47 ms from 32 tokens (a light-space grid).
   Shared helper meshes (a pack token is still 29.2 nodes in the census). The avatar system is
   likely to be reworked (user, 2026-11-09), so avatar-side work waits.
