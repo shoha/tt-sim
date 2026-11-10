@@ -378,3 +378,28 @@ func test_looks_past_the_slots_are_dropped() -> void:
 
 func test_the_bake_shader_is_warmed() -> void:
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/ground_light_field_bake.gdshader")
+
+
+## The warm-up draws the bakes' canvas pipelines once in a viewport of the bakes' own format, so a
+## map's first bake does not compile them (197 and 82 ms cold, card viewdraw).
+func test_the_warm_viewport_draws_what_the_bakes_draw() -> void:
+	var warm := GroundLookBake.warm_viewport()
+	var bake := GroundLookBake.bake_viewport("LookBake0")
+	assert_eq(warm.transparent_bg, bake.transparent_bg, "same transparency")
+	assert_eq(warm.disable_3d, bake.disable_3d, "2D only")
+	assert_eq(warm.use_hdr_2d, bake.use_hdr_2d, "same format")
+	assert_eq(warm.render_target_update_mode, SubViewport.UPDATE_ONCE, "draws once")
+	var shaders := []
+	var blends := []
+	for child in warm.get_children():
+		var item := child as CanvasItem
+		if item.material is ShaderMaterial:
+			shaders.append((item.material as ShaderMaterial).shader)
+		elif item.material is CanvasItemMaterial:
+			blends.append((item.material as CanvasItemMaterial).blend_mode)
+	assert_has(shaders, GroundLookBake.BAKE_SHADER, "the light-field bake")
+	assert_has(shaders, GroundLookBake.STEEP_SHADER, "the steep bake")
+	assert_has(blends, CanvasItemMaterial.BLEND_MODE_MUL, "the mass stamps' multiply")
+	assert_has(blends, CanvasItemMaterial.BLEND_MODE_ADD, "the mass stamps' add")
+	warm.free()
+	bake.free()

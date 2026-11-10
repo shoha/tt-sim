@@ -92,6 +92,8 @@ const FORCE_ARG := "--warm-graphics"
 const MARKER_SECTION := "warmup"
 const MARKER_KEY := "key"
 const _INCLUDE_PATTERN := '#include\\s+"([^"]+)"'
+## The longest finish_behind() waits for the shader in flight (one took up to about 90 ms).
+const BEHIND_WAIT_MS := 1000
 
 ## The shaders the warm-up started, kept for the session so a later load by path returns the
 ## same Shader and so the same compiled RID.
@@ -100,6 +102,10 @@ static var _held: Array[Shader] = []
 static var _held_materials: Array[Material] = []
 ## WorkerThreadPool tasks still to be waited for (wait_later), collected in release_materials().
 static var _late_tasks := PackedInt64Array()
+## The compile behind the title of a launch that does not warm (compile_behind), null before it.
+static var _behind: Thread = null
+## Set by stop_behind(): that compile stops after its current shader, or never starts.
+static var _behind_stop := false
 
 
 static func hold(shader: Shader) -> void:
@@ -137,6 +143,63 @@ static func release_materials() -> void:
 ## end instead of now: the warm-up's drain probe when it gave up before the task ran.
 static func wait_later(task: int) -> void:
 	_late_tasks.append(task)
+
+
+## Compiles every covered shader (get_rid) on a low-priority thread behind the title, on a launch
+## that does not warm. The warm-up's caches outlive the process, but each process still compiles a
+## shader on first use, on the main thread: a map's first sight of the ground cost about 220 ms
+## in its creation and 220 ms more in its first view (the looked twins), and the wind shaders 25
+## to 30 ms each under the loading sheet (card viewdraw, 2026-11-10, an exported build on warm
+## caches). The shaders load and are held here; the thread only compiles. Returns whether it
+## started: not headless, not after stop_behind(), once a session.
+static func compile_behind() -> bool:
+	if _behind != null or _behind_stop or DisplayServer.get_name() == "headless":
+		return false
+	var shaders: Array[Shader] = []
+	for path: String in COVERED_SHADERS:
+		var shader := load(path) as Shader
+		if shader != null:
+			hold(shader)
+			shaders.append(shader)
+	_behind = Thread.new()
+	_behind.start(compile_shaders.bind(shaders), Thread.PRIORITY_LOW)
+	return true
+
+
+## Calls get_rid() on each of `shaders`, which compiles one not yet compiled, until stop_behind().
+## Returns how many it reached. Any thread.
+static func compile_shaders(shaders: Array[Shader]) -> int:
+	var done := 0
+	for shader in shaders:
+		if _behind_stop:
+			break
+		shader.get_rid()
+		done += 1
+	return done
+
+
+## Stops the compile behind the title after its current shader (or keeps it from starting): Root
+## calls it at the doors into a map, which then compile what is left on first use.
+static func stop_behind() -> void:
+	_behind_stop = true
+
+
+## Stops the compile behind the title and waits for its current shader, at most BEHIND_WAIT_MS
+## (Root's exit: a thread must not be destroyed while it runs; one still running then stays
+## referenced here). Returns how many shaders it compiled, or -1 when none ran or it is still
+## running.
+static func finish_behind() -> int:
+	if _behind == null or not _behind.is_started():
+		return -1
+	_behind_stop = true
+	var waited_from := Time.get_ticks_msec()
+	while _behind.is_alive() and Time.get_ticks_msec() - waited_from < BEHIND_WAIT_MS:
+		OS.delay_msec(5)
+	if _behind.is_alive():
+		return -1
+	var done: int = _behind.wait_to_finish()
+	_behind = null
+	return done
 
 
 ## Whether `shader`'s get_rid() belongs on the warm-up's worker rather than the main thread.

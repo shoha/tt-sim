@@ -146,13 +146,24 @@ func _ready() -> void:
 		precompile.first = PackedStringArray([OnDemand.GRAPHICS_WARMUP_SCREEN])
 		precompile.first_loaded.connect(_start_warmup, CONNECT_ONE_SHOT)
 		IdleThrottle.busy = true
+	else:
+		precompile.tree_exited.connect(_compile_shaders_behind, CONNECT_ONE_SHOT | CONNECT_DEFERRED)
 	add_child(precompile)
 	# Slows the frame rate while the window is in the background (Settings > Graphics).
 	IdleThrottle.install(self)
 
 
 func _exit_tree() -> void:
+	GraphicsWarmup.finish_behind()
 	GraphicsWarmup.release_materials()
+
+
+## A launch that does not warm compiles the covered shaders behind the idle title once the
+## precompile is done, so a map's first frames do not (GraphicsWarmup.compile_behind; card
+## viewdraw). A door into a map stops it (_ensure_table).
+func _compile_shaders_behind() -> void:
+	if is_inside_tree() and GraphicsWarmup.compile_behind():
+		BootTrace.mark("shaders: compiling behind the title")
 
 
 ## Starts the first launch's graphics warm-up behind the title (GraphicsWarmupScreen with its bar
@@ -293,6 +304,7 @@ func _setup_level_play_controller() -> void:
 func _ensure_table() -> void:
 	if _level_play_controller != null:
 		return
+	GraphicsWarmup.stop_behind()
 	BootPrecompile.finish_current()
 	var table_script: GDScript = load(LEVEL_PLAY_CONTROLLER_PATH)
 	_level_play_controller = table_script.new()

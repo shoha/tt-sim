@@ -16,7 +16,9 @@ extends Node
 ##            pipelines on the calling thread, so the compile waits happen there, several at
 ##            a time (one thread doing them in turn took 15 s of the 17 s).
 ##   DRAW     each built sample drawn invisibly in %WarmupViewport through PipelineWarmer (the
-##            draw-time variants), until none is pending. Nothing draws headless. Then it waits
+##            draw-time variants), until none is pending, and the ground look's 2D bakes once in
+##            a viewport of their format (GroundLookBake.warm_viewport). Nothing draws headless.
+##            Then it waits
 ##            for the engine's background compiles to drain (_drained): the specialized
 ##            pipelines those draws ask for compile on the WorkerThreadPool afterwards, and a map
 ##            opened before they are done froze for 3.8 to 4.1 s (card firstlaunch2).
@@ -433,6 +435,8 @@ func _start_draw() -> void:
 		push_warning("GraphicsWarmup: sample %s has no geometry; skipped" % sample_name)
 	_warmer = PipelineWarmer.new()
 	_viewport.add_child(_warmer)
+	# The ground look's 2D bakes draw in viewports of their own format (card viewdraw).
+	add_child(GroundLookBake.warm_viewport())
 	for sample in _results:
 		_built_names.append(String(sample.name))
 		var mesh := GraphicsWarmup.sample_mesh(sample)

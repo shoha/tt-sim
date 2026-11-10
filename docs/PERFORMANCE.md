@@ -1607,6 +1607,92 @@ release export (no ttscatter release DLL), rain starting on a cold shader cache 
 camera pan during rain while new meshes appear (the heightfield renders on every move then, as
 before).
 
+### The first view's frame, attributed (topic viewdraw, 2026-11-10)
+
+The 400 ms frame firstview left unattributed is two different costs, one per kind of launch. Both
+are the main thread compiling something the map needs the moment it first shows; neither is the
+driver's own fixed cost.
+
+**How it was found.** Debug exports of main 90685261 with the render-job tools packed (`tools/*`
+dropped from the export filter for the measurement only) and a probe autoload added by the
+override.cfg beside the exe (loaded from the worktree by absolute path, so probe changes need no
+re-export). Per frame: wall, draw (`frame_pre_draw` to `frame_post_draw`), compiles, new
+viewports, and with `--gpu-profile` the RenderingDevice's captured timestamps, CPU and GPU, every
+viewport's render time measured so the `vp_begin_<rid>` stamps name the viewport; for the worst
+frames a timeline of node_added events, phase points and BootTrace marks. Each run had a fresh user
+folder and a fresh NVIDIA cache; a second launch in the same folder and cache is a player's later
+launch (warm caches, and no warm-up: its key has not changed). New 100 ft temperate forest, valley,
+seed 1234, through the dialog, RTX 3080, 1920x1080. Dev runs (editor binary, warm caches) do not
+show it: their first view drew in 10.3 ms.
+
+- **First launch** (first view 391.5 to 408.0 ms, draw 286 to 294): the draw is the first draw of
+  GroundLookBake's two transparent 2D SubViewports, `LookBake0` 197.3 ms and `SteepBake` 82.4 ms
+  CPU in "Render CanvasItems": their canvas pipelines (cv2) compiled at draw on the cold driver
+  cache. The world's 3D passes took about 5 ms CPU. The warm-up compiles the bake shaders
+  (COVERED_SHADERS), but a canvas pipeline is per render-target format, and the warm-up never drew
+  into a transparent 2D viewport.
+- **Later launches** (first view 375 to 403 ms, draw only about 30): the shaders compile again in
+  every process, on the main thread, at first use (`Shader.get_rid()`; `load()` alone does not
+  compile: loading all 52 covered shaders early changed nothing). The first view's 220 ms after its
+  draw is GroundLookBake's `_on_baked` on `frame_post_draw` swapping in the looked shader twins
+  (85, 65 and 68 ms); "load: ground created" (235 to 253 ms) is the plain ground, skirt and ring
+  shaders (64, 44, 48 ms); the sheet frame (250 to 281 ms) the wind foliage shaders (25 to 30 ms
+  each). The engine's own pipeline cache off changed nothing.
+- Measured alternatives on a later launch: the full warm-up forced (`--warm-graphics`) gave a first
+  view of 79.2 ms but runs 4 s behind the title every launch; `get_rid()` of every covered shader,
+  one per frame on the main thread, 100.0 ms, costing 1272 ms over 52 title frames (worst about
+  85 ms); the same on one thread, 94.7 ms (ground 45, sheet 140.5), 1304 ms on the thread with title
+  frames of 34 to 70 ms meanwhile (their draw waits on the compile).
+
+**The change.**
+
+1. The warm-up's draw phase also draws `GroundLookBake.warm_viewport()`: a 16x16 viewport with the
+   bakes' own flags (`bake_viewport()`, which the bakes now build through too, so the two cannot
+   drift), a rect per bake shader and one per mass-stamp blend (multiply and add). The bakes'
+   canvas pipelines compile there, behind the title.
+2. A launch that does not warm compiles the covered shaders behind the idle title:
+   `GraphicsWarmup.compile_behind()` (Root, once BootPrecompile leaves the tree) loads and holds
+   them on the main thread and calls `get_rid()` on each on a low-priority thread. A door into a
+   map stops it after its current shader (`stop_behind()` in `Root._ensure_table`); what is left
+   compiles at first use, as before. Root's exit waits at most 1 s for it.
+
+Not read from the engine source: that `Shader.get_rid()` may run on two threads at once (a lazily
+made RID). The door stop keeps any overlap to one shader.
+
+**Exported true-cold A/B.** Debug exports of main 90685261 (before) and the change (after), each
+round a fresh user folder and NVIDIA cache launched twice (a: first launch, b: second launch, same
+folder and cache), n 4 per arm, arms alternated, lane held, GPU at idle clocks, probe in both arms
+with the idle throttle held off (a run's window may not have the focus), no `--gpu-profile`.
+Milliseconds; "Open over 100" is the open's frames over 100 ms and their summed time.
+
+| Launch | Arm | First view (mean) | Its draw | Ground created | Hand-over | Open over 100 | Sheet |
+|---|---|---|---|---|---|---|---|
+| First | before | 390.8, 391.8, 397.2, 398.8 (394.7) | 287 to 295 | 70.8 | 320.2 | 2, 709 to 723 | 1099 to 1143 |
+| | after | 113.0, 113.2, 117.2, 109.1 (113.1) | 7.7 to 8.9 | 59.6 | 315.3 | 2, 420 to 435 | 806 to 859 |
+| Second | before | 388.4, 380.7, 389.4, 377.6 (384.0) | 29 to 30 | 238.0 | 218.3 | 4, 1093 to 1111 | 1272 to 1315 |
+| | after | 96.8, 95.5, 97.7, 94.5 (96.1) | 27 to 31 | 45.3 | 181.5 | 2, 312 to 324 | 760 to 797 |
+
+The first view's frame is down from 384 to 395 ms to 96 to 117 ms on both launches (target under
+150), with the same compiles in it except the two canvas ones. What is left in it is the process
+part (the map install, WeatherRenderer and its particles, biome preparation, about 65 ms on a
+second launch and 105 on a first) and on a second launch about 30 ms of draw.
+
+The cost moved behind the title: on a first launch the warm-up's draw frame grew from 217 to 224
+ms to 315 to 326 ms (the bakes' canvas compiles), and on a later launch the title's worst frame
+while the shaders compile behind it is 81 to 91 ms (22 to 26 before), for about 1.3 s. Neither
+blocks a door. Drawing the warm viewport a frame after the warm-up's samples would split the first
+of these; not done.
+
+**Look.** Home view of the new 100 ft forest map, before and after exports, first launch, full
+size: the mean level moved -0.000 of 255 (mean absolute difference 0.082, 0.010% of pixels by
+more than 2 of 255; the world viewport's own capture 0.000): same pixels, the looked ground bound.
+
+**Left.** The hand-over frame ("title left the tree": the world viewport's first draw, 1920x1080)
+is now the worst of a first launch, 306 to 319 ms with draw 167 to 179 ms and cv4+su2; on a second
+launch 180 to 183 ms, draw about 40, cv4. Which four canvas pipelines compile there is not
+attributed (the frame had no timestamp set in the probe). Not verified here: macOS (Metal), other
+GPUs and drivers, a release export, Play of a saved map (the open path only).
+
 ## Mobile renderer hang (2026-09-26): one occurrence, not reproduced
 
 macOS runs the Mobile renderer (`rendering_method.macos="mobile"`), so a load that hangs

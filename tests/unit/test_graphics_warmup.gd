@@ -194,6 +194,21 @@ func test_only_texture_blit_shaders_compile_on_the_worker() -> void:
 	assert_false(GraphicsWarmup.compiles_on_worker(load("res://shaders/lofi_canvas.gdshader")))
 
 
+func test_compile_shaders_reaches_each_shader() -> void:
+	var shaders: Array[Shader] = [
+		load("res://shaders/ground_light_field_bake.gdshader"),
+		load("res://shaders/ground_steep_bake.gdshader")
+	]
+	assert_eq(GraphicsWarmup.compile_shaders(shaders), 2)
+	for shader in shaders:
+		assert_true(shader.get_rid().is_valid(), "%s has a RID" % shader.resource_path)
+
+
+func test_the_compile_behind_the_title_never_runs_headless() -> void:
+	assert_false(GraphicsWarmup.compile_behind(), "headless draws nothing")
+	assert_eq(GraphicsWarmup.finish_behind(), -1, "none ran")
+
+
 func test_format_flags_keep_only_the_flag_bits() -> void:
 	var format := (
 		Mesh.ARRAY_FORMAT_VERTEX

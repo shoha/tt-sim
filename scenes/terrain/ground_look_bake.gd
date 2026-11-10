@@ -92,6 +92,55 @@ func _ready() -> void:
 	set_process(not _plan.get("biomes", PackedStringArray()).is_empty())
 
 
+## A transparent 2D SubViewport, as every bake here draws into, named `vp_name`, not drawing yet.
+## A canvas pipeline is keyed by its render target's format as well as its shader, so the
+## warm-up's twin (warm_viewport) is made here too.
+static func bake_viewport(vp_name: String) -> SubViewport:
+	var vp := SubViewport.new()
+	vp.name = vp_name
+	vp.disable_3d = true
+	vp.transparent_bg = true
+	vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	return vp
+
+
+## A ColorRect named `rect_name` that draws `shader` through a ShaderMaterial of its own.
+static func bake_rect(rect_name: String, shader: Shader) -> ColorRect:
+	var rect := ColorRect.new()
+	rect.name = rect_name
+	var shader_mat := ShaderMaterial.new()
+	shader_mat.shader = shader
+	rect.material = shader_mat
+	return rect
+
+
+## A small bake viewport that draws, once, everything a bake draws: both bake shaders and the
+## mass stamps' two blend modes (GroundMassStamps.material). The first-launch graphics warm-up
+## adds it, so those canvas pipelines compile there: on a cold driver cache the first view of a
+## looked map compiled two of them in its draw (197 and 82 ms, card viewdraw), and the grass's
+## first restamp two more. Pixels: none of a map's (its own viewport, freed with the warm-up).
+static func warm_viewport() -> SubViewport:
+	var vp := bake_viewport("LookBakeWarm")
+	vp.size = Vector2i(MIN_PX, MIN_PX)
+	for shader: Shader in [BAKE_SHADER, STEEP_SHADER]:
+		var rect := bake_rect(shader.resource_path.get_file().get_basename(), shader)
+		rect.size = Vector2(MIN_PX, MIN_PX)
+		vp.add_child(rect)
+	var dot := GradientTexture2D.new()
+	dot.width = 4
+	dot.height = 4
+	for blend: CanvasItemMaterial.BlendMode in [
+		CanvasItemMaterial.BLEND_MODE_MUL, CanvasItemMaterial.BLEND_MODE_ADD
+	]:
+		var stamp := TextureRect.new()
+		stamp.name = "Stamp%d" % blend
+		stamp.texture = dot
+		stamp.material = GroundMassStamps.material(blend)
+		vp.add_child(stamp)
+	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	return vp
+
+
 ## The biome rows of `terrain`'s map for GroundLookUniforms.plan: row 0 the base (the most
 ## covered map biome on the base surface, else the palette's first biome on it, as the routing
 ## table's base row), then one per document biome, each with the layer its ground draws on.
@@ -271,11 +320,7 @@ func _bake_all() -> void:
 ## the bake rect, with its slot's bake uniforms; rendered once with the slots.
 func _bake_steep() -> void:
 	if _steep == null:
-		_steep = SubViewport.new()
-		_steep.name = STEEP_NODE
-		_steep.disable_3d = true
-		_steep.transparent_bg = true
-		_steep.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		_steep = bake_viewport(STEEP_NODE)
 		add_child(_steep)
 	var cell := GroundSteepZones.cell_px(_rect)
 	var band := Vector2(cell.x * GroundSteepZones.LAYERS, cell.y * GroundSteepZones.ROWS)
@@ -286,11 +331,7 @@ func _bake_steep() -> void:
 	for s in biomes().size():
 		var rect: ColorRect = rects[s] if s < rects.size() else null
 		if rect == null:
-			rect = ColorRect.new()
-			rect.name = "Slot%d" % s
-			var shader_mat := ShaderMaterial.new()
-			shader_mat.shader = STEEP_SHADER
-			rect.material = shader_mat
+			rect = bake_rect("Slot%d" % s, STEEP_SHADER)
 			_steep.add_child(rect)
 		rect.position = Vector2(0.0, band.y * s)
 		rect.size = band
@@ -329,17 +370,8 @@ func _restamp() -> void:
 func _viewport(s: int) -> SubViewport:
 	if s < _viewports.size():
 		return _viewports[s]
-	var vp := SubViewport.new()
-	vp.name = "LookBake%d" % s
-	vp.disable_3d = true
-	vp.transparent_bg = true
-	vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
-	var rect := ColorRect.new()
-	rect.name = "Rect"
-	var shader_mat := ShaderMaterial.new()
-	shader_mat.shader = BAKE_SHADER
-	rect.material = shader_mat
-	vp.add_child(rect)
+	var vp := bake_viewport("LookBake%d" % s)
+	vp.add_child(bake_rect("Rect", BAKE_SHADER))
 	add_child(vp)
 	_viewports.append(vp)
 	return vp
