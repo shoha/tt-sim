@@ -197,6 +197,24 @@ func _init() -> void:
 	refresh()
 
 
+## Starts the pictures the pane's first build makes on workers: every served structure's tile at
+## the size the author's tile choice gives, and the first pick's in the place strip. An authoring
+## open calls it as it begins and collects the job before its sheet drops
+## (StructureThumbnail.warm_finish_async), so the tool's first open decodes none (card
+## structopen). Main thread; the palette must be served.
+static func warm_pictures() -> Dictionary:
+	var rows := LibraryStructureStore.structures()
+	var small := UiPreferences.load_structure_tiles_small()
+	var px := int(StructurePalette.tile_metrics(small, FALLBACK_WIDTH_PX)["thumb"])
+	var wanted: Array = []
+	for row: Dictionary in rows:
+		wanted.append([row, px])
+	var found := StructurePalette.sections(rows, "", [])
+	if not found.is_empty() and not (found[0]["rows"] as Array).is_empty():
+		wanted.append([found[0]["rows"][0], PLACE_THUMB_PX])
+	return StructureThumbnail.warm_start(wanted)
+
+
 ## True when the libraries serve `ref` (whether or not the search shows its tile).
 func has_ref(ref: String) -> bool:
 	return not LibraryStructureStore.structure(ref).is_empty()

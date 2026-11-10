@@ -78,6 +78,9 @@ const YARD_PROPS_SAMPLE := "structure_yard_props"
 ## The last warm-up's units in order, {"frame", "combo", "phase", "ms"} (process frame, COMBOS
 ## index, Phase, main-thread ms); the hitches probe and the tests read it.
 static var last_log: Array[Dictionary] = []
+## False makes an authoring open warm nothing ahead of the Structure tool
+## (StructureTool.warm_ahead): the performance harness's in-run A/B switch (card structopen).
+static var ahead_enabled: bool = true
 
 ## Units done so far (unit u: combo u / UNITS_PER_COMBO, phase u % UNITS_PER_COMBO), and whether
 ## the worker's part is taken.
@@ -123,6 +126,17 @@ static func warm(
 	node._root = root
 	structures.add_child(node)
 	return node
+
+
+## Starts the library maps a MAKE unit would bake in its own frame on the prebake lane, behind any
+## map a load waits for (SurfaceStore.PRIORITY_AHEAD): the planks of `boards:wall`
+## (StructureMaterials._timber), whose three maps baked in that unit, a 267 ms frame of the tool's
+## first open in a fresh user folder (card structopen). An authoring open calls it as it begins;
+## maps already baked or queued are left alone.
+static func prebake_surfaces() -> void:
+	SurfaceStore.prebake(
+		PackedStringArray([LibraryBindings.crossing_planks()]), SurfaceStore.PRIORITY_AHEAD
+	)
 
 
 ## Holds `structures`' warm-up where it is (the Structure or Village tool was put down), so its

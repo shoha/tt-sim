@@ -1391,7 +1391,63 @@ title idles. The job opens its map soon after the warm-up, so they most likely c
 main thread when the tool opens. This has not been bisected inside the merge, and the open was
 not timed after a long title idle. A fix would precompile those scripts on a worker once an
 authoring map opens, if BootPrecompile has not finished them; it needs its own card and has to
-be measured with this job.
+be measured with this job. (It was not the scripts: see the next section.)
+
+### The structure tool's first open (topic structopen, 2026-11-09)
+
+The regression above was not a script compile. Measured in the warmstruct_profile procedure (a
+real window, `--warm-graphics`, a fresh user folder per run named by a project-root
+`override.cfg`, 1920x1080 pinned, vsync off after the load, RTX 3080 idle before each batch, lane
+held), with probes added around the open: at main 5f2c32bf BootPrecompile had passed all 14 of
+its paths by the time the map was asked for (1 s after the title), 173 procgen scripts were
+cached before the tool opened, and not one `.gd` became cached during the open (a snapshot of
+`ResourceLoader.has_cached` over every project script before and after). The same 692 to 716 ms
+frame came with a 45 s title idle. Timing the rail click's parts put 666 to 700 ms in
+`PaneStack.show_pane`, the Structure pane's first build, with no pipeline compile in it or in the
+eight frames after. A headless split of that build: 649 ms is `StructureThumbnail.of` for the 100
+served structures (a JPG decode, a square crop and a Lanczos scale to 80 px each, 3 to 9 ms), the
+rest of the pane 22 to 46 ms. The cause is sysload's d12969c5 ("a tool's own pane ... built on
+first show"), which reached tokenmesh in the merge 92f6a036: it moved the pane, decodes and all,
+from the authoring open's loading into the tool's first open (inferred from the ancestry; a run of
+d12969c5^ against d12969c5 was not made). The open's second long frame (256 to 304 ms, about 110
+frames in) was StructureWarmup's `boards:wall` MAKE unit, 250 to 295 ms against 64 ms on
+2026-10-31: the planks surface's three maps baked on the main thread in a fresh folder.
+
+The change (`StructureTool.warm_ahead`, called beside the Paint swatches as an authoring open
+begins): `StructureToolPane.warm_pictures()` makes every tile's picture at the pane's size, and the
+first pick's place-strip picture, on a WorkerThreadPool group task (`StructureThumbnail.picture`,
+the one maker of the image on either thread); the open collects them into the cache within the
+load's frame budget before its sheet drops (`collect_ahead_async`). `StructureWarmup.
+prebake_surfaces()` puts the planks on the prebake lane at `PRIORITY_AHEAD`, behind the maps the
+load waits for. Nothing in the start-up script graph moved (test_boot_graph unchanged).
+`StructureWarmup.ahead_enabled` is the in-run A/B switch the numbers below use (false is main's
+behaviour). Alternated runs, worst frame in ms:
+
+| When the tool is first opened | Before | After |
+|---|---|---|
+| a: the map asked for 1 s after the title (it waits for the warm-up), tool 4 s after the map (n 4) | 720.8, 697.3, 693.6, 684.8 | 55.4, 56.6, 57.9, 53.8 |
+| a: second worst frame of the open | 304.0, 269.7, 255.6, 261.1 | 20.9, 22.8, 22.0, 21.4 |
+| a: the pane's first build | 700.5, 679.4, 675.8, 666.0 | 37.1, 37.4, 38.0, 36.6 |
+| a: the `boards:wall` MAKE unit | 294.5, 264.4, 250.3, 255.6 | 1.0, 1.1, 1.0, 1.0 |
+| b: 45 s at the title first, BootPrecompile long done (n 2) | 716.0, 703.8 | 55.5, 55.1 |
+| c: the frame the map is ready, before the prebake lane could be idle (n 4) | 681.0, 684.5, 678.3, 685.3 | 55.7, 48.1, 43.0, 42.3 |
+| c: second worst (frame 1 of the open in both arms; before also the 261 to 286 ms MAKE frame) | 267.6, 264.1, 261.3, 285.9 | 39.1, 36.6, 35.7, 36.8 |
+| First building placed (case a) | 22.3, 19.0, 18.6, 18.6 | 20.2, 18.5, 20.4, 18.2 |
+| First street and Dress (case a) | 604.5, 571.8, 576.4, 593.8 | 575.7, 569.9, 566.1, 576.9 |
+
+The open is one frame of 54 to 58 ms (the pane's 37 ms build and the frame), against 67 to 71 ms
+on 2026-10-31, and the rest of it stays under 23 ms. The first street and Dress keep their two
+frames of 494 to 604 ms (the dress call itself, about 410 ms, then its bake): a separate cost,
+not touched here. Same output: a digest of every mesh under the map after the street and Dress
+(114 meshes, 295,468 vertices) has the same MD5 in all 12 runs of both arms, and the pictures a
+worker makes are byte-identical to the main thread's (`test_structure_tool.gd`
+`test_warmed_pictures_cover_the_panes_first_build`, which also pins that the pane's first build
+after the warm makes no picture on the main thread: `StructureThumbnail.made_on_main`, a count,
+not a time). The price: every authoring open decodes 101 pictures on workers (about 650 ms of CPU
+spread over the pool while the map builds) and bakes the planks once per user folder (the bake
+cache then holds them), and keeps about 2.5 MB of 80 px textures. Not verified: macOS (Metal) and
+a minimum-spec machine, the Small tiles preference (48 px; warmed the same way, not timed), and an
+open whose library serves more structures.
 
 ## Mobile renderer hang (2026-09-26): one occurrence, not reproduced
 
