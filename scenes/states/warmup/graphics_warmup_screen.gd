@@ -16,7 +16,10 @@ extends Node
 ##            pipelines on the calling thread, so the compile waits happen there, several at
 ##            a time (one thread doing them in turn took 15 s of the 17 s).
 ##   DRAW     each built sample drawn invisibly in %WarmupViewport through PipelineWarmer (the
-##            draw-time variants), until none is pending. Nothing draws headless.
+##            draw-time variants), until none is pending. Nothing draws headless. Then it waits
+##            for the engine's background compiles to drain (_drained): the specialized
+##            pipelines those draws ask for compile on the WorkerThreadPool afterwards, and a map
+##            opened before they are done froze for 3.8 to 4.1 s (card firstlaunch2).
 ## The bar is weighted by phase (PHASE_WEIGHTS) and the line under it says what is going on
 ## (status_for): shaders started, then the group of samples (the ground, water, plants,
 ## buildings) being gathered and compiled with a count, then the first frame.
@@ -30,10 +33,23 @@ signal finished
 enum Phase { COMPILE, BUILD, DRAW, DONE }
 
 const TITLE := "Preparing graphics"
-## Progress share of COMPILE, BUILD and DRAW: their measured time shares on a cold cache
-## (1.0 s, 4.6 s and 0.06 s of 5.7 s, RTX 3080, 8 build threads, docs/PERFORMANCE.md "Structure
-## shaders in the first-launch warm-up"), so the bar moves at an even pace.
-const PHASE_WEIGHTS: Array[float] = [0.18, 0.80, 0.02]
+## The status line while DRAW waits for the drain.
+const DRAINING := "Finishing shaders"
+## Progress share of COMPILE, BUILD and DRAW: their measured time shares on a true first launch
+## (Godot's and the driver's caches empty: 1.8 s, 11 s and 3.9 s of 16.7 s with DRAW's drain, RTX
+## 3080, 8 build threads, docs/PERFORMANCE.md "First launch behind the title"), so the bar moves
+## at an even pace.
+const PHASE_WEIGHTS: Array[float] = [0.11, 0.66, 0.23]
+## DRAW's share of the bar is the draws' first tenth, then the drain's by time: elapsed / (elapsed
+## + DRAIN_HALF_MS), half of it at DRAIN_HALF_MS, so it keeps moving through a wait whose length
+## is not known.
+const DRAIN_HALF_MS := 1500.0
+## The longest DRAW waits for the drain before it gives up and finishes (a probe that never runs
+## must not hold the doors shut).
+const DRAIN_CAP_MS := 20000
+## Once the first probe has run, the compiles the pool had already started are still running: the
+## drain waits this long more and posts a second probe (compiles queued meanwhile go ahead of it).
+const DRAIN_SETTLE_MS := 400
 ## The part of BUILD's share given to collecting the samples (one step per source); the rest
 ## is building them (one step per sample; the build threads take samples from one queue, so the
 ## count tracks the time). A fixed split, so the bar never steps back when the sample count
@@ -91,6 +107,12 @@ var _labels := PackedStringArray()
 var _built_rids: Array = []
 var _next_sample := 0
 var _warmer: PipelineWarmer = null
+## The drain probe (_drained): when the wait began, and the WorkerThreadPool task posted behind
+## the compiles (-1 before).
+var _drain_start_msec := -1
+var _drain_task := -1
+## When the first probe was seen done (-1 before), and whether the second one is out.
+var _drain_first_msec := -1
 var _start_msec := 0
 var _phase_start_msec := -1
 var _phase_worst_ms := 0.0
@@ -131,6 +153,13 @@ static func status_for(at: Phase, done: int, total: int, label: String) -> Strin
 		Phase.DRAW:
 			return "Drawing a first frame"
 	return ""
+
+
+## The overall progress in DRAW, `drawn` of `total` samples drawn and the drain waited for
+## `drain_ms` (see DRAIN_HALF_MS). Pure.
+static func draw_progress(drawn: int, total: int, drain_ms: float) -> float:
+	var drain := drain_ms / (drain_ms + DRAIN_HALF_MS) if drain_ms > 0.0 else 0.0
+	return _progress_at(Phase.DRAW, 0.1 * _ratio(drawn, total) + 0.9 * drain)
 
 
 static func _progress_at(at: Phase, fraction: float) -> float:
@@ -179,6 +208,9 @@ func _exit_tree() -> void:
 			OS.delay_msec(1)
 		_thread.wait_to_finish()
 		_thread = null
+	if _drain_task >= 0:
+		GraphicsWarmup.wait_later(_drain_task)
+		_drain_task = -1
 	_free_meshes()
 	BootTrace.mark("warm-up: screen left the tree")
 
@@ -194,6 +226,10 @@ func progress() -> float:
 			var total := _total
 			_mutex.unlock()
 			return build_progress(collected, sample_sources.size(), built, total)
+		Phase.DRAW:
+			var drawn := _built_names.size() - (_warmer.pending_count() if _warmer else 0)
+			var waited := 0 if _drain_start_msec < 0 else Time.get_ticks_msec() - _drain_start_msec
+			return draw_progress(drawn, _built_names.size(), waited)
 	return progress_for(phase, 0, 1)
 
 
@@ -235,7 +271,7 @@ func _process(_delta: float) -> void:
 				_thread = null
 				_start_draw()
 		Phase.DRAW:
-			if _warmer.pending_count() == 0:
+			if _warmer.pending_count() == 0 and _drained():
 				_finish()
 	var status := _status_now()
 	# Only a changed line goes to the label (an empty one leaves it as it is).
@@ -255,6 +291,9 @@ func _status_now() -> String:
 			return status_for(phase, _next_shader, shader_paths.size(), "")
 		Phase.BUILD:
 			return status_for(phase, built, total, label)
+		Phase.DRAW:
+			if _drain_start_msec >= 0:
+				return DRAINING
 	return status_for(phase, 0, 1, "")
 
 
@@ -263,9 +302,11 @@ func _start_build() -> void:
 	# Lazily created statics the worker's material builds read: create them here so the
 	# worker never races a main-thread first use.
 	WindFoliage.wind_shaders()
+	BootTrace.mark("warm-up: wind shaders ready")
 	_thread = Thread.new()
 	var err := _thread.start(_build)
 	assert(err == OK, "GraphicsWarmupScreen: could not start the worker: %s" % error_string(err))
+	BootTrace.mark("warm-up: worker started")
 
 
 ## The coordinating thread (the Thread _start_build starts). It runs the texture_blit compile
@@ -401,6 +442,49 @@ func _start_draw() -> void:
 			_warmer.warm(mesh, String(sample.name), "")
 		else:
 			_warmer.warm_mesh(mesh, String(sample.name))
+
+
+## Whether the engine's background pipeline compiles have drained. The specialized variants of
+## the pipelines DRAW drew compile on the WorkerThreadPool after the draw (94 of them on a true
+## first launch), and the first thing on the main thread that waits for one of the pool's tasks
+## waits behind all of them: a map opened at the hand-over froze for 3.8 to 4.1 s, and freeing
+## the samples' materials there did the same (card firstlaunch2). No monitor counts what is still
+## queued (the compile counters move when a compile is asked for), so a probe task is posted
+## behind them, a frame after the last draw; the pool runs tasks in the order posted, so the
+## probe has run once the pool has taken every compile ahead of it; DRAIN_SETTLE_MS later a second
+## probe covers what was still running. Never blocks; gives up after DRAIN_CAP_MS.
+func _drained() -> bool:
+	var now := Time.get_ticks_msec()
+	if _drain_start_msec < 0:
+		_drain_start_msec = now
+		BootTrace.mark("warm-up: drawn, waiting for the background compiles")
+		return false
+	var waited := now - _drain_start_msec
+	if _drain_task < 0:
+		if _drain_first_msec >= 0 and now - _drain_first_msec < DRAIN_SETTLE_MS:
+			return false
+		_drain_task = WorkerThreadPool.add_task(_drain_probe, false, "GraphicsWarmup drain")
+		return false
+	if WorkerThreadPool.is_task_completed(_drain_task):
+		WorkerThreadPool.wait_for_task_completion(_drain_task)
+		_drain_task = -1
+		if _drain_first_msec < 0:
+			_drain_first_msec = now
+			BootTrace.mark("warm-up: the pool took the compiles in %d ms" % waited)
+			return false
+	elif waited < DRAIN_CAP_MS:
+		return false
+	else:
+		GraphicsWarmup.wait_later(_drain_task)
+		push_warning("GraphicsWarmup: the background compiles did not drain in %d ms" % waited)
+	print("GraphicsWarmup: background compiles drained in %d ms" % waited)
+	BootTrace.mark("warm-up: background compiles drained in %d ms" % waited)
+	_drain_task = -1
+	return true
+
+
+static func _drain_probe() -> void:
+	pass
 
 
 func _finish() -> void:

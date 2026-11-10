@@ -98,6 +98,8 @@ const _INCLUDE_PATTERN := '#include\\s+"([^"]+)"'
 static var _held: Array[Shader] = []
 ## The samples' materials, kept for the session (keep_materials).
 static var _held_materials: Array[Material] = []
+## WorkerThreadPool tasks still to be waited for (wait_later), collected in release_materials().
+static var _late_tasks := PackedInt64Array()
 
 
 static func hold(shader: Shader) -> void:
@@ -126,6 +128,15 @@ static func kept_material_count() -> int:
 ## after they had stopped, and the game never quit (measured, a dev run).
 static func release_materials() -> void:
 	_held_materials.clear()
+	for task in _late_tasks:
+		WorkerThreadPool.wait_for_task_completion(task)
+	_late_tasks.clear()
+
+
+## Waits for WorkerThreadPool task `task` (every task must be waited for once) at the session's
+## end instead of now: the warm-up's drain probe when it gave up before the task ran.
+static func wait_later(task: int) -> void:
+	_late_tasks.append(task)
 
 
 ## Whether `shader`'s get_rid() belongs on the warm-up's worker rather than the main thread.

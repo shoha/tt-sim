@@ -167,13 +167,24 @@ func _start_warmup() -> void:
 func _on_warmup_finished() -> void:
 	_warmup_pending = false
 	IdleThrottle.set_busy(false)
-	if _warmup_screen:
-		_warmup_screen.queue_free()
-		_warmup_screen = null
-	if _warmup_action.is_valid():
-		var action := _warmup_action
-		_warmup_action = Callable()
-		action.call()
+	var screen := _warmup_screen
+	_warmup_screen = null
+	if not _warmup_action.is_valid():
+		if screen:
+			screen.queue_free()
+		return
+	var action := _warmup_action
+	_warmup_action = Callable()
+	BootTrace.mark("warm-up: the waiting door runs")
+	action.call()
+	BootTrace.mark("warm-up: the waiting door ran")
+	# The screen (its viewport and samples) goes a frame later, so freeing it and entering a map
+	# are not one long frame (about 100 ms apart, card firstlaunch2); its bar stays under the
+	# door's own overlay meanwhile.
+	if screen and is_inside_tree():
+		get_tree().process_frame.connect(screen.queue_free, CONNECT_ONE_SHOT)
+	elif screen:
+		screen.queue_free()
 
 
 ## Runs `action` now, or once the first launch's warm-up is done: a map must not open on pipelines
@@ -484,12 +495,15 @@ func _enter_playing_state() -> void:
 	# Instantiate GameMap
 	_ensure_table()
 	_game_map = (load(GAME_MAP_SCENE_PATH) as PackedScene).instantiate()
+	BootTrace.mark("play: table instantiated")
 	add_child(_game_map)
+	BootTrace.mark("play: table in the tree")
 
 	# Setup bidirectional references between LevelPlayController and GameMap
 	_level_play_controller.setup(_game_map)
 	_game_map.setup(_level_play_controller)
 	_connect_room_drawer()
+	BootTrace.mark("play: table set up")
 
 	# Hide the AppMenu "Level Editor" button during gameplay — the pause
 	# menu provides "Edit Level" instead.
@@ -514,6 +528,7 @@ func _enter_playing_state() -> void:
 		# Local play: Just load the level
 		if not _level_play_controller.play_level(pending_level):
 			push_error("Root: Failed to play level")
+		BootTrace.mark("play: load started")
 
 
 ## The room drawer over the table: Move the table here, the shelf rows' Save into map and
@@ -531,6 +546,8 @@ func _exit_state(state: State) -> void:
 	match state:
 		State.TITLE_SCREEN:
 			if _title_screen:
+				if BootTrace.enabled:
+					_title_screen.tree_exited.connect(BootTrace.mark.bind("title left the tree"))
 				_title_screen.queue_free()
 				_title_screen = null
 			_session_flow.end_join()

@@ -149,10 +149,10 @@ func test_freed_mid_build_joins_and_writes_no_marker() -> void:
 func test_progress_is_weighted_by_phase() -> void:
 	const PHASE := GraphicsWarmupScreen.Phase
 	assert_eq(GraphicsWarmupScreen.progress_for(PHASE.COMPILE, 0, 10), 0.0)
-	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.COMPILE, 10, 10), 0.18, 1e-6)
-	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.BUILD, 1, 2), 0.58, 1e-6)
+	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.COMPILE, 10, 10), 0.11, 1e-6)
+	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.BUILD, 1, 2), 0.44, 1e-6)
 	assert_almost_eq(
-		GraphicsWarmupScreen.progress_for(PHASE.BUILD, 0, 0), 0.18, 1e-6, "no samples yet"
+		GraphicsWarmupScreen.progress_for(PHASE.BUILD, 0, 0), 0.11, 1e-6, "no samples yet"
 	)
 	assert_almost_eq(
 		GraphicsWarmupScreen.PHASE_WEIGHTS.reduce(func(a: float, b: float) -> float: return a + b),
@@ -160,8 +160,45 @@ func test_progress_is_weighted_by_phase() -> void:
 		1e-6,
 		"the phases add up to the whole bar"
 	)
-	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.DRAW, 0, 1), 0.98, 1e-6)
+	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.DRAW, 0, 1), 0.77, 1e-6)
 	assert_eq(GraphicsWarmupScreen.progress_for(PHASE.DONE, 0, 0), 1.0)
+
+
+## The drain's wait has no known length: the bar keeps moving through it and stays short of done.
+func test_the_bar_moves_through_the_drain_and_stops_short_of_done() -> void:
+	var last := GraphicsWarmupScreen.draw_progress(0, 4, 0.0)
+	var draw_start := GraphicsWarmupScreen.progress_for(GraphicsWarmupScreen.Phase.DRAW, 0, 1)
+	assert_almost_eq(last, draw_start, 1e-6)
+	for step in [[4, 0.0], [4, 100.0], [4, 1500.0], [4, 6000.0], [4, 60000.0]]:
+		var now := GraphicsWarmupScreen.draw_progress(step[0], 4, step[1])
+		assert_gt(now, last, "%s moves the bar" % [step])
+		assert_lt(now, 1.0, "%s is not done" % [step])
+		last = now
+
+
+## The specialized pipelines DRAW asks for compile on the WorkerThreadPool afterwards; a map opened
+## before they were done froze for 4 s. DRAW finishes only once a task posted behind the pool's
+## queue has run. The pool is filled past its thread count with held tasks, so the probe waits.
+func test_draw_waits_for_the_pool_to_drain() -> void:
+	var release := [false]
+	var hold := func() -> void:
+		var deadline := Time.get_ticks_msec() + 8000
+		while not release[0] and Time.get_ticks_msec() < deadline:
+			OS.delay_msec(5)
+	var tasks := PackedInt64Array()
+	for i in OS.get_processor_count() + 2:
+		tasks.append(WorkerThreadPool.add_task(hold, false, "test hold"))
+	var screen := _screen(func() -> Array: return [])
+	add_child_autofree(screen)
+	await wait_until(func() -> bool: return screen._drain_task >= 0, 5.0, "probe posted")
+	await wait_frames(10)
+	assert_ne(screen.phase, GraphicsWarmupScreen.Phase.DONE, "the queue is still busy")
+	assert_eq(screen._status_now(), GraphicsWarmupScreen.DRAINING)
+	release[0] = true
+	await wait_until(_done(screen), 10.0, "reaches DONE once drained")
+	for task in tasks:
+		WorkerThreadPool.wait_for_task_completion(task)
+	GraphicsWarmup.release_materials()
 
 
 func test_build_progress_moves_during_collection_and_never_steps_back() -> void:

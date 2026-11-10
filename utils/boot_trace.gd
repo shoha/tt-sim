@@ -28,6 +28,8 @@ extends RefCounted
 ## first-launch graphics warm-up included: the "launch" field holds the worst frames, each with the
 ## mark it followed, its draw time and the pipeline compiles in it, and the frames over HITCH_MS.
 ## At the end it prints the timeline and appends one JSON line to user://boot_trace.jsonl;
+## `--boot-trace-doors=<plan>` clicks the title's doors during a first launch's warm-up (DoorTrace,
+## loaded only then) and ends the trace when the last one has arrived.
 ## `--boot-trace-quit` then quits, for scripted rounds (tools/render_jobs/local or a loop).
 
 const SETTLE_S := 3.0
@@ -38,6 +40,8 @@ const MAP_TIMEOUT_S := 120
 const PLAY_FOLDER := "_boot2_play"
 ## The cold-open driver (--boot-trace-cold), loaded only when asked for (the start-up graph).
 const OPEN_TRACE := "res://utils/open_trace.gd"
+## The door driver (--boot-trace-doors), loaded only when asked for.
+const DOOR_TRACE := "res://utils/door_trace.gd"
 
 static var enabled: bool = _detect()
 static var _marks: Array[Array] = []
@@ -59,6 +63,9 @@ static var _launch_last_comp := PackedInt64Array()
 static var _launch_comp_start := PackedInt64Array()
 static var _draw_start_us: int = 0
 static var _draw_ms: float = 0.0
+## The door driver's script while it runs (it holds the trace open), and its result.
+static var _doors: Script = null
+static var _doors_result: Dictionary = {}
 
 
 static func _detect() -> bool:
@@ -122,6 +129,15 @@ static func _on_launch_frame() -> void:
 
 ## The pipeline compile counters, by the monitors' order (canvas, mesh, surface, draw,
 ## specialization).
+static func compile_counts() -> PackedInt64Array:
+	return _compiles()
+
+
+## "cv2+su5": the compiles between counters `a` and `b` (compile_counts()), "" for none. Pure.
+static func compile_text(a: PackedInt64Array, b: PackedInt64Array) -> String:
+	return _compile_text(a, b)
+
+
 static func _compiles() -> PackedInt64Array:
 	return PackedInt64Array(
 		[
@@ -199,6 +215,15 @@ static func title_ready(tree: SceneTree) -> void:
 	if DisplayServer.get_name() != "headless":
 		RenderingServer.frame_post_draw.connect(_on_first_draw, CONNECT_ONE_SHOT)
 	tree.process_frame.connect(_on_frame.bind(tree))
+	if arg_value("boot-trace-doors") != "":
+		_doors = load(DOOR_TRACE)
+		_doors.call("run", tree, arg_value("boot-trace-doors"))
+
+
+## The door driver's end: its result goes into the JSON line and the trace may finish.
+static func finish_doors(result: Dictionary) -> void:
+	_doors_result = result
+	_doors = null
 
 
 ## How long the title idles before the trace ends: SETTLE_S, or `--boot-trace-idle=<seconds>` (a
@@ -250,7 +275,7 @@ static func _on_frame(tree: SceneTree) -> void:
 			_settled_us = now
 	if _quit_early(tree, now):
 		return
-	if now - _title_at_us < int(_settle_s() * 1000000.0):
+	if now - _title_at_us < int(_settle_s() * 1000000.0) or _doors != null:
 		return
 	# A first launch's warm-up runs behind the title: the default settle waits for it, so the
 	# trace sees the title's frames while it runs. An explicit idle acts after that long.
@@ -415,6 +440,7 @@ static func _finish(tree: SceneTree) -> void:
 	}
 	print("boot_trace: launch %s" % JSON.stringify(line["launch"]))
 	line.merge(maps)
+	line.merge(_doors_result)
 	for key: String in maps:
 		if maps[key] is float:
 			print("boot_trace: %s %.1f" % [key, maps[key]])

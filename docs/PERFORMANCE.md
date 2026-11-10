@@ -1302,6 +1302,97 @@ a host, join or resume clicked during the warm-up in a real window (unit tests o
 pipeline compiles per map load and the 1,500 Controls rebuilt per play load (audit S7 and S8)
 are untouched.
 
+### The doors during the warm-up, and the drain (topic firstlaunch2, 2026-11-09)
+
+The doors were clicked in a real window during a true first launch: exported debug builds, a
+fresh user folder and NVIDIA cache per run (the driver wrote its two files there every run),
+1920x1080 windowed, RTX 3080 idle before each run, lane held, one run per case. The clicks are
+`DoorTrace` (`utils/door_trace.gd`, off unless `--boot-trace-doors=<plan>`; loaded only then):
+real mouse events at each control's centre through the window's input path, so the bar's sheet
+takes a click as it would. Steam was not running, so Host, Join and Resume end in the "Steam is
+not running" answer on the title, which is what a player without Steam sees.
+
+**A defect: the hand-over froze for 4 s.** A door that waited ran at the end of DRAW, and the map's
+entry froze: 3992, 4107 and 4083 ms frames (Play, Edit map, New map). Marks put the whole wait in
+`_level_play_controller.setup` and `_game_map.setup` (3837 ms from "table in the tree" to "table
+set up"; 11 ms when the same click came 10 s after the warm-up). It is the engine's background
+pipeline compiles: DRAW's draws ask for about 94 specialized pipelines, which compile on the
+WorkerThreadPool after the draw, and the first main-thread call that waits for one of the pool's
+tasks waits behind all of them (the same queue the old hand-over's material frees waited for).
+The compile counters move when a compile is asked for, not when it ends (no change after DONE in
+a probe), so no monitor shows the queue. The fix (`GraphicsWarmupScreen._drained`): after the
+last draw DRAW posts a probe task to the pool and finishes only once it has run (the pool runs
+tasks in the order posted), then waits DRAIN_SETTLE_MS (400 ms) and posts a second one for what
+was still running; it never blocks and gives up after 20 s. The drain takes 3.9 to 4.1 s on a true
+first launch, so the warm-up is done at about 23.5 s instead of 19.5 s, still behind the title.
+The bar moves through it ("Finishing shaders"; DRAW's share by time, PHASE_WEIGHTS now 0.11, 0.66,
+0.23 from the cold shares). A waiting door now runs before the screen is freed, and the screen
+goes a frame later, so its free and the map's entry are not one frame.
+
+| Door (clicked 1.5 s after the title unless said) | End | After the click | Worst frame from the click | Over 250 ms |
+|---|---|---|---|---|
+| Host | title, "Steam is not running" | 20.1 s (3.0 s after done) | 232 ms | 0 |
+| Join (a code no room has) | the card's answer | 17.7 s (1.0 s after done) | 218 ms | 0 |
+| Resume (a saved session over test_map) | title, "Steam is not running" | 19.6 s | 217 ms | 0 |
+| Play test_map | the table loaded | 19.8 s (2.3 s after done) | 428 ms (the map's first view) | 2 |
+| Edit map test_map | authoring open | 20.1 s | 457 ms (the map's first view) | 3 |
+| New map (Generate, Create a second later) | authoring open | 20.0 s | 701 ms (the dialog's load at the click) | 4 |
+| Play twice, 0.2 s apart | the table, once | 19.8 s | 424 ms | 2 |
+| Host, then Play 1 s later | Host's answer: the bar's sheet took the second click | | | |
+| New map, then the window closed 4.5 s later | quit | 1.76 s from the close to the exit | | |
+| Play at DRAW's start (the race before the end) | the table | 6.7 s | 424 ms | 2 |
+| Play the frame after done (the race after) | the table | 2.7 s | 429 ms | 3 |
+
+Before the fix the Play, Edit map and New map rows were 3992, 4107 and 4083 ms. The hand-over
+frame itself is now 180 to 385 ms against 261 to 308 ms for the same entry 25 s after the title.
+What is left over 250 ms in those runs is the map's own first view (the scatter's or the
+swatches' frame, 395 to 458 ms, 3 to 7 draw-time compiles in it, the same with no warm-up wait)
+and, for New map clicked that early, the dialog's load waiting for BootPrecompile's in-flight
+script (663 to 729 ms; boot2's known immediate-click cost, 4 s before). The bar showed 0.1 to
+0.66 s after the click (0.66 s when the click came before the warm-up's screen was loaded) and
+moved 285 to 331 times; its longest still stretch is the plants gathering, 3.5 to 3.8 s. No error
+in any log (each map's load prints the 24 known `_image_compress_bc_func` lines of an exported
+debug build).
+
+**First map open after the warm-up, before and after (true cold, n 2 alternated).** The before
+arm is main d5839419 with the launch watch added (its warm-up ran before the title); both open a
+new 100 ft temperate forest map (valley, seed 1234) through the dialog 25 s after the title
+(`--boot-trace-idle=25 --boot-trace-cold=...`):
+
+| | Before | After |
+|---|---|---|
+| Sheet dropped after Create | 1330.9, 1330.5 ms | 1337.6, 1328.2 ms |
+| Cover settled | 4478.8, 4477.1 ms | 4476.9, 4466.9 ms |
+| Worst frame of the open | 396, 398 ms | 395, 399 ms |
+| Frames over 100 ms (time in them) | 4 (1116, 1106 ms) | 4 (1149, 1130 ms) |
+| The entry frame | 275, 276 ms | 309, 308 ms |
+| Compiles over the whole launch | cv16+me141+su61+dr3+sp132 | the same |
+| Worst frame of the whole launch | 3584, 3621 ms | 395, 399 ms |
+
+No new pop-in: the same compiles land in the same first-view frames in both arms (cv2+su14+dr3+sp10
+in the swatches frame). The entry frame is 33 ms longer after (draw 175 against 138 ms), not
+explained. Water, fire, weather and the structure shaders' first uses were not compared here.
+
+A final run of the doors on the shipped code (the screen freed a frame after the door ran, n 1
+each) measured the hand-over frame ("title left the tree") at 187 ms for Play, 248 ms for Edit
+and 268 ms for New map, against 3992 to 4107 ms before the drain. The worst frames were 427,
+452, 678 and 220 ms for Play, Edit, New map and Host. For New map the worst is still the dialog
+load at 1.5 s, which waits for BootPrecompile's script in flight.
+
+**The structure tool's open regression (bisected, not fixed).** The worst frame when the tool
+opens, from the warmstruct_profile job with `--warm-graphics` and a fresh user folder each step,
+was 68.4 ms at 5ace9494 (2026-10-31) and 707.6 ms at c6d842e0. A first-parent bisect over 120
+commits (9 steps) lands on the merge 92f6a036 ("Merge main into tokenmesh"): 65.9 ms at its
+first parent a6da2175, 698.9 ms at the merge itself. The 699 to 843 ms frame is always frame 0
+of the open. On the merge's main side, boot2's 55e8cdd3 ("the first structure build loads
+procgen's evaluator, settlement, props and ornaments") moved those scripts off the start-up
+graph. BootPrecompile (57b1e363) lists them last in its ROOTS and compiles them only while the
+title idles. The job opens its map soon after the warm-up, so they most likely compile on the
+main thread when the tool opens. This has not been bisected inside the merge, and the open was
+not timed after a long title idle. A fix would precompile those scripts on a worker once an
+authoring map opens, if BootPrecompile has not finished them; it needs its own card and has to
+be measured with this job.
+
 ## Mobile renderer hang (2026-09-26): one occurrence, not reproduced
 
 macOS runs the Mobile renderer (`rendering_method.macos="mobile"`), so a load that hangs
