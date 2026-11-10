@@ -73,6 +73,8 @@ GPU.
 | GPU | Skirt shadow ring instead of a shadowless skirt (skirtring; look kept) | costs +0.12 ms home, +0.31 zoom 4 at an edge, +0.29 full zoom-out over the shadowless skirt (the original full skirt: +0.15-0.19, +0.30, +0.55) | skirtring |
 | System | Idle throttle: 15 fps unfocused, 5 fps minimised (sysidle; board perf-idle-throttle) | minimised 0.20-0.22 -> 0.005-0.016 cores | sysidle |
 | System | A new map's first open: swatches and biome colours from the decoded maps (never baked), dialog bakes ahead, strips paint over frames (coldopen) | sheet 8,165-8,188 -> 2,556-2,630 ms; cover settled and lane idle 11,481-11,496 -> 5,885-5,952 ms; dialog first frame 2,790-2,836 -> 158-160 ms; main-thread bakes 10 (about 8.4 s of BC7) -> 0 | f2ba68aa |
+| System | First launch: the title shows at once and the graphics warm-up runs behind it; Host / Join / Resume / play / authoring wait under a progress bar; the warm-up's materials are kept for the session instead of freed (firstlaunch, S6) | exported debug, true cold, n 4: title on screen 22,982 -> 4,646 ms; worst launch frame 3,641 -> 228 ms; time in frames over 100 ms 6,737 -> 1,293 ms; warm-up done 19.3 -> 19.7 s (behind the title); same pixels (mean abs diff 0.248) | afb69e94 |
+| Look | Boot splash: a sharp painted d20 rendered from the model instead of the 400 px icon stretched 2.7x by the engine's default `stretch_mode` (splash; board perf-look-splash-d20) | 2160x2160 PNG, 1.06 MB, 1:1 at 4K; title interactive in an export +70 ms (3,325 -> 3,393 ms median), about 30 ms of it the PNG decode | c8f538d6 |
 | Tokens | Pack idle animation at 30 Hz on screen, none off screen (tokenmesh; board perf-token-anim: 30) | 500 tokens 8.09 -> 0.67 ms headless | tokenmesh |
 | Network | Map document format 4 and 5: scatter rows in a binary codec (mapformat; board perf-map-format: binary) | 320 ft `map.ttmap` 3.60 -> 1.44 MB; late-join state 3.62 -> 1.46 MB; join to table 3.12 -> 2.12 s | mapformat |
 | Download | Surface maps shipped as lossless WebP, the loader reads WebP or PNG (texwebp; board perf-texture-shipping: webp) | surfaces in the zip 150.4 -> 45.1 MB (deflate 6, about -105 MB of the 269 MB); pixel-identical (156 of 156 maps; a home frame byte-identical); cold open +78 ms inside the spread | 57f62b34, core-library c67e39f, plantgen baa95df |
@@ -163,8 +165,13 @@ From the register's rows that are not merged, with their measured size:
   the lane's decode, hash and cache write (about 0.5 s) off its serial path, and the sheet,
   entry and "ground created" frames (about 290 / 280 / 260 ms); about 620 MB of texture memory
   stays at the title after a map (526 MB unattributed, engine-side); the first-launch warm-up
-  (17 s) and its 3.8 s frozen frame; about 80 pipeline compiles per load; 1,500 Controls rebuilt
-  per play load; process memory creeps 2.7 MB per map cycle.
+  (done; a first launch still has 8 frames over 100 ms, the worst 228 ms: the warm-up's first draws, a 214 ms
+  wind-shader build on the main thread, the 156 ms first title frame; Host / Join / Resume clicked
+  during the warm-up are tested in units only, and the structure tool's first open is about 690 ms,
+  was 67-71 ms on 2026-10-31: card firstlaunch2 is on these); about 80 pipeline compiles per load;
+  1,500 Controls rebuilt per play load; process memory creeps 2.7 MB per map cycle. Real motion in
+  the boot splash needs the autoload scripts compiled off the main thread (a rotating die measured:
+  0.4 s of turning in an export, then a 450 ms freeze in `Root._ready`; not built).
 - **Look-pending** (the user's look is the gate): cleared by the board's answers on 2026-11-09,
   except perf-look-rendersize. Texture shipping is lossless, so it has no look to judge.
 - **Test hygiene found on the way.** GUT silently dropped two test scripts that did not parse
