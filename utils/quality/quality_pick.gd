@@ -90,6 +90,16 @@ func _on_measured(result: Dictionary) -> void:
 	)
 	print(line)
 	BootTrace.mark(line)
+	BootTrace.mark(
+		(
+			"quality: pacing %s, %d ramp frames, %d load viewports"
+			% [
+				JSON.stringify(result.get("pacing", {})),
+				int(result.get("ramp_frames", 0)),
+				int(result.get("load", 0)),
+			]
+		)
+	)
 	queue_free()
 
 

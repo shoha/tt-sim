@@ -29,9 +29,12 @@ preset itself. Card autoquality (2026-11-10); the numbers and the captures are i
   saved graphics settings has chosen). `QualityBench` (`utils/quality/quality_bench.gd`) draws a
   fixed forest scene (64 m ground, 30,000 ground-cover cards, 260 trees, the shipped defaults, the
   warm-up's home camera) in a SubViewport at the window's pixel size, with LoadPacing's cover (vsync
-  off) so the GPU clocks up, ramps 500 ms and until no pipeline has compiled for 400 ms (a compile
-  while sampling starts the ramp again), then reads the GPU time of at least 30 frames over 800 ms
-  and reports the median. Its meshes are built on a thread and its pipelines are pre-compiled, so it
+  off, the frame cap lifted) so the GPU clocks up. It ramps at least 500 ms, until its GPU times stop
+  falling and no pipeline has compiled for 400 ms (a compile while sampling starts the ramp again).
+  Where something outside the game paces the frames well above the bench's GPU work (an exported
+  build on the dev machine holds 14 ms frames whatever vsync says), it adds up to 5 viewports of the
+  same world so the GPU's work fills the frame and its clocks rise. Then it reads the GPU time of
+  at least 30 frames over 800 ms and reports the median. Its meshes are built on a thread and its pipelines are pre-compiled, so it
   adds no compile hitch. `predicted_ms()` turns that into the filled 200 ft map's home view at the
   defaults (`GAME_PER_BENCH` 2.28, measured), and `decide()` reads a table:
   - High while the prediction is at most 80 % of the 60 fps budget (13.4 ms): the rest is headroom
@@ -80,10 +83,10 @@ preset itself. Card autoquality (2026-11-10); the numbers and the captures are i
 
 ## Not verified
 
-Open before the flag flips: on an exported first launch the bench reads about 35 % higher than in
-the editor-run calibration (its frames take about 14 ms there, so the GPU clocks stay low; the cause
-is not found). The pick errs one preset low near a threshold until that is fixed or
-`GAME_PER_BENCH` is calibrated from the exported reading (`docs/PERFORMANCE.md`).
+On an exported first launch the bench still reads about 17 % above the editor-run calibration
+(2.46 to 2.51 ms against about 2.1 on an RTX 3080; 2.74 to 3.09 before the load viewports), for a
+reason not found. `GAME_PER_BENCH` stays calibrated against the editor reading, so the error leans a
+fast card toward Low, never a slow card toward High (`docs/PERFORMANCE.md`).
 
 No weak GPU, AMD or Intel driver, or macOS (Metal, Forward Mobile) was measured: the thresholds are
 derived from an RTX 3080 and the minspec2 estimate. `RenderingServer.viewport_get_measured_render_

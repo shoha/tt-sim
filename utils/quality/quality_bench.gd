@@ -19,15 +19,17 @@ extends Node
 ##   BUILD   one Thread makes the meshes and the materials and creates a RenderingServer mesh of
 ##           each, so their pipelines compile there and not at the first draw on the main thread
 ##           (GraphicsWarmup.surface_data; the warm-up's BUILD does the same).
-##   RAMP    the viewport draws for RAMP_MS so the GPU's clocks rise to their working level. At the
-##           title, vsync is off meanwhile (LoadPacing's cover: nothing moves on the title, so no
-##           tear shows), else a fast GPU drawing a few ms every 16.7 ms stays at idle clocks and
-##           reads two or three times slower than it is. It also waits until no pipeline has
-##           compiled for QUIET_MS: on a cold driver cache the specialized pipelines compile in the
-##           background while slower ubershaders draw, so a frame measured then reads too slow.
+##   RAMP    the viewport draws for at least RAMP_MS, until its GPU time stops falling
+##           (settled()), so the GPU's clocks rise to their working level. At the title, vsync is
+##           off and the frame rate uncapped meanwhile (LoadPacing's cover plus Engine.max_fps 0:
+##           nothing moves on the title, so no tear shows), else a fast GPU drawing a few ms per
+##           paced frame stays at idle clocks and reads slower than it is. It also waits until no
+##           pipeline has compiled for QUIET_MS: on a cold driver cache the specialized pipelines
+##           compile in the background while slower ubershaders draw.
 ##   SAMPLE  the viewport's measured GPU time, per frame, for at least SAMPLE_MS and MIN_SAMPLES
 ##           frames; the result is their median. A compile meanwhile sends it back to RAMP.
-## Then it puts back what it changed (vsync, the global soft-shadow tier), frees its viewport and
+## Then it puts back what it changed (vsync, the frame cap, the global soft-shadow tier), frees its
+## viewport and
 ## emits `measured` once: {"ok", "gpu_ms", "samples", "frame_ms" (the sampled frames' median
 ## time), "restarts" (compiles that sent SAMPLE back), "size", "scale", "adapter_type", "adapter",
 ## "elapsed_ms"}. ok is false (gpu_ms 0) headless, when it was aborted, or when the
@@ -40,6 +42,17 @@ enum Phase { BUILD, RAMP, SAMPLE, DONE }
 const RAMP_MS := 500
 ## How long the pipeline compile counters must stand still before sampling starts.
 const QUIET_MS := 400
+## The ramp also lasts until its GPU times stop falling: the last SETTLE_WINDOW frames' median
+## within SETTLE_TOLERANCE of the window's before (settled()).
+const SETTLE_WINDOW := 15
+const SETTLE_TOLERANCE := 0.05
+## When frames are paced well above the GPU's work (a driver-forced vsync: on the dev machine an
+## exported game's frames hold 14 ms, two refreshes at 144 Hz, whatever the game asks), the GPU
+## idles most of each frame and keeps its idle clocks (200 to 600 MHz measured), reading about
+## 35 % slow. After LOAD_PROBE_FRAMES ramp frames the run adds up to LOAD_MAX more viewports
+## drawing the same world, so the GPU's work fills the frame and its clocks rise (extra_load()).
+const LOAD_PROBE_FRAMES := 20
+const LOAD_MAX := 5
 const SAMPLE_MS := 800
 const MIN_SAMPLES := 30
 ## The longest a run may take from its first frame (a GPU so slow that 30 frames take longer
@@ -84,6 +97,15 @@ var _frame_usec := 0
 var _compiles := -1
 var _quiet_msec := 0
 var _restarts := 0
+## What paces the frames when sampling starts (pacing_state()), for the result.
+var _pacing: Dictionary = {}
+## Engine.max_fps under the cover, put back by _restore(); -1 when the run did not change it.
+var _saved_max_fps := -1
+## The ramp's GPU times: sampling waits until they stop falling (settled()).
+var _ramp_samples := PackedFloat32Array()
+## The ramp's frame times, and the extra viewports drawing the same world (_add_load()).
+var _ramp_frames := PackedFloat32Array()
+var _load: Array[SubViewport] = []
 var _saved_shadow_quality := -1
 var _covered := false
 var _aborted := false
@@ -153,6 +175,7 @@ func _process(_delta: float) -> void:
 				_restarts += 1
 				_samples.clear()
 				_frame_samples.clear()
+				_ramp_samples.clear()
 				_enter(Phase.RAMP)
 	match _phase:
 		Phase.BUILD:
@@ -162,10 +185,25 @@ func _process(_delta: float) -> void:
 				_assemble()
 				_enter(Phase.RAMP)
 		Phase.RAMP:
-			var quiet := now - _quiet_msec >= QUIET_MS
-			if (now - _phase_msec >= RAMP_MS and quiet) or now - _start_msec >= CAP_MS:
+			var ramp_gpu := RenderingServer.viewport_get_measured_render_time_gpu(
+				_viewport.get_viewport_rid()
+			)
+			if ramp_gpu > 0.0:
+				_ramp_samples.append(ramp_gpu)
+			var usec := Time.get_ticks_usec()
+			if _frame_usec > 0:
+				_ramp_frames.append((usec - _frame_usec) / 1000.0)
+			_frame_usec = usec
+			if _load.is_empty() and _ramp_samples.size() == LOAD_PROBE_FRAMES:
+				# The fastest GPU time so far: early frames read slow while the clocks are low.
+				var fastest := _ramp_samples.duplicate()
+				fastest.sort()
+				_add_load(extra_load(median(_ramp_frames), fastest[0]))
+			var ready := now - _quiet_msec >= QUIET_MS and settled(_ramp_samples)
+			if (now - _phase_msec >= RAMP_MS and ready) or now - _start_msec >= CAP_MS:
 				_enter(Phase.SAMPLE)
 				_frame_usec = Time.get_ticks_usec()
+				_pacing = pacing_state()
 		Phase.SAMPLE:
 			var gpu := RenderingServer.viewport_get_measured_render_time_gpu(
 				_viewport.get_viewport_rid()
@@ -178,6 +216,40 @@ func _process(_delta: float) -> void:
 			var enough := now - _phase_msec >= SAMPLE_MS and _samples.size() >= MIN_SAMPLES
 			if enough or now - _start_msec >= CAP_MS + SAMPLE_MS:
 				_finish(not _samples.is_empty())
+
+
+## How many extra viewports fill a frame of [param frame_ms] whose measured viewport takes
+## [param gpu_ms] of GPU: none when the frame is about the GPU's own work, at most LOAD_MAX. Pure.
+static func extra_load(frame_ms: float, gpu_ms: float) -> int:
+	if gpu_ms <= 0.0 or frame_ms < gpu_ms * 1.5:
+		return 0
+	return clampi(int(ceil(frame_ms / gpu_ms)) - 1, 1, LOAD_MAX)
+
+
+## Whether the ramp's GPU times have stopped falling (the clocks are up): the median of the last
+## SETTLE_WINDOW samples is no more than SETTLE_TOLERANCE below the median of the window before.
+## Pure.
+static func settled(values: PackedFloat32Array) -> bool:
+	var n := values.size()
+	if n < SETTLE_WINDOW * 2:
+		return false
+	var last := median(values.slice(n - SETTLE_WINDOW))
+	var before := median(values.slice(n - SETTLE_WINDOW * 2, n - SETTLE_WINDOW))
+	return last >= before * (1.0 - SETTLE_TOLERANCE)
+
+
+## What paces the main loop now: the vsync mode, the frame cap, LoadPacing's cover, the idle
+## throttle's state and the window's focus (the result's "pacing").
+static func pacing_state() -> Dictionary:
+	return {
+		"vsync": int(DisplayServer.window_get_vsync_mode()),
+		"max_fps": Engine.max_fps,
+		"covered": LoadPacing.is_covered(),
+		"throttle_busy": IdleThrottle.busy,
+		"throttle_focused": IdleThrottle.focused,
+		"focused": DisplayServer.window_is_focused(),
+		"fps": Engine.get_frames_per_second(),
+	}
 
 
 ## Every pipeline compile so far (canvas, mesh, surface, draw and specialization): RAMP waits for
@@ -275,6 +347,36 @@ func _assemble() -> void:
 	if may_cover:
 		LoadPacing.cover(self)
 		_covered = true
+		# Uncapped as well: the cover's 240 fps cap sleeps between frames, and on Windows a window
+		# that is not in front sleeps in 15.6 ms steps, so the GPU idled at 200 to 600 MHz and read
+		# 35 % slow (exported first launch, card autoquality). Put back in _restore().
+		_saved_max_fps = Engine.max_fps
+		Engine.max_fps = 0
+
+
+## Adds [param count] viewports drawing the bench's world through their own copy of its camera
+## (freed with the bench), and restarts the settle check under the new load.
+func _add_load(count: int) -> void:
+	for i in count:
+		var extra := SubViewport.new()
+		extra.name = "QualityBenchLoad%d" % i
+		# The bench viewport owns its world (own_world_3d), which only find_world_3d() returns.
+		extra.world_3d = _viewport.find_world_3d()
+		extra.size = _size
+		extra.msaa_3d = Viewport.MSAA_DISABLED
+		extra.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		var camera := Camera3D.new()
+		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+		camera.size = CAMERA_SIZE
+		camera.near = 0.001
+		camera.far = 1000.0
+		camera.transform = CAMERA_TRANSFORM
+		camera.current = true
+		extra.add_child(camera)
+		add_child(extra)
+		_load.append(extra)
+	if count > 0:
+		_ramp_samples.clear()
 
 
 func _finish(ok: bool) -> void:
@@ -287,6 +389,9 @@ func _finish(ok: bool) -> void:
 		"samples": _samples.size(),
 		"frame_ms": median(_frame_samples),
 		"restarts": _restarts,
+		"pacing": _pacing,
+		"ramp_frames": _ramp_samples.size(),
+		"load": _load.size(),
 		"size": _size,
 		"scale": scale,
 		"adapter_type": int(RenderingServer.get_video_adapter_type()),
@@ -298,8 +403,13 @@ func _finish(ok: bool) -> void:
 	queue_free()
 
 
-## Puts back vsync and the soft-shadow tier and frees the meshes the worker made. Safe twice.
+## Puts back the frame cap, vsync and the soft-shadow tier and frees the meshes the worker made.
+## Safe twice.
 func _restore() -> void:
+	if _saved_max_fps >= 0:
+		# The cover's cap first: its uncover puts the player's own back after it.
+		Engine.max_fps = _saved_max_fps
+		_saved_max_fps = -1
 	if _covered:
 		LoadPacing.uncover(self)
 		_covered = false

@@ -7058,15 +7058,57 @@ warm-up ends (about 25 s after the process start on a first launch) and takes ab
 High in all 8 runs. Flag off loads nothing (771 of 962 scripts at the end, as main's 771 of 957;
 with the flag on 775).
 
-**Open: the first-run bench reads high.** In those launches the bench read 2.74 to 3.09 ms, against
-2.06 to 2.34 in the editor-run render jobs, so the prediction (6.3 to 7.1 ms) sits about 35 % above
-the calibration. The sampled frames took about 14 ms each (49 samples in 800 ms; the render jobs
-got 192, about 4 ms frames), so the GPU idled most of each frame and its clocks stayed low. No
-pipeline compiled while it sampled (0 restarts of the compile-quiet gate). What holds the frame
-there (vsync not off in that window, or Windows throttling a window that is not in front) is not
-found. On the 3080 the pick is still High with room; a card near a threshold would get one preset
-lower. Before the flag is flipped: find the cap, or calibrate `GAME_PER_BENCH` from the exported
-first-run reading (4.757 / 2.95 = 1.6).
+**The first-run bench read high, and the fix (autoquality round 2).** In those launches the bench
+read 2.74 to 3.09 ms against 2.06 to 2.34 in the editor-run render jobs (about +35 %). Logged per
+run (the pick's `quality: pacing` mark, nvidia-smi every 250 ms from the runner):
+
+- The sampled frames take 14.0 ms (two refreshes of the 144 Hz display) in every exported run,
+  with vsync reported off (0), the frame cap 240 or 0, the idle throttle released, focused or not,
+  and also with `display/window/vsync/vsync_mode=0` set from the start in an override.cfg. The
+  editor binary's render jobs run the same bench at about 4 ms frames. So the pacing comes from
+  outside the game (the driver or the compositor for this exe); the game cannot turn it off.
+- With 2.5 to 3 ms of GPU work per 14 ms frame the GPU sits at 21 to 40 % load; its clock was 210
+  to 675 MHz through most of a bench (the 3080's working clock is about 1785 to 1900 MHz).
+- No pipeline compiled while it sampled (0 restarts of the compile-quiet gate).
+
+Fix in `QualityBench`: the frame cap is lifted (`Engine.max_fps` 0, put back after), the ramp lasts
+until its GPU times stop falling (`settled()`), and after 20 ramp frames, when the frame time is at
+least 1.5 times the fastest GPU time seen, it adds up to 5 viewports drawing the same world so the
+GPU's work fills the paced frame (`extra_load()`; none on an unpaced frame or a GPU that already
+fills it, one more on a GPU about 3.5 times slower). The bench takes about 0.3 s longer.
+
+Bench ms at 1920x1080, RTX 3080 (exported debug build, true cold, n 4 each):
+
+| Run | before the fix | after the fix | load viewports |
+|---|---|---|---|
+| exported first launch (where the pick runs) | 2.74 / 2.83 / 2.88 / 2.91 / 2.92 / 3.06 / 3.08 / 3.09 | 2.46 / 2.47 / 2.50 / 2.51 | 4 to 5 |
+| exported second launch (warm caches) | 2.89 / 2.89 / 2.92 / 2.92 | 2.54 / 2.57 / 2.57 / 2.60 | 5 |
+| editor render job (unpaced, about 4 ms frames) | 2.06 to 2.34 (median about 2.1) | | 0 |
+
+The fix takes 12 to 15 % off the exported reading. It is still 17 % (first launch) to 21 % (second)
+above the editor's, not inside the 10 % target. The rest is not explained by the graphics clock
+alone: one logged second launch sampled at 1785 MHz and still read 2.89. With the extra viewports the
+GPU's work is about 90 % of the frame. A memory clock held below P0, or the extra viewports sharing
+caches, are guesses that were not checked.
+
+`GAME_PER_BENCH` stays 2.28, calibrated against the editor's unpaced bench. A card near a threshold
+has no idle time in its frame (its GPU fills the paced frame without help), so it reads near the
+unpaced cost; recalibrating to the exported 3080 reading (4.757 / 2.49 = 1.91) would predict such a
+card 17 % fast and hand it High when it cannot hold 60 fps. On a fast card the residual only leans
+the pick toward Low, which is the cheap error: Low looks like High at the home views. The one
+constant flips if the board prefers the other error.
+
+Emulation on the export (before the last change to the load probe; `--quality-bench-scale`): scale
+1 read 2.60 / 2.84 and picked High, scale 2 read 7.18 / 7.28 and picked Low, scale 3 read 14.48 /
+14.72 and picked Lowest. The final code was not re-run at scales 2 and 3, where it now adds one
+load viewport.
+
+The bench's first frame takes 77 to 93 ms in exported launches: 8 surface and 6 specialization
+pipelines compile at its first draw on the main thread despite the threaded precompile. With the
+load viewports, frames are about 38 ms. All of this is behind the static title and under 100 ms.
+Launch watch with the final code (n 4, alternated): before, the title was drawn at 4506 to 4697 ms,
+the worst frame was 316.5 to 330.8 ms and 8 to 10 frames went over 100 ms. After: 4490 to 4732,
+313.1 to 332.1 and 8 to 9. No regression.
 
 
 ## Measuring on a real weak GPU
