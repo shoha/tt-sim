@@ -1,13 +1,14 @@
 class_name GraphicsWarmup
 extends RefCounted
 
-## The first-launch graphics warm-up's policy and helpers (the screen that runs it is
-## GraphicsWarmupScreen, entered as Root.State.WARMING_UP).
+## The first-launch graphics warm-up's policy and helpers (GraphicsWarmupScreen runs it, behind
+## the title since 2026-11-09: Root._start_warmup).
 ##
 ## On a cold shader and pipeline cache, a map's first load compiles the wind, ground and water
 ## shaders and their pipelines on the main thread: 3 to 4 s single frames on Metal, long
-## enough for macOS to mark the app "Not Responding". The warm-up does that work once, before
-## the title screen, without blocking the main thread (see the screen's phases), and records
+## enough for macOS to mark the app "Not Responding". The warm-up does that work once, behind
+## the title screen (a door into a map waits for it), without blocking the main thread (see the
+## screen's phases), and records
 ## a key so it runs again only when something that invalidates the caches changes: the engine
 ## version, the rendering method, the OS version, the GPU or (on Windows and Linux) its driver,
 ## or the code of a covered shader or any file it includes. On macOS the Metal compiler belongs
@@ -95,12 +96,36 @@ const _INCLUDE_PATTERN := '#include\\s+"([^"]+)"'
 ## The shaders the warm-up started, kept for the session so a later load by path returns the
 ## same Shader and so the same compiled RID.
 static var _held: Array[Shader] = []
+## The samples' materials, kept for the session (keep_materials).
+static var _held_materials: Array[Material] = []
 
 
 static func hold(shader: Shader) -> void:
 	assert(shader != null, "GraphicsWarmup.hold: null shader")
 	if not _held.has(shader):
 		_held.append(shader)
+
+
+## Keeps the materials of `samples` for the session, so the shaders the warm-up compiled stay
+## compiled (a StandardMaterial3D's generated shader goes with its last material) and so freeing
+## them never waits on the pipelines the engine is still specializing in the background.
+static func keep_materials(samples: Array) -> void:
+	for sample: Dictionary in samples:
+		var material: Material = sample.get("material")
+		if material != null and not _held_materials.has(material):
+			_held_materials.append(material)
+
+
+## How many sample materials the session keeps (keep_materials).
+static func kept_material_count() -> int:
+	return _held_materials.size()
+
+
+## Lets the kept materials go. Root calls it on its way out of the tree, while the engine's
+## worker threads still run: a material freed with the script statics at exit waited for them
+## after they had stopped, and the game never quit (measured, a dev run).
+static func release_materials() -> void:
+	_held_materials.clear()
 
 
 ## Whether `shader`'s get_rid() belongs on the warm-up's worker rather than the main thread.

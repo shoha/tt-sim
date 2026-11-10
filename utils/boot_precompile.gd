@@ -19,6 +19,14 @@ extends Node
 ## thing that needs the code (a session or a map): the worker stops after its current script and
 ## the main thread carries on, loading what is left itself. A window close while the worker runs
 ## waits for it (_notification), because quitting under a compile crashes.
+##
+## `first` goes ahead of ROOTS: on a first launch Root puts the graphics warm-up's screen there,
+## whose scripts reach the same web (its load was a 2.1 s frame before the first one; perf audit
+## S6), and starts the warm-up behind the title on `first_loaded`.
+
+## Emitted once on the main thread: the `first` scripts are loaded, or the precompile stopped
+## before them (the caller then loads what is left itself).
+signal first_loaded
 
 ## The scripts that open the play and authoring code: the map scene (play and authoring with it),
 ## the table, the authoring controller, the avatar builder, the token look and the procgen
@@ -49,9 +57,14 @@ static var current: BootPrecompile = null
 ## Threads still running when the game left, kept so none is destroyed while running.
 static var _stranded: Array[Thread] = []
 
+## Loaded before ROOTS, in order (see the class doc). Set before the node enters the tree.
+var first: PackedStringArray = []
 ## Scripts the worker compiled, and the time it took (ms), for the boot trace.
 var compiled := 0
 var spent_ms := 0.0
+## How many paths the worker is past (written by the worker only).
+var _passed := 0
+var _first_sent := false
 
 var _thread: Thread = null
 var _delay := START_DELAY_FRAMES
@@ -106,24 +119,34 @@ func _exit_tree() -> void:
 
 func _process(_delta: float) -> void:
 	if _thread != null:
+		if _passed >= first.size():
+			_send_first()
 		if not _thread.is_alive():
 			_thread.wait_to_finish()
 			BootTrace.mark("precompiled the play and authoring scripts (%d)" % compiled)
 			set_process(false)
 			if current == self:
 				current = null
+			_send_first()
 			if _closing:
 				get_tree().quit()
 			queue_free()
 		return
 	if _stop:
+		_send_first()
 		queue_free()
 		return
 	if _delay > 0:
 		_delay -= 1
 		return
 	_thread = Thread.new()
-	_thread.start(_run.bind(ROOTS))
+	_thread.start(_run.bind(first + ROOTS))
+
+
+func _send_first() -> void:
+	if not _first_sent:
+		_first_sent = true
+		first_loaded.emit()
 
 
 ## Asks the worker to stop after the script it is on, and does not wait: the main thread that
@@ -142,8 +165,8 @@ func _run(paths: PackedStringArray) -> void:
 	for path in paths:
 		if _stop:
 			break
-		if ResourceLoader.has_cached(path):
-			continue
-		ResourceLoader.load(path)
-		compiled += 1
+		if not ResourceLoader.has_cached(path):
+			ResourceLoader.load(path)
+			compiled += 1
+		_passed += 1
 	spent_ms = (Time.get_ticks_usec() - start_us) / 1000.0

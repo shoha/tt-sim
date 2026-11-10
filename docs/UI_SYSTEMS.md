@@ -80,10 +80,10 @@ The application uses a **state stack** managed by the `Root` node.
 | `PLAYING`      | Active gameplay with GameMap loaded      |
 | `PAUSED`       | Game paused, pause menu visible          |
 | `AUTHORING`    | Building or dressing a map in the game view (offline only); see [Authoring Mode](#authoring-mode) |
-| `WARMING_UP`   | First-launch graphics warm-up before the title screen |
 
-The values are fixed (`TITLE_SCREEN` 0, `ROOM` 1, `PLAYING` 3, `PAUSED` 4, `AUTHORING` 5,
-`WARMING_UP` 6; 2 is retired) because `UIManager`, the validation bridge and the net scenarios
+The values are fixed (`TITLE_SCREEN` 0, `ROOM` 1, `PLAYING` 3, `PAUSED` 4, `AUTHORING` 5; 2 and
+6 are retired: 6 was `WARMING_UP`, the first-launch graphics warm-up, which runs behind the title
+since 2026-11-09, ARCHITECTURE.md) because `UIManager`, the validation bridge and the net scenarios
 use the numbers. `ROOM` replaced `LOBBY_HOST` and `LOBBY_CLIENT` on 2026-10-09. Entering it
 never connects: Host (or Resume) starts hosting from the title and Root enters `ROOM` once
 hosting; Join in place on the title's card connects, and Root enters `ROOM` (or `PLAYING`, when

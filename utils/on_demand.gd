@@ -72,6 +72,9 @@ static func foliage_mips(mesh: Mesh) -> void:
 
 ## A new GraphicsWarmupScreen; `on_finished` runs once when it is done. Not yet in the tree.
 static func graphics_warmup_screen(on_finished: Callable) -> Node:
-	var screen: Variant = (load(GRAPHICS_WARMUP_SCREEN) as PackedScene).instantiate()
+	var scene := load(GRAPHICS_WARMUP_SCREEN) as PackedScene
+	BootTrace.mark("warm-up: screen scene loaded")
+	var screen: Variant = scene.instantiate()
+	BootTrace.mark("warm-up: screen instantiated")
 	screen.finished.connect(on_finished, CONNECT_ONE_SHOT)
 	return screen

@@ -68,7 +68,7 @@ A skipped step logs `skip <op> (<reason>)`.
 | Op | Fields | What it does |
 |---|---|---|
 | `title` | none | Switch to the title state (`change_state(0)`), without the leave prompt and without saving. |
-| `wait_title` | none | Wait until the title state is current: the first-launch graphics warm-up (`Root.State.WARMING_UP`) has handed over. Put it first in any job that may boot into the warm-up. |
+| `wait_title` | none | Wait until the title state is current. Put it first in every job. A first launch's graphics warm-up (`--warm-graphics`) runs behind the title since 2026-11-09; a `new_map` or play then waits for it under its bar (`Root._when_warm`), and `wait_ready` waits through that. |
 | `new_map` | `biome` (palette biome id, `""` for bare ground), `size` (ft, default 200), `seed` (default 1234), `landform` (a `StartingLandform.KINDS` id, default `flat`) | Open a new map in authoring, as the New map dialog does. The default `flat` keeps older jobs on the ground they were written for. |
 | `dress` | `folder` (level folder under `user://levels/`) | Open an existing level in authoring; a GLB-only level opens as a dressing layer. Nothing is written unless something saves. |
 | `play` | `folder` | Load that level folder and play it (`_on_play_level_requested`). |

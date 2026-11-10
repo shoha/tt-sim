@@ -97,6 +97,26 @@ func test_a_close_request_waits_for_the_worker() -> void:
 
 
 ## Settlement.KIND_NAMES copies procgen's list so the resource does not name ProcgenSettlement.
+## Root starts a first launch's warm-up on first_loaded: it comes once, also when the precompile
+## is stopped before its worker started (Root then loads what is left itself).
+func test_first_loaded_comes_once_even_when_stopped_early() -> void:
+	var precompile := BootPrecompile.new()
+	precompile.first = PackedStringArray(["res://utils/on_demand.gd"])
+	watch_signals(precompile)
+	add_child(precompile)
+	precompile.finish()
+	await wait_frames(3)
+	assert_signal_emit_count(precompile, "first_loaded", 1)
+	assert_null(precompile._thread, "no worker was started")
+
+
+## The worker counts each path it is past, cached ones included: what first_loaded waits on.
+func test_the_worker_counts_the_paths_it_is_past() -> void:
+	var precompile: BootPrecompile = autofree(BootPrecompile.new())
+	precompile._run(PackedStringArray(["res://utils/on_demand.gd", "res://utils/boot_trace.gd"]))
+	assert_eq(precompile._passed, 2)
+
+
 func test_settlement_kind_names_follow_procgen() -> void:
 	assert_eq(Settlement.KIND_NAMES, ProcgenSettlement.NAMES, "the copy follows procgen's kits")
 

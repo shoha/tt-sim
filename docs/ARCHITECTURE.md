@@ -273,9 +273,15 @@ enum State {
     PLAYING = 3,       # Active gameplay
     PAUSED = 4,        # Game paused (overlay state)
     AUTHORING = 5,     # Building or dressing a map in the game view (offline only)
-    WARMING_UP = 6,    # First-launch graphics warm-up before the title screen
+    # 6 was WARMING_UP; the first-launch graphics warm-up runs behind the title since 2026-11-09
 }
 ```
+
+A first launch (GraphicsWarmup.should_run()) boots to the title as any launch does and runs the
+graphics warm-up behind it (`Root._start_warmup`, once BootPrecompile has loaded the warm-up's
+scene on its worker). The doors into a map wait for it under its bar (`Root._when_warm`): the
+offline ones in `change_state` (PLAYING and AUTHORING, `Root.waits_for_warmup`), a session's at
+the title (Host, Join, Resume), so the network never waits on a state change.
 
 The values are fixed: `UIManager` mirrors `PLAYING` and `PAUSED` as ints, and the validation
 bridge and the net scenarios use the numbers. Escape in AUTHORING goes through the overlay

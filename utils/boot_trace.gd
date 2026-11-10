@@ -24,6 +24,9 @@ extends RefCounted
 ## new-map dialog as a player does and times it to the starting cover grown in and the surface
 ## lane idle (OpenTrace, loaded only then; `--boot-trace-clear-cache` deletes the core library's
 ## baked surface maps at the title first, for a new player's first open).
+## Every frame from Root's first one to the end of the trace is also watched (watch_launch), the
+## first-launch graphics warm-up included: the "launch" field holds the worst frames, each with the
+## mark it followed, its draw time and the pipeline compiles in it, and the frames over HITCH_MS.
 ## At the end it prints the timeline and appends one JSON line to user://boot_trace.jsonl;
 ## `--boot-trace-quit` then quits, for scripted rounds (tools/render_jobs/local or a loop).
 
@@ -44,6 +47,18 @@ static var _last_us: int = 0
 static var _frames: int = 0
 static var _worst_ms: float = 0.0
 static var _settled_us: int = 0
+## The launch watch (watch_launch): one entry per frame, the frame's time, the mark it ended
+## after, its draw time and the pipeline compiles in it ("" for none).
+static var _launch_ms := PackedFloat64Array()
+static var _launch_at_us := PackedInt64Array()
+static var _launch_stage := PackedStringArray()
+static var _launch_draw_ms := PackedFloat64Array()
+static var _launch_comp := PackedStringArray()
+static var _launch_last_us: int = 0
+static var _launch_last_comp := PackedInt64Array()
+static var _launch_comp_start := PackedInt64Array()
+static var _draw_start_us: int = 0
+static var _draw_ms: float = 0.0
 
 
 static func _detect() -> bool:
@@ -68,6 +83,102 @@ static func arg_value(name: String) -> String:
 		if arg.begins_with("--%s=" % name):
 			return arg.get_slice("=", 1)
 	return ""
+
+
+## Watches every frame from now to the end of the trace (the class doc), when the trace is on.
+## Called once, at the end of Root._ready, before the first frame.
+static func watch_launch(tree: SceneTree) -> void:
+	if not enabled or not _launch_comp_start.is_empty():
+		return
+	_launch_last_us = Time.get_ticks_usec()
+	_launch_last_comp = _compiles()
+	_launch_comp_start = _launch_last_comp
+	tree.process_frame.connect(_on_launch_frame)
+	if DisplayServer.get_name() != "headless":
+		RenderingServer.frame_pre_draw.connect(_on_pre_draw)
+		RenderingServer.frame_post_draw.connect(_on_post_draw)
+
+
+static func _on_pre_draw() -> void:
+	_draw_start_us = Time.get_ticks_usec()
+
+
+static func _on_post_draw() -> void:
+	_draw_ms += (Time.get_ticks_usec() - _draw_start_us) / 1000.0
+
+
+static func _on_launch_frame() -> void:
+	var now := Time.get_ticks_usec()
+	var compiles := _compiles()
+	_launch_ms.append((now - _launch_last_us) / 1000.0)
+	_launch_at_us.append(now)
+	_launch_stage.append(last_mark())
+	_launch_draw_ms.append(_draw_ms)
+	_launch_comp.append(_compile_text(_launch_last_comp, compiles))
+	_launch_last_us = now
+	_launch_last_comp = compiles
+	_draw_ms = 0.0
+
+
+## The pipeline compile counters, by the monitors' order (canvas, mesh, surface, draw,
+## specialization).
+static func _compiles() -> PackedInt64Array:
+	return PackedInt64Array(
+		[
+			Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_CANVAS),
+			Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_MESH),
+			Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_SURFACE),
+			Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_DRAW),
+			Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_SPECIALIZATION),
+		]
+	)
+
+
+## "cv2+su5": the compiles between counters `a` and `b`, "" for none. Pure.
+static func _compile_text(a: PackedInt64Array, b: PackedInt64Array) -> String:
+	var names := ["cv", "me", "su", "dr", "sp"]
+	var out := PackedStringArray()
+	for k in mini(a.size(), b.size()):
+		if b[k] != a[k]:
+			out.append("%s%d" % [names[k], b[k] - a[k]])
+	return "+".join(out)
+
+
+## The launch watch's summary: frames, the worst, the count and total of frames over HITCH_MS,
+## the compiles by kind, and the worst `top` frames as "ms@at[stage | draw | compiles]".
+static func launch_report(top: int = 12) -> Dictionary:
+	var order: Array[int] = []
+	var over := 0
+	var over_ms := 0.0
+	for i in _launch_ms.size():
+		order.append(i)
+		if _launch_ms[i] > HITCH_MS:
+			over += 1
+			over_ms += _launch_ms[i]
+	order.sort_custom(func(a: int, b: int) -> bool: return _launch_ms[a] > _launch_ms[b])
+	var worst: Array[String] = []
+	for k in mini(top, order.size()):
+		var i := order[k]
+		worst.append(
+			(
+				"%.1f@%.0f[%s | draw %.1f | %s]"
+				% [
+					_launch_ms[i],
+					_launch_at_us[i] / 1000.0,
+					_launch_stage[i],
+					_launch_draw_ms[i],
+					_launch_comp[i],
+				]
+			)
+		)
+	return {
+		"frames": _launch_ms.size(),
+		"worst_ms": snappedf(_launch_ms[order[0]], 0.1) if not order.is_empty() else 0.0,
+		"over_hitch": over,
+		"over_hitch_ms": snappedf(over_ms, 0.1),
+		"compiles": _compile_text(_launch_comp_start, _compiles()),
+		"worst": worst,
+	}
 
 
 ## Marks the title as built and watches the frames that follow (see the class doc). Called once,
@@ -141,6 +252,11 @@ static func _on_frame(tree: SceneTree) -> void:
 		return
 	if now - _title_at_us < int(_settle_s() * 1000000.0):
 		return
+	# A first launch's warm-up runs behind the title: the default settle waits for it, so the
+	# trace sees the title's frames while it runs. An explicit idle acts after that long.
+	var scene := tree.current_scene
+	if arg_value("boot-trace-idle") == "" and scene != null and scene.get("_warmup_pending") == true:
+		return
 	tree.process_frame.disconnect(_on_frame)
 	_finish(tree)
 
@@ -188,12 +304,15 @@ static func _maps(tree: SceneTree) -> Dictionary:
 	var started := Time.get_ticks_usec()
 	mark("first map: open requested")
 	root.call("_begin_authoring", {"level": null, "new_map": spec, "return_to": &"title"})
+	# A first launch's warm-up holds the open until it is done (Root._when_warm), so the
+	# controller may come later.
 	var controller: Node = root.get("_authoring_controller")
-	while controller != null and not bool(controller.get("_is_open")):
+	while controller == null or not bool(controller.get("_is_open")):
 		if Time.get_ticks_usec() - started > MAP_TIMEOUT_S * 1000000:
 			mark("first map: timed out")
 			return out
 		await tree.process_frame
+		controller = root.get("_authoring_controller")
 	out["first_map_ms"] = snappedf((Time.get_ticks_usec() - started) / 1000.0, 0.1)
 	mark("first map: open")
 	started = Time.get_ticks_usec()
@@ -292,7 +411,9 @@ static func _finish(tree: SceneTree) -> void:
 		"display": DisplayServer.get_name(),
 		"worst_frame_ms": snappedf(_worst_ms, 0.1),
 		"marks": rows,
+		"launch": launch_report(),
 	}
+	print("boot_trace: launch %s" % JSON.stringify(line["launch"]))
 	line.merge(maps)
 	for key: String in maps:
 		if maps[key] is float:

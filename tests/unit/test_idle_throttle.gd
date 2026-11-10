@@ -18,6 +18,7 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	IdleThrottle.busy = false
 	IdleThrottle.focused = true
 	IdleThrottle.minimized = false
 	IdleThrottle.release()
@@ -37,6 +38,15 @@ func test_the_policy_caps_only_a_window_in_the_background() -> void:
 	)
 	assert_eq(IdleThrottle.UNFOCUSED_FPS, 15)
 	assert_eq(IdleThrottle.MINIMIZED_FPS, 5)
+
+
+## A first launch's warm-up behind the title holds the throttle off while it runs.
+func test_busy_work_holds_the_cap_off_and_it_returns_after() -> void:
+	IdleThrottle.focused = false
+	IdleThrottle.set_busy(true)
+	assert_eq(Engine.max_fps, 0, "no cap while busy, unfocused or not")
+	IdleThrottle.set_busy(false)
+	assert_eq(Engine.max_fps, IdleThrottle.UNFOCUSED_FPS, "the cap returns when the work is done")
 
 
 func test_a_host_with_peers_keeps_a_floor() -> void:

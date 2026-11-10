@@ -55,6 +55,34 @@ func test_a_real_sample_is_built() -> void:
 	assert_eq(screen.built_names(), PackedStringArray(["tri"]))
 
 
+## Freeing a sample's material at the hand-over waited 3.8 s for the pipelines the engine was
+## still specializing (perf audit S6): the session keeps them, the screen keeps no samples.
+func test_the_samples_materials_outlive_the_screen() -> void:
+	var sample := _triangle_sample("tri")
+	var material: Material = sample.material
+	var screen := _screen(func() -> Array: return [sample])
+	add_child_autofree(screen)
+	await wait_until(_done(screen), 10.0, "reaches DONE")
+	assert_true(GraphicsWarmup._held_materials.has(material), "kept for the session")
+	assert_eq(screen._samples.size() + screen._results.size(), 0, "the screen holds no samples")
+	GraphicsWarmup.release_materials()
+	assert_eq(GraphicsWarmup.kept_material_count(), 0, "released on the way out")
+
+
+## Behind the title the bar stays hidden until something waits for the warm-up.
+func test_a_background_warm_up_shows_its_bar_only_when_asked() -> void:
+	var screen := _screen(func() -> Array: return [])
+	screen.background = true
+	screen.shader_paths = ["res://shaders/water.gdshader", "res://shaders/waterfall.gdshader"]
+	add_child_autofree(screen)
+	var overlay: CanvasLayer = screen.get_node("%LoadingOverlay")
+	assert_false(overlay.visible, "hidden behind the title")
+	screen.show_progress()
+	assert_true(overlay.visible, "shown for a waiting door")
+	await wait_until(_done(screen), 10.0, "reaches DONE")
+	GraphicsWarmup.release_materials()
+
+
 func test_many_samples_build_on_several_threads_and_keep_their_order() -> void:
 	var names: Array[String] = []
 	var first := func() -> Array:

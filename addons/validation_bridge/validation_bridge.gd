@@ -260,8 +260,9 @@ func _get_app_state() -> String:
 	if root_scene == null or not root_scene.has_method("get_current_state"):
 		return "UNKNOWN"
 	var state_value: int = root_scene.get_current_state()
-	# Root.State values; 2 is retired (was LOBBY_CLIENT, before ROOM replaced both lobbies).
-	var state_names := ["TITLE_SCREEN", "ROOM", "", "PLAYING", "PAUSED", "AUTHORING", "WARMING_UP"]
+	# Root.State values; 2 is retired (was LOBBY_CLIENT, before ROOM replaced both lobbies), and so
+	# is 6 (WARMING_UP: the first-launch warm-up runs behind the title since 2026-11-09).
+	var state_names := ["TITLE_SCREEN", "ROOM", "", "PLAYING", "PAUSED", "AUTHORING"]
 	if state_value >= 0 and state_value < state_names.size() and state_names[state_value] != "":
 		return state_names[state_value]
 	return "UNKNOWN(%d)" % state_value

@@ -47,6 +47,10 @@ static var focused := true
 static var minimized := false
 ## A probe that runs as a script and wants the real throttle sets this before install().
 static var allow_scripted := false
+## True while one-time work the player is waiting on runs in the background (a first launch's
+## graphics warm-up behind the title, whose threads hand their RenderingServer calls to the main
+## thread once a frame: at 15 fps its gathering took 8.7 s against 3.4 s uncapped). No cap then.
+static var busy := false
 ## Engine.max_fps before the throttle lowered it; -1 while the throttle holds no cap.
 static var _base_fps := -1
 
@@ -96,6 +100,12 @@ static func set_enabled(value: bool) -> void:
 	reapply()
 
 
+## Holds the throttle off while `value` (see `busy`), and applies the cap again after.
+static func set_busy(value: bool) -> void:
+	busy = value
+	reapply()
+
+
 ## Puts the frame cap that stood before the throttle back. LoadPacing calls it as a cover begins,
 ## so it saves the player's cap and not the throttled one.
 static func release() -> void:
@@ -107,7 +117,7 @@ static func release() -> void:
 static func reapply() -> void:
 	if LoadPacing.is_covered():
 		return
-	_set_cap(cap_for(enabled, focused, minimized, _hosting_peers()))
+	_set_cap(cap_for(enabled and not busy, focused, minimized, _hosting_peers()))
 
 
 ## The cap the throttle holds now, 0 when none.

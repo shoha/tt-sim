@@ -1,8 +1,9 @@
 class_name GraphicsWarmupScreen
 extends Node
 
-## The first-launch "Preparing graphics" screen (Root.State.WARMING_UP; GraphicsWarmup has
-## the why). Each phase keeps the main thread's frames short, so the window stays responsive:
+## The first-launch graphics warm-up (GraphicsWarmup has the why). Root runs it behind the title
+## with its "Preparing graphics" bar hidden (`background`) and shows the bar (show_progress) when a
+## door into a map has to wait for it. Each phase keeps the main thread's frames short:
 ##   COMPILE  one covered shader per frame: load, hold, get_rid(), which starts its compile on
 ##            the WorkerThreadPool (starting all of them in one frame cost a 510 ms frame).
 ##            Shaders that compile on the calling thread instead
@@ -19,7 +20,8 @@ extends Node
 ## The bar is weighted by phase (PHASE_WEIGHTS) and the line under it says what is going on
 ## (status_for): shaders started, then the group of samples (the ground, water, plants,
 ## buildings) being gathered and compiled with a count, then the first frame.
-## Then it writes the marker, frees the meshes and emits `finished`. %WarmupViewport is set up
+## Then it writes the marker, frees the meshes, keeps the samples' materials for the session
+## (GraphicsWarmup.keep_materials) and emits `finished`. %WarmupViewport is set up
 ## like the game world (camera, light, environment, MSAA, debanding) because a pipeline is
 ## keyed by the framebuffer format as well as the shader and vertex layout.
 
@@ -53,6 +55,8 @@ var shader_paths: Array = GraphicsWarmup.COVERED_SHADERS
 var phase: Phase = Phase.COMPILE
 ## How many threads build samples at once.
 var build_workers: int = clampi(OS.get_processor_count() / 2, 2, MAX_BUILD_WORKERS)
+## Runs behind the title with the bar hidden until show_progress() (Root, on a first launch).
+var background := false
 ## Whether BUILD's gathering and building run on several threads at once.
 var concurrent: bool = DisplayServer.get_name() != "headless"
 
@@ -77,6 +81,8 @@ var _build_ms := 0
 var _results: Array[Dictionary] = []
 var _skipped := PackedStringArray()
 var _rids: Array[RID] = []
+## The names of _results, set on the main thread when DRAW starts (built_names()).
+var _built_names := PackedStringArray()
 ## The samples in source order and the label of each, set before the build threads start (they
 ## only read them); the mesh each built into (a RID, or null for a skipped sample, under
 ## _mutex); and the next sample index to take (under _mutex).
@@ -143,13 +149,25 @@ static func _ratio(done: int, total: int) -> float:
 func _ready() -> void:
 	_viewport.msaa_3d = VisualEffectsController.saved_antialiasing_level() as Viewport.MSAA
 	_environment.apply_level_environment(LevelData.new(), _viewport)
-	_overlay.show_loading(TITLE)
-	_overlay.set_progress(0.0, _status_now())
+	BootTrace.mark("warm-up: environment applied")
+	if not background:
+		show_progress()
 	_start_msec = Time.get_ticks_msec()
 	_enter_phase(Phase.COMPILE)
 
 
+## Shows the bar and the status line over whatever is on screen (a background warm-up runs
+## without them until something has to wait for it).
+func show_progress() -> void:
+	if _overlay.visible:
+		return
+	_overlay.show_loading(TITLE)
+	_status = _status_now()
+	_overlay.set_progress(progress(), _status)
+
+
 func _exit_tree() -> void:
+	BootTrace.mark("warm-up: screen leaves the tree")
 	if _thread != null:
 		_mutex.lock()
 		_cancel = true
@@ -162,6 +180,7 @@ func _exit_tree() -> void:
 		_thread.wait_to_finish()
 		_thread = null
 	_free_meshes()
+	BootTrace.mark("warm-up: screen left the tree")
 
 
 func progress() -> float:
@@ -181,10 +200,7 @@ func progress() -> float:
 ## The names of the samples the worker built, in order. Valid once BUILD is over.
 func built_names() -> PackedStringArray:
 	assert(phase >= Phase.DRAW, "GraphicsWarmupScreen: built_names() before BUILD is over")
-	var names := PackedStringArray()
-	for sample in _results:
-		names.append(String(sample.name))
-	return names
+	return _built_names
 
 
 ## The paths of the shaders COMPILE left to the worker.
@@ -370,12 +386,14 @@ func _cancelled() -> bool:
 func _start_draw() -> void:
 	print("GraphicsWarmup: collecting the samples took %d ms of BUILD" % _collect_ms)
 	print("GraphicsWarmup: building took %d ms on %d threads" % [_build_ms, build_workers])
+	BootTrace.mark("warm-up: collected in %d ms, built in %d ms" % [_collect_ms, _build_ms])
 	_enter_phase(Phase.DRAW)
 	for sample_name in _skipped:
 		push_warning("GraphicsWarmup: sample %s has no geometry; skipped" % sample_name)
 	_warmer = PipelineWarmer.new()
 	_viewport.add_child(_warmer)
 	for sample in _results:
+		_built_names.append(String(sample.name))
 		var mesh := GraphicsWarmup.sample_mesh(sample)
 		if sample.multimesh:
 			# No wind category: build_chunk then keeps shadow casting on for every sample, so
@@ -390,6 +408,7 @@ func _finish() -> void:
 	# This frame's _process still sets the bar to 1.0 after we return; nothing after that.
 	set_process(false)
 	GraphicsWarmup.write_marker(GraphicsWarmup.cache_key(), marker_path)
+	BootTrace.mark("warm-up: marker written")
 	_free_meshes()
 	print(
 		(
@@ -403,6 +422,15 @@ func _finish() -> void:
 			]
 		)
 	)
+	# Freeing a sample's material here waited for the pipelines the engine was still
+	# specializing in the background: a 3.8 s frozen frame at the hand-over to the title on a
+	# cold cache (perf audit S6). The session keeps them (GraphicsWarmup.keep_materials) and
+	# Root releases them on its way out; only the geometry goes now.
+	GraphicsWarmup.keep_materials(_samples)
+	_samples.clear()
+	_results.clear()
+	var kept := GraphicsWarmup.kept_material_count()
+	BootTrace.mark("warm-up: samples dropped, %d materials kept" % kept)
 	finished.emit()
 
 
@@ -423,6 +451,7 @@ func _enter_phase(next: Phase) -> void:
 	phase = next
 	_phase_start_msec = Time.get_ticks_msec()
 	_phase_worst_ms = 0.0
+	BootTrace.mark("warm-up: " + str(Phase.keys()[next]))
 
 
 func _track_frame() -> void:

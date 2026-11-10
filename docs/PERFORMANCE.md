@@ -959,8 +959,9 @@ thread: single frames of 3.45 s and 4.3 s on Metal, long enough for macOS to mar
 4574.1 ms worst frame.
 
 The fix is a "Preparing graphics" screen before the title screen (`GraphicsWarmupScreen`,
-`Root.State.WARMING_UP`; policy and helpers in `utils/graphics_warmup.gd`). It does the
-compile work once, in three phases, each arranged so the main thread never waits on it:
+`Root.State.WARMING_UP`; policy and helpers in `utils/graphics_warmup.gd`). (Since 2026-11-09 it
+runs behind the title instead and the state is gone: "First launch behind the title" below.) It
+does the compile work once, in three phases, each arranged so the main thread never waits on it:
 
 - **COMPILE**: one covered shader per frame, `load()` plus `get_rid()`. Spatial and
   canvas_item shaders start their compile on the WorkerThreadPool; starting all of them in
@@ -1220,6 +1221,79 @@ collect share of BUILD 0.3 (collecting took 1.4 s of 4.6). The build threads sha
 built count tracks time; collecting is almost all the plants source, so the bar sits at 0.75 of the
 collect share for about a second, with "Gathering plants" under it, and then moves on. A capture during BUILD (`jobs/warmstruct_boot.json`) shows the title, the bar a third
 full and "Gathering plants".
+
+## First launch behind the title (topic firstlaunch, 2026-11-09)
+
+Audit S6: a first launch spent about 17 s on the warm-up screen before the title and ended it
+with a 3.8 s frozen frame. Procedure: exported debug builds (ttscatter has no release DLL, so no
+release export), RTX 3080, 1920x1080 windowed, vsync on, lane held; each run in a fresh user
+folder (named by an `override.cfg` beside the exe, which an exported build reads) with a fresh
+NVIDIA driver cache (`__GL_SHADER_DISK_CACHE_PATH` set for the child; the driver wrote its files
+there), so every run is a true first launch; four runs per arm, alternated. Times are the boot
+trace's (since the engine started). The trace's launch watch (`--boot-trace`, `launch` in
+`boot_trace.jsonl`) records every frame from Root's first with the mark before it, its draw time
+(`frame_pre_draw` to `frame_post_draw`) and the pipeline compiles in it.
+
+Where the time went before (probe run, n 1): a 2.1 s frame before the warm-up's first frame
+(the screen's scene load: its scripts reach the play web, so the main thread compiled them while
+BootPrecompile had done 2 of its 13 roots); the warm-up, 14.1 s (COMPILE 1.8, BUILD 12.3 = collect
+4.3 + build 7.9 on 8 threads, DRAW 0.05); then 3.78 s between the screen leaving the tree and the
+title's first frame, whose own draw took 46 ms. Freeing the 46 samples' materials waited for the
+engine's background pipeline specializations (94 over a launch): a probe that kept the materials
+handed over in 18 ms. The warm-up's 5.6 s in the section above was taken with the NVIDIA cache
+warm; with it empty the same work takes 14 s.
+
+The change:
+
+- **The title comes first.** Root decides the warm-up (`_warmup_pending`), shows the title,
+  and BootPrecompile loads the warm-up scene first on its worker (`BootPrecompile.first`,
+  `first_loaded`) before the play web; then `_start_warmup` adds the screen with its bar hidden
+  (`background`). `Root.State.WARMING_UP` (6) is gone.
+- **Doors that need warm caches wait.** `change_state` to PLAYING or AUTHORING off the network
+  (`Root.waits_for_warmup`), host, join and resume go through `Root._when_warm`: the bar shows
+  over the title (`show_progress`) until the warm-up is done, then the latest asked action runs.
+  If a door had stopped BootPrecompile (the new-map dialog does), the wait restarts it, else the
+  main thread compiled the rest on entering authoring (a 5042 ms frame in a dev probe; the fix is
+  not re-measured in a window).
+- **The samples' materials are kept** (`GraphicsWarmup.keep_materials`) for the session and
+  released in `Root._exit_tree`; freeing them with the script statics at exit hung the quit.
+- **`IdleThrottle.busy`** holds the 15 fps unfocused cap off during the warm-up. Its collect and
+  build phases flush RenderingServer calls once a frame, so behind an unfocused window COMPILE
+  and collect took twice as long (3.6 and 8.7 s against 1.8 and 4.3 s, dev probes, n 1).
+
+| True cold launch, n 4 each, median (range) | Before (main d5839419 + trace) | After |
+|---|---|---|
+| Title drawn | 22982 ms (22684-23088) | 4646 ms (4467-4650) |
+| Warm-up done | 19341 ms (19066-19465) | 19668 ms (19520-19781), behind the title |
+| Worst frame of the launch | 3641 ms (3618-3647) | 228 ms (225-233) |
+| Frames over 100 ms | 9 (7-9) | 8 (7-9) |
+| Time in frames over 100 ms | 6737 ms (6609-6919) | 1293 ms (1186-1446) |
+| Pipeline compiles, launch | canvas 3, mesh 126, specialization 94 | canvas 7, mesh 126, specialization 94 |
+| Second launch, title drawn | 3410 ms | 3327 ms |
+
+The title is on screen 18 s sooner and the window never freezes for more than a quarter
+second. What is left over 100 ms: four COMPILE frames of 131 to 225 ms (the warm-up viewport's
+first draws, 69 to 129 ms of draw), the BUILD-start frame of 214 ms
+(`WindFoliage.wind_shaders` on the main thread), the title's first frame (156 ms) and one or two
+BUILD frames of about 105 ms. A first launch's engine start is also about 1.2 s slower than a
+second's (first autoload at 3257 against 2077 ms: the engine's own shaders into an empty shader
+cache, inferred).
+
+Same look: a home-view capture pair (`--warm-graphics --full`, fresh folders, the same
+`settings.cfg` in both) has the same mean level (66.322), a mean absolute difference of 0.248 and
+no pixel over 8 levels. First use after the warm-up, one run each, before and after: structure
+tool open 679.0 and 698.2 ms worst frame (second worst 255.5 and 272.7), first building placed
+36.8 and 34.8 ms. The tool-open frame was 67 to 71 ms on 2026-10-31 (table above): a regression
+from elsewhere, the same in both arms. A first map open right after the title is not comparable
+between the arms (after, it includes the wait under the bar). A dev probe's first map view after
+the warm-up drew a 525 ms frame with 2 canvas, 17 surface, 3 draw and 13 specialization compiles:
+some draw-time variants are still uncovered, with no before pair.
+
+Not verified: macOS (Metal, Forward Mobile, where the warm-up began), a minimum-spec GPU, AMD or
+Intel drivers, a release export, the water, fire and weather first-use hitches on their own, and
+a host, join or resume clicked during the warm-up in a real window (unit tests only). The 80
+pipeline compiles per map load and the 1,500 Controls rebuilt per play load (audit S7 and S8)
+are untouched.
 
 ## Mobile renderer hang (2026-09-26): one occurrence, not reproduced
 

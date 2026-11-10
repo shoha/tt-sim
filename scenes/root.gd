@@ -35,7 +35,8 @@ enum State {
 	PLAYING = 3,
 	PAUSED = 4,
 	AUTHORING = 5,  ## Building or dressing a map in the game view (offline only)
-	WARMING_UP = 6,  ## First-launch graphics warm-up before the title screen (GraphicsWarmup)
+	# 6 was WARMING_UP; the first-launch graphics warm-up runs behind the title since 2026-11-09
+	# (_start_warmup).
 }
 
 const TITLE_SCREEN_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
@@ -77,7 +78,11 @@ var _authoring_request: Dictionary = {}
 ## OnDemand on first use so neither is compiled at start-up.
 var _new_map_dialog: Node = null
 var _warmup_screen: Node = null
-var _warmup_entered: bool = false
+## A first launch's graphics warm-up has not finished (GraphicsWarmup.should_run()); it runs
+## behind the title (_start_warmup), and what would open a map waits for it (_when_warm).
+var _warmup_pending: bool = false
+## What runs once the warm-up is done (the latest title action that had to wait), or null.
+var _warmup_action: Callable = Callable()
 ## Whether the first entry into TITLE_SCREEN starts the startup update check (not for Steam,
 ## which updates the game itself). Consumed by _take_startup_update_check().
 var _update_check_on_title: bool = false
@@ -123,17 +128,91 @@ func _ready() -> void:
 	EventBus.biome_designer_requested.connect(_on_biome_designer_requested)
 
 	# Skip in-app updates for Steam users — Steam handles updates. The check starts on the
-	# first title screen, so its dialog cannot open over the graphics warm-up.
+	# first title screen.
 	_update_check_on_title = OS.get_environment("SteamAppId").is_empty()
 
-	# Enter initial state
-	push_state(boot_state(GraphicsWarmup.should_run()))
-	# The play and authoring code compiles in slices while the title idles (BootPrecompile).
+	# Enter initial state: always the title; a first launch warms its graphics behind it.
+	BootTrace.watch_launch(get_tree())
+	_warmup_pending = GraphicsWarmup.should_run()
+	BootTrace.mark("warm-up decided: %s" % _warmup_pending)
+	push_state(State.TITLE_SCREEN)
+	BootTrace.mark("initial state entered")
+	# The play and authoring code compiles in slices while the title idles (BootPrecompile). On a
+	# first launch the warm-up's screen goes first: its scripts reach the same web, and compiling
+	# them on the main thread was a 2.1 s frame (perf audit S6).
 	var precompile := BootPrecompile.new()
 	precompile.name = "BootPrecompile"
+	if _warmup_pending:
+		precompile.first = PackedStringArray([OnDemand.GRAPHICS_WARMUP_SCREEN])
+		precompile.first_loaded.connect(_start_warmup, CONNECT_ONE_SHOT)
+		IdleThrottle.busy = true
 	add_child(precompile)
 	# Slows the frame rate while the window is in the background (Settings > Graphics).
 	IdleThrottle.install(self)
+
+
+func _exit_tree() -> void:
+	GraphicsWarmup.release_materials()
+
+
+## Starts the first launch's graphics warm-up behind the title (GraphicsWarmupScreen with its bar
+## hidden), once BootPrecompile has its scene loaded. A title action already waiting shows the bar.
+func _start_warmup() -> void:
+	BootTrace.mark("warm-up: starting behind the title")
+	_warmup_screen = OnDemand.graphics_warmup_screen(_on_warmup_finished)
+	_warmup_screen.set("background", not _warmup_action.is_valid())
+	add_child(_warmup_screen)
+
+
+func _on_warmup_finished() -> void:
+	_warmup_pending = false
+	IdleThrottle.set_busy(false)
+	if _warmup_screen:
+		_warmup_screen.queue_free()
+		_warmup_screen = null
+	if _warmup_action.is_valid():
+		var action := _warmup_action
+		_warmup_action = Callable()
+		action.call()
+
+
+## Runs `action` now, or once the first launch's warm-up is done: a map must not open on pipelines
+## still compiling (a compile on first sight of water or fire). Meanwhile the warm-up's bar shows
+## over the title; the latest action to wait is the one that runs.
+func _when_warm(action: Callable) -> void:
+	if not _warmup_pending:
+		action.call()
+		return
+	_warmup_action = action
+	if _warmup_screen:
+		_warmup_screen.call("show_progress")
+	# A door passed on the way here (the new-map dialog) stopped the precompile; the wait is long
+	# enough to finish it on its worker, so the map's entry does not compile the rest on the main
+	# thread (a 5 s frame after an early click, measured). One worker at a time: a stopped one
+	# still finishing its script goes first.
+	if BootPrecompile.current != null or not is_inside_tree():
+		return
+	var stopped := get_node_or_null("BootPrecompile")
+	if stopped != null:
+		if not stopped.tree_exited.is_connected(_resume_precompile):
+			stopped.tree_exited.connect(_resume_precompile, CONNECT_ONE_SHOT | CONNECT_DEFERRED)
+	else:
+		_resume_precompile()
+
+
+func _resume_precompile() -> void:
+	if not _warmup_pending or BootPrecompile.current != null:
+		return
+	var precompile := BootPrecompile.new()
+	precompile.name = "BootPrecompileAfterWarmup"
+	add_child(precompile)
+
+
+## Whether entering `state` waits for a first launch's warm-up: the offline doors into a map
+## (playing and authoring). A session's doors wait at the title instead (host, join, resume), so
+## the network never waits on a state change. Pure.
+static func waits_for_warmup(state: State, networked: bool) -> bool:
+	return not networked and (state == State.PLAYING or state == State.AUTHORING)
 
 
 ## FoliageLibrary switched the palette: rebuild the open map so its scatter draws the new
@@ -255,9 +334,10 @@ func _on_open_editor_requested(level_path: String = "") -> void:
 
 
 ## The title's Resume: the keeper reads the session and asks the flow to host it
-## (SessionKeeper.host_requested), and the room opens with its shelf.
+## (SessionKeeper.host_requested), and the room opens with its shelf. A session's door: it waits
+## for a first launch's warm-up (_when_warm).
 func _on_resume_requested(id: String) -> void:
-	_table_mover.keeper.resume(id)
+	_when_warm(_table_mover.keeper.resume.bind(id))
 
 
 func _on_play_level_requested(level_data: LevelData) -> void:
@@ -326,6 +406,9 @@ func pop_state() -> void:
 
 ## Replace the entire state stack with a new base state
 func change_state(new_state: State) -> void:
+	if _warmup_pending and waits_for_warmup(new_state, NetworkManager.is_networked()):
+		_when_warm(change_state.bind(new_state))
+		return
 	var old_state := get_current_state()
 	if new_state == old_state and _state_stack.size() == 1:
 		return
@@ -343,12 +426,6 @@ func change_state(new_state: State) -> void:
 	EventBus.state_changed.emit(old_state, new_state)
 
 
-## The first state: the graphics warm-up when `warm` (GraphicsWarmup.should_run()), else the
-## title screen.
-static func boot_state(warm: bool) -> State:
-	return State.WARMING_UP if warm else State.TITLE_SCREEN
-
-
 ## True once, on the first call, when the startup update check is wanted.
 func _take_startup_update_check() -> bool:
 	var take := _update_check_on_title
@@ -362,10 +439,16 @@ func _enter_state(state: State) -> void:
 			_title_screen = TITLE_SCREEN_SCENE.instantiate()
 			add_child(_title_screen)
 			# Connect title screen signals
+			# A session's doors wait for a first launch's warm-up here (waits_for_warmup).
 			if _title_screen.has_signal("host_game_requested"):
-				_title_screen.host_game_requested.connect(_session_flow.host_from_title)
+				_title_screen.host_game_requested.connect(
+					func(info: Dictionary) -> void:
+						_when_warm(_session_flow.host_from_title.bind(info))
+				)
 			if _title_screen.has_signal("join_requested"):
-				_title_screen.join_requested.connect(_session_flow.join_session)
+				_title_screen.join_requested.connect(
+					func(code: String) -> void: _when_warm(_session_flow.join_session.bind(code))
+				)
 				_title_screen.join_cancel_requested.connect(_session_flow.cancel_join)
 			if _title_screen.has_signal("resume_requested"):
 				_title_screen.resume_requested.connect(_on_resume_requested)
@@ -395,8 +478,6 @@ func _enter_state(state: State) -> void:
 			_enter_paused_state()
 		State.AUTHORING:
 			_enter_authoring_state()
-		State.WARMING_UP:
-			_enter_warming_up_state()
 
 
 func _enter_playing_state() -> void:
@@ -461,25 +542,6 @@ func _exit_state(state: State) -> void:
 			_exit_paused_state()
 		State.AUTHORING:
 			_exit_authoring_state()
-		State.WARMING_UP:
-			_exit_warming_up_state()
-
-
-func _enter_warming_up_state() -> void:
-	assert(not _warmup_entered, "Root: the graphics warm-up runs at most once per process")
-	_warmup_entered = true
-	if _app_menu:
-		_app_menu.hide()
-	_warmup_screen = OnDemand.graphics_warmup_screen(change_state.bind(State.TITLE_SCREEN))
-	add_child(_warmup_screen)
-
-
-func _exit_warming_up_state() -> void:
-	if _warmup_screen:
-		_warmup_screen.queue_free()
-		_warmup_screen = null
-	if _app_menu:
-		_app_menu.show()
 
 
 func _exit_playing_state() -> void:
