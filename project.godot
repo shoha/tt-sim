@@ -19,7 +19,7 @@ config/version="0.4.2"
 run/main_scene="uid://dow8pna05oxft"
 config/features=PackedStringArray("4.7", "Forward Plus")
 boot_splash/bg_color=Color(0.12156863, 0.12156863, 0.14901961, 1)
-boot_splash/image="res://assets/icons/ui/ttsim-icon.png"
+boot_splash/image="res://assets/splash/boot_splash.png"
 config/icon="uid://b5peyjobxtm2l"
 
 [audio]
