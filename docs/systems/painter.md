@@ -4,8 +4,8 @@ The painted look draws a level in the painter's style: one sheet of tones, chose
 the light, and later the ground, plants, trees and buildings. It ships beside Classic, the game's
 usual look, which stays the default and the fallback for weak GPUs and for presets no mood paints
 yet (owner, 2026-11-12). Phase 1 card A1 (painter-a1) landed the light; card A1b paints the
-ground and the GLB scatter (plants, rocks, logs). Trees and buildings still wear their Classic
-materials under Painted (cards A2, A3 follow).
+ground and the GLB scatter (plants, rocks, logs); cards A2 and A3 grow the painted trees; card A3b
+paints the buildings' walls, roofs and timber from the sheet (owner decision D5, 2026-11-12).
 The plan is `D:/dev/tabletop/docs/research/2026-11-12-painter-integration-plan.md`; the spike it
 came from is the local branch `painterspike` (handoff `docs/plans/handoffs/painterspike.md`).
 
@@ -30,6 +30,8 @@ came from is the local branch `painterspike` (handoff `docs/plans/handoffs/paint
 | `PainterTrees` | `painter/trees/painter_trees.gd` | The painted trees' host: grows, installs and draws the mapped tree rows, hides and restores the GLB trees |
 | tree tones, meshes, brushes | `painter/trees/tree_tones.gd` (+ `tree_roles.json`), `tree_meshes.gd`, `tree_brushes.gd` | The palette and role_params textures, the shared instanced blocks, the 14 brush layers |
 | painted tree shaders | `painter/shaders/painter_tree_stroke.gdshader`, `painter_tree_blockin.gdshader`, `painter_tree.gdshaderinc` (+ `painter/trees/tree_uniforms.json`) | The spike's stroke and block-in passes on tt-sim's wind, sun and fades |
+| `PainterBuildings` | `painter/painter_buildings.gd` | The buildings' host: stand-ins on the structures' wall, roof, timber and stone parts, toned from the sheet, and back |
+| painted structure shader | `painter/shaders/painter_structure.gdshader` | The selector light on a structure part: three sheet tones, a pattern per material, dabs, fold ink |
 
 `LevelEnvironmentManager` owns one `PainterScene`, loaded by path (`PAINTER_SCENE`) the first time a
 level is drawn Painted, so neither the start-up nor a Classic level compiles the painter
@@ -273,13 +275,67 @@ eye view's levels, rim trees, far meshes and fog are a later card's (A2b).
   the main thread (willow and old oak the dearest, up to 5300 texels); 107 trees in chunks of 12 on
   the worker pool take 123 ms wall.
 
+## Buildings
+
+Under Painted, the procgen structures (`AuthoredStructures`, the authored houses, walls and
+mills) wear the painted structure shader on their walls, roofs, timber and stone; their panes,
+glow, lanterns, ornament, metal, dressing and water keep Classic (card painter-a3b, owner decision
+D5: sheet-driven, not the prototype's hand-drawn edges, piece ids or wobble). The aim is the
+spike's route A: broad coloured masses, a few accents, shadow-lit by the sheet's sun.
+
+- **The host.** `PainterSurfaces` makes one `PainterBuildings`, loaded by path (`BUILDINGS`) the
+  first time it paints, and hands it every painted state; `buildings()` returns it (null until
+  then, so a level never drawn Painted never builds one). It follows events, never polls: the
+  map's `child_entered_tree` finds a later `AuthoredStructures`, and that node's
+  `child_entered_tree` dresses each `Structure_<id>` as it is built (structures are built whole
+  and then added, so the parts are there when the event fires) and after every rebuild.
+- **The swap.** Each part is a `MeshInstance3D` named `<role>_<kind>` (mill parts with a `cap_`,
+  `wheel_` or `vane_` prefix) whose ArrayMesh surface holds the shared Classic material. The host
+  sets `material_override` to a stand-in ShaderMaterial, one per kind and tagged with
+  `PainterBuildings.META`, and keeps the override it found; `release()` puts that exact value back
+  and disconnects. The shared surface materials are never touched. `KINDS` maps a part name to
+  `[sheet role, pattern, family, pick]`; a `roof_<x>` with no row of its own (a plaster gable end)
+  takes `wall_<x>`'s, and a name with no row keeps Classic.
+- **Roles.** Walls: `plaster` (also adobe), `wall-stone` (masonry, stone, stone trim and
+  chimneys), `wall-log`, `wall-boards` (boards, wood); brick takes `roof-clay` with the stone
+  pattern. Roofs: `roof-thatch`, `roof-slate`, `roof-shingle`, `roof-turf`; a tile or wood roof
+  carries the four `PICK_ROLES` ramps and the shader picks one per vertex from the recipe's
+  paint colour (the spike's `_roof_tone`: grey to slate, red-orange to clay, brown to shingle,
+  green to turf). Every frame, trim, opening and door of wood takes `timber`. The wall roles and
+  `timber` are new in `core.sheet` (sheet `:world`, every mood's `:world` and night keyframes).
+- **Tones.** `PainterBuildings.ramp(sheet, mood, role, elevation, family)` is the same two-variant
+  ramp as `PainterTones` with a building family's numbers (`shape_of`): walls turn their shade hue
+  by `wall-shade-turn` and take `wall-pull` (stone `stone-pull`) of the mood's shade pull, a
+  `wall-shade-lift` less deep; roofs take `roof-pull` and `roof-shade-lift`; timber turns by
+  `timber-shade-turn` and takes `timber-pull` (a brown pulled toward a violet shade goes through
+  red to maroon). Every role takes `building-lit` of the mood's lit lift and pull (a pale wall
+  under the full lift is white), and the lit step moves chroma toward `lit-hue` as a vector
+  (`lit_step`), since turning a blue slate's hue toward a yellow lit hue split it into teal and
+  pink. A new elevation re-tones the same materials.
+- **The shader.** `painter_structure.gdshader` is the selector light (`painter_selector`'s model
+  on a structure): ALBEDO white, no ambient, `light()` picks shade, middle or lit by the sun's N.L
+  steps (`tone_lo`, `tone_hi` from the sheet) and steps to shade under a cast shadow. The fragment
+  mixes the two variants by a world noise and adds soft dabs, and a pattern per material: roofs an
+  eave band and a ridge light, thatch strands, turf tufts, broken courses for tile, slate and
+  shingle; walls a contact shade at the foot, stone blocks, log seams, board joints, plaster
+  streaks. Every line fades with its pixel footprint (`fwidth`), and a fold ink darkens hard
+  creases. Houses still cast and receive the engine's shadows.
+- **Cost.** It adds no geometry (the three test-village houses: 20 painted parts, 13 materials,
+  5818 triangles). In-run A/B on the village at 1920x1080, vsync off, indicative only (shared
+  GPU): painted buildings 3.84 and 4.04 ms, Classic buildings 4.03 and 4.09 ms, no measurable
+  cost.
+- **Gaps.** A door's or shutter's recipe paint (red, orange) becomes `timber` brown, so a Classic
+  accent is lost; roofs carry no snow in winter; streets and settlement ground are not painted
+  here; the shader is not in `GraphicsWarmup`, so its first Painted level compiles it.
+
 ## The painted state signal
 
 `LevelEnvironmentManager.painted_look_changed(state: Dictionary)` is emitted when the painted state
 changes: `{sheet, mood, elevation}` while Painted, `{}` on leaving it (Classic, a new level, the
 manager's `clear()`). It is deduplicated, so a sun or preset write that leaves the three alone does
-not emit. `PainterSurfaces` follows it to paint, re-tone or release; later painters (trees,
-buildings) should follow the same signal rather than the manager's apply calls.
+not emit. `PainterSurfaces` follows it to paint, re-tone or release, and passes it on to the trees'
+and buildings' hosts; later painters should follow the same signal rather than the manager's apply
+calls.
 
 ## How to add a mood
 
@@ -297,7 +353,11 @@ buildings) should follow the same signal rather than the manager's apply calls.
   (take, follow the sun and the preset, the exact round trip), `test_painter_surfaces.gd` (ground
   and plant roles cover core, the paint and release round trip, later chunks and species, the AA
   swap exemption, tones and thinning from the sheet, the zone image, the signal),
+  `test_painter_buildings.gd` (the swap and exact restore, re-tone, a structure built later,
+  leaving Painted, the roof pick, shaded walls and timber and slate across moods),
   `test_boot_graph.gd`.
+- Buildings look: card painter-a3b's job (`tools/render_jobs/local/painter-a3b/`, copied beside
+  its captures in `compare/painter_a3b/`).
 - Look: the render jobs of cards painter-a1, painter-a1b and painter-a1c
   (`tools/render_jobs/local/painter-a1/`, `local/painter-a1b/`, `local/painter-a1c/`, not
   committed); their captures are in `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/`

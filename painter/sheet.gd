@@ -54,9 +54,16 @@ const COLOR_ROLES: Array[String] = [
 const NUMBER_PROPS: Array[String] = ["sun-energy", "ambient-energy"]
 ## Colour roles a keyframe may leave to a `:world` default (see the header): the ground's forest
 ## floor and shore, the grass, the ground's pale drift and fallen-leaf marks, the four flower
-## accents (PainterSurfaces paints with them), and the conifers' needles (PainterTreeTones).
+## accents (PainterSurfaces paints with them), the conifers' needles (PainterTreeTones), and the
+## buildings' walls and timber (PainterBuildings: plaster, a stone wall, log and board walls, the
+## beams, frames and doors).
 const DEFAULT_ROLES: Array[String] = [
 	"needle",
+	"plaster",
+	"wall-stone",
+	"wall-log",
+	"wall-boards",
+	"timber",
 	"floor",
 	"shore",
 	"grass",
@@ -78,7 +85,14 @@ const DEFAULT_ROLES: Array[String] = [
 ## own (PainterTreeTones): a crown's shade hue, pull and keep and lit pull and a stem's shade pull
 ## and keep in place of the species' (crown-*, bark-*), how much less deep a stem's shade is than
 ## a role's (bark-shade-lift), and how far a sun's cast shadow steps a tree into its cool tint
-## (tree-cast).
+## (tree-cast). The buildings' (PainterBuildings), all relative to the mood's ramp so one value
+## serves every mood and sun: walls' shade hue turned from the mood's shade-hue (wall-shade-turn,
+## degrees), their pull as a share of its shade-pull (wall-pull, stone walls and chimneys
+## stone-pull) and their shade that much less deep (wall-shade-lift); the roofs' pull share and
+## lift (roof-pull, roof-shade-lift); timber's
+## own turn and pull share (timber-shade-turn, timber-pull: a brown turned toward the violet
+## shade goes the short way through red to maroon); and the share of the mood's lit-lift and
+## lit-pull every building role takes (building-lit: a pale wall under the full lift is white).
 const DEFAULT_NUMBERS: Array[String] = [
 	"shade-hue",
 	"shade-pull",
@@ -122,6 +136,15 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"bark-shade-keep",
 	"bark-shade-lift",
 	"tree-cast",
+	"wall-shade-turn",
+	"wall-pull",
+	"stone-pull",
+	"wall-shade-lift",
+	"roof-pull",
+	"roof-shade-lift",
+	"timber-shade-turn",
+	"timber-pull",
+	"building-lit",
 ]
 ## Below this OKLCH chroma a colour's hue is meaningless: a blend takes the other end's hue.
 const GREY_CHROMA := 0.02

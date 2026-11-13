@@ -69,6 +69,25 @@
      cool tint. */
   crown-shade-hue: 210;  crown-shade-pull: 0.8;  crown-shade-keep: 0.7;  crown-lit-pull: 0.2;
   bark-shade-pull: 0.04;  bark-shade-keep: 0.9;  bark-shade-lift: 0.1;  tree-cast: 0.7;
+
+  /* The buildings (PainterBuildings; the spike's route A cottages, spike_built3): a cream lime
+     wash, a pale warm stone, honey logs and boards, dark honey beams; the roofs are the five roof
+     roles. Each mood sets its day colours in its :world and its night ones in its night key.
+     The ramp numbers are relative to the mood's: a wall's shade turns 11 degrees bluer than the
+     mood's (the spike's 274 under summer's 285: a blue lavender, not a mauve) and is a little
+     less deep, so a shaded lime wash stays a light colour; timber's shade turns away from the
+     violet and is barely pulled (a brown pulled toward it went through red to maroon in the
+     spike's eave bands; painter-a2a4's stems: its own brown a step darker reads best); every
+     building role takes 60 % of the mood's lit lift and lit pull (the full lift took plaster
+     to white; the pull is a chroma vector for buildings, so a blue slate opposite the yellow
+     lit hue greys a little instead of turning teal or pink).
+     Stone and roofs take less pull than a lime wash (painter-a3b round 1: the same pull on a
+     darker grey stone read as a periwinkle slab, on slate as lavender). */
+  plaster: oklch(0.89 0.045 88);  wall-stone: oklch(0.76 0.032 78);
+  wall-log: oklch(0.60 0.080 58);  wall-boards: oklch(0.64 0.058 72);  timber: oklch(0.45 0.075 52);
+  wall-shade-turn: -11;  wall-pull: 1.2;  stone-pull: 0.5;  wall-shade-lift: 0.06;
+  roof-pull: 0.45;  roof-shade-lift: 0.03;  timber-shade-turn: -50;  timber-pull: 0.15;
+  building-lit: 0.6;
 }
 
 @mood summer {
@@ -121,6 +140,8 @@
     stone: oklch(0.52 0.030 260);  path: oklch(0.60 0.045 255);
     roof-clay: oklch(0.42 0.075 20);  roof-slate: oklch(0.38 0.035 265);  roof-shingle: oklch(0.36 0.040 300);
     roof-turf: oklch(0.38 0.060 180);  roof-thatch: oklch(0.52 0.050 70);
+    plaster: oklch(0.62 0.030 250);  wall-stone: oklch(0.55 0.025 255);
+    wall-log: oklch(0.40 0.030 50);  wall-boards: oklch(0.44 0.025 60);  timber: oklch(0.32 0.025 40);
     floor: oklch(0.38 0.050 190);  shore: oklch(0.55 0.040 250);  grass: oklch(0.43 0.065 170);
     drift: oklch(0.58 0.050 220);  litter: oklch(0.40 0.040 240);
     flower-gold: oklch(0.66 0.070 95);  flower-rose: oklch(0.52 0.070 345);
@@ -156,6 +177,9 @@
     needle: oklch(0.36 0.065 182);
     crown-shade-hue: 215;  crown-shade-pull: 0.6;  crown-shade-keep: 0.7;  crown-lit-pull: 0.35;
     tree-cast: 0.55;
+    /* Walls warm in the low gold light, their shade the mood's lilac. */
+    plaster: oklch(0.80 0.055 70);  wall-stone: oklch(0.62 0.035 60);
+    wall-log: oklch(0.50 0.070 45);  wall-boards: oklch(0.55 0.055 55);  timber: oklch(0.38 0.060 45);
   }
   @key high 24 {
     sun: oklch(0.88 0.090 58);  sun-energy: 0.95;
@@ -190,6 +214,8 @@
     stone: oklch(0.46 0.035 290);  path: oklch(0.56 0.050 300);
     roof-clay: oklch(0.38 0.080 15);  roof-slate: oklch(0.34 0.040 285);  roof-shingle: oklch(0.33 0.045 320);
     roof-turf: oklch(0.35 0.060 175);  roof-thatch: oklch(0.47 0.055 60);
+    plaster: oklch(0.56 0.040 295);  wall-stone: oklch(0.48 0.035 290);
+    wall-log: oklch(0.36 0.030 30);  wall-boards: oklch(0.40 0.030 40);  timber: oklch(0.30 0.025 30);
     floor: oklch(0.35 0.055 200);  shore: oklch(0.50 0.045 290);  grass: oklch(0.39 0.070 180);
     drift: oklch(0.55 0.055 290);  litter: oklch(0.38 0.045 300);
     flower-gold: oklch(0.62 0.070 85);  flower-rose: oklch(0.48 0.075 340);
@@ -212,6 +238,9 @@
        plants had, a slate-teal shade, a light cast step over an already dark palette. */
     needle: oklch(0.33 0.040 188);
     crown-shade-hue: 225;  crown-shade-pull: 0.35;  crown-shade-keep: 0.7;  tree-cast: 0.35;
+    /* Bone walls and grey stone where the light falls (the spike's grimdark plaster). */
+    plaster: oklch(0.64 0.030 85);  wall-stone: oklch(0.48 0.016 215);
+    wall-log: oklch(0.40 0.040 60);  wall-boards: oklch(0.44 0.030 75);  timber: oklch(0.30 0.025 45);
   }
   @key high 27 {
     sun: oklch(0.88 0.030 85);  sun-energy: 0.8;
@@ -246,6 +275,8 @@
     stone: oklch(0.34 0.015 240);  path: oklch(0.42 0.025 240);
     roof-clay: oklch(0.28 0.050 25);  roof-slate: oklch(0.26 0.020 240);  roof-shingle: oklch(0.25 0.025 280);
     roof-turf: oklch(0.26 0.035 185);  roof-thatch: oklch(0.36 0.030 70);
+    plaster: oklch(0.46 0.020 240);  wall-stone: oklch(0.36 0.015 240);
+    wall-log: oklch(0.29 0.020 40);  wall-boards: oklch(0.32 0.018 60);  timber: oklch(0.24 0.015 30);
     floor: oklch(0.24 0.030 200);  grass: oklch(0.29 0.040 190);  drift: oklch(0.40 0.030 230);
     flower-gold: oklch(0.50 0.040 90);  flower-white: oklch(0.60 0.020 240);
     lit-hue: 235;  lit-pull: 0.4;
@@ -268,6 +299,9 @@
        lavender twigs), shading to the snow's cool blue. */
     needle: oklch(0.38 0.060 186);
     crown-shade-hue: 245;  crown-shade-pull: 0.6;  crown-shade-keep: 0.6;  tree-cast: 0.6;
+    /* Warm walls against the blue snow: a lime wash a step under the snow's white. */
+    plaster: oklch(0.84 0.032 72);  wall-stone: oklch(0.66 0.020 75);
+    wall-log: oklch(0.55 0.060 55);  wall-boards: oklch(0.62 0.042 70);  timber: oklch(0.42 0.055 50);
   }
   @key high 24 {
     sun: oklch(0.97 0.020 80);  sun-energy: 1.0;
@@ -303,6 +337,8 @@
     stone: oklch(0.46 0.025 260);  path: oklch(0.60 0.040 258);
     roof-clay: oklch(0.40 0.070 20);  roof-slate: oklch(0.36 0.030 262);  roof-shingle: oklch(0.35 0.035 290);
     roof-turf: oklch(0.40 0.045 190);  roof-thatch: oklch(0.50 0.040 70);
+    plaster: oklch(0.62 0.025 255);  wall-stone: oklch(0.50 0.022 258);
+    wall-log: oklch(0.38 0.025 45);  wall-boards: oklch(0.44 0.022 60);  timber: oklch(0.30 0.020 40);
     floor: oklch(0.60 0.045 258);  grass: oklch(0.48 0.035 230);  drift: oklch(0.74 0.040 255);
     flower-gold: oklch(0.56 0.040 90);  flower-white: oklch(0.74 0.035 255);
     lit-hue: 240;  lit-pull: 0.3;  shade-pull: 0.5;  shade-keep: 0.6;
@@ -320,6 +356,8 @@
     litter-marks: 0.5;
     /* Amber crowns shade to rust (a pull toward teal would grey them), needles to blue-teal. */
     crown-shade-hue: 300;  crown-shade-pull: 0.5;  crown-shade-keep: 0.85;
+    plaster: oklch(0.87 0.048 82);  wall-stone: oklch(0.74 0.035 72);
+    wall-log: oklch(0.57 0.075 52);  wall-boards: oklch(0.62 0.055 68);  timber: oklch(0.44 0.075 48);
   }
   @key high 34 {
     sun: oklch(0.96 0.045 78);  sun-energy: 1.0;
@@ -353,6 +391,8 @@
     stone: oklch(0.50 0.030 255);  path: oklch(0.58 0.040 255);
     roof-clay: oklch(0.36 0.065 15);  roof-slate: oklch(0.37 0.035 262);  roof-shingle: oklch(0.36 0.045 300);
     roof-turf: oklch(0.40 0.060 150);  roof-thatch: oklch(0.52 0.045 70);
+    plaster: oklch(0.60 0.030 250);  wall-stone: oklch(0.52 0.028 255);
+    wall-log: oklch(0.40 0.030 45);  wall-boards: oklch(0.44 0.026 60);  timber: oklch(0.31 0.025 35);
     floor: oklch(0.38 0.055 60);  shore: oklch(0.54 0.040 250);  grass: oklch(0.44 0.060 150);
     drift: oklch(0.56 0.045 230);  litter: oklch(0.40 0.055 40);
     flower-gold: oklch(0.62 0.070 85);  flower-rose: oklch(0.48 0.070 345);

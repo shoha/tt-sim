@@ -5,7 +5,9 @@ extends RefCounted
 ## scatter tt-sim builds from GLBs (bushes, ferns, grass, flowers, rocks, logs) wear painted
 ## materials coloured from the sheet (docs/systems/painter.md "Surfaces"). The scatter's mapped
 ## trees are drawn by PainterTrees (painter/trees/painter_trees.gd, loaded by path here), which
-## hides their GLB nodes; buildings, water and tokens keep their Classic materials (later cards).
+## hides their GLB nodes, and the built structures' walls, roofs and timber by PainterBuildings
+## (painter/painter_buildings.gd, loaded by path here too); water and tokens keep their Classic
+## materials (later cards).
 ##
 ## Events, never a poll. LevelEnvironmentManager owns one (made by path on the first Painted
 ## level, so neither the start-up nor a Classic level compiles it) and its signal
@@ -44,6 +46,8 @@ const PLANT_SHADER := "res://painter/shaders/painter_plant.gdshader"
 const SOLID_SHADER := "res://painter/shaders/painter_solid.gdshader"
 ## The painted trees' host (PainterTrees), loaded by path on the first painted map.
 const TREES := "res://painter/trees/painter_trees.gd"
+## The painted buildings' host (PainterBuildings), loaded by path on the first painted map.
+const BUILDINGS := "res://painter/painter_buildings.gd"
 ## Metadata on every material this paints with.
 const META := &"painter_surface"
 ## The map root's name under the map container (MapSourceLoader.install).
@@ -71,6 +75,8 @@ var _seen: Dictionary = {}
 var _zone_queued := false
 ## The painted trees (a PainterTrees), made on the first paint().
 var _trees: RefCounted = null
+## The painted buildings (a PainterBuildings), made on the first paint().
+var _buildings: RefCounted = null
 
 
 ## Follows `manager`'s painted_look_changed for the map under `map_container`.
@@ -101,6 +107,9 @@ func paint(map: Node3D, state: Dictionary) -> bool:
 	_paint_species()
 	_retone()
 	_paint_trees()
+	if _buildings == null:
+		_buildings = (load(BUILDINGS) as GDScript).new()
+	_buildings.call("paint", _map, applied)
 	return true
 
 
@@ -108,6 +117,8 @@ func paint(map: Node3D, state: Dictionary) -> bool:
 func release() -> void:
 	if _trees != null:
 		_trees.call("release")
+	if _buildings != null:
+		_buildings.call("release")
 	_unbind()
 	for id: int in _overrides:
 		var pair: Array = _overrides[id]
@@ -221,6 +232,11 @@ func _paint_trees() -> void:
 ## The painted trees (a PainterTrees), null before the first paint().
 func trees() -> RefCounted:
 	return _trees
+
+
+## The painted buildings (a PainterBuildings), null before the first paint().
+func buildings() -> RefCounted:
+	return _buildings
 
 
 # ---------------------------------------------------------------- the ground
