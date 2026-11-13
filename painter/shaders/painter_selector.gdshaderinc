@@ -6,7 +6,7 @@
 // cutout (and, on a flower, which pixels are petals); none of its colour is drawn.
 //
 // kind: 0 leaf mass (lit as one rounded form about the plant's middle), 1 grass (one flat tone,
-// darker at the base), 2 solid (rock, wood, litter: its own normals, a noise-broken turn),
+// darker at the base, lit or shaded like the ground: no middle step), 2 solid (rock, wood, litter: its own normals, a noise-broken turn),
 // 3 flower (the grass ramp on its green pixels, one of four flat accents on its petals by group).
 // PainterSurfaces sets every uniform from the sheet (PainterTones.ramp and the sheet's numbers).
 // Includers call selector_fragment() at the end of fragment() with the world position and
@@ -110,6 +110,12 @@ void light() {
 		float x = dot(normalize(f_n), lw) + (f_wob - 0.5) * 0.3;
 		float t = 0.1 + 0.4 * smoothstep(tone_lo - 0.01, tone_lo + 0.01, x)
 			+ 0.4 * smoothstep(tone_hi - 0.01, tone_hi + 0.01, x);
+		if (kind == 1 || kind == 3) {
+			// Ground cover lights like the ground it stands on (painter_ground's light()): lit unless
+			// a cast shadow or a sun at the horizon, never a middle step for a low sun, so a lawn
+			// at a dusk sun is one family with the lit ground beside it.
+			t = 0.1 + 0.8 * smoothstep(0.02, 0.1, lw.y + (f_wob - 0.5) * 0.1);
+		}
 		vec3 col = selector_pal(t, f_variant + (t - 0.45) * 0.3);
 		vec3 shd = selector_pal(0.1, f_variant);
 		if (f_accent > -0.5) {

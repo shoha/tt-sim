@@ -150,8 +150,19 @@ the path share, the rock share and wet ground (shore), from the map document's b
 biome slots and surface weights. Real role data is still to come: a `paint_role` per surface in
 the library (and a biome's role read from its ground surface) would replace the word rules.
 
+Shade ramp. `PainterTones.steps` draws a role's shade from `shade-keep` of its own chroma plus a
+pull of `shade-pull` toward `shade-hue` (the ground reads `ground-shade-keep`, grass and flowers
+`grass-shade-keep`; 1, the default, is the spike's ramp). A full keep under a large pull swings a
+grey role (a path, snow, a log) to a saturated shade and cancels a role opposite the shade hue to
+grey; a low keep under a small pull gives every role one shade family. Card painter-a1c used it
+for dusk's lilac shade (keep 0.2 on the ground, 0 on grass) and the quieter night shades.
+
 Plant roles. `PainterPlantRoles.of(asset_id, wind_category, flower)` gives a kind (mass, grass,
 solid, flower) and a tone role by asset-id words; the scatter template's `flower` flag wins.
+Grass and flowers light like the ground they stand on: lit unless cast shadowed or the sun is at
+the horizon (no middle step for a low sun), with light and shadow read at the tuft's foot
+(`LIGHT_VERTEX` dropped to the root, the only light-point shift in the painted shaders; ground
+cover casts nothing, so no shadow leaves its caster).
 Thinning is the sheet's: `keep-grass` (0.6) and `keep-flower` (0.4) in groups of a slow world
 noise, both in the colour and the shadow pass.
 
@@ -184,6 +195,7 @@ buildings) should follow the same signal rather than the manager's apply calls.
   and plant roles cover core, the paint and release round trip, later chunks and species, the AA
   swap exemption, tones and thinning from the sheet, the zone image, the signal),
   `test_boot_graph.gd`.
-- Look: the render jobs of cards painter-a1 and painter-a1b (`tools/render_jobs/local/painter-a1/`
-  and `local/painter-a1b/`, not committed); their captures are in
-  `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_a1/` and `painter_a1b/`.
+- Look: the render jobs of cards painter-a1, painter-a1b and painter-a1c
+  (`tools/render_jobs/local/painter-a1/`, `local/painter-a1b/`, `local/painter-a1c/`, not
+  committed); their captures are in `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/`
+  `painter_a1/`, `painter_a1b/` and `painter_a1c/`.

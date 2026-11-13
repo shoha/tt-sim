@@ -11,8 +11,11 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled;
  * arrival grow-in and shrink (wind_foliage_grow.gdshaderinc's instance uniforms), the canopy
  * and occlusion fades and the leaf shadow push (wind_foliage_include.gdshaderinc). PainterSurfaces
  * makes it as a duplicate of the plant's own wind material, so every wind, fade and cutout
- * uniform keeps its value. A plain alpha-scissor cutout: the strokes are opaque, so MSAA needs
- * no alpha-to-coverage twin, and the foliage AA swap leaves it alone (WindFoliage.META_STAND_IN).
+ * uniform keeps its value. A plain alpha-scissor cutout, and the foliage AA swap leaves it alone
+ * (WindFoliage.META_STAND_IN). Known fault (painter-a1c): in the eye view (4x MSAA, where the
+ * Classic foliage swaps to its alpha-to-coverage twin) thin grass blades alias into fine broken
+ * light lines where they cross a dark bush; an alpha-to-coverage twin swapped like the Classic's
+ * is the planned fix.
  *
  * MANAGED BY: PainterSurfaces (painter/painter_surfaces.gd).
  */
@@ -70,4 +73,13 @@ void fragment() {
 	f_mul = mul;
 	f_wob = wob;
 	f_accent = petal;
+	if (kind == 1 || kind == 3) {
+		// Ground cover takes the cast shade of the ground at its foot: light and shadow are read
+		// straight below the fragment, a little over the tuft's root, with the ground's up normal,
+		// so a bush's or a tree's shadow covers the grass in it with the same shape it lays on the
+		// ground (read at the blade, a tuft whose foot was in the shadow stood lit in it; painter-
+		// a1c eye view). Grass casts no shadow, so no shadow moves off its caster.
+		LIGHT_VERTEX = (VIEW_MATRIX * vec4(v_wp.x, v_o.y + 0.1, v_wp.z, 1.0)).xyz;
+		NORMAL = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+	}
 }

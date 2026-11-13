@@ -252,6 +252,29 @@ func test_a_ramp_steps_from_shade_to_lit() -> void:
 			assert_lt(mid, lit, "%s middle under its lit" % role)
 
 
+func test_shade_keep_scales_the_roles_own_chroma_under_the_pull() -> void:
+	var shape := {
+		"shade-hue": 290.0,
+		"shade-pull": 0.5,
+		"shade-depth": 0.6,
+		"lit-hue": 45.0,
+		"lit-pull": 0.0,
+		"lit-lift": 0.1,
+	}
+	var lch := Vector3(0.7, 0.06, 60.0)
+	var full: Vector3 = PainterTones.steps(lch, shape)[0]
+	shape["shade-keep"] = 1.0
+	assert_eq(PainterTones.steps(lch, shape)[0], full, "keep 1 is the old ramp, and the default")
+	shape["shade-keep"] = 0.0
+	var none: Vector3 = PainterTones.steps(lch, shape)[0]
+	assert_almost_eq(none.y, 0.5 * PainterTones.PULL_CHROMA, 0.0001, "only the pull is left")
+	assert_almost_eq(none.z, 290.0, 0.01, "at the shade hue, whatever the role's own")
+	var core := PainterSheet.load_sheet("core")
+	var path := PainterSheet.lch_of_color(PainterTones.ramp(core, "dusk", "path", 20.0, "ground-")[0])
+	assert_lt(path.y, 0.07, "dusk's path shade is a quiet lilac, not magenta")
+	assert_between(path.z, 270.0, 310.0, "dusk's path shade leans lilac")
+
+
 func test_the_zone_map_reads_the_document() -> void:
 	var doc := MapDocument.create_flat(Vector2i(10, 10), "forest_floor", "test", 7)
 	var image := PainterSurfaces.zone_image(doc)
