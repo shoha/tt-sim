@@ -44,7 +44,7 @@
   @key low 6 {
     sun: oklch(0.90 0.095 70);  sun-energy: 1.0;
     sky: oklch(0.74 0.075 262);  horizon: oklch(0.88 0.075 68);
-    ambient: oklch(0.84 0.040 268);  ambient-energy: 0.62;
+    ambient: oklch(0.86 0.035 255);  ambient-energy: 0.72;
     haze: oklch(0.86 0.055 62);
     ground: oklch(0.69 0.125 120);  leaf: oklch(0.63 0.145 130);  bark: oklch(0.50 0.075 50);
     stone: oklch(0.69 0.040 68);  path: oklch(0.80 0.070 70);
@@ -56,7 +56,7 @@
   @key night -8 {
     sun: oklch(0.82 0.050 255);  sun-energy: 0.25;
     sky: oklch(0.30 0.060 268);  horizon: oklch(0.42 0.060 272);
-    ambient: oklch(0.62 0.070 262);  ambient-energy: 0.75;
+    ambient: oklch(0.56 0.095 258);  ambient-energy: 0.7;
     haze: oklch(0.42 0.050 266);
     ground: oklch(0.42 0.060 175);  leaf: oklch(0.38 0.070 190);  bark: oklch(0.32 0.040 280);
     stone: oklch(0.48 0.030 260);  path: oklch(0.55 0.040 260);
