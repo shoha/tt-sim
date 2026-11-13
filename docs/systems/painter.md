@@ -240,15 +240,27 @@ eye view's levels, rim trees, far meshes and fog are a later card's (A2b).
   `test_painter_trees_draw` grows every species and fails if one outgrows it. The block-in's
   crown masses fade by a world noise of about half a metre with a light screen dither on each
   piece's rim (a plain 1 px dither read as halftone grain over a token).
-- The token window (painter-a2a4, painter-a2a5): `tree_token_fade` in the include reads
+- The token window (painter-a2a4, painter-a2a5, painter-token-window): the include reads
   OcclusionFadeManager's token texture and screen tiles as the plants do (the tile's list in the
-  camera's pass, the plain loop otherwise), but CLEARS instead of dithering to `min_alpha`: a
-  fragment nearer the camera than a token (up to `TREE_TOKEN_BEHIND`, a quarter of the zone
-  radius, behind its centre; a full radius cut the trunk just behind a token) whose screen offset
-  lies inside `TREE_TOKEN_CORE` (0.75) of the zone radius is discarded, and between 0.75 and 1 one
-  world noise of `TREE_TOKEN_EDGE_M` (0.8 m) draws the edge for every part (painter-trees-polish:
-  the parts' own keys left a veil of single leaves and twigs in the band), so the crown opens in
-  one clean round window over the token. Every part clears: strokes, masses, limbs and trunks. It runs after the canopy fades and only in the
+  camera's pass, the plain loop otherwise), but CLEARS instead of dithering to `min_alpha`, for
+  parts nearer the camera than a token (up to `TREE_TOKEN_BEHIND_LEAF`, 0.6 of the zone radius,
+  behind its centre for foliage; `TREE_TOKEN_BEHIND`, a quarter, for wood: a full radius cut the
+  trunk just behind a token). painter-token-window: the previous cut (every part along one
+  scalloped circle at about 0.8 to 0.9 of the radius) framed the ground behind in one light state
+  and read as a glass dome (a pale disc at sun 45, a dark one at sun 20, in winter and grimdark).
+  Now a STROKE goes whole: its vertex stage (`tree_token_stroke`) loops the tiles under the
+  stroke's screen box and collapses the quad when the stroke's nearest point lies inside the rim,
+  which a world noise sets per token between `TREE_TOKEN_EDGE_LO` and `_HI` (0.76 to 0.9 R, lobes
+  `TREE_TOKEN_LOBE_M` 0.9 m or half the radius for a small token) plus the stroke's own key
+  (+-0.05), so the rim is a ragged run of leaf dabs. Ground shadow dabs are never cut. The block-in
+  masses and limbs are cut per fragment (`tree_token_frag`) `TREE_TOKEN_MASS_PAD` (0.1) further
+  out, at most the radius (the tiles are binned by it). The vertex stage computes FRAGCOORD's tile
+  as `(clip.xy / clip.w * 0.5 + 0.5) * VIEWPORT_SIZE` with no row flip (measured: a flip left the
+  strokes over the token). Measured against the circle at 1920x1080 (vsync off, interleaved): tokens
+  view -0.18 ms, home -0.08, far -0.09; shadow and visible primitives unchanged. Still open: a small
+  token cut into a trunk shows a nearly round hole (the limb is one mass). Letting the whole crown
+  cast (`shadow_simple` 1) was tried for the window and dropped: it shaded nothing inside it (the
+  crowns' shadows fall aside at sun 45). It runs after the canopy fades and only in the
   camera's pass (the sun's pass keeps the whole crown's shadow). Both shaders must hand their own
   view-space point to `tree_fades`: the stroke shader and, since painter-a2a5, the block-in
   (`skip_vertex_transform`, VERTEX and NORMAL in view space). The block-in wrote POSITION alone

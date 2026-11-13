@@ -816,7 +816,7 @@ void fragment() {
 		// rim (painter-a2a4). The wood stays through the canopy fades to ground the tree.
 		float key = clamp(0.9 * p_noise(v_wp * 1.6 + 7.0) + 0.1 * bayer16(FRAGCOORD.xy / world_px_cell()), 0.0, 1.0);
 		tree_fades(VERTEX, INV_VIEW_MATRIX, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy,
-			VIEWPORT_SIZE, key, kind10 > 0.5);
+			VIEWPORT_SIZE, key, kind10 > 0.5, false);
 	}
 }
 

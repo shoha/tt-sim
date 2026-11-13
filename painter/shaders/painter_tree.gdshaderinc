@@ -890,51 +890,75 @@ const float TREE_BRUSH_BAND = 1.2;
 const float TREE_CUT_INNER = 0.6;
 const float TREE_CUT_BARK = 1.5;
 const float TREE_CUT_BEHIND = 0.5;
-// The token window (painter-a2a4): a round zone clears fully inside TREE_TOKEN_CORE of its radius
-// and closes by the radius (a token's top sits near 0.9 of it at the orbit view's pitch; the
-// zone may not reach past the radius, the screen tiles are binned by it).
-const float TREE_TOKEN_CORE = 0.75;
+// The token window (painter-a2a4; painter-token-window): an opening through the crowns in front of
+// a token. painter-token-window: the previous round cut every part along one scalloped circle, and
+// with the ground behind in one light state the opening read as a glass dome. Now no part is cut
+// along a circle: a STROKE goes whole (the vertex stage asks where its nearest point lies,
+// tree_token_stroke), so the rim is a run of leaf dabs; the block-in and the limbs are cut per
+// fragment TREE_TOKEN_MASS_PAD further out, so the dabs at the rim stand over the opening and no
+// flat cut through a mass shows between them. Where the rim lies (zone radii) a slow world noise
+// says, in lobes about TREE_TOKEN_LOBE_M across (TREE_TOKEN_LOBE_R of the zone's radius for a
+// small token, whose whole zone is smaller than a lobe), between TREE_TOKEN_EDGE_LO and _HI, and
+// each stroke's own key moves it by up to TREE_TOKEN_STROKE_JIT, so the opening is a ragged blob.
+// A token's figure fills about 0.65 of its zone at the orbit view's pitch, so no kept stroke
+// reaches inside 0.7. Nothing clears past the radius: the screen tiles are binned by it. (A small
+// token cut into a trunk still shows a nearly round hole: the limb is one mass, cut per fragment.)
+// Measured (docs/systems/painter.md "Trees"): the strokes' vertex-stage test is cheaper than the
+// per-fragment tile lookup it replaced.
+const float TREE_TOKEN_EDGE_LO = 0.76;
+const float TREE_TOKEN_EDGE_HI = 0.9;
+const float TREE_TOKEN_LOBE_M = 0.9;
+const float TREE_TOKEN_LOBE_R = 0.5;
+const float TREE_TOKEN_STROKE_JIT = 0.05;
+const float TREE_TOKEN_MASS_PAD = 0.1;
 // How far behind a token's centre the window still clears, in zone radii (painter-trees-polish: a
-// full radius cut the trunk standing just behind a token at the window's top).
+// full radius cut the trunk standing just behind a token at the window's top). Foliage clears
+// deeper (painter-token-window: the back of a crown just behind the token stood as loose leaves
+// in the opening beside it); wood keeps the shallow cut.
 const float TREE_TOKEN_BEHIND = 0.25;
-// The window's edge: one world noise of about this many metres decides the band for every part
-// (strokes of every level, masses, limbs), so the opening is one clean scalloped line (a key per
-// stroke left single leaves and twigs floating in the band).
-const float TREE_TOKEN_EDGE_M = 0.8;
+const float TREE_TOKEN_BEHIND_LEAF = 0.6;
 
-// How far one token clears a tree fragment, 0 (none) to 1 (gone): the plants' zone and test
-// (occlusion_token_alpha: a round zone by the footprint, an avatar figure's upright ellipse) with
-// a cleared core in place of their min_alpha dither.
-float tree_token_cover(vec4 token_data, vec3 vertex_view, mat4 view_matrix, mat4 projection_matrix) {
+// How far outside one token's feathered rim a point (view space) lies, in zone radii (negative:
+// the window takes it); 1e3 when it is not in front of the token. `reach` (view units) is a
+// stroke's half size, so its nearest point is the one tested (0 for a fragment); `world` is where
+// the rim's lobes are read (a stroke's anchor, a fragment's point) and `shift` moves the rim out
+// (a stroke's jitter, the block-in's pad). The zone is the plants' (occlusion_token_alpha): a
+// round one by the footprint, an avatar figure's upright ellipse, in the plane of the token's
+// view depth. `wood`: a limb or a bark stroke (the shallow behind cut).
+float tree_token_margin(vec4 token_data, vec3 vertex_view, float reach, vec3 world, float shift,
+		bool wood, mat4 view_matrix, mat4 projection_matrix) {
 	float radius = abs(token_data.w);
 	if (radius <= 0.0) {
-		return 0.0;
+		return 1e3;
 	}
 	vec3 token_view = (view_matrix * vec4(token_data.xyz, 1.0)).xyz;
-	// A little behind the token's centre too (about its back edge), so nothing standing at the
-	// token draws over it (the plants test only in front of the centre).
-	if (vertex_view.z <= token_view.z - radius * TREE_TOKEN_BEHIND) {
-		return 0.0;
+	if (vertex_view.z <= token_view.z - radius * (wood ? TREE_TOKEN_BEHIND : TREE_TOKEN_BEHIND_LEAF)) {
+		return 1e3;
 	}
-	vec2 fragment_xy = vertex_view.xy;
+	float lobe = min(TREE_TOKEN_LOBE_M, TREE_TOKEN_LOBE_R * radius);
+	float edge = mix(TREE_TOKEN_EDGE_LO, TREE_TOKEN_EDGE_HI,
+		smoothstep(0.2, 0.8, p_noise(world / lobe + 11.0))) + shift;
+	vec2 xy = vertex_view.xy;
 	if (projection_matrix[3][3] < 0.5 && vertex_view.z < -0.0001) {
-		fragment_xy *= token_view.z / vertex_view.z;
+		float s = token_view.z / vertex_view.z;
+		xy *= s;
+		reach *= s;
 	}
-	vec2 offset = fragment_xy - token_view.xy;
+	vec2 offset = xy - token_view.xy;
 	if (token_data.w < 0.0) {
-		return 1.0 - smoothstep(FIGURE_CORE, 1.0, length(offset / vec2(radius * FIGURE_WIDTH, radius)));
+		return length(offset / vec2(radius * FIGURE_WIDTH, radius)) - reach / (radius * FIGURE_WIDTH) - edge;
 	}
-	return 1.0 - smoothstep(TREE_TOKEN_CORE, 1.0, length(offset) / radius);
+	return (length(offset) - reach) / radius - edge;
 }
 
-// The most any token clears this fragment (OcclusionFadeManager's tokens, its screen tiles in the
-// camera's pass), 0 when the occlusion fade is off.
-float tree_token_fade(vec3 vertex_view, mat4 view_matrix, mat4 projection_matrix, vec2 frag_coord,
-		vec2 viewport_size) {
+// True when the feathered window takes a block-in fragment (its screen tile's tokens): the rim
+// TREE_TOKEN_MASS_PAD further out than the strokes'.
+bool tree_token_frag(vec3 vertex_view, vec3 world, bool wood, mat4 view_matrix,
+		mat4 projection_matrix, vec2 frag_coord, vec2 viewport_size) {
 	if (!enable_occlusion || occlusion_token_count <= 0) {
-		return 0.0;
+		return false;
 	}
-	float cover = 0.0;
+	float near = 1e3;
 	if (occlusion_tiles_match(view_matrix, projection_matrix)) {
 		ivec2 grid = ivec2(occlusion_tile_grid.xy);
 		ivec2 tile = clamp(ivec2(frag_coord / viewport_size * vec2(grid)), ivec2(0), grid - 1);
@@ -943,16 +967,64 @@ float tree_token_fade(vec3 vertex_view, mat4 view_matrix, mat4 projection_matrix
 		int first = int(header.x);
 		int end = first + int(header.y);
 		for (int i = first; i < end; i++) {
-			cover = max(cover, tree_token_cover(texelFetch(occlusion_tokens, occlusion_texel(i), 0),
-				vertex_view, view_matrix, projection_matrix));
+			near = min(near, tree_token_margin(texelFetch(occlusion_tokens, occlusion_texel(i), 0),
+				vertex_view, 0.0, world, TREE_TOKEN_MASS_PAD, wood, view_matrix, projection_matrix));
 		}
 	} else {
 		for (int i = 0; i < occlusion_token_count; i++) {
-			cover = max(cover, tree_token_cover(texelFetch(occlusion_tokens, ivec2(i, 0), 0),
-				vertex_view, view_matrix, projection_matrix));
+			near = min(near, tree_token_margin(texelFetch(occlusion_tokens, ivec2(i, 0), 0),
+				vertex_view, 0.0, world, TREE_TOKEN_MASS_PAD, wood, view_matrix, projection_matrix));
 		}
 	}
-	return cover;
+	return near < 0.0;
+}
+
+// True when the feathered window takes a whole stroke (vertex stage): its centre `centre_view`
+// and half size `reach` (view units), `world` its anchor (the rim's lobes), `key` its own 0..1.
+// The tokens are those of every screen tile under the stroke, so a stroke whose nearest point
+// lies in a token's zone always finds it (the zone lies inside its tiles). `wood`: a bark stroke.
+bool tree_token_stroke(vec3 centre_view, float reach, vec3 world, float key, bool wood,
+		mat4 view_matrix, mat4 projection_matrix, vec2 viewport_size) {
+	if (!enable_occlusion || occlusion_token_count <= 0) {
+		return false;
+	}
+	float shift = (key - 0.5) * 2.0 * TREE_TOKEN_STROKE_JIT;
+	float near = 1e3;
+	bool persp = projection_matrix[3][3] < 0.5;
+	vec4 clip = projection_matrix * vec4(centre_view, 1.0);
+	ivec2 grid = ivec2(occlusion_tile_grid.xy);
+	ivec2 t0 = ivec2(0);
+	ivec2 t1 = ivec2(-1);
+	if (occlusion_tiles_match(view_matrix, projection_matrix) && clip.w > 0.0001) {
+		// FRAGCOORD's own convention (measured: no row flip from the projection's NDC).
+		vec2 px = (clip.xy / clip.w * 0.5 + 0.5) * viewport_size;
+		float r_px = reach * abs(projection_matrix[0][0]) * 0.5 * viewport_size.x
+			/ (persp ? max(-centre_view.z, 0.0001) : 1.0);
+		vec2 cell = viewport_size / vec2(grid);
+		t0 = clamp(ivec2(floor((px - r_px) / cell)), ivec2(0), grid - 1);
+		t1 = clamp(ivec2(floor((px + r_px) / cell)), ivec2(0), grid - 1);
+	}
+	if (t1.x >= t0.x && t1.x - t0.x < 3 && t1.y - t0.y < 3) {
+		for (int ty = t0.y; ty <= t1.y; ty++) {
+			for (int tx = t0.x; tx <= t1.x; tx++) {
+				vec4 header = texelFetch(occlusion_tokens,
+					occlusion_texel(int(occlusion_tile_grid.z) + ty * grid.x + tx), 0);
+				int first = int(header.x);
+				int end = first + int(header.y);
+				for (int i = first; i < end; i++) {
+					near = min(near, tree_token_margin(texelFetch(occlusion_tokens, occlusion_texel(i), 0),
+						centre_view, reach, world, shift, wood, view_matrix, projection_matrix));
+				}
+			}
+		}
+	} else {
+		// No tiles for this view, or a stroke wider than three tiles: every token.
+		for (int i = 0; i < occlusion_token_count; i++) {
+			near = min(near, tree_token_margin(texelFetch(occlusion_tokens, ivec2(i, 0), 0),
+				centre_view, reach, world, shift, wood, view_matrix, projection_matrix));
+		}
+	}
+	return near < 0.0;
 }
 
 // The canopy fades (the view-centre window, a map brush's window, the Village tool's cut) and
@@ -960,11 +1032,12 @@ float tree_token_fade(vec3 vertex_view, mat4 view_matrix, mat4 projection_matrix
 // does not see them). `key` (0..1) is constant over a whole stroke or a whole mass, so a crown
 // opens in bold pieces rather than a stipple; a `trunk` stays through every fade but the cut and
 // the token window. Only the camera's pass fades: the sun's pass keeps the whole crown's shadow.
-// The token window clears in a round zone (painter-a2a4: the plants' min_alpha dither left a dot
-// screen and dark pieces over a token under a painted crown); its edge is one world-noise line for
-// every part, not the parts' own keys (painter-trees-polish).
+// The token window (painter-a2a4: the plants' min_alpha dither left a dot screen and dark pieces
+// over a token under a painted crown) is the feathered one above: a `whole` part (a stroke, which
+// its vertex stage already took or kept) is not cut here; the block-in and limbs are cut at their
+// lobed edge.
 void tree_fades(vec3 vertex_view, mat4 inv_view_matrix, mat4 view_matrix, mat4 projection_matrix,
-		vec2 frag_coord, vec2 viewport_size, float key, bool trunk) {
+		vec2 frag_coord, vec2 viewport_size, float key, bool trunk, bool whole) {
 	vec3 back = canopy_fade_view.xyz;
 	if (dot(inv_view_matrix[2].xyz, back) < 0.999) {
 		return;
@@ -998,9 +1071,9 @@ void tree_fades(vec3 vertex_view, mat4 inv_view_matrix, mat4 view_matrix, mat4 p
 	if (fade > 0.0 && key < fade) {
 		discard;
 	}
-	// (Every part of a tree may clear: a crown's top is never a floor.) One edge for every part.
-	float token = tree_token_fade(vertex_view, view_matrix, projection_matrix, frag_coord, viewport_size);
-	if (token > 0.0 && 0.3 + 0.4 * p_noise(world / TREE_TOKEN_EDGE_M + 11.0) < token) {
+	// (Every part of a tree may clear: a crown's top is never a floor.)
+	if (!whole && tree_token_frag(vertex_view, world, trunk, view_matrix, projection_matrix,
+			frag_coord, viewport_size)) {
 		discard;
 	}
 }

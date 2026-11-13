@@ -972,26 +972,35 @@ void vertex() {
 			float sr = sin(wrot);
 			vec3 bx = bx0 * cr + by0 * sr;
 			vec3 by = by0 * cr - bx0 * sr;
-			vec2 c = UV - 0.5;
 			wp += wn * lift * size * (0.3 + 0.7 * rnd);
 			if (is_mark && (fix3 & 4) != 0 && (mk & 2) != 0 && foliage) {
 				wp.y -= size * 0.6;
 			}
+			// How far the quad's centre sits along its length from the stroke's point.
+			float shift = 0.0;
 			if (twig16 && !strand16) {
 				// A twig grows FROM its anchor (a spray's base is at the brush's near end).
-				c.x += tw19 ? (cap19 || level < 0.5 ? 0.0 : 0.45) : 0.22;
+				shift = tw19 ? (cap19 || level < 0.5 ? 0.0 : 0.45) : 0.22;
 			} else if (plain) {
-				c.x += 0.4 * abs(rp3.x);
+				shift = 0.4 * abs(rp3.x);
 			}
 			if (flick) {
-				c.x += 0.42;
+				shift += 0.42;
 			}
-			wp += bx * c.x * len + by * c.y * wid;
 			if (tw19) {
 				// twig-back: the twig mass lies behind its limbs.
 				wp -= to_cam * twig_back19 * (cap19 ? 0.5 : 1.0);
 			}
+			vec3 centre = wp + bx * shift * len;
+			wp = centre + bx * (UV.x - 0.5) * len + by * (UV.y - 0.5) * wid;
 			VERTEX = (VIEW_MATRIX * vec4(wp, 1.0)).xyz;
+			// tt-sim (painter-token-window): the token window takes a stroke whole, by where its
+			// nearest point lies (a ground dab under a crown is not in front of anything: it stays).
+			if (!is_shadow && tree_token_stroke((VIEW_MATRIX * vec4(centre, 1.0)).xyz, 0.5 * max(len, wid),
+					anchor, fract(rnd * 13.7 + 0.31), abs(role - 1.0) < 0.5, VIEW_MATRIX, PROJECTION_MATRIX,
+					VIEWPORT_SIZE)) {
+				VERTEX = vec3(0.0);
+			}
 			v_brush = brush;
 			bool flip = fract(rnd * 5.3) > 0.5;
 			v_uv = brush > 2.5 ? vec2(UV.x, flip ? 1.0 - UV.y : UV.y) : mix(UV, 1.0 - UV, flip ? 1.0 : 0.0);
@@ -1168,7 +1177,7 @@ void fragment() {
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 	ROUGHNESS = 1.0;
 	tree_fades(VERTEX, INV_VIEW_MATRIX, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE,
-		v_key, v_key < 0.0);
+		v_key, v_key < 0.0, true);
 	v_wp_light = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
