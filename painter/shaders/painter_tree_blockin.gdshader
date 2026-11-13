@@ -14,6 +14,9 @@ render_mode skip_vertex_transform, specular_disabled, ambient_light_disabled;
 
 uniform float silhouette = 0.0;
 uniform float lod_level = 1.0;
+// tt-sim: how far round from a crown mass's edge its outline may break (|N.eye| under this times a
+// world noise is not drawn).
+const float MASS_RIM_BREAK = 0.5;
 uniform float cap_on = 2.0;
 uniform float bare = 0.0;
 uniform float r8 = 1.0;
@@ -502,6 +505,15 @@ void fragment() {
 	// is left of a bare willow, a few whips, is solid.)
 	if (foliage && v_form > 0.5 && f_rp3.y > 0.0 && (silhouette < 0.5 || silhouette > 1.5) && !(r16 > 0.5 && f_rp6.z > 0.5)) {
 		if (!g_sun && p_noise(v_wp * 2.3 + 7.0) < f_rp3.y * near7) {
+			discard;
+		}
+	}
+	// tt-sim (painter-trees-polish): a crown mass's outline breaks into soft lobes by a world noise
+	// where it turns from the eye, so its 8-sided polygon and the flat facets at its rim never read
+	// as slabs between the strokes (the strokes carry the crown's edge). Camera pass only.
+	if (foliage && v_form < 1.5 && !g_sun) {
+		vec3 rim_eye = PROJECTION_MATRIX[3][3] == 0.0 ? normalize(INV_VIEW_MATRIX[3].xyz - v_wp) : normalize(INV_VIEW_MATRIX[2].xyz);
+		if (abs(dot(normalize(v_wn), rim_eye)) < MASS_RIM_BREAK * p_noise(v_wp * 1.7 + 13.0)) {
 			discard;
 		}
 	}

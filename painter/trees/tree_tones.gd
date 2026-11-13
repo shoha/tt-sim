@@ -28,7 +28,9 @@ extends RefCounted
 ## The ramp. A species keeps its own shade depth and lit numbers, moved by the sheet's ramp
 ## numbers' difference from its summer midday (REFERENCE). Its shade's hue, pull and keep are
 ## the sheet's: a crown's (leaf, evergreen) `crown-shade-*` (and its lit step leans toward the
-## mood's `lit-hue` by `crown-lit-pull`), a stem's (bark, trim) the mood's `shade-hue` with
+## mood's `lit-hue` by `crown-lit-pull`, `crown-lit-lift` lighter and `crown-lit-chroma` times
+## as rich, keyframed by the sun so a low sun gilds a crown's lit side; its shade
+## `crown-shade-lift` less deep), a stem's (bark, trim) the mood's `shade-hue` with
 ## `bark-shade-pull` and `-keep`, its depth `bark-shade-lift` less. painter-a2a3 found the spike's
 ## per-species pulls (oak 1.1, world 1.0, toward 305) cancelling a green crown's chroma to grey
 ## and swinging brown bark to maroon; the prototype's crowns shade to a deep teal green, and its
@@ -52,6 +54,9 @@ const SPIKE_ROLE := {"leaf": "--leaf", "bark": "--bark", "trim": "--bark", "ever
 const SHADE_PREFIX := {"leaf": "crown-", "evergreen": "crown-", "bark": "bark-", "trim": "bark-"}
 ## Below this sheet chroma a role's hue no longer moves a species' hue (the move fades to 0).
 const HUE_CHROMA := 0.04
+## The share of crown-lit-pull a conifer's needles take (painter-trees-polish: a dark, low-chroma
+## needle turned fully toward the dusk sun's hue read as a flat khaki slab).
+const NEEDLE_LIT_SHARE := 0.5
 ## The sheet keyframe the species' own colours stand for.
 const REFERENCE := {"mood": "summer", "elevation": 60.0}
 const SHAPE_KEYS: Array[String] = [
@@ -215,7 +220,14 @@ static func _sheet_shade(
 	out["shade-keep"] = clampf(keep, 0.0, 1.0)
 	if prefix == "crown-":
 		out["lit-hue"] = PainterSheet.number(sheet, mood, "lit-hue", elevation)
-		out["lit-pull"] = PainterSheet.number(sheet, mood, "crown-lit-pull", elevation)
+		var lit_pull := PainterSheet.number(sheet, mood, "crown-lit-pull", elevation)
+		out["lit-pull"] = lit_pull * (NEEDLE_LIT_SHARE if tag == "evergreen" else 1.0)
+		var lit_lift := PainterSheet.number(sheet, mood, "crown-lit-lift", elevation)
+		out["lit-lift"] = maxf(float(out["lit-lift"]) + lit_lift, 0.0)
+		var lit_chroma := PainterSheet.number(sheet, mood, "crown-lit-chroma", elevation)
+		out["lit-chroma"] = float(out["lit-chroma"]) * maxf(lit_chroma, 0.0)
+		var shade_lift := PainterSheet.number(sheet, mood, "crown-shade-lift", elevation)
+		out["shade-depth"] = clampf(float(out["shade-depth"]) + shade_lift, 0.0, 1.0)
 	else:
 		var lift := PainterSheet.number(sheet, mood, "bark-shade-lift", elevation)
 		out["shade-depth"] = clampf(float(out["shade-depth"]) + lift, 0.0, 1.0)

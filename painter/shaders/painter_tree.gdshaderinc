@@ -894,8 +894,13 @@ const float TREE_CUT_BEHIND = 0.5;
 // and closes by the radius (a token's top sits near 0.9 of it at the orbit view's pitch; the
 // zone may not reach past the radius, the screen tiles are binned by it).
 const float TREE_TOKEN_CORE = 0.75;
-// A stem stroke's key in the token window (its canopy key is -1, kept): it goes at the band's middle.
-const float TREE_TOKEN_STEM_KEY = 0.5;
+// How far behind a token's centre the window still clears, in zone radii (painter-trees-polish: a
+// full radius cut the trunk standing just behind a token at the window's top).
+const float TREE_TOKEN_BEHIND = 0.25;
+// The window's edge: one world noise of about this many metres decides the band for every part
+// (strokes of every level, masses, limbs), so the opening is one clean scalloped line (a key per
+// stroke left single leaves and twigs floating in the band).
+const float TREE_TOKEN_EDGE_M = 0.8;
 
 // How far one token clears a tree fragment, 0 (none) to 1 (gone): the plants' zone and test
 // (occlusion_token_alpha: a round zone by the footprint, an avatar figure's upright ellipse) with
@@ -906,9 +911,9 @@ float tree_token_cover(vec4 token_data, vec3 vertex_view, mat4 view_matrix, mat4
 		return 0.0;
 	}
 	vec3 token_view = (view_matrix * vec4(token_data.xyz, 1.0)).xyz;
-	// Up to a radius behind the token's centre too: a crown mass just behind a token's top showed
-	// as a dark piece over its head (the plants test only in front of the centre).
-	if (vertex_view.z <= token_view.z - radius) {
+	// A little behind the token's centre too (about its back edge), so nothing standing at the
+	// token draws over it (the plants test only in front of the centre).
+	if (vertex_view.z <= token_view.z - radius * TREE_TOKEN_BEHIND) {
 		return 0.0;
 	}
 	vec2 fragment_xy = vertex_view.xy;
@@ -955,8 +960,9 @@ float tree_token_fade(vec3 vertex_view, mat4 view_matrix, mat4 projection_matrix
 // does not see them). `key` (0..1) is constant over a whole stroke or a whole mass, so a crown
 // opens in bold pieces rather than a stipple; a `trunk` stays through every fade but the cut and
 // the token window. Only the camera's pass fades: the sun's pass keeps the whole crown's shadow.
-// The token window clears by the same key (painter-a2a4: the plants' min_alpha dither left a dot
-// screen and dark pieces over a token under a painted crown), a stem's strokes at the band's middle.
+// The token window clears in a round zone (painter-a2a4: the plants' min_alpha dither left a dot
+// screen and dark pieces over a token under a painted crown); its edge is one world-noise line for
+// every part, not the parts' own keys (painter-trees-polish).
 void tree_fades(vec3 vertex_view, mat4 inv_view_matrix, mat4 view_matrix, mat4 projection_matrix,
 		vec2 frag_coord, vec2 viewport_size, float key, bool trunk) {
 	vec3 back = canopy_fade_view.xyz;
@@ -992,9 +998,9 @@ void tree_fades(vec3 vertex_view, mat4 inv_view_matrix, mat4 view_matrix, mat4 p
 	if (fade > 0.0 && key < fade) {
 		discard;
 	}
-	// (Every part of a tree may clear: a crown's top is never a floor.)
+	// (Every part of a tree may clear: a crown's top is never a floor.) One edge for every part.
 	float token = tree_token_fade(vertex_view, view_matrix, projection_matrix, frag_coord, viewport_size);
-	if (token > 0.0 && (key < 0.0 ? TREE_TOKEN_STEM_KEY : key) < token) {
+	if (token > 0.0 && 0.3 + 0.4 * p_noise(world / TREE_TOKEN_EDGE_M + 11.0) < token) {
 		discard;
 	}
 }

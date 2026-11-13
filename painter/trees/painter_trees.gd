@@ -121,6 +121,7 @@ func retone(sheet: Dictionary, mood: String, elevation: float) -> void:
 		m.set_shader_parameter(&"tone_hi", PainterSheet.number(sheet, mood, "tone-hi", elevation))
 		m.set_shader_parameter(&"cut_amp", PainterSheet.number(sheet, mood, "cut", elevation))
 		m.set_shader_parameter(&"cast_amount", PainterSheet.number(sheet, mood, "tree-cast", elevation))
+		m.set_shader_parameter(&"deposit", PainterSheet.number(sheet, mood, "crown-deposit", elevation))
 
 
 ## Brings the painted trees in line with the scatters' rows: grows the new, frees the gone.

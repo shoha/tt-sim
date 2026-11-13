@@ -45,13 +45,20 @@ const RULES: Array = [
 	],
 	[KIND_MASS, "leaf", ["fern", "bracken", "ivy", "moss", "bush", "shrub", "hedge"]],
 ]
+## Words of a tree-category asset that is a leaf mass the plant shader paints, not a tree
+## (painter-trees-polish: the core forest's bushes sway as trees, stayed Classic and read summer
+## green in winter and black in grimdark).
+const TREE_MASS_WORDS: Array[String] = ["bush", "shrub", "hedge"]
 
 
 ## {"kind", "role", "ground_cover"} for asset `asset_id` of wind category `wind_category`
 ## (WindFoliage: "tree", "grass" or "" for still) and the palette's `flower` flag, or {} when the
-## Painted look leaves it Classic (trees).
+## Painted look leaves it Classic or the painted trees draw it (trees; a bush is a leaf mass).
 static func of(asset_id: String, wind_category: String, flower: bool = false) -> Dictionary:
 	if wind_category == "tree":
+		for word in TREE_MASS_WORDS:
+			if asset_id.to_lower().contains(word):
+				return _entry(KIND_MASS, "leaf")
 		return {}
 	if flower:
 		return _entry(KIND_FLOWER, "grass")

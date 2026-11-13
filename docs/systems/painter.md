@@ -144,7 +144,10 @@ time a level is drawn Painted) swaps materials on the live map and swaps them ba
   node shares its species' mesh, so one swap covers every cell). A swaying asset's wind material is
   duplicated with the painted plant shader, so wind, the fades and the grow-in come from the same
   includes and uniforms; a still one (rock, log, litter) gets the painted solid shader with its
-  albedo texture for a cut-out. Trees (`PainterPlantRoles.of` returns `{}`) keep their materials.
+  albedo texture for a cut-out. Trees (`PainterPlantRoles.of` returns `{}`) keep their materials;
+  a tree-category asset named bush, shrub or hedge (the core forest's bushes sway as trees) is a
+  leaf mass and is painted (painter-trees-polish: Classic, they stayed summer green in winter and
+  black in grimdark). Logs and stumps (the `bark` role) shade with the stems' `bark-` numbers.
 - Chunks built later and species added later are painted as they arrive: the terrain's
   `child_entered_tree`, the scatter's `cells_applied` and `species_added`, and `ground_edited`
   (which rebuilds the zone texture). No polling, no per-frame work.
@@ -217,14 +220,21 @@ eye view's levels, rim trees, far meshes and fog are a later card's (A2b).
   `crown-lit-pull` for a crown, the mood's `shade-hue` with `bark-shade-pull` and
   `bark-shade-keep` for a stem (painter-a2a3: the spike's per-species pulls toward 305 cancelled a
   green crown to grey and swung brown bark to maroon; summer crowns now shade to a deep teal green,
-  stems to a dark brown). A stem's shade depth is its species' less `bark-shade-lift` (0.1;
+  stems to a dark brown). Keyframed crown numbers light a crown with its mood and sun
+  (painter-trees-polish): `crown-lit-lift` and `crown-lit-chroma` make the lit step lighter and
+  richer where `crown-lit-pull` turns it toward the light's hue (a low summer sun gilds it, the
+  last dusk sun turns it apricot, not the olive that read as summer trees on a violet floor; a
+  conifer's needles take `NEEDLE_LIT_SHARE` 0.5 of the pull, a full one read khaki),
+  `crown-shade-lift` keeps a dark mood's shade a step lighter (grimdark) or deepens a pale one
+  (winter), and `crown-deposit` is the `deposit` uniform: the share of a crown's up side the frost
+  takes (winter 0.55: snow caps on the crowns, shelves on the needles). A stem's shade depth is its species' less `bark-shade-lift` (0.1;
   painter-a2a4, with `bark-shade-pull` down to 0.04), so summer trunks read a warm mid brown with
   darker furrows rather than a near-black. `tree-cast` is the sun's cast step on a tree (`cast_amount`), lighter at
   a low sun and in the dark moods; the limbs' material takes a near-neutral cast tint
   (`PainterTrees.BARK_CAST_TINT`), since a stem stands in its own crown's shadow and the crowns'
   cool tint made it maroon. Print the ramps with a tone printer before a render (painter-a2a3's
-  `tree_tones.gd` pattern). Winter's bare trees and snow loads are later: in phase 1 a deciduous
-  tree keeps its leaves in winter, a pale frosted green.
+  `tree_tones.gd` pattern). Winter's bare trees and limb snow are later: in phase 1 a deciduous
+  tree keeps its leaves in winter, a frosted green with snow caps (`crown-deposit`).
 - Canopy: `CameraController.CANOPY_CLEARANCE` (20 m) stands over the tallest grown painted tree
   (poplar 16.74 m at age 0.95; the GLB trees reach 16 m) plus `BOUND_GROW`;
   `test_painter_trees_draw` grows every species and fails if one outgrows it. The block-in's
@@ -233,11 +243,12 @@ eye view's levels, rim trees, far meshes and fog are a later card's (A2b).
 - The token window (painter-a2a4, painter-a2a5): `tree_token_fade` in the include reads
   OcclusionFadeManager's token texture and screen tiles as the plants do (the tile's list in the
   camera's pass, the plain loop otherwise), but CLEARS instead of dithering to `min_alpha`: a
-  fragment nearer the camera than a token (up to one zone radius behind its centre) whose screen
-  offset lies inside `TREE_TOKEN_CORE` (0.75) of the zone radius is discarded, and between 0.75
-  and 1 it goes by its fade key (a stroke's own key, a stem stroke's `TREE_TOKEN_STEM_KEY` 0.5, a
-  mass's or limb's world-noise key), so the crown opens in a round window over the token. Every
-  part clears: strokes, masses, limbs and trunks. It runs after the canopy fades and only in the
+  fragment nearer the camera than a token (up to `TREE_TOKEN_BEHIND`, a quarter of the zone
+  radius, behind its centre; a full radius cut the trunk just behind a token) whose screen offset
+  lies inside `TREE_TOKEN_CORE` (0.75) of the zone radius is discarded, and between 0.75 and 1 one
+  world noise of `TREE_TOKEN_EDGE_M` (0.8 m) draws the edge for every part (painter-trees-polish:
+  the parts' own keys left a veil of single leaves and twigs in the band), so the crown opens in
+  one clean round window over the token. Every part clears: strokes, masses, limbs and trunks. It runs after the canopy fades and only in the
   camera's pass (the sun's pass keeps the whole crown's shadow). Both shaders must hand their own
   view-space point to `tree_fades`: the stroke shader and, since painter-a2a5, the block-in
   (`skip_vertex_transform`, VERTEX and NORMAL in view space). The block-in wrote POSITION alone
@@ -246,6 +257,14 @@ eye view's levels, rim trees, far meshes and fog are a later card's (A2b).
   the haze depth and the received sun shadow of the block-in read the foot too.
   `test_painter_trees_draw` checks the binding, the VERTEX write and both loops in every tree
   shader.
+- One hand (painter-trees-polish): every broadleaf crown and the spruce paint with the oak's
+  scalloped `lobed` brush (`tree_roles.json`; the lime's heart-shaped `scale`, the poplar's and
+  rowan's `flick`, the spruce's `spray` and the birch's small `round` read as a second, cruder hand
+  or as confetti); the birch is fewer, larger dabs in a yellow-green (the spike's lemon was the
+  brightest thing on the map); the willow keeps its strands. The block-in's crown masses are 8 x 5
+  spheres whose facets and polygon outline showed as flat slabs between the strokes of the
+  sparser species: their outline breaks into lobes by a world noise where they turn from the eye
+  (`MASS_RIM_BREAK`, camera pass only; no geometry added).
 - A grazing sun (painter-a2a4): the long bands across the floor at a 3 degree sun were
   `painter_ground`'s turned-from-the-sun step, not the trees' shadows (they stayed with the
   shadows off and the trees hidden); the step and its wiggle scale with the sun's height under

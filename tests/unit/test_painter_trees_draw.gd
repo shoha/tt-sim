@@ -215,10 +215,11 @@ func test_the_tones_keep_each_species_and_follow_the_sheet() -> void:
 	assert_eq(PainterTreeTones.role_rows("spruce")[8], table["spruce"]["evergreen"])
 	assert_eq(PainterTreeTones.role_rows("oak")[6], PainterTreeTones.GROUND_ROW)
 	# Summer at a high sun: the sheet's leaf stands lighter than the spike world's, so the
-	# spike's birch is lifted by as much and keeps its own hue.
+	# birch (painter-trees-polish: a yellow-green, the spike's lemon was the brightest thing on
+	# the map) is lifted by as much and keeps its own hue.
 	var birch_leaf: int = table["birch"]["leaf"]
 	var mid := palette.get_pixel(15, birch_leaf * PainterTreeTones.VARIANTS + 1)
-	var spike := PainterSheet.parse_color("oklch(0.76 0.135 124)")
+	var spike := PainterSheet.parse_color("oklch(0.68 0.118 131)")
 	var got := PainterSheet.lch_of_color(mid)
 	assert_almost_eq(got.z, spike.z, 6.0, "the birch's own hue")
 	assert_gt(got.x, spike.x, "lifted with the sheet's lighter leaf")

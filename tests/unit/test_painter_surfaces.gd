@@ -119,6 +119,10 @@ func test_every_ground_role_paints_a_sheet_role() -> void:
 
 func test_plants_take_a_kind_and_trees_stay_classic() -> void:
 	assert_eq(PainterPlantRoles.of(OAK, "tree"), {})
+	# A bush sways as a tree but is a leaf mass the plant shader paints (one season in winter).
+	var bush := PainterPlantRoles.of(BIOME + "/Bush_BerryBush_v0_temperate_forest", "tree")
+	assert_eq(bush["kind"], PainterPlantRoles.KIND_MASS)
+	assert_eq(bush["role"], "leaf")
 	assert_eq(PainterPlantRoles.of(GRASS, "grass")["kind"], PainterPlantRoles.KIND_GRASS)
 	assert_eq(PainterPlantRoles.of(BOULDER, "")["role"], "stone")
 	assert_true(PainterPlantRoles.of("x/Clump_Sprig", "grass", true)["ground_cover"], "a flower")

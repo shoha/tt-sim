@@ -505,8 +505,11 @@ static func _tone_plant(
 	material: ShaderMaterial, entry: Dictionary, sheet: Dictionary, mood: String, elevation: float
 ) -> void:
 	var low := int(entry["kind"]) in [PainterPlantRoles.KIND_GRASS, PainterPlantRoles.KIND_FLOWER]
+	# Logs and stumps shade like the painted stems, to their own brown (painter-trees-polish: the
+	# mood's full violet pull read maroon on a log's shaded side at a lower sun).
+	var prefix := "grass-" if low else ("bark-" if str(entry["role"]) == "bark" else "")
 	var ramp := PainterTones.linear_ramp(
-		PainterTones.ramp(sheet, mood, str(entry["role"]), elevation, "grass-" if low else "")
+		PainterTones.ramp(sheet, mood, str(entry["role"]), elevation, prefix)
 	)
 	var names := [&"c_shade0", &"c_mid0", &"c_lit0", &"c_shade1", &"c_mid1", &"c_lit1"]
 	for i in names.size():
