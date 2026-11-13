@@ -82,12 +82,15 @@
      to white; the pull is a chroma vector for buildings, so a blue slate opposite the yellow
      lit hue greys a little instead of turning teal or pink).
      Stone and roofs take less pull than a lime wash (painter-a3b round 1: the same pull on a
-     darker grey stone read as a periwinkle slab, on slate as lavender). */
+     darker grey stone read as a periwinkle slab, on slate as lavender). A lime wash keeps most
+     of its own warm hue in shade (painter-manner-b: a 1.2 pull read lavender over a whole
+     facade; 0.3 leaves a warm grey cream, the prototype's shaded walls). Roofs carry no snow
+     but in winter (roof-snow, the share of a roof under it, in the drift role's white). */
   plaster: oklch(0.89 0.045 88);  wall-stone: oklch(0.76 0.032 78);
   wall-log: oklch(0.60 0.080 58);  wall-boards: oklch(0.64 0.058 72);  timber: oklch(0.45 0.075 52);
-  wall-shade-turn: -11;  wall-pull: 1.2;  stone-pull: 0.5;  wall-shade-lift: 0.06;
+  wall-shade-turn: -11;  wall-pull: 0.3;  stone-pull: 0.5;  wall-shade-lift: 0.13;
   roof-pull: 0.45;  roof-shade-lift: 0.03;  timber-shade-turn: -50;  timber-pull: 0.15;
-  building-lit: 0.6;
+  building-lit: 0.6;  roof-snow: 0;
 }
 
 @mood summer {
@@ -249,7 +252,7 @@
     haze: oklch(0.64 0.030 215);
     ground: oklch(0.36 0.040 165);  leaf: oklch(0.45 0.050 165);  bark: oklch(0.33 0.025 50);
     stone: oklch(0.40 0.015 220);  path: oklch(0.50 0.030 75);
-    roof-clay: oklch(0.36 0.085 35);  roof-slate: oklch(0.34 0.020 230);  roof-shingle: oklch(0.32 0.030 50);
+    roof-clay: oklch(0.35 0.058 35);  roof-slate: oklch(0.34 0.020 230);  roof-shingle: oklch(0.32 0.030 50);
     roof-turf: oklch(0.34 0.040 160);  roof-thatch: oklch(0.43 0.045 75);
   }
   /* A low sun under the lid of cloud: rust in the light, the shade gone to slate. */
@@ -260,7 +263,7 @@
     haze: oklch(0.56 0.030 220);
     ground: oklch(0.33 0.040 150);  leaf: oklch(0.41 0.050 160);  bark: oklch(0.31 0.025 45);
     stone: oklch(0.37 0.018 210);  path: oklch(0.47 0.035 65);
-    roof-clay: oklch(0.34 0.085 35);  roof-slate: oklch(0.31 0.020 230);  roof-shingle: oklch(0.30 0.030 50);
+    roof-clay: oklch(0.33 0.058 35);  roof-slate: oklch(0.31 0.020 230);  roof-shingle: oklch(0.30 0.030 50);
     roof-turf: oklch(0.31 0.040 155);  roof-thatch: oklch(0.40 0.045 70);
     lit-hue: 60;  lit-pull: 0.5;
   }
@@ -299,9 +302,11 @@
        lavender twigs), shading to the snow's cool blue. */
     needle: oklch(0.38 0.060 186);
     crown-shade-hue: 245;  crown-shade-pull: 0.6;  crown-shade-keep: 0.6;  tree-cast: 0.6;
-    /* Warm walls against the blue snow: a lime wash a step under the snow's white. */
+    /* Warm walls against the blue snow: a lime wash a step under the snow's white; the roofs
+       half under snow, the eaves and the steepest runs left bare. */
     plaster: oklch(0.84 0.032 72);  wall-stone: oklch(0.66 0.020 75);
     wall-log: oklch(0.55 0.060 55);  wall-boards: oklch(0.62 0.042 70);  timber: oklch(0.42 0.055 50);
+    roof-snow: 0.6;
   }
   @key high 24 {
     sun: oklch(0.97 0.020 80);  sun-energy: 1.0;

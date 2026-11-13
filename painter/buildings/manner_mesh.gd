@@ -15,7 +15,12 @@ extends RefCounted
 ##           the piece's own coordinates in metres (UV2) and [u_len, v_len, code, accent] (CUSTOM0)
 ##           so a shader draws strokes along the piece instead of along the world;
 ##   shadow  the uncut mesh moved by the same field: the shadow pass keeps the recipe's triangles;
-##   fringe  a thatch roof's ragged teeth, a few triangles along each eave, appended to the draw.
+##   fringe  a thatch roof's ragged teeth, a few triangles along each eave, appended to the draw;
+##   hand    a half-timber beam cut every BEAM_SEG_M along its axis and widened on both long sides
+##           by a brush width that wanders (`brush_at`), so its edges read brushed and a little
+##           crooked; a door leaf and its panels lean (`door_lean`), one way per building;
+##   collider the structure's collision faces moved by the same field (and cut like the roof
+##           where they lie above the walls), so a click and a standing token meet what is drawn.
 ## Nothing here reads the scene tree; the same inputs give the same arrays.
 
 const CODE_NONE := 0
@@ -51,6 +56,17 @@ const SEG_M := 1.0
 ## A thatch tooth's width along the eave, metres, and its length when the record has no fringe.
 const TOOTH_M := 0.2
 const TOOTH_LEN_M := 0.22
+## A beam's cut along its axis, metres (a 3 m post in two, a 6 m plate in four; its back face,
+## in the wall, is not cut), and its brush: each long side moves out by BEAM_WIDEN_M plus up to
+## BEAM_WANDER_M of a smooth wander along the beam.
+const BEAM_SEG_M := 1.6
+const BEAM_WIDEN_M := 0.016
+const BEAM_WANDER_M := 0.016
+## A door leaf's lean: metres along the wall per metre above the wall foot.
+const DOOR_LEAN := 0.045
+## A collision triangle is cut like a roof when its lowest point is above this share of the way
+## from the wall foot to the eave (walls, cut nowhere in the draw, stay whole).
+const COLLIDER_CUT_ABOVE := 0.6
 const FORMAT := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
 
 
@@ -95,6 +111,69 @@ static func phase_of(seed_value: int) -> Vector3:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(seed_value)
 	return Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU)
+
+
+## How far a beam's long side at map point `p` moves out (metres): BEAM_WIDEN_M plus a smooth
+## wander of up to BEAM_WANDER_M along the beam. A function of the point only, so the vertices
+## two faces share move together. Pure.
+static func brush_at(p: Vector3, phase: Vector3) -> float:
+	var s := (
+		0.6 * sin(p.x * 3.1 + p.y * 2.3 + p.z * 2.7 + phase.x)
+		+ 0.4 * sin(p.x * 7.3 - p.y * 5.1 + p.z * 4.4 + phase.z)
+	)
+	return BEAM_WIDEN_M + BEAM_WANDER_M * (0.5 + 0.5 * s)
+
+
+## The lean of a door at map point `p` on a wall facing `n`: along the wall, DOOR_LEAN a metre
+## above `foot`, to the side `phase` picks for the whole building. Pure.
+static func door_lean(p: Vector3, n: Vector3, foot: float, phase: Vector3) -> Vector3:
+	var side := Vector3.UP.cross(n)
+	side.y = 0.0
+	if side.length_squared() < 0.01:
+		return Vector3.ZERO
+	var sign_of := 1.0 if sin(phase.y * 3.0) >= 0.0 else -1.0
+	return side.normalized() * sign_of * maxf(p.y - foot, 0.0) * DOOR_LEAN
+
+
+## The collision faces `faces` (a triangle soup, map frame) moved by the field `opts` (wander_at),
+## the triangles above the walls first cut as the drawn roof is (every SEG_M in plan), so the
+## collider follows the drawn lean, eaves and ridges. Pure.
+static func collider(faces: PackedVector3Array, opts: Dictionary) -> PackedVector3Array:
+	var foot := float(opts.get("foot", 0.0))
+	var eave := float(opts.get("eave", 0.0))
+	var above := foot + (eave - foot) * COLLIDER_CUT_ABOVE
+	var out := PackedVector3Array()
+	for t in range(0, faces.size() - 2, 3):
+		var tri := [faces[t], faces[t + 1], faces[t + 2]]
+		var low := minf(faces[t].y, minf(faces[t + 1].y, faces[t + 2].y))
+		if eave <= foot or low < above:
+			for p: Vector3 in tri:
+				out.append(p)
+			continue
+		var stack: Array = [tri]
+		while not stack.is_empty():
+			var s: Array = stack.pop_back()
+			var best := -1
+			var best_len := SEG_M
+			for e in 3:
+				var d: Vector3 = s[(e + 1) % 3] - s[e]
+				var h := Vector2(d.x, d.z).length()
+				if h > best_len:
+					best_len = h
+					best = e
+			if best < 0:
+				for p: Vector3 in s:
+					out.append(p)
+				continue
+			var a: Vector3 = s[best]
+			var b: Vector3 = s[(best + 1) % 3]
+			var c: Vector3 = s[(best + 2) % 3]
+			var mid := (a + b) * 0.5
+			stack.append([a, mid, c])
+			stack.append([mid, b, c])
+	for k in out.size():
+		out[k] += wander_at(out[k], opts)
+	return out
 
 
 ## The record of every vertex (null where none, or of a kind with no code). Pure.
@@ -144,14 +223,19 @@ static func build(
 		m.add(src[k], normals[k], colours[k], recs[k])
 	var cut_idx := PackedInt32Array()
 	var mids: Dictionary = {}
+	var cut := bool(opts.get("cut", true))
 	for t in range(0, index.size() - 2, 3):
 		var tri := [index[t], index[t + 1], index[t + 2]]
-		if bool(opts.get("cut", true)) and CUT_CODES.has(m.code(tri[0])):
-			_cut(m, tri, mids, cut_idx)
+		if cut and CUT_CODES.has(m.code(tri[0])):
+			_cut(m, tri, mids, cut_idx, SEG_M, Vector3.ZERO)
+		elif cut and _is_beam(m.rec[tri[0]]) and m.nor[tri[0]].dot(m.rec[tri[0]]["n"]) > -0.5:
+			_cut(m, tri, mids, cut_idx, BEAM_SEG_M, m.rec[tri[0]]["u"])
 		else:
 			cut_idx.append_array(PackedInt32Array(tri))
 	if bool(opts.get("fringe", true)):
 		_fringe(m, recs, colours, cut_idx)
+	if cut:
+		_hand(m, opts)
 	for k in m.pos.size():
 		m.pos[k] += wander_at(m.pos[k], opts)
 	var moved := src.duplicate()
@@ -181,16 +265,20 @@ class Grow:
 	var col := PackedColorArray()
 	var uv2 := PackedVector2Array()
 	var cus := PackedFloat32Array()
+	## The record of each vertex (null where none).
+	var rec: Array = []
 
-	func add(p: Vector3, n: Vector3, c: Color, rec: Variant) -> int:
+	func add(p: Vector3, n: Vector3, c: Color, r_in: Variant) -> int:
 		pos.append(p)
 		nor.append(n)
 		col.append(c)
-		if rec == null:
+		rec.append(r_in)
+		var rec_v: Variant = r_in
+		if rec_v == null:
 			uv2.append(Vector2.ZERO)
 			cus.append_array(PackedFloat32Array([0.0, 0.0, 0.0, 0.5]))
 		else:
-			var r: Dictionary = rec
+			var r: Dictionary = rec_v
 			var d: Vector3 = p - (r["origin"] as Vector3)
 			uv2.append(Vector2(d.dot(r["u"]), d.dot(r["v"])))
 			cus.append_array(
@@ -218,20 +306,26 @@ class Grow:
 		col.append(col[a].lerp(col[b], 0.5))
 		uv2.append((uv2[a] + uv2[b]) * 0.5)
 		cus.append_array(cus.slice(a * 4, a * 4 + 4))
+		rec.append(rec[a])
 		mids[key] = pos.size() - 1
 		return pos.size() - 1
 
 
-## Cuts triangle `tri` at the middle of its longest horizontal edge until none is over SEG_M.
-static func _cut(m: Grow, tri: Array, mids: Dictionary, out: PackedInt32Array) -> void:
+## Cuts triangle `tri` at the middle of its longest edge until none is over `seg` metres, the
+## edges measured along `axis` (a beam's own) or, where `axis` is zero, in plan (so a roof is cut
+## along its eave and ridge only).
+static func _cut(
+	m: Grow, tri: Array, mids: Dictionary, out: PackedInt32Array, seg: float, axis: Vector3
+) -> void:
+	var horizontal := axis == Vector3.ZERO
 	var stack: Array = [tri]
 	while not stack.is_empty():
 		var t: Array = stack.pop_back()
 		var best := -1
-		var best_len := SEG_M
+		var best_len := seg
 		for e in 3:
 			var d: Vector3 = m.pos[t[(e + 1) % 3]] - m.pos[t[e]]
-			var h := Vector2(d.x, d.z).length()
+			var h := Vector2(d.x, d.z).length() if horizontal else absf(d.dot(axis))
 			if h > best_len:
 				best_len = h
 				best = e
@@ -244,6 +338,29 @@ static func _cut(m: Grow, tri: Array, mids: Dictionary, out: PackedInt32Array) -
 		var mi := m.mid(a, b, mids)
 		stack.append([a, mi, c])
 		stack.append([mi, b, c])
+
+
+static func _is_beam(rec: Variant) -> bool:
+	return rec != null and str(rec["kind"]) == "beam"
+
+
+## The hand: every beam vertex moved out across the beam by brush_at (a widened, wandering brush
+## edge), every door leaf and panel vertex by door_lean. Before the wander, so both move with it.
+static func _hand(m: Grow, opts: Dictionary) -> void:
+	var phase: Vector3 = opts.get("phase", Vector3.ZERO)
+	var foot := float(opts.get("foot", 0.0))
+	for k in m.pos.size():
+		var rec: Variant = m.rec[k]
+		if rec == null:
+			continue
+		var code := m.code(k)
+		if _is_beam(rec):
+			var v: Vector3 = rec["v"]
+			var half := maxf(float(rec["v_len"]) * 0.5, 0.001)
+			var across := (m.pos[k] - (rec["origin"] as Vector3)).dot(v) - half
+			m.pos[k] += v * clampf(across / half, -1.0, 1.0) * brush_at(m.pos[k], phase)
+		elif code == CODE_LEAF:
+			m.pos[k] += door_lean(m.pos[k], rec["n"], foot, phase)
 
 
 ## A thatch roof's teeth: along every eave edge of a thatch roof slope with vertices in this mesh,

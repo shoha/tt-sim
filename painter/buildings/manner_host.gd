@@ -1,34 +1,47 @@
 class_name PainterMannerHost
 extends RefCounted
 
-## Puts the hand-drawn manner (the owner's choice B of card painter-manner) on the painted
-## buildings while PainterBuildings.manner_mode is "b" ("" is the A3b look and never makes one of
-## these): the recipe mesh cut and wandered (PainterMannerMesh), strokes drawn in the fragment
-## shader along each piece's own frame (painter_structure_manner.gdshader).
-## Per structure, on a WorkerThreadPool task: the records (PainterMannerSource.evaluate) and the
-## arrays; on the main thread (call_deferred, no poll) the meshes are made and put in: a painted
-## part's own node keeps the recipe topology, wandered, as its shadow caster (SHADOWS_ONLY) and a
-## child draws the cut mesh with no shadow; a Classic part (panes, door metal) takes the wandered
-## mesh in place so it stays in its hole. restore_all() puts back every mesh and cast setting and
-## frees what it added.
+## Puts the hand-drawn manner (card painter-manner's choice B, the Painted default since card
+## painter-manner-b) on the painted buildings: the recipe mesh cut and wandered
+## (PainterMannerMesh), strokes drawn in the fragment shader along each piece's own frame
+## (painter_structure_manner.gdshader). A structure procgen gives no manner records for keeps the
+## A3b look PainterBuildings already put on it.
+##
+## Per structure, on a WorkerThreadPool task: the records (PainterMannerSource.evaluate, the one
+## place that asks procgen for them), the arrays and the moved collider. On the main thread the
+## results are installed in arrival order, one step a frame (a structure's meshes, then its
+## collider: about 1 ms each; one process_frame connection while any wait, none otherwise: no
+## poll). The shader is loaded on a loader thread when the host is made and kept, so neither the
+## first install nor a return to Painted parses it on the main thread (painter-manner-b: 37 ms):
+##   a painted part's own node draws the cut mesh in the manner's material and casts no shadow; when
+##   the part cast one before, a child (SHADOW) casts it from the recipe topology, wandered, so the
+##   shadow pass draws what Classic drew. An opening's frames and shutters cast none in Classic and
+##   none here (card painter-manner-b: the probe made every part cast, about 1.5k more shadow
+##   triangles for three houses);
+##   a Classic part (panes, door metal) takes the wandered mesh in place so it stays in its hole;
+##   the structure's collision shape is replaced by its faces under the same field
+##   (PainterMannerMesh.collider), so a click and a standing token meet the leaning house.
+## restore_all() puts back every mesh, override, cast setting and shape and frees what it added.
 
 const SHADER := "res://painter/shaders/painter_structure_manner.gdshader"
-const DRAW := "MannerDraw"
-const MODES := {"b": 1}
+const SHADOW := "MannerShadow"
 ## Mesh names that are the yard, not the building (not wandered).
 const SKIP_PREFIXES: Array[String] = ["dressing", "decor", "cap_", "wheel_", "vane_"]
 ## The wander amplitude (metres at full height).
 const AMP_M := 0.14
+## The structure's collision shape (AuthoredStructures._body).
+const COLLISION := "Collision/CollisionShape3D"
 
 ## Per structure built: {"id", "eval_ms", "build_ms", "install_ms", "tris": {src, draw, shadow},
-## "bytes"}.
+## "bytes", "collider": [faces before, after]}.
 var stats: Array[Dictionary] = []
 
-var _mode := ""
 var _generation := 0
-## Node instance id -> [mesh instance, its mesh, its cast_shadow] for every part changed.
+## Node instance id -> [mesh instance, its mesh, its cast_shadow, its material_override].
 var _restore: Dictionary = {}
-## Nodes added (draw children).
+## CollisionShape3D instance id -> [node, its shape].
+var _shapes: Dictionary = {}
+## Nodes added (shadow children).
 var _added: Array[Node] = []
 ## Structure node instance ids dressed or being built.
 var _dressed: Dictionary = {}
@@ -41,20 +54,22 @@ var _owner_ref: WeakRef = null
 ## Job key -> WorkerThreadPool task id, until its result is installed.
 var _tasks: Dictionary = {}
 var _next_key := 0
+## Install steps waiting for the main thread, oldest first: a result ({"job", "parts", ...}) or
+## a structure's collider ({"job", "collider"}).
+var _queue: Array[Dictionary] = []
+var _draining := false
+var _shader: Shader = null
 
 
 func _init(buildings: PainterBuildings) -> void:
 	_owner_ref = weakref(buildings)
+	ResourceLoader.load_threaded_request(SHADER)
 
 
-## Starts the build of `structure` (a `Structure_<id>` node) in `mode`; nothing when it is done or
-## under way, or when the mode is not a candidate.
-func dress(structure: Node, mode: String) -> void:
-	if not MODES.has(mode) or _dressed.has(structure.get_instance_id()):
+## Starts the build of `structure` (a `Structure_<id>` node); nothing when it is done or under way.
+func dress(structure: Node) -> void:
+	if _dressed.has(structure.get_instance_id()) or not structure.is_inside_tree():
 		return
-	if mode != _mode:
-		restore_all()
-		_mode = mode
 	var id := AuthoredStructures._id_of(structure)
 	var doc := PainterMannerSource.document(structure.get_tree())
 	var record := PainterMannerSource.structure_of(doc, id)
@@ -66,6 +81,10 @@ func dress(structure: Node, mode: String) -> void:
 		if mi == null or not mi.has_meta(AuthoredStructures.TAGS_META) or _skipped(str(mi.name)):
 			continue
 		parts[str(mi.name)] = PainterBuildings.kind_of(str(mi.name))
+	var faces := PackedVector3Array()
+	var cs := structure.get_node_or_null(COLLISION) as CollisionShape3D
+	if cs != null and cs.shape is ConcavePolygonShape3D:
+		faces = (cs.shape as ConcavePolygonShape3D).get_faces()
 	var authored := structure.get_parent()
 	var decor := bool(authored.call("_decor")) if authored.has_method("_decor") else false
 	_dressed[structure.get_instance_id()] = true
@@ -75,7 +94,7 @@ func dress(structure: Node, mode: String) -> void:
 		"structure": record,
 		"decor": decor,
 		"parts": parts,
-		"mode": mode,
+		"faces": faces,
 		"generation": _generation
 	}
 	_next_key += 1
@@ -83,8 +102,8 @@ func dress(structure: Node, mode: String) -> void:
 	_tasks[_next_key] = WorkerThreadPool.add_task(_work.bind(job))
 
 
-## Puts back every mesh and cast setting changed and frees every node added; results still on
-## their way are dropped.
+## Puts back every mesh, override, cast setting and shape changed and frees every node added;
+## results still on their way are dropped.
 func restore_all() -> void:
 	_generation += 1
 	for id: int in _restore:
@@ -93,7 +112,13 @@ func restore_all() -> void:
 			var mi: MeshInstance3D = entry[0]
 			mi.mesh = entry[1]
 			mi.cast_shadow = entry[2]
+			mi.material_override = entry[3]
 	_restore.clear()
+	for id: int in _shapes:
+		var pair: Array = _shapes[id]
+		if is_instance_valid(pair[0]):
+			(pair[0] as CollisionShape3D).shape = pair[1]
+	_shapes.clear()
 	for node in _added:
 		if is_instance_valid(node):
 			node.get_parent().remove_child(node)
@@ -102,7 +127,7 @@ func restore_all() -> void:
 	_dressed.clear()
 	_materials.clear()
 	_shared.clear()
-	_mode = ""
+	_queue.clear()
 
 
 ## Tones every material this made (PainterBuildings._tone with the part's kind).
@@ -130,7 +155,7 @@ func _work(job: Dictionary) -> void:
 	var t1 := Time.get_ticks_usec()
 	var out := {"job": job, "parts": {}, "eval_ms": (t1 - t0) / 1000.0}
 	if feed.is_empty():
-		_install.call_deferred(out)
+		_arrived.call_deferred(out)
 		return
 	var structure: Structure = job.structure
 	var building: Dictionary = feed.building
@@ -160,19 +185,51 @@ func _work(job: Dictionary) -> void:
 		if not painted:
 			built.erase("draw")
 		out.parts[part_name] = built
+	var faces: PackedVector3Array = job.faces
+	if not faces.is_empty():
+		out["collider"] = PainterMannerMesh.collider(faces, opts)
 	out["build_ms"] = (Time.get_ticks_usec() - t1) / 1000.0
-	_install.call_deferred(out)
+	_arrived.call_deferred(out)
 
 
 # ---------------------------------------------------------------- main thread
 
 
+## A worker's result on the main thread: queued, and the queue drained from the next frame on.
+func _arrived(out: Dictionary) -> void:
+	var key := int(out.job.key)
+	if _tasks.has(key):
+		# Finished but for its return: waited for here so the pool never holds an unwaited task.
+		WorkerThreadPool.wait_for_task_completion(_tasks[key])
+		_tasks.erase(key)
+	if int(out.job.generation) != _generation:
+		return
+	_queue.append(out)
+	var tree := Engine.get_main_loop() as SceneTree
+	if not _draining and tree != null:
+		_draining = true
+		tree.process_frame.connect(_drain, CONNECT_ONE_SHOT)
+
+
+## Installs the oldest queued step, then waits a frame for the next.
+func _drain() -> void:
+	_draining = false
+	if not _queue.is_empty():
+		var step: Dictionary = _queue.pop_front()
+		if step.has("parts"):
+			_install(step)
+			if step.has("collider"):
+				_queue.push_front({"job": step.job, "collider": step.collider})
+		else:
+			_install_collider(step)
+	var tree := Engine.get_main_loop() as SceneTree
+	if not _queue.is_empty() and tree != null:
+		_draining = true
+		tree.process_frame.connect(_drain, CONNECT_ONE_SHOT)
+
+
 func _install(out: Dictionary) -> void:
 	var job: Dictionary = out.job
-	if _tasks.has(int(job.key)):
-		# Finished but for its return: waited for here so the pool never holds an unwaited task.
-		WorkerThreadPool.wait_for_task_completion(_tasks[int(job.key)])
-		_tasks.erase(int(job.key))
 	var structure := instance_from_id(int(job.node)) as Node3D
 	if int(job.generation) != _generation or structure == null or not is_instance_valid(structure):
 		return
@@ -187,19 +244,25 @@ func _install(out: Dictionary) -> void:
 		var shadow: Array = built.shadow
 		if (shadow[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() != mi.mesh.surface_get_array_len(0):
 			continue
-		_restore[mi.get_instance_id()] = [mi, mi.mesh, mi.cast_shadow]
+		_restore[mi.get_instance_id()] = [mi, mi.mesh, mi.cast_shadow, mi.material_override]
 		var material := mi.mesh.surface_get_material(0)
-		mi.mesh = _mesh(shadow, material, 0)
 		tris.src += int(built.triangles[0])
-		tris.shadow += int(built.triangles[2])
 		if not built.has("draw"):
+			mi.mesh = _mesh(shadow, material, 0)
 			tris.draw += int(built.triangles[0])
+			if mi.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+				tris.shadow += int(built.triangles[2])
 			continue
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
-		var draw := _child(mi, DRAW, _mesh(built.draw, null, PainterMannerMesh.FORMAT))
-		draw.material_override = _surface_material(part_name)
+		var casts := mi.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.mesh = _mesh(built.draw, null, PainterMannerMesh.FORMAT)
+		mi.material_override = _surface_material(part_name)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		tris.draw += int(built.triangles[1])
 		bytes += _bytes(built.draw, 56)
+		if casts:
+			_child(mi, SHADOW, _mesh(shadow, material, 0))
+			tris.shadow += int(built.triangles[2])
+			bytes += _bytes(shadow, 32)
 	(
 		stats
 		. append(
@@ -208,18 +271,46 @@ func _install(out: Dictionary) -> void:
 				"eval_ms": out.eval_ms,
 				"build_ms": out.get("build_ms", 0.0),
 				"install_ms": (Time.get_ticks_usec() - t0) / 1000.0,
+				"collider_ms": 0.0,
 				"tris": tris,
-				"bytes": bytes
+				"bytes": bytes,
+				"collider": [0, 0]
 			}
 		)
 	)
+
+
+## Puts a structure's moved collision faces (`step.collider`) in place of its shape; the shape it
+## had is kept for restore_all().
+func _install_collider(step: Dictionary) -> void:
+	var job: Dictionary = step.job
+	var structure := instance_from_id(int(job.node)) as Node3D
+	if int(job.generation) != _generation or structure == null or not is_instance_valid(structure):
+		return
+	var t0 := Time.get_ticks_usec()
+	var moved: PackedVector3Array = step.collider
+	var cs := structure.get_node_or_null(COLLISION) as CollisionShape3D
+	if moved.is_empty() or cs == null or not (cs.shape is ConcavePolygonShape3D):
+		return
+	var old := cs.shape as ConcavePolygonShape3D
+	var shape := ConcavePolygonShape3D.new()
+	shape.backface_collision = old.backface_collision
+	shape.set_faces(moved)
+	_shapes[cs.get_instance_id()] = [cs, old]
+	cs.shape = shape
+	var id := AuthoredStructures._id_of(structure)
+	for k in range(stats.size() - 1, -1, -1):
+		if int(stats[k].id) == id:
+			stats[k]["collider_ms"] = (Time.get_ticks_usec() - t0) / 1000.0
+			stats[k]["collider"] = [(job.faces as PackedVector3Array).size() / 3, moved.size() / 3]
+			break
 
 
 func _child(parent: MeshInstance3D, child_name: String, mesh: ArrayMesh) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.name = child_name
 	mi.mesh = mesh
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 	parent.add_child(mi)
 	_added.append(mi)
 	return mi
@@ -236,15 +327,19 @@ static func _mesh(arrays: Array, material: Material, flags: int) -> ArrayMesh:
 ## About what the arrays take on the GPU: `stride` bytes a vertex and four an index.
 static func _bytes(arrays: Array, stride: int) -> int:
 	var verts := (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
-	return verts * stride + (arrays[Mesh.ARRAY_INDEX] as PackedInt32Array).size() * 4
+	var index: Variant = arrays[Mesh.ARRAY_INDEX]
+	return verts * stride + (0 if index == null else (index as PackedInt32Array).size() * 4)
 
 
 func _surface_material(key: String) -> ShaderMaterial:
 	if _shared.has(key):
 		return _shared[key]
 	var kind := PainterBuildings.kind_of(key)
+	if _shader == null:
+		var loaded := ResourceLoader.load_threaded_get(SHADER) as Shader
+		_shader = loaded if loaded != null else load(SHADER) as Shader
 	var material := ShaderMaterial.new()
-	material.shader = load(SHADER) as Shader
+	material.shader = _shader
 	material.set_meta(PainterBuildings.META, true)
 	material.set_shader_parameter(&"pattern", int(kind[1]))
 	material.set_shader_parameter(&"pick", int(kind[3]))

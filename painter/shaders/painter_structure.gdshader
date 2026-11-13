@@ -34,14 +34,19 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
  */
 
 #include "res://painter/shaders/painter_noise.gdshaderinc"
+#include "res://painter/shaders/painter_structure_common.gdshaderinc"
 
 // 0 plaster, 1 stone, 2 log, 3 boards, 4 timber, 5 tile, 6 slate, 7 shingle, 8 thatch, 9 turf.
 uniform int pattern = 0;
-// 0: the material's own ramp; 1: a tile roof's tone by its paint; 2: a wooden roof's (no clay).
+// 0: the material's own ramp; 1: a tile roof's tone by its paint; 2: a wooden roof's (no clay);
+// 3: a door's or shutter's (timber, or the clay, turf or slate accent by its paint).
 uniform int pick = 0;
 // LINEAR [shade0, mid0, lit0, shade1, mid1, lit1] per tone; a picked roof's tones are 0 clay,
 // 1 slate, 2 shingle, 3 turf.
 uniform vec3 ramps[24];
+// The share of a roof under snow (sheet roof-snow) and the snow's LINEAR [shade, mid, lit].
+uniform float snow = 0.0;
+uniform vec3 snow_ramp[3];
 // The N.L where the shade, middle and lit steps meet (sheet tone-lo, tone-hi).
 uniform float tone_lo = -0.08;
 uniform float tone_hi = 0.48;
@@ -72,36 +77,11 @@ varying vec3 f_mid;
 varying vec3 f_lit;
 varying float f_wob;
 
-// The sheet roof tone a roof paint (linear RGB) chooses: see the header. `woody` never takes clay.
-int roof_tone(vec3 c, bool woody) {
-	vec3 lms = vec3(
-		0.4122214708 * c.r + 0.5363325363 * c.g + 0.0514459929 * c.b,
-		0.2119034982 * c.r + 0.6806995451 * c.g + 0.1073969566 * c.b,
-		0.0883024619 * c.r + 0.2817188376 * c.g + 0.6299787005 * c.b);
-	lms = pow(max(lms, vec3(0.0)), vec3(1.0 / 3.0));
-	float a = 1.9779984951 * lms.x - 2.4285922050 * lms.y + 0.4505937099 * lms.z;
-	float b = 0.0259040371 * lms.x + 0.7827717662 * lms.y - 0.8086757660 * lms.z;
-	float hue = mod(degrees(atan(b, a)) + 360.0, 360.0);
-	if (length(vec2(a, b)) < 0.04) {
-		return 1;
-	}
-	if (hue >= 340.0 || hue < 18.0) {
-		return 0;
-	}
-	if (hue < 58.0) {
-		return woody ? 2 : 0;
-	}
-	if (hue < 100.0) {
-		return 2;
-	}
-	return 1;
-}
-
 void vertex() {
 	v_wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	v_wn = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	v_h = COLOR.a;
-	v_tone = pick > 0 ? roof_tone(COLOR.rgb, pick == 2) : 0;
+	v_tone = tone_of(pick, COLOR.rgb);
 }
 
 // A thin line at the start of each unit of `x` (width `w` of a unit), faded out before the
@@ -130,7 +110,8 @@ void fragment() {
 	// is never one smooth field (the prototype's roofs: blotches over the base colour).
 	float bn = p_noise(wp * dab_freq + 33.0);
 	float dab = (pattern >= 5 ? 1.0 : dab_wall) * dabs;
-	dark += smoothstep(0.62, 0.72, bn) * dab;
+	// A slate's dark dabs read as blotches up close: a lighter share of them.
+	dark += smoothstep(0.62, 0.72, bn) * dab * (pattern == 6 ? 0.35 : 1.0);
 	light += (1.0 - smoothstep(0.28, 0.38, bn)) * dab * 0.8;
 	// A slope's own axes (roofs) and a wall's horizontal axis, from the face normal.
 	vec2 flat_n = n.xz;
@@ -201,12 +182,17 @@ void fragment() {
 	}
 	// The fold line: where the shading normal turns within a pixel (a corner, an eave lip).
 	dark += smoothstep(0.2, 0.6, length(fwidth(NORMAL))) * ink;
-	dark = clamp(dark * marks, 0.0, 0.85);
-	light = clamp(light * marks, 0.0, 0.8);
+	// Snow on a roof (winter): the snow's own tones, the marks under it mostly hidden.
+	float cover = pattern >= 5 ? snow_cover(snow, wp, up, h) : 0.0;
+	dark = clamp(dark * marks * (1.0 - cover * 0.85), 0.0, 0.85);
+	light = clamp(light * marks * (1.0 - cover * 0.85), 0.0, 0.8);
 	int base = v_tone * 6;
 	vec3 shd = mix(ramps[base], ramps[base + 3], variant);
 	vec3 mid = mix(ramps[base + 1], ramps[base + 4], variant);
 	vec3 lit = mix(ramps[base + 2], ramps[base + 5], variant);
+	shd = mix(shd, snow_ramp[0], cover);
+	mid = mix(mid, snow_ramp[1], cover);
+	lit = mix(lit, snow_ramp[2], cover);
 	vec3 deep = shd * 0.82;
 	f_shd = mix(mix(shd, deep, dark), mid, light * 0.5);
 	f_mid = mix(mix(mid, shd, dark), lit, light * 0.6);

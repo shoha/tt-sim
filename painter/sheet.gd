@@ -92,7 +92,8 @@ const DEFAULT_ROLES: Array[String] = [
 ## lift (roof-pull, roof-shade-lift); timber's
 ## own turn and pull share (timber-shade-turn, timber-pull: a brown turned toward the violet
 ## shade goes the short way through red to maroon); and the share of the mood's lit-lift and
-## lit-pull every building role takes (building-lit: a pale wall under the full lift is white).
+## lit-pull every building role takes (building-lit: a pale wall under the full lift is white);
+## and how much of a roof lies under snow (roof-snow, 0 to 1, in the drift role's colour).
 const DEFAULT_NUMBERS: Array[String] = [
 	"shade-hue",
 	"shade-pull",
@@ -145,6 +146,7 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"timber-shade-turn",
 	"timber-pull",
 	"building-lit",
+	"roof-snow",
 ]
 ## Below this OKLCH chroma a colour's hue is meaningless: a blend takes the other end's hue.
 const GREY_CHROMA := 0.02

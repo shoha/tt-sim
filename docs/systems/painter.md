@@ -280,8 +280,10 @@ eye view's levels, rim trees, far meshes and fog are a later card's (A2b).
 Under Painted, the procgen structures (`AuthoredStructures`, the authored houses, walls and
 mills) wear the painted structure shader on their walls, roofs, timber and stone; their panes,
 glow, lanterns, ornament, metal, dressing and water keep Classic (card painter-a3b, owner decision
-D5: sheet-driven, not the prototype's hand-drawn edges, piece ids or wobble). The aim is the
-spike's route A: broad coloured masses, a few accents, shadow-lit by the sheet's sun.
+D5: sheet-driven). Since card painter-manner-b the prototype's hand-drawn manner (procgen's piece
+records: wobble, lean, strokes along each piece) is drawn over that by default, and the A3b look
+below is the fallback for a structure without records. The aim is the spike's route A: broad
+coloured masses, a few accents, shadow-lit by the sheet's sun.
 
 - **The host.** `PainterSurfaces` makes one `PainterBuildings`, loaded by path (`BUILDINGS`) the
   first time it paints, and hands it every painted state; `buildings()` returns it (null until
@@ -324,9 +326,48 @@ spike's route A: broad coloured masses, a few accents, shadow-lit by the sheet's
   5818 triangles). In-run A/B on the village at 1920x1080, vsync off, indicative only (shared
   GPU): painted buildings 3.84 and 4.04 ms, Classic buildings 4.03 and 4.09 ms, no measurable
   cost.
-- **Gaps.** A door's or shutter's recipe paint (red, orange) becomes `timber` brown, so a Classic
-  accent is lost; roofs carry no snow in winter; streets and settlement ground are not painted
-  here; the shader is not in `GraphicsWarmup`, so its first Painted level compiles it.
+- **Accents and snow (card painter-manner-b).** A door's or shutter's tone comes from its recipe
+  paint (pick 3, `ACCENT_ROLES`): wood and dull paint stay `timber`, a red or orange paint takes
+  `roof-clay`, a green `roof-turf`, a blue `roof-slate`, so Classic's red doors and orange shutters
+  keep an accent in every mood. Roofs lie under snow by the sheet's `roof-snow` (0 but in winter,
+  0.6) in the `drift` role's colour; both shaders share `painter_structure_common.gdshaderinc`
+  for the picks and the snow.
+- **The hand-drawn manner (the default since card painter-manner-b).** `PainterBuildings.hand_drawn`
+  (true) puts `PainterMannerHost` on every structure procgen gives manner records for; a structure
+  without records keeps the look above, the fallback (false draws every structure that way, for
+  an A/B). Per structure, on a worker: the records (`PainterMannerSource.evaluate`, today a
+  second recipe evaluation of about 55-65 ms; the one place to change when `build_one` keeps
+  them), the meshes (`PainterMannerMesh.build`: the recipe mesh cut on roofs, gables and the
+  ridge every metre, every vertex moved by one smooth field per building: a lean that grows with
+  height, bowing and wobbling eaves and ridges; a thatch eave's teeth; each beam cut in two or
+  four along its axis and widened by a wandering brush width; a door leaf and its panels lean)
+  and the collider (`PainterMannerMesh.collider`: the collision faces under the same field, the
+  ones above the walls cut like the roof). On the main thread, one step a frame (about 1 ms
+  each): the part's own node draws the cut mesh in `painter_structure_manner.gdshader` and casts
+  no shadow, a `MannerShadow` child casts the recipe topology (wandered) only where the part cast
+  in Classic (opening frames and shutters cast none), a Classic part (panes, metal) takes the
+  wandered mesh in place; then the collision shape is swapped for the moved faces.
+  `restore_all()` puts back every mesh, override, cast setting and shape. The shader draws the
+  prototype's stroke families from the piece frame (`UV2` metres, `CUSTOM0` [u_len, v_len, code,
+  accent]): ruled lines inside each face edge at least about two pixels wide (eave dark, verges
+  and ridge pale), a few broad washes on plaster, broad dry marks per stone course, strokes and
+  course lines on thatch, dashes on tile and slate, a beam's brush rim, a door's planks, grain
+  and brace.
+- **Its cost (card painter-manner-b, one interleaved sitting, 1920x1080, vsync off, summer sun
+  45, order Classic A3b B B A3b Classic, each the mean of its pair; indicative, shared GPU, the
+  pairs 0.0-0.06 ms apart).** B over Classic buildings (under the painted look): home, mid, far,
+  eye +0.07, +0.06, +0.04, +0.15 ms for 3 houses and +0.06, +0.02, +0.03, +0.18 for 12; over A3b
+  0.00, +0.02, +0.01, +0.04 and +0.09, +0.03, +0.03, +0.07. The eye views carry most of it, and
+  most of that is the painted shader itself (A3b +0.11 over Classic there). Main pass +5.8k
+  primitives for 3 houses (11,842 drawn against the recipe's 5,998), +23.3k for 12; shadow pass
+  identical to A3b and Classic in the same views (the probe's +1.5k came from opening parts made
+  to cast). Build 67-71 ms median a structure on a worker (max 97) after the 55-67 ms
+  evaluation; install 1.0-1.1 ms median (max 2.8) and the collider 0.9-1.0 ms, in separate
+  frames; 0.59 MB of mesh arrays a house. Numbers and the gap probe: `docs/plans/handoffs/
+  painter-a1.md` "Manner B".
+- **Gaps.** Streets and settlement ground are not painted here; neither shader is in
+  `GraphicsWarmup` (the manner's is loaded on a loader thread when the host is made, so its parse
+  is off the main thread, but its first draw still compiles it).
 - **Manner probe (card painter-manner, 2026-11-13; look-pending, default OFF).** Three ways to
   bring back the prototype's hand-drawn manner from procgen's manner records (procgen branch
   `procgen-manner`, not pinned: at tt-sim's pin there are no records and the probe changes
@@ -347,7 +388,7 @@ spike's route A: broad coloured masses, a few accents, shadow-lit by the sheet's
   captures and the recommendation: `docs/plans/handoffs/painter-a1.md` "Manner probe"; frames
   under `docs/research/2026-11-09-prototypes/compare/painter_manner/`. The owner chose B
   (2026-11-13); A and C (`PainterMannerStrokes`, `PainterMannerBake`, shader modes 0, 2 and 3)
-  were deleted (card painter-manner-b), so `manner_mode` takes "" or "b".
+  were deleted (card painter-manner-b) and B became the default (above).
 
 ## The painted state signal
 

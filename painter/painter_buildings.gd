@@ -39,6 +39,16 @@ const PART_PREFIXES: Array[String] = ["cap_", "wheel_", "vane_"]
 const PICK_ROLES: Array[String] = ["roof-clay", "roof-slate", "roof-shingle", "roof-turf"]
 ## The sheet role of a picked roof (its tone comes from its paint).
 const PICK := ""
+## A painted door's or shutter's tones, in the shader's order (paint_tone): unpainted wood is
+## timber; a red or orange paint takes the clay, a green the turf, a blue the slate (the sheet's
+## accents in every mood; Classic's red doors and orange shutters became brown under A3b).
+const ACCENT_ROLES: Array[String] = ["timber", "roof-clay", "roof-turf", "roof-slate"]
+## The sheet role of a door or shutter whose tone comes from its paint.
+const ACCENT := "accent"
+## The role the roofs' snow takes its colour from (winter's is the snow's white) and the number
+## that says how much of a roof it covers (0 in every mood but winter).
+const SNOW_ROLE := "drift"
+const SNOW_NUMBER := "roof-snow"
 ## The shader's patterns.
 const P_PLASTER := 0
 const P_STONE := 1
@@ -75,18 +85,19 @@ const KINDS: Dictionary = {
 	"trim_wood": ["timber", P_TIMBER, "timber", 0],
 	"trim_trim": ["timber", P_TIMBER, "timber", 0],
 	"frame_wood": ["timber", P_TIMBER, "timber", 0],
-	"opening_wood": ["timber", P_TIMBER, "timber", 0],
-	"door_wood": ["timber", P_TIMBER, "timber", 0],
+	"opening_wood": [ACCENT, P_TIMBER, "timber", 3],
+	"door_wood": [ACCENT, P_TIMBER, "timber", 3],
 }
 
-## "" draws the A3b look (the default; nothing below changes); "b" puts the hand-drawn manner on
-## the painted buildings (PainterMannerHost). Read when a structure is dressed: change it, then
-## release() and paint() again.
-static var manner_mode := ""
+## True (the default) puts the hand-drawn manner on every painted structure procgen gives manner
+## records for (PainterMannerHost); false draws them all in the A3b look, the fallback a
+## structure without records keeps (an A/B switch for measurements). Read when a structure is
+## dressed: change it, then release() and paint() again.
+static var hand_drawn := true
 
 ## What is drawn now: {"sheet", "mood", "elevation"}, {} while nothing is painted.
 var applied: Dictionary = {}
-## The manner candidates' host, made on the first dress with manner_mode set.
+## The hand-drawn manner's host, made on the first dress while hand_drawn is set.
 var manner: PainterMannerHost = null
 
 var _map: Node3D = null
@@ -216,10 +227,10 @@ func _dress(structure: Node) -> void:
 			continue
 		_swapped[mesh_instance.get_instance_id()] = [mesh_instance, mesh_instance.material_override]
 		mesh_instance.material_override = _material(key)
-	if manner_mode != "":
+	if hand_drawn:
 		if manner == null:
 			manner = PainterMannerHost.new(self)
-		manner.dress(structure, manner_mode)
+		manner.dress(structure)
 
 
 ## Forgets the records of freed parts (a rebuilt structure's old node).
@@ -265,6 +276,8 @@ func _tone(material: ShaderMaterial, kind: Array, sheet: Dictionary) -> void:
 	var roles: Array[String] = []
 	if str(kind[0]) == PICK:
 		roles.assign(PICK_ROLES)
+	elif str(kind[0]) == ACCENT:
+		roles.assign(ACCENT_ROLES)
 	else:
 		roles.append(str(kind[0]))
 	var ramps := PackedVector3Array()
@@ -272,6 +285,12 @@ func _tone(material: ShaderMaterial, kind: Array, sheet: Dictionary) -> void:
 		ramps.append_array(ramp(sheet, mood, role, elevation, str(kind[2])))
 	ramps.resize(PICK_ROLES.size() * 6)
 	material.set_shader_parameter(&"ramps", ramps)
+	material.set_shader_parameter(
+		&"snow", PainterSheet.number(sheet, mood, SNOW_NUMBER, elevation)
+	)
+	material.set_shader_parameter(
+		&"snow_ramp", ramp(sheet, mood, SNOW_ROLE, elevation, "roof").slice(0, 3)
+	)
 	material.set_shader_parameter(
 		&"tone_lo", PainterSheet.number(sheet, mood, "tone-lo", elevation)
 	)

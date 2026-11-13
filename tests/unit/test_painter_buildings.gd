@@ -200,6 +200,41 @@ func test_a_slate_roofs_lit_variants_stay_one_family() -> void:
 			assert_gt(a.x, mid.x, "%s %d: lit is lighter than the mid" % [mood, elevation])
 
 
+func test_a_shaded_lime_wash_stays_warm_by_day() -> void:
+	# painter-manner-b: a 1.2 pull read lavender over a facade in shade; a lime wash keeps its hue.
+	var sheet := PainterSheet.load_sheet("core")
+	for mood: String in ["summer", "dusk", "autumn", "winter"]:
+		for elevation in [60.0, 20.0]:
+			var ramp := PainterBuildings.ramp(sheet, mood, "plaster", elevation, "wall")
+			var shade := PainterSheet.lch_of_color(_srgb(ramp[0]))
+			assert_true(
+				shade.y < 0.02 or (shade.z > 20.0 and shade.z < 120.0),
+				"%s %d: shaded plaster h%.0f C%.3f is not lavender" % [mood, elevation, shade.z, shade.y]
+			)
+
+
+func test_doors_and_shutters_take_the_accents_and_winter_roofs_the_snow() -> void:
+	var sheet := PainterSheet.load_sheet("core")
+	assert_eq(PainterBuildings.kind_of("door_wood")[3], 3, "a door picks its tone by its paint")
+	assert_eq(PainterBuildings.kind_of("opening_wood")[3], 3, "and a shutter")
+	_village()
+	var buildings := PainterBuildings.new()
+	buildings.paint(_map, {"sheet": "core", "mood": "winter", "elevation": 20.0})
+	var door := buildings.material_of("door_wood")
+	var ramps: PackedVector3Array = door.get_shader_parameter(&"ramps")
+	for i in PainterBuildings.ACCENT_ROLES.size():
+		var want := PainterBuildings.ramp(
+			sheet, "winter", PainterBuildings.ACCENT_ROLES[i], 20.0, "timber"
+		)
+		assert_eq(ramps[i * 6 + 1], want[1], "%s's mid" % PainterBuildings.ACCENT_ROLES[i])
+	var roof := buildings.material_of("roof_thatch")
+	assert_gt(float(roof.get_shader_parameter(&"snow")), 0.3, "winter roofs lie under snow")
+	assert_eq((roof.get_shader_parameter(&"snow_ramp") as PackedVector3Array).size(), 3)
+	buildings.paint(_map, STATE)
+	assert_eq(float(roof.get_shader_parameter(&"snow")), 0.0, "no snow in summer")
+	buildings.release()
+
+
 func test_mesh_names_map_to_painted_kinds() -> void:
 	assert_eq(PainterBuildings.kind_of("roof_tile")[3], 1, "a tile roof picks its tone")
 	assert_eq(PainterBuildings.kind_of("cap_roof_thatch")[0], "roof-thatch", "a mill's cap")

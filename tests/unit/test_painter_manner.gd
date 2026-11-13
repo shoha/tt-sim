@@ -65,8 +65,9 @@ func _build() -> Dictionary:
 	)
 
 
-func test_the_switch_is_off_by_default_and_then_no_mesh_changes() -> void:
-	assert_eq(PainterBuildings.manner_mode, "", "A3b is the default")
+func test_the_manner_is_the_default_and_switched_off_no_mesh_changes() -> void:
+	assert_true(PainterBuildings.hand_drawn, "the hand-drawn manner is the Painted default")
+	PainterBuildings.hand_drawn = false
 	StructureRecipes.ensure_served()
 	var map := Node3D.new()
 	map.name = "LevelMap"
@@ -90,6 +91,7 @@ func test_the_switch_is_off_by_default_and_then_no_mesh_changes() -> void:
 		assert_eq(node.cast_shadow, before[node][1])
 		assert_eq(node.get_child_count(), before[node][2])
 	buildings.release()
+	PainterBuildings.hand_drawn = true
 
 
 func test_the_mesh_build_is_deterministic_cut_and_keeps_the_shadow_topology() -> void:
@@ -118,25 +120,134 @@ func test_the_wander_keeps_the_foot_and_is_a_function_of_the_point() -> void:
 	assert_lt(PainterMannerMesh.wander_at(p, opts).length(), 0.14 * 2.5)
 
 
-func test_an_installed_candidate_is_put_back_exactly() -> void:
-	var structure := Node3D.new()
-	structure.name = "Structure_1"
-	_container.add_child(structure)
+func _part(structure: Node3D, part_name: String, cast: int) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
-	mi.name = "roof_thatch"
+	mi.name = part_name
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _quad())
 	mi.mesh = mesh
+	mi.cast_shadow = cast
 	structure.add_child(mi)
-	var buildings := PainterBuildings.new()
-	var host := PainterMannerHost.new(buildings)
-	var job := {"node": structure.get_instance_id(), "generation": 0, "key": -1, "mode": "b"}
-	host._install({"job": job, "parts": {"roof_thatch": _build()}, "eval_ms": 0.0})
-	assert_ne(mi.mesh, mesh, "the wandered shadow mesh is in")
-	assert_eq(mi.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
-	assert_eq(mi.get_child_count(), 1, "the drawn mesh is a child")
+	return mi
+
+
+func test_an_install_draws_in_place_casts_only_what_cast_and_is_put_back_exactly() -> void:
+	var structure := Node3D.new()
+	structure.name = "Structure_1"
+	_container.add_child(structure)
+	var roof := _part(structure, "roof_thatch", GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
+	var shutter := _part(structure, "opening_wood", GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	var override := ShaderMaterial.new()
+	roof.material_override = override
+	var meshes := {roof: roof.mesh, shutter: shutter.mesh}
+	var faces := PackedVector3Array(_quad()[Mesh.ARRAY_VERTEX]).slice(0, 3)
+	var shape := ConcavePolygonShape3D.new()
+	shape.set_faces(faces)
+	var body := StaticBody3D.new()
+	body.name = "Collision"
+	var cs := CollisionShape3D.new()
+	cs.name = "CollisionShape3D"
+	cs.shape = shape
+	body.add_child(cs)
+	structure.add_child(body)
+	var host := PainterMannerHost.new(PainterBuildings.new())
+	var job := {
+		"node": structure.get_instance_id(), "generation": 0, "key": -1, "faces": faces
+	}
+	var moved := PainterMannerMesh.collider(faces, _opts())
+	host._install(
+		{
+			"job": job,
+			"parts": {"roof_thatch": _build(), "opening_wood": _build()},
+			"eval_ms": 0.0,
+			"collider": moved
+		}
+	)
+	assert_eq(cs.shape, shape, "the collider waits for its own frame")
+	host._install_collider({"job": job, "collider": moved})
+	for mi: MeshInstance3D in [roof, shutter]:
+		assert_ne(mi.mesh, meshes[mi], "%s draws the cut mesh" % mi.name)
+		assert_eq(mi.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+		assert_true((mi.material_override as ShaderMaterial).has_meta(PainterBuildings.META))
+	assert_eq(roof.get_child_count(), 1, "a part that cast keeps casting, from a child")
+	var caster := roof.get_child(0) as MeshInstance3D
+	assert_eq(caster.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
+	assert_eq(caster.mesh.surface_get_array_len(0), 4, "the shadow keeps the recipe's vertices")
+	assert_eq(shutter.get_child_count(), 0, "a shutter cast no shadow in Classic and casts none")
+	assert_ne(cs.shape, shape, "the collider follows the drawn house")
+	assert_eq((cs.shape as ConcavePolygonShape3D).get_faces(), moved)
 	assert_eq(host.stats.size(), 1)
+	assert_eq(int(host.stats[0].tris.shadow), 2, "only the roof's two triangles cast")
 	host.restore_all()
-	assert_eq(mi.mesh, mesh, "the very same mesh is back")
-	assert_eq(mi.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
-	assert_eq(mi.get_child_count(), 0, "what it added is gone")
+	for mi: MeshInstance3D in [roof, shutter]:
+		assert_eq(mi.mesh, meshes[mi], "the very same mesh is back on %s" % mi.name)
+		assert_eq(mi.get_child_count(), 0, "what it added is gone")
+	assert_eq(roof.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
+	assert_eq(shutter.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	assert_eq(roof.material_override, override, "the override it had is back")
+	assert_null(shutter.material_override)
+	assert_eq(cs.shape, shape, "the very same shape is back")
+
+
+func test_the_manner_shader_loads_with_the_sheet_uniforms() -> void:
+	var shader := load(PainterMannerHost.SHADER) as Shader
+	assert_not_null(shader)
+	var names := []
+	for u: Dictionary in shader.get_shader_uniform_list():
+		names.append(u["name"])
+	for want in ["pattern", "pick", "ramps", "tone_lo", "tone_hi", "snow", "snow_ramp"]:
+		assert_has(names, want)
+
+
+func test_the_collider_follows_the_field_and_is_cut_only_above_the_walls() -> void:
+	var opts := {"amp": 0.14, "phase": PainterMannerMesh.phase_of(56), "foot": 0.0, "eave": 3.0}
+	var wall := PackedVector3Array([Vector3(0, 0, 0), Vector3(6, 0, 0), Vector3(6, 3, 0)])
+	var roof := PackedVector3Array([Vector3(0, 3, 0), Vector3(6, 3, 0), Vector3(6, 4.5, -2)])
+	var moved_wall := PainterMannerMesh.collider(wall, opts)
+	assert_eq(moved_wall.size(), 3, "a wall triangle stays whole, as the drawn wall")
+	for k in 3:
+		assert_eq(moved_wall[k], wall[k] + PainterMannerMesh.wander_at(wall[k], opts))
+	var moved_roof := PainterMannerMesh.collider(roof, opts)
+	assert_gt(moved_roof.size(), 3 * 6, "a 6 m roof triangle is cut every metre in plan")
+	assert_eq(PainterMannerMesh.collider(roof, opts), moved_roof, "pure")
+
+
+func test_a_beam_is_brushed_wider_and_a_door_leans() -> void:
+	var beam := {
+		"id": "frame/beam0",
+		"kind": "beam",
+		"origin": Vector3(0, 0, 0),
+		"u": Vector3.UP,
+		"v": Vector3.RIGHT,
+		"n": Vector3.BACK,
+		"u_len": 3.0,
+		"v_len": 0.2,
+		"accent": 0.5
+	}
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array(
+		[Vector3(0, 0, 0.1), Vector3(0.2, 0, 0.1), Vector3(0.2, 3, 0.1), Vector3(0, 3, 0.1)]
+	)
+	var back := Vector3.BACK
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([back, back, back, back])
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 2, 1, 0, 3, 2])
+	var opts := {"amp": 0.0, "phase": Vector3.ZERO, "foot": 0.0, "eave": 3.0}
+	var built := PainterMannerMesh.build(
+		arrays, PackedInt32Array([0, 0, 0, 0]), PackedStringArray(["frame/beam0"]),
+		{"frame/beam0": beam}, opts
+	)
+	assert_between(int(built.triangles[1]), 4, 8, "a 3 m beam face is cut in two: a few triangles")
+	var lo := INF
+	var hi := -INF
+	for p: Vector3 in built.draw[Mesh.ARRAY_VERTEX]:
+		lo = minf(lo, p.x)
+		hi = maxf(hi, p.x)
+	var widest := PainterMannerMesh.BEAM_WIDEN_M + PainterMannerMesh.BEAM_WANDER_M + 0.001
+	assert_between(-lo, PainterMannerMesh.BEAM_WIDEN_M - 0.001, widest, "brushed wider on one side")
+	assert_between(hi - 0.2, PainterMannerMesh.BEAM_WIDEN_M - 0.001, widest, "and on the other")
+	var lean := PainterMannerMesh.door_lean(Vector3(0, 2, 0), Vector3.BACK, 0.0, Vector3.ZERO)
+	assert_almost_eq(lean.length(), 2.0 * PainterMannerMesh.DOOR_LEAN, 0.0001)
+	assert_almost_eq(lean.y, 0.0, 0.0001, "along the wall")
+	var at_foot := PainterMannerMesh.door_lean(Vector3.ZERO, Vector3.BACK, 0.0, Vector3.ZERO)
+	assert_eq(at_foot, Vector3.ZERO, "a door stands on its sill")
