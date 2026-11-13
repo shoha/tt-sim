@@ -206,10 +206,26 @@ eye view's levels, rim trees, far meshes and fog are a later card's (A2b).
   other uniform. The field map (`field16`) has no tt-sim source yet: a neutral texel.
 - Tones (`PainterTreeTones`, `tree_roles.json`): one style row per species role (leaf, bark, trim,
   a conifer's evergreen), plus the deposit and the ground; each keeps the spike's own colour and
-  ramp and moves as the sheet's role (`leaf`, `bark`, the new default role `needle`) and ramp
-  numbers move from the summer midday, so species never share one green and follow every mood
-  and sun. Winter's bare trees and snow loads are later: in phase 1 a deciduous tree keeps its
-  leaves in winter.
+  moves as the sheet's role (`leaf`, `bark`, the default role `needle`, keyframed per mood) stands
+  from the spike world's colour of that role: lightness and chroma by ratio (a chroma gain by its
+  square root), hue the short way, so species never share one green, a dark mood narrows their
+  spread instead of pushing the darkest to black, and every mood and sun moves them. A species
+  keeps its own shade depth and lit numbers (moved from the summer midday), but its shade's hue,
+  pull and keep are the sheet's: `crown-shade-hue`, `crown-shade-pull`, `crown-shade-keep` and
+  `crown-lit-pull` for a crown, the mood's `shade-hue` with `bark-shade-pull` and
+  `bark-shade-keep` for a stem (painter-a2a3: the spike's per-species pulls toward 305 cancelled a
+  green crown to grey and swung brown bark to maroon; summer crowns now shade to a deep teal green,
+  stems to a dark brown). `tree-cast` is the sun's cast step on a tree (`cast_amount`), lighter at
+  a low sun and in the dark moods; the limbs' material takes a near-neutral cast tint
+  (`PainterTrees.BARK_CAST_TINT`), since a stem stands in its own crown's shadow and the crowns'
+  cool tint made it maroon. Print the ramps with a tone printer before a render (painter-a2a3's
+  `tree_tones.gd` pattern). Winter's bare trees and snow loads are later: in phase 1 a deciduous
+  tree keeps its leaves in winter, a pale frosted green.
+- Canopy: `CameraController.CANOPY_CLEARANCE` (20 m) stands over the tallest grown painted tree
+  (poplar 16.74 m at age 0.95; the GLB trees reach 16 m) plus `BOUND_GROW`;
+  `test_painter_trees_draw` grows every species and fails if one outgrows it. The block-in's
+  crown masses fade by a world noise of about half a metre with a light screen dither on each
+  piece's rim (a plain 1 px dither read as halftone grain over a token).
 
 - Species (`species.json`, data): the asset table, group -> species: Oak oak, Birch birch,
   Broadleaf lime, Poplar poplar, Spruce and Pine spruce, Willow willow, Sapling rowan (young).

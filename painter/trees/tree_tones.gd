@@ -17,12 +17,21 @@ extends RefCounted
 ## settle, blockin), (hang, sky, layer, rise), (mark, mark-value, mark-turn + 2 mark-trim,
 ## mark-size), (cap, far, mark-brush, mark-aspect), (grain, fill, 0, 0).
 ##
-## Colours follow the sheet. A species keeps its own colour and ramp (the spike's tuned birch,
-## oak, spruce, ...), moved by how far the sheet's role and ramp numbers at the level's mood and
-## sun stand from the sheet's summer midday (REFERENCE): lightness and the ramp numbers by their
-## difference, chroma by its ratio, hues by the short way round. So summer at a high sun paints
-## the spike's own trees, and every other mood and sun moves each species the way it moves the
-## plants and the ground, without the species sharing one green.
+## Colours follow the sheet. A species keeps its own colour (the spike's tuned birch, oak,
+## spruce, ...), moved by how far the sheet's role at the level's mood and sun stands from the
+## spike world's colour of that role (SPIKE_ROLE, the one the species were tuned against):
+## lightness and chroma by their ratio (so a dark mood narrows the species' spread rather than
+## pushing the darkest to black; a chroma gain above 1 by its square root, so a pale birch does
+## not go neon), hue the short way round, by less as the sheet's colour greys.
+## So the species never share one green, and each moves the way the sheet moves the plants.
+##
+## The ramp. A species keeps its own shade depth and lit numbers, moved by the sheet's ramp
+## numbers' difference from its summer midday (REFERENCE). Its shade's hue, pull and keep are
+## the sheet's: a crown's (leaf, evergreen) `crown-shade-*` (and its lit step leans toward the
+## mood's `lit-hue` by `crown-lit-pull`), a stem's (bark, trim) the mood's `shade-hue` with
+## `bark-shade-*`. painter-a2a3 found the spike's per-species pulls (oak 1.1,
+## world 1.0, toward 305) cancelling a green crown's chroma to grey and swinging brown bark to
+## maroon; the prototype's crowns shade to a deep teal green and its stems to a dark warm brown.
 
 const DATA := "res://painter/trees/tree_roles.json"
 const TONES := 32
@@ -38,6 +47,10 @@ const ROLE_NAMES: Array[String] = [
 ## The sheet role each tree role follows, and the spike world colour it was tuned against.
 const SHEET_ROLE := {"leaf": "leaf", "bark": "bark", "trim": "bark", "evergreen": "needle"}
 const SPIKE_ROLE := {"leaf": "--leaf", "bark": "--bark", "trim": "--bark", "evergreen": "--needle"}
+## The sheet prefix of each tree role's shade numbers (a crown's or a stem's).
+const SHADE_PREFIX := {"leaf": "crown-", "evergreen": "crown-", "bark": "bark-", "trim": "bark-"}
+## Below this sheet chroma a role's hue no longer moves a species' hue (the move fades to 0).
+const HUE_CHROMA := 0.04
 ## The sheet keyframe the species' own colours stand for.
 const REFERENCE := {"mood": "summer", "elevation": 60.0}
 const SHAPE_KEYS: Array[String] = [
@@ -133,8 +146,9 @@ static func bake(sheet: Dictionary, mood: String, elevation: float) -> Dictionar
 		var lch: Vector3 = PainterSheet.parse_color(str(props.get("color", "")))
 		var shape := _shape(props, world)
 		if tag is String:
-			lch = _moved(lch, sheet, mood, elevation, SHEET_ROLE[tag])
-			shape = _moved_shape(shape, sheet, mood, elevation)
+			var spike := PainterSheet.parse_color(str(world.get(SPIKE_ROLE[tag], "")))
+			lch = _moved(lch, spike, PainterSheet.tone_lch(sheet, mood, SHEET_ROLE[tag], elevation))
+			shape = _sheet_shade(_moved_shape(shape, sheet, mood, elevation), sheet, mood, elevation, tag)
 		elif int(tag) == GROUND_ROW:
 			lch = PainterSheet.tone_lch(sheet, mood, "ground", elevation)
 		_paint_row(palette, ri, lch, shape, props)
@@ -172,18 +186,36 @@ static func _shape(props: Dictionary, world: Dictionary) -> Dictionary:
 	return out
 
 
-## `lch` moved by the sheet's `role` at (mood, elevation) against REFERENCE.
-static func _moved(
-	lch: Vector3, sheet: Dictionary, mood: String, elevation: float, role: String
-) -> Vector3:
-	var now := PainterSheet.tone_lch(sheet, mood, role, elevation)
-	var ref := PainterSheet.tone_lch(sheet, REFERENCE["mood"], role, REFERENCE["elevation"])
-	var ratio := now.y / ref.y if ref.y > 0.001 else 1.0
+## A species colour `lch`, tuned against the spike world's `spike`, moved as the sheet's role
+## `now` stands from it (pure).
+static func _moved(lch: Vector3, spike: Vector3, now: Vector3) -> Vector3:
+	var l_ratio := now.x / spike.x if spike.x > 0.001 else 1.0
+	var c_ratio := now.y / spike.y if spike.y > 0.001 else 1.0
+	if c_ratio > 1.0:
+		c_ratio = sqrt(c_ratio)
+	var turn := fposmod(now.z - spike.z + 180.0, 360.0) - 180.0
 	return Vector3(
-		clampf(lch.x + now.x - ref.x, 0.02, 0.985),
-		maxf(lch.y * ratio, 0.0),
-		fposmod(lch.z + fposmod(now.z - ref.z + 180.0, 360.0) - 180.0, 360.0)
+		clampf(lch.x * l_ratio, 0.02, 0.985),
+		maxf(lch.y * c_ratio, 0.0),
+		fposmod(lch.z + turn * clampf(now.y / HUE_CHROMA, 0.0, 1.0), 360.0)
 	)
+
+
+## `shape` with the sheet's shade hue, pull and keep for a tree role `tag` (SHADE_PREFIX).
+static func _sheet_shade(
+	shape: Dictionary, sheet: Dictionary, mood: String, elevation: float, tag: String
+) -> Dictionary:
+	var out := shape.duplicate()
+	var prefix: String = SHADE_PREFIX[tag]
+	var hue_key := "crown-shade-hue" if prefix == "crown-" else "shade-hue"
+	out["shade-hue"] = PainterSheet.number(sheet, mood, hue_key, elevation)
+	out["shade-pull"] = PainterSheet.number(sheet, mood, prefix + "shade-pull", elevation)
+	var keep := PainterSheet.number(sheet, mood, prefix + "shade-keep", elevation)
+	out["shade-keep"] = clampf(keep, 0.0, 1.0)
+	if prefix == "crown-":
+		out["lit-hue"] = PainterSheet.number(sheet, mood, "lit-hue", elevation)
+		out["lit-pull"] = PainterSheet.number(sheet, mood, "crown-lit-pull", elevation)
+	return out
 
 
 static func _moved_shape(

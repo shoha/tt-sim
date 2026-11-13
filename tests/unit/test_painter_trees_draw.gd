@@ -187,17 +187,68 @@ func test_the_tones_keep_each_species_and_follow_the_sheet() -> void:
 	assert_true((table["spruce"] as Dictionary).has("evergreen"), "a conifer has needles")
 	assert_eq(PainterTreeTones.role_rows("spruce")[8], table["spruce"]["evergreen"])
 	assert_eq(PainterTreeTones.role_rows("oak")[6], PainterTreeTones.GROUND_ROW)
-	# Summer at the reference sun paints the spike's own birch leaf as the middle tone.
+	# Summer at a high sun: the sheet's leaf stands lighter than the spike world's, so the
+	# spike's birch is lifted by as much and keeps its own hue.
 	var birch_leaf: int = table["birch"]["leaf"]
 	var mid := palette.get_pixel(15, birch_leaf * PainterTreeTones.VARIANTS + 1)
-	var spike := PainterSheet.color_of_lch(PainterSheet.parse_color("oklch(0.76 0.135 124)"))
-	assert_almost_eq(mid.g, spike.g, 0.08, "the birch's own green")
+	var spike := PainterSheet.parse_color("oklch(0.76 0.135 124)")
+	var got := PainterSheet.lch_of_color(mid)
+	assert_almost_eq(got.z, spike.z, 6.0, "the birch's own hue")
+	assert_gt(got.x, spike.x, "lifted with the sheet's lighter leaf")
 	var oak_leaf: int = table["oak"]["leaf"]
 	assert_ne(
 		palette.get_pixel(15, oak_leaf * 4 + 1), mid, "the species do not share one green"
 	)
 	var dusk: Image = PainterTreeTones.bake(sheet, "dusk", 10.0)["palette"]
 	assert_ne(dusk.get_pixel(15, birch_leaf * 4 + 1), mid, "the mood moves the colour")
+
+
+## CameraController.CANOPY_CLEARANCE stands over every painted tree at its oldest, strokes and
+## sway included (the seeds below include the tallest painter-a2a3 found for poplar and lime
+## among 60 per species).
+func test_the_canopy_clearance_stands_over_the_tallest_painted_tree() -> void:
+	var tallest := 0.0
+	for species in PainterTreeSpecies.names():
+		var arch := PainterTreeSpecies.architecture(species)
+		for openness: float in [0.1, 0.5, 0.9]:
+			for seed: int in [72271, 32676, 88109]:
+				var cx := {"age": PainterTreeSpecies.AGE["hi"], "openness": openness}
+				var conifer := PainterTreeSpecies.is_conifer(species)
+				var masses := PainterTreeGrowth.tree(arch, cx, seed, conifer)
+				var b: AABB = PainterTreePack.pack(masses, seed, 3.0, PainterTreeSpecies.wide())["aabb"]
+				tallest = maxf(tallest, b.end.y)
+	assert_gt(tallest, 15.0, "the tallest species is measured (poplar 16.74 m)")
+	assert_lte(
+		tallest + PainterTrees.BOUND_GROW,
+		CameraController.CANOPY_CLEARANCE,
+		"the clearance stands over a %.2f m tree" % tallest
+	)
+
+
+## painter-a2a3: the spike's shade pulls swung brown bark to maroon and cancelled a green crown
+## to grey. Every stem's shade stays a warm brown (or a near grey) in every mood and sun, and a
+## summer crown's shade keeps most of its green, leaning teal.
+func test_stems_shade_brown_and_crowns_shade_green() -> void:
+	var sheet := PainterSheet.load_sheet("core")
+	var table := PainterTreeTones.row_table()
+	for mood: String in PainterSheet.MOODS:
+		for elevation: float in [60.0, 20.0, 3.0, -8.0]:
+			var palette: Image = PainterTreeTones.bake(sheet, mood, elevation)["palette"]
+			for species: String in table:
+				var bark: int = table[species]["bark"]
+				var shade := PainterSheet.lch_of_color(palette.get_pixel(3, bark * 4 + 1))
+				if shade.y > 0.02:
+					assert_true(
+						shade.z < 75.0 or shade.z > 350.0,
+						"%s bark shade in %s at %.0f is warm (h %.0f)" % [species, mood, elevation, shade.z]
+					)
+	var summer: Image = PainterTreeTones.bake(sheet, "summer", 60.0)["palette"]
+	for species: String in table:
+		var leaf: int = table[species]["leaf"]
+		var shade := PainterSheet.lch_of_color(summer.get_pixel(3, leaf * 4 + 1))
+		var mid := PainterSheet.lch_of_color(summer.get_pixel(15, leaf * 4 + 1))
+		assert_gt(shade.y, mid.y * 0.6, "%s crown shade keeps its chroma" % species)
+		assert_between(shade.z, 135.0, 200.0, "%s crown shade is green to teal" % species)
 
 
 func test_the_shared_meshes_and_brushes() -> void:

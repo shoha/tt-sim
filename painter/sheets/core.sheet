@@ -59,6 +59,14 @@
      pixel footprint (m) between which a mark fades out, the cast shadow step's wiggle. */
   marks: 0.4;  mark-thin: 0.25;  drift-marks: 0.3;  litter-marks: 0.3;  patches: 1;
   mark-px-lo: 0.07;  mark-px-hi: 0.14;  cut: 0.1;
+
+  /* The painted trees (PainterTreeTones): a crown's shade leans teal and keeps most of its own
+     green (the prototype's S18; the spike's pull toward violet cancelled a green to grey), a
+     stem's shade is its own brown with a small pull (the spike's swung it to maroon); a crown's
+     lit step leans a little toward the light's hue (a full lean read as mustard); tree-cast is
+     how far the sun's cast shadow steps a tree into its cool tint. */
+  crown-shade-hue: 210;  crown-shade-pull: 0.8;  crown-shade-keep: 0.7;  crown-lit-pull: 0.2;
+  bark-shade-pull: 0.2;  bark-shade-keep: 0.9;  tree-cast: 0.7;
 }
 
 @mood summer {
@@ -94,6 +102,8 @@
     /* The lawn and its grass stay gold-green in the low light (grass is lit like the ground since
        painter-a1c, so its lit step shows at every sun): a small lift and pull, not cream. */
     ground-lit-pull: 0.2;  ground-lit-lift: 0.06;  grass-lit-pull: 0.2;  grass-lit-lift: 0.06;
+    /* Near the horizon most of a crown lies in another's cast shadow: a lighter step. */
+    tree-cast: 0.45;
   }
   /* Moonlight: a blue night where the board still reads. The moon (the level's sun under the
      horizon) is a strong cool key over a deeper ambient, so lit and shaded sides part. The shade
@@ -104,7 +114,8 @@
     sky: oklch(0.30 0.050 262);  horizon: oklch(0.42 0.045 262);
     ambient: oklch(0.52 0.055 245);  ambient-energy: 0.55;
     haze: oklch(0.42 0.050 266);
-    ground: oklch(0.46 0.060 166);  leaf: oklch(0.40 0.070 182);  bark: oklch(0.32 0.040 280);
+    ground: oklch(0.46 0.060 166);  leaf: oklch(0.46 0.070 182);  bark: oklch(0.34 0.025 40);
+    needle: oklch(0.32 0.050 196);
     stone: oklch(0.52 0.030 260);  path: oklch(0.60 0.045 255);
     roof-clay: oklch(0.42 0.075 20);  roof-slate: oklch(0.38 0.035 265);  roof-shingle: oklch(0.36 0.040 300);
     roof-turf: oklch(0.38 0.060 180);  roof-thatch: oklch(0.52 0.050 70);
@@ -116,6 +127,7 @@
     lit-hue: 220;  lit-pull: 0.35;  lit-lift: 0.14;
     ground-shade-pull: 0.3;  ground-shade-depth: 0.68;  ground-shade-keep: 0.4;  ground-lit-lift: 0.12;
     grass-shade-keep: 0.4;
+    crown-shade-hue: 225;  crown-shade-pull: 0.4;  crown-shade-keep: 0.6;  tree-cast: 0.4;
   }
 }
 
@@ -137,13 +149,18 @@
     ground-shade-pull: 0.75;  ground-shade-depth: 0.66;  ground-shade-keep: 0.2;
     ground-lit-pull: 0.05;  ground-lit-lift: 0.07;
     grass-shade-keep: 0;  grass-lit-pull: 0.1;  grass-lit-lift: 0.06;
+    /* Crowns stay a readable mid green with gold on their lit side (S18 dusk's willow and
+       rowan), their shade a deep green, not the ground's lilac. */
+    needle: oklch(0.36 0.065 182);
+    crown-shade-hue: 215;  crown-shade-pull: 0.6;  crown-shade-keep: 0.7;  crown-lit-pull: 0.35;
+    tree-cast: 0.55;
   }
   @key high 24 {
     sun: oklch(0.88 0.090 58);  sun-energy: 0.95;
     sky: oklch(0.62 0.090 300);  horizon: oklch(0.70 0.100 45);
     ambient: oklch(0.72 0.070 298);  ambient-energy: 0.6;
     haze: oklch(0.66 0.075 305);
-    ground: var(--meadow);  leaf: oklch(0.52 0.105 138);  bark: oklch(0.42 0.055 50);
+    ground: var(--meadow);  leaf: oklch(0.60 0.120 140);  bark: oklch(0.42 0.055 50);
     stone: oklch(0.52 0.030 60);  path: oklch(0.75 0.055 65);
     roof-clay: oklch(0.50 0.130 28);  roof-slate: oklch(0.45 0.050 290);  roof-shingle: oklch(0.45 0.060 20);
     roof-turf: oklch(0.50 0.090 130);  roof-thatch: oklch(0.58 0.085 62);
@@ -154,7 +171,7 @@
     sky: oklch(0.52 0.085 295);  horizon: oklch(0.66 0.120 38);
     ambient: oklch(0.62 0.080 295);  ambient-energy: 0.62;
     haze: oklch(0.60 0.085 310);
-    ground: oklch(0.62 0.115 104);  leaf: oklch(0.47 0.095 135);  bark: oklch(0.38 0.055 45);
+    ground: oklch(0.62 0.115 104);  leaf: oklch(0.56 0.110 136);  bark: oklch(0.38 0.055 45);
     stone: oklch(0.49 0.035 50);  path: oklch(0.72 0.060 58);
     roof-clay: oklch(0.47 0.125 28);  roof-slate: oklch(0.41 0.050 290);  roof-shingle: oklch(0.41 0.060 20);
     roof-turf: oklch(0.46 0.085 125);  roof-thatch: oklch(0.55 0.090 58);
@@ -166,7 +183,8 @@
     sky: oklch(0.28 0.070 290);  horizon: oklch(0.40 0.075 320);
     ambient: oklch(0.48 0.095 290);  ambient-energy: 0.55;
     haze: oklch(0.40 0.060 300);
-    ground: oklch(0.42 0.065 170);  leaf: oklch(0.36 0.070 190);  bark: oklch(0.30 0.040 300);
+    ground: oklch(0.42 0.065 170);  leaf: oklch(0.42 0.070 188);  bark: oklch(0.32 0.025 30);
+    needle: oklch(0.30 0.050 200);  bark-shade-pull: 0.05;
     stone: oklch(0.46 0.035 290);  path: oklch(0.56 0.050 300);
     roof-clay: oklch(0.38 0.080 15);  roof-slate: oklch(0.34 0.040 285);  roof-shingle: oklch(0.33 0.045 320);
     roof-turf: oklch(0.35 0.060 175);  roof-thatch: oklch(0.47 0.055 60);
@@ -188,13 +206,17 @@
     flower-violet: oklch(0.42 0.050 290);  flower-white: oklch(0.72 0.020 90);
     tone-lo: 0.12;  tone-hi: 0.66;  shade-hue: 250;  shade-pull: 0.45;  shade-depth: 0.53;
     lit-hue: 85;  lit-lift: 0.17;  ground-shade-pull: 0.45;  ground-lit-lift: 0.2;
+    /* Crowns are readable grey-green masses (S18 grimdark), not black: a lighter leaf than the
+       plants had, a slate-teal shade, a light cast step over an already dark palette. */
+    needle: oklch(0.33 0.040 188);
+    crown-shade-hue: 225;  crown-shade-pull: 0.35;  crown-shade-keep: 0.7;  tree-cast: 0.35;
   }
   @key high 27 {
     sun: oklch(0.88 0.030 85);  sun-energy: 0.8;
     sky: oklch(0.40 0.020 250);  horizon: oklch(0.56 0.025 240);
     ambient: oklch(0.64 0.030 220);  ambient-energy: 0.6;
     haze: oklch(0.64 0.030 215);
-    ground: oklch(0.36 0.040 165);  leaf: oklch(0.33 0.045 172);  bark: oklch(0.25 0.022 40);
+    ground: oklch(0.36 0.040 165);  leaf: oklch(0.45 0.050 165);  bark: oklch(0.33 0.025 50);
     stone: oklch(0.40 0.015 220);  path: oklch(0.50 0.030 75);
     roof-clay: oklch(0.36 0.085 35);  roof-slate: oklch(0.34 0.020 230);  roof-shingle: oklch(0.32 0.030 50);
     roof-turf: oklch(0.34 0.040 160);  roof-thatch: oklch(0.43 0.045 75);
@@ -205,7 +227,7 @@
     sky: oklch(0.34 0.020 255);  horizon: oklch(0.50 0.040 60);
     ambient: oklch(0.56 0.030 230);  ambient-energy: 0.6;
     haze: oklch(0.56 0.030 220);
-    ground: oklch(0.33 0.040 150);  leaf: oklch(0.30 0.045 165);  bark: oklch(0.23 0.022 40);
+    ground: oklch(0.33 0.040 150);  leaf: oklch(0.41 0.050 160);  bark: oklch(0.31 0.025 45);
     stone: oklch(0.37 0.018 210);  path: oklch(0.47 0.035 65);
     roof-clay: oklch(0.34 0.085 35);  roof-slate: oklch(0.31 0.020 230);  roof-shingle: oklch(0.30 0.030 50);
     roof-turf: oklch(0.31 0.040 155);  roof-thatch: oklch(0.40 0.045 70);
@@ -217,7 +239,8 @@
     sky: oklch(0.20 0.020 250);  horizon: oklch(0.30 0.025 245);
     ambient: oklch(0.42 0.040 240);  ambient-energy: 0.55;
     haze: oklch(0.32 0.025 240);
-    ground: oklch(0.28 0.035 190);  leaf: oklch(0.25 0.040 195);  bark: oklch(0.20 0.024 20);
+    ground: oklch(0.28 0.035 190);  leaf: oklch(0.33 0.040 195);  bark: oklch(0.26 0.020 30);
+    needle: oklch(0.27 0.035 200);
     stone: oklch(0.34 0.015 240);  path: oklch(0.42 0.025 240);
     roof-clay: oklch(0.28 0.050 25);  roof-slate: oklch(0.26 0.020 240);  roof-shingle: oklch(0.25 0.025 280);
     roof-turf: oklch(0.26 0.035 185);  roof-thatch: oklch(0.36 0.030 70);
@@ -228,8 +251,9 @@
 }
 
 @mood winter {
-  /* The spike's winter (a 19 to 29 degree sun): snow meadow, warm grey-violet bare crowns, a
-     pale cool haze. Grass and flowers stand as dry stalks over the snow. */
+  /* The spike's winter (a 19 to 29 degree sun): snow meadow, a pale cool haze, crowns a frosted
+     green (painter-a2a3: phase 1 keeps the leaves, and the spike's grey-violet bare-crown tone
+     read as lavender trees). Grass and flowers stand as dry stalks over the snow. */
   :world {
     floor: oklch(0.82 0.030 255);  shore: oklch(0.72 0.025 250);  grass: oklch(0.70 0.050 85);
     drift: oklch(0.95 0.015 240);  litter: oklch(0.62 0.040 60);
@@ -238,13 +262,17 @@
     tone-lo: -0.02;  tone-hi: 0.48;  shade-hue: 265;  shade-pull: 1.0;  shade-depth: 0.74;
     lit-lift: 0.07;  ground-shade-pull: 1.05;  ground-shade-depth: 0.78;  ground-lit-lift: 0.075;
     ground-hue-spread: 6;  ground-value-spread: 0.02;
+    /* Phase 1 keeps the deciduous crowns in leaf: a pale frosted green (not the spike's bare
+       lavender twigs), shading to the snow's cool blue. */
+    needle: oklch(0.38 0.060 186);
+    crown-shade-hue: 245;  crown-shade-pull: 0.6;  crown-shade-keep: 0.6;  tree-cast: 0.6;
   }
   @key high 24 {
     sun: oklch(0.97 0.020 80);  sun-energy: 1.0;
     sky: oklch(0.84 0.030 240);  horizon: oklch(0.94 0.022 235);
     ambient: oklch(0.90 0.025 255);  ambient-energy: 0.6;
     haze: oklch(0.93 0.020 262);
-    ground: oklch(0.885 0.030 252);  leaf: oklch(0.65 0.020 318);  bark: oklch(0.40 0.045 50);
+    ground: oklch(0.885 0.030 252);  leaf: oklch(0.70 0.045 160);  bark: oklch(0.42 0.045 50);
     stone: oklch(0.62 0.015 250);  path: oklch(0.80 0.030 262);
     roof-clay: oklch(0.52 0.110 36);  roof-slate: oklch(0.50 0.030 255);  roof-shingle: oklch(0.48 0.050 45);
     roof-turf: oklch(0.60 0.060 140);  roof-thatch: oklch(0.66 0.060 85);
@@ -255,7 +283,7 @@
     sky: oklch(0.76 0.040 260);  horizon: oklch(0.88 0.050 50);
     ambient: oklch(0.84 0.035 280);  ambient-energy: 0.65;
     haze: oklch(0.88 0.035 300);
-    ground: oklch(0.86 0.035 300);  leaf: oklch(0.62 0.025 320);  bark: oklch(0.38 0.045 45);
+    ground: oklch(0.86 0.035 300);  leaf: oklch(0.67 0.045 150);  bark: oklch(0.40 0.045 45);
     stone: oklch(0.60 0.020 280);  path: oklch(0.78 0.035 300);
     roof-clay: oklch(0.52 0.110 34);  roof-slate: oklch(0.48 0.030 270);  roof-shingle: oklch(0.46 0.050 40);
     roof-turf: oklch(0.56 0.055 135);  roof-thatch: oklch(0.65 0.065 75);
@@ -268,7 +296,8 @@
     sky: oklch(0.32 0.045 262);  horizon: oklch(0.46 0.040 262);
     ambient: oklch(0.56 0.045 258);  ambient-energy: 0.55;
     haze: oklch(0.48 0.045 262);
-    ground: oklch(0.66 0.045 255);  leaf: oklch(0.44 0.030 280);  bark: oklch(0.28 0.035 280);
+    ground: oklch(0.66 0.045 255);  leaf: oklch(0.48 0.035 205);  bark: oklch(0.31 0.020 40);
+    needle: oklch(0.31 0.040 210);
     stone: oklch(0.46 0.025 260);  path: oklch(0.60 0.040 258);
     roof-clay: oklch(0.40 0.070 20);  roof-slate: oklch(0.36 0.030 262);  roof-shingle: oklch(0.35 0.035 290);
     roof-turf: oklch(0.40 0.045 190);  roof-thatch: oklch(0.50 0.040 70);
@@ -287,6 +316,8 @@
     flower-gold: oklch(0.82 0.140 80);  flower-rose: oklch(0.66 0.140 25);
     flower-violet: oklch(0.58 0.110 300);  flower-white: oklch(0.92 0.035 90);
     litter-marks: 0.5;
+    /* Amber crowns shade to rust (a pull toward teal would grey them), needles to blue-teal. */
+    crown-shade-hue: 300;  crown-shade-pull: 0.5;  crown-shade-keep: 0.85;
   }
   @key high 34 {
     sun: oklch(0.96 0.045 78);  sun-energy: 1.0;
@@ -316,7 +347,7 @@
     sky: oklch(0.30 0.055 262);  horizon: oklch(0.42 0.055 268);
     ambient: oklch(0.52 0.085 260);  ambient-energy: 0.55;
     haze: oklch(0.42 0.045 262);
-    ground: oklch(0.45 0.060 160);  leaf: oklch(0.42 0.060 40);  bark: oklch(0.30 0.040 290);
+    ground: oklch(0.45 0.060 160);  leaf: oklch(0.42 0.060 40);  bark: oklch(0.31 0.025 35);
     stone: oklch(0.50 0.030 255);  path: oklch(0.58 0.040 255);
     roof-clay: oklch(0.36 0.065 15);  roof-slate: oklch(0.37 0.035 262);  roof-shingle: oklch(0.36 0.045 300);
     roof-turf: oklch(0.40 0.060 150);  roof-thatch: oklch(0.52 0.045 70);

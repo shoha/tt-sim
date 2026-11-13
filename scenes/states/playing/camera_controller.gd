@@ -52,9 +52,13 @@ const RMB_PAN_CLICK_THRESHOLD_MS: int = 150  # Max ms for a short-click (not a d
 const RMB_PAN_MOVE_THRESHOLD_PX: float = 5.0  # Min movement to count as drag
 
 ## The near plane is pulled back until the bottom corners' ray origins stand this far above
-## the highest ground, over the tallest canopy (palette trees reach 16 m; margin for Blender
-## maps' taller ones): see OrbitView.update_camera_offset.
-const CANOPY_CLEARANCE := 24.0
+## the highest ground, over the tallest canopy: see OrbitView.update_camera_offset. From the
+## data (painter-a2a3, measured 2026-11-12): the core palette's GLB trees reach 16 m and the
+## painted trees grown at their oldest 16.74 m (poplar; lime 16.0, spruce 14.6, oak 14.3), plus
+## the 2.5 m their strokes and sway may stand past the grown bounds (PainterTrees.BOUND_GROW).
+## test_painter_trees_draw grows every species and fails if one outgrows it. (Was 24 m, with a
+## margin for the archived Blender maps' taller trees.)
+const CANOPY_CLEARANCE := 20.0
 
 # Camera shake
 const SHAKE_MAX_INTENSITY := 0.05  # Max shake offset in world units

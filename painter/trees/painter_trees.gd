@@ -42,6 +42,8 @@ const MAP_W := 17
 const NEAR_M := 18.0
 const BOUND_GROW := 2.5
 const LEVELS := 3
+## The cast shadow's tint on the block-in's limbs (the crowns keep the shader's cool default).
+const BARK_CAST_TINT := Vector3(0.6, 0.55, 0.55)
 
 ## key (PainterTreeSpecies.key_of) -> {"row", "d", "pos", "cell", "species"} for every tree drawn.
 var trees: Dictionary = {}
@@ -116,6 +118,7 @@ func retone(sheet: Dictionary, mood: String, elevation: float) -> void:
 		m.set_shader_parameter(&"tone_lo", PainterSheet.number(sheet, mood, "tone-lo", elevation))
 		m.set_shader_parameter(&"tone_hi", PainterSheet.number(sheet, mood, "tone-hi", elevation))
 		m.set_shader_parameter(&"cut_amp", PainterSheet.number(sheet, mood, "cut", elevation))
+		m.set_shader_parameter(&"cast_amount", PainterSheet.number(sheet, mood, "tree-cast", elevation))
 
 
 ## Brings the painted trees in line with the scatters' rows: grows the new, frees the gone.
@@ -258,6 +261,10 @@ func _make_materials() -> void:
 			m.set_shader_parameter(uniform_name, str_to_var(own[uniform_name]))
 		if k < 2:
 			m.set_shader_parameter(&"kind10", float(k))
+			if k == 1:
+				# The limbs: a stem stands in its own crown's shadow, and the crowns' cool tint
+				# turned brown bark maroon (painter-a2a3); a near-neutral step keeps it brown.
+				m.set_shader_parameter(&"cast_tint", BARK_CAST_TINT)
 		else:
 			m.set_shader_parameter(&"pass10", float(k - 2))
 			m.set_shader_parameter(&"brushes", PainterTreeBrushes.texture())
