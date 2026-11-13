@@ -122,6 +122,8 @@ func paint(map: Node3D, state: Dictionary) -> bool:
 		"mood": str(state["mood"]),
 		"elevation": float(state.get("elevation", 45.0))
 	}
+	# Structures built from now on bring their manner records with them (one evaluation).
+	StructureGeometry.manner_records = hand_drawn
 	if _map == null:
 		_map = map
 		_map.child_entered_tree.connect(_on_map_child)
@@ -144,6 +146,7 @@ func release() -> void:
 	_swapped.clear()
 	_map = null
 	applied = {}
+	StructureGeometry.manner_records = false
 
 
 ## Whether anything is painted.

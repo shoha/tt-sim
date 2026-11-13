@@ -335,9 +335,7 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
 - **The hand-drawn manner (the default since card painter-manner-b).** `PainterBuildings.hand_drawn`
   (true) puts `PainterMannerHost` on every structure procgen gives manner records for; a structure
   without records keeps the look above, the fallback (false draws every structure that way, for
-  an A/B). Per structure, on a worker: the records (`PainterMannerSource.evaluate`, today a
-  second recipe evaluation of about 55-65 ms; the one place to change when `build_one` keeps
-  them), the meshes (`PainterMannerMesh.build`: the recipe mesh cut on roofs, gables and the
+  an A/B). Per structure, on a worker: the records, the meshes (`PainterMannerMesh.build`: the recipe mesh cut on roofs, gables and the
   ridge every metre, every vertex moved by one smooth field per building: a lean that grows with
   height, bowing and wobbling eaves and ridges; a thatch eave's teeth; each beam cut in two or
   four along its axis and widened by a wandering brush width; a door leaf and its panels lean)
@@ -353,6 +351,21 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   and ridge pale), a few broad washes on plaster, broad dry marks per stone course, strokes and
   course lines on thatch, dashes on tile and slate, a beam's brush rim, a door's planks, grain
   and brace.
+- **One evaluation (card painter-manner-c).** While the painted look is on (`PainterBuildings.paint`
+  sets `StructureGeometry.manner_records`, `release()` clears it) `build_one` sets procgen's
+  `ProcgenStructureInputs.manner` on the evaluation it already makes and keeps the records as
+  parts `manner` (the mesh, digest, roles, walkable faces, cloth and mills are unchanged with the
+  flag: a test builds eight recipes both ways, and the whole gate passed with it forced on;
+  procgen tags the pieces with sub-paths such as `walls_3/wall/side0`, and every lookup keys on
+  the node id). `AuthoredStructures.built_parts(id)` hands the host the cached parts and
+  `PainterMannerSource.of_parts` reads them, so the host never evaluates again. A structure built
+  while the look was Classic (or whose parts left the 48-entry cache) has no records, and
+  `PainterMannerSource.evaluate` evaluates it again on the worker, the fallback. Measured
+  (headless, main thread, median of 6 interleaved builds): recording adds 2-23 ms to a build
+  (stone house 1.9, house_hip 5.3, thatched cottage 8.7, inn_gallery 11.2, half-timber 13.6,
+  dutch_bell_house 22.9) against the 40-76 ms a second evaluation took; records 16-224 KB
+  serialized a house (about a third of its mesh arrays), held only in the cache. A Classic level
+  pays neither.
 - **Its cost (card painter-manner-b, one interleaved sitting, 1920x1080, vsync off, summer sun
   45, order Classic A3b B B A3b Classic, each the mean of its pair; indicative, shared GPU, the
   pairs 0.0-0.06 ms apart).** B over Classic buildings (under the painted look): home, mid, far,

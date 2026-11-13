@@ -7,8 +7,9 @@ extends RefCounted
 ## (painter_structure_manner.gdshader). A structure procgen gives no manner records for keeps the
 ## A3b look PainterBuildings already put on it.
 ##
-## Per structure, on a WorkerThreadPool task: the records (PainterMannerSource.evaluate, the one
-## place that asks procgen for them), the arrays and the moved collider. On the main thread the
+## Per structure, on a WorkerThreadPool task: the records (PainterMannerSource: those the
+## structure's own build kept, AuthoredStructures.built_parts, else a second evaluation), the
+## arrays and the moved collider. On the main thread the
 ## results are installed in arrival order, one step a frame (a structure's meshes, then its
 ## collider: about 1 ms each; one process_frame connection while any wait, none otherwise: no
 ## poll). The shader is loaded on a loader thread when the host is made and kept, so neither the
@@ -32,8 +33,9 @@ const AMP_M := 0.14
 ## The structure's collision shape (AuthoredStructures._body).
 const COLLISION := "Collision/CollisionShape3D"
 
-## Per structure built: {"id", "eval_ms", "build_ms", "install_ms", "tris": {src, draw, shadow},
-## "bytes", "collider": [faces before, after]}.
+## Per structure built: {"id", "eval_ms", "source" ("build": the records came with the structure's
+## parts; "eval": evaluated again), "record_bytes", "build_ms", "install_ms",
+## "tris": {src, draw, shadow}, "bytes", "collider": [faces before, after]}.
 var stats: Array[Dictionary] = []
 
 var _generation := 0
@@ -87,12 +89,16 @@ func dress(structure: Node) -> void:
 		faces = (cs.shape as ConcavePolygonShape3D).get_faces()
 	var authored := structure.get_parent()
 	var decor := bool(authored.call("_decor")) if authored.has_method("_decor") else false
+	var built: Dictionary = (
+		authored.call("built_parts", id) if authored.has_method("built_parts") else {}
+	)
 	_dressed[structure.get_instance_id()] = true
 	var job := {
 		"node": structure.get_instance_id(),
 		"doc": doc,
 		"structure": record,
 		"decor": decor,
+		"built": built if built.has("manner") else {},
 		"parts": parts,
 		"faces": faces,
 		"generation": _generation
@@ -151,9 +157,15 @@ static func _skipped(node_name: String) -> bool:
 
 func _work(job: Dictionary) -> void:
 	var t0 := Time.get_ticks_usec()
-	var feed := PainterMannerSource.evaluate(job.doc, job.structure, job.decor)
+	var feed := PainterMannerSource.of_parts(job.built)
+	var source := "build"
+	if feed.is_empty():
+		feed = PainterMannerSource.evaluate(job.doc, job.structure, job.decor)
+		source = "eval"
 	var t1 := Time.get_ticks_usec()
-	var out := {"job": job, "parts": {}, "eval_ms": (t1 - t0) / 1000.0}
+	var out := {"job": job, "parts": {}, "eval_ms": (t1 - t0) / 1000.0, "source": source}
+	if not feed.is_empty():
+		out["record_bytes"] = var_to_bytes(job.built.get("manner", [])).size()
 	if feed.is_empty():
 		_arrived.call_deferred(out)
 		return
@@ -269,6 +281,8 @@ func _install(out: Dictionary) -> void:
 			{
 				"id": AuthoredStructures._id_of(structure),
 				"eval_ms": out.eval_ms,
+				"source": out.get("source", ""),
+				"record_bytes": out.get("record_bytes", 0),
 				"build_ms": out.get("build_ms", 0.0),
 				"install_ms": (Time.get_ticks_usec() - t0) / 1000.0,
 				"collider_ms": 0.0,

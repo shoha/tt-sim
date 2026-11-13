@@ -1,9 +1,10 @@
 extends GutTest
 
-## The manner probe behind PainterBuildings.manner_mode (card painter-manner; docs/systems/
-## painter.md "Buildings", "Manner probe"): off by default and then nothing changes; the mesh build
-## is deterministic, cuts only what wanders, keeps the recipe topology for the shadow and adds a
-## thatch eave's teeth; an installed candidate is put back exactly.
+## The hand-drawn manner (PainterBuildings.hand_drawn; docs/systems/painter.md "Buildings"):
+## switched off nothing changes; build_one records procgen's manner data in its own evaluation
+## without changing the parts (card painter-manner-c); the mesh build is deterministic, cuts only
+## what wanders, keeps the recipe topology for the shadow and adds a thatch eave's teeth; an
+## install is put back exactly.
 
 const STATE := {"sheet": "core", "mood": "summer", "elevation": 60.0}
 
@@ -110,6 +111,57 @@ func test_the_mesh_build_is_deterministic_cut_and_keeps_the_shadow_topology() ->
 	for k in range(2, custom.size(), 4):
 		teeth += int(custom[k] == float(PainterMannerMesh.CODE_FRINGE))
 	assert_between(teeth, 19 * 3, 20 * 3, "about twenty teeth along the 4 m eave")
+
+
+## The parts build_one makes, minus what the records may change (the tags) and the records.
+func _comparable(parts: Dictionary) -> Dictionary:
+	var meshes: Array = []
+	for mesh: Dictionary in parts.meshes:
+		meshes.append([mesh.role, mesh.kind, mesh.arrays])
+	var mill: Dictionary = parts.get("mill", {})
+	return {
+		"digest": StructureGeometry.digest_of(parts),
+		"meshes": meshes,
+		"walkable": parts.walkable,
+		"collision": parts.collision,
+		"top": parts.top,
+		"mill": mill.keys(),
+		"glow": (parts.glow as Array).size()
+	}
+
+
+func test_build_one_records_in_one_pass_and_changes_nothing_else() -> void:
+	# card painter-manner-c: the records come from build_one's own evaluation while the painted
+	# manner is on; roles, walkable faces, cloth, mills and the mesh read the node ids only.
+	StructureRecipes.ensure_served()
+	var doc := MapDocument.create_flat(Vector2i(40, 40), "grass", "v", 9)
+	var plan := PackedVector2Array(
+		[Vector2(-3.5, -2.5), Vector2(3.5, -2.5), Vector2(3.5, 2.5), Vector2(-3.5, 2.5)]
+	)
+	var recipes := [
+		"core:thatched_cottage",
+		"core:half_timber_house",
+		"core:house_hip",
+		"core:house_flat",
+		"core:inn_gallery",
+		"core:dormered_house",
+		"core:windmill_dutch",
+		"core:market_hall"
+	]
+	assert_false(StructureGeometry.manner_records, "off unless the painted manner is on")
+	for k in recipes.size():
+		var structure := Structure.make(k + 1, recipes[k], plan, 11 + k)
+		var off := StructureGeometry.build_one(doc, structure)
+		StructureGeometry.manner_records = true
+		var on := StructureGeometry.build_one(doc, structure)
+		StructureGeometry.manner_records = false
+		assert_eq(str(off.get("problem", "")), "", "%s builds" % recipes[k])
+		assert_false(off.has("manner"), "no records while off")
+		assert_eq(_comparable(on), _comparable(off), "%s: the same parts" % recipes[k])
+		var feed := PainterMannerSource.of_parts(on)
+		assert_false(feed.is_empty(), "%s: records with the parts" % recipes[k])
+		if not feed.is_empty():
+			assert_false((feed.building as Dictionary).is_empty(), "the building record")
 
 
 func test_the_wander_keeps_the_foot_and_is_a_function_of_the_point() -> void:

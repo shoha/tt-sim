@@ -326,6 +326,11 @@ func cache_size() -> int:
 	return _cache.size()
 
 
+## The cached parts structure `structure_id`'s node was made from (read only; the painter), or {}.
+func built_parts(structure_id: int) -> Dictionary:
+	return _cache.get(_keys.get(structure_id, -1), {})
+
+
 ## top_y in world space (the node's global transform), or -INF with none.
 func world_top() -> float:
 	if top_y == -INF:
@@ -551,8 +556,8 @@ func _stage(doc: MapDocument, list: Array, keys: Dictionary) -> void:
 func _install(id: int, key: int, parts: Dictionary) -> void:
 	_installs.erase(id)
 	_free_structure_node(id)
+	_keys[id] = key  # before the node: its child_entered_tree listeners read built_parts(id)
 	_add_node(id, parts)
-	_keys[id] = key
 	_note(id, key, parts)
 
 

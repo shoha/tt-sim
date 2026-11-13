@@ -33,7 +33,8 @@ extends RefCounted
 ##    decor false draws procgen's flat blobs, the fallback of a library without decor assets,
 ##    "dressing": StructureDressing.build's yard (soft ground patch, path, plants; not in digest_of
 ##    or the building's triangle budget), "problem": why nothing was built, or "", "warning": a soft
-##    budget note, or ""}
+##    budget note, or "", "manner": procgen's manner records (procgen docs/manner_data.md), only
+##    while `manner_records` is set; not in digest_of}
 ## Budgets (design.md "Triangle budgets"): over SOFT_TRIANGLES a structure builds and warns; over
 ## HARD_TRIANGLES it is refused (empty parts, `problem` says why).
 
@@ -70,6 +71,12 @@ const PLOT_KIND := "stone"
 ## True: masonry courses in the texture (a tenth of the triangles); false: modelled blocks. Applies
 ## to a recipe that declares a `textured` parameter the record does not set itself.
 static var textured := true
+## True while the painted look's hand-drawn manner is on (PainterBuildings.paint sets it,
+## release() clears it): build_one asks procgen for its manner records in the same evaluation
+## (about 9 ms a building on the worker, the mesh unchanged) and keeps them as parts "manner".
+## False, a Classic level pays nothing; a structure built then and painted later is evaluated
+## again by PainterMannerSource.
+static var manner_records := false
 
 ## The ground a structure asks about is WallGeometry.Ground (the document's heights at a map point).
 
@@ -144,14 +151,17 @@ static func build_one(
 		StructureOrnaments.soften(recipe)
 	parts.decor = decor
 	var evaluator := StructureProcgen.new_evaluator(recipe.registry)
-	var plant: Variant = evaluator.evaluate_structure(
-		recipe, inputs_for(doc, structure, recipe), true
-	)
+	var inputs := inputs_for(doc, structure, recipe)
+	var records := manner_records
+	inputs.manner = records
+	var plant: Variant = evaluator.evaluate_structure(recipe, inputs, true)
 	if plant == null or not evaluator.errors.is_empty():
 		var why := String(evaluator.errors[0]) if not evaluator.errors.is_empty() else "no result"
 		parts.problem = "recipe %s failed: %s" % [structure.recipe, why]
 		return _with_plot(parts, doc, structure)
 	var geometry: PlantGeometry = plant["lods"][0]
+	if records:
+		parts.manner = geometry.manner
 	var triangles := geometry.triangle_count()
 	parts.triangles = triangles
 	if triangles > HARD_TRIANGLES:
