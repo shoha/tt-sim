@@ -11,8 +11,11 @@ extends RefCounted
 ## `lit-lift` lighter, a little less chroma, its hue pulled toward `lit-hue` by `lit-pull`. Each
 ## role has two VARIANTS, `value-spread` darker and lighter and `hue-spread` degrees either side,
 ## which a surface mixes between by a slow world noise so a field of one role is never one flat
-## colour. The ground reads its own `ground-` depth, pull, lift and spreads. All numbers are the
-## sheet's (keyframed, so they follow the sun), none are here.
+## colour. A surface may read its own numbers under a prefix: the ground its `ground-` depth,
+## pulls, lift and spreads, grass and flowers their `grass-` lit pull and lift (a high sun keeps
+## a lawn green rather than lifting it to cream). A prefixed name the sheet's defaults do not
+## list falls back to the plain one. All numbers are the sheet's (keyframed, so they follow the
+## sun), none are here.
 
 ## OKLab chroma per unit of shade-pull (the spike's constant: its sheet was tuned against it).
 const PULL_CHROMA := 0.085
@@ -23,21 +26,25 @@ const LIT_MAX_L := 0.985
 
 
 ## [shade0, mid0, lit0, shade1, mid1, lit1] (sRGB Colors) of `role` in `mood` at `elevation`:
-## the dark-cool variant first. `ground` reads the ground's own ramp numbers.
+## the dark-cool variant first. `prefix` ("ground-", "grass-" or "") picks a surface's own ramp
+## numbers where the sheet defines them.
 static func ramp(
-	sheet: Dictionary, mood: String, role: String, elevation: float, ground: bool = false
+	sheet: Dictionary, mood: String, role: String, elevation: float, prefix: String = ""
 ) -> Array[Color]:
 	var base := PainterSheet.tone_lch(sheet, mood, role, elevation)
-	var pre := "ground-" if ground else ""
-	var hue_spread := PainterSheet.number(sheet, mood, pre + "hue-spread", elevation)
-	var value_spread := PainterSheet.number(sheet, mood, pre + "value-spread", elevation)
+	var num := func(name: String) -> float:
+		var own := prefix + name
+		var key := own if own in PainterSheet.DEFAULT_NUMBERS else name
+		return PainterSheet.number(sheet, mood, key, elevation)
+	var hue_spread: float = num.call("hue-spread")
+	var value_spread: float = num.call("value-spread")
 	var shape := {
-		"shade-hue": PainterSheet.number(sheet, mood, "shade-hue", elevation),
-		"shade-pull": PainterSheet.number(sheet, mood, pre + "shade-pull", elevation),
-		"shade-depth": PainterSheet.number(sheet, mood, pre + "shade-depth", elevation),
-		"lit-hue": PainterSheet.number(sheet, mood, "lit-hue", elevation),
-		"lit-pull": PainterSheet.number(sheet, mood, pre + "lit-pull", elevation),
-		"lit-lift": PainterSheet.number(sheet, mood, pre + "lit-lift", elevation),
+		"shade-hue": num.call("shade-hue"),
+		"shade-pull": num.call("shade-pull"),
+		"shade-depth": num.call("shade-depth"),
+		"lit-hue": num.call("lit-hue"),
+		"lit-pull": num.call("lit-pull"),
+		"lit-lift": num.call("lit-lift"),
 	}
 	var out: Array[Color] = []
 	for variant in 2:

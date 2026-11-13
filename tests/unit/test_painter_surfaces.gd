@@ -228,9 +228,11 @@ func test_the_tones_and_the_thinning_are_the_sheets() -> void:
 	assert_false(grass.get_shader_parameter(&"casts_shadow"), "ground cover casts none")
 	var boulder := _mesh_of(scatter, BOULDER).surface_get_material(0) as ShaderMaterial
 	assert_almost_eq(float(boulder.get_shader_parameter(&"keep")), 1.0, 1e-6, "rocks all stay")
-	var ramp := PainterTones.ramp(sheet, "summer", "grass", 45.0)
+	var ramp := PainterTones.ramp(sheet, "summer", "grass", 45.0, "grass-")
 	assert_eq(grass.get_shader_parameter(&"c_lit1"), PainterTones.linear(ramp[5]))
-	var ground_ramp := PainterTones.ramp(sheet, "summer", "ground", 45.0, true)
+	var plain := PainterTones.ramp(sheet, "summer", "grass", 45.0)
+	assert_ne(ramp[5], plain[5], "grass has its own lit step")
+	var ground_ramp := PainterTones.ramp(sheet, "summer", "ground", 45.0, "ground-")
 	var lit: PackedVector3Array = surfaces.ground_material().get_shader_parameter(&"g_lit")
 	assert_eq(lit[0], PainterTones.linear(ground_ramp[2]), "the meadow's lit tone")
 	surfaces.paint(_map, {"sheet": "core", "mood": "summer", "elevation": -8.0})

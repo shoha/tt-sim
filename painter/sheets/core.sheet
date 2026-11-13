@@ -19,7 +19,7 @@
    sheet's :world holds the summer day's; a mood's :world or a keyframe overrides it. */
 
 :world {
-  --meadow: oklch(0.72 0.135 131);
+  --meadow: oklch(0.70 0.150 138);
   --leaf: oklch(0.67 0.165 138);
   --bark: oklch(0.52 0.075 55);
   --stone: oklch(0.70 0.030 80);
@@ -40,6 +40,7 @@
   shade-hue: 285;  shade-pull: 0.9;  shade-depth: 0.66;
   lit-hue: 95;  lit-pull: 0.45;  lit-lift: 0.2;  hue-spread: 12;  value-spread: 0.035;
   ground-shade-pull: 0.9;  ground-shade-depth: 0.69;  ground-lit-pull: 0.45;  ground-lit-lift: 0.12;
+  grass-lit-pull: 0.45;  grass-lit-lift: 0.2;
   ground-hue-spread: 14;  ground-value-spread: 0.04;
 
   /* The plants: the N.L where the shade, middle and lit steps meet; grass kept at 60 % and
@@ -62,12 +63,14 @@
     sky: oklch(0.80 0.085 238);  horizon: oklch(0.93 0.040 215);
     ambient: oklch(0.90 0.045 222);  ambient-energy: 0.55;
     haze: oklch(0.91 0.030 228);
-    ground: var(--meadow);  leaf: var(--leaf);  bark: var(--bark);  stone: var(--stone);  path: var(--path);
+    leaf: var(--leaf);  bark: var(--bark);  stone: var(--stone);  path: var(--path);
     roof-clay: var(--terracotta);  roof-slate: oklch(0.50 0.040 255);  roof-shingle: oklch(0.50 0.060 45);
     roof-turf: oklch(0.58 0.100 135);  roof-thatch: var(--thatch);
-    /* A high sun keeps the meadow green: its lit ground stays near its own hue (round 1 of
-       painter-a1b read a 0.45 pull and 0.12 lift as a pale cream field). */
-    ground-lit-pull: 0.12;  ground-lit-lift: 0.05;
+    /* A high sun keeps the lawn a luminous mid green (the prototype's S18): the ground and the
+       grass on it stay near their own hue and lift little, so a cast shadow still parts from
+       them (painter-a1b read a 0.45 pull and a 0.12 to 0.2 lift as a pale cream field). */
+    ground: var(--meadow);  grass: oklch(0.64 0.150 140);
+    ground-lit-pull: 0.12;  ground-lit-lift: 0.05;  grass-lit-pull: 0.1;  grass-lit-lift: 0.06;
   }
   /* Golden hour. The sun goes gold, not red, and the shade stays a light blue-violet so walls
      facing away from it keep their own colour (the spike's cold front walls) and clay roofs do

@@ -432,7 +432,7 @@ func _tone_ground(sheet: Dictionary, mood: String, elevation: float) -> void:
 	var shade := PackedVector3Array()
 	for role: String in PainterGroundRoles.ROLES:
 		var ramp := PainterTones.ramp(
-			sheet, mood, PainterGroundRoles.TONE_ROLE[role], elevation, true
+			sheet, mood, PainterGroundRoles.TONE_ROLE[role], elevation, "ground-"
 		)
 		lit.append_array([PainterTones.linear(ramp[2]), PainterTones.linear(ramp[5])])
 		shade.append_array([PainterTones.linear(ramp[0]), PainterTones.linear(ramp[3])])
@@ -463,8 +463,9 @@ func _tone_ground(sheet: Dictionary, mood: String, elevation: float) -> void:
 static func _tone_plant(
 	material: ShaderMaterial, entry: Dictionary, sheet: Dictionary, mood: String, elevation: float
 ) -> void:
+	var low := int(entry["kind"]) in [PainterPlantRoles.KIND_GRASS, PainterPlantRoles.KIND_FLOWER]
 	var ramp := PainterTones.linear_ramp(
-		PainterTones.ramp(sheet, mood, str(entry["role"]), elevation)
+		PainterTones.ramp(sheet, mood, str(entry["role"]), elevation, "grass-" if low else "")
 	)
 	var names := [&"c_shade0", &"c_mid0", &"c_lit0", &"c_shade1", &"c_mid1", &"c_lit1"]
 	for i in names.size():

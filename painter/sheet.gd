@@ -87,6 +87,8 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"ground-shade-depth",
 	"ground-lit-pull",
 	"ground-lit-lift",
+	"grass-lit-pull",
+	"grass-lit-lift",
 	"ground-hue-spread",
 	"ground-value-spread",
 	"tone-lo",
