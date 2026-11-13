@@ -73,6 +73,9 @@
      gilds the lit side, toward the light's hue by crown-lit-pull), its shade a little less deep
      in a dark mood, and frost on its up side in winter (crown-deposit, the share it may take). */
   crown-lit-lift: 0;  crown-lit-chroma: 1;  crown-shade-lift: 0;  crown-deposit: 0;
+  /* A bush is the leaf a step deeper and quieter, on a crown's ramp, so it sits under the oaks
+     rather than glowing lime beside them (painter-trees-polish2). */
+  bush-value: 0.86;  bush-chroma: 0.74;
 
   /* The buildings (PainterBuildings; the spike's route A cottages, spike_built3): a cream lime
      wash, a pale warm stone, honey logs and boards, dark honey beams; the roofs are the five roof
@@ -210,9 +213,10 @@
     roof-clay: oklch(0.47 0.125 28);  roof-slate: oklch(0.41 0.050 290);  roof-shingle: oklch(0.41 0.060 20);
     roof-turf: oklch(0.46 0.085 125);  roof-thatch: oklch(0.55 0.090 58);
     floor: oklch(0.57 0.095 106);  grass: oklch(0.60 0.125 114);
-    /* The last sun lights a crown's edge apricot: most of the way to the sun's hue, lighter and
-       richer than the green under it (an olive lit side read as mustard). */
-    crown-lit-pull: 0.85;  crown-lit-lift: 0.16;  crown-lit-chroma: 1.25;
+    /* The last sun lights a crown's edge apricot to gold: well toward the sun's hue and lighter
+       than the green under it (an olive lit side read as mustard), but no richer (painter-trees-
+       polish2: at 0.85 pull and 1.25 chroma the crowns read as autumn, not sunset on summer). */
+    crown-lit-pull: 0.72;  crown-lit-lift: 0.12;  crown-lit-chroma: 0.95;
   }
   /* After sunset: a violet night, warmer than summer's. */
   @key night -8 {

@@ -162,6 +162,38 @@ static func bake(sheet: Dictionary, mood: String, elevation: float) -> Dictionar
 	return {"palette": palette, "params": params}
 
 
+## The six sRGB tones a painted bush paints with (PainterPlantRoles.KIND_CROWN; PainterTones.ramp's
+## order: shade, mid, lit of the dark variant, then of the light one). The sheet's leaf at
+## `bush-value` of its lightness and `bush-chroma` of its chroma (ratios, so a bush follows every
+## mood as the leaf does), on a crown's ramp: the world's shape moved as a species' is, with the
+## sheet's crown shade and lit numbers. So a bush sits under the crowns in their family and gilds,
+## frosts and darkens with them (painter-trees-polish2: the plain leaf ramp read as lime gumdrops).
+static func bush_ramp(sheet: Dictionary, mood: String, elevation: float) -> Array[Color]:
+	var world: Dictionary = data()["world"]
+	var leaf := PainterSheet.tone_lch(sheet, mood, "leaf", elevation)
+	var lch := Vector3(
+		leaf.x * PainterSheet.number(sheet, mood, "bush-value", elevation),
+		leaf.y * PainterSheet.number(sheet, mood, "bush-chroma", elevation),
+		leaf.z
+	)
+	var shape := _sheet_shade(
+		_moved_shape(_shape({}, world), sheet, mood, elevation), sheet, mood, elevation, "leaf"
+	)
+	var hue_spread := _num(world, "hue-spread", 8.0)
+	var value_spread := _num(world, "value-spread", 0.03)
+	var out: Array[Color] = []
+	for side: float in [-1.0, 1.0]:
+		var steps := PainterTones.steps(
+			Vector3(lch.x + side * value_spread, lch.y, lch.z + side * hue_spread), shape
+		)
+		var lit := steps[2]
+		lit.y *= float(shape["lit-chroma"])
+		steps[2] = lit
+		for s: Vector3 in steps:
+			out.append(PainterSheet.color_of_lch(s))
+	return out
+
+
 ## The deposit's style: the spike world's deposit colour and ramp.
 static func _deposit(world: Dictionary) -> Dictionary:
 	var out := world.duplicate()

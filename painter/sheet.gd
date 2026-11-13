@@ -86,8 +86,9 @@ const DEFAULT_ROLES: Array[String] = [
 ## and keep in place of the species' (crown-*, bark-*), how much less deep a stem's shade is than
 ## a role's (bark-shade-lift), a crown's lit step's extra lift and chroma factor and its shade's
 ## extra lift (crown-lit-lift, crown-lit-chroma, crown-shade-lift), the share of a crown's up side
-## the frost deposit takes (crown-deposit), and how far a sun's cast shadow steps a tree into its
-## cool tint (tree-cast).
+## the frost deposit takes (crown-deposit), the share of the leaf's lightness and chroma a bush
+## takes on the crowns' ramp (bush-value, bush-chroma), and how far a sun's cast shadow steps a
+## tree into its cool tint (tree-cast).
 ## The buildings' (PainterBuildings), all relative to the mood's ramp so one value
 ## serves every mood and sun: walls' shade hue turned from the mood's shade-hue (wall-shade-turn,
 ## degrees), their pull as a share of its shade-pull (wall-pull, stone walls and chimneys
@@ -139,6 +140,8 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"crown-lit-chroma",
 	"crown-shade-lift",
 	"crown-deposit",
+	"bush-value",
+	"bush-chroma",
 	"bark-shade-pull",
 	"bark-shade-keep",
 	"bark-shade-lift",

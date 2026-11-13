@@ -15,6 +15,12 @@ const KIND_MASS := 0
 const KIND_GRASS := 1
 const KIND_SOLID := 2
 const KIND_FLOWER := 3
+## A bush, shrub or hedge: a leaf mass painted in the crowns' hand (painter-trees-polish2): lobed
+## domes over a rounded form with a broken outline, toned by the trees' crown ramp (CROWN_TONES).
+const KIND_CROWN := 4
+## The script whose bush_ramp() tones a KIND_CROWN plant (loaded by path, as PainterSurfaces loads
+## the painted trees, so a Classic start-up never compiles the trees' code).
+const CROWN_TONES := "res://painter/trees/tree_tones.gd"
 ## [kind, sheet role, words], first match wins (substrings of the asset id, lower case).
 const RULES: Array = [
 	[
@@ -43,9 +49,10 @@ const RULES: Array = [
 		"bark",
 		["log", "stump", "branch", "deadwood", "stick", "twig", "mushroom", "root", "snag"]
 	],
-	[KIND_MASS, "leaf", ["fern", "bracken", "ivy", "moss", "bush", "shrub", "hedge"]],
+	[KIND_CROWN, "leaf", ["bush", "shrub", "hedge"]],
+	[KIND_MASS, "leaf", ["fern", "bracken", "ivy", "moss"]],
 ]
-## Words of a tree-category asset that is a leaf mass the plant shader paints, not a tree
+## Words of a tree-category asset that is a bush the plant shader paints, not a tree
 ## (painter-trees-polish: the core forest's bushes sway as trees, stayed Classic and read summer
 ## green in winter and black in grimdark).
 const TREE_MASS_WORDS: Array[String] = ["bush", "shrub", "hedge"]
@@ -58,7 +65,7 @@ static func of(asset_id: String, wind_category: String, flower: bool = false) ->
 	if wind_category == "tree":
 		for word in TREE_MASS_WORDS:
 			if asset_id.to_lower().contains(word):
-				return _entry(KIND_MASS, "leaf")
+				return _entry(KIND_CROWN, "leaf")
 		return {}
 	if flower:
 		return _entry(KIND_FLOWER, "grass")
