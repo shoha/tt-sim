@@ -890,12 +890,73 @@ const float TREE_BRUSH_BAND = 1.2;
 const float TREE_CUT_INNER = 0.6;
 const float TREE_CUT_BARK = 1.5;
 const float TREE_CUT_BEHIND = 0.5;
+// The token window (painter-a2a4): a round zone clears fully inside TREE_TOKEN_CORE of its radius
+// and closes by the radius (a token's top sits near 0.9 of it at the orbit view's pitch; the
+// zone may not reach past the radius, the screen tiles are binned by it).
+const float TREE_TOKEN_CORE = 0.75;
+// A stem stroke's key in the token window (its canopy key is -1, kept): it goes at the band's middle.
+const float TREE_TOKEN_STEM_KEY = 0.5;
+
+// How far one token clears a tree fragment, 0 (none) to 1 (gone): the plants' zone and test
+// (occlusion_token_alpha: a round zone by the footprint, an avatar figure's upright ellipse) with
+// a cleared core in place of their min_alpha dither.
+float tree_token_cover(vec4 token_data, vec3 vertex_view, mat4 view_matrix, mat4 projection_matrix) {
+	float radius = abs(token_data.w);
+	if (radius <= 0.0) {
+		return 0.0;
+	}
+	vec3 token_view = (view_matrix * vec4(token_data.xyz, 1.0)).xyz;
+	// Up to a radius behind the token's centre too: a crown mass just behind a token's top showed
+	// as a dark piece over its head (the plants test only in front of the centre).
+	if (vertex_view.z <= token_view.z - radius) {
+		return 0.0;
+	}
+	vec2 fragment_xy = vertex_view.xy;
+	if (projection_matrix[3][3] < 0.5 && vertex_view.z < -0.0001) {
+		fragment_xy *= token_view.z / vertex_view.z;
+	}
+	vec2 offset = fragment_xy - token_view.xy;
+	if (token_data.w < 0.0) {
+		return 1.0 - smoothstep(FIGURE_CORE, 1.0, length(offset / vec2(radius * FIGURE_WIDTH, radius)));
+	}
+	return 1.0 - smoothstep(TREE_TOKEN_CORE, 1.0, length(offset) / radius);
+}
+
+// The most any token clears this fragment (OcclusionFadeManager's tokens, its screen tiles in the
+// camera's pass), 0 when the occlusion fade is off.
+float tree_token_fade(vec3 vertex_view, mat4 view_matrix, mat4 projection_matrix, vec2 frag_coord,
+		vec2 viewport_size) {
+	if (!enable_occlusion || occlusion_token_count <= 0) {
+		return 0.0;
+	}
+	float cover = 0.0;
+	if (occlusion_tiles_match(view_matrix, projection_matrix)) {
+		ivec2 grid = ivec2(occlusion_tile_grid.xy);
+		ivec2 tile = clamp(ivec2(frag_coord / viewport_size * vec2(grid)), ivec2(0), grid - 1);
+		vec4 header = texelFetch(occlusion_tokens,
+			occlusion_texel(int(occlusion_tile_grid.z) + tile.y * grid.x + tile.x), 0);
+		int first = int(header.x);
+		int end = first + int(header.y);
+		for (int i = first; i < end; i++) {
+			cover = max(cover, tree_token_cover(texelFetch(occlusion_tokens, occlusion_texel(i), 0),
+				vertex_view, view_matrix, projection_matrix));
+		}
+	} else {
+		for (int i = 0; i < occlusion_token_count; i++) {
+			cover = max(cover, tree_token_cover(texelFetch(occlusion_tokens, ivec2(i, 0), 0),
+				vertex_view, view_matrix, projection_matrix));
+		}
+	}
+	return cover;
+}
 
 // The canopy fades (the view-centre window, a map brush's window, the Village tool's cut) and
-// the token occlusion fade of one tree fragment; fragment() passes its built-ins in (a plain
-// function does not see them). `key` (0..1) is constant over a whole stroke or a whole mass, so
-// a crown opens in bold pieces rather than a stipple; a `trunk` stays through every fade but the
-// cut. Only the camera's pass fades: the sun's pass keeps the whole crown's shadow.
+// the token window of one tree fragment; fragment() passes its built-ins in (a plain function
+// does not see them). `key` (0..1) is constant over a whole stroke or a whole mass, so a crown
+// opens in bold pieces rather than a stipple; a `trunk` stays through every fade but the cut and
+// the token window. Only the camera's pass fades: the sun's pass keeps the whole crown's shadow.
+// The token window clears by the same key (painter-a2a4: the plants' min_alpha dither left a dot
+// screen and dark pieces over a token under a painted crown), a stem's strokes at the band's middle.
 void tree_fades(vec3 vertex_view, mat4 inv_view_matrix, mat4 view_matrix, mat4 projection_matrix,
 		vec2 frag_coord, vec2 viewport_size, float key, bool trunk) {
 	vec3 back = canopy_fade_view.xyz;
@@ -931,8 +992,11 @@ void tree_fades(vec3 vertex_view, mat4 inv_view_matrix, mat4 view_matrix, mat4 p
 	if (fade > 0.0 && key < fade) {
 		discard;
 	}
-	// (A zero normal: a crown's top is never a floor, so every part of a tree may fade.)
-	apply_occlusion_fade(vec3(0.0), vertex_view, view_matrix, projection_matrix, frag_coord, viewport_size);
+	// (Every part of a tree may clear: a crown's top is never a floor.)
+	float token = tree_token_fade(vertex_view, view_matrix, projection_matrix, frag_coord, viewport_size);
+	if (token > 0.0 && (key < 0.0 ? TREE_TOKEN_STEM_KEY : key) < token) {
+		discard;
+	}
 }
 
 // The sun's cast shadow on a tree as a tone step (light() of both passes): 0 lit .. 1 shaded,

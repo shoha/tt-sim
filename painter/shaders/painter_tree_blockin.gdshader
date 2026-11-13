@@ -126,7 +126,8 @@ varying flat float v_row;
 varying flat float v_moss;
 // (Round 12: the role's rows 2 and 3 are fetched in the fragment stage; the varyings ran out.)
 // tt-sim: this shader is at the real renderer's 32-varying limit (the headless dummy renderer
-// does not check it), so the canopy fade's key is the screen dither, not a varying.
+// does not check it), so the canopy fade's key is a world noise and a fine screen dither, not a
+// varying.
 
 void vertex() {
 	int trow = int(INSTANCE_CUSTOM.x + 0.5);
@@ -791,9 +792,10 @@ void fragment() {
 	ROUGHNESS = 1.0;
 	if (!g_sun) {
 		// The crown masses dissolve in bold world-space pieces (a slow noise, about half a metre),
-		// the screen dither only softening each piece's rim: the plain dither read as a halftone
-		// grain over a token at a close zoom (painter-a2a3). The wood stays to ground the tree.
-		float key = clamp(0.75 * p_noise(v_wp * 1.6 + 7.0) + 0.25 * bayer16(FRAGCOORD.xy / world_px_cell()), 0.0, 1.0);
+		// a fine screen dither only softening each piece's rim: the plain dither read as a halftone
+		// grain over a token at a close zoom (painter-a2a3), a quarter share still dotted every
+		// rim (painter-a2a4). The wood stays through the canopy fades to ground the tree.
+		float key = clamp(0.9 * p_noise(v_wp * 1.6 + 7.0) + 0.1 * bayer16(FRAGCOORD.xy / world_px_cell()), 0.0, 1.0);
 		tree_fades(VERTEX, INV_VIEW_MATRIX, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy,
 			VIEWPORT_SIZE, key, kind10 > 0.5);
 	}
