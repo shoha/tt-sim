@@ -131,7 +131,7 @@ func test_an_installed_candidate_is_put_back_exactly() -> void:
 	var buildings := PainterBuildings.new()
 	var host := PainterMannerHost.new(buildings)
 	var job := {"node": structure.get_instance_id(), "generation": 0, "key": -1, "mode": "b"}
-	host._install({"job": job, "parts": {"roof_thatch": _build()}, "eval_ms": 0.0, "image": null})
+	host._install({"job": job, "parts": {"roof_thatch": _build()}, "eval_ms": 0.0})
 	assert_ne(mi.mesh, mesh, "the wandered shadow mesh is in")
 	assert_eq(mi.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
 	assert_eq(mi.get_child_count(), 1, "the drawn mesh is a child")

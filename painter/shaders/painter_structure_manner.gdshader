@@ -2,23 +2,17 @@ shader_type spatial;
 render_mode cull_back, specular_disabled, ambient_light_disabled;
 
 /*
- * Painted structure with procgen's manner data (PROBE, card painter-manner)
- * ======================================================================
+ * Painted structure with procgen's manner data (card painter-manner's choice B)
+ * ===========================================================================
  *
  * painter_structure.gdshader (A3b) with the strokes laid along each piece's own frame instead of
  * along the world. PainterMannerMesh writes per vertex the piece's (u, v) metres (UV2) and
  * [u_len, v_len, code, accent] (CUSTOM0; code 1 wall, 2 roof slope, 3 gable end, 4 beam or trim
- * box, 5 door leaf, 6 ridge, 7 thatch tooth, 0 no record: the A3b patterns). `mode`:
- *   0  a plain wash (patches, dabs, eave band, foot): candidate A's surface under its strokes;
- *   1  candidate B: the prototype's stroke families drawn here, from the piece frame: a ruled
- *      line just inside each face edge (eave dark, ridge pale), dry-brush washes along a plaster
- *      wall, short marks in courses on stone, strokes down a thatch slope with course lines,
- *      dashes across tiles, a broad stroke with a light and a dark line along a beam, planks on
- *      a door leaf, strands on a thatch tooth;
- *   2  candidate C: as 1, but a face's strokes come from the building's baked texture (`atlas`,
- *      UV); edges, beams and doors stay procedural;
- *   3  candidate A's stroke quads: UV along and across the stroke, UV2 (value / 2, grain); a
- *      brush edge by discard, the value darkens or lightens the part's own colour.
+ * box, 5 door leaf, 6 ridge, 7 thatch tooth, 0 no record: the A3b patterns). The prototype's
+ * stroke families are drawn here, from the piece frame: a ruled line just inside each face edge
+ * (eave dark, ridge pale), dry-brush washes along a plaster wall, short marks in courses on
+ * stone, strokes down a thatch slope with course lines, dashes across tiles, a broad stroke with
+ * a light and a dark line along a beam, planks on a door leaf, strands on a thatch tooth.
  * Light, tones and the uniforms the sheet sets are the A3b shader's (PainterBuildings._tone).
  * Marks fade out where a metre is under about twelve pixels (far views draw only the wash).
  *
@@ -43,11 +37,6 @@ uniform float ink = 0.55;
 uniform float contact = 0.4;
 uniform float contact_m = 0.8;
 uniform float eave = 0.35;
-uniform int mode = 1;
-uniform sampler2D atlas : hint_default_black, filter_linear_mipmap;
-// How strongly the manner's strokes darken and lighten.
-uniform float stroke_dark = 1.0;
-uniform float stroke_light = 1.0;
 
 varying vec3 v_wp;
 varying vec3 v_wn;
@@ -55,7 +44,6 @@ varying float v_h;
 varying flat int v_tone;
 varying vec2 v_fuv;
 varying vec4 v_rec;
-varying vec2 v_auv;
 
 varying vec3 f_n;
 varying vec3 f_shd;
@@ -93,8 +81,7 @@ void vertex() {
 	v_h = COLOR.a;
 	v_tone = pick > 0 ? roof_tone(COLOR.rgb, pick == 2) : 0;
 	v_fuv = UV2;
-	v_rec = mode == 3 ? vec4(0.0) : CUSTOM0;
-	v_auv = UV;
+	v_rec = CUSTOM0;
 }
 
 float p_line(float x, float w) {
@@ -147,9 +134,7 @@ void fragment() {
 	vec2 down = flat_len > 0.02 ? flat_n / flat_len : vec2(0.0, 1.0);
 	vec2 across = vec2(-down.y, down.x);
 	float up = n.y;
-	float s = dot(wp.xz, down) / max(up, 0.35);
-	float t = dot(wp.xz, across);
-	float u = t;
+	float u = dot(wp.xz, across);
 	float h = clamp(v_h, 0.0, 1.0);
 	int code = int(v_rec.z + 0.5);
 	vec2 f = v_fuv;
@@ -157,24 +142,7 @@ void fragment() {
 	float vl = v_rec.y;
 	float acc = v_rec.w;
 	float detail = 1.0 - smoothstep(0.04, 0.09, length(fwidth(f)));
-	if (mode == 3) {
-		// A stroke quad: tapered ends, a soft side, dry gaps; its value moves the part's colour.
-		float along = min(v_auv.x, 1.0 - v_auv.x);
-		float grain = f.y;
-		float edge = p_noise(vec3(v_auv * vec2(6.0, 2.0), grain * 40.0));
-		float mask = smoothstep(0.0, 0.1, along + (edge - 0.5) * 0.08);
-		mask *= 1.0 - smoothstep(0.32, 0.5, abs(v_auv.y - 0.5) + (edge - 0.5) * 0.2);
-		mask *= mix(0.3, 1.0, smoothstep(0.2, 0.4, p_noise(vec3(v_auv.x * 9.0, v_auv.y * 2.0, grain * 13.0))));
-		if (mask < 0.5) {
-			discard;
-		}
-		float value = f.x * 2.0;
-		dark += max(1.0 - value, 0.0) * 2.2 * stroke_dark;
-		light += max(value - 1.0, 0.0) * 3.0 * stroke_light;
-		if (pattern >= 5) {
-			dark += eave * (1.0 - smoothstep(0.0, 0.16, h));
-		}
-	} else if (code > 0) {
+	if (code > 0) {
 		bool face = code == 1 || code == 3;
 		bool roof = code == 2;
 		if (roof) {
@@ -185,7 +153,7 @@ void fragment() {
 			float hm = h * 16.0;
 			dark += contact * (1.0 - smoothstep(0.0, contact_m, hm));
 		}
-		if (mode > 0 && (face || roof)) {
+		if (face || roof) {
 			// The ruled line just inside each edge, wobbling and broken.
 			float wob = (p_noise(vec3(f * 1.4, acc * 9.0)) - 0.5) * 0.06;
 			float dx = min(f.x, ul - f.x);
@@ -203,11 +171,7 @@ void fragment() {
 				dark += line * (0.55 + 0.2 * at_high) * detail;
 			}
 		}
-		if (mode == 2 && (face || roof)) {
-			vec4 baked = texture(atlas, v_auv);
-			dark += baked.r * 1.5 * stroke_dark;
-			light += baked.g * 1.8 * stroke_light;
-		} else if (mode == 1 && face) {
+		if (face) {
 			if (pattern == 1) {
 				vec2 m = p_strokes(f, 0.3, 0.48, 0.5, 0.6, 0.7, 11.0);
 				dark += m.x * 0.5 * detail;
@@ -221,7 +185,7 @@ void fragment() {
 				dark += m.x * 0.42 * detail;
 				light += m.y * 0.42 * detail;
 			}
-		} else if (mode == 1 && roof) {
+		} else if (roof) {
 			if (pattern == 8) {
 				vec2 m = p_strokes(f.yx, 0.075, 0.8, 0.5, 0.7, 0.45, 5.0);
 				dark += m.x * 0.45 * detail;
@@ -242,13 +206,13 @@ void fragment() {
 				light += m.y * 0.45 * detail;
 			}
 		}
-		if (mode > 0 && (code == 4 || code == 6)) {
+		if (code == 4 || code == 6) {
 			// A beam: one broad stroke, a light line and a dark line along it.
 			float across_b = vl > 0.0 ? f.y / vl : 0.5;
 			light += p_band(across_b, 0.7, 0.22) * 0.55 * smoothstep(0.1, 0.3, p_noise(vec3(f.x * 1.5, acc * 7.0, 1.0)));
 			dark += p_band(across_b, 0.28, 0.2) * 0.4;
 			variant = clamp(variant + (acc - 0.5) * 0.6, 0.0, 1.0);
-		} else if (mode > 0 && code == 5) {
+		} else if (code == 5) {
 			dark += p_line(f.y / 0.16, 0.12) * 0.6;
 			light += smoothstep(0.55, 0.8, p_noise(vec3(f.x * 3.0, f.y * 20.0, 2.0))) * 0.25;
 		} else if (code == 7) {
@@ -264,7 +228,7 @@ void fragment() {
 		} else {
 			float hm = h * 16.0;
 			dark += contact * (1.0 - smoothstep(0.0, contact_m, hm)) * (1.0 - smoothstep(0.6, 0.9, abs(up)));
-			if (pattern == 1 && mode > 0) {
+			if (pattern == 1) {
 				float r = wp.y / 0.34;
 				float row = floor(r);
 				float c = u / 0.62 + 0.5 * mod(row, 2.0) + p_hash(vec3(row, 3.0, 1.0)) * 0.3;
@@ -274,9 +238,7 @@ void fragment() {
 			}
 		}
 	}
-	if (mode != 3) {
-		dark += smoothstep(0.2, 0.6, length(fwidth(NORMAL))) * ink;
-	}
+	dark += smoothstep(0.2, 0.6, length(fwidth(NORMAL))) * ink;
 	dark = clamp(dark * marks, 0.0, 0.85);
 	light = clamp(light * marks, 0.0, 0.8);
 	int base = v_tone * 6;

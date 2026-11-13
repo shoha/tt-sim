@@ -79,9 +79,9 @@ const KINDS: Dictionary = {
 	"door_wood": ["timber", P_TIMBER, "timber", 0],
 }
 
-## PROBE (card painter-manner): "" draws the A3b look (the default; nothing below changes);
-## "a", "b" or "c" puts that manner candidate on the painted buildings (PainterMannerHost). Read
-## when a structure is dressed: change it, then release() and paint() again.
+## "" draws the A3b look (the default; nothing below changes); "b" puts the hand-drawn manner on
+## the painted buildings (PainterMannerHost). Read when a structure is dressed: change it, then
+## release() and paint() again.
 static var manner_mode := ""
 
 ## What is drawn now: {"sheet", "mood", "elevation"}, {} while nothing is painted.

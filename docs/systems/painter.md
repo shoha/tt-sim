@@ -345,7 +345,9 @@ spike's route A: broad coloured masses, a few accents, shadow-lit by the sheet's
   evaluation (about 55 ms, gone if build_one kept the records); install on the main thread about
   1 ms (B) to 2.7 ms (C, max); about 0.3 MB a building (B), 0.6 (A), 1.2 (C, the texture). Numbers,
   captures and the recommendation: `docs/plans/handoffs/painter-a1.md` "Manner probe"; frames
-  under `docs/research/2026-11-09-prototypes/compare/painter_manner/`.
+  under `docs/research/2026-11-09-prototypes/compare/painter_manner/`. The owner chose B
+  (2026-11-13); A and C (`PainterMannerStrokes`, `PainterMannerBake`, shader modes 0, 2 and 3)
+  were deleted (card painter-manner-b), so `manner_mode` takes "" or "b".
 
 ## The painted state signal
 

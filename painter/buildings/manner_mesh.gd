@@ -1,9 +1,9 @@
 class_name PainterMannerMesh
 extends RefCounted
 
-## PROBE (card painter-manner, behind PainterBuildings.manner_mode, default off; delete with the
-## probe if it is not chosen): a built structure's recipe mesh redrawn with procgen's manner data
-## (procgen docs/manner_data.md) for a stroke pass that costs about what the recipe costs.
+## The hand-drawn manner's mesh (card painter-manner's choice B, PainterMannerHost): a built
+## structure's recipe mesh redrawn with procgen's manner data (procgen docs/manner_data.md) for a
+## stroke pass that costs about what the recipe costs.
 ##
 ## The model. A structure's meshes are in the map frame and every vertex carries the tag of the
 ## piece that made it (AuthoredStructures.TAGS_META); the manner records give each piece a frame
@@ -114,8 +114,8 @@ static func records_of(
 
 ## The draw, shadow and fringe arrays of one mesh (see the header). `arrays` a surface's arrays
 ## (map frame), `tags` its per-vertex tags, `table` the structure's tag table, `records` path ->
-## record. `opts`: the field ({"amp", "phase", "foot", "eave"}, wander_at) and "cut", "fringe",
-## "atlas" (PainterMannerBake packing, candidate C). Returns {"draw", "shadow",
+## record. `opts`: the field ({"amp", "phase", "foot", "eave"}, wander_at) and "cut", "fringe".
+## Returns {"draw", "shadow",
 ## "triangles": [source, draw, shadow]}. Pure.
 static func build(
 	arrays: Array,
@@ -167,34 +167,11 @@ static func build(
 	draw[Mesh.ARRAY_TEX_UV2] = m.uv2
 	draw[Mesh.ARRAY_CUSTOM0] = m.cus
 	draw[Mesh.ARRAY_INDEX] = cut_idx
-	if opts.has("atlas"):
-		draw[Mesh.ARRAY_TEX_UV] = atlas_uv(m.uv2, m.ids, opts["atlas"])
 	return {
 		"draw": draw,
 		"shadow": shadow,
 		"triangles": [index.size() / 3, cut_idx.size() / 3, index.size() / 3]
 	}
-
-
-## Per vertex, where the piece's (u, v) metres `uv2` fall in the baked texture (PainterMannerBake
-## `packing`: {"size", "rects"}); a vertex of no baked piece reads the blank corner. Pure.
-static func atlas_uv(
-	uv2: PackedVector2Array, ids: PackedStringArray, packing: Dictionary
-) -> PackedVector2Array:
-	var size := Vector2(packing["size"])
-	var rects: Dictionary = packing["rects"]
-	var out := PackedVector2Array()
-	out.resize(uv2.size())
-	for k in uv2.size():
-		var rect: Variant = rects.get(ids[k])
-		if rect == null:
-			out[k] = Vector2(0.5, 0.5) / size
-			continue
-		var r: Rect2i = rect
-		var px := Vector2(r.position) + uv2[k] * PainterMannerBake.PX_M
-		px = px.clamp(Vector2(r.position), Vector2(r.end))
-		out[k] = px / size
-	return out
 
 
 ## A mesh's arrays as they grow (the cut's midpoints and the fringe's teeth are appended).
@@ -204,13 +181,11 @@ class Grow:
 	var col := PackedColorArray()
 	var uv2 := PackedVector2Array()
 	var cus := PackedFloat32Array()
-	var ids := PackedStringArray()
 
 	func add(p: Vector3, n: Vector3, c: Color, rec: Variant) -> int:
 		pos.append(p)
 		nor.append(n)
 		col.append(c)
-		ids.append("" if rec == null else str(rec["id"]))
 		if rec == null:
 			uv2.append(Vector2.ZERO)
 			cus.append_array(PackedFloat32Array([0.0, 0.0, 0.0, 0.5]))
@@ -243,7 +218,6 @@ class Grow:
 		col.append(col[a].lerp(col[b], 0.5))
 		uv2.append((uv2[a] + uv2[b]) * 0.5)
 		cus.append_array(cus.slice(a * 4, a * 4 + 4))
-		ids.append(ids[a])
 		mids[key] = pos.size() - 1
 		return pos.size() - 1
 
