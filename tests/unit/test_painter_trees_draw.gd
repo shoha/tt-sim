@@ -215,6 +215,86 @@ func test_the_foliage_aa_swap_never_reaches_a_tree_material() -> void:
 	surfaces.release()
 
 
+## A table as the playing state makes one: a GameMap (never in the tree, no scene) whose map
+## container holds a LevelMap with one scatter of two oaks.
+func _table() -> Dictionary:
+	var table: GameMap = GameMap.new()
+	var container := Node3D.new()
+	add_child(container)
+	table.map_container = container
+	var map := Node3D.new()
+	map.name = "LevelMap"
+	container.add_child(map)
+	var scatter := AuthoredScatter.create()
+	scatter.budget = 1_000_000_000
+	scatter.grow_seconds = 0.0
+	map.add_child(scatter)
+	scatter.set_cells({Vector2i(0, 0): {OAK: _rows([Vector2(1, 1), Vector2(2, 1)])}})
+	return {"table": table, "container": container, "map": map, "glb": _glb_trees(scatter)}
+
+
+## painter-trees-fix: the second level of a process came out with no painted tree (a render job
+## built a village, then a forest, both Painted). LevelEnvironmentManager lives on while every
+## entry into play makes a new GameMap, and its PainterSurfaces still followed the first table's
+## freed map container, so the second map was never painted. Both ways a second level comes: a
+## new table (title, then play) and the same table with a new LevelMap (a level loaded in play).
+func test_a_second_level_in_one_process_gets_its_painted_trees() -> void:
+	var choice := RenderStyle.choice
+	RenderStyle.choice = RenderStyle.CHOICE_PAINTED
+	for same_table: bool in [false, true]:
+		var manager := LevelEnvironmentManager.new()
+		var first := _table()
+		manager.setup(first["table"])
+		manager.set_look({"style": RenderStyle.PAINTED, "mood": "summer"})
+		var surfaces := manager.get("_surfaces") as PainterSurfaces
+		var trees := _painted(surfaces)
+		assert_eq(trees.trees.size(), 2, "the first level painted (same table %s)" % same_table)
+		manager.clear()
+		for node: Node3D in first["glb"]:
+			assert_true(node.visible, "the first level's GLB oaks shown again on unload")
+		var second := first
+		if same_table:
+			(first["map"] as Node).queue_free()
+			await wait_process_frames(1)
+			var map := Node3D.new()
+			map.name = "LevelMap"
+			(first["container"] as Node).add_child(map)
+			var scatter := AuthoredScatter.create()
+			scatter.budget = 1_000_000_000
+			scatter.grow_seconds = 0.0
+			map.add_child(scatter)
+			scatter.set_cells({Vector2i(0, 0): {OAK: _rows([Vector2(4, 4), Vector2(6, 2)])}})
+			second = {"map": map, "glb": _glb_trees(scatter)}
+		else:
+			(first["container"] as Node).free()
+			(first["table"] as Node).free()
+			second = _table()
+			manager.setup(second["table"])
+		manager.set_look({"style": RenderStyle.PAINTED, "mood": "summer"})
+		trees = _painted(surfaces)
+		assert_eq(manager.get("_surfaces"), surfaces, "one surfaces host for the process")
+		assert_eq(trees.trees.size(), 2, "the second level painted (same table %s)" % same_table)
+		assert_true(surfaces.is_active(), "the second level's ground and scatter painted")
+		for node: Node3D in second["glb"]:
+			assert_false(node.visible, "the second level's GLB oaks hidden")
+		RenderStyle.choice = RenderStyle.CHOICE_CLASSIC
+		manager.apply_render_style()
+		assert_eq(trees.trees.size(), 0, "leaving Painted frees the second level's trees")
+		for node: Node3D in second["glb"]:
+			assert_true(node.visible, "the second level's GLB oaks shown again")
+		RenderStyle.choice = RenderStyle.CHOICE_PAINTED
+		manager.clear()
+		var container: Node = (
+			second["container"] if second.has("container") else first["container"]
+		)
+		container.free()
+		if second.has("table"):
+			(second["table"] as Node).free()
+		elif is_instance_valid(first["table"]):
+			(first["table"] as Node).free()
+	RenderStyle.choice = choice
+
+
 func test_the_tones_keep_each_species_and_follow_the_sheet() -> void:
 	var sheet := PainterSheet.load_sheet("core")
 	var baked := PainterTreeTones.bake(sheet, "summer", 60.0)

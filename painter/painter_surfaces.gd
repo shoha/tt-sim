@@ -79,8 +79,11 @@ var _trees: RefCounted = null
 var _buildings: RefCounted = null
 
 
-## Follows `manager`'s painted_look_changed for the map under `map_container`.
+## Follows `manager`'s painted_look_changed for the map under `map_container`; called again with
+## each new table's container (a map painted under another container is released first).
 func attach(manager: Object, map_container: Node3D) -> void:
+	if map_container != _container and _map != null:
+		release()
 	_container = map_container
 	if not manager.is_connected(SIGNAL, _on_look_changed):
 		manager.connect(SIGNAL, _on_look_changed)
