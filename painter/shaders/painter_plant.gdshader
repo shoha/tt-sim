@@ -44,6 +44,15 @@ void vertex() {
 }
 
 void fragment() {
+	if (kind == 4) {
+		// A bush's outline breaks between its lobes (painter_selector's bush_cut), in the sun's pass
+		// too, so its shadow's edge is as round as its outline.
+		vec3 eye = PROJECTION_MATRIX[3][3] == 0.0 ? normalize(INV_VIEW_MATRIX[3].xyz - v_wp)
+			: normalize(INV_VIEW_MATRIX[2].xyz);
+		if (bush_cut(v_wp, v_o, v_scale, eye)) {
+			discard;
+		}
+	}
 	NORMAL = two_sided_foliage_normal(NORMAL, FRONT_FACING);
 	vec3 pbr_albedo;
 	float pbr_alpha;

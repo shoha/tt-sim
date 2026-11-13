@@ -30,8 +30,8 @@ const LIT_MAX_L := 0.985
 
 
 ## [shade0, mid0, lit0, shade1, mid1, lit1] (sRGB Colors) of `role` in `mood` at `elevation`:
-## the dark-cool variant first. `prefix` ("ground-", "grass-" or "") picks a surface's own ramp
-## numbers where the sheet defines them.
+## the dark-cool variant first. `prefix` ("ground-", "grass-", "bark-" or "") picks a surface's
+## own ramp numbers where the sheet defines them.
 static func ramp(
 	sheet: Dictionary, mood: String, role: String, elevation: float, prefix: String = ""
 ) -> Array[Color]:

@@ -119,6 +119,21 @@ func test_every_ground_role_paints_a_sheet_role() -> void:
 
 func test_plants_take_a_kind_and_trees_stay_classic() -> void:
 	assert_eq(PainterPlantRoles.of(OAK, "tree"), {})
+	# A bush sways as a tree but is a leaf mass the plant shader paints (one season in winter), in
+	# the crowns' hand and tones.
+	var bush := PainterPlantRoles.of(BIOME + "/Bush_BerryBush_v0_temperate_forest", "tree")
+	assert_eq(bush["kind"], PainterPlantRoles.KIND_CROWN)
+	assert_eq(bush["role"], "leaf")
+	assert_eq(PainterPlantRoles.of("x/Shrub_Box", "grass")["kind"], PainterPlantRoles.KIND_CROWN)
+	assert_eq(PainterPlantRoles.of("x/Fern_Lady", "grass")["kind"], PainterPlantRoles.KIND_MASS)
+	var ramp: Array = (load(PainterPlantRoles.CROWN_TONES) as GDScript).call(
+		"bush_ramp", PainterSheet.load_sheet("core"), "summer", 60.0
+	)
+	assert_eq(ramp.size(), 6, "a bush's ramp: shade, mid and lit of two variants")
+	var leaf := PainterSheet.tone_lch(PainterSheet.load_sheet("core"), "summer", "leaf", 60.0)
+	var mid := PainterSheet.lch_of_color(ramp[1])
+	assert_lt(mid.x, leaf.x, "a bush is deeper than the sheet's leaf")
+	assert_lt(mid.y, leaf.y, "and less saturated")
 	assert_eq(PainterPlantRoles.of(GRASS, "grass")["kind"], PainterPlantRoles.KIND_GRASS)
 	assert_eq(PainterPlantRoles.of(BOULDER, "")["role"], "stone")
 	assert_true(PainterPlantRoles.of("x/Clump_Sprig", "grass", true)["ground_cover"], "a flower")
