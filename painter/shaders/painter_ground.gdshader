@@ -47,6 +47,9 @@ uniform float mark_thin = 0.25;
 uniform vec2 mark_px = vec2(0.06, 0.16);
 // The cast shadow step's wiggle (attenuation units) by the brush streak.
 uniform float cut_amp = 0.0;
+// The sun height (sine of its elevation, 20 degrees) under which the turned-from-the-sun step
+// shrinks with it (light()).
+const float TURN_SUN_FULL = 0.34;
 uniform vec2 stroke_dir = vec2(1.0, 0.0);
 uniform sampler2DArray brushes : filter_linear_mipmap, repeat_disable;
 uniform bool brushes_present = false;
@@ -292,8 +295,12 @@ void light() {
 		vec3 lw = normalize((INV_VIEW_MATRIX * vec4(LIGHT, 0.0)).xyz);
 		// One flat shade colour behind a firm edge: the step sits in the middle of the penumbra.
 		float cast = 1.0 - smoothstep(0.44 + f_cut, 0.56 + f_cut, ATTENUATION);
-		// Ground turned from the sun takes its shade too (a steep bank's far side).
-		float turned = 1.0 - smoothstep(0.02, 0.1, dot(normalize(f_n), lw) + (f_edge - 0.5) * 0.1);
+		// Ground turned from the sun takes its shade too (a steep bank's far side). The step and
+		// its wiggle shrink with the sun's height under TURN_SUN_FULL (painter-a2a4): at a 3 degree
+		// sun flat ground's N.L (0.05) sat inside them, and the wiggle alone striped a level
+		// meadow lit and shade; now only a bank turned past the grazing sun goes into shade.
+		float turn_k = clamp(lw.y / TURN_SUN_FULL, 0.05, 1.0);
+		float turned = 1.0 - smoothstep(0.02 * turn_k, 0.1 * turn_k, dot(normalize(f_n), lw) + (f_edge - 0.5) * 0.1 * turn_k);
 		DIFFUSE_LIGHT += mix(f_lit, f_shd, max(cast, turned));
 	}
 }
