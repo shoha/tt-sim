@@ -85,6 +85,8 @@ const float BUSH_TILT = 1.1;
 // How far round from the outline the lobes break it: |N.eye| under this between two lobes is not
 // drawn, so the outline is a run of round bumps rather than the GLB's polygon.
 const float BUSH_RIM = 0.4;
+// The highest tone a bush's lobe keeps in a cast shadow (0.1 shade, 0.5 middle).
+const float BUSH_CAST_T = 0.3;
 
 // The bush's form centre for an instance at `origin` of `scale`.
 vec3 bush_mid(vec3 origin, float scale) {
@@ -177,7 +179,9 @@ void light() {
 			t = 0.1 + 0.8 * smoothstep(0.02, 0.1, lw.y + (f_wob - 0.5) * 0.1);
 		}
 		vec3 col = selector_pal(t, f_variant + (t - 0.45) * 0.3);
-		vec3 shd = selector_pal(0.1, f_variant);
+		// In a cast shadow a bush's lobes keep a half step toward the sun (as a crown's strokes keep
+		// crown-cast): one flat shade read as a smooth dark lump (painter-trees-polish3).
+		vec3 shd = selector_pal(kind == 4 ? min(t, BUSH_CAST_T) : 0.1, f_variant);
 		if (f_accent > -0.5) {
 			vec3 a = accent[int(f_accent + 0.5)];
 			float lr = dot(shd, vec3(0.3, 0.59, 0.11))
