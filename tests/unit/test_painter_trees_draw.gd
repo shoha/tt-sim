@@ -104,9 +104,21 @@ func test_every_tree_shader_tests_the_tokens_at_its_own_fragment() -> void:
 		"occlusion_tiles_match(view_matrix, projection_matrix)",
 		"for (int i = first; i < end; i++)",
 		"for (int i = 0; i < occlusion_token_count; i++)",
-		"float token = tree_token_fade(",
+		"bool tree_token_frag(",
+		"bool tree_token_stroke(",
 	]:
 		assert_true(inc.contains(wanted), "the token window: %s" % wanted)
+
+
+## painter-token-window: a circular cut through every part read as a glass dome over the token.
+## A stroke goes whole, decided in its vertex stage (never a ground shadow dab); the block-in is
+## cut per fragment; no stroke is cut per fragment.
+func test_the_token_window_takes_whole_strokes() -> void:
+	var stroke := FileAccess.get_file_as_string(PainterTrees.STROKE_SHADER)
+	assert_true(stroke.contains("!is_shadow && tree_token_stroke("), "strokes go whole, dabs stay")
+	assert_true(stroke.contains("v_key, v_key < 0.0, true);"), "no per-fragment cut on a stroke")
+	var block := FileAccess.get_file_as_string(PainterTrees.BLOCKIN_SHADER)
+	assert_true(block.contains("key, kind10 > 0.5, false);"), "the block-in is cut per fragment")
 
 
 func test_painted_rows_become_cells_and_hide_the_glb_trees() -> void:
