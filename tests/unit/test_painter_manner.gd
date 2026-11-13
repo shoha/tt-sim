@@ -348,3 +348,99 @@ func test_a_beam_is_brushed_wider_and_a_door_leans() -> void:
 	assert_almost_eq(lean.y, 0.0, 0.0001, "along the wall")
 	var at_foot := PainterMannerMesh.door_lean(Vector3.ZERO, Vector3.BACK, 0.0, Vector3.ZERO)
 	assert_eq(at_foot, Vector3.ZERO, "a door stands on its sill")
+
+
+func test_snow_strips_stand_proud_along_the_edges_and_are_pure() -> void:
+	# card painter-roof-snow: a lip along the eave and verge, a cap along the ridge.
+	var roof := _roof()
+	var edges: Array = roof["edges"]
+	roof["edges"] = edges + [{"a": Vector3(0, 2, 0), "b": Vector3(0, 3.2, -1.6), "kind": "verge"}]
+	var still := {"amp": 0.0, "phase": Vector3.ZERO, "foot": 0.0, "eave": 2.0}
+	var src := PainterMannerSnow.source({"roof/slope0": roof}, {}, PackedStringArray(), still)
+	var a := PainterMannerSnow.build(src)
+	var b := PainterMannerSnow.build(src)
+	assert_eq(a.arrays[Mesh.ARRAY_VERTEX], b.arrays[Mesh.ARRAY_VERTEX], "same inputs, same strips")
+	assert_eq(a.arrays[Mesh.ARRAY_INDEX], b.arrays[Mesh.ARRAY_INDEX])
+	assert_gt(int(a.by_kind.lip), 0, "an eave and a verge lip")
+	assert_gt(int(a.by_kind.cap), 0, "a ridge cap")
+	var custom: PackedFloat32Array = a.arrays[Mesh.ARRAY_CUSTOM0]
+	var coded := 0
+	for k in range(2, custom.size(), 4):
+		coded += int(custom[k] == float(PainterMannerSnow.CODE))
+	assert_eq(coded, custom.size() / 4, "every strip vertex carries the snow code")
+	var proud := -INF
+	var past := INF
+	for p: Vector3 in a.arrays[Mesh.ARRAY_VERTEX]:
+		proud = maxf(proud, (p - (roof["origin"] as Vector3)).dot(roof["n"]))
+		past = minf(past, (p - (roof["origin"] as Vector3)).dot(roof["v"]))
+	assert_between(proud, 0.12, 0.4, "the lip and the cap stand a hand's width off the slope")
+	assert_lt(past, -0.03, "the lip rounds over the eave")
+	var none := PainterMannerSnow.build(
+		PainterMannerSnow.source({}, {}, PackedStringArray(), still)
+	)
+	assert_eq(int(none.triangles), 0, "no roof, no strips")
+	assert_true((none.arrays as Array).is_empty())
+
+
+func test_no_roof_snow_adds_nothing_and_winter_adds_strips_that_cast_no_shadow() -> void:
+	# card painter-roof-snow: a mood without roof snow builds and adds nothing; winter's re-tone
+	# builds the strips on a worker; leaving winter frees them.
+	StructureRecipes.ensure_served()
+	var doc := MapDocument.create_flat(Vector2i(40, 40), "grass", "v", 9)
+	var plan := PackedVector2Array(
+		[Vector2(-3.5, -2.5), Vector2(3.5, -2.5), Vector2(3.5, 2.5), Vector2(-3.5, 2.5)]
+	)
+	var record := Structure.make(1, "core:thatched_cottage", plan, 5)
+	doc.structures.append(record)
+	var structures := AuthoredStructures.create(doc)
+	_container.add_child(structures)
+	var node := structures.get_node("Structure_1") as Node3D
+	StructureGeometry.manner_records = true
+	var built := StructureGeometry.build_one(doc, record)
+	StructureGeometry.manner_records = false
+	var buildings := PainterBuildings.new()
+	buildings.applied = STATE.duplicate()
+	var host := PainterMannerHost.new(buildings)
+	var parts := {}
+	for child in node.get_children():
+		if child is MeshInstance3D and child.has_meta(AuthoredStructures.TAGS_META):
+			if not PainterMannerHost._skipped(str(child.name)):
+				parts[str(child.name)] = PainterBuildings.kind_of(str(child.name))
+	var job := {
+		"node": node.get_instance_id(),
+		"doc": doc,
+		"structure": record,
+		"decor": false,
+		"built": built,
+		"parts": parts,
+		"faces": PackedVector3Array(),
+		"generation": 0,
+		"snow": host._snow_wanted(),
+		"snow_gen": 0,
+		"key": -1
+	}
+	assert_false(job.snow, "summer lays no roof snow")
+	host._jobs[node.get_instance_id()] = job
+	host._work(job)
+	await wait_until(func() -> bool: return host.stats.size() == 1, 10.0)
+	assert_eq(host.stats.size(), 1, "the parts installed")
+	assert_null(node.get_node_or_null(PainterMannerHost.SNOW), "no strips without roof snow")
+	assert_eq(int(host.stats[0].tris.snow), 0)
+	assert_eq(float(host.stats[0].snow_ms), 0.0, "nothing built for them either")
+	var sheet := PainterSheet.load_sheet("core")
+	buildings.applied = {"sheet": "core", "mood": "winter", "elevation": 20.0}
+	assert_gt(buildings.snow_amount(), 0.0, "winter lays roof snow")
+	host.retone(sheet)
+	await wait_until(
+		func() -> bool: return node.get_node_or_null(PainterMannerHost.SNOW) != null, 10.0
+	)
+	var snow := node.get_node_or_null(PainterMannerHost.SNOW) as MeshInstance3D
+	assert_not_null(snow, "winter's re-tone adds the strips")
+	if snow != null:
+		assert_eq(snow.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+		var tris: int = snow.mesh.surface_get_array_index_len(0) / 3
+		assert_between(tris, 150, 700, "a few hundred triangles a house")
+	buildings.applied = STATE.duplicate()
+	host.retone(sheet)
+	assert_null(node.get_node_or_null(PainterMannerHost.SNOW), "leaving winter frees them")
+	host.restore_all()

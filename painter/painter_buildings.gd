@@ -45,8 +45,9 @@ const PICK := ""
 const ACCENT_ROLES: Array[String] = ["timber", "roof-clay", "roof-turf", "roof-slate"]
 ## The sheet role of a door or shutter whose tone comes from its paint.
 const ACCENT := "accent"
-## The role the roofs' snow takes its colour from (winter's is the snow's white) and the number
-## that says how much of a roof it covers (0 in every mood but winter).
+## The role the roofs' snow takes its colour from (winter's is the snow's white, under the
+## ground's ramp numbers: snow_ramp) and the number that says how deep it lies (0 in every mood
+## but winter; above 0 the hand-drawn manner also builds its strips, PainterMannerSnow).
 const SNOW_ROLE := "drift"
 const SNOW_NUMBER := "roof-snow"
 ## The shader's patterns.
@@ -291,15 +292,35 @@ func _tone(material: ShaderMaterial, kind: Array, sheet: Dictionary) -> void:
 	material.set_shader_parameter(
 		&"snow", PainterSheet.number(sheet, mood, SNOW_NUMBER, elevation)
 	)
-	material.set_shader_parameter(
-		&"snow_ramp", ramp(sheet, mood, SNOW_ROLE, elevation, "roof").slice(0, 3)
-	)
+	material.set_shader_parameter(&"snow_ramp", snow_ramp(sheet, mood, elevation))
 	material.set_shader_parameter(
 		&"tone_lo", PainterSheet.number(sheet, mood, "tone-lo", elevation)
 	)
 	material.set_shader_parameter(
 		&"tone_hi", PainterSheet.number(sheet, mood, "tone-hi", elevation)
 	)
+
+
+## How much snow lies on the roofs now (the sheet's roof-snow in the applied mood; 0 while
+## nothing is painted or the mood lays none).
+func snow_amount() -> float:
+	if applied.is_empty():
+		return 0.0
+	var sheet := PainterSheet.load_sheet(applied["sheet"])
+	return PainterSheet.number(sheet, applied["mood"], SNOW_NUMBER, applied["elevation"])
+
+
+## The roofs' snow as three LINEAR colours [shade, mid, lit]: the drift role's white under the
+## ground's own ramp numbers (the ground snow's strong blue shade), its two variants averaged.
+## Pure.
+static func snow_ramp(sheet: Dictionary, mood: String, elevation: float) -> PackedVector3Array:
+	var colours := PainterTones.ramp(sheet, mood, SNOW_ROLE, elevation, "ground-")
+	var out := PackedVector3Array()
+	for step in 3:
+		out.append(
+			PainterTones.linear(colours[step]).lerp(PainterTones.linear(colours[step + 3]), 0.5)
+		)
+	return out
 
 
 ## The six LINEAR colours [shade0, mid0, lit0, shade1, mid1, lit1] of building role `role`

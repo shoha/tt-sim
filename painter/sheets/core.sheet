@@ -92,7 +92,8 @@
      darker grey stone read as a periwinkle slab, on slate as lavender). A lime wash keeps most
      of its own warm hue in shade (painter-manner-b: a 1.2 pull read lavender over a whole
      facade; 0.3 leaves a warm grey cream, the prototype's shaded walls). Roofs carry no snow
-     but in winter (roof-snow, the share of a roof under it, in the drift role's white). */
+     but in winter (roof-snow, how deep it lies, in the drift role's white under the ground's
+     ramp numbers; above 0 the hand-drawn buildings also get snow lips, caps and pads). */
   plaster: oklch(0.89 0.045 88);  wall-stone: oklch(0.80 0.042 80);
   wall-log: oklch(0.60 0.080 58);  wall-boards: oklch(0.64 0.058 72);  timber: oklch(0.45 0.075 52);
   wall-shade-turn: -11;  wall-pull: 0.3;  stone-pull: 0.3;  wall-shade-lift: 0.13;
@@ -328,7 +329,8 @@
        lighter and greener (polish3: it read dull and muddy beside the cobalt ground shadows). */
     crown-lit-lift: 0.1;  crown-lit-pull: 0.3;  crown-shade-lift: -0.06;  crown-deposit: 0.55;
     /* Warm walls against the blue snow: a lime wash a step under the snow's white; the roofs
-       half under snow, the eaves and the steepest runs left bare. */
+       under a blanket with thick edges (card painter-roof-snow): deep on thatch, thin enough on
+       steep and sun-facing tile and slate that their strokes show through. */
     plaster: oklch(0.84 0.032 72);  wall-stone: oklch(0.66 0.020 75);
     wall-log: oklch(0.55 0.060 55);  wall-boards: oklch(0.62 0.042 70);  timber: oklch(0.42 0.055 50);
     roof-snow: 0.45;

@@ -349,8 +349,9 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   paint (pick 3, `ACCENT_ROLES`): wood and dull paint stay `timber`, a red or orange paint takes
   `roof-clay`, a green `roof-turf`, a blue `roof-slate`, so Classic's red doors and orange shutters
   keep an accent in every mood. Roofs lie under snow by the sheet's `roof-snow` (0 but in winter,
-  0.6) in the `drift` role's colour; both shaders share `painter_structure_common.gdshaderinc`
-  for the picks and the snow.
+  0.45) in the `drift` role's colour; both shaders share `painter_structure_common.gdshaderinc`
+  for the picks and the fallback's snow patches (the hand-drawn manner's blanket and strips:
+  "Roof snow with a body" below).
 - **The hand-drawn manner (the default since card painter-manner-b).** `PainterBuildings.hand_drawn`
   (true) puts `PainterMannerHost` on every structure procgen gives manner records for; a structure
   without records keeps the look above, the fallback (false draws every structure that way, for
@@ -419,6 +420,38 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   roundhouse's round roof and the minka's profile roof (plain smooth straw, no strokes or teeth:
   the weakest), no broken building seen. house_flat and log_cabin were not identified with
   certainty in the frames.
+- **Roof snow with a body (card painter-roof-snow, 2026-11-13; look-pending).** Owner verdict:
+  the flat winter patches had no volume. While the sheet's `roof-snow` is above 0 (winter 0.45,
+  now how deep it lies) and `PainterMannerHost.snow_body` is on (the default; false is the tip's
+  winter, an A/B switch), the host builds per structure on its worker `PainterMannerSnow`'s strips
+  (code 9, one `MannerSnow` child that casts no shadow, wandered with the building): a rounded
+  lip along every eave and verge (flush on the slope about 0.4 m in, a lit top 0.24 m proud at full
+  hold, a nose 0.11 m past the edge, an underside tucked under it; thickness and reach swell along
+  the edge), a ridge or hip cap per slope whose crest meets its partner's midway, a cushion on each
+  chimney cap and a wedge on each window sill; thatch holds the most (1.0), turf 0.9, wood and
+  shingle 0.75, tile and slate 0.7. The manner shader lays the whole roof under a blanket
+  (`snow_layer`: deeper toward the ridge, in broad heaps and within half a metre of the strips,
+  thinner on steep and sun-facing runs via the `foliage_sun` global, a scalloped and brushed line
+  between deep and thin); where it is thin the roof's strongest strokes are bare and crisp (tile
+  dashes red, slate dashes dark), elsewhere marks keep 8 %. Strips take the snow's ramp whole, lit
+  by their own normals (lit top, blue underside), darker at the foot and under the nose; the snow
+  ramp is now the `drift` role under the ground's ramp numbers (`PainterBuildings.snow_ramp`), the
+  ground snow's strong blue shade, in both building shaders. A thatch eave's teeth stay bare
+  (they read as icicles). A mood without roof snow builds and adds nothing (a test; no strips, no
+  worker time, every new shader term behind `snow > 0`); a re-tone into winter builds the strips
+  from the kept dress job on a worker, out of winter frees them. Triangles: 400 to 482 a house
+  (stone 400, thatched 460, half-timber 480: 1,340 for the three core houses, main pass +1,336
+  measured), shadow pass unchanged; strips 1.2-3.2 ms a house on the worker, install unchanged
+  (1.05-1.2 ms median). Cost (one interleaved sitting, winter sun 20, 1920x1080, vsync off, order
+  Classic before after after before before after Classic, after minus before per adjacent pair,
+  three pairs; the sitting drifted about +0.2 ms from first to last sample): 3 houses home +0.04,
+  -0.01, +0.02; mid +0.01, 0.00, 0.00; far -0.02, 0.00, +0.02; eye +0.03, 0.00, -0.01 ms; 12
+  houses home +0.04, -0.02, 0.00; mid +0.07, -0.01, -0.01; far +0.01, -0.02, 0.00; eye +0.02,
+  0.00, +0.02: the median of the three pairs at most +0.02 at every view, within the +0.05
+  budget and the noise floor (one pair +0.07 at mid 12, its other two -0.01). Frames:
+  `docs/research/2026-11-09-prototypes/compare/painter_snow/`. Open: a soft blue light patch where
+  a sunlit slope sits at the lit threshold (the light's wobble, not the snow); tile's show-through
+  dashes read regular in rows; no drift against chimneys or dormers yet.
 - **Its cost (card painter-manner-b, one interleaved sitting, 1920x1080, vsync off, summer sun
   45, order Classic A3b B B A3b Classic, each the mean of its pair; indicative, shared GPU, the
   pairs 0.0-0.06 ms apart).** B over Classic buildings (under the painted look): home, mid, far,

@@ -21,11 +21,18 @@ extends RefCounted
 ##   triangles for three houses);
 ##   a Classic part (panes, door metal) takes the wandered mesh in place so it stays in its hole;
 ##   the structure's collision shape is replaced by its faces under the same field
-##   (PainterMannerMesh.collider), so a click and a standing token meet the leaning house.
+##   (PainterMannerMesh.collider), so a click and a standing token meet the leaning house;
+##   while the sheet lays snow on roofs (PainterBuildings.snow_amount above 0) a child (SNOW)
+##   draws the structure's snow strips (PainterMannerSnow) and casts no shadow. Built with the
+##   parts when the mood already has snow, else on a worker when a re-tone brings it (from the
+##   dress job kept per structure); freed when a re-tone takes it away. No snow, nothing added.
 ## restore_all() puts back every mesh, override, cast setting and shape and frees what it added.
 
 const SHADER := "res://painter/shaders/painter_structure_manner.gdshader"
 const SHADOW := "MannerShadow"
+const SNOW := "MannerSnow"
+## The material the snow strips draw with (any roof's: the strips' own code picks their branch).
+const SNOW_KEY := "roof_thatch"
 ## Mesh names that are the yard, not the building (not wandered).
 const SKIP_PREFIXES: Array[String] = ["dressing", "decor", "cap_", "wheel_", "vane_"]
 ## The wander amplitude (metres at full height).
@@ -33,9 +40,15 @@ const AMP_M := 0.14
 ## The structure's collision shape (AuthoredStructures._body).
 const COLLISION := "Collision/CollisionShape3D"
 
+## True (the default) gives winter's roofs their body (the strips and the shader's blanket);
+## false draws them as before card painter-roof-snow (an A/B switch for measurements). Read when
+## a structure is dressed and a material made: change it, then release() and paint() again.
+static var snow_body := true
+
 ## Per structure built: {"id", "eval_ms", "source" ("build": the records came with the structure's
 ## parts; "eval": evaluated again), "record_bytes", "build_ms", "install_ms",
-## "tris": {src, draw, shadow}, "bytes", "collider": [faces before, after]}.
+## "tris": {src, draw, shadow, snow}, "bytes", "collider": [faces before, after], "snow_ms" (the
+## strips' build on the worker)}.
 var stats: Array[Dictionary] = []
 
 var _generation := 0
@@ -61,6 +74,14 @@ var _next_key := 0
 var _queue: Array[Dictionary] = []
 var _draining := false
 var _shader: Shader = null
+## Whether the dressed structures carry snow strips (the last snow_amount seen above 0).
+var _snow_on := false
+## Bumped when the snow comes or goes: a strips result of an older one is dropped.
+var _snow_gen := 0
+## Structure node instance id -> its dress job (kept to build its snow strips later).
+var _jobs: Dictionary = {}
+## Structure node instance id -> its SNOW node.
+var _snow_nodes: Dictionary = {}
 
 
 func _init(buildings: PainterBuildings) -> void:
@@ -93,6 +114,7 @@ func dress(structure: Node) -> void:
 		authored.call("built_parts", id) if authored.has_method("built_parts") else {}
 	)
 	_dressed[structure.get_instance_id()] = true
+	_snow_on = _snow_wanted()
 	var job := {
 		"node": structure.get_instance_id(),
 		"doc": doc,
@@ -101,11 +123,19 @@ func dress(structure: Node) -> void:
 		"built": built if built.has("manner") else {},
 		"parts": parts,
 		"faces": faces,
-		"generation": _generation
+		"generation": _generation,
+		"snow": _snow_on,
+		"snow_gen": _snow_gen
 	}
+	_jobs[structure.get_instance_id()] = job
+	_start(_work, job)
+
+
+func _start(work: Callable, job: Dictionary) -> void:
 	_next_key += 1
-	job["key"] = _next_key
-	_tasks[_next_key] = WorkerThreadPool.add_task(_work.bind(job))
+	var task := job.duplicate()
+	task["key"] = _next_key
+	_tasks[_next_key] = WorkerThreadPool.add_task(work.bind(task))
 
 
 ## Puts back every mesh, override, cast setting and shape changed and frees every node added;
@@ -134,15 +164,43 @@ func restore_all() -> void:
 	_materials.clear()
 	_shared.clear()
 	_queue.clear()
+	_jobs.clear()
+	_snow_nodes.clear()
+	_snow_on = false
 
 
-## Tones every material this made (PainterBuildings._tone with the part's kind).
+## Tones every material this made (PainterBuildings._tone with the part's kind), and builds or
+## frees the snow strips when the mood brings or takes away roof snow.
 func retone(sheet: Dictionary) -> void:
 	var owner := _owner_ref.get_ref() as PainterBuildings
 	if owner == null:
 		return
 	for pair: Array in _materials:
 		owner._tone(pair[0], PainterBuildings.kind_of(pair[1]), sheet)
+	var wanted := _snow_wanted()
+	if wanted == _snow_on:
+		return
+	_snow_on = wanted
+	_snow_gen += 1
+	for id: int in _snow_nodes:
+		var node: Node = _snow_nodes[id]
+		if is_instance_valid(node):
+			_added.erase(node)
+			node.get_parent().remove_child(node)
+			node.queue_free()
+	_snow_nodes.clear()
+	for id: int in _jobs:
+		var job: Dictionary = _jobs[id]
+		job["snow_gen"] = _snow_gen
+		job["snow"] = _snow_on
+		if _snow_on and is_instance_valid(instance_from_id(id)):
+			_start(_work_snow, job)
+
+
+## Whether the strips are wanted now: snow_body on and the owner's mood lays roof snow.
+func _snow_wanted() -> bool:
+	var owner := _owner_ref.get_ref() as PainterBuildings
+	return snow_body and owner != null and owner.snow_amount() > 0.0
 
 
 static func _skipped(node_name: String) -> bool:
@@ -169,23 +227,8 @@ func _work(job: Dictionary) -> void:
 	if feed.is_empty():
 		_arrived.call_deferred(out)
 		return
-	var structure: Structure = job.structure
-	var building: Dictionary = feed.building
 	var records: Dictionary = feed.records
-	var foot := float(building.get("wall_foot", 0.0))
-	var eave := foot
-	for rec: Dictionary in records.values():
-		if str(rec["kind"]) == "wall_face":
-			var top: float = (rec["origin"] as Vector3).y + float(rec["v_len"]) * (rec["v"] as Vector3).y
-			eave = maxf(eave, top)
-	var opts := {
-		"amp": AMP_M,
-		"phase": PainterMannerMesh.phase_of(structure.seed_value),
-		"foot": foot,
-		"eave": eave,
-		"walls": PainterMannerMesh.wall_normals(records),
-		"door_dir": PainterMannerMesh.door_dir(records)
-	}
+	var opts := _field(feed, job.structure)
 	var table: PackedStringArray = feed.table
 	for part_name: String in job.parts:
 		var mesh: Variant = feed.meshes.get(part_name)
@@ -203,7 +246,52 @@ func _work(job: Dictionary) -> void:
 	if not faces.is_empty():
 		out["collider"] = PainterMannerMesh.collider(faces, opts)
 	out["build_ms"] = (Time.get_ticks_usec() - t1) / 1000.0
+	if bool(job.get("snow", false)):
+		_snow_of(feed, opts, out)
 	_arrived.call_deferred(out)
+
+
+## The snow strips of a structure dressed before its mood had snow (retone): its records again
+## (with its parts, or evaluated), then the strips.
+func _work_snow(job: Dictionary) -> void:
+	var feed := PainterMannerSource.of_parts(job.built)
+	if feed.is_empty():
+		feed = PainterMannerSource.evaluate(job.doc, job.structure, job.decor)
+	var out := {"job": job}
+	if not feed.is_empty():
+		_snow_of(feed, _field(feed, job.structure), out)
+	_arrived.call_deferred(out)
+
+
+## Adds the strips of `feed` under the field `opts` to `out` ("snow": arrays, "snow_tris",
+## "snow_ms"). Worker-safe.
+static func _snow_of(feed: Dictionary, opts: Dictionary, out: Dictionary) -> void:
+	var t0 := Time.get_ticks_usec()
+	var src := PainterMannerSnow.source(feed.records, feed.meshes, feed.table, opts)
+	var built := PainterMannerSnow.build(src)
+	out["snow"] = built.arrays
+	out["snow_tris"] = int(built.triangles)
+	out["snow_ms"] = (Time.get_ticks_usec() - t0) / 1000.0
+
+
+## The wander field of a structure from its manner feed (PainterMannerMesh.build's opts). Pure.
+static func _field(feed: Dictionary, structure: Structure) -> Dictionary:
+	var building: Dictionary = feed.building
+	var records: Dictionary = feed.records
+	var foot := float(building.get("wall_foot", 0.0))
+	var eave := foot
+	for rec: Dictionary in records.values():
+		if str(rec["kind"]) == "wall_face":
+			var top: float = (rec["origin"] as Vector3).y + float(rec["v_len"]) * (rec["v"] as Vector3).y
+			eave = maxf(eave, top)
+	return {
+		"amp": AMP_M,
+		"phase": PainterMannerMesh.phase_of(structure.seed_value),
+		"foot": foot,
+		"eave": eave,
+		"walls": PainterMannerMesh.wall_normals(records),
+		"door_dir": PainterMannerMesh.door_dir(records)
+	}
 
 
 # ---------------------------------------------------------------- main thread
@@ -234,8 +322,10 @@ func _drain() -> void:
 			_install(step)
 			if step.has("collider"):
 				_queue.push_front({"job": step.job, "collider": step.collider})
-		else:
+		elif step.has("collider"):
 			_install_collider(step)
+		else:
+			_install_snow(step)
 	var tree := Engine.get_main_loop() as SceneTree
 	if not _queue.is_empty() and tree != null:
 		_draining = true
@@ -248,7 +338,7 @@ func _install(out: Dictionary) -> void:
 	if int(job.generation) != _generation or structure == null or not is_instance_valid(structure):
 		return
 	var t0 := Time.get_ticks_usec()
-	var tris := {"src": 0, "draw": 0, "shadow": 0}
+	var tris := {"src": 0, "draw": 0, "shadow": 0, "snow": 0}
 	var bytes := 0
 	for part_name: String in out.parts:
 		var mi := structure.get_node_or_null(NodePath(part_name)) as MeshInstance3D
@@ -290,10 +380,50 @@ func _install(out: Dictionary) -> void:
 				"collider_ms": 0.0,
 				"tris": tris,
 				"bytes": bytes,
-				"collider": [0, 0]
+				"collider": [0, 0],
+				"snow_ms": 0.0
 			}
 		)
 	)
+	if out.has("snow"):
+		_install_snow(out)
+
+
+## Puts a structure's snow strips (`step.snow`, PainterMannerSnow arrays) on a SNOW child that casts
+## no shadow; nothing when the snow went away since the build or the structure has them already.
+func _install_snow(step: Dictionary) -> void:
+	var job: Dictionary = step.job
+	var id := int(job.node)
+	var structure := instance_from_id(id) as Node3D
+	var arrays: Array = step.get("snow", [])
+	if (
+		int(job.generation) != _generation
+		or int(job.get("snow_gen", -1)) != _snow_gen
+		or not _snow_on
+		or arrays.is_empty()
+		or _snow_nodes.has(id)
+		or structure == null
+		or not is_instance_valid(structure)
+	):
+		return
+	var t0 := Time.get_ticks_usec()
+	var mi := MeshInstance3D.new()
+	mi.name = SNOW
+	mi.mesh = _mesh(arrays, null, PainterMannerMesh.FORMAT)
+	mi.material_override = _surface_material(SNOW_KEY)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	structure.add_child(mi)
+	_added.append(mi)
+	_snow_nodes[id] = mi
+	var sid := AuthoredStructures._id_of(structure)
+	for k in range(stats.size() - 1, -1, -1):
+		if int(stats[k].id) == sid:
+			stats[k].tris["snow"] = int(step.get("snow_tris", 0))
+			stats[k]["snow_ms"] = float(step.get("snow_ms", 0.0))
+			stats[k]["install_ms"] = (
+				float(stats[k].install_ms) + (Time.get_ticks_usec() - t0) / 1000.0
+			)
+			break
 
 
 ## Puts a structure's moved collision faces (`step.collider`) in place of its shape; the shape it
@@ -359,6 +489,7 @@ func _surface_material(key: String) -> ShaderMaterial:
 	material.set_meta(PainterBuildings.META, true)
 	material.set_shader_parameter(&"pattern", int(kind[1]))
 	material.set_shader_parameter(&"pick", int(kind[3]))
+	material.set_shader_parameter(&"snow_body", snow_body)
 	_shared[key] = material
 	_materials.append([material, key])
 	var owner := _owner_ref.get_ref() as PainterBuildings
