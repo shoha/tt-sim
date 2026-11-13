@@ -82,6 +82,33 @@ func test_both_shaders_compile_against_the_wind_sun_and_fade_globals() -> void:
 	assert_false(code.contains("LIGHT_VERTEX"), "the shadow lookup never moves")
 
 
+## painter-a2a5: the block-in wrote POSITION alone, so its fragment VERTEX was the mesh's unit
+## sphere at the tree's foot, and a token under a crown kept the masses and limbs over it. Every
+## tree shader binds the token texture, writes its own view-space VERTEX and tests the tokens
+## there; the include walks the screen tile's list and the plain loop.
+func test_every_tree_shader_tests_the_tokens_at_its_own_fragment() -> void:
+	for path: String in [PainterTrees.STROKE_SHADER, PainterTrees.BLOCKIN_SHADER]:
+		var names: Array = []
+		for u: Dictionary in (load(path) as Shader).get_shader_uniform_list():
+			names.append(u["name"])
+		for wanted: String in ["enable_occlusion", "occlusion_tokens"]:
+			assert_has(names, wanted, "%s binds %s" % [path, wanted])
+		var code := FileAccess.get_file_as_string(path)
+		assert_true(code.contains("skip_vertex_transform"), "%s places VERTEX itself" % path)
+		assert_true(
+			code.contains("VERTEX = (VIEW_MATRIX * vec4("), "%s writes its view-space point" % path
+		)
+		assert_true(code.contains("tree_fades(VERTEX,"), "%s fades at its own fragment" % path)
+	var inc := FileAccess.get_file_as_string(INCLUDE)
+	for wanted: String in [
+		"occlusion_tiles_match(view_matrix, projection_matrix)",
+		"for (int i = first; i < end; i++)",
+		"for (int i = 0; i < occlusion_token_count; i++)",
+		"float token = tree_token_fade(",
+	]:
+		assert_true(inc.contains(wanted), "the token window: %s" % wanted)
+
+
 func test_painted_rows_become_cells_and_hide_the_glb_trees() -> void:
 	var scatter := _scatter()
 	scatter.set_cells({Vector2i(0, 0): {OAK: _rows([Vector2(1, 1), Vector2(2, 1)])}})

@@ -215,7 +215,9 @@ eye view's levels, rim trees, far meshes and fog are a later card's (A2b).
   `crown-lit-pull` for a crown, the mood's `shade-hue` with `bark-shade-pull` and
   `bark-shade-keep` for a stem (painter-a2a3: the spike's per-species pulls toward 305 cancelled a
   green crown to grey and swung brown bark to maroon; summer crowns now shade to a deep teal green,
-  stems to a dark brown). `tree-cast` is the sun's cast step on a tree (`cast_amount`), lighter at
+  stems to a dark brown). A stem's shade depth is its species' less `bark-shade-lift` (0.1;
+  painter-a2a4, with `bark-shade-pull` down to 0.04), so summer trunks read a warm mid brown with
+  darker furrows rather than a near-black. `tree-cast` is the sun's cast step on a tree (`cast_amount`), lighter at
   a low sun and in the dark moods; the limbs' material takes a near-neutral cast tint
   (`PainterTrees.BARK_CAST_TINT`), since a stem stands in its own crown's shadow and the crowns'
   cool tint made it maroon. Print the ramps with a tone printer before a render (painter-a2a3's
@@ -226,6 +228,26 @@ eye view's levels, rim trees, far meshes and fog are a later card's (A2b).
   `test_painter_trees_draw` grows every species and fails if one outgrows it. The block-in's
   crown masses fade by a world noise of about half a metre with a light screen dither on each
   piece's rim (a plain 1 px dither read as halftone grain over a token).
+- The token window (painter-a2a4, painter-a2a5): `tree_token_fade` in the include reads
+  OcclusionFadeManager's token texture and screen tiles as the plants do (the tile's list in the
+  camera's pass, the plain loop otherwise), but CLEARS instead of dithering to `min_alpha`: a
+  fragment nearer the camera than a token (up to one zone radius behind its centre) whose screen
+  offset lies inside `TREE_TOKEN_CORE` (0.75) of the zone radius is discarded, and between 0.75
+  and 1 it goes by its fade key (a stroke's own key, a stem stroke's `TREE_TOKEN_STEM_KEY` 0.5, a
+  mass's or limb's world-noise key), so the crown opens in a round window over the token. Every
+  part clears: strokes, masses, limbs and trunks. It runs after the canopy fades and only in the
+  camera's pass (the sun's pass keeps the whole crown's shadow). Both shaders must hand their own
+  view-space point to `tree_fades`: the stroke shader and, since painter-a2a5, the block-in
+  (`skip_vertex_transform`, VERTEX and NORMAL in view space). The block-in wrote POSITION alone
+  before, so Godot's VERTEX was the mesh's unit sphere or ribbon block at the tree's FOOT: masses
+  and limbs over a token were tested at the foot and stayed as dark pieces, and the canopy fades,
+  the haze depth and the received sun shadow of the block-in read the foot too.
+  `test_painter_trees_draw` checks the binding, the VERTEX write and both loops in every tree
+  shader.
+- A grazing sun (painter-a2a4): the long bands across the floor at a 3 degree sun were
+  `painter_ground`'s turned-from-the-sun step, not the trees' shadows (they stayed with the
+  shadows off and the trees hidden); the step and its wiggle scale with the sun's height under
+  `TURN_SUN_FULL` (0.34, sin 20 degrees), unchanged at 20 degrees and above.
 
 - Species (`species.json`, data): the asset table, group -> species: Oak oak, Birch birch,
   Broadleaf lime, Poplar poplar, Spruce and Pine spruce, Willow willow, Sapling rowan (young).

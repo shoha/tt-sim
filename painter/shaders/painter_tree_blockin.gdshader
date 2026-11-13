@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode specular_disabled, ambient_light_disabled;
+render_mode skip_vertex_transform, specular_disabled, ambient_light_disabled;
 // Round 10 block-in of TREES: blockin8.txt's fragment stage, unchanged, under a vertex stage that
 // builds the solid from the tree's mass list (mass_tex, layouts in painter10.gd) instead of
 // reading per-vertex attributes. Two shared meshes are instanced:
@@ -452,7 +452,14 @@ void vertex() {
 		wp += mass_sway(wphase, ww_v);
 		wp += edge_push(v_wp, ww_v * (0.25 + 0.75 * rho_v * rho_v));
 	}
-	POSITION = alive ? PROJECTION_MATRIX * (VIEW_MATRIX * vec4(wp, 1.0)) : vec4(2.0, 2.0, 2.0, 1.0);
+	// The fragment stage's VERTEX and NORMAL are this point and its normal, in view space
+	// (skip_vertex_transform): the token window, the canopy fades, the haze and the sun's shadow
+	// lookup all read VERTEX. (painter-a2a5: with POSITION alone, Godot's VERTEX was the mesh's own
+	// unit sphere or ribbon block at the tree's foot, so a crown was tested at its foot and a token
+	// under it kept the masses and limbs over it.)
+	VERTEX = (VIEW_MATRIX * vec4(wp, 1.0)).xyz;
+	NORMAL = normalize(mat3(VIEW_MATRIX) * v_wn);
+	POSITION = alive ? PROJECTION_MATRIX * vec4(VERTEX, 1.0) : vec4(2.0, 2.0, 2.0, 1.0);
 	if (wood_v) {
 		// A limb stroke is painted in limb coordinates: its fragments get the axis point, not their own.
 		v_wp = wood_axis;
