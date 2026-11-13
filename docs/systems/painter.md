@@ -383,7 +383,17 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   Sheet: wall-stone oklch(0.80 0.042 80), stone-pull 0.3, building-lit 0.5, winter roof-snow 0.45.
   Cost: the shader dropped two 3D noises a fragment (the light's wobble and the second patch
   octave reuse the dab noise), every stroke noise is 2D (four hashes, not eight), and no stroke
-  is drawn past 30 cm a pixel.
+  is drawn past 30 cm a pixel. Measured (one interleaved sitting, order Classic B B Classic,
+  summer 45, 1920x1080, vsync off, each the mean of its pair; Classic drifted 0.00-0.08 ms
+  between its samples, B's pairs 0.00-0.04 apart): hand-drawn minus Classic for 3 houses home
+  +0.03, mid -0.01, far -0.01, eye +0.13 ms; for 12 houses +0.00, +0.02, +0.02, eye +0.12. The
+  eye view with 3 houses stays over the +0.1 budget by about 0.03 ms (card painter-manner-b:
+  +0.15), most of it the painted shading on screen-filling walls. Main pass +5,844 primitives
+  for three houses (11,842 drawn against 5,998), shadow pass equal to Classic in the same pose.
+  Per house on a worker: mesh build 68-71 ms median (max 90) with no second evaluation (records
+  from the parts: eval 0.15 ms); install 1.0-1.1 ms median, max 2.5, but the first install after
+  the look turns Painted took 35-42 ms (one frame, not investigated: likely the threaded shader
+  load's wait or its first material); 0.59 MB of mesh arrays a house, about 67 KB of records.
 - **Coverage (card painter-manner-c, 12 recipes, `compare/painter_manner_c/gallery/`).** Drawn in
   the manner: hip, dormered, inn gallery, barn, porch cottage, ruin cottage (rubble falls back),
   watchtower; falling back per piece without a seam: windmill_dutch (all of it, Taper), the
