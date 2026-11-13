@@ -327,6 +327,25 @@ spike's route A: broad coloured masses, a few accents, shadow-lit by the sheet's
 - **Gaps.** A door's or shutter's recipe paint (red, orange) becomes `timber` brown, so a Classic
   accent is lost; roofs carry no snow in winter; streets and settlement ground are not painted
   here; the shader is not in `GraphicsWarmup`, so its first Painted level compiles it.
+- **Manner probe (card painter-manner, 2026-11-13; look-pending, default OFF).** Three ways to
+  bring back the prototype's hand-drawn manner from procgen's manner records (procgen branch
+  `procgen-manner`, not pinned: at tt-sim's pin there are no records and the probe changes
+  nothing), behind `PainterBuildings.manner_mode` ("" = the look above; "a", "b", "c"),
+  `painter/buildings/manner_*.gd` and `painter/shaders/painter_structure_manner.gdshader`. All
+  three share one mesh pass (PainterMannerMesh): the recipe mesh moved by one smooth field per
+  building (a lean that grows with height, bowing and wobbling eaves and ridges), roofs, gables
+  and the ridge cut every metre so the field bends them, a thatch eave's teeth, per-vertex piece
+  coordinates for the shader; the shadow pass keeps the recipe topology (wandered, SHADOWS_ONLY).
+  A adds the strokes as geometry, B draws them in the fragment shader from the piece frame, C
+  bakes the face strokes once into a texture per building. Measured on the 12-house village in
+  one interleaved sitting (1920x1080, vsync off, indicative): every candidate within about
+  +0.07 ms of the A3b look at home, mid, far and eye views for 3 and for 12 houses (the noise
+  floor about 0.05 ms); main-pass triangles for the three test houses 1.60x the recipe for B and C,
+  3.8x for A; build on a worker 40-50 ms (B, C) and 75 ms (A) per building plus a second recipe
+  evaluation (about 55 ms, gone if build_one kept the records); install on the main thread about
+  1 ms (B) to 2.7 ms (C, max); about 0.3 MB a building (B), 0.6 (A), 1.2 (C, the texture). Numbers,
+  captures and the recommendation: `docs/plans/handoffs/painter-a1.md` "Manner probe"; frames
+  under `docs/research/2026-11-09-prototypes/compare/painter_manner/`.
 
 ## The painted state signal
 

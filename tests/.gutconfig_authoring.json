@@ -7,6 +7,7 @@
 		"res://tests/unit/test_authored_water.gd",
 		"res://tests/unit/test_painter_surfaces.gd",
 		"res://tests/unit/test_painter_buildings.gd",
+		"res://tests/unit/test_painter_manner.gd",
 		"res://tests/unit/test_painter_trees.gd",
 		"res://tests/unit/test_painter_trees_draw.gd",
 		"res://tests/unit/test_authoring_editor.gd",

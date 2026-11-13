@@ -79,8 +79,15 @@ const KINDS: Dictionary = {
 	"door_wood": ["timber", P_TIMBER, "timber", 0],
 }
 
+## PROBE (card painter-manner): "" draws the A3b look (the default; nothing below changes);
+## "a", "b" or "c" puts that manner candidate on the painted buildings (PainterMannerHost). Read
+## when a structure is dressed: change it, then release() and paint() again.
+static var manner_mode := ""
+
 ## What is drawn now: {"sheet", "mood", "elevation"}, {} while nothing is painted.
 var applied: Dictionary = {}
+## The manner candidates' host, made on the first dress with manner_mode set.
+var manner: PainterMannerHost = null
 
 var _map: Node3D = null
 var _structures: Node = null
@@ -117,6 +124,8 @@ func release() -> void:
 	if is_instance_valid(_map) and _map.child_entered_tree.is_connected(_on_map_child):
 		_map.child_entered_tree.disconnect(_on_map_child)
 	_unbind()
+	if manner != null:
+		manner.restore_all()
 	for id: int in _swapped:
 		var pair: Array = _swapped[id]
 		if is_instance_valid(pair[0]):
@@ -207,6 +216,10 @@ func _dress(structure: Node) -> void:
 			continue
 		_swapped[mesh_instance.get_instance_id()] = [mesh_instance, mesh_instance.material_override]
 		mesh_instance.material_override = _material(key)
+	if manner_mode != "":
+		if manner == null:
+			manner = PainterMannerHost.new(self)
+		manner.dress(structure, manner_mode)
 
 
 ## Forgets the records of freed parts (a rebuilt structure's old node).
@@ -239,6 +252,8 @@ func _retone() -> void:
 	var sheet := PainterSheet.load_sheet(applied["sheet"])
 	for key: String in _materials:
 		_tone(_materials[key], kind_of(key), sheet)
+	if manner != null:
+		manner.retone(sheet)
 	if is_instance_valid(_structures):
 		for child in _structures.get_children():
 			_dress(child)
