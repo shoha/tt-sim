@@ -76,8 +76,9 @@ const DEFAULT_ROLES: Array[String] = [
 ## how much of the small marks, patches: the block-in's variation, mark-px-*: the pixel footprints
 ## in metres between which a mark fades out, cut: the shadow step's wiggle). The painted trees'
 ## own (PainterTreeTones): a crown's shade hue, pull and keep and lit pull and a stem's shade pull
-## and keep in place of the species' (crown-*, bark-*), and how far a sun's cast shadow steps a
-## tree into its cool tint (tree-cast).
+## and keep in place of the species' (crown-*, bark-*), how much less deep a stem's shade is than
+## a role's (bark-shade-lift), and how far a sun's cast shadow steps a tree into its cool tint
+## (tree-cast).
 const DEFAULT_NUMBERS: Array[String] = [
 	"shade-hue",
 	"shade-pull",
@@ -119,6 +120,7 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"crown-lit-pull",
 	"bark-shade-pull",
 	"bark-shade-keep",
+	"bark-shade-lift",
 	"tree-cast",
 ]
 ## Below this OKLCH chroma a colour's hue is meaningless: a blend takes the other end's hue.

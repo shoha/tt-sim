@@ -42,8 +42,10 @@ const MAP_W := 17
 const NEAR_M := 18.0
 const BOUND_GROW := 2.5
 const LEVELS := 3
-## The cast shadow's tint on the block-in's limbs (the crowns keep the shader's cool default).
-const BARK_CAST_TINT := Vector3(0.6, 0.55, 0.55)
+## The cast shadow's tint on the block-in's limbs (the crowns keep the shader's cool default): a
+## near-neutral step, so a stem in its crown's shadow stays its own brown (painter-a2a4: a red-heavy
+## 0.6/0.55/0.55 read dark chocolate under every crown).
+const BARK_CAST_TINT := Vector3(0.66, 0.66, 0.68)
 
 ## key (PainterTreeSpecies.key_of) -> {"row", "d", "pos", "cell", "species"} for every tree drawn.
 var trees: Dictionary = {}
@@ -263,7 +265,7 @@ func _make_materials() -> void:
 			m.set_shader_parameter(&"kind10", float(k))
 			if k == 1:
 				# The limbs: a stem stands in its own crown's shadow, and the crowns' cool tint
-				# turned brown bark maroon (painter-a2a3); a near-neutral step keeps it brown.
+				# turned brown bark maroon (painter-a2a3); a neutral step keeps it brown.
 				m.set_shader_parameter(&"cast_tint", BARK_CAST_TINT)
 		else:
 			m.set_shader_parameter(&"pass10", float(k - 2))

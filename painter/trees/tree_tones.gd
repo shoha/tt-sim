@@ -29,9 +29,10 @@ extends RefCounted
 ## numbers' difference from its summer midday (REFERENCE). Its shade's hue, pull and keep are
 ## the sheet's: a crown's (leaf, evergreen) `crown-shade-*` (and its lit step leans toward the
 ## mood's `lit-hue` by `crown-lit-pull`), a stem's (bark, trim) the mood's `shade-hue` with
-## `bark-shade-*`. painter-a2a3 found the spike's per-species pulls (oak 1.1,
-## world 1.0, toward 305) cancelling a green crown's chroma to grey and swinging brown bark to
-## maroon; the prototype's crowns shade to a deep teal green and its stems to a dark warm brown.
+## `bark-shade-pull` and `-keep`, its depth `bark-shade-lift` less. painter-a2a3 found the spike's
+## per-species pulls (oak 1.1, world 1.0, toward 305) cancelling a green crown's chroma to grey
+## and swinging brown bark to maroon; the prototype's crowns shade to a deep teal green, and its
+## stems (painter-a2a4) shade to their own warm brown a step under the lit side.
 
 const DATA := "res://painter/trees/tree_roles.json"
 const TONES := 32
@@ -215,6 +216,9 @@ static func _sheet_shade(
 	if prefix == "crown-":
 		out["lit-hue"] = PainterSheet.number(sheet, mood, "lit-hue", elevation)
 		out["lit-pull"] = PainterSheet.number(sheet, mood, "crown-lit-pull", elevation)
+	else:
+		var lift := PainterSheet.number(sheet, mood, "bark-shade-lift", elevation)
+		out["shade-depth"] = clampf(float(out["shade-depth"]) + lift, 0.0, 1.0)
 	return out
 
 

@@ -62,11 +62,13 @@
 
   /* The painted trees (PainterTreeTones): a crown's shade leans teal and keeps most of its own
      green (the prototype's S18; the spike's pull toward violet cancelled a green to grey), a
-     stem's shade is its own brown with a small pull (the spike's swung it to maroon); a crown's
-     lit step leans a little toward the light's hue (a full lean read as mustard); tree-cast is
-     how far the sun's cast shadow steps a tree into its cool tint. */
+     stem's shade is its own brown, nearly unpulled and bark-shade-lift less deep than a role's
+     (painter-a2a4: a 0.2 pull still read red-maroon and the full depth dark chocolate beside
+     Classic's mid brown stems); a crown's lit step leans a little toward the light's hue (a full
+     lean read as mustard); tree-cast is how far the sun's cast shadow steps a tree into its
+     cool tint. */
   crown-shade-hue: 210;  crown-shade-pull: 0.8;  crown-shade-keep: 0.7;  crown-lit-pull: 0.2;
-  bark-shade-pull: 0.2;  bark-shade-keep: 0.9;  tree-cast: 0.7;
+  bark-shade-pull: 0.04;  bark-shade-keep: 0.9;  bark-shade-lift: 0.1;  tree-cast: 0.7;
 }
 
 @mood summer {

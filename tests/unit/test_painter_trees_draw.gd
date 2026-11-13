@@ -226,8 +226,11 @@ func test_the_canopy_clearance_stands_over_the_tallest_painted_tree() -> void:
 
 
 ## painter-a2a3: the spike's shade pulls swung brown bark to maroon and cancelled a green crown
-## to grey. Every stem's shade stays a warm brown (or a near grey) in every mood and sun, and a
-## summer crown's shade keeps most of its green, leaning teal.
+## to grey. painter-a2a4: a 0.2 pull still read red beside the lit side. Every stem's shade stays
+## its own warm brown (or a near grey) in every mood and sun: within 12 degrees of its middle
+## tone's hue (the 0.2 pull turned it 15 to 22), and never past red into maroon or violet
+## (under 10; a pine's own red-orange at dusk and night moods sits at 17 to 30); and a summer
+## crown's shade keeps most of its green, leaning teal.
 func test_stems_shade_brown_and_crowns_shade_green() -> void:
 	var sheet := PainterSheet.load_sheet("core")
 	var table := PainterTreeTones.row_table()
@@ -237,11 +240,12 @@ func test_stems_shade_brown_and_crowns_shade_green() -> void:
 			for species: String in table:
 				var bark: int = table[species]["bark"]
 				var shade := PainterSheet.lch_of_color(palette.get_pixel(3, bark * 4 + 1))
-				if shade.y > 0.02:
-					assert_true(
-						shade.z < 75.0 or shade.z > 350.0,
-						"%s bark shade in %s at %.0f is warm (h %.0f)" % [species, mood, elevation, shade.z]
-					)
+				var mid := PainterSheet.lch_of_color(palette.get_pixel(15, bark * 4 + 1))
+				if shade.y > 0.02 and mid.y > 0.02:
+					var where := "%s bark shade in %s at %.0f" % [species, mood, elevation]
+					assert_between(shade.z, 10.0, 80.0, "%s is warm, not maroon (h %.0f)" % [where, shade.z])
+					var turn := absf(fposmod(shade.z - mid.z + 180.0, 360.0) - 180.0)
+					assert_lt(turn, 12.0, "%s keeps its middle tone's hue (%.0f off)" % [where, turn])
 	var summer: Image = PainterTreeTones.bake(sheet, "summer", 60.0)["palette"]
 	for species: String in table:
 		var leaf: int = table[species]["leaf"]
@@ -249,6 +253,25 @@ func test_stems_shade_brown_and_crowns_shade_green() -> void:
 		var mid := PainterSheet.lch_of_color(summer.get_pixel(15, leaf * 4 + 1))
 		assert_gt(shade.y, mid.y * 0.6, "%s crown shade keeps its chroma" % species)
 		assert_between(shade.z, 135.0, 200.0, "%s crown shade is green to teal" % species)
+
+
+## painter-a2a4: the stems read dark chocolate beside Classic's mid brown. On a summer midday a
+## brown stem's middle tone is a mid brown and its lit side a light one, and its shade is no
+## darker than a step under the middle.
+func test_summer_stems_are_mid_brown() -> void:
+	var sheet := PainterSheet.load_sheet("core")
+	var table := PainterTreeTones.row_table()
+	var palette: Image = PainterTreeTones.bake(sheet, "summer", 60.0)["palette"]
+	for species: String in table:
+		var bark: int = table[species]["bark"]
+		var mid := PainterSheet.lch_of_color(palette.get_pixel(15, bark * 4 + 1))
+		if mid.y < 0.03:
+			continue
+		var shade := PainterSheet.lch_of_color(palette.get_pixel(3, bark * 4 + 1))
+		var lit := PainterSheet.lch_of_color(palette.get_pixel(28, bark * 4 + 1))
+		assert_gte(mid.x, 0.44, "%s bark middle is a mid brown (L %.2f)" % [species, mid.x])
+		assert_gte(lit.x, 0.58, "%s bark lit side is a light brown (L %.2f)" % [species, lit.x])
+		assert_gte(shade.x, mid.x * 0.7, "%s bark shade is a step under the middle" % species)
 
 
 func test_the_shared_meshes_and_brushes() -> void:
