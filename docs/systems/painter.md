@@ -464,6 +464,38 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   `docs/research/2026-11-09-prototypes/compare/painter_snow/`. Open: a soft blue light patch where
   a sunlit slope sits at the lit threshold (the light's wobble, not the snow); tile's show-through
   dashes read regular in rows; no drift against chimneys or dormers yet.
+- **Buildings fix (card painter-buildings-fix, 2026-11-13; look-pending).** A critic failed the
+  combined look on five points; the thatch cottage is the reference. (1) Winter roofs: under the
+  blanket the roof's own marks are hidden whole (`hide` 1; the 8 % left read as dirt and drew the
+  thatch's course bands and ruled lines as a faint grid); `snow_layer` is replaced by `snow_thin`,
+  which bares the roof's strokes only in a few broken, wavering runs just above the eave's lip
+  (taller on steep or sun-facing slopes, none at the verges, where tile dashes read as flecks);
+  the blanket carries its own broad washes (`p_wash`, lighter and bluer, along the eave) and its
+  light turns softly (a wider light step on snow, the wobble taken from the washes). Strips: the
+  eave lip overhangs 0.19 m and hangs in scallops (up to 0.09 m, about one a metre, a segment
+  each 0.3 m of eave, 0.5 m of verge), the underside darker blue; ridge caps 0.28 m high, 0.5 m
+  down each slope; each chimney gets a drift collar where its stack meets the roof, heaped on the
+  uphill side (16 triangles). (2) Stone walls: `p_stones`, dry-brushed stones per course (each
+  course its own stone length, each stone its own inset per side, an edge the dry brush breaks,
+  its own tone and value from the piece's accent), a few dark joint strokes, one broad stroke
+  along a course here and there. (3) Dabs and the light's wobble on a piece with a record come
+  from its own frame, stretched along its strokes (along the courses on a wall, down the fall line
+  on a roof) and from two separate noises, so a roof blotch is a few brushed patches without a
+  ring and a tree's shadow on a wall breaks into strokes along the courses (`f_tune.y` 0.7 there);
+  a roof slope's light step is a little softer and its wobble half as far. (4) Half-timber: each
+  beam bows across itself up to 5.5 cm between its ends and its brushed edge wanders up to 3 cm
+  (same cut, no new triangles); window frames and door cases widen by 0.6 of a beam's brush;
+  plaster carries stronger dry-brush washes over a slow value drift. (5) Grimdark's flatness is in
+  the crowns and the ground, not the buildings (their roles keep their colours). Triangles: main
+  pass unchanged (three houses 11,842, shadow 5,098), winter strips 750-950 a house (thatched
+  748, porch 752, dormered 828, hip 944), +876 visible at home for three houses over the roof-snow
+  card's. Cost (one interleaved sitting, sun 20, 1920x1080, vsync off, the tip's shader against
+  this one on the same meshes, order tip new new tip in summer then winter, each the mean of its
+  pair): summer home/mid/far/eye +0.03/+0.02/+0.00/+0.01 ms for 3 houses, +0.00/+0.01/+0.01/+0.01
+  for 12; winter -0.01/+0.00/-0.00/+0.03 for 3, -0.00/+0.01/+0.01/+0.02 for 12. Winter's eye
+  overrun over Classic (+0.24 to +0.25 ms here) is not the snow: the strips and the snow terms
+  switched off (`snow_body` false) cost the same within 0.01 ms; it is the hand-drawn shading
+  itself at the eye. Frames: `docs/research/2026-11-09-prototypes/compare/painter_final2/`.
 - **Its cost (card painter-manner-b, one interleaved sitting, 1920x1080, vsync off, summer sun
   45, order Classic A3b B B A3b Classic, each the mean of its pair; indicative, shared GPU, the
   pairs 0.0-0.06 ms apart).** B over Classic buildings (under the painted look): home, mid, far,

@@ -16,10 +16,11 @@ extends RefCounted
 ##           so a shader draws strokes along the piece instead of along the world;
 ##   shadow  the uncut mesh moved by the same field: the shadow pass keeps the recipe's triangles;
 ##   fringe  a thatch roof's ragged teeth, a few triangles along each eave, appended to the draw;
-##   hand    a half-timber beam cut every BEAM_SEG_M along its axis and widened on both long sides
-##           by a brush width that wanders (`brush_at`), so its edges read brushed and a little
-##           crooked; a door leaf and its panels lean away from the leaf's hinge (`door_dir`;
-##           `door_lean` where no leaf has one), one way per building;
+##   hand    a half-timber beam cut every BEAM_SEG_M along its axis, widened on both long sides
+##           by a brush width that wanders (`brush_at`) and bowed between its ends, so its edges
+##           read brushed and it stands a little crooked; a window frame or door case widened by
+##           a share of that brush; a door leaf and its panels lean away from the leaf's hinge
+##           (`door_dir`; `door_lean` where no leaf has one), one way per building;
 ##   stand-off a wall's trim (procgen's `side`, `proud`) at least MIN_PROUD_M off its wall's face,
 ##           so the uncut wall never buries a sill or a beam;
 ##   collider the structure's collision faces moved by the same field (and cut like the roof
@@ -75,11 +76,18 @@ const SEG_M := 1.0
 const TOOTH_M := 0.2
 const TOOTH_LEN_M := 0.22
 ## A beam's cut along its axis, metres (a 3 m post in two, a 6 m plate in four; its back face,
-## in the wall, is not cut), and its brush: each long side moves out by BEAM_WIDEN_M plus up to
-## BEAM_WANDER_M of a smooth wander along the beam.
+## in the wall, is not cut; a finer cut tripled a post's triangles), and its brush: each long
+## side moves out by BEAM_WIDEN_M plus up to BEAM_WANDER_M of a smooth wander along the beam, and
+## the whole beam bows across itself by up to BEAM_BOW_M between its ends (card
+## painter-buildings-fix: straight timbers read as a second, ruled hand beside the thatch
+## cottage's). A window frame or door case widens by FRAME_BRUSH of a beam's brush (its edges a
+## little soft), uncut.
 const BEAM_SEG_M := 1.6
 const BEAM_WIDEN_M := 0.016
-const BEAM_WANDER_M := 0.016
+const BEAM_WANDER_M := 0.03
+const BEAM_BOW_M := 0.055
+const FRAME_BRUSH := 0.6
+const FRAME_KINDS: Array[String] = ["frame", "door_case"]
 ## A door leaf's lean: metres along the wall per metre above the wall foot.
 const DOOR_LEAN := 0.045
 ## A collision triangle is cut like a roof when its lowest point is above this share of the way
@@ -427,7 +435,9 @@ static func _stand_off(m: Grow, walls: Dictionary) -> void:
 
 
 ## The hand: every beam vertex moved out across the beam by brush_at (a widened, wandering brush
-## edge), every door leaf and panel vertex by door_lean. Before the wander, so both move with it.
+## edge) and across it by the beam's bow (none at its ends, so joints stay met), every frame and
+## door case vertex by FRAME_BRUSH of brush_at, every door leaf and panel vertex by door_lean.
+## Before the wander, so all of them move with it.
 static func _hand(m: Grow, opts: Dictionary) -> void:
 	var phase: Vector3 = opts.get("phase", Vector3.ZERO)
 	var foot := float(opts.get("foot", 0.0))
@@ -437,11 +447,20 @@ static func _hand(m: Grow, opts: Dictionary) -> void:
 		if rec == null:
 			continue
 		var code := m.code(k)
-		if _is_beam(rec):
+		if _is_beam(rec) or FRAME_KINDS.has(str(rec["kind"])):
+			var beam := _is_beam(rec)
 			var v: Vector3 = rec["v"]
+			var d := m.pos[k] - (rec["origin"] as Vector3)
 			var half := maxf(float(rec["v_len"]) * 0.5, 0.001)
-			var across := (m.pos[k] - (rec["origin"] as Vector3)).dot(v) - half
-			m.pos[k] += v * clampf(across / half, -1.0, 1.0) * brush_at(m.pos[k], phase)
+			var across := d.dot(v) - half
+			var brush := brush_at(m.pos[k], phase) * (1.0 if beam else FRAME_BRUSH)
+			var shift := v * clampf(across / half, -1.0, 1.0) * brush
+			if beam:
+				var length := maxf(float(rec["u_len"]), 0.001)
+				var s := d.dot(rec["u"])
+				var bow := sin(PI * clampf(s / length, 0.0, 1.0)) * sin(s * 1.3 + phase.y + length)
+				shift += v * bow * BEAM_BOW_M
+			m.pos[k] += shift
 		elif code == CODE_LEAF and dir != Vector3.ZERO:
 			m.pos[k] += dir * maxf(m.pos[k].y - foot, 0.0) * DOOR_LEAN
 		elif code == CODE_LEAF:

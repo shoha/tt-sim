@@ -15,7 +15,10 @@ extends RefCounted
 ##         (a heaped, scalloped outline), more on thatch, which holds more snow;
 ##   cap   along every ridge and hip, one half per slope, rising from the slope to a soft crest
 ##         midway to the other half's edge, where the two halves meet;
-##   pad   a cushion on each chimney's cap and a wedge on each window sill.
+##   pad   a cushion on each chimney's cap, a drift collar where its stack meets the roof (heaped
+##         on the uphill side) and a wedge on each window sill.
+## The lip's nose hangs over the edge in scallops (card painter-buildings-fix: a ruler-straight
+## lip read as machine-made), so its blue underside reads as a soft, heavy overhang.
 ## Every vertex carries the manner's per-vertex data (UV2: metres along the strip and the profile
 ## step; CUSTOM0: [length, profile steps, CODE, accent]) and is moved by the building's wander
 ## field, so the strips follow the leaning eaves. The strips cast no shadow (PainterMannerHost puts
@@ -26,19 +29,25 @@ const CODE := 9
 ## How much snow a roof material holds (thatch the most); others take DEFAULT_HOLD.
 const HOLD: Dictionary = {"thatch": 1.0, "turf": 0.9, "wood": 0.75, "shingle": 0.75}
 const DEFAULT_HOLD := 0.7
-## Segment lengths along an eave, a verge and a ridge (metres).
-const SEG_EAVE_M := 0.7
-const SEG_VERGE_M := 0.9
+## Segment lengths along an eave, a verge and a ridge (metres; an eave's carries its scallops).
+const SEG_EAVE_M := 0.3
+const SEG_VERGE_M := 0.5
 const SEG_RIDGE_M := 0.8
 ## The lip at full hold: thickness above the slope, reach up the slope from the edge, overhang
-## past the edge (metres); a verge's is VERGE_SCALE of an eave's.
+## past the edge and the deepest droop of a scallop (metres); a verge's is VERGE_SCALE of an
+## eave's.
 const LIP_T_M := 0.24
 const LIP_IN_M := 0.42
-const LIP_OVER_M := 0.11
+const LIP_OVER_M := 0.19
+const LIP_DROOP_M := 0.09
 const VERGE_SCALE := 0.7
 ## The ridge cap at full hold: height above the ridge and reach down each slope.
-const CAP_T_M := 0.2
-const CAP_IN_M := 0.4
+const CAP_T_M := 0.28
+const CAP_IN_M := 0.5
+## A chimney's drift collar at full hold: its height against the stack (more uphill) and its
+## reach out over the roof, in half-widths of the stack.
+const COLLAR_T_M := 0.2
+const COLLAR_REACH := 1.7
 ## Two cap edges of different roofs this close (metres, line to line) are one ridge's halves.
 const PAIR_M := 0.7
 ## A chimney cushion's and a sill wedge's thickness.
@@ -101,6 +110,8 @@ static func build(src: Dictionary) -> Dictionary:
 	var before_pads := g.idx.size()
 	for pad: Dictionary in src.get("pads", []):
 		_pad(g, pad)
+		if str(pad["kind"]) == "chimney":
+			_collar(g, pad, src.get("roofs", []))
 	counts.pad = (g.idx.size() - before_pads) / 3
 	if g.idx.is_empty():
 		return {"arrays": [], "triangles": 0, "by_kind": counts}
@@ -165,6 +176,13 @@ static func swell(s: float, seed: int) -> float:
 	return 1.0 + 0.22 * sin(s * 1.7 + ph) + 0.13 * sin(s * 4.1 + ph * 2.3)
 
 
+## The hang of a lip's scallops along its edge, 0 to 1 (`s` metres along it, `seed` per edge):
+## about one scallop a metre, each its own width. Pure.
+static func scallop(s: float, seed: int) -> float:
+	var ph := float(seed % 991) * 0.53
+	return 0.5 + 0.5 * sin(s * 6.6 + ph + 0.9 * sin(s * 2.3 + ph))
+
+
 ## The direction in the slope's plane (normal `n`) across edge a-b, away from the slope's middle
 ## `mid`. Pure.
 static func outward(a: Vector3, b: Vector3, n: Vector3, mid: Vector3) -> Vector3:
@@ -192,11 +210,12 @@ static func _lip(
 		var end := minf(minf(s, length - s) / 0.35, 1.0)
 		var t := LIP_T_M * hold * sw * lerpf(0.6, 1.0, end)
 		var reach := LIP_IN_M * hold * (2.0 - sw)
-		var over := LIP_OVER_M * hold * sw
+		var over := LIP_OVER_M * hold * sw * lerpf(0.5, 1.0, end) * (1.0 + 0.25 * sin(s * 3.3 + seed))
+		var droop := LIP_DROOP_M * hold * scallop(s, seed) * end
 		g.add(p - o * reach - n * 0.015, n, s, 0.0, size, acc)
 		g.add(p - o * reach * 0.3 + n * t, n + o * 0.35, s, 1.0, size, acc)
-		g.add(p + o * over + n * t * 0.4, o + n * 0.25, s, 2.0, size, acc)
-		g.add(p + o * over * 0.3 - n * t * 0.3, o * 0.4 - n, s, 3.0, size, acc)
+		g.add(p + o * over + n * t * 0.3 - Vector3.UP * droop * 0.5, o + n * 0.25, s, 2.0, size, acc)
+		g.add(p + o * over * 0.4 - n * t * 0.3 - Vector3.UP * droop, o * 0.4 - n, s, 3.0, size, acc)
 	for i in count:
 		g.band(first + i * 4, first + (i + 1) * 4, 4)
 	g.end_cap(first, 4, -along)
@@ -302,6 +321,64 @@ static func _pad(g: Strips, pad: Dictionary) -> void:
 		g.tri(rim + j, ring + j, ring + k, facing)
 		g.tri(rim + j, ring + k, rim + k, facing)
 		g.tri(ring + j, crown, ring + k, Vector3.UP)
+
+
+## A chimney's drift collar (16 triangles): where its stack (`pad`, the cap's or the stack's top)
+## meets the highest roof slope of `roofs` under it, a ring of snow against the stack's sides,
+## heaped and reaching further on the uphill side, sloping down to the roof. Nothing when no slope
+## lies under the stack.
+static func _collar(g: Strips, pad: Dictionary, roofs: Array) -> void:
+	var c: Vector3 = pad["centre"]
+	var roof: Dictionary = {}
+	var best := -INF
+	for r: Dictionary in roofs:
+		var y := _plane_y(r, c)
+		if is_nan(y) or y >= c.y or y <= best:
+			continue
+		var d := Vector3(c.x, y, c.z) - (r["origin"] as Vector3)
+		var du := d.dot(r["u"])
+		var dv := d.dot(r["v"])
+		if du > -0.1 and du < float(r["u_len"]) + 0.1 and dv > -0.1 and dv < float(r["v_len"]) + 0.1:
+			best = y
+			roof = r
+	if roof.is_empty():
+		return
+	var n: Vector3 = roof["n"]
+	var uphill := -Vector3(n.x, 0.0, n.z).normalized()
+	var hold := float(HOLD.get(str(roof.get("material", "")), DEFAULT_HOLD))
+	var ha: Vector3 = pad["a"]
+	var hb: Vector3 = pad["b"]
+	var size := Vector2(ha.length() * 2.0, 2.0)
+	var offs := [-ha - hb, -hb, ha - hb, ha, ha + hb, hb, -ha + hb, -ha]
+	var rim := g.pos.size()
+	for off: Vector3 in offs:
+		var dir := Vector3(off.x, 0.0, off.z).normalized()
+		var heap := maxf(dir.dot(uphill), 0.0)
+		var p := c + off * (COLLAR_REACH + 0.8 * heap)
+		p.y = _plane_y(roof, p) - 0.01
+		g.add(p, n, 0.0, 0.0, size, 0.5)
+	for off: Vector3 in offs:
+		var dir := Vector3(off.x, 0.0, off.z).normalized()
+		var heap := maxf(dir.dot(uphill), 0.0)
+		var p := c + off * 1.05
+		p.y = _plane_y(roof, p) + COLLAR_T_M * hold * (0.5 + heap)
+		g.add(p, n + dir * 0.6 + Vector3.UP * 0.4, 0.0, 1.0, size, 0.5)
+	var ring := rim + offs.size()
+	for j in offs.size():
+		var k := (j + 1) % offs.size()
+		var facing := g.nor[ring + j] + g.nor[ring + k]
+		g.tri(rim + j, ring + j, ring + k, facing)
+		g.tri(rim + j, ring + k, rim + k, facing)
+
+
+## The height of roof slope `r`'s plane over map point `p` (its x and z); NAN for a slope that
+## stands near upright. Pure.
+static func _plane_y(r: Dictionary, p: Vector3) -> float:
+	var n: Vector3 = r["n"]
+	if n.y < 0.2:
+		return NAN
+	var o: Vector3 = r["origin"]
+	return o.y - (n.x * (p.x - o.x) + n.z * (p.z - o.z)) / n.y
 
 
 ## The chimney caps and window sills of a structure, read from the vertices of the pieces that

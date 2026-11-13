@@ -13,8 +13,10 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
  * part). The prototype's stroke families (spike_built3), drawn from the piece frame:
  *   ruled lines just inside each face edge, at least about two pixels wide: the eave dark, the
  *   verges and the ridge pale (the prototype's ruled verge), a wall's corners dark;
- *   a plaster wall: a few broad soft washes, lighter or darker, each its own length and height;
- *   a stone wall: broad dry-brush marks per course, a broken course line, a few ticks;
+ *   a plaster wall: broad dry-brush washes, lighter or darker, each its own length and height,
+ *   over a slow drift of value across the wall;
+ *   a stone wall: dry-brushed stones (p_stones), crisp and irregular, each its own tone, with a
+ *   few dark joint strokes under the courses and beside the stones;
  *   a thatch slope: strokes down the slope with course lines; tiles, slates and shingles: dashes
  *   under each course;
  *   a beam (widened past its recipe width by the mesh): a broad stroke, a light and a dark line
@@ -22,14 +24,18 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
  *   a door: plank seams, a wandering grain, a brace stroke, darker at the head;
  *   a thatch tooth: strands and a darker tip.
  * A door or shutter takes the timber ramp, or the clay, turf or slate accent by its paint
- * (pick 3). Winter (`snow` above 0, the sheet's roof-snow, card painter-roof-snow): a roof slope
- * lies under a blanket (snow_layer: deeper toward the ridge and on thatch, thinner on steep and
- * sun-facing runs, its outline scalloped and brushed, the roof's marks showing through where it
- * is thin, soft blue troughs), the snow strips (code 9, PainterMannerSnow: eave and verge lips,
- * ridge caps, chimney and sill pads) take the snow's ramp whole, lit by their own normals, with a
- * darker foot where they sit on the roof. Light, tones and the uniforms the sheet
- * sets are the A3b shader's (PainterBuildings._tone). Marks fade out with their pixel footprint
- * (far views draw only the wash).
+ * (pick 3). Winter (`snow` above 0, the sheet's roof-snow, cards painter-roof-snow and
+ * painter-buildings-fix): a roof slope lies under a blanket that hides the roof's own marks
+ * whole and carries its own broad brush washes, lighter and bluer, and a soft light; the roof
+ * shows through only in a few thin runs (snow_thin: just above the eave's lip, taller on steep
+ * and sun-facing slopes), where its strongest strokes are bare and crisp. The
+ * snow strips (code 9, PainterMannerSnow: eave and verge lips, ridge caps, chimney cushions and
+ * collars, sill pads) take the snow's ramp whole, lit by their own normals, with a darker foot
+ * where they sit on the roof and a blue underside. The light's wobble (and so a light edge or
+ * a tree's shadow) follows each piece's strokes: along the courses on a wall, down the fall line
+ * on a roof. Light, tones and the uniforms the sheet sets are the A3b shader's
+ * (PainterBuildings._tone). Marks fade out with their pixel footprint (far views draw only the
+ * wash).
  *
  * MANAGED BY: PainterMannerHost (painter/buildings/manner_host.gd).
  */
@@ -73,6 +79,12 @@ varying vec3 f_shd;
 varying vec3 f_mid;
 varying vec3 f_lit;
 varying float f_wob;
+// x: half the width of the light's steps, crisp on paint, a little softer on a roof slope and
+// soft on snow (a blanket's light turns); y: how far the wobble moves a cast shadow's edge (a
+// wall's is broken into strokes along its courses: a tree's soft shadow on a wall read as pale
+// diagonal smears); z: how far it moves the light's steps (half on a roof slope, where a step
+// crossing the slope read as a dark blot).
+varying vec3 f_tune;
 
 void vertex() {
 	v_wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -151,26 +163,55 @@ vec2 p_wash(vec2 f, float row, float cell, float share, float thick, float dark_
 	return vec2(on * is_dark, on * (1.0 - is_dark));
 }
 
-// How thick winter's blanket lies on a roof piece (0 thin, 1 deep), from its frame (`f` metres,
-// `ul` and `vl` its size, `taper` a hip face's, `n` its normal, `acc` its accent): the sheet's
-// snow times what the roof holds (thatch the most), deeper toward the ridge and in broad heaps,
-// thinner on steep and sun-facing runs, and deep where it meets the strips (within about half a
-// metre of an eave, verge, hip or ridge). The line between deep and thin is scalloped along the
-// slope and dragged along the courses like a brush. The whole roof lies under snow; where it is
-// thin the roof's own strokes show through it, bare.
-float snow_layer(vec2 f, float ul, float vl, float taper, vec3 n, float acc) {
+// Dry-brushed stones on a wall frame `f` (metres) in courses `cr` high (`fw` a metre's pixel
+// footprint): per course its own stone length (1.4 to 2.4 courses) and offset; per stone a crisp
+// shape (each side its own inset, the edge broken by the drag of a dry brush along the course)
+// and a tone of its own: about a third darker, a quarter lighter, the rest the wall's. A dark
+// joint stroke runs under some stretches of a course and beside some stones. Returns (dark,
+// light, a value shift for the stone).
+vec3 p_stones(vec2 f, float cr, float fw, float seed) {
+	float r = f.y / cr;
+	float ri = floor(r);
+	float len = cr * mix(1.4, 2.4, p_hash(vec3(ri, seed, 3.0)));
+	float x = f.x / len + p_hash(vec3(ri, seed, 1.0)) * 5.0;
+	float ci = floor(x);
+	float h = p_hash(vec3(ri, ci, seed + 2.0));
+	float h2 = p_hash(vec3(ci, ri, seed + 4.0));
+	vec2 q = vec2(fract(x) * len, fract(r) * cr);
+	float drag = p_n2(vec2(f.x * 4.0, f.y * 18.0), seed);
+	float l = 0.02 + 0.06 * h2;
+	float rt = 0.02 + 0.06 * fract(h2 * 7.3);
+	float b = 0.015 + 0.035 * fract(h * 5.1);
+	float t = 0.015 + 0.035 * fract(h * 9.7);
+	float edge = min(min(q.x - l, len - rt - q.x), min(q.y - b, cr - t - q.y)) + (drag - 0.5) * 0.05;
+	float inside = smoothstep(0.0, max(fw * 1.2, 0.006), edge);
+	float dry = mix(0.45, 1.0, smoothstep(0.3, 0.6, drag));
+	float dk = inside * dry * smoothstep(0.64, 0.7, h) * mix(0.3, 0.6, fract(h * 13.1));
+	float lt = inside * dry * (1.0 - smoothstep(0.22, 0.28, h)) * mix(0.3, 0.55, fract(h * 17.3));
+	float jw = max(0.02, fw * 1.6);
+	float under = (1.0 - smoothstep(jw * 0.5, jw, q.y)) * step(0.6, p_n2(vec2(f.x * 0.9, ri), seed + 8.0));
+	float beside = (1.0 - smoothstep(jw * 0.5, jw, q.x)) * step(0.72, h2);
+	float joint = max(under, beside) * mix(0.55, 1.0, drag);
+	return vec3(dk + joint * 0.55, lt, (fract(h * 3.7) - 0.5) * inside);
+}
+
+// Where winter's blanket lies thin on a roof piece (0 deep, 1 thin), from its frame (`f` metres,
+// `ul` and `vl` its size, `taper` a hip face's, `n` its normal, `acc` its accent): only a few
+// runs just above the eave's lip, never the middle of a slope nor the verges (bare marks there
+// read as scattered flecks), taller on a steep or sun-facing slope where snow slides, broken
+// along the eave and wavering like a hand-drawn line. Less of it where the roof holds more snow
+// (thatch) and none under deep snow.
+float snow_thin(vec2 f, float ul, float vl, float taper, vec3 n, float acc) {
 	float hold = pattern == 8 ? 1.0 : (pattern == 9 ? 0.9 : (pattern == 7 ? 0.75 : 0.7));
-	float h = vl > 0.0 ? clamp(f.y / vl, 0.0, 1.0) : 0.5;
-	float steep = 1.0 - smoothstep(0.6, 0.85, n.y);
-	float sun = smoothstep(0.35, 0.85, dot(n, normalize(foliage_sun.xyz)));
-	float heap = p_n2(f * 0.55 + acc * 17.0, 31.0);
+	float steep = 1.0 - smoothstep(0.55, 0.8, n.y);
+	float sun = smoothstep(0.3, 0.8, dot(n, normalize(foliage_sun.xyz)));
 	float dx = min(f.x - taper * f.y, ul - taper * f.y - f.x) / sqrt(1.0 + taper * taper);
-	float rim = min(dx, min(f.y, vl - f.y));
-	float d = snow * hold * 1.6 + 0.3 * h + 0.5 * (heap - 0.5) - 0.25 * steep - 0.3 * sun
-		+ 0.45 * (1.0 - smoothstep(0.3, 0.75, rim));
-	float edge = (p_n2(vec2(f.x * 1.3, f.y * 0.5), 21.0) - 0.5) * 0.3
-		+ (p_n2(vec2(f.x * 0.4, f.y * 6.0), 23.0) - 0.5) * 0.14;
-	return smoothstep(0.44, 0.5, d + edge);
+	float y = f.y + 0.1 * sin(f.x * 2.3 + acc * 20.0) + 0.05 * sin(f.x * 5.9 + acc * 7.0);
+	float tall = 0.3 + 0.4 * max(steep, sun);
+	float eave_b = smoothstep(0.42, 0.5, y) * (1.0 - smoothstep(0.42 + tall, 0.5 + tall, y));
+	float runs = smoothstep(0.58, 0.66, p_n2(vec2(f.x * 0.55, acc * 13.0), 61.0));
+	float room = clamp(1.7 - snow * hold * 2.4 + 0.3 * sun, 0.0, 1.0);
+	return eave_b * runs * room * smoothstep(0.5, 0.8, dx);
 }
 
 void fragment() {
@@ -180,26 +221,6 @@ void fragment() {
 	METALLIC = 0.0;
 	vec3 n = normalize(v_wn);
 	vec3 wp = v_wp;
-	// One 3D noise for the dabs, reused as the patches' second octave and the light's wobble
-	// (card painter-manner-c: two 3D noises a fragment fewer than A3b's).
-	float bn = p_noise(wp * dab_freq + 33.0);
-	float pn = mix(p_noise(wp * patch_freq + 7.0), bn, 0.3);
-	float variant = mix(0.5, smoothstep(0.36, 0.64, pn), patch_mix);
-	float dark = 0.0;
-	float light = 0.0;
-	// A roof slope's own strokes (where winter's thin snow leaves the roof bare).
-	float strokes = 0.0;
-	float dab = (pattern >= 5 ? 1.0 : dab_wall) * dabs;
-	// A slate's dark dabs read as blotches up close: a lighter share of them.
-	dark += smoothstep(0.62, 0.72, bn) * dab * (pattern == 6 ? 0.35 : 1.0);
-	light += (1.0 - smoothstep(0.28, 0.38, bn)) * dab * 0.8;
-	vec2 flat_n = n.xz;
-	float flat_len = length(flat_n);
-	vec2 down = flat_len > 0.02 ? flat_n / flat_len : vec2(0.0, 1.0);
-	vec2 across = vec2(-down.y, down.x);
-	float up = n.y;
-	float u = dot(wp.xz, across);
-	float h = clamp(v_h, 0.0, 1.0);
 	int code = int(floor(v_rec.z + 0.01));
 	// A wall's course in metres rides in the code's fraction (0: the pattern's own), a hip face's
 	// taper (metres along the eave a metre up the slope) in sixteenths in the accent's whole part.
@@ -209,6 +230,46 @@ void fragment() {
 	vec2 f = v_fuv;
 	float ul = v_rec.x;
 	float vl = v_rec.y;
+	bool on_course = code == 1 || code == 3;
+	bool on_slope = code == 2 || code == 8;
+	// The dabs' noise and the light's wobble. A piece with a record draws them from its own frame,
+	// stretched along its strokes (along the courses on a wall, down the fall line on a roof), so
+	// a dab is a brushed patch and a light edge or a tree's shadow breaks into brush marks, never
+	// a round blot or a smear; two noises there, so a dab never carries a ring of light (card
+	// painter-buildings-fix). A piece with none keeps A3b's one 3D noise for both.
+	float bn;
+	float wob;
+	if (code > 0) {
+		vec2 k = on_course ? vec2(0.8, 3.5) : (on_slope ? vec2(0.45, 0.9) : vec2(1.1));
+		bn = p_n2(f * k + acc * 13.0, 33.0);
+		wob = bn;
+		if (on_course || on_slope) {
+			wob = p_n2(f * (on_course ? vec2(1.2, 6.0) : vec2(3.0, 0.5)) + acc * 5.0, 35.0);
+			bn += on_slope ? (wob - 0.5) * 0.25 : 0.0;
+		}
+	} else {
+		bn = p_noise(wp * dab_freq + 33.0);
+		wob = bn;
+	}
+	float pn = mix(p_noise(wp * patch_freq + 7.0), bn, 0.3);
+	float variant = mix(0.5, smoothstep(0.36, 0.64, pn), patch_mix);
+	float dark = 0.0;
+	float light = 0.0;
+	// A roof slope's own strokes (where winter's thin snow leaves the roof bare).
+	float strokes = 0.0;
+	float dab = (pattern >= 5 ? 1.0 : dab_wall) * dabs;
+	// A roof's dabs are a few subtle brushed patches (blotches read as stains); a slate's fewer.
+	float dab_hi = on_slope ? 0.68 : 0.62;
+	float dab_lit = on_slope ? 0.5 : 1.0;
+	dark += smoothstep(dab_hi, dab_hi + 0.1, bn) * dab * (pattern == 6 ? 0.35 : 1.0) * dab_lit;
+	light += (1.0 - smoothstep(0.28, 0.38, bn)) * dab * 0.8 * dab_lit;
+	vec2 flat_n = n.xz;
+	float flat_len = length(flat_n);
+	vec2 down = flat_len > 0.02 ? flat_n / flat_len : vec2(0.0, 1.0);
+	vec2 across = vec2(-down.y, down.x);
+	float up = n.y;
+	float u = dot(wp.xz, across);
+	float h = clamp(v_h, 0.0, 1.0);
 	// A metre's pixel footprint on the piece: fine marks fade from 4 cm a pixel, broad ones from
 	// 8 cm, the ruled lines from 16 cm; past 30 cm no stroke is drawn at all (far views).
 	float fw = length(fwidth(f));
@@ -230,19 +291,14 @@ void fragment() {
 		}
 		float cr = course_m > 0.05 ? course_m : (pattern == 2 ? 0.3 : (pattern == 3 ? 0.24 : 0.34));
 		if (wall && pattern == 1) {
-			// Stone: about two blocks in five, staggered per course, get a dab a little inside
-			// the block, darker or lighter (the prototype's scattered stones, not a full grid); it
-			// reads at home zoom where the marks are a few pixels (fades when a course is under
-			// about three pixels).
-			float row = floor(f.y / cr);
-			float c = f.x / (cr * 1.9) + 0.5 * mod(row, 2.0) + p_hash(vec3(row, 3.0, 1.0)) * 0.3;
-			float blk = p_hash(vec3(row, floor(c), 7.0));
-			vec2 q = vec2(fract(c), fract(f.y / cr));
-			float inside = smoothstep(0.08, 0.2, min(q.x, 1.0 - q.x)) * smoothstep(0.1, 0.24, min(q.y, 1.0 - q.y));
+			// Stone, dry-brushed (p_stones; card painter-buildings-fix: soft blurred blocks read as
+			// an upscaled texture): it reads at home zoom and fades when a course is under about
+			// three pixels.
+			vec3 st = p_stones(f, cr, fw, 3.0 + acc * 17.0);
 			float block = 1.0 - smoothstep(0.15, 0.35, fw / cr);
-			float stone = step(0.6, blk) * inside * block;
-			dark += stone * step(0.8, blk) * 0.45;
-			light += stone * (1.0 - step(0.8, blk)) * 0.35;
+			dark += st.x * block;
+			light += st.y * block;
+			variant = clamp(variant + st.z * 0.6 * block, 0.0, 1.0);
 		}
 		if (fw < 0.3) {
 			if (face || code == 2) {
@@ -274,22 +330,23 @@ void fragment() {
 			}
 			if (wall) {
 				if (pattern == 1) {
-					// Stone: a broad dry mark or two per course, a broken course line, ticks.
-					vec2 m = p_wash(f, cr, cr * 2.2, 0.6, 0.3, 0.55, 11.0);
-					dark += m.x * 0.75 * broad;
-					light += m.y * 0.55 * broad;
-					float course = p_line(f.y / cr, 0.08) * step(0.4, p_n2(vec2(f.x * 1.3, floor(f.y / cr)), 4.0));
-					dark += course * 0.5 * detail;
-					float tick = p_line(f.x / (cr * 1.9) + p_hash(vec3(floor(f.y / cr), 2.0, 5.0)) * 3.0, 0.035);
-					dark += tick * step(0.65, p_hash(vec3(floor(f.y / cr), floor(f.x / (cr * 1.9)), 6.0))) * 0.4 * detail;
+					// Stone: one broad dry stroke along a course here and there (the stones and
+					// their joints are p_stones').
+					vec2 m = p_wash(f, cr, cr * 3.0, 0.3, 0.22, 0.5, 11.0 + acc * 9.0);
+					dark += m.x * 0.3 * broad;
+					light += m.y * 0.3 * broad;
 				} else if (pattern == 2 || pattern == 3) {
 					vec2 g = pattern == 2 ? f : f.yx;
 					dark += p_line(g.y / cr, 0.12) * step(0.3, p_n2(vec2(g.x * 0.9, floor(g.y / cr)), 4.0)) * 0.55;
 				} else {
-					// Plaster: a few broad soft washes, mostly lighter, each its own size.
-					vec2 m = p_wash(f, 0.6, 1.7, 0.32, 0.22, 0.35, 3.0);
-					dark += m.x * 0.22 * broad;
-					light += m.y * 0.2 * broad;
+					// Plaster: broad dry-brush washes, lighter or darker, each its own size, over
+					// a slow drift of value across the wall (a stretch lighter, the next darker).
+					vec2 m = p_wash(f, 0.55, 1.5, 0.5, 0.26, 0.45, 3.0 + acc * 9.0);
+					dark += m.x * 0.4 * broad;
+					light += m.y * 0.36 * broad;
+					float drift = p_n2(f * vec2(0.45, 0.6) + acc * 7.0, 37.0);
+					dark += smoothstep(0.55, 0.8, drift) * 0.22 * broad;
+					light += (1.0 - smoothstep(0.2, 0.45, drift)) * 0.2 * broad;
 				}
 			} else if (roof) {
 				if (pattern == 8) {
@@ -373,25 +430,38 @@ void fragment() {
 	float cover = 0.0;
 	float hide = 0.85;
 	float snow_dark = 0.0;
+	float snow_light = 0.0;
+	float soft = 0.01;
 	if (snow > 0.0) {
 		if (strip || (snow_body && code == 6)) {
-			// A strip (or the ridge beam under its cap): all snow, a darker foot where it sits.
+			// A strip (or the ridge beam under its cap): all snow, a darker foot where it sits
+			// and a blue underside under a lip's nose.
 			cover = 1.0;
+			hide = 1.0;
+			soft = 0.06;
 			snow_dark = strip
-				? 0.4 * (1.0 - smoothstep(0.0, 0.6, f.y)) + 0.35 * smoothstep(1.8, 3.0, f.y)
+				? 0.4 * (1.0 - smoothstep(0.0, 0.6, f.y)) + 0.55 * smoothstep(1.8, 3.0, f.y)
 				: 0.0;
 		} else if (snow_body && code > 0 && roofy && code != 7) {
-			// Under snow; where it lies thin the roof's own strongest strokes are bare, crisp
-			// (a soft show-through read as grey smudges on slate, painter-roof-snow verdict).
-			float thin = 1.0 - snow_layer(f, ul, vl, taper, n, acc);
+			// Under the blanket the roof's own marks are hidden whole (its dashes and blotches
+			// read as dirt through the snow, card painter-buildings-fix); only in snow_thin's few
+			// runs are its strongest strokes bare, crisp. The blanket carries its own broad
+			// washes, lighter or bluer, laid along the eave, and its light turns softly along
+			// them.
+			float thin = snow_thin(f, ul, vl, taper, n, acc);
 			cover = 1.0 - thin * smoothstep(0.3, 0.45, strokes);
-			hide = 0.92;
+			hide = 1.0;
+			vec2 sw = p_wash(f, 0.5, 1.6, 0.55, 0.32, 0.45, 41.0 + acc * 7.0);
+			snow_dark = sw.x * 0.45 * broad * cover;
+			snow_light = sw.y * 0.6 * broad * cover;
+			wob = mix(wob, 0.5 + (sw.y - sw.x) * 0.45, cover);
+			soft = mix(0.01, 0.06, cover);
 		} else if (roofy && !(snow_body && code == 7)) {
 			cover = snow_cover(snow, wp, up, h);
 		}
 	}
 	dark = clamp(dark * marks * (1.0 - cover * hide) + snow_dark, 0.0, 0.85);
-	light = clamp(light * marks * (1.0 - cover * hide), 0.0, 0.8);
+	light = clamp(light * marks * (1.0 - cover * hide) + snow_light, 0.0, 0.8);
 	int base = v_tone * 6;
 	vec3 shd = mix(ramps[base], ramps[base + 3], variant);
 	vec3 mid = mix(ramps[base + 1], ramps[base + 4], variant);
@@ -404,16 +474,18 @@ void fragment() {
 	f_mid = mix(mix(mid, shd, dark), lit, light * 0.6);
 	f_lit = mix(mix(lit, mid, dark), lit * 1.06, light);
 	f_n = n;
-	f_wob = bn;
+	f_wob = wob;
+	bool paint_slope = on_slope && cover < 0.5;
+	f_tune = vec3(paint_slope ? 0.025 : soft, on_course ? 0.7 : 0.2, paint_slope ? 0.06 : 0.12);
 }
 
 void light() {
 	if (LIGHT_IS_DIRECTIONAL) {
 		vec3 lw = normalize((INV_VIEW_MATRIX * vec4(LIGHT, 0.0)).xyz);
-		float cast = 1.0 - smoothstep(0.45, 0.55, ATTENUATION + (f_wob - 0.5) * 0.2);
-		float x = dot(normalize(f_n), lw) + (f_wob - 0.5) * 0.12;
-		vec3 col = mix(f_shd, f_mid, smoothstep(tone_lo - 0.01, tone_lo + 0.01, x));
-		col = mix(col, f_lit, smoothstep(tone_hi - 0.01, tone_hi + 0.01, x));
+		float cast = 1.0 - smoothstep(0.45, 0.55, ATTENUATION + (f_wob - 0.5) * f_tune.y);
+		float x = dot(normalize(f_n), lw) + (f_wob - 0.5) * f_tune.z;
+		vec3 col = mix(f_shd, f_mid, smoothstep(tone_lo - f_tune.x, tone_lo + f_tune.x, x));
+		col = mix(col, f_lit, smoothstep(tone_hi - f_tune.x, tone_hi + f_tune.x, x));
 		DIFFUSE_LIGHT += mix(col, f_shd, cast * cast_amount);
 	}
 }

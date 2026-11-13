@@ -340,7 +340,13 @@ func test_a_beam_is_brushed_wider_and_a_door_leans() -> void:
 	for p: Vector3 in built.draw[Mesh.ARRAY_VERTEX]:
 		lo = minf(lo, p.x)
 		hi = maxf(hi, p.x)
-	var widest := PainterMannerMesh.BEAM_WIDEN_M + PainterMannerMesh.BEAM_WANDER_M + 0.001
+	# The ends do not bow (each side there is out by its brush alone); between them the beam bows.
+	var widest := (
+		PainterMannerMesh.BEAM_WIDEN_M
+		+ PainterMannerMesh.BEAM_WANDER_M
+		+ PainterMannerMesh.BEAM_BOW_M
+		+ 0.001
+	)
 	assert_between(-lo, PainterMannerMesh.BEAM_WIDEN_M - 0.001, widest, "brushed wider on one side")
 	assert_between(hi - 0.2, PainterMannerMesh.BEAM_WIDEN_M - 0.001, widest, "and on the other")
 	var lean := PainterMannerMesh.door_lean(Vector3(0, 2, 0), Vector3.BACK, 0.0, Vector3.ZERO)
@@ -439,7 +445,8 @@ func test_no_roof_snow_adds_nothing_and_winter_adds_strips_that_cast_no_shadow()
 	if snow != null:
 		assert_eq(snow.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 		var tris: int = snow.mesh.surface_get_array_index_len(0) / 3
-		assert_between(tris, 150, 700, "a few hundred triangles a house")
+		# Scalloped lips (a segment each 0.3 m of eave) and chimney collars: under a thousand.
+		assert_between(tris, 150, 1000, "a few hundred triangles a house")
 	buildings.applied = STATE.duplicate()
 	host.retone(sheet)
 	assert_null(node.get_node_or_null(PainterMannerHost.SNOW), "leaving winter frees them")
