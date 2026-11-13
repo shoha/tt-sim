@@ -3,8 +3,9 @@ extends RefCounted
 
 ## The painted look's surfaces: while a level is drawn Painted, the authored ground and the
 ## scatter tt-sim builds from GLBs (bushes, ferns, grass, flowers, rocks, logs) wear painted
-## materials coloured from the sheet (docs/systems/painter.md "Surfaces"). Trees, buildings,
-## water and tokens keep their Classic materials (later cards).
+## materials coloured from the sheet (docs/systems/painter.md "Surfaces"). The scatter's mapped
+## trees are drawn by PainterTrees (painter/trees/painter_trees.gd, loaded by path here), which
+## hides their GLB nodes; buildings, water and tokens keep their Classic materials (later cards).
 ##
 ## Events, never a poll. LevelEnvironmentManager owns one (made by path on the first Painted
 ## level, so neither the start-up nor a Classic level compiles it) and its signal
@@ -41,6 +42,8 @@ const SIGNAL := &"painted_look_changed"
 const GROUND_SHADER := "res://painter/shaders/painter_ground.gdshader"
 const PLANT_SHADER := "res://painter/shaders/painter_plant.gdshader"
 const SOLID_SHADER := "res://painter/shaders/painter_solid.gdshader"
+## The painted trees' host (PainterTrees), loaded by path on the first painted map.
+const TREES := "res://painter/trees/painter_trees.gd"
 ## Metadata on every material this paints with.
 const META := &"painter_surface"
 ## The map root's name under the map container (MapSourceLoader.install).
@@ -66,6 +69,8 @@ var _swapped: Array = []
 ## Mesh instance id -> true for every species looked at (painted or left Classic).
 var _seen: Dictionary = {}
 var _zone_queued := false
+## The painted trees (a PainterTrees), made on the first paint().
+var _trees: RefCounted = null
 
 
 ## Follows `manager`'s painted_look_changed for the map under `map_container`.
@@ -95,11 +100,14 @@ func paint(map: Node3D, state: Dictionary) -> bool:
 		_rebuild_zone()
 	_paint_species()
 	_retone()
+	_paint_trees()
 	return true
 
 
 ## Puts every material back as it was before the first paint() and stops following the map.
 func release() -> void:
+	if _trees != null:
+		_trees.call("release")
 	_unbind()
 	for id: int in _overrides:
 		var pair: Array = _overrides[id]
@@ -192,10 +200,27 @@ func _on_ground_edited(_rect: Rect2i) -> void:
 
 func _on_cells_applied(_cells: Array[Vector2i]) -> void:
 	_tone_new(_paint_species())
+	if _trees != null:
+		_trees.call("sync")
 
 
 func _on_species_added(_materials: Array[ShaderMaterial]) -> void:
 	_tone_new(_paint_species())
+	if _trees != null:
+		_trees.call("sync")
+
+
+## Draws the scatter's mapped trees painted (PainterTrees), or re-tones and re-syncs them.
+func _paint_trees() -> void:
+	if _trees == null:
+		_trees = (load(TREES) as GDScript).new()
+	var doc: MapDocument = _terrain.document if is_instance_valid(_terrain) else null
+	_trees.call("paint", _map, _scatters, doc, applied)
+
+
+## The painted trees (a PainterTrees), null before the first paint().
+func trees() -> RefCounted:
+	return _trees
 
 
 # ---------------------------------------------------------------- the ground

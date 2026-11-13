@@ -54,8 +54,9 @@ const COLOR_ROLES: Array[String] = [
 const NUMBER_PROPS: Array[String] = ["sun-energy", "ambient-energy"]
 ## Colour roles a keyframe may leave to a `:world` default (see the header): the ground's forest
 ## floor and shore, the grass, the ground's pale drift and fallen-leaf marks, the four flower
-## accents (PainterSurfaces paints with them).
+## accents (PainterSurfaces paints with them), and the conifers' needles (PainterTreeTones).
 const DEFAULT_ROLES: Array[String] = [
+	"needle",
 	"floor",
 	"shore",
 	"grass",

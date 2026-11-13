@@ -27,6 +27,9 @@ came from is the local branch `painterspike` (handoff `docs/plans/handoffs/paint
 | `PainterTreeSpecies` | `painter/trees/tree_species.gd`, `species.json` | Which scatter trees are grown (asset table), each species' form data, a row's age, openness and seed |
 | tree generator | `painter/trees/tree_skeleton.gd`, `tree_crown.gd`, `tree_growth.gd`, `tree_base.gd`, `tree_mass.gd` | `PainterTreeGrowth.tree(...)`: the skeleton and crown masses of one tree (the spike's family14) |
 | `PainterTreePack` | `painter/trees/tree_pack.gd` | A tree's masses packed as data texels for the painted tree shaders (the spike's PPainter13) |
+| `PainterTrees` | `painter/trees/painter_trees.gd` | The painted trees' host: grows, installs and draws the mapped tree rows, hides and restores the GLB trees |
+| tree tones, meshes, brushes | `painter/trees/tree_tones.gd` (+ `tree_roles.json`), `tree_meshes.gd`, `tree_brushes.gd` | The palette and role_params textures, the shared instanced blocks, the 14 brush layers |
+| painted tree shaders | `painter/shaders/painter_tree_stroke.gdshader`, `painter_tree_blockin.gdshader`, `painter_tree.gdshaderinc` (+ `painter/trees/tree_uniforms.json`) | The spike's stroke and block-in passes on tt-sim's wind, sun and fades |
 
 `LevelEnvironmentManager` owns one `PainterScene`, loaded by path (`PAINTER_SCENE`) the first time a
 level is drawn Painted, so neither the start-up nor a Classic level compiles the painter
@@ -175,11 +178,38 @@ material survives entering and leaving the eye view (`test_painter_surfaces.gd`)
 
 ## Trees
 
-Card A2a (painter-a2a) began the painted trees: under Painted the scatter's tree rows are to be
-grown by the painter's own generator and drawn by its block-in and stroke shaders in place of
-the GLB trees. What has landed is the generator and the species table; the host that installs
-the trees, the shaders and the swap are still to come (the plan is the card's handoff,
-`docs/plans/handoffs/painter-a1.md` "A2a").
+Card A2a (painter-a2a, painter-a2a2) draws the painted trees: under Painted the scatter's mapped
+tree rows are grown by the painter's own generator and drawn by its block-in and stroke shaders in
+place of the GLB trees, which come back exactly when the look leaves Painted. Grow-in motion, the
+eye view's levels, rim trees, far meshes and fog are a later card's (A2b).
+
+- The host, `PainterTrees` (`painter/trees/painter_trees.gd`), is made by PainterSurfaces (by
+  path) and driven by its events: paint() on a Painted state, sync() on the scatter's
+  `cells_applied` and `species_added`, release() on leaving. It hides the mapped species' GLB chunk
+  nodes (and any built later, by `child_entered_tree`) and shows exactly those again. New rows grow
+  on the WorkerThreadPool in chunks of 12, nearest the camera first, and install about 2 ms a frame
+  through one-shot `process_frame` callbacks; an erase frees the tree's row at once. The only value
+  read each frame is the camera's size, for the stroke level (no zoom signal exists).
+- The draw (the spike's layout): cells of 5 m, five MultiMeshInstance3D a cell on the shared meshes
+  of `PainterTreeMeshes` (sphere block, round 19's limb ribbon, stroke levels 0..2). The block-in
+  casts the sun's shadow (crowns cast a broad-lobed swollen shape in the sun's pass); strokes cast
+  none. Both receive it as a tone step in light() (`tree_cast`: no lookup shift, only the threshold
+  wiggle by the sheet's `cut`). Level l shows while |clamp(lod, 0, 2) - l| < 0.999, lod = 1 -
+  log2(camera size / 13.85).
+- The shaders (`painter_tree_stroke.gdshader`, `painter_tree_blockin.gdshader`, shared
+  `painter_tree.gdshaderinc`) are the spike's final composed code, sliced, with tt-sim's wind
+  globals (the gust is WindModel's field), the `foliage_sun` global for the light's direction, the
+  canopy fades by whole strokes and masses (stems stay) and the token occlusion fade (its binding
+  copied from the scatter's own tree material). The spike's untone is gone: the Painted tonemap is
+  linear at exposure 1, so the palette reaches the screen as written. The eye view's levels are
+  pinned off (`e_far` 1). `tree_uniforms.json` holds the summer values the spike set on every
+  other uniform. The field map (`field16`) has no tt-sim source yet: a neutral texel.
+- Tones (`PainterTreeTones`, `tree_roles.json`): one style row per species role (leaf, bark, trim,
+  a conifer's evergreen), plus the deposit and the ground; each keeps the spike's own colour and
+  ramp and moves as the sheet's role (`leaf`, `bark`, the new default role `needle`) and ramp
+  numbers move from the summer midday, so species never share one green and follow every mood
+  and sun. Winter's bare trees and snow loads are later: in phase 1 a deciduous tree keeps its
+  leaves in winter.
 
 - Species (`species.json`, data): the asset table, group -> species: Oak oak, Birch birch,
   Broadleaf lime, Poplar poplar, Spruce and Pine spruce, Willow willow, Sapling rowan (young).

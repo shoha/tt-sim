@@ -32,6 +32,9 @@
   drift: oklch(0.86 0.100 112);  litter: oklch(0.70 0.070 100);
   flower-gold: oklch(0.84 0.150 90);  flower-rose: oklch(0.70 0.140 15);
   flower-violet: oklch(0.62 0.120 300);  flower-white: oklch(0.94 0.030 105);
+  /* The conifers' needles (the painted trees: each species keeps its own needle colour, moved as
+     this one moves from the summer midday's). */
+  needle: oklch(0.40 0.075 176);
 
   /* The tone ramp (PainterTones.ramp): a role's shade is its lightness times shade-depth with
      shade-keep of its chroma, pulled toward shade-hue by shade-pull; its lit colour is lit-lift
