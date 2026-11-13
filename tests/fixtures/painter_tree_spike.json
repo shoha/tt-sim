@@ -1,0 +1,126 @@
+{
+	"openness": 0.5,
+	"seed": 4242,
+	"trees": {
+		"birch_0.3": {
+			"masses": 124.0,
+			"sha": "853c36f27e18e8159347d9050c84f0361902fcf4d729e33cc5b8dc6e9d17c10b",
+			"texels": 1711.0
+		},
+		"birch_0.6": {
+			"masses": 287.0,
+			"sha": "9ef084c55bc86ead3eb412a67911a48901cc9c8a4b35d92e33d0bdc4a5200ecb",
+			"texels": 3776.0
+		},
+		"birch_0.9": {
+			"masses": 322.0,
+			"sha": "611b8d486478aee399be23755511514b7152dc9fbd6ac76f29babd4520e22e92",
+			"texels": 4124.0
+		},
+		"lime_0.3": {
+			"masses": 97.0,
+			"sha": "c3d4174dd7d998163d280bbacaab3a9a4e2bb32fabb13ea1c3374e13db5a3225",
+			"texels": 1560.0
+		},
+		"lime_0.6": {
+			"masses": 188.0,
+			"sha": "26c64d8a628724e2c7ad9b52513966dd3aed2acc75e444fe7544823d0c3b1110",
+			"texels": 2837.0
+		},
+		"lime_0.9": {
+			"masses": 224.0,
+			"sha": "235d682708bfa3fb52d78996baa823ecbe3465d7e39393120c61e05d1c645a65",
+			"texels": 3513.0
+		},
+		"oak_0.3": {
+			"masses": 179.0,
+			"sha": "a6f033a5a7b90c4554715e06143e2438563d6e5232c884d3c2bc70f581972c30",
+			"texels": 2360.0
+		},
+		"oak_0.6": {
+			"masses": 233.0,
+			"sha": "e57dcfc1e6fb5c400182e215e685e927f5bc9cac46a492ae22647b584dbc26bb",
+			"texels": 2896.0
+		},
+		"oak_0.9": {
+			"masses": 255.0,
+			"sha": "7286ba360c64e75101180cc238ef8869fa65e9180eb80e5e884c05a57e156178",
+			"texels": 3251.0
+		},
+		"poplar_0.3": {
+			"masses": 89.0,
+			"sha": "f3e98759f66944d363b75f6b8640e52d14a9f794565fc054d448e33cd6c4dff4",
+			"texels": 1217.0
+		},
+		"poplar_0.6": {
+			"masses": 159.0,
+			"sha": "89a3f0e368a9a13b5116461a45377605ab4db91c5a8d267a4c47f72d0e560628",
+			"texels": 2070.0
+		},
+		"poplar_0.9": {
+			"masses": 158.0,
+			"sha": "ac7fd718ac10e25bcc79ed5cc5e8e99150165cc0131695bfa9b53028a4801172",
+			"texels": 2094.0
+		},
+		"rowan_0.3": {
+			"masses": 54.0,
+			"sha": "9902e4895fc58d5098dd48c1528fb250a51a2143b6fb7a23068cafdda5be87ae",
+			"texels": 719.0
+		},
+		"rowan_0.6": {
+			"masses": 155.0,
+			"sha": "8aa78dc92d71e8a2562d9dd841202fd4527e7289295086fa14f2493fec189d1f",
+			"texels": 2022.0
+		},
+		"rowan_0.9": {
+			"masses": 197.0,
+			"sha": "d9e4ffeaf68892d226ee872cfa9d7c1ed9c4f4065cd409b3766467966552eff5",
+			"texels": 2648.0
+		},
+		"scotspine_0.3": {
+			"masses": 75.0,
+			"sha": "216326a33938381e5925f902fd4853a12f9cb1720c14389d1ecccf2cbcd51ce9",
+			"texels": 1102.0
+		},
+		"scotspine_0.6": {
+			"masses": 271.0,
+			"sha": "279ce77e76e5d5b575f79c0316ed16b6bcbbc9a8891c4395eeb416c08cc91a09",
+			"texels": 2983.0
+		},
+		"scotspine_0.9": {
+			"masses": 223.0,
+			"sha": "336642663ceea57a0d89cf7e9d2447efe2c082c7e17cc4991a92978ff8f94723",
+			"texels": 2534.0
+		},
+		"spruce_0.3": {
+			"masses": 157.0,
+			"sha": "324e8ee3269606203efe6c48cb2b866bced1c2b72c95a8b498a06949ccddff5c",
+			"texels": 2194.0
+		},
+		"spruce_0.6": {
+			"masses": 198.0,
+			"sha": "deb8d76ce3de8c494b15739a7916a6ed1f02af5baa7a421355c224bf3348f296",
+			"texels": 2688.0
+		},
+		"spruce_0.9": {
+			"masses": 201.0,
+			"sha": "dfa1a3ea83a1bcad64e5ff39e99073e85f563322d849db1b40846401cd864e08",
+			"texels": 2754.0
+		},
+		"willow_0.3": {
+			"masses": 125.0,
+			"sha": "622c6a9e9bb08e2e8e57bbe8e4d16f8bbbf81ec8ac210955e9fe59a68f8a80bd",
+			"texels": 1718.0
+		},
+		"willow_0.6": {
+			"masses": 329.0,
+			"sha": "153064b245caf33f0100be155a607e56d9595dfa9f1d9bf43b86c32b01fd3d6c",
+			"texels": 4669.0
+		},
+		"willow_0.9": {
+			"masses": 361.0,
+			"sha": "66eb3b22a10d573cdccd982e2f2083f4a02cbba5f304cf8068e590cf2a94afd4",
+			"texels": 5250.0
+		}
+	}
+}

@@ -24,6 +24,9 @@ came from is the local branch `painterspike` (handoff `docs/plans/handoffs/paint
 | `PainterPlantRoles` | `painter/plant_roles.gd` | The pure asset-id to plant kind and tone role table; trees get none |
 | `PainterBrushes` | `painter/painter_brushes.gd` | The ground's three brush-mark layers, built once in code |
 | painted ground, plant, solid | `painter/shaders/painter_ground.gdshader`, `painter_plant.gdshader`, `painter_solid.gdshader` | The ground's block-in and marks; the selector light on swaying and on still scatter (`painter_selector.gdshaderinc`, `painter_noise.gdshaderinc`) |
+| `PainterTreeSpecies` | `painter/trees/tree_species.gd`, `species.json` | Which scatter trees are grown (asset table), each species' form data, a row's age, openness and seed |
+| tree generator | `painter/trees/tree_skeleton.gd`, `tree_crown.gd`, `tree_growth.gd`, `tree_base.gd`, `tree_mass.gd` | `PainterTreeGrowth.tree(...)`: the skeleton and crown masses of one tree (the spike's family14) |
+| `PainterTreePack` | `painter/trees/tree_pack.gd` | A tree's masses packed as data texels for the painted tree shaders (the spike's PPainter13) |
 
 `LevelEnvironmentManager` owns one `PainterScene`, loaded by path (`PAINTER_SCENE`) the first time a
 level is drawn Painted, so neither the start-up nor a Classic level compiles the painter
@@ -169,6 +172,38 @@ noise, both in the colour and the shadow pass.
 The foliage AA swap (`WindFoliage`, the eye view's alpha-to-coverage) collects stand-ins through
 `WindFoliage.META_STAND_IN`: it swaps the original wind material in their place, so a painted
 material survives entering and leaving the eye view (`test_painter_surfaces.gd`).
+
+## Trees
+
+Card A2a (painter-a2a) began the painted trees: under Painted the scatter's tree rows are to be
+grown by the painter's own generator and drawn by its block-in and stroke shaders in place of
+the GLB trees. What has landed is the generator and the species table; the host that installs
+the trees, the shaders and the swap are still to come (the plan is the card's handoff,
+`docs/plans/handoffs/painter-a1.md` "A2a").
+
+- Species (`species.json`, data): the asset table, group -> species: Oak oak, Birch birch,
+  Broadleaf lime, Poplar poplar, Spruce and Pine spruce, Willow willow, Sapling rowan (young).
+  Acacia, Cactus, Palm and DeadTree stay GLB. Each species' form props are the ones the spike's
+  sheet (`glade_ttsim.sheet`) resolved, written by the card's dump of the spike; `scotspine` is
+  in the data but no asset maps to it yet. It ships through the export presets' `include_filter`
+  (`painter/trees/*.json`), as the sheets do.
+- A row's tree is pure in the row: the species from the asset id, the age from the row's scale
+  (0.6 at scale 1, 1.2 per unit, 0.25..0.95; saplings 0.28, 0.5, 0.15..0.42), the openness from
+  the biome density at the point plus a slow world noise (the spike counted neighbouring rows,
+  which made a tree change when one beside it was painted), and the seed an integer hash of the
+  position in centimetres. So a brush never changes a tree it did not touch, and every peer grows
+  the same one.
+- The generator is the spike's code (family5's helpers, family14's skeleton and crown, PPainter12
+  and 13's pack), split into files under the line cap and renamed, not rewritten:
+  `test_painter_trees.gd` grows 24 of the spike's own trees and compares the packed bytes with
+  the spike's (`tests/fixtures/painter_tree_spike.json`, Windows bytes), and keeps a golden digest
+  per species, seed and age (`painter_tree_digests.json`, snapped to 1e-4; delete it and run the
+  script to write it again, deliberately).
+- Visual only: nothing in play (collision, line of sight, navigation) reads a grown mass, so float
+  drift between platforms moves pixels, never play.
+- Cost (headless, indicative, the 24-thread dev machine): one tree grows and packs in 1 to 10 ms on
+  the main thread (willow and old oak the dearest, up to 5300 texels); 107 trees in chunks of 12 on
+  the worker pool take 123 ms wall.
 
 ## The painted state signal
 
