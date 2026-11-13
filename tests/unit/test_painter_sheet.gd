@@ -25,10 +25,22 @@ func before_each() -> void:
 
 
 func _sheet(summer_keys: String, extra: String = "") -> String:
-	var text := ":world { --meadow: oklch(0.72 0.135 131); }\n@mood summer { %s }\n" % summer_keys
-	for mood: String in PainterSheet.HIGH_ONLY:
-		text += "@mood %s { @key high 30 { %s } }\n" % [mood, _MINIMAL_KEY]
+	var text := ":world { --meadow: oklch(0.72 0.135 131); %s }\n" % _defaults()
+	text += "@mood summer { %s }\n" % summer_keys
+	for mood: String in PainterSheet.MOODS:
+		if mood != "summer":
+			text += "@mood %s { %s }\n" % [mood, _three_keys()]
 	return text + extra
+
+
+## A sheet-wide default for every DEFAULT_ROLES and DEFAULT_NUMBERS entry.
+func _defaults() -> String:
+	var text := ""
+	for role: String in PainterSheet.DEFAULT_ROLES:
+		text += "%s: oklch(0.6 0.05 100); " % role
+	for prop: String in PainterSheet.DEFAULT_NUMBERS:
+		text += "%s: 0.5; " % prop
+	return text
 
 
 func _three_keys() -> String:
@@ -45,7 +57,32 @@ func test_the_core_sheet_passes_its_lint_and_has_every_mood() -> void:
 	var sheet := PainterSheet.load_sheet("core")
 	for mood: String in PainterSheet.MOODS:
 		assert_true(sheet.has(mood), "core.sheet has %s" % mood)
-	assert_eq((sheet["summer"] as Array).size(), 3, "summer has all three keyframes")
+		assert_eq((sheet[mood] as Array).size(), 3, "%s has all three keyframes" % mood)
+	assert_eq(PainterSheet.HIGH_ONLY, [] as Array[String], "no mood is on the allow-list")
+
+
+func test_a_default_comes_from_the_keyframe_then_the_mood_then_the_sheet() -> void:
+	var keys := _three_keys().replace(
+		"@key high 60 { ", "@key high 60 { keep-grass: 0.9; floor: oklch(0.3 0.05 100); "
+	)
+	var mood_world := ":world { keep-flower: 0.2; } "
+	var text := _sheet(keys).replace("@mood summer { ", "@mood summer { " + mood_world)
+	var parsed := PainterSheet.parse(text)
+	assert_eq(PainterSheet.lint(parsed), PackedStringArray())
+	var sheet := PainterSheet.compile(parsed)
+	assert_almost_eq(PainterSheet.number(sheet, "summer", "keep-grass", 60.0), 0.9, 1e-6)
+	assert_almost_eq(PainterSheet.number(sheet, "summer", "keep-grass", -8.0), 0.5, 1e-6)
+	assert_almost_eq(PainterSheet.number(sheet, "summer", "keep-flower", -8.0), 0.2, 1e-6)
+	assert_almost_eq(PainterSheet.tone_lch(sheet, "summer", "floor", 60.0).x, 0.3, 1e-6)
+	assert_almost_eq(PainterSheet.tone_lch(sheet, "dusk", "floor", 60.0).x, 0.6, 1e-6)
+
+
+func test_the_lint_rejects_an_unknown_or_missing_default() -> void:
+	var text := _sheet(_three_keys()).replace("keep-grass: 0.5;", "keep-grass: 0.5; keep-moss: 1;")
+	var errors := PainterSheet.lint(PainterSheet.parse(text))
+	assert_true(Array(errors).has(":world: unknown default keep-moss"))
+	errors = PainterSheet.lint(PainterSheet.parse(_sheet(_three_keys()).replace("cut: 0.5;", "")))
+	assert_true(Array(errors).any(func(e: String) -> bool: return e.ends_with("missing cut")))
 
 
 func test_a_minimal_sheet_lints_clean() -> void:
@@ -64,7 +101,7 @@ func test_the_lint_rejects_an_unknown_mood() -> void:
 	assert_true(Array(errors).any(func(e: String) -> bool: return e.contains("unknown mood: spring")))
 
 
-func test_the_lint_rejects_a_missing_keyframe_outside_the_allow_list() -> void:
+func test_the_lint_rejects_a_missing_keyframe() -> void:
 	var keys := "@key low 6 { %s } @key high 60 { %s }" % [_MINIMAL_KEY, _MINIMAL_KEY]
 	var errors := PainterSheet.lint(PainterSheet.parse(_sheet(keys)))
 	assert_true(
@@ -72,7 +109,7 @@ func test_the_lint_rejects_a_missing_keyframe_outside_the_allow_list() -> void:
 	)
 	assert_false(
 		Array(errors).any(func(e: String) -> bool: return e.begins_with("dusk:")),
-		"dusk is on the high-only allow-list"
+		"dusk has all three"
 	)
 
 
@@ -99,8 +136,8 @@ func test_a_keyframe_resolves_to_its_own_tones_and_the_ends_hold() -> void:
 	assert_almost_eq(PainterSheet.tone_lch(sheet, "summer", "ambient", -60.0), night, tiny)
 	assert_almost_eq(PainterSheet.tone_lch(sheet, "summer", "ambient", 89.0), high, tiny)
 	var dusk_a := PainterSheet.tone(sheet, "dusk", "sun", 70.0)
-	var dusk_b := PainterSheet.tone(sheet, "dusk", "sun", -5.0)
-	assert_true(dusk_a.is_equal_approx(dusk_b), "a high-only mood holds one tone at every sun")
+	var dusk_b := PainterSheet.tone(sheet, "dusk", "sun", 24.0)
+	assert_true(dusk_a.is_equal_approx(dusk_b), "a mood holds its high keyframe above it")
 
 
 func test_tones_change_smoothly_across_the_sun_elevation() -> void:
@@ -124,7 +161,11 @@ func test_tones_change_smoothly_across_the_sun_elevation() -> void:
 			var b := PainterSheet.number(sheet, mood, prop, 5.0 + STEP_DEG)
 			assert_lt(absf(b - a), 0.05, "%s %s moves smoothly" % [mood, prop])
 	gut.p("largest step: %.4f OKLab (%s)" % [worst, worst_at])
-	assert_lt(worst, MAX_STEP_DELTA, "no jump over %s per %s degrees" % [MAX_STEP_DELTA, STEP_DEG])
+	assert_lt(
+		worst,
+		MAX_STEP_DELTA,
+		"no jump over %s per %s degrees (worst: %s)" % [MAX_STEP_DELTA, STEP_DEG, worst_at]
+	)
 
 
 func test_hue_blends_the_short_way_and_grey_takes_the_other_hue() -> void:

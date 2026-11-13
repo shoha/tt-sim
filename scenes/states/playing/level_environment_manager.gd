@@ -7,6 +7,13 @@ class_name LevelEnvironmentManager
 ## (environment & lighting) while LevelPlayController focuses on level
 ## loading, tokens, and network sync.
 
+## What the painted look draws changed (docs/systems/painter.md "The painted state"): entering
+## Painted, or a new sheet, mood or sun elevation under it, gives {"sheet", "mood", "elevation"};
+## leaving it (Classic, a classic-only preset, the level unloaded) gives {}. An apply that leaves
+## the drawn state as it was emits nothing, and neither do the transient releases inside one
+## apply. PainterSurfaces follows it (made here on the first Painted state); later painters can too.
+signal painted_look_changed(state: Dictionary)
+
 ## Distance (world units) beyond which the sun stops casting shadows. Left at Godot's
 ## own default deliberately: tightening it was MEASURED and does nothing on a map of
 ## this scale.
@@ -105,6 +112,8 @@ const SCATTER_RENDER_LAYER: int = 1 << 1
 const PROBE_CULL_MASK: int = 0xFFFFF & ~SCATTER_RENDER_LAYER
 ## The painted look's scene host (PainterScene), loaded on the first Painted level.
 const PAINTER_SCENE := "res://painter/painter_scene.gd"
+## The painted look's surfaces (PainterSurfaces), loaded on the first Painted state.
+const PAINTER_SURFACES := "res://painter/painter_surfaces.gd"
 
 var _world_environment: WorldEnvironment = null
 var _sun_light: DirectionalLight3D = null
@@ -126,6 +135,9 @@ var _look: Dictionary = {}
 var _preset: String = ""
 var _sun_settings: SunSettings = null
 var _painter: RefCounted = null
+## The last painted_look_changed state, and the PainterSurfaces that follows it.
+var _painted_state: Dictionary = {}
+var _surfaces: RefCounted = null
 
 
 func setup(game_map: Node) -> void:
@@ -382,7 +394,9 @@ static func configure_reflection_probe(
 ## (no explicit choice), the map's embedded environment is used as the base.
 func apply_level_environment(level_data: LevelData, world_viewport: Node) -> void:
 	# Classic writes first (the painted look, if any, lets go so it remembers Classic's values).
+	# A new level: the painted surfaces let go of the last map before this one's are painted.
 	_release_painter()
+	_publish_painted({})
 	_look = level_data.look
 	_preset = level_data.environment_preset
 	_sun_settings = level_data.visual_settings.sun
@@ -726,6 +740,7 @@ func _apply_render_style() -> void:
 		if _painter != null and _painter.call("is_active"):
 			_release_painter()
 			_after_style_change()
+		_publish_painted({})
 		return
 	if _painter == null:
 		_painter = (load(PAINTER_SCENE) as GDScript).new()
@@ -734,8 +749,25 @@ func _apply_render_style() -> void:
 	)
 	var sun: DirectionalLight3D = _sun_light if is_instance_valid(_sun_light) else null
 	var elevation := _sun_settings.elevation_degrees if _sun_settings != null else 45.0
-	_painter.call("take", env, sun, style["sheet"], style["mood"], elevation)
+	var taken: bool = _painter.call("take", env, sun, style["sheet"], style["mood"], elevation)
 	_after_style_change()
+	_publish_painted(
+		{"sheet": style["sheet"], "mood": style["mood"], "elevation": elevation} if taken else {}
+	)
+
+
+## Emits painted_look_changed when `state` differs from the last one (see the signal), making the
+## PainterSurfaces that follows it on the first Painted state.
+func _publish_painted(state: Dictionary) -> void:
+	if state == _painted_state:
+		return
+	_painted_state = state
+	if not state.is_empty() and _surfaces == null and is_instance_valid(_game_map):
+		var container: Variant = _game_map.get("map_container")
+		if container is Node3D:
+			_surfaces = (load(PAINTER_SURFACES) as GDScript).new()
+			_surfaces.call("attach", self, container)
+	painted_look_changed.emit(state)
 
 
 ## The light changed under the foliage and the water: publish the sun and the ambient again.
@@ -790,6 +822,7 @@ func get_map_sky_resource() -> Sky:
 ## Clear environment state (called when level is unloaded).
 func clear() -> void:
 	_release_painter()
+	_publish_painted({})
 	_look = {}
 	_preset = ""
 	_sun_settings = null

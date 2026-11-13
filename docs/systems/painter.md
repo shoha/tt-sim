@@ -3,8 +3,9 @@
 The painted look draws a level in the painter's style: one sheet of tones, chosen together, owns
 the light, and later the ground, plants, trees and buildings. It ships beside Classic, the game's
 usual look, which stays the default and the fallback for weak GPUs and for presets no mood paints
-yet (owner, 2026-11-12). Phase 1 card A1 (painter-a1) landed the light only: under Painted the
-ground, plants, trees and buildings still wear their Classic materials (cards A1b, A2, A3 follow).
+yet (owner, 2026-11-12). Phase 1 card A1 (painter-a1) landed the light; card A1b paints the
+ground and the GLB scatter (plants, rocks, logs). Trees and buildings still wear their Classic
+materials under Painted (cards A2, A3 follow).
 The plan is `D:/dev/tabletop/docs/research/2026-11-12-painter-integration-plan.md`; the spike it
 came from is the local branch `painterspike` (handoff `docs/plans/handoffs/painterspike.md`).
 
@@ -17,6 +18,12 @@ came from is the local branch `painterspike` (handoff `docs/plans/handoffs/paint
 | `core.sheet` | `painter/sheets/core.sheet` | The shipped tones: moods summer, dusk, grimdark, winter, autumn |
 | `PainterScene` | `painter/painter_scene.gd` | The scene host: takes the level's Environment and sun under Painted, restores them exactly when it lets go |
 | painted sky | `painter/shaders/painter_sky.gdshader` | A sky shader: horizon to zenith, a glow toward the level's sun, the far ground below the horizon |
+| `PainterTones` | `painter/painter_tones.gd` | The pure tone ramp: a role's shade, middle and lit colours in two variants |
+| `PainterSurfaces` | `painter/painter_surfaces.gd` | The surface host: swaps the ground's and the scatter's materials for painted ones and back |
+| `PainterGroundRoles` | `painter/ground_roles.gd` | The pure surface-id and biome-id to ground-role table (meadow, floor, path, rock, shore) |
+| `PainterPlantRoles` | `painter/plant_roles.gd` | The pure asset-id to plant kind and tone role table; trees get none |
+| `PainterBrushes` | `painter/painter_brushes.gd` | The ground's three brush-mark layers, built once in code |
+| painted ground, plant, solid | `painter/shaders/painter_ground.gdshader`, `painter_plant.gdshader`, `painter_solid.gdshader` | The ground's block-in and marks; the selector light on swaying and on still scatter (`painter_selector.gdshaderinc`, `painter_noise.gdshaderinc`) |
 
 `LevelEnvironmentManager` owns one `PainterScene`, loaded by path (`PAINTER_SCENE`) the first time a
 level is drawn Painted, so neither the start-up nor a Classic level compiles the painter
@@ -107,10 +114,58 @@ Text in the spike's dialect: `/* comments */`, `name: value;` declarations, colo
   roles, keyframes out of order and values that are not colours or numbers. `load_sheet` refuses
   a sheet that fails it.
 
-Only summer has all three keyframes so far. dusk, grimdark, winter and autumn carry the spike's
-tuning (each made for one sun between 24 and 34 degrees) as a single `high` keyframe they hold at
-every sun; `PainterSheet.HIGH_ONLY` is the lint's allow-list for that, and each mood leaves it
-when its own look card authors its `low` and `night`.
+- Defaults (`DEFAULT_ROLES`, `DEFAULT_NUMBERS`): the surfaces' other tones (`floor`, `shore`,
+  `grass`, `drift`, `litter`, the four `flower-*`) and numbers (the tone ramp, the ground's own
+  ramp, the plants' steps and thinning, the ground's marks). A keyframe may set one; else the
+  mood's `:world` block, else the sheet's `:world` (which holds the summer day's). The lint
+  rejects a name in a `:world` that is neither a `--token` nor a default.
+
+Every mood has all three keyframes (card A1b authored dusk's, grimdark's, winter's and autumn's
+`low` and `night`); `PainterSheet.HIGH_ONLY`, the lint's allow-list for a mood with one keyframe,
+is empty.
+
+## Surfaces
+
+Under Painted, `PainterSurfaces` (owned by `LevelEnvironmentManager`, loaded by path the first
+time a level is drawn Painted) swaps materials on the live map and swaps them back exactly:
+
+- The ground: every `TerrainChunk*` and the `TerrainSkirt` get a `material_override` of the
+  painted ground shader (the skirt melts into the painted sky's far ground). The stored override,
+  null included, goes back on release.
+- The scatter: each GLB species' mesh surfaces (`AuthoredScatter.resolved_species()`; every cell
+  node shares its species' mesh, so one swap covers every cell). A swaying asset's wind material is
+  duplicated with the painted plant shader, so wind, the fades and the grow-in come from the same
+  includes and uniforms; a still one (rock, log, litter) gets the painted solid shader with its
+  albedo texture for a cut-out. Trees (`PainterPlantRoles.of` returns `{}`) keep their materials.
+- Chunks built later and species added later are painted as they arrive: the terrain's
+  `child_entered_tree`, the scatter's `cells_applied` and `species_added`, and `ground_edited`
+  (which rebuilds the zone texture). No polling, no per-frame work.
+
+Ground roles. `PainterGroundRoles.surface_role(id)` sorts a surface id by its `_`-separated words
+(first rule wins: rock, shore, floor, path, meadow; anything else is meadow), and
+`biome_role(id)` sorts a biome the same way. `test_painter_surfaces.gd` checks that every core
+surface resolves and that each core biome's role equals its own ground surface's. The zone
+texture (`PainterSurfaces.zone_image`, RGBA8 per map cell, box-blurred) holds the meadow share,
+the path share, the rock share and wet ground (shore), from the map document's base surface,
+biome slots and surface weights. Real role data is still to come: a `paint_role` per surface in
+the library (and a biome's role read from its ground surface) would replace the word rules.
+
+Plant roles. `PainterPlantRoles.of(asset_id, wind_category, flower)` gives a kind (mass, grass,
+solid, flower) and a tone role by asset-id words; the scatter template's `flower` flag wins.
+Thinning is the sheet's: `keep-grass` (0.6) and `keep-flower` (0.4) in groups of a slow world
+noise, both in the colour and the shadow pass.
+
+The foliage AA swap (`WindFoliage`, the eye view's alpha-to-coverage) collects stand-ins through
+`WindFoliage.META_STAND_IN`: it swaps the original wind material in their place, so a painted
+material survives entering and leaving the eye view (`test_painter_surfaces.gd`).
+
+## The painted state signal
+
+`LevelEnvironmentManager.painted_look_changed(state: Dictionary)` is emitted when the painted state
+changes: `{sheet, mood, elevation}` while Painted, `{}` on leaving it (Classic, a new level, the
+manager's `clear()`). It is deduplicated, so a sun or preset write that leaves the three alone does
+not emit. `PainterSurfaces` follows it to paint, re-tone or release; later painters (trees,
+buildings) should follow the same signal rather than the manager's apply calls.
 
 ## How to add a mood
 
@@ -125,6 +180,10 @@ when its own look card authors its `low` and `night`.
 
 - Unit: `test_painter_sheet.gd` (lint, resolver, continuity), `test_render_style.gd` (table,
   precedence, the Settings row, the level codec, the late-join snapshot), `test_painter_scene.gd`
-  (take, follow the sun and the preset, the exact round trip), `test_boot_graph.gd`.
-- Look: the render job of card painter-a1 (`tools/render_jobs/local/painter-a1/`, not committed);
-  its captures are in `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_a1/`.
+  (take, follow the sun and the preset, the exact round trip), `test_painter_surfaces.gd` (ground
+  and plant roles cover core, the paint and release round trip, later chunks and species, the AA
+  swap exemption, tones and thinning from the sheet, the zone image, the signal),
+  `test_boot_graph.gd`.
+- Look: the render jobs of cards painter-a1 and painter-a1b (`tools/render_jobs/local/painter-a1/`
+  and `local/painter-a1b/`, not committed); their captures are in
+  `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_a1/` and `painter_a1b/`.

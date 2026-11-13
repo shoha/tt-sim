@@ -106,6 +106,11 @@ const CANOPY_CARD := 2
 ## Metadata on a wind ShaderMaterial built on the ground-cover variant (is_ground_cover), so the
 ## antialiasing swap (shader_for) keeps it there.
 const META_GROUND := "foliage_ground"
+## Metadata on a material standing in for a wind material (the Painted look's plants,
+## PainterSurfaces), holding the original. collect_foliage_shader_materials() returns the original
+## in its place, so the antialiasing swap, the debug toggles and any other shader swap reach the
+## material that comes back when the stand-in leaves, and never replace the stand-in's shader.
+const META_STAND_IN := "foliage_stand_in"
 
 static var _shader: Shader = null
 static var _shader_no_aa: Shader = null
@@ -251,7 +256,8 @@ static func _collect_all_wind_foliage_multimeshes(
 ## surfaces under [param map_container] -- used by VisualEffectsController to swap
 ## every foliage material between the antialiased and plain-cutout shader variants
 ## when the player's Antialiasing setting changes. Returns an empty array if
-## map_container is null or has no wind foliage.
+## map_container is null or has no wind foliage. A stand-in (META_STAND_IN) is returned as the
+## original it stands in for.
 static func collect_foliage_shader_materials(map_container: Node3D) -> Array[ShaderMaterial]:
 	var result: Array[ShaderMaterial] = []
 	if not map_container:
@@ -263,18 +269,22 @@ static func collect_foliage_shader_materials(map_container: Node3D) -> Array[Sha
 			continue
 		var mesh := mm_inst.multimesh.mesh
 		for surface_idx in range(mesh.get_surface_count()):
-			var mat := mesh.surface_get_material(surface_idx)
-			if mat is ShaderMaterial and mat not in result:
-				result.append(mat as ShaderMaterial)
+			_add_swappable(mesh.surface_get_material(surface_idx), result)
 	# Baked foliage (a structure's decor plants, one MeshInstance3D tagged like a MultiMesh).
 	var baked: Array[MeshInstance3D] = []
 	_collect_baked_foliage(map_container, baked)
 	for instance in baked:
 		for surface_idx in range(instance.mesh.get_surface_count()):
-			var mat := instance.mesh.surface_get_material(surface_idx)
-			if mat is ShaderMaterial and mat not in result:
-				result.append(mat as ShaderMaterial)
+			_add_swappable(instance.mesh.surface_get_material(surface_idx), result)
 	return result
+
+
+## Adds `mat` (or, for a stand-in, the original it holds) to `result` once, if a ShaderMaterial.
+static func _add_swappable(mat: Material, result: Array[ShaderMaterial]) -> void:
+	if mat != null and mat.has_meta(META_STAND_IN):
+		mat = mat.get_meta(META_STAND_IN) as Material
+	if mat is ShaderMaterial and mat not in result:
+		result.append(mat as ShaderMaterial)
 
 
 ## Every MeshInstance3D under `node` that carries a wind foliage category and a mesh.

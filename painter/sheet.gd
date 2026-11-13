@@ -17,13 +17,18 @@ extends RefCounted
 ## sets it, and the painter only reads its elevation (owner, 2026-11-12).
 ##
 ## Tones were tuned for one sun per mood in the spike and broke at other suns (cold front walls,
-## magenta roofs at a low sun), so a mood needs all three keyframes; the moods in HIGH_ONLY are
-## allowed one `high` keyframe for now and hold it at every sun until their own card.
+## magenta roofs at a low sun), so a mood needs all three keyframes; a mood in HIGH_ONLY would be
+## allowed one `high` keyframe and hold it at every sun (none is, since card A1b).
+##
+## Defaults. A keyframe must set every COLOR_ROLES and NUMBER_PROPS entry. The DEFAULT_ROLES and
+## DEFAULT_NUMBERS (the ground's and the plants' extra tones, the tone ramp, the thinning) may
+## instead come from a declaration of the same name, without `--`, in the mood's `:world` block,
+## else in the sheet's: keyframe, then mood, then sheet. The lint checks each resolves.
 
 ## The moods a sheet must define (RenderStyle maps the environment presets onto them).
 const MOODS: Array[String] = ["summer", "dusk", "grimdark", "winter", "autumn"]
 ## Moods allowed a single `high` keyframe until their own look card (the lint's allow-list).
-const HIGH_ONLY: Array[String] = ["dusk", "grimdark", "winter", "autumn"]
+const HIGH_ONLY: Array[String] = []
 ## Keyframe names, lowest sun first.
 const KEYS: Array[String] = ["night", "low", "high"]
 ## Colour roles every keyframe sets. The environment uses sun, sky, horizon, ambient and haze;
@@ -47,6 +52,59 @@ const COLOR_ROLES: Array[String] = [
 ]
 ## Number properties every keyframe sets: the sun's and the ambient light's energy.
 const NUMBER_PROPS: Array[String] = ["sun-energy", "ambient-energy"]
+## Colour roles a keyframe may leave to a `:world` default (see the header): the ground's forest
+## floor and shore, the grass, the ground's pale drift and fallen-leaf marks, the four flower
+## accents (PainterSurfaces paints with them).
+const DEFAULT_ROLES: Array[String] = [
+	"floor",
+	"shore",
+	"grass",
+	"drift",
+	"litter",
+	"flower-gold",
+	"flower-rose",
+	"flower-violet",
+	"flower-white",
+]
+## Numbers a keyframe may leave to a `:world` default. The tone ramp (PainterTones.ramp: how a
+## role's shade and lit colours are drawn from it, the ground's own ramp under `ground-`), the
+## plants' light steps (tone-lo, tone-hi, N.L thresholds), the thinning of grass and flowers in
+## groups (keep-*: the share kept, keep-freq-*: 1/m of the world noise that groups them), the
+## flowers' colour groups (flower-mix, 1/m), and the ground's brush marks (marks: the share of
+## cells that hold one, mark-thin: how far a flat area thins them, drift-marks and litter-marks:
+## how much of the small marks, patches: the block-in's variation, mark-px-*: the pixel footprints
+## in metres between which a mark fades out, cut: the shadow step's wiggle).
+const DEFAULT_NUMBERS: Array[String] = [
+	"shade-hue",
+	"shade-pull",
+	"shade-depth",
+	"lit-hue",
+	"lit-pull",
+	"lit-lift",
+	"hue-spread",
+	"value-spread",
+	"ground-shade-pull",
+	"ground-shade-depth",
+	"ground-lit-pull",
+	"ground-lit-lift",
+	"ground-hue-spread",
+	"ground-value-spread",
+	"tone-lo",
+	"tone-hi",
+	"keep-grass",
+	"keep-flower",
+	"keep-freq-grass",
+	"keep-freq-flower",
+	"flower-mix",
+	"marks",
+	"mark-thin",
+	"drift-marks",
+	"litter-marks",
+	"patches",
+	"mark-px-lo",
+	"mark-px-hi",
+	"cut",
+]
 ## Below this OKLCH chroma a colour's hue is meaningless: a blend takes the other end's hue.
 const GREY_CHROMA := 0.02
 ## The sheets the game ships, by id.
@@ -128,6 +186,8 @@ static func lint(parsed: Dictionary) -> PackedStringArray:
 			var vars: Dictionary = (parsed.get("tokens", {}) as Dictionary).duplicate()
 			vars.merge(mood["tokens"], true)
 			_lint_key(keys[key_name]["props"], vars, "%s.%s" % [mood_name, key_name], errors)
+		_lint_defaults(mood["tokens"], mood_name, errors)
+	_lint_defaults(parsed.get("tokens", {}), ":world", errors)
 	return errors
 
 
@@ -147,10 +207,10 @@ static func compile(parsed: Dictionary) -> Dictionary:
 			var key: Dictionary = mood["keys"][key_name]
 			var lch := {}
 			var numbers := {}
-			for role: String in COLOR_ROLES:
-				lch[role] = parse_color(_resolve(str(key["props"][role]), vars))
-			for prop: String in NUMBER_PROPS:
-				numbers[prop] = _resolve(str(key["props"][prop]), vars).to_float()
+			for role: String in COLOR_ROLES + DEFAULT_ROLES:
+				lch[role] = parse_color(_resolve(_prop(key["props"], vars, role), vars))
+			for prop: String in NUMBER_PROPS + DEFAULT_NUMBERS:
+				numbers[prop] = _resolve(_prop(key["props"], vars, prop), vars).to_float()
 			frames.append({"name": key_name, "elevation": key["elevation"], "lch": lch, "numbers": numbers})
 		out[mood_name] = frames
 	return out
@@ -182,9 +242,9 @@ static func number(compiled: Dictionary, mood: String, prop: String, elevation: 
 ## Every role (sRGB Color) and number of `mood` at `elevation`, in one dictionary.
 static func tones(compiled: Dictionary, mood: String, elevation: float) -> Dictionary:
 	var out := {}
-	for role: String in COLOR_ROLES:
+	for role: String in COLOR_ROLES + DEFAULT_ROLES:
 		out[role] = tone(compiled, mood, role, elevation)
-	for prop: String in NUMBER_PROPS:
+	for prop: String in NUMBER_PROPS + DEFAULT_NUMBERS:
 		out[prop] = number(compiled, mood, prop, elevation)
 	return out
 
@@ -358,19 +418,36 @@ static func _resolve(value: String, vars: Dictionary) -> String:
 	return v
 
 
+## A keyframe's `name`: its own declaration, else the `:world` default of that name ("" if none).
+static func _prop(props: Dictionary, vars: Dictionary, name: String) -> String:
+	return str(props.get(name, vars.get(name, "")))
+
+
 static func _lint_key(
 	props: Dictionary, vars: Dictionary, where: String, errors: PackedStringArray
 ) -> void:
+	var roles: Array[String] = COLOR_ROLES + DEFAULT_ROLES
+	var numbers: Array[String] = NUMBER_PROPS + DEFAULT_NUMBERS
 	for prop: String in props:
-		if not COLOR_ROLES.has(prop) and not NUMBER_PROPS.has(prop):
+		if not roles.has(prop) and not numbers.has(prop):
 			errors.append("%s: unknown role %s" % [where, prop])
-	for role: String in COLOR_ROLES:
-		if not props.has(role):
+	for role: String in roles:
+		var value := _prop(props, vars, role)
+		if value.is_empty():
 			errors.append("%s: missing role %s" % [where, role])
-		elif parse_color(_resolve(str(props[role]), vars)).x < 0.0:
-			errors.append("%s: %s is not a colour: %s" % [where, role, props[role]])
-	for prop: String in NUMBER_PROPS:
-		if not props.has(prop):
+		elif parse_color(_resolve(value, vars)).x < 0.0:
+			errors.append("%s: %s is not a colour: %s" % [where, role, value])
+	for prop: String in numbers:
+		var value := _prop(props, vars, prop)
+		if value.is_empty():
 			errors.append("%s: missing %s" % [where, prop])
-		elif not _resolve(str(props[prop]), vars).is_valid_float():
-			errors.append("%s: %s is not a number: %s" % [where, prop, props[prop]])
+		elif not _resolve(value, vars).is_valid_float():
+			errors.append("%s: %s is not a number: %s" % [where, prop, value])
+
+
+## A `:world` block's declarations: `--name` tokens, or defaults named after a DEFAULT_ROLES or
+## DEFAULT_NUMBERS entry; anything else is a typo.
+static func _lint_defaults(tokens: Dictionary, where: String, errors: PackedStringArray) -> void:
+	for name: String in tokens:
+		if not name.begins_with("--") and not (DEFAULT_ROLES + DEFAULT_NUMBERS).has(name):
+			errors.append("%s: unknown default %s" % [where, name])

@@ -464,6 +464,24 @@ func prepare_biome(biome_id: String) -> void:
 		set_process(true)
 
 
+## Every resolved species as asset id -> {"mesh", "wind_category", "height", "flower"} (ids
+## that failed to resolve are left out). The meshes are the ones every cell node draws, so a
+## material set on one of their surfaces shows in every cell, built now or later (the Painted
+## look's stand-ins, PainterSurfaces).
+func resolved_species() -> Dictionary:
+	var out := {}
+	for asset_id: String in _species:
+		var record: Dictionary = _species[asset_id]
+		if record.has("mesh"):
+			out[asset_id] = {
+				"mesh": record["mesh"],
+				"wind_category": record.get("wind_category", ""),
+				"height": record.get("height", 1.0),
+				"flower": record.get("flower", false),
+			}
+	return out
+
+
 ## How many species have been resolved (including ids that failed to).
 func resolved_species_count() -> int:
 	return _species.size()
@@ -917,6 +935,7 @@ func _species_for(asset_id: String) -> Dictionary:
 		"by_shader": all_wind,
 		"height": maxf(aabb.end.y, 0.0),
 		"stage": ScatterArrival.stage_for(asset_id, palette_root),
+		"flower": template.get("flower", false) == true,
 	}
 	if not materials.is_empty():
 		species_added.emit(materials)
