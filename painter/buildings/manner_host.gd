@@ -182,7 +182,9 @@ func _work(job: Dictionary) -> void:
 		"amp": AMP_M,
 		"phase": PainterMannerMesh.phase_of(structure.seed_value),
 		"foot": foot,
-		"eave": eave
+		"eave": eave,
+		"walls": PainterMannerMesh.wall_normals(records),
+		"door_dir": PainterMannerMesh.door_dir(records)
 	}
 	var table: PackedStringArray = feed.table
 	for part_name: String in job.parts:

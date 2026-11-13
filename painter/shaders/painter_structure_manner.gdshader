@@ -8,8 +8,9 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
  * painter_structure.gdshader (A3b) with the strokes laid along each piece's own frame instead of
  * along the world. PainterMannerMesh writes per vertex the piece's (u, v) metres (UV2) and
  * [u_len, v_len, code, accent] (CUSTOM0; code 1 wall, 2 roof slope, 3 gable end, 4 beam or trim
- * box, 5 door leaf, 6 ridge, 7 thatch tooth, 0 no record: the A3b patterns). The prototype's
- * stroke families (spike_built3), drawn from the piece frame:
+ * box, 5 door leaf, 6 ridge, 7 thatch tooth, 8 flat roof, 0 no record: the A3b patterns; a
+ * wall's course in metres in the code's fraction, a hip face's taper in the accent's whole
+ * part). The prototype's stroke families (spike_built3), drawn from the piece frame:
  *   ruled lines just inside each face edge, at least about two pixels wide: the eave dark, the
  *   verges and the ridge pale (the prototype's ruled verge), a wall's corners dark;
  *   a plaster wall: a few broad soft washes, lighter or darker, each its own length and height;
@@ -72,6 +73,16 @@ void vertex() {
 	v_rec = CUSTOM0;
 }
 
+// 2D value noise, 0..1, one cell per unit: four hashes where p_noise takes eight (every stroke
+// noise has a constant third coordinate; card painter-manner-c halved their cost this way).
+float p_n2(vec2 p, float seed) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(p_hash(vec3(i, seed)), p_hash(vec3(i + vec2(1.0, 0.0), seed)), f.x),
+		mix(p_hash(vec3(i + vec2(0.0, 1.0), seed)), p_hash(vec3(i + vec2(1.0, 1.0), seed)), f.x), f.y);
+}
+
 float p_line(float x, float w) {
 	float f = fract(x);
 	float d = min(f, 1.0 - f);
@@ -84,19 +95,23 @@ float p_band(float x, float at, float w) {
 	return 1.0 - smoothstep(w * 0.35, w * 0.5, abs(x - at));
 }
 
-// Short strokes along x in rows `row` metres high: cells `cell` metres long, `share` of them
-// drawn, each tapered and dry. Returns (dark, light) for the cell's own value.
+// Short strokes along x in rows `row` metres high: cells about `cell` metres long (each row its
+// own length, 0.6 to 1.5 times), `share` of them drawn, each its own width (0.6 to 1.3 times
+// `width`) and place in the row, tapered and dry. Returns (dark, light) for the cell's own value.
 vec2 p_strokes(vec2 f, float row, float cell, float share, float width, float dark_share, float seed) {
 	float r = f.y / row;
 	float ri = floor(r);
-	float x = f.x / cell + p_hash(vec3(ri, seed, 1.0)) * 7.0;
+	float len = cell * mix(0.6, 1.5, p_hash(vec3(ri, seed, 2.0)));
+	float x = f.x / len + p_hash(vec3(ri, seed, 1.0)) * 7.0;
 	float ci = floor(x);
 	float h = p_hash(vec3(ri, ci, seed));
+	float h2 = p_hash(vec3(ci, ri, seed + 4.0));
 	float fx = fract(x);
-	float fy = fract(r);
+	float fy = fract(r) - (h2 - 0.5) * 0.3;
+	float w = width * mix(0.6, 1.3, h2);
 	float body = smoothstep(0.0, 0.18, fx) * (1.0 - smoothstep(0.72, 1.0, fx));
-	body *= 1.0 - smoothstep(width * 0.3, width * 0.5, abs(fy - 0.5));
-	float dry = smoothstep(0.25, 0.45, p_noise(vec3(f.x * 7.0, ri * 3.1, seed)));
+	body *= 1.0 - smoothstep(w * 0.3, w * 0.5, abs(fy - 0.5));
+	float dry = smoothstep(0.25, 0.45, p_n2(vec2(f.x * 7.0, ri * 3.1), seed));
 	float on = step(1.0 - share, h) * body * mix(0.35, 1.0, dry);
 	float is_dark = step(h, 1.0 - share + share * dark_share);
 	return vec2(on * is_dark, on * (1.0 - is_dark));
@@ -119,8 +134,8 @@ vec2 p_wash(vec2 f, float row, float cell, float share, float thick, float dark_
 	float centre = 0.5 + (p_hash(vec3(ri, ci, seed + 5.3)) - 0.5) * 0.35;
 	float th = thick * mix(1.0, 2.0, p_hash(vec3(ri, ci, seed + 7.9)));
 	float across = abs(fract(r) - centre) / th;
-	body *= 1.0 - smoothstep(0.3, 0.5, across + (p_noise(vec3(f.x * 2.3, ri, seed)) - 0.5) * 0.2);
-	float dry = smoothstep(0.2, 0.55, p_noise(vec3(f.x * 4.0, f.y * 16.0, seed)));
+	body *= 1.0 - smoothstep(0.3, 0.5, across + (p_n2(vec2(f.x * 2.3, ri), seed) - 0.5) * 0.2);
+	float dry = smoothstep(0.2, 0.55, p_n2(vec2(f.x * 4.0, f.y * 16.0), seed));
 	float on = step(1.0 - share, h) * body * mix(0.25, 1.0, dry);
 	float is_dark = step(p_hash(vec3(ri, ci, seed + 9.4)), dark_share);
 	return vec2(on * is_dark, on * (1.0 - is_dark));
@@ -133,11 +148,13 @@ void fragment() {
 	METALLIC = 0.0;
 	vec3 n = normalize(v_wn);
 	vec3 wp = v_wp;
-	float pn = mix(p_noise(wp * patch_freq + 7.0), p_noise(wp * patch_freq * 3.3 + 21.0), 0.3);
+	// One 3D noise for the dabs, reused as the patches' second octave and the light's wobble
+	// (card painter-manner-c: two 3D noises a fragment fewer than A3b's).
+	float bn = p_noise(wp * dab_freq + 33.0);
+	float pn = mix(p_noise(wp * patch_freq + 7.0), bn, 0.3);
 	float variant = mix(0.5, smoothstep(0.36, 0.64, pn), patch_mix);
 	float dark = 0.0;
 	float light = 0.0;
-	float bn = p_noise(wp * dab_freq + 33.0);
 	float dab = (pattern >= 5 ? 1.0 : dab_wall) * dabs;
 	// A slate's dark dabs read as blotches up close: a lighter share of them.
 	dark += smoothstep(0.62, 0.72, bn) * dab * (pattern == 6 ? 0.35 : 1.0);
@@ -149,115 +166,147 @@ void fragment() {
 	float up = n.y;
 	float u = dot(wp.xz, across);
 	float h = clamp(v_h, 0.0, 1.0);
-	int code = int(v_rec.z + 0.5);
+	int code = int(floor(v_rec.z + 0.01));
+	// A wall's course in metres rides in the code's fraction (0: the pattern's own), a hip face's
+	// taper (metres along the eave a metre up the slope) in sixteenths in the accent's whole part.
+	float course_m = fract(v_rec.z + 0.01) - 0.01;
+	float taper = floor(v_rec.w) / 16.0;
+	float acc = fract(v_rec.w);
 	vec2 f = v_fuv;
 	float ul = v_rec.x;
 	float vl = v_rec.y;
-	float acc = v_rec.w;
 	// A metre's pixel footprint on the piece: fine marks fade from 4 cm a pixel, broad ones from
-	// 8 cm, the ruled lines from 10 cm.
+	// 8 cm, the ruled lines from 16 cm; past 30 cm no stroke is drawn at all (far views).
 	float fw = length(fwidth(f));
 	float detail = 1.0 - smoothstep(0.04, 0.09, fw);
 	float broad = 1.0 - smoothstep(0.08, 0.16, fw);
 	bool roofy = pattern >= 5;
 	if (code > 0) {
-		bool face = code == 1 || code == 3;
-		bool roof = code == 2;
-		if (roof) {
+		bool flat_roof = code == 8;
+		bool wall = code == 1 || code == 3 || (flat_roof && pattern < 5);
+		bool face = code == 1 || code == 3 || flat_roof;
+		bool roof = code == 2 || (flat_roof && pattern >= 5);
+		if (code == 2) {
 			dark += eave * (1.0 - smoothstep(0.0, 0.16, h));
 			light += 0.35 * smoothstep(0.82, 1.0, h);
 		}
-		if (face) {
+		if (code == 1 || code == 3) {
 			float hm = h * 16.0;
 			dark += contact * (1.0 - smoothstep(0.0, contact_m, hm));
 		}
-		if (face || roof) {
-			// The ruled line just inside each edge, wobbling and broken, never under about two
-			// pixels wide or inset less than three.
-			float lw = max(0.02, fw * 1.1);
-			float inset = max(0.07, fw * 3.0);
-			float wob = (p_noise(vec3(f * 1.4, acc * 9.0)) - 0.5) * 0.06;
-			float dx = min(f.x, ul - f.x);
-			float dy0 = f.y;
-			float dy1 = vl - f.y;
-			float de = min(dx, min(dy0, dy1));
-			float line = 1.0 - smoothstep(lw, lw + max(0.012, fw), abs(de - inset - wob));
-			line *= step(0.2, p_noise(vec3((f.x + f.y) * 1.1, acc * 5.0, 2.0)));
-			line *= 1.0 - smoothstep(0.1, 0.2, fw);
-			float at_low = step(dy0, min(dx, dy1));
-			float at_high = step(dy1, min(dx, dy0));
-			float at_side = 1.0 - at_low - at_high;
-			if (roof) {
-				dark += line * 0.9 * at_low;
-				light += line * (0.75 * at_high + 0.6 * at_side);
-			} else if (code == 3) {
-				light += line * 0.55 * (1.0 - at_low);
-				dark += line * 0.5 * at_low;
-			} else {
-				dark += line * 0.45;
-			}
+		float cr = course_m > 0.05 ? course_m : (pattern == 2 ? 0.3 : (pattern == 3 ? 0.24 : 0.34));
+		if (wall && pattern == 1) {
+			// Stone: about two blocks in five, staggered per course, get a dab a little inside
+			// the block, darker or lighter (the prototype's scattered stones, not a full grid); it
+			// reads at home zoom where the marks are a few pixels (fades when a course is under
+			// about three pixels).
+			float row = floor(f.y / cr);
+			float c = f.x / (cr * 1.9) + 0.5 * mod(row, 2.0) + p_hash(vec3(row, 3.0, 1.0)) * 0.3;
+			float blk = p_hash(vec3(row, floor(c), 7.0));
+			vec2 q = vec2(fract(c), fract(f.y / cr));
+			float inside = smoothstep(0.08, 0.2, min(q.x, 1.0 - q.x)) * smoothstep(0.1, 0.24, min(q.y, 1.0 - q.y));
+			float block = 1.0 - smoothstep(0.15, 0.35, fw / cr);
+			float stone = step(0.6, blk) * inside * block;
+			dark += stone * step(0.8, blk) * 0.45;
+			light += stone * (1.0 - step(0.8, blk)) * 0.35;
 		}
-		if (face) {
-			if (pattern == 1) {
-				// Stone: a broad dry mark or two per course, a broken course line, a few ticks.
-				vec2 m = p_wash(f, 0.34, 0.75, 0.55, 0.28, 0.55, 11.0);
-				dark += m.x * 0.6 * broad;
-				light += m.y * 0.5 * broad;
-				float course = p_line(f.y / 0.34, 0.07) * step(0.45, p_noise(vec3(f.x * 1.3, floor(f.y / 0.34), 4.0)));
-				dark += course * 0.45 * detail;
-				float tick = p_line(f.x / 0.55 + p_hash(vec3(floor(f.y / 0.34), 2.0, 5.0)) * 3.0, 0.035);
-				dark += tick * step(0.7, p_hash(vec3(floor(f.y / 0.34), floor(f.x / 0.55), 6.0))) * 0.35 * detail;
-			} else if (pattern == 2 || pattern == 3) {
-				vec2 g = pattern == 2 ? f : f.yx;
-				float sp = pattern == 2 ? 0.3 : 0.24;
-				dark += p_line(g.y / sp, 0.12) * step(0.3, p_noise(vec3(g.x * 0.9, floor(g.y / sp), 4.0))) * 0.55;
-			} else {
-				// Plaster: a few broad soft washes, mostly lighter, each its own size.
-				vec2 m = p_wash(f, 0.6, 1.7, 0.32, 0.22, 0.35, 3.0);
-				dark += m.x * 0.22 * broad;
-				light += m.y * 0.3 * broad;
-			}
-		} else if (roof) {
-			if (pattern == 8) {
-				vec2 m = p_strokes(f.yx, 0.075, 0.8, 0.5, 0.7, 0.45, 5.0);
-				dark += m.x * 0.45 * detail;
-				light += m.y * 0.4 * detail;
-				for (int c = 1; c <= 3; c++) {
-					float at = vl * 0.25 * float(c) + (p_noise(vec3(f.x * 0.8, float(c), 6.0)) - 0.5) * 0.2;
-					float band = p_band(f.y, at, 0.06) * step(0.25, p_noise(vec3(f.x * 1.2, float(c), 8.0)));
-					dark += band * 0.5 * detail;
+		if (fw < 0.3) {
+			if (face || code == 2) {
+				// The ruled line just inside each edge (a hip face's sides follow its taper),
+				// wobbling and broken, never under about three pixels wide or inset less than
+				// three.
+				float lw = max(0.03, fw * 1.4);
+				float inset = max(0.07, fw * 3.0);
+				float wob = (p_n2(f * 1.4, acc * 9.0) - 0.5) * 0.06;
+				float dx = min(f.x - taper * f.y, ul - taper * f.y - f.x) / sqrt(1.0 + taper * taper);
+				float dy0 = f.y;
+				float dy1 = vl - f.y;
+				float de = min(dx, min(dy0, dy1));
+				float line = 1.0 - smoothstep(lw, lw + max(0.012, fw), abs(de - inset - wob));
+				line *= step(0.2, p_n2(vec2((f.x + f.y) * 1.1, acc * 5.0), 2.0));
+				line *= 1.0 - smoothstep(0.16, 0.3, fw);
+				float at_low = step(dy0, min(dx, dy1));
+				float at_high = step(dy1, min(dx, dy0));
+				float at_side = 1.0 - at_low - at_high;
+				if (code == 2) {
+					dark += line * 0.9 * at_low;
+					light += line * (0.75 * at_high + 0.6 * at_side);
+				} else if (code == 3) {
+					light += line * 0.55 * (1.0 - at_low);
+					dark += line * 0.5 * at_low;
+				} else {
+					dark += line * 0.45;
 				}
-			} else if (pattern == 9) {
-				vec2 m = p_strokes(f, 0.25, 0.35, 0.35, 0.8, 0.5, 9.0);
-				dark += m.x * 0.35 * detail;
-				light += m.y * 0.35 * detail;
-			} else {
-				float course = pattern == 5 ? 0.42 : (pattern == 6 ? 0.32 : 0.26);
-				vec2 m = p_strokes(f + vec2(0.0, course * 0.35), course, 0.45, 0.55, 0.22, 0.82, 7.0);
-				dark += m.x * 0.6 * detail;
-				light += m.y * 0.45 * detail;
+			}
+			if (wall) {
+				if (pattern == 1) {
+					// Stone: a broad dry mark or two per course, a broken course line, ticks.
+					vec2 m = p_wash(f, cr, cr * 2.2, 0.6, 0.3, 0.55, 11.0);
+					dark += m.x * 0.75 * broad;
+					light += m.y * 0.55 * broad;
+					float course = p_line(f.y / cr, 0.08) * step(0.4, p_n2(vec2(f.x * 1.3, floor(f.y / cr)), 4.0));
+					dark += course * 0.5 * detail;
+					float tick = p_line(f.x / (cr * 1.9) + p_hash(vec3(floor(f.y / cr), 2.0, 5.0)) * 3.0, 0.035);
+					dark += tick * step(0.65, p_hash(vec3(floor(f.y / cr), floor(f.x / (cr * 1.9)), 6.0))) * 0.4 * detail;
+				} else if (pattern == 2 || pattern == 3) {
+					vec2 g = pattern == 2 ? f : f.yx;
+					dark += p_line(g.y / cr, 0.12) * step(0.3, p_n2(vec2(g.x * 0.9, floor(g.y / cr)), 4.0)) * 0.55;
+				} else {
+					// Plaster: a few broad soft washes, mostly lighter, each its own size.
+					vec2 m = p_wash(f, 0.6, 1.7, 0.32, 0.22, 0.35, 3.0);
+					dark += m.x * 0.22 * broad;
+					light += m.y * 0.2 * broad;
+				}
+			} else if (roof) {
+				if (pattern == 8) {
+					vec2 m = p_strokes(f.yx, 0.075, 0.8, 0.42, 0.7, 0.45, 5.0);
+					dark += m.x * 0.45 * detail;
+					light += m.y * 0.4 * detail;
+					for (int c = 1; c <= 3; c++) {
+						float at = vl * 0.25 * float(c) + (p_n2(vec2(f.x * 0.8, float(c)), 6.0) - 0.5) * 0.2;
+						float band = p_band(f.y, at, 0.06) * step(0.25, p_n2(vec2(f.x * 1.2, float(c)), 8.0));
+						dark += band * 0.5 * detail;
+					}
+				} else if (pattern == 9) {
+					vec2 m = p_strokes(f, 0.25, 0.35, 0.35, 0.8, 0.5, 9.0);
+					dark += m.x * 0.35 * detail;
+					light += m.y * 0.35 * detail;
+				} else if (pattern == 6) {
+					// Slate: a few long thin ruled dashes, each its own length and place (the
+					// prototype's sparse slate lines over its broad blotches).
+					vec2 m = p_strokes(f + vec2(0.0, 0.2), 0.48, 1.7, 0.28, 0.16, 0.85, 7.0);
+					dark += m.x * 0.6 * broad;
+					light += m.y * 0.4 * broad;
+				} else {
+					float course = pattern == 5 ? 0.42 : 0.26;
+					vec2 m = p_strokes(f + vec2(0.0, course * 0.35), course, 0.45, 0.55, 0.22, 0.82, 7.0);
+					dark += m.x * 0.6 * detail;
+					light += m.y * 0.45 * detail;
+				}
+			}
+			if (code == 4 || code == 6) {
+				// A beam: one broad stroke, a light and a dark line along it, and a dark brush
+				// rim where the mesh widened it, dragged dry so it breaks.
+				float across_b = vl > 0.0 ? f.y / vl : 0.5;
+				light += p_band(across_b, 0.66, 0.22) * 0.45 * smoothstep(0.1, 0.3, p_n2(vec2(f.x * 1.5, acc * 7.0), 1.0));
+				dark += p_band(across_b, 0.3, 0.2) * 0.4;
+				float rim = min(across_b, 1.0 - across_b) + (p_n2(vec2(f.x * 2.6, acc * 3.0), 9.0) - 0.5) * 0.14;
+				dark += (1.0 - smoothstep(0.04, 0.17, rim)) * 0.7 * (code == 4 ? 1.0 : 0.0);
+			} else if (code == 5) {
+				// A door: plank seams, a wandering grain, one brace stroke, a darker head.
+				float x = f.y + sin(f.x * 4.0 + acc * 20.0) * 0.012;
+				dark += p_line(f.y / 0.16, 0.12) * 0.5;
+				dark += p_line(x / 0.045, 0.18) * 0.22 * detail;
+				float diag = ul > 0.0 && vl > 0.0 ? f.y / vl - f.x / ul : 1.0;
+				dark += p_band(diag, 0.0, 0.07) * 0.35 * step(0.3, p_n2(vec2(f.x * 3.0, acc), 3.0));
+				dark += smoothstep(0.7, 1.0, ul > 0.0 ? f.x / ul : 0.0) * 0.3;
+			} else if (code == 7) {
+				// A thatch tooth: strands down it, a darker tip.
+				dark += p_line(f.x / 0.05, 0.3) * 0.4 + smoothstep(-0.05, -0.25, f.y) * 0.3;
 			}
 		}
 		if (code == 4 || code == 6) {
-			// A beam: one broad stroke, a light and a dark line along it, and a dark brush rim
-			// where the mesh widened it, dragged dry so it breaks.
-			float across_b = vl > 0.0 ? f.y / vl : 0.5;
-			light += p_band(across_b, 0.66, 0.22) * 0.5 * smoothstep(0.1, 0.3, p_noise(vec3(f.x * 1.5, acc * 7.0, 1.0)));
-			dark += p_band(across_b, 0.3, 0.18) * 0.35;
-			float rim = min(across_b, 1.0 - across_b) + (p_noise(vec3(f.x * 2.6, acc * 3.0, 9.0)) - 0.5) * 0.12;
-			dark += (1.0 - smoothstep(0.02, 0.1, rim)) * 0.5 * (code == 4 ? 1.0 : 0.0);
 			variant = clamp(variant + (acc - 0.5) * 0.6, 0.0, 1.0);
-		} else if (code == 5) {
-			// A door: plank seams, a wandering grain, one brace stroke, a darker head.
-			float x = f.y + sin(f.x * 4.0 + acc * 20.0) * 0.012;
-			dark += p_line(f.y / 0.16, 0.12) * 0.5;
-			dark += p_line(x / 0.045, 0.18) * 0.22 * detail;
-			float diag = ul > 0.0 && vl > 0.0 ? f.y / vl - f.x / ul : 1.0;
-			dark += p_band(diag, 0.0, 0.07) * 0.35 * step(0.3, p_noise(vec3(f.x * 3.0, acc, 3.0)));
-			dark += smoothstep(0.7, 1.0, ul > 0.0 ? f.x / ul : 0.0) * 0.3;
-		} else if (code == 7) {
-			// A thatch tooth: strands down it, a darker tip.
-			dark += p_line(f.x / 0.05, 0.3) * 0.4 + smoothstep(-0.05, -0.25, f.y) * 0.3;
 		}
 		roofy = roof || code == 6 || code == 7;
 	} else {
@@ -295,7 +344,7 @@ void fragment() {
 	f_mid = mix(mix(mid, shd, dark), lit, light * 0.6);
 	f_lit = mix(mix(lit, mid, dark), lit * 1.06, light);
 	f_n = n;
-	f_wob = p_noise(wp * 1.7 + 5.0);
+	f_wob = bn;
 }
 
 void light() {

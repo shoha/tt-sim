@@ -164,6 +164,51 @@ func test_build_one_records_in_one_pass_and_changes_nothing_else() -> void:
 			assert_false((feed.building as Dictionary).is_empty(), "the building record")
 
 
+func test_courses_tapers_stand_off_and_hinges_ride_in_the_records() -> void:
+	var wall := {"id": "w", "kind": "wall_face", "course": 0.3, "accent": 0.4}
+	var zw := PainterMannerMesh.code_and_accent(wall)
+	assert_almost_eq(zw.x, PainterMannerMesh.CODE_WALL + 0.3, 0.0001, "course in the fraction")
+	var boards := {"id": "b", "kind": "wall_face", "course": 0.0, "board_width": 0.2}
+	assert_almost_eq(PainterMannerMesh.code_and_accent(boards).x, 1.2, 0.0001, "board width")
+	var hip := _roof()
+	hip["shape"] = "hip_end"
+	hip["edges"] = [{"a": Vector3(0, 2, 0), "b": Vector3(2, 3.2, -1.6), "kind": "hip"}]
+	var hzw := PainterMannerMesh.code_and_accent(hip)
+	assert_eq(int(hzw.x), PainterMannerMesh.CODE_ROOF)
+	assert_eq(floori(hzw.y), 16, "a hip running 2 m along the eave over a 2 m slope: taper 1")
+	assert_almost_eq(fposmod(hzw.y, 1.0), 0.3 * 0.999, 0.0001, "the accent keeps its fraction")
+	var records := {
+		"w": {"id": "w", "kind": "wall_face", "side": 2, "n": Vector3.BACK},
+		"s":
+		{
+			"id": "s",
+			"kind": "sill",
+			"side": 2,
+			"proud": 0.01,
+			"n": Vector3.UP,
+			"origin": Vector3.ZERO,
+			"u": Vector3.RIGHT,
+			"v": Vector3.BACK,
+			"u_len": 1.0,
+			"v_len": 0.1
+		},
+		"d":
+		{
+			"id": "d",
+			"kind": "door_leaf",
+			"u": Vector3.RIGHT,
+			"hinge_side": "u1",
+			"n": Vector3.BACK
+		}
+	}
+	assert_eq(PainterMannerMesh.wall_normals(records), {2: Vector3.BACK})
+	assert_eq(PainterMannerMesh.door_dir(records), Vector3.LEFT, "away from the hinge at u1")
+	var m := PainterMannerMesh.Grow.new()
+	m.add(Vector3(1, 1, 0), Vector3.UP, Color.WHITE, records["s"])
+	PainterMannerMesh._stand_off(m, PainterMannerMesh.wall_normals(records))
+	assert_almost_eq(m.pos[0].z, PainterMannerMesh.MIN_PROUD_M - 0.01, 0.0001, "lifted to 3 cm")
+
+
 func test_the_wander_keeps_the_foot_and_is_a_function_of_the_point() -> void:
 	var opts := _opts()
 	assert_eq(PainterMannerMesh.wander_at(Vector3(3, 0, 2), opts), Vector3.ZERO, "the foot stays")

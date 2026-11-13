@@ -86,11 +86,11 @@
      of its own warm hue in shade (painter-manner-b: a 1.2 pull read lavender over a whole
      facade; 0.3 leaves a warm grey cream, the prototype's shaded walls). Roofs carry no snow
      but in winter (roof-snow, the share of a roof under it, in the drift role's white). */
-  plaster: oklch(0.89 0.045 88);  wall-stone: oklch(0.76 0.032 78);
+  plaster: oklch(0.89 0.045 88);  wall-stone: oklch(0.80 0.042 80);
   wall-log: oklch(0.60 0.080 58);  wall-boards: oklch(0.64 0.058 72);  timber: oklch(0.45 0.075 52);
-  wall-shade-turn: -11;  wall-pull: 0.3;  stone-pull: 0.5;  wall-shade-lift: 0.13;
+  wall-shade-turn: -11;  wall-pull: 0.3;  stone-pull: 0.3;  wall-shade-lift: 0.13;
   roof-pull: 0.45;  roof-shade-lift: 0.03;  timber-shade-turn: -50;  timber-pull: 0.15;
-  building-lit: 0.6;  roof-snow: 0;
+  building-lit: 0.5;  roof-snow: 0;
 }
 
 @mood summer {
@@ -306,7 +306,7 @@
        half under snow, the eaves and the steepest runs left bare. */
     plaster: oklch(0.84 0.032 72);  wall-stone: oklch(0.66 0.020 75);
     wall-log: oklch(0.55 0.060 55);  wall-boards: oklch(0.62 0.042 70);  timber: oklch(0.42 0.055 50);
-    roof-snow: 0.6;
+    roof-snow: 0.45;
   }
   @key high 24 {
     sun: oklch(0.97 0.020 80);  sun-energy: 1.0;

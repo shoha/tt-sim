@@ -18,7 +18,10 @@ extends RefCounted
 ##   fringe  a thatch roof's ragged teeth, a few triangles along each eave, appended to the draw;
 ##   hand    a half-timber beam cut every BEAM_SEG_M along its axis and widened on both long sides
 ##           by a brush width that wanders (`brush_at`), so its edges read brushed and a little
-##           crooked; a door leaf and its panels lean (`door_lean`), one way per building;
+##           crooked; a door leaf and its panels lean away from the leaf's hinge (`door_dir`;
+##           `door_lean` where no leaf has one), one way per building;
+##   stand-off a wall's trim (procgen's `side`, `proud`) at least MIN_PROUD_M off its wall's face,
+##           so the uncut wall never buries a sill or a beam;
 ##   collider the structure's collision faces moved by the same field (and cut like the roof
 ##           where they lie above the walls), so a click and a standing token meet what is drawn.
 ## Nothing here reads the scene tree; the same inputs give the same arrays.
@@ -31,11 +34,16 @@ const CODE_BOX := 4
 const CODE_LEAF := 5
 const CODE_RIDGE := 6
 const CODE_FRINGE := 7
-## A record kind's code in CUSTOM0.z.
+const CODE_FLAT := 8
+## A record kind's code in CUSTOM0.z (a wall face's course in metres rides in its fraction). A
+## piece of a kind not listed (or with no record: round and profile roofs, a Taper's pieces,
+## ornaments) draws the A3b patterns on the same wandered mesh, so it meets its neighbours.
 const CODES: Dictionary = {
 	"wall_face": CODE_WALL,
 	"coping": CODE_WALL,
 	"roof_slope": CODE_ROOF,
+	"roof_part": CODE_ROOF,
+	"roof_flat": CODE_FLAT,
 	"gable_end": CODE_GABLE,
 	"beam": CODE_BOX,
 	"frame": CODE_BOX,
@@ -43,6 +51,12 @@ const CODES: Dictionary = {
 	"shutter": CODE_BOX,
 	"door_case": CODE_BOX,
 	"chimney": CODE_BOX,
+	"block": CODE_BOX,
+	"step": CODE_BOX,
+	"cornice": CODE_BOX,
+	"quoin": CODE_BOX,
+	"parapet": CODE_BOX,
+	"viga": CODE_BOX,
 	"door_leaf": CODE_LEAF,
 	"door_panel": CODE_LEAF,
 	"ridge": CODE_RIDGE,
@@ -51,6 +65,10 @@ const CODES: Dictionary = {
 ## (Walls are not cut: their openings' corners already give the lean enough vertices, and cutting
 ## them more than doubled the recipe's triangles in round 1.)
 const CUT_CODES: Array[int] = [CODE_ROOF, CODE_GABLE, CODE_RIDGE]
+## A wall's trim (a piece with `side` and `proud`, procgen's stand-off) stands at least this far
+## off the face plane: the uncut wall between its vertices strays up to a few centimetres from the
+## field its trim follows, and a sill or beam flush with it would be buried there.
+const MIN_PROUD_M := 0.03
 ## The longest horizontal run of a cut edge, metres.
 const SEG_M := 1.0
 ## A thatch tooth's width along the eave, metres, and its length when the record has no fringe.
@@ -191,9 +209,32 @@ static func records_of(
 	return out
 
 
+## A record's CUSTOM0 (z, w): z its kind's code plus, for a wall face, its course in metres (the
+## record's `course`, a boarded wall's `board_width`; at most 0.45) as the fraction; w its accent
+## plus, for a hip roof face, its taper (how far its hip runs along the eave a metre up the slope)
+## in sixteenths as the whole part. Pure.
+static func code_and_accent(r: Dictionary) -> Vector2:
+	var code := float(CODES[str(r["kind"])])
+	var accent := clampf(float(r.get("accent", 0.5)), 0.0, 1.0) * 0.999
+	if str(r["kind"]) == "wall_face":
+		var course := float(r.get("course", 0.0))
+		if course <= 0.0:
+			course = float(r.get("board_width", 0.0))
+		code += clampf(course, 0.0, 0.45)
+	elif str(r["kind"]) == "roof_slope" and str(r.get("shape", "")).begins_with("hip"):
+		var v_len := float(r["v_len"])
+		for e: Dictionary in r.get("edges", []):
+			if str(e["kind"]) == "hip" and v_len > 0.01:
+				var run := absf(((e["b"] as Vector3) - (e["a"] as Vector3)).dot(r["u"]))
+				accent += roundf(clampf(run / v_len, 0.0, 4.0) * 16.0)
+				break
+	return Vector2(code, accent)
+
+
 ## The draw, shadow and fringe arrays of one mesh (see the header). `arrays` a surface's arrays
 ## (map frame), `tags` its per-vertex tags, `table` the structure's tag table, `records` path ->
-## record. `opts`: the field ({"amp", "phase", "foot", "eave"}, wander_at) and "cut", "fringe".
+## record. `opts`: the field ({"amp", "phase", "foot", "eave"}, wander_at), "cut", "fringe",
+## "walls" (wall_normals: the trim's stand-off) and "door_dir" (door_dir: the doors' lean).
 ## Returns {"draw", "shadow",
 ## "triangles": [source, draw, shadow]}. Pure.
 static func build(
@@ -221,6 +262,7 @@ static func build(
 	var m := Grow.new()
 	for k in src.size():
 		m.add(src[k], normals[k], colours[k], recs[k])
+	_stand_off(m, opts.get("walls", {}))
 	var cut_idx := PackedInt32Array()
 	var mids: Dictionary = {}
 	var cut := bool(opts.get("cut", true))
@@ -267,6 +309,8 @@ class Grow:
 	var cus := PackedFloat32Array()
 	## The record of each vertex (null where none).
 	var rec: Array = []
+	## Record id -> its CUSTOM0 (z, w) (code_and_accent), made once per piece.
+	var _zw: Dictionary = {}
 
 	func add(p: Vector3, n: Vector3, c: Color, r_in: Variant) -> int:
 		pos.append(p)
@@ -281,16 +325,11 @@ class Grow:
 			var r: Dictionary = rec_v
 			var d: Vector3 = p - (r["origin"] as Vector3)
 			uv2.append(Vector2(d.dot(r["u"]), d.dot(r["v"])))
-			cus.append_array(
-				PackedFloat32Array(
-					[
-						float(r["u_len"]),
-						float(r["v_len"]),
-						float(CODES[str(r["kind"])]),
-						float(r.get("accent", 0.5))
-					]
-				)
-			)
+			var id := str(r["id"])
+			if not _zw.has(id):
+				_zw[id] = PainterMannerMesh.code_and_accent(r)
+			var zw: Vector2 = _zw[id]
+			cus.append_array(PackedFloat32Array([float(r["u_len"]), float(r["v_len"]), zw.x, zw.y]))
 		return pos.size() - 1
 
 	func code(k: int) -> int:
@@ -344,11 +383,55 @@ static func _is_beam(rec: Variant) -> bool:
 	return rec != null and str(rec["kind"]) == "beam"
 
 
+## The outward normal of each wall face by its footprint side (`walls` for build's opts). Pure.
+static func wall_normals(records: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for rec: Dictionary in records.values():
+		if str(rec["kind"]) == "wall_face" and rec.has("side"):
+			out[int(rec["side"])] = rec["n"]
+	return out
+
+
+## The lean of the building's doors (`door_dir` for build's opts): along the first door leaf with
+## a hinge, away from its hinge (the free edge's top leans out over the step); ZERO with none.
+## Pure.
+static func door_dir(records: Dictionary) -> Vector3:
+	for rec: Dictionary in records.values():
+		if str(rec["kind"]) != "door_leaf" or not rec.has("hinge_side"):
+			continue
+		var u: Vector3 = rec["u"]
+		u.y = 0.0
+		if u.length_squared() < 0.01:
+			continue
+		return u.normalized() * (1.0 if str(rec["hinge_side"]) == "u0" else -1.0)
+	return Vector3.ZERO
+
+
+## Every vertex of a wall's trim (a record with `side` and `proud` >= 0) moved out along its
+## wall's normal until the piece stands MIN_PROUD_M off the face plane.
+static func _stand_off(m: Grow, walls: Dictionary) -> void:
+	if walls.is_empty():
+		return
+	var lifts: Dictionary = {}
+	for k in m.pos.size():
+		var rec: Variant = m.rec[k]
+		if rec == null or not rec.has("proud") or not rec.has("side"):
+			continue
+		var id := str(rec["id"])
+		if not lifts.has(id):
+			var proud := float(rec["proud"])
+			var n: Variant = walls.get(int(rec["side"]))
+			var lift := clampf(MIN_PROUD_M - proud, 0.0, MIN_PROUD_M)
+			lifts[id] = (n as Vector3) * lift if n != null and proud >= 0.0 else Vector3.ZERO
+		m.pos[k] += lifts[id]
+
+
 ## The hand: every beam vertex moved out across the beam by brush_at (a widened, wandering brush
 ## edge), every door leaf and panel vertex by door_lean. Before the wander, so both move with it.
 static func _hand(m: Grow, opts: Dictionary) -> void:
 	var phase: Vector3 = opts.get("phase", Vector3.ZERO)
 	var foot := float(opts.get("foot", 0.0))
+	var dir: Vector3 = opts.get("door_dir", Vector3.ZERO)
 	for k in m.pos.size():
 		var rec: Variant = m.rec[k]
 		if rec == null:
@@ -359,6 +442,8 @@ static func _hand(m: Grow, opts: Dictionary) -> void:
 			var half := maxf(float(rec["v_len"]) * 0.5, 0.001)
 			var across := (m.pos[k] - (rec["origin"] as Vector3)).dot(v) - half
 			m.pos[k] += v * clampf(across / half, -1.0, 1.0) * brush_at(m.pos[k], phase)
+		elif code == CODE_LEAF and dir != Vector3.ZERO:
+			m.pos[k] += dir * maxf(m.pos[k].y - foot, 0.0) * DOOR_LEAN
 		elif code == CODE_LEAF:
 			m.pos[k] += door_lean(m.pos[k], rec["n"], foot, phase)
 

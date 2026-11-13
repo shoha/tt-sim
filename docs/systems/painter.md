@@ -366,6 +366,30 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   dutch_bell_house 22.9) against the 40-76 ms a second evaluation took; records 16-224 KB
   serialized a house (about a third of its mesh arrays), held only in the cache. A Classic level
   pays neither.
+- **The records' new data (card painter-manner-c; look-pending).** Hip faces (`shape` hip_*) carry
+  their taper (the hip's run along the eave a metre up the slope, sixteenths in CUSTOM0.w's whole
+  part), so the ruled side lines follow the hips; a wall face's `course` (a boarded wall's
+  `board_width`) rides in CUSTOM0.z's fraction and spaces the stone, log and board marks; flat
+  roofs (code 8) get ruled lines all round and their material's marks; dormer and hood roofs
+  (`roof_part`) draw as roof slopes, gallery and porch `block`s, `step`s and other fitted trim as
+  boxes. A wall's trim (`side`, `proud` >= 0) stands at least 3 cm off its wall
+  (`MIN_PROUD_M`, `_stand_off`), since the uncut wall strays a few centimetres from the field its
+  trim follows. A door leans away from its leaf's hinge (`door_dir`). A piece with no record
+  (round and profile roofs, a Taper's pieces: windmills, wizard tower, crystal spire) keeps the A3b
+  patterns on the same wandered mesh, so it meets its neighbours without a seam. Look: stone gets
+  scattered inset dabs on two blocks in five plus broad marks and ticks per course; slate a few
+  long thin dashes; thatch strokes of uneven length and width; plaster's light washes weaker;
+  beams a darker, wider brush rim; ruled lines at least three pixels and fading from 16 cm a pixel.
+  Sheet: wall-stone oklch(0.80 0.042 80), stone-pull 0.3, building-lit 0.5, winter roof-snow 0.45.
+  Cost: the shader dropped two 3D noises a fragment (the light's wobble and the second patch
+  octave reuse the dab noise), every stroke noise is 2D (four hashes, not eight), and no stroke
+  is drawn past 30 cm a pixel.
+- **Coverage (card painter-manner-c, 12 recipes, `compare/painter_manner_c/gallery/`).** Drawn in
+  the manner: hip, dormered, inn gallery, barn, porch cottage, ruin cottage (rubble falls back),
+  watchtower; falling back per piece without a seam: windmill_dutch (all of it, Taper), the
+  roundhouse's round roof and the minka's profile roof (plain smooth straw, no strokes or teeth:
+  the weakest), no broken building seen. house_flat and log_cabin were not identified with
+  certainty in the frames.
 - **Its cost (card painter-manner-b, one interleaved sitting, 1920x1080, vsync off, summer sun
   45, order Classic A3b B B A3b Classic, each the mean of its pair; indicative, shared GPU, the
   pairs 0.0-0.06 ms apart).** B over Classic buildings (under the painted look): home, mid, far,
