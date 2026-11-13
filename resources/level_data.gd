@@ -58,6 +58,10 @@ const DEFAULT_DISPLAY_UNIT_PER_CELL := 5.0
 ## Empty string means "use map defaults if available, otherwise PROPERTY_DEFAULTS".
 ## See EnvironmentPresets for available presets.
 @export var environment_preset: String = ""
+## The map's look (docs/systems/painter.md): {} for Classic, or {"style": "classic"|"painted",
+## "sheet": a painter sheet id ("" core), "mood": a sheet mood ("" the preset's, RenderStyle)}.
+## A player's Settings Look row can override it locally; visual only, it changes nothing in play.
+@export var look: Dictionary = {}
 ## Optional overrides for specific environment properties
 ## Keys should match EnvironmentPresets property names (e.g., "ambient_light_energy", "fog_density")
 ## Colors should be Color objects or hex strings like "#ff0000"
@@ -287,6 +291,7 @@ func duplicate_level() -> LevelData:
 	new_level.map_offset = map_offset
 	new_level.light_intensity_scale = light_intensity_scale
 	new_level.environment_preset = environment_preset
+	new_level.look = look.duplicate()
 	new_level.environment_overrides = environment_overrides.duplicate()
 	new_level.water_style = water_style
 	new_level.water = water.copy_settings()
@@ -368,6 +373,7 @@ func to_dict() -> Dictionary:
 		"map_document": map_document,
 		"light_intensity_scale": light_intensity_scale,
 		"environment_preset": environment_preset,
+		"look": RenderStyle.sanitize_look(look),
 		"environment_overrides": EnvironmentPresets.overrides_to_json(environment_overrides),
 		"water_style": water.matching_look(),
 		"water_overrides": water.to_dict(),
@@ -428,6 +434,8 @@ static func from_dict(data: Dictionary) -> LevelData:
 
 	level.light_intensity_scale = data.get("light_intensity_scale", 1.0)
 	level.environment_preset = data.get("environment_preset", "")
+	# Untrusted like the rest: only a known style and plain strings survive.
+	level.look = RenderStyle.sanitize_look(data.get("look", {}))
 	level.environment_overrides = EnvironmentPresets.overrides_from_json(
 		data.get("environment_overrides", {})
 	)

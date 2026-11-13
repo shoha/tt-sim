@@ -1,0 +1,127 @@
+/* core.sheet: the painted look's tones for the core library (painter/sheet.gd reads it; the
+   format and the rules are in docs/systems/painter.md).
+
+   Started from the painter spike's glade_ttsim.sheet (branch painterspike): its summer, dusk,
+   grimdark, winter and autumn colours, each tuned there for ONE sun the sheet chose. Here the
+   level's sun chooses (time of day or the manual sun), so a mood holds keyframes by sun
+   elevation in degrees and the resolver blends between them in OKLCH:
+     high   a midday sun
+     low    the sun near the horizon (golden hour)
+     night  the sun below the horizon (moonlight; the level's sun still sets the direction)
+
+   Roles: sun, sky (the zenith), horizon, ambient, haze (fog and far colour) light the scene;
+   ground, leaf, bark, stone, path and the five roofs are the tones later cards paint with.
+   Numbers: sun-energy and ambient-energy (the linear tonemap shows them as written).
+
+   Only summer has all three keyframes so far. dusk, grimdark, winter and autumn hold their
+   spike tuning as a single `high` keyframe at every sun until their own look card
+   (PainterSheet.HIGH_ONLY is the lint's allow-list for that). */
+
+:world {
+  --meadow: oklch(0.72 0.135 131);
+  --leaf: oklch(0.67 0.165 138);
+  --bark: oklch(0.52 0.075 55);
+  --stone: oklch(0.70 0.030 80);
+  --path: oklch(0.80 0.060 80);
+  --terracotta: oklch(0.55 0.135 33);
+  --thatch: oklch(0.71 0.085 84);
+}
+
+@mood summer {
+  /* The richest mood: a warm white sun, cool blue shade, a deep meadow, blue haze. */
+  @key high 60 {
+    sun: oklch(0.98 0.022 92);  sun-energy: 1.05;
+    sky: oklch(0.80 0.085 238);  horizon: oklch(0.93 0.040 215);
+    ambient: oklch(0.90 0.045 222);  ambient-energy: 0.55;
+    haze: oklch(0.91 0.030 228);
+    ground: var(--meadow);  leaf: var(--leaf);  bark: var(--bark);  stone: var(--stone);  path: var(--path);
+    roof-clay: var(--terracotta);  roof-slate: oklch(0.50 0.040 255);  roof-shingle: oklch(0.50 0.060 45);
+    roof-turf: oklch(0.58 0.100 135);  roof-thatch: var(--thatch);
+  }
+  /* Golden hour. The sun goes gold, not red, and the shade stays a light blue-violet so walls
+     facing away from it keep their own colour (the spike's cold front walls) and clay roofs do
+     not swing to magenta under a pink fill. */
+  @key low 6 {
+    sun: oklch(0.90 0.095 70);  sun-energy: 1.0;
+    sky: oklch(0.74 0.075 262);  horizon: oklch(0.88 0.075 68);
+    ambient: oklch(0.84 0.040 268);  ambient-energy: 0.62;
+    haze: oklch(0.86 0.055 62);
+    ground: oklch(0.69 0.125 120);  leaf: oklch(0.63 0.145 130);  bark: oklch(0.50 0.075 50);
+    stone: oklch(0.69 0.040 68);  path: oklch(0.80 0.070 70);
+    roof-clay: oklch(0.56 0.130 38);  roof-slate: oklch(0.51 0.040 262);  roof-shingle: oklch(0.52 0.065 48);
+    roof-turf: oklch(0.57 0.100 125);  roof-thatch: oklch(0.72 0.090 78);
+  }
+  /* Moonlight: a blue night where the board still reads. The sun is under the horizon, so the
+     ambient carries most of the light. */
+  @key night -8 {
+    sun: oklch(0.82 0.050 255);  sun-energy: 0.25;
+    sky: oklch(0.30 0.060 268);  horizon: oklch(0.42 0.060 272);
+    ambient: oklch(0.62 0.070 262);  ambient-energy: 0.75;
+    haze: oklch(0.42 0.050 266);
+    ground: oklch(0.42 0.060 175);  leaf: oklch(0.38 0.070 190);  bark: oklch(0.32 0.040 280);
+    stone: oklch(0.48 0.030 260);  path: oklch(0.55 0.040 260);
+    roof-clay: oklch(0.40 0.070 20);  roof-slate: oklch(0.38 0.035 265);  roof-shingle: oklch(0.36 0.040 300);
+    roof-turf: oklch(0.38 0.060 180);  roof-thatch: oklch(0.50 0.050 70);
+  }
+}
+
+@mood dusk {
+  /* The spike's dusk (tuned there at a 20 to 26 degree sun): a warm sky, violet haze and
+     blue-violet shade ("blue violet works", owner 2026-11-11). One keyframe until its card. */
+  :world { --meadow: oklch(0.64 0.110 108); }
+  @key high 24 {
+    sun: oklch(0.88 0.090 58);  sun-energy: 0.95;
+    sky: oklch(0.62 0.090 300);  horizon: oklch(0.70 0.100 45);
+    ambient: oklch(0.72 0.070 298);  ambient-energy: 0.6;
+    haze: oklch(0.66 0.075 305);
+    ground: var(--meadow);  leaf: oklch(0.52 0.105 138);  bark: oklch(0.40 0.070 340);
+    stone: oklch(0.50 0.035 55);  path: oklch(0.72 0.070 60);
+    roof-clay: oklch(0.50 0.130 28);  roof-slate: oklch(0.45 0.050 290);  roof-shingle: oklch(0.45 0.060 20);
+    roof-turf: oklch(0.50 0.090 130);  roof-thatch: oklch(0.58 0.085 62);
+  }
+}
+
+@mood grimdark {
+  /* The spike's grimdark (a 27 degree sun): a limited palette, deep blue-green masses, bone and
+     rust where the light falls, a pale fog. One keyframe until its card. */
+  @key high 27 {
+    sun: oklch(0.88 0.030 85);  sun-energy: 0.8;
+    sky: oklch(0.40 0.020 250);  horizon: oklch(0.56 0.025 240);
+    ambient: oklch(0.64 0.030 220);  ambient-energy: 0.6;
+    haze: oklch(0.64 0.030 215);
+    ground: oklch(0.36 0.040 165);  leaf: oklch(0.33 0.045 172);  bark: oklch(0.25 0.022 40);
+    stone: oklch(0.40 0.015 220);  path: oklch(0.50 0.030 75);
+    roof-clay: oklch(0.36 0.085 35);  roof-slate: oklch(0.34 0.020 230);  roof-shingle: oklch(0.32 0.030 50);
+    roof-turf: oklch(0.34 0.040 160);  roof-thatch: oklch(0.43 0.045 75);
+  }
+}
+
+@mood winter {
+  /* The spike's winter (a 19 to 29 degree sun): snow meadow, warm grey-violet bare crowns, a
+     pale cool haze. One keyframe until its card. */
+  @key high 24 {
+    sun: oklch(0.97 0.020 80);  sun-energy: 1.0;
+    sky: oklch(0.84 0.030 240);  horizon: oklch(0.94 0.012 235);
+    ambient: oklch(0.90 0.025 255);  ambient-energy: 0.6;
+    haze: oklch(0.93 0.020 262);
+    ground: oklch(0.885 0.030 252);  leaf: oklch(0.65 0.020 318);  bark: oklch(0.40 0.045 50);
+    stone: oklch(0.62 0.015 250);  path: oklch(0.80 0.030 262);
+    roof-clay: oklch(0.52 0.110 36);  roof-slate: oklch(0.50 0.030 255);  roof-shingle: oklch(0.48 0.050 45);
+    roof-turf: oklch(0.60 0.060 140);  roof-thatch: oklch(0.66 0.060 85);
+  }
+}
+
+@mood autumn {
+  /* The spike's autumn (a 34 degree sun): amber crowns over a warm meadow, warm haze. One
+     keyframe until its card. */
+  @key high 34 {
+    sun: oklch(0.96 0.045 78);  sun-energy: 1.0;
+    sky: oklch(0.80 0.070 232);  horizon: oklch(0.92 0.045 90);
+    ambient: oklch(0.88 0.040 235);  ambient-energy: 0.55;
+    haze: oklch(0.90 0.050 80);
+    ground: oklch(0.74 0.120 114);  leaf: oklch(0.72 0.155 62);  bark: var(--bark);
+    stone: var(--stone);  path: var(--path);
+    roof-clay: oklch(0.45 0.100 15);  roof-slate: oklch(0.48 0.040 250);  roof-shingle: oklch(0.48 0.070 40);
+    roof-turf: oklch(0.62 0.110 105);  roof-thatch: oklch(0.72 0.060 82);
+  }
+}

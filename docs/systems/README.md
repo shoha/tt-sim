@@ -82,6 +82,10 @@ Documents here:
 - [token_toon.md](token_toon.md): the painted look of pack tokens (`TokenToon`, Settings >
   Graphics > Token shading): the per-material swap, the bands and per-source shade tint, the
   hidden fade, the ghost, the warm-up, the captures and the numbers.
+- [painter.md](painter.md): the painted look (`RenderStyle`, Settings > Graphics > Look, the
+  level's `look` field): the sheet and its moods keyed by sun elevation (`PainterSheet`), the
+  scene host that owns the light under Painted (`PainterScene`), the preset-to-mood table, how to
+  add a mood.
 
 The last five were moved out of `AGENTS.md` Key Conventions on 2026-10-09 and are first cuts:
 they hold the map and the rules, use only the headings they have content for, and leave the

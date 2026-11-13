@@ -35,6 +35,15 @@ const EYE_SMOOTHING_TOOLTIP := (
 	+ "off if walking the table at eye level runs slowly: edges of trunks, rocks and leaves "
 	+ "show small steps."
 )
+## The Look row (graphics/look, RenderStyle, beside Shadow quality): which look the board is drawn
+## in on this computer. Classic is the default and the weak-GPU choice; Painted lets the painter's
+## sheet own the sun's colour, the sky, the ambient light and the tonemap; Map's choice follows the
+## map. Applies at once. The quality presets leave it alone (docs/systems/painter.md).
+const LOOK_TOOLTIP := (
+	"How the board is lit and coloured on your screen. Classic is the game's usual look. Painted "
+	+ "lights it in the painted style of the map's mood; the time of day and the sun still work. "
+	+ "Map's choice uses whichever the map was made with. Only your own screen changes."
+)
 const IDLE_THROTTLE_TOOLTIP := (
 	"Slows the game down while its window is in the background (15 frames a second when another "
 	+ "window has the focus, 5 when minimised) to save power and heat. Turn it off to keep the "
@@ -50,10 +59,12 @@ static func apply_startup(config: ConfigFile) -> void:
 	ShadowCascades.current = ShadowCascades.stored(config)
 	GroundClipmapSetting.current = GroundClipmapSetting.stored(config)
 	IdleThrottle.enabled = IdleThrottle.stored(config)
+	RenderStyle.choice = RenderStyle.stored(config)
 
 
 ## Puts the saved choices on the options without applying them (Root applied them at startup).
 static func show_saved(menu: SettingsMenu, config: ConfigFile) -> void:
+	_select(_look_option(menu), RenderStyle.stored(config))
 	_select(menu.foliage_edges_option, FoliageEdges.stored(config))
 	_eye_check(menu).set_pressed_no_signal(FoliageEdges.stored_eye_smoothing(config))
 	_select(menu.shadow_cascades_option, ShadowCascades.stored(config))
@@ -62,6 +73,9 @@ static func show_saved(menu: SettingsMenu, config: ConfigFile) -> void:
 
 
 static func save(menu: SettingsMenu, config: ConfigFile) -> void:
+	config.set_value(
+		"graphics", RenderStyle.KEY, RenderStyle.sanitize(_look_option(menu).get_selected_id())
+	)
 	config.set_value("graphics", IdleThrottle.KEY, menu.idle_throttle_check.button_pressed)
 	config.set_value("graphics", FoliageEdges.EYE_KEY, _eye_check(menu).button_pressed)
 	config.set_value(
@@ -82,6 +96,7 @@ static func save(menu: SettingsMenu, config: ConfigFile) -> void:
 
 
 static func show_defaults(menu: SettingsMenu) -> void:
+	_select(_look_option(menu), RenderStyle.DEFAULT_CHOICE)
 	menu.idle_throttle_check.set_pressed_no_signal(IdleThrottle.DEFAULT)
 	_eye_check(menu).set_pressed_no_signal(FoliageEdges.EYE_DEFAULT)
 	_select(menu.foliage_edges_option, FoliageEdges.DEFAULT)
@@ -91,8 +106,10 @@ static func show_defaults(menu: SettingsMenu) -> void:
 
 ## Applies both choices now, with the Antialiasing level: the map on screen sets its MSAA and
 ## re-picks every foliage shader variant (that reads FoliageEdges.current, so it runs after it),
-## the sun on screen takes its cascades, and later maps read both.
+## the sun on screen takes its cascades, and later maps read both. The Look choice reaches the
+## map on screen through the rendering toggles' apply, which runs after this one.
 static func apply(menu: SettingsMenu, game_map: Node3D) -> void:
+	RenderStyle.choice = RenderStyle.sanitize(_look_option(menu).get_selected_id())
 	FoliageEdges.current = FoliageEdges.sanitize(menu.foliage_edges_option.get_selected_id())
 	FoliageEdges.eye_smoothing = _eye_check(menu).button_pressed
 	ShadowCascades.current = ShadowCascades.sanitize(menu.shadow_cascades_option.get_selected_id())
@@ -113,11 +130,17 @@ static func apply_tooltips(menu: SettingsMenu) -> void:
 	menu.ground_detail_option.tooltip_text = GROUND_DETAIL_TOOLTIP
 	menu.idle_throttle_check.tooltip_text = IDLE_THROTTLE_TOOLTIP
 	_eye_check(menu).tooltip_text = EYE_SMOOTHING_TOOLTIP
+	_look_option(menu).tooltip_text = LOOK_TOOLTIP
 
 
 ## The Eye view smoothing toggle (found by its unique name, so settings_menu.gd stays as it is).
 static func _eye_check(menu: SettingsMenu) -> CheckButton:
 	return menu.get_node("%EyeSmoothingCheck") as CheckButton
+
+
+## The Look row's option (found by its unique name, like the Eye view smoothing toggle).
+static func _look_option(menu: SettingsMenu) -> OptionButton:
+	return menu.get_node("%LookOption") as OptionButton
 
 
 static func _select(option: OptionButton, choice: int) -> void:

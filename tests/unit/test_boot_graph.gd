@@ -18,7 +18,9 @@ extends GutTest
 ## the Settings graphics helper name it, so it is in the graph (one script, no web behind it).
 ## 344 with GroundClipmapSetting (clipmap1): a 40-line constants class the Settings graphics helper
 ## names, kept apart so the clipmap's own scripts are not in the start-up graph.
-const LIMIT_SCRIPTS := 344
+## 345 with RenderStyle (painter-a1): the Look row's 140-line constants and resolver class, which
+## LevelData and the Settings graphics helper name; the rest of painter/ loads on first use.
+const LIMIT_SCRIPTS := 345
 
 var _classes: Dictionary = {}
 var _strings := RegEx.create_from_string(
@@ -61,6 +63,10 @@ func test_the_start_up_script_graph_stays_within_its_limit() -> void:
 		% [scripts, LIMIT_SCRIPTS]
 	)
 	gut.p("start-up script graph: %d scripts (limit %d)" % [scripts, LIMIT_SCRIPTS])
+	# The painted look (painter-a1): the Settings helper and LevelData name RenderStyle, which names
+	# nothing else; the sheet and the scene host load by path on the first Painted level.
+	var painter := seen.keys().filter(func(p: String) -> bool: return p.begins_with("res://painter/"))
+	assert_eq(painter, ["res://painter/render_style.gd"], "the start-up compiles only RenderStyle")
 
 
 ## BootPrecompile's roots exist and are listed once: a renamed script would make the worker skip

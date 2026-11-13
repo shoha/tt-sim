@@ -103,6 +103,8 @@ const PROBE_MIN_HEIGHT: float = 4.0
 ## map's own scatter stays on layer 1, which its probe has always captured at load.
 const SCATTER_RENDER_LAYER: int = 1 << 1
 const PROBE_CULL_MASK: int = 0xFFFFF & ~SCATTER_RENDER_LAYER
+## The painted look's scene host (PainterScene), loaded on the first Painted level.
+const PAINTER_SCENE := "res://painter/painter_scene.gd"
 
 var _world_environment: WorldEnvironment = null
 var _sun_light: DirectionalLight3D = null
@@ -117,6 +119,13 @@ var _game_map: Node = null  # GameMap reference (for viewport & lo-fi access)
 var _current_sky_key: String = ""  # sky_preset of the last resolved environment
 var _sun_azimuth_deg: float = 0.0  # azimuth of the last applied SunSettings
 var _reflection_probe: ReflectionProbe = null
+## The painted look (docs/systems/painter.md): the level's look field, preset and sun as last
+## applied, and the PainterScene that owns the light while the effective style is Painted
+## (loaded by path on first use, so neither the start-up nor a Classic level compiles it).
+var _look: Dictionary = {}
+var _preset: String = ""
+var _sun_settings: SunSettings = null
+var _painter: RefCounted = null
 
 
 func setup(game_map: Node) -> void:
@@ -372,6 +381,11 @@ static func configure_reflection_probe(
 ## Map defaults are passed through as a layer — when preset is ""
 ## (no explicit choice), the map's embedded environment is used as the base.
 func apply_level_environment(level_data: LevelData, world_viewport: Node) -> void:
+	# Classic writes first (the painted look, if any, lets go so it remembers Classic's values).
+	_release_painter()
+	_look = level_data.look
+	_preset = level_data.environment_preset
+	_sun_settings = level_data.visual_settings.sun
 	# Create WorldEnvironment if it doesn't exist
 	if not is_instance_valid(_world_environment):
 		_world_environment = WorldEnvironment.new()
@@ -451,6 +465,9 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		# (four splits, SUN_SHADOW_BLEND_SPLITS); the other choices drop the blend or the splits.
 		ShadowCascades.apply_to(_sun_light, ShadowCascades.current)
 		world_viewport.add_child(_sun_light)
+	# The rendering toggles above may have taken the sun for Painted: Classic writes it first.
+	if _painter != null:
+		_painter.call("release_sun")
 	_configure_sun_light(level_data.visual_settings.sun)
 	_sun_azimuth_deg = level_data.visual_settings.sun.azimuth_degrees
 	_sync_sky_view()
@@ -471,6 +488,8 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		lofi_config.merge(level_data.lofi.to_dict(), true)
 		_game_map.apply_lofi_overrides(lofi_config)
 
+	_apply_render_style()
+
 	if level_data.environment_preset != "":
 		print(
 			(
@@ -487,12 +506,15 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 ## Apply environment settings to the live WorldEnvironment.
 func apply_environment_settings(preset: String, overrides: Dictionary) -> void:
 	if is_instance_valid(_world_environment):
+		_release_painter_env()
+		_preset = preset
 		EnvironmentPresets.apply_to_world_environment(
 			_world_environment, preset, overrides, _map_sky_resource, _map_environment_config
 		)
 		_push_water_ambient_reflection_uniform()
 		_remember_sky_key(preset, overrides)
 		_sync_sky_view()
+		_apply_render_style()
 	else:
 		push_warning("LevelEnvironmentManager: WorldEnvironment is null")
 
@@ -503,9 +525,13 @@ func apply_sun_settings(settings: SunSettings) -> void:
 	if not is_instance_valid(_sun_light):
 		push_warning("LevelEnvironmentManager: sun light is null")
 		return
+	if _painter != null:
+		_painter.call("release_sun")
+	_sun_settings = settings
 	_configure_sun_light(settings)
 	_sun_azimuth_deg = settings.azimuth_degrees
 	_sync_sky_view()
+	_apply_render_style()
 
 
 ## Resolve mode ("auto" | "on" | "off") against whether the map brought its own
@@ -654,10 +680,79 @@ func fit_shadow_distance_for_eye(eye: Vector3, map_bounds: AABB, map_scale: floa
 func apply_rendering_toggles(ssao_enabled: bool, ssr_enabled: bool, sdfgi_enabled: bool) -> void:
 	if not is_instance_valid(_world_environment) or not _world_environment.environment:
 		return
+	_release_painter_env()
 	var env := _world_environment.environment
 	env.ssao_enabled = ssao_enabled
 	env.ssr_enabled = ssr_enabled
 	env.sdfgi_enabled = sdfgi_enabled
+	# Also how a Settings Apply reaches the live map: RenderStyle.choice is set by then.
+	_apply_render_style()
+
+
+# ============================================================================
+# Render style (the painted look, docs/systems/painter.md)
+# ============================================================================
+
+
+## Re-resolves the effective style (RenderStyle.choice, the level's look, its preset) and draws
+## the light in it: the Settings Look row and a changed look come in here.
+func apply_render_style() -> void:
+	_release_painter()
+	_apply_render_style()
+
+
+## Sets the level's look field ({"style", "sheet", "mood"}, LevelData.look) and redraws.
+func set_look(look: Dictionary) -> void:
+	_look = RenderStyle.sanitize_look(look)
+	apply_render_style()
+
+
+## {"style", "sheet", "mood"} the level is drawn in now (RenderStyle.resolve).
+func get_render_style() -> Dictionary:
+	return RenderStyle.resolve(_look, _preset)
+
+
+## The painted look's scene host (a PainterScene), null until the first Painted level.
+func get_painter() -> RefCounted:
+	return _painter
+
+
+## Draws the light in the effective style. Under Classic it lets go of anything Painted held;
+## under Painted the scene host takes the Environment and the sun for the level sun's elevation.
+## Always after the Classic writes of the same apply (see PainterScene's header).
+func _apply_render_style() -> void:
+	var style := get_render_style()
+	if style["style"] != RenderStyle.PAINTED:
+		if _painter != null and _painter.call("is_active"):
+			_release_painter()
+			_after_style_change()
+		return
+	if _painter == null:
+		_painter = (load(PAINTER_SCENE) as GDScript).new()
+	var env: Environment = (
+		_world_environment.environment if is_instance_valid(_world_environment) else null
+	)
+	var sun: DirectionalLight3D = _sun_light if is_instance_valid(_sun_light) else null
+	var elevation := _sun_settings.elevation_degrees if _sun_settings != null else 45.0
+	_painter.call("take", env, sun, style["sheet"], style["mood"], elevation)
+	_after_style_change()
+
+
+## The light changed under the foliage and the water: publish the sun and the ambient again.
+func _after_style_change() -> void:
+	_push_water_ambient_reflection_uniform()
+	if is_instance_valid(_sun_light) and _sun_light.visible:
+		FoliageLight.publish_sun(_sun_light)
+
+
+func _release_painter() -> void:
+	if _painter != null:
+		_painter.call("release")
+
+
+func _release_painter_env() -> void:
+	if _painter != null:
+		_painter.call("release_env")
 
 
 ## Push the level's actual ambient/sky color to the water shader's
@@ -694,6 +789,10 @@ func get_map_sky_resource() -> Sky:
 
 ## Clear environment state (called when level is unloaded).
 func clear() -> void:
+	_release_painter()
+	_look = {}
+	_preset = ""
+	_sun_settings = null
 	_original_light_energies.clear()
 	_wind_materials.clear()
 	_foliage_overrides = {}

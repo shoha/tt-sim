@@ -113,6 +113,11 @@ static func _sky(env: Environment, forward: Vector3, energy: float, out: Diction
 		out.skirt_sky_panorama = panorama.panorama
 		out.skirt_sky_basis = basis
 		out.skirt_sky_energy = panorama.energy_multiplier * energy
+	elif sky_material is ShaderMaterial and sky_material.has_meta(&"painter_sky"):
+		# The painted look's sky (PainterScene): the skirt fades into its far-ground tone, the
+		# colour that sky shows below the horizon.
+		var painter := sky_material as ShaderMaterial
+		out.skirt_backdrop = _linear(painter.get_shader_parameter("foot_color"), energy)
 	elif sky_material is ShaderMaterial and is_painted_sky(sky_material as ShaderMaterial):
 		# The eye view's painted sky (EyeSky): the skirt and the water fade to the nearest ridge's
 		# foot colour, which is also the depth fog colour, so grass, skirt, fogged ground and ridge
