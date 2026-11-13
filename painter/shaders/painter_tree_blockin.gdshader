@@ -125,9 +125,8 @@ varying flat float v_inst;
 varying flat float v_row;
 varying flat float v_moss;
 // (Round 12: the role's rows 2 and 3 are fetched in the fragment stage; the varyings ran out.)
-
-// tt-sim: the canopy fade's key (see vertex()).
-varying flat float v_key;
+// tt-sim: this shader is at the real renderer's 32-varying limit (the headless dummy renderer
+// does not check it), so the canopy fade's key is the screen dither, not a varying.
 
 void vertex() {
 	int trow = int(INSTANCE_CUSTOM.x + 0.5);
@@ -156,8 +155,6 @@ void vertex() {
 	v_snow = vec3(0.0);
 	v_bseed = 0.0;
 	v_rise = 1000.0;
-	// tt-sim: the canopy fade's key, one per mass or limb piece; the stem keeps -1 (it stays).
-	v_key = fract(float(idx) * 0.6180339 + float(trow) * 0.1372);
 	bool wood_v = false;
 	vec3 wood_fn = vec3(0.0);
 	float wood_form = 0.0;
@@ -260,9 +257,6 @@ void vertex() {
 			vec4 pf = mt(hdr + 2, layer);
 			vec4 pl = mt(hdr + 2 + np - 1, layer);
 			bool stem = (hfl & 8) != 0;
-			if (stem) {
-				v_key = -1.0;
-			}
 			bool bare17 = texelFetch(role_params, ivec2(int(row_of(0.0, inst) + 0.5), 6), 0).z > 0.5;
 			float px19 = 2.0 / (PROJECTION_MATRIX[1][1] * VIEWPORT_SIZE.y);
 			float twig = stem ? 0.0 : twig19(pf.w);
@@ -796,8 +790,10 @@ void fragment() {
 	}
 	ROUGHNESS = 1.0;
 	if (!g_sun) {
+		// The crown masses dither out; the wood (trunk and limbs) stays to ground the tree.
+		float key = bayer16(FRAGCOORD.xy / world_px_cell());
 		tree_fades(VERTEX, INV_VIEW_MATRIX, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy,
-			VIEWPORT_SIZE, v_key, v_key < 0.0);
+			VIEWPORT_SIZE, key, kind10 > 0.5);
 	}
 }
 
