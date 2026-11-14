@@ -35,6 +35,11 @@ const GLOBAL_TILE_VIEW := &"occlusion_tile_view"
 const GLOBAL_TILE_GRID := &"occlusion_tile_grid"
 ## Per-material sampler uniform the shared token texture is bound to.
 const TOKEN_TEXTURE_UNIFORM := &"occlusion_tokens"
+## Metadata on a tree MultiMeshInstance3D hidden because another drawer stands in for it (the
+## painted trees, PainterTrees): its materials are registered although it is hidden, since the
+## stand-in takes the fade's binding from them (painter-trees-fix: a level loaded Painted had its
+## tree chunks hidden before setup() and no token window).
+const KEEP_HIDDEN_META := &"occlusion_keep_hidden"
 ## Channel masks matching BaseMaterial3D.TextureChannel, dotted against the sampled
 ## texel in the shader the way Godot's own material shader does it.
 const CHANNEL_MASKS := {
@@ -624,7 +629,7 @@ static func _collect_tree_multimeshes(node: Node, result: Array[MultiMeshInstanc
 	for child in node.get_children():
 		if (
 			child is MultiMeshInstance3D
-			and child.visible
+			and (child.visible or child.has_meta(KEEP_HIDDEN_META))
 			and child.get_meta("wind_foliage_category", "") == "tree"
 		):
 			result.append(child as MultiMeshInstance3D)

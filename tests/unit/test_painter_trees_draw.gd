@@ -277,11 +277,17 @@ func test_a_second_level_in_one_process_gets_its_painted_trees() -> void:
 		assert_true(surfaces.is_active(), "the second level's ground and scatter painted")
 		for node: Node3D in second["glb"]:
 			assert_false(node.visible, "the second level's GLB oaks hidden")
+		# A level loaded Painted hides its tree chunks before the fade manager's setup(); the
+		# manager still registers them, so the painted trees take a live token binding from them.
+		var collected: Array[MultiMeshInstance3D] = []
+		OcclusionFadeManager._collect_tree_multimeshes(second["map"], collected)
+		assert_eq(collected.size(), (second["glb"] as Array).size(), "hidden oaks still registered")
 		RenderStyle.choice = RenderStyle.CHOICE_CLASSIC
 		manager.apply_render_style()
 		assert_eq(trees.trees.size(), 0, "leaving Painted frees the second level's trees")
 		for node: Node3D in second["glb"]:
 			assert_true(node.visible, "the second level's GLB oaks shown again")
+			assert_false(node.has_meta(OcclusionFadeManager.KEEP_HIDDEN_META), "the mark gone")
 		RenderStyle.choice = RenderStyle.CHOICE_PAINTED
 		manager.clear()
 		var container: Node = (
