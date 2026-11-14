@@ -91,7 +91,9 @@ const DEFAULT_ROLES: Array[String] = [
 ## the frost deposit takes (crown-deposit), the share of a broadleaf's leaf clumps it keeps
 ## (leaf-keep, 1 in leaf; each species falls by its leaf role's `fall` from tree_roles.json), how
 ## far a crown's kept leaves turn to the `dry-leaf` colour (leaf-turn) and how much less deep a
-## turned leaf's shade is (dry-shade-lift), how much heavier the snow lies on a conifer's boughs
+## turned leaf's shade is (dry-shade-lift: the share of its lightness it keeps more), how much of
+## its own chroma it keeps and how far it pulls to the crowns' shade hue (dry-shade-keep,
+## dry-shade-pull), how much heavier the snow lies on a conifer's boughs
 ## (needle-snow, times its `settle`), the share of the leaf's lightness and chroma a bush takes
 ## on the crowns' ramp (bush-value, bush-chroma), and how far a sun's cast shadow steps a
 ## tree into its cool tint (tree-cast).
@@ -150,6 +152,8 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"leaf-keep",
 	"leaf-turn",
 	"dry-shade-lift",
+	"dry-shade-keep",
+	"dry-shade-pull",
 	"needle-snow",
 	"bush-value",
 	"bush-chroma",

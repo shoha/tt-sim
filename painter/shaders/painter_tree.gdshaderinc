@@ -97,6 +97,10 @@ const float TREE_DRY_STROKES = 0.45;
 // ring; 0.55: a round knot, a seed ball).
 const float TREE_DRY_SHRINK = 0.75;
 
+// Only the bare variants (TREE_BARE: painter_tree_stroke_bare.gdshader, painter_tree_blockin_bare)
+// read the drop; a tree in leaf draws with the plain ones, which have none of this code (card
+// painter-winter-trees2: in every season it cost the eye view 0.23 ms in summer).
+#ifdef TREE_BARE
 // 1 while the sheet's leaf-keep is under 1 (PainterTrees.retone): only then is the leaf row's drop
 // read (two texel reads a vertex in leaf cost the eye view about 0.2 ms, measured).
 uniform float leaf_fall = 0.0;
@@ -118,6 +122,7 @@ bool tree_leaf_fallen(float mass_seed, float drop) {
 	h ^= h >> 13u;
 	return float(h >> 8u) / 16777216.0 < drop;
 }
+#endif
 
 float tone3(float ndl, float jit, float soft) {
 	float x = ndl + jit;

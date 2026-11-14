@@ -75,8 +75,12 @@
   crown-lit-lift: 0;  crown-lit-chroma: 1;  crown-shade-lift: 0;  crown-deposit: 0;
   /* A broadleaf in leaf keeps every leaf clump (leaf-keep 1); a bare season keeps a share, each
      species falling by its own `fall` (tree_roles.json), and its kept leaves turn toward the dry
-     leaf by leaf-turn. A conifer's boughs carry needle-snow times their snow. */
+     leaf by leaf-turn. A conifer's boughs carry needle-snow times their snow. A dry leaf is thin
+     and lit through: its shade keeps dry-shade-lift more of its lightness, dry-shade-keep of its
+     own chroma and takes dry-shade-pull toward the crowns' shade hue (the crown's keep and pull
+     greyed it to mauve). */
   leaf-keep: 1;  leaf-turn: 0;  dry-shade-lift: 0;  needle-snow: 1;  dry-leaf: oklch(0.60 0.100 58);
+  dry-shade-keep: 1;  dry-shade-pull: 0.3;
   /* A bush is the leaf a step deeper and quieter, on a crown's ramp, so it sits under the oaks
      rather than glowing lime beside them (painter-trees-polish2). */
   bush-value: 0.86;  bush-chroma: 0.74;
@@ -349,7 +353,7 @@
     /* Bare broadleaves (owner, 2026-11-13: toward the prototype's winter): a fifth of the clumps
        kept at the reference fall (the oak about a third, a birch or willow a few), all of them a
        russet to golden dry leaf; the conifers' boughs loaded heavier. */
-    leaf-keep: 0.15;  leaf-turn: 1;  dry-shade-lift: 0.45;  needle-snow: 1.6;
+    leaf-keep: 0.15;  leaf-turn: 1;  dry-shade-lift: 0.15;  needle-snow: 1.6;
     dry-leaf: oklch(0.58 0.088 56);
     /* Warm walls against the blue snow: a lime wash a step under the snow's white; the roofs
        under a blanket with thick edges (card painter-roof-snow): deep on thatch, thin enough on

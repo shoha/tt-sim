@@ -170,11 +170,9 @@ static func bake(sheet: Dictionary, mood: String, elevation: float) -> Dictionar
 					var dry := PainterSheet.tone_lch(sheet, mood, "dry-leaf", elevation)
 					var dried := _dried(own, spike, dry, _num(props, "dry-turn", 0.0))
 					lch = PainterSheet.lerp_lch(lch, dried, turn)
-					# A dry leaf is thin and lit through: its shade a step less deep (a full
-					# crown's depth read as black dabs on a bare tree).
-					var lift := PainterSheet.number(sheet, mood, "dry-shade-lift", elevation)
-					shape["shade-depth"] = maxf(float(shape["shade-depth"]) - lift * turn, 0.0)
 			shape = _sheet_shade(_moved_shape(shape, sheet, mood, elevation), sheet, mood, elevation, tag)
+			if tag is String and tag == "leaf" and not bush:
+				shape = _dry_shape(shape, sheet, mood, elevation)
 		elif int(tag) == GROUND_ROW:
 			lch = PainterSheet.tone_lch(sheet, mood, "ground", elevation)
 		_paint_row(palette, ri, lch, shape, props)
@@ -190,6 +188,28 @@ static func bake(sheet: Dictionary, mood: String, elevation: float) -> Dictionar
 			g2.b *= maxf(PainterSheet.number(sheet, mood, "needle-snow", elevation), 0.0)
 			params.set_pixel(ri, 2, g2)
 	return {"palette": palette, "params": params}
+
+
+## A broadleaf's leaf ramp `shape` in a bare season: a dry leaf is thin and lit through, so its
+## shade keeps more of its lightness (`shade-depth` is the share of the lightness the shade keeps,
+## PainterTones.steps; painter-winter-trees subtracted the lift, and the kept clumps' shade halves
+## read as near-black dabs, oak #070304) by the sheet's `dry-shade-lift`, and its warm hue: its own
+## chroma by `dry-shade-keep`, the pull to the crowns' shade hue by `dry-shade-pull` (the crown's
+## keep and pull greyed it to mauve, oak #504749). Each by `leaf-turn` (pure).
+static func _dry_shape(
+	shape: Dictionary, sheet: Dictionary, mood: String, elevation: float
+) -> Dictionary:
+	var turn := clampf(PainterSheet.number(sheet, mood, "leaf-turn", elevation), 0.0, 1.0)
+	if turn <= 0.0:
+		return shape
+	var out := shape.duplicate()
+	var lift := PainterSheet.number(sheet, mood, "dry-shade-lift", elevation)
+	out["shade-depth"] = clampf(float(out["shade-depth"]) + lift * turn, 0.0, 1.0)
+	var keep := PainterSheet.number(sheet, mood, "dry-shade-keep", elevation)
+	out["shade-keep"] = clampf(lerpf(float(out["shade-keep"]), keep, turn), 0.0, 1.0)
+	var pull := PainterSheet.number(sheet, mood, "dry-shade-pull", elevation)
+	out["shade-pull"] = lerpf(float(out["shade-pull"]), maxf(pull, 0.0), turn)
+	return out
 
 
 ## A species leaf `own` (tuned against the spike's leaf `spike`) as a dry leaf of the sheet's
