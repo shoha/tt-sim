@@ -138,9 +138,12 @@ func test_growing_on_a_worker_thread_gives_the_same_tree() -> void:
 ## maps them (not the flowering ones, nor the agaves), a bush's pads are pure in its box and seed,
 ## and a bush stays a few pads and under twenty stroke roots (72 strokes at level 1).
 func test_a_bush_is_a_few_pads_in_its_box() -> void:
-	assert_eq(PainterTreeSpecies.species_for("x/Bush_BerryBush_v0_temperate_forest"), "bush")
+	var berry := PainterTreeSpecies.species_for("x/Bush_BerryBush_v0_temperate_forest")
+	assert_eq(berry, "bush_berry", "berries are a bush row of their own (painter-plants-fix3)")
 	assert_eq(PainterTreeSpecies.species_for("x/Bush_Bush_v1_grassland_meadow"), "bush")
-	assert_eq(PainterTreeSpecies.species_for("x/Bush_BushWithWildflowers_v0"), "")
+	assert_eq(PainterTreeSpecies.species_for("x/Bush_BushWithWildflowers_v0"), "bush_flower")
+	assert_eq(PainterTreeSpecies.species_for("x/Bush_FloweringBush_v0"), "bush_flower")
+	assert_true(PainterTreeSpecies.is_bush(berry) and PainterTreeSpecies.is_bush("bush_flower"))
 	assert_eq(PainterTreeSpecies.species_for("x/Bush_Agave_v0_rocky_badlands"), "")
 	assert_false(PainterTreeSpecies.names().has(PainterTreeSpecies.BUSH), "not a grown species")
 	var box := PainterTreeBush.box_of(AABB(Vector3(-0.9, 0.0, -0.8), Vector3(1.8, 1.6, 1.6)), 0.8)
@@ -156,4 +159,14 @@ func test_a_bush_is_a_few_pads_in_its_box() -> void:
 		assert_true(bool(d["has_crown"]))
 		var again := PainterTreePack.pack(PainterTreeBush.masses(box, seed_v), seed_v, 3.0, 0)
 		assert_eq(_snapped_digest(again), _snapped_digest(d), "pure in the box and seed")
+		assert_lt((d["aabb"] as AABB).position.y, 0.1, "it stands on the ground")
+	# A large bush is a shell of four clumps with no core, within the pad and stroke budget (a pad
+	# costs what many strokes do; painter-plants-fix4).
+	var big := PainterTreeBush.box_of(AABB(Vector3(-1.5, 0.0, -1.5), Vector3(3.0, 2.6, 3.0)), 1.0)
+	for seed_v: int in [3, 77, 90210]:
+		var masses := PainterTreeBush.masses(big, seed_v)
+		assert_eq(masses.size(), PainterTreeBush.RING + 1, "a ring of clumps and a top clump")
+		var d := PainterTreePack.pack(masses, seed_v, 3.0, 0)
+		assert_lte(int(d["roots"]), 16, "at most 64 level-1 strokes")
+		assert_lte(int(d["n_ell"]), PainterTrees.BUSH_ELL_PER_INST, "one block instance")
 		assert_lt((d["aabb"] as AABB).position.y, 0.1, "it stands on the ground")

@@ -24,6 +24,9 @@ extends RefCounted
 const DATA := "res://painter/trees/species.json"
 ## The asset table's value for a bush drawn as a crown-only tree (PainterTreeBush).
 const BUSH := "bush"
+## Every bush species, BUSH first (painter-plants-fix3: berry and flowering bushes carry trim
+## marks).
+const BUSHES: Array[String] = [BUSH, "bush_berry", "bush_flower"]
 ## The row's scale is at index SCALE_AT of its MapDocument row (ScatterGenerator.ROW_STRIDE).
 const SCALE_AT := 7
 ## Age at the nominal scale, its slope per unit of scale, and its range (the spike's).
@@ -63,7 +66,7 @@ static func species_for(asset_id: String) -> String:
 
 ## Whether `species` (species_for's answer) is a bush, laid by PainterTreeBush.
 static func is_bush(species: String) -> bool:
-	return species == BUSH
+	return species in BUSHES
 
 
 ## Every grown species name in the data (BUSH is not one).
