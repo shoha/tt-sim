@@ -18,7 +18,8 @@ extends RefCounted
 ## material per kind on the mesh surface. A painted part gets a material_override (the shared
 ## surface material is never touched); the override it had is kept per node and put back. Parts
 ## of kinds not in KINDS keep Classic: panes and lantern glass, doors' metal, ornaments, props,
-## water, glow halos, the yard's dressing and decor plants. Each stand-in carries META.
+## water, glow halos and decor plants. The yard's dressing (its planting and its ground skirt)
+## takes the yard's own two shaders (YARD). Each stand-in carries META.
 ##
 ## Tones. Every colour is the sheet's: a role's ramp (PainterTones.steps over the mood's ramp
 ## numbers moved by the buildings' own, relative ones: wall-shade-turn, wall-pull, stone-pull,
@@ -45,6 +46,18 @@ const PICK := ""
 const ACCENT_ROLES: Array[String] = ["timber", "roof-clay", "roof-turf", "roof-slate"]
 ## The sheet role of a door or shutter whose tone comes from its paint.
 const ACCENT := "accent"
+## The yard's dressing (card painter-buildings-fix2): its props (YARD_SHADER) take one of four
+## ramps by their Classic colour, in the shader's order, each under its own building family's
+## ramp numbers; its ground skirt and path (YARD_GROUND_SHADER) the path's.
+const YARD := "yard"
+const YARD_ROLES: Array[String] = ["leaf", "stone", "timber", "flower-rose"]
+const YARD_FAMILIES: Array[String] = ["roof", "stone", "timber", "wall"]
+const YARD_GROUND_ROLE := "path"
+const YARD_SHADER := "res://painter/shaders/painter_yard.gdshader"
+const YARD_GROUND_SHADER := "res://painter/shaders/painter_yard_ground.gdshader"
+## The pick modes (KINDS' fourth field) that draw with the yard's shaders.
+const PICK_YARD := 4
+const PICK_YARD_GROUND := 5
 ## The role the roofs' snow takes its colour from (winter's is the snow's white, under the
 ## ground's ramp numbers: snow_ramp) and the number that says how deep it lies (0 in every mood
 ## but winter; above 0 the hand-drawn manner also builds its strips, PainterMannerSnow).
@@ -88,6 +101,8 @@ const KINDS: Dictionary = {
 	"frame_wood": ["timber", P_TIMBER, "timber", 0],
 	"opening_wood": [ACCENT, P_TIMBER, "timber", 3],
 	"door_wood": [ACCENT, P_TIMBER, "timber", 3],
+	"dressing_props": [YARD, 0, "yard", PICK_YARD],
+	"dressing_ground": [YARD, 0, "yard", PICK_YARD_GROUND],
 }
 
 ## True (the default) puts the hand-drawn manner on every painted structure procgen gives manner
@@ -95,6 +110,9 @@ const KINDS: Dictionary = {
 ## structure without records keeps (an A/B switch for measurements). Read when a structure is
 ## dressed: change it, then release() and paint() again.
 static var hand_drawn := true
+## False leaves the yard's dressing Classic, as before card painter-buildings-fix2 (an A/B switch
+## for measurements). Read when a structure is dressed: change it, then release() and paint().
+static var paint_yard := true
 
 ## What is drawn now: {"sheet", "mood", "elevation"}, {} while nothing is painted.
 var applied: Dictionary = {}
@@ -174,6 +192,8 @@ func material_of(key: String) -> ShaderMaterial:
 ## keeps Classic. Pure.
 static func kind_of(node_name: String) -> Array:
 	var key := part_key(node_name)
+	if not paint_yard and str(KINDS.get(key, [""])[0]) == YARD:
+		return []
 	if KINDS.has(key):
 		return KINDS[key]
 	if key.begins_with("roof_"):
@@ -249,10 +269,17 @@ func _material(key: String) -> ShaderMaterial:
 		return _materials[key]
 	var kind := kind_of(key)
 	var material := ShaderMaterial.new()
-	material.shader = load(SHADER) as Shader
+	var pick := int(kind[3])
+	var path := SHADER
+	if pick == PICK_YARD:
+		path = YARD_SHADER
+	elif pick == PICK_YARD_GROUND:
+		path = YARD_GROUND_SHADER
+	material.shader = load(path) as Shader
 	material.set_meta(META, true)
-	material.set_shader_parameter(&"pattern", int(kind[1]))
-	material.set_shader_parameter(&"pick", int(kind[3]))
+	if path == SHADER:
+		material.set_shader_parameter(&"pattern", int(kind[1]))
+		material.set_shader_parameter(&"pick", pick)
 	_materials[key] = material
 	if not applied.is_empty():
 		_tone(material, kind, PainterSheet.load_sheet(applied["sheet"]))
@@ -278,15 +305,23 @@ func _tone(material: ShaderMaterial, kind: Array, sheet: Dictionary) -> void:
 	var mood: String = applied["mood"]
 	var elevation: float = applied["elevation"]
 	var roles: Array[String] = []
+	var families: Array[String] = []
 	if str(kind[0]) == PICK:
 		roles.assign(PICK_ROLES)
 	elif str(kind[0]) == ACCENT:
 		roles.assign(ACCENT_ROLES)
+	elif str(kind[0]) == YARD and int(kind[3]) == PICK_YARD:
+		roles.assign(YARD_ROLES)
+		families.assign(YARD_FAMILIES)
+	elif str(kind[0]) == YARD:
+		roles.append(YARD_GROUND_ROLE)
+		families.append("stone")
 	else:
 		roles.append(str(kind[0]))
 	var ramps := PackedVector3Array()
-	for role in roles:
-		ramps.append_array(ramp(sheet, mood, role, elevation, str(kind[2])))
+	for k in roles.size():
+		var family := families[k] if k < families.size() else str(kind[2])
+		ramps.append_array(ramp(sheet, mood, roles[k], elevation, family))
 	ramps.resize(PICK_ROLES.size() * 6)
 	material.set_shader_parameter(&"ramps", ramps)
 	material.set_shader_parameter(

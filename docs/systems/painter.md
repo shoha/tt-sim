@@ -342,8 +342,9 @@ eye view's levels, rim trees, far meshes and fog are a later card's (A2b).
 
 Under Painted, the procgen structures (`AuthoredStructures`, the authored houses, walls and
 mills) wear the painted structure shader on their walls, roofs, timber and stone; their panes,
-glow, lanterns, ornament, metal, dressing and water keep Classic (card painter-a3b, owner decision
-D5: sheet-driven). Since card painter-manner-b the prototype's hand-drawn manner (procgen's piece
+glow, lanterns, ornament, metal and water keep Classic (card painter-a3b, owner decision
+D5: sheet-driven); the yards' dressing (props and ground skirt) has its own two painted shaders
+since card painter-buildings-fix2. Since card painter-manner-b the prototype's hand-drawn manner (procgen's piece
 records: wobble, lean, strokes along each piece) is drawn over that by default, and the A3b look
 below is the fallback for a structure without records. The aim is the spike's route A: broad
 coloured masses, a few accents, shadow-lit by the sheet's sun.
@@ -528,6 +529,42 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   overrun over Classic (+0.24 to +0.25 ms here) is not the snow: the strips and the snow terms
   switched off (`snow_body` false) cost the same within 0.01 ms; it is the hand-drawn shading
   itself at the eye. Frames: `docs/research/2026-11-09-prototypes/compare/painter_final2/`.
+- **Buildings fix 2 (card painter-buildings-fix2, 2026-11-13; look-pending).** Owner verdict on
+  the roof snow: thicker along the borders than in the middle, a tray. (1) Every roof slope whose
+  edges are an eave, two sides (verge or hip) and a ridge or an apex lies under one blanket mesh
+  (`PainterMannerBlanket`, code 10, on the snow child): 0.3 m times the material's hold and a
+  steepness factor in the middle, tapering over 1.3 m to 3.5 cm at a verge and to 0.12 m times
+  hold at the eave, piling 30 % toward the top, with a 25 % sag keyed to the world; its normals
+  follow the grid, so the light makes the lit top and the shade rolling off toward the edges, and
+  the thin edges are a little cooler (a shade from thinness). The eave has a modest rounded lip
+  (0.16 m over, scallops to 0.08 m, a blue tucked underside), a verge a small roll, a ridge or hip
+  one rounded crest where the two thick halves meet. A dormer's and a porch's roof pieces (no
+  edges in their records) get them from their frame. Other roofs keep the lips and caps.
+  Chimney collars sit on the blanket (smaller: 0.14 m, 1.4 half-widths); a strip's foot is only
+  slightly darker. Under the blanket no roof mark shows anywhere (`snow_thin` is gone), so tile
+  and slate dashes no longer fleck the snow. `PainterMannerSnow.blanket` false is the tip's
+  strips (an A/B switch). (2) The yard's dressing is painted: its props (`painter_yard.gdshader`)
+  take one of four ramps by their Classic colour (leaf, stone, timber, rose flowers), a lobe noise
+  turning the light inside each faceted shape, snow caps in winter; its ground skirt and path
+  (`painter_yard_ground.gdshader`) are one flat wash of the path tone with a brushed scalloped
+  edge (Classic's long alpha fade read as an airbrushed warm halo), mostly gone under winter's
+  snow. `PainterBuildings.paint_yard` false leaves them Classic. (3) Stone walls: a tree's
+  dappled light moves its edge per stone; roof slopes and the blanket count a point as in cast
+  shadow under 0.3 of the light (a twig's partial shadow drew dark X marks) and their light
+  wobble is laid in patches along the courses (vertical streaks read as smears). Snow triangles
+  a house (headless): thatch 700, stone 640, timber 784, hip 828, dormer 1034, porch 1422 (the
+  strips were about 480-950); in the village the main pass draws 170 fewer primitives in winter
+  than the strips (3 houses), the shadow pass is identical (the snow casts none). The snow builds
+  in 3-7 ms a house on the worker; nothing runs per frame. Cost (one interleaved sitting,
+  1920x1080, vsync off, sun 20, order tip new Classic-yard new tip, each the mean of its pair;
+  indicative, shared GPU, pairs 0.00-0.11 ms apart): new over the tip at home, mid, far, eye
+  +0.02, +0.04, +0.00, -0.00 ms for 3 houses and -0.00, -0.01, -0.01, -0.02 for 12 in summer;
+  -0.02, -0.03, -0.01, -0.00 and -0.01, -0.02, -0.01, +0.02 in winter. The painted yard alone
+  (against Classic's yard) is 0.00 to 0.03 ms cheaper in every view but two (winter far and eye
+  for 12, where it is 0.06 and 0.03 dearer, within the pair spread). Open: the yard props still
+  read faceted; broad pale patches along the stone courses at eye level; vertical hairlines on
+  the timber and dormered houses' plaster (likely T-junction cracks at the openings,
+  undiagnosed); the dormered house's chimney pad reads as a white square frame.
 - **Its cost (card painter-manner-b, one interleaved sitting, 1920x1080, vsync off, summer sun
   45, order Classic A3b B B A3b Classic, each the mean of its pair; indicative, shared GPU, the
   pairs 0.0-0.06 ms apart).** B over Classic buildings (under the painted look): home, mid, far,

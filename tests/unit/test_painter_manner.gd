@@ -388,6 +388,43 @@ func test_snow_strips_stand_proud_along_the_edges_and_are_pure() -> void:
 	assert_true((none.arrays as Array).is_empty())
 
 
+func test_snow_blanket_is_thickest_in_the_middle_and_thin_at_the_verges() -> void:
+	# card painter-buildings-fix2: a slope with an eave, a ridge and two verges lies under one
+	# blanket (no separate lips or caps), thick in the middle, a few centimetres at a verge.
+	var roof := _roof()
+	var edges: Array = roof["edges"]
+	roof["edges"] = (
+		edges
+		+ [
+			{"a": Vector3(0, 2, 0), "b": Vector3(0, 3.2, -1.6), "kind": "verge"},
+			{"a": Vector3(4, 2, 0), "b": Vector3(4, 3.2, -1.6), "kind": "verge"},
+		]
+	)
+	assert_false(PainterMannerBlanket.layout(roof).is_empty(), "the slope reads as a blanket")
+	var still := {"amp": 0.0, "phase": Vector3.ZERO, "foot": 0.0, "eave": 2.0}
+	var src := PainterMannerSnow.source({"roof/slope0": roof}, {}, PackedStringArray(), still)
+	var a := PainterMannerSnow.build(src)
+	assert_gt(int(a.by_kind.blanket), 0, "a blanket")
+	assert_eq(int(a.by_kind.lip) + int(a.by_kind.cap), 0, "no lips or caps of their own")
+	var origin: Vector3 = roof["origin"]
+	var middle := -INF
+	var at_verge := INF
+	var custom: PackedFloat32Array = a.arrays[Mesh.ARRAY_CUSTOM0]
+	var verts: PackedVector3Array = a.arrays[Mesh.ARRAY_VERTEX]
+	for k in verts.size():
+		assert_eq(int(custom[k * 4 + 2]), PainterMannerBlanket.CODE, "every vertex the blanket's code")
+		var rel := verts[k] - origin
+		var x := rel.dot(roof["u"])
+		var y := rel.dot(roof["v"])
+		var up := rel.dot(roof["n"])
+		if absf(x - 2.0) < 0.7 and y > 0.6 and y < 1.6:
+			middle = maxf(middle, up)
+		if absf(x) < 0.01 and y > 0.6 and y < 1.6 and up > 0.0:
+			at_verge = minf(at_verge, up)
+	assert_gt(middle, 0.2, "thick in the middle")
+	assert_lt(at_verge, 0.06, "thin at the verge")
+
+
 func test_no_roof_snow_adds_nothing_and_winter_adds_strips_that_cast_no_shadow() -> void:
 	# card painter-roof-snow: a mood without roof snow builds and adds nothing; winter's re-tone
 	# builds the strips on a worker; leaving winter frees them.

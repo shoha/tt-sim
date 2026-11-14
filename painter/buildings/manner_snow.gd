@@ -5,20 +5,21 @@ extends RefCounted
 ## few thin strips that give the snow an edge you can see, built from procgen's manner records
 ## (PainterMannerHost) while the sheet lays snow on roofs (roof-snow above 0), never otherwise.
 ##
-## The model. The snow ON a roof slope is painted by the manner shader (snow_layer: the whole
-## roof under a blanket, deeper toward the ridge and on thatch, thinner on steep and sun-facing
-## runs, the roof's own strokes bare where it is thin). These strips are where it has thickness:
-##   lip   along every eave and verge of a roof slope (and of a dormer's or a porch's roof): a
-##         rounded roll that starts flush on the slope a hand's width inside the edge, rises to
-##         its own lit top, rounds over the edge and tucks under it, so its underside reads blue
-##         against the bare dark eave below. Its thickness and reach swell and thin along the edge
-##         (a heaped, scalloped outline), more on thatch, which holds more snow;
+## The model. Every roof slope whose edges are an eave, two sides and a ridge or an apex (and every
+## dormer's or porch's roof piece, given those edges from its frame) lies under one blanket
+## (PainterMannerBlanket, card painter-buildings-fix2): thickest in the middle and toward the
+## ridge, thin and soft at the verges, a modest rounded lip at the eave, the two halves of a ridge
+## or a hip meeting in one rounded crest. Any other roof (a flat roof, a plan the blanket cannot
+## read) keeps the strips it had before:
+##   lip   along every eave and verge: a rounded roll that starts flush on the slope a hand's
+##         width inside the edge, rises to its own lit top, rounds over the edge and tucks under
+##         it, its nose hanging in scallops (more on thatch, which holds more snow);
 ##   cap   along every ridge and hip, one half per slope, rising from the slope to a soft crest
-##         midway to the other half's edge, where the two halves meet;
-##   pad   a cushion on each chimney's cap, a drift collar where its stack meets the roof (heaped
-##         on the uphill side) and a wedge on each window sill.
-## The lip's nose hangs over the edge in scallops (card painter-buildings-fix: a ruler-straight
-## lip read as machine-made), so its blue underside reads as a soft, heavy overhang.
+##         midway to the other half's edge, where the two halves meet.
+## And on every roof:
+##   pad   a cushion on each chimney's cap, a small drift collar where its stack meets the
+##         blanket (heaped on the uphill side) and a wedge on each window sill.
+## The roof itself, under the blanket, is drawn by the manner shader as a plain snow cover.
 ## Every vertex carries the manner's per-vertex data (UV2: metres along the strip and the profile
 ## step; CUSTOM0: [length, profile steps, CODE, accent]) and is moved by the building's wander
 ## field, so the strips follow the leaning eaves. The strips cast no shadow (PainterMannerHost puts
@@ -46,8 +47,8 @@ const CAP_T_M := 0.28
 const CAP_IN_M := 0.5
 ## A chimney's drift collar at full hold: its height against the stack (more uphill) and its
 ## reach out over the roof, in half-widths of the stack.
-const COLLAR_T_M := 0.2
-const COLLAR_REACH := 1.7
+const COLLAR_T_M := 0.14
+const COLLAR_REACH := 1.4
 ## Two cap edges of different roofs this close (metres, line to line) are one ridge's halves.
 const PAIR_M := 0.7
 ## A chimney cushion's and a sill wedge's thickness.
@@ -61,6 +62,10 @@ const ROOF_KINDS: Array[String] = ["roof_slope", "roof_part", "roof_flat"]
 ## Mesh name prefixes that may hold chimney caps and sills.
 const TOP_MESHES: Array[String] = ["chimney_", "trim_", "opening_"]
 
+## False lays every roof's lips and caps as before card painter-buildings-fix2 (an A/B switch for
+## measurements; read when a structure's snow is built).
+static var blanket := true
+
 
 ## What the strips of one structure need, taken from its manner feed (PainterMannerSource) and the
 ## field `opts` (PainterMannerMesh.wander_at's, with "walls"): {"roofs": [roof records], "pads":
@@ -71,47 +76,111 @@ static func source(
 ) -> Dictionary:
 	var roofs: Array = []
 	for rec: Dictionary in records.values():
-		if ROOF_KINDS.has(str(rec["kind"])) and not (rec.get("edges", []) as Array).is_empty():
+		if not ROOF_KINDS.has(str(rec["kind"])):
+			continue
+		if not (rec.get("edges", []) as Array).is_empty():
 			roofs.append(rec)
+		elif str(rec["kind"]) == "roof_part":
+			var framed := _framed(rec)
+			if not framed.is_empty():
+				roofs.append(framed)
 	return {"roofs": roofs, "pads": _pads(records, meshes, table, opts), "opts": opts}
 
 
-## The strips of `src` (source()): {"arrays" (Mesh arrays, PainterMannerMesh.FORMAT), "triangles",
-## "by_kind": {lip, cap, pad}}; "arrays" empty when there is nothing to lay snow on. Pure.
+## A roof piece with no edges (a dormer's or a porch's roof) as a slope: its frame's lowest side the
+## eave, the side across from it the ridge (a porch roof's against its wall), the other two verges,
+## its normal turned up; {} for a piece that stands near upright. Pure.
+static func _framed(rec: Dictionary) -> Dictionary:
+	var n: Vector3 = rec["n"]
+	if absf(n.y) < 0.2:
+		return {}
+	var o: Vector3 = rec["origin"]
+	var u: Vector3 = (rec["u"] as Vector3) * float(rec["u_len"])
+	var v: Vector3 = (rec["v"] as Vector3) * float(rec["v_len"])
+	var c: Array[Vector3] = [o, o + u, o + u + v, o + v]
+	var low := 0
+	for k in 4:
+		if c[k].y + c[(k + 1) % 4].y < c[low].y + c[(low + 1) % 4].y - 0.001:
+			low = k
+	var edges: Array = []
+	for k in 4:
+		var kind := "eave" if k == low else ("ridge" if k == (low + 2) % 4 else "verge")
+		edges.append({"kind": kind, "a": c[k], "b": c[(k + 1) % 4]})
+	var out := rec.duplicate()
+	out["n"] = n if n.y > 0.0 else -n
+	out["edges"] = edges
+	return out
+
+
+## The snow of `src` (source()): {"arrays" (Mesh arrays, PainterMannerMesh.FORMAT), "triangles",
+## "by_kind": {blanket, lip, cap, pad}}; "arrays" empty when there is nothing to lay snow on. Pure.
 static func build(src: Dictionary) -> Dictionary:
 	var g := Strips.new()
-	var counts := {"lip": 0, "cap": 0, "pad": 0}
+	var counts := {"blanket": 0, "lip": 0, "cap": 0, "pad": 0}
 	var opts: Dictionary = src.get("opts", {})
 	var phase: Vector3 = opts.get("phase", Vector3.ZERO)
 	var seed := int(phase.x * 1000.0)
 	var caps: Array = []
+	var lays: Dictionary = {}
 	for roof: Dictionary in src.get("roofs", []):
 		var hold := float(HOLD.get(str(roof.get("material", "")), DEFAULT_HOLD))
+		var lay := PainterMannerBlanket.layout(roof) if blanket else {}
+		if not lay.is_empty():
+			lays[roof["id"]] = lay
 		var n: Vector3 = roof["n"]
-		var mid: Vector3 = (
-			(roof["origin"] as Vector3)
-			+ (roof["u"] as Vector3) * float(roof["u_len"]) * 0.5
-			+ (roof["v"] as Vector3) * float(roof["v_len"]) * 0.5
-		)
+		var mid := _mid(roof)
 		for e: Dictionary in roof["edges"]:
 			var kind := str(e["kind"])
 			var before := g.idx.size()
-			if LIP_KINDS.has(kind):
+			if CAP_KINDS.has(kind):
+				caps.append(
+					{
+						"a": e["a"],
+						"b": e["b"],
+						"n": n,
+						"mid": mid,
+						"hold": hold,
+						"roof": roof["id"],
+						"blanket": not lay.is_empty(),
+						"edge": e,
+					}
+				)
+			elif LIP_KINDS.has(kind) and lay.is_empty():
 				var s := 1.0 if kind == "eave" else VERGE_SCALE
 				var seg := SEG_EAVE_M if kind == "eave" else SEG_VERGE_M
 				_lip(g, e["a"], e["b"], n, mid, hold * s, seg, seed + before)
 				counts.lip += (g.idx.size() - before) / 3
-			elif CAP_KINDS.has(kind):
-				caps.append({"a": e["a"], "b": e["b"], "n": n, "mid": mid, "hold": hold, "roof": roof["id"]})
+	for roof: Dictionary in src.get("roofs", []):
+		if not lays.has(roof["id"]):
+			continue
+		var lay: Dictionary = lays[roof["id"]]
+		var partners := {}
+		for cap: Dictionary in caps:
+			if cap["roof"] != roof["id"]:
+				continue
+			var other := _partner(cap, caps)
+			if other.is_empty():
+				continue
+			var which := "ridge"
+			if cap["edge"] == lay["left_edge"]:
+				which = "left"
+			elif cap["edge"] == lay["right_edge"]:
+				which = "right"
+			partners[which] = other["n"]
+		var hold := float(HOLD.get(str(roof.get("material", "")), DEFAULT_HOLD))
+		counts.blanket += PainterMannerBlanket.lay_into(
+			g, roof, lay, partners, hold, phase, seed + g.pos.size()
+		)
 	var before_caps := g.idx.size()
 	for cap: Dictionary in caps:
-		_cap(g, cap, _partner(cap, caps), seed)
+		if not cap["blanket"]:
+			_cap(g, cap, _partner(cap, caps), seed)
 	counts.cap = (g.idx.size() - before_caps) / 3
 	var before_pads := g.idx.size()
 	for pad: Dictionary in src.get("pads", []):
 		_pad(g, pad)
 		if str(pad["kind"]) == "chimney":
-			_collar(g, pad, src.get("roofs", []))
+			_collar(g, pad, src.get("roofs", []), lays, phase)
 	counts.pad = (g.idx.size() - before_pads) / 3
 	if g.idx.is_empty():
 		return {"arrays": [], "triangles": 0, "by_kind": counts}
@@ -140,10 +209,14 @@ class Strips:
 	var idx := PackedInt32Array()
 
 	func add(p: Vector3, n: Vector3, along: float, step: float, size: Vector2, acc: float) -> int:
+		return put(p, n, Vector2(along, step), PackedFloat32Array([size.x, size.y, float(CODE), acc]))
+
+	## A vertex with its own UV2 and CUSTOM0 (`data`, four floats).
+	func put(p: Vector3, n: Vector3, uv: Vector2, data: PackedFloat32Array) -> int:
 		pos.append(p)
 		nor.append(n.normalized())
-		uv2.append(Vector2(along, step))
-		cus.append_array(PackedFloat32Array([size.x, size.y, float(CODE), acc]))
+		uv2.append(uv)
+		cus.append_array(data)
 		return pos.size() - 1
 
 	## Triangle (a, b, c) wound so its front faces along `facing` (clockwise seen from the front,
@@ -327,7 +400,9 @@ static func _pad(g: Strips, pad: Dictionary) -> void:
 ## meets the highest roof slope of `roofs` under it, a ring of snow against the stack's sides,
 ## heaped and reaching further on the uphill side, sloping down to the roof. Nothing when no slope
 ## lies under the stack.
-static func _collar(g: Strips, pad: Dictionary, roofs: Array) -> void:
+static func _collar(
+	g: Strips, pad: Dictionary, roofs: Array, lays: Dictionary, phase: Vector3
+) -> void:
 	var c: Vector3 = pad["centre"]
 	var roof: Dictionary = {}
 	var best := -INF
@@ -346,6 +421,7 @@ static func _collar(g: Strips, pad: Dictionary, roofs: Array) -> void:
 	var n: Vector3 = roof["n"]
 	var uphill := -Vector3(n.x, 0.0, n.z).normalized()
 	var hold := float(HOLD.get(str(roof.get("material", "")), DEFAULT_HOLD))
+	var lay: Dictionary = lays.get(roof["id"], {})
 	var ha: Vector3 = pad["a"]
 	var hb: Vector3 = pad["b"]
 	var size := Vector2(ha.length() * 2.0, 2.0)
@@ -355,13 +431,14 @@ static func _collar(g: Strips, pad: Dictionary, roofs: Array) -> void:
 		var dir := Vector3(off.x, 0.0, off.z).normalized()
 		var heap := maxf(dir.dot(uphill), 0.0)
 		var p := c + off * (COLLAR_REACH + 0.8 * heap)
-		p.y = _plane_y(roof, p) - 0.01
+		p.y = _plane_y(roof, p) + _on_blanket(roof, lay, hold, p, phase) - 0.03
 		g.add(p, n, 0.0, 0.0, size, 0.5)
 	for off: Vector3 in offs:
 		var dir := Vector3(off.x, 0.0, off.z).normalized()
 		var heap := maxf(dir.dot(uphill), 0.0)
 		var p := c + off * 1.05
-		p.y = _plane_y(roof, p) + COLLAR_T_M * hold * (0.5 + heap)
+		var rise := COLLAR_T_M * hold * (0.5 + heap)
+		p.y = _plane_y(roof, p) + _on_blanket(roof, lay, hold, p, phase) + rise
 		g.add(p, n + dir * 0.6 + Vector3.UP * 0.4, 0.0, 1.0, size, 0.5)
 	var ring := rim + offs.size()
 	for j in offs.size():
@@ -379,6 +456,26 @@ static func _plane_y(r: Dictionary, p: Vector3) -> float:
 		return NAN
 	var o: Vector3 = r["origin"]
 	return o.y - (n.x * (p.x - o.x) + n.z * (p.z - o.z)) / n.y
+
+
+## How far the blanket of slope `r` (layout `lay`, {} for none) stands above its plane over map
+## point `p`, measured upright. Pure.
+static func _on_blanket(
+	r: Dictionary, lay: Dictionary, hold: float, p: Vector3, phase: Vector3
+) -> float:
+	if lay.is_empty():
+		return 0.0
+	var n: Vector3 = r["n"]
+	return PainterMannerBlanket.depth_at(r, lay, hold, p, phase) / maxf(n.y, 0.2)
+
+
+## The middle of roof record `r`'s frame. Pure.
+static func _mid(r: Dictionary) -> Vector3:
+	return (
+		(r["origin"] as Vector3)
+		+ (r["u"] as Vector3) * float(r["u_len"]) * 0.5
+		+ (r["v"] as Vector3) * float(r["v_len"]) * 0.5
+	)
 
 
 ## The chimney caps and window sills of a structure, read from the vertices of the pieces that

@@ -59,21 +59,32 @@ func test_painting_swaps_the_parts_and_release_restores_them_exactly() -> void:
 	var buildings := PainterBuildings.new()
 	assert_true(buildings.paint(_map, STATE))
 	var painted := 0
+	var yard := 0
 	var kept := 0
+	var shaders := {
+		PainterBuildings.PICK_YARD: PainterBuildings.YARD_SHADER,
+		PainterBuildings.PICK_YARD_GROUND: PainterBuildings.YARD_GROUND_SHADER,
+	}
 	for mi: MeshInstance3D in before:
 		var surface: Material = before[mi][1]
 		assert_eq(mi.mesh.surface_get_material(0), surface, "the shared surface stays")
-		if PainterBuildings.kind_of(str(mi.name)).is_empty():
+		var kind := PainterBuildings.kind_of(str(mi.name))
+		if kind.is_empty():
 			assert_eq(mi.material_override, before[mi][0], "%s keeps Classic" % mi.name)
 			kept += 1
 			continue
 		var stand_in := mi.material_override as ShaderMaterial
 		assert_not_null(stand_in, "%s painted" % mi.name)
 		assert_true(stand_in.has_meta(PainterBuildings.META))
-		assert_eq(stand_in.shader.resource_path, PainterBuildings.SHADER)
-		painted += 1
+		var want: String = shaders.get(kind[3], PainterBuildings.SHADER)
+		assert_eq(stand_in.shader.resource_path, want, "%s's shader" % mi.name)
+		if kind[3] in shaders:
+			yard += 1
+		else:
+			painted += 1
 	assert_gt(painted, 12, "walls, roofs, timber and stone of three houses")
-	assert_gt(kept, 6, "panes, door metal, dressing keep Classic")
+	assert_gt(yard, 2, "the yards' props and ground are painted in their own shaders")
+	assert_gt(kept, 3, "panes, door metal and the rest keep Classic")
 	for key in ["wall_plaster", "roof_thatch", "roof_tile", "roof_wood", "frame_wood"]:
 		assert_not_null(buildings.material_of(key), "%s has a stand-in" % key)
 	buildings.release()
@@ -239,8 +250,15 @@ func test_mesh_names_map_to_painted_kinds() -> void:
 	assert_eq(PainterBuildings.kind_of("roof_tile")[3], 1, "a tile roof picks its tone")
 	assert_eq(PainterBuildings.kind_of("cap_roof_thatch")[0], "roof-thatch", "a mill's cap")
 	assert_eq(PainterBuildings.kind_of("roof_plaster")[0], "plaster", "a plaster gable end")
-	for classic in ["opening_glass", "door_metal", "ornament_leaf", "dressing_ground", "decor_baked"]:
+	for classic in ["opening_glass", "door_metal", "ornament_leaf", "decor_baked"]:
 		assert_true(PainterBuildings.kind_of(classic).is_empty(), "%s keeps Classic" % classic)
+	var props := PainterBuildings.kind_of("dressing_props")
+	assert_eq(props[3], PainterBuildings.PICK_YARD, "a yard's props are painted")
+	var ground := PainterBuildings.kind_of("dressing_ground")
+	assert_eq(ground[3], PainterBuildings.PICK_YARD_GROUND, "a yard's ground is painted")
+	PainterBuildings.paint_yard = false
+	assert_true(PainterBuildings.kind_of("dressing_props").is_empty(), "the yard switch off")
+	PainterBuildings.paint_yard = true
 
 
 func test_the_shader_loads_with_its_uniforms() -> void:
