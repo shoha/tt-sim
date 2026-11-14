@@ -140,6 +140,9 @@ func test_plants_take_a_kind_and_trees_stay_classic() -> void:
 	assert_lt(mid.y, leaf.y, "and less saturated")
 	assert_eq(PainterPlantRoles.of(GRASS, "grass")["kind"], PainterPlantRoles.KIND_GRASS)
 	assert_eq(PainterPlantRoles.of(BOULDER, "")["role"], "stone")
+	# painter-trees-fix2: the words are the asset's own, not its biome's ("grassland").
+	var meadow_stone := PainterPlantRoles.of("grassland_meadow_summer_s1/Stone_Small_summer_04", "")
+	assert_eq(meadow_stone["role"], "stone", "a meadow's stone is not a grass tuft")
 	assert_true(PainterPlantRoles.of("x/Clump_Sprig", "grass", true)["ground_cover"], "a flower")
 
 

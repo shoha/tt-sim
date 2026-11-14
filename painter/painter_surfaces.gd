@@ -416,6 +416,9 @@ func _paint_species() -> Array:
 				var stand_in := _stand_in(original, entry, float(record["height"]))
 				if stand_in == null:
 					continue
+				var box := mesh.get_aabb()
+				stand_in.set_shader_parameter(&"selector_centre", box.get_center())
+				stand_in.set_shader_parameter(&"selector_extent", box.size * 0.5)
 				mesh.surface_set_material(i, stand_in)
 				var swap := [mesh, i, original, stand_in, entry]
 				_swapped.append(swap)
@@ -544,6 +547,14 @@ static func _tone_plant(
 			freq = PainterSheet.number(sheet, mood, "keep-freq-flower", elevation)
 	material.set_shader_parameter(&"keep", keep)
 	material.set_shader_parameter(&"keep_freq", freq)
+	# Snow on the plants when the crowns take it (winter), in the snow's own colours (the drift
+	# role on the ground's ramp), so a tuft's cap is the snow round its foot.
+	var snow := PainterTones.ramp(sheet, mood, "drift", elevation, "ground-")
+	material.set_shader_parameter(
+		&"frost", PainterSheet.number(sheet, mood, "crown-deposit", elevation)
+	)
+	material.set_shader_parameter(&"c_frost_lit", PainterTones.linear(snow[2]))
+	material.set_shader_parameter(&"c_frost_shd", PainterTones.linear(snow[0]))
 
 
 ## The direction the ground's marks lie along: the camera's right in the map's XZ.

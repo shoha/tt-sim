@@ -462,7 +462,22 @@ void vertex() {
 	// under it kept the masses and limbs over it.)
 	VERTEX = (VIEW_MATRIX * vec4(wp, 1.0)).xyz;
 	NORMAL = normalize(mat3(VIEW_MATRIX) * v_wn);
-	POSITION = alive ? PROJECTION_MATRIX * vec4(VERTEX, 1.0) : vec4(2.0, 2.0, 2.0, 1.0);
+	// tt-sim (painter-trees-fix2): every mass, limb and trunk goes with its tree when the token
+	// window takes it whole (tree_token_crown: the crown's form centre and radius across), as its
+	// strokes do, so neither a mass nor a bare trunk is left beside the opening. The camera's pass
+	// only; a ground mass stays.
+	bool crown_gone = false;
+	if (alive && abs(floor(role + 0.5) - ROLE_GROUND) > 0.5 && t3.w > 0.5
+			&& occlusion_token_count > 0
+			&& abs(dot(normalize(INV_VIEW_MATRIX[2].xyz), normalize(sun_dir))) <= 0.9995) {
+		vec4 crown = vec4((VIEW_MATRIX * (MODEL_MATRIX * vec4(t3.xyz, 1.0))).xyz,
+			max(t4.x, t4.z) * length(MODEL_MATRIX[0].xyz));
+		// One answer per tree, so every vertex of a mass decides alike (a mass half collapsed would
+		// smear its triangles across the frame).
+		crown_gone = tree_token_crown(crown, VIEW_MATRIX, PROJECTION_MATRIX);
+	}
+	POSITION = alive && !crown_gone ? PROJECTION_MATRIX * vec4(VERTEX, 1.0)
+		: vec4(2.0, 2.0, 2.0, 1.0);
 	if (wood_v) {
 		// A limb stroke is painted in limb coordinates: its fragments get the axis point, not their own.
 		v_wp = wood_axis;

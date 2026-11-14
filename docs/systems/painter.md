@@ -169,13 +169,35 @@ grey; a low keep under a small pull gives every role one shade family. Card pain
 for dusk's lilac shade (keep 0.2 on the ground, 0 on grass) and the quieter night shades.
 
 Plant roles. `PainterPlantRoles.of(asset_id, wind_category, flower)` gives a kind (mass, grass,
-solid, flower) and a tone role by asset-id words; the scatter template's `flower` flag wins.
+solid, flower, crown) and a tone role by the words of the asset's OWN name (painter-trees-fix2:
+the biome prefix was read too, so every `grassland_meadow_summer_s1/...` asset matched "grass" and
+a meadow's stones were painted as tufts); the scatter template's `flower` flag wins.
 Grass and flowers light like the ground they stand on: lit unless cast shadowed or the sun is at
 the horizon (no middle step for a low sun), with light and shadow read at the tuft's foot
-(`LIGHT_VERTEX` dropped to the root, the only light-point shift in the painted shaders; ground
-cover casts nothing, so no shadow leaves its caster).
+(`LIGHT_VERTEX` dropped to the root; ground cover casts nothing, so no shadow leaves its caster).
+Each tuft is darker at its base and toward its rim (`TUFT_RIM`, by the distance from its axis
+over its mesh box's half width) and a step lighter or darker than its neighbours (`TUFT_STEP`),
+so a bed of the core meadow's broad-bladed grass reads as rounded scallops, not one flat strip.
 Thinning is the sheet's: `keep-grass` (0.6) and `keep-flower` (0.4) in groups of a slow world
-noise, both in the colour and the shadow pass.
+noise, both in the colour and the shadow pass (winter 0.45 and 0.25: fewer tufts stand above the
+snow).
+
+A crown-kind plant (bushes, shrubs, hedges, ferns; the core berry bushes are card-built from long
+arching leaf straps) is painted on its ENVELOPE (painter-trees-fix2): a spheroid inscribed in its
+mesh's box (`selector_centre`, `selector_extent`, set from the mesh's AABB), round about the up
+axis. Each fragment is lit, toned and cut at the point where its view ray enters the envelope
+(`bush_front`), so every card along one ray takes the same lobe and tone, and a card reaching past
+the envelope is cut; the lobes (`bush_lobe`, a world Voronoi) turn as hemispheres over their
+cells, so the tone steps run round each lobe in arcs. The sun's shadow is read at the envelope
+point too (`LIGHT_VERTEX`). Before, each strap was toned at its own depth and the bush read as
+splayed hard-edged shards.
+
+Snow on plants: the stand-ins take the sheet's `crown-deposit` (0 but in winter) as `frost`, in the
+snow's own two steps (the drift role on the ground's ramp): a tuft's top (by its height fraction,
+ragged by a small noise), a bush's or a leaf mass's up-facing lobes, a rock's or log's up faces.
+Winter's grass is a warm straw (`grass` oklch 0.67 0.062 72) with a small lit lift and a shade
+that keeps its own hue over the violet pull (`grass-shade-keep` 1.8, above 1): a muted russet in
+shade, where the full pull read as grey-lilac ghosts at eye level.
 
 The foliage AA swap (`WindFoliage`, the eye view's alpha-to-coverage) collects stand-ins through
 `WindFoliage.META_STAND_IN`: it swaps the original wind material in their place, so a painted
@@ -258,7 +280,17 @@ eye view's levels, rim trees, far meshes and fog are a later card's (A2b).
   as `(clip.xy / clip.w * 0.5 + 0.5) * VIEWPORT_SIZE` with no row flip (measured: a flip left the
   strokes over the token). Measured against the circle at 1920x1080 (vsync off, interleaved): tokens
   view -0.18 ms, home -0.08, far -0.09; shadow and visible primitives unchanged. Still open: a small
-  token cut into a trunk shows a nearly round hole (the limb is one mass). Letting the whole crown
+  token cut into a trunk shows a nearly round hole (the limb is one mass).
+  A tree goes whole (painter-trees-fix2, `tree_token_crown`): when a token's window reaches into a
+  crown by at least `TREE_TOKEN_CROWN_SHARE` (0.5) of its radius and the crown's radius is under
+  `TREE_TOKEN_CROWN_MAX` (2.6) zone radii, every stroke and block-in mass of that tree but its
+  ground dabs is collapsed in the vertex stage (camera pass only; its shadow stays). The test reads
+  the tree row's crown form centre and radii (`tree_tex` texels 3 and 4) against every token of the
+  plain list (a crown's centre may lie outside the token's tiles), once per tree, so all parts
+  decide alike. It is for a small tree in front of a large token: the window used to take a
+  birch's middle and limbs and leave its fringe floating beside Venusaur, and a crown taken alone
+  would leave a bare trunk. A crown much wider than the zone (the oak over Venusaur, any tree over
+  an Eevee) keeps the plain rim. Letting the whole crown
   cast (`shadow_simple` 1) was tried for the window and dropped: it shaded nothing inside it (the
   crowns' shadows fall aside at sun 45). It runs after the canopy fades and only in the
   camera's pass (the sun's pass keeps the whole crown's shadow). Both shaders must hand their own

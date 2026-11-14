@@ -931,6 +931,16 @@ const float TREE_TOKEN_SMALL_HI = 0.8;
 // outside the rim (the critic's loose leaf clumps floating at the opening's edge, left over from a
 // clump the window had mostly taken).
 const float TREE_TOKEN_CLUMP_REACH = 0.4;
+// painter-trees-fix2: a small tree in front of a large token goes whole. When the window reaches
+// into a crown by at least TREE_TOKEN_CROWN_SHARE of its radius (its form centre lies less than that
+// share of its radius outside the rim) and the crown's radius is under TREE_TOKEN_CROWN_MAX zone
+// radii, the whole tree goes in the camera's pass, crown, limbs and trunk (its ground dabs and its
+// shadow stay): the critic's pale birch clumps floating beside Venusaur were the fringe of a birch
+// whose middle and limbs the window had taken, and a crown taken alone leaves a bare trunk. A crown
+// much wider than the token's zone (the oak over Venusaur, any tree over an Eevee) keeps the
+// plain rim.
+const float TREE_TOKEN_CROWN_SHARE = 0.5;
+const float TREE_TOKEN_CROWN_MAX = 2.6;
 
 // Where the rim lies (zone radii) for a token `token_data` of zone `radius` at the view-plane
 // offset `rel` (in zone radii) of a point whose rim lobes are read at `world`.
@@ -980,8 +990,38 @@ float tree_token_margin(vec4 token_data, vec3 vertex_view, float reach, vec3 wor
 	return length(rel) - reach / radius - tree_token_edge(token_data, rel, world, radius) - shift;
 }
 
+// True when one token's window takes a whole tree (see TREE_TOKEN_CROWN_SHARE): `crown` xyz the
+// crown's form centre (view space), w its radius across (view units). The rim is read without its
+// world lobes (at the origin), so every stroke and mass of one tree decides alike.
+bool tree_token_crown_one(vec4 token_data, vec4 crown, mat4 view_matrix, mat4 projection_matrix) {
+	float e = crown.w / abs(token_data.w);
+	if (e >= TREE_TOKEN_CROWN_MAX) {
+		return false;
+	}
+	float m = tree_token_margin(token_data, crown.xyz, 0.0, vec3(0.0), 0.0, false, view_matrix,
+		projection_matrix);
+	return m < TREE_TOKEN_CROWN_SHARE * e;
+}
+
+// True when a token's window takes the tree of crown `crown` (tree_token_crown_one; w 0: no
+// crown). Every token of the plain list: the crown's centre may lie outside the zone, so outside
+// the token's screen tiles.
+bool tree_token_crown(vec4 crown, mat4 view_matrix, mat4 projection_matrix) {
+	if (crown.w <= 0.0 || !enable_occlusion || occlusion_token_count <= 0) {
+		return false;
+	}
+	for (int i = 0; i < occlusion_token_count; i++) {
+		if (tree_token_crown_one(texelFetch(occlusion_tokens, ivec2(i, 0), 0), crown, view_matrix,
+				projection_matrix)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 // True when the feathered window takes a block-in fragment (its screen tile's tokens): the rim
-// TREE_TOKEN_MASS_PAD further out than the strokes'.
+// TREE_TOKEN_MASS_PAD further out than the strokes'. (A tree the window takes whole is collapsed in
+// the block-in's vertex stage, tree_token_crown.)
 bool tree_token_frag(vec3 vertex_view, vec3 world, bool wood, mat4 view_matrix,
 		mat4 projection_matrix, vec2 frag_coord, vec2 viewport_size) {
 	if (!enable_occlusion || occlusion_token_count <= 0) {
@@ -1024,13 +1064,17 @@ float tree_token_stroke_margin(vec4 token_data, vec3 centre_view, float reach, v
 
 // True when the feathered window takes a whole stroke (vertex stage): its centre `centre_view`
 // and half size `reach` (view units), its clump's centre `clump_view` (the centre itself for a
-// stroke of no clump), `world` its anchor (the rim's lobes), `key` its own 0..1.
+// stroke of no clump), its tree's crown `crown` (tree_token_crown's: the tree goes whole; w 0 for
+// a ground dab), `world` its anchor (the rim's lobes), `key` its own 0..1.
 // The tokens are those of every screen tile under the stroke, so a stroke whose nearest point
 // lies in a token's zone always finds it (the zone lies inside its tiles). `wood`: a bark stroke.
-bool tree_token_stroke(vec3 centre_view, float reach, vec3 clump_view, vec3 world, float key,
-		bool wood, mat4 view_matrix, mat4 projection_matrix, vec2 viewport_size) {
+bool tree_token_stroke(vec3 centre_view, float reach, vec3 clump_view, vec4 crown, vec3 world,
+		float key, bool wood, mat4 view_matrix, mat4 projection_matrix, vec2 viewport_size) {
 	if (!enable_occlusion || occlusion_token_count <= 0) {
 		return false;
+	}
+	if (tree_token_crown(crown, view_matrix, projection_matrix)) {
+		return true;
 	}
 	float shift = (key - 0.5) * 2.0 * TREE_TOKEN_STROKE_JIT;
 	float near = 1e3;

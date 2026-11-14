@@ -1003,9 +1003,23 @@ void vertex() {
 			// tt-sim (painter-token-window): the token window takes a stroke whole, by where its
 			// nearest point lies (a ground dab under a crown is not in front of anything: it stays).
 			vec3 centre_view = (VIEW_MATRIX * vec4(centre, 1.0)).xyz;
+			// painter-trees-fix2: a stroke goes with its whole tree when the window takes the tree
+			// (tree_token_crown: the crown's form centre and radius across, texels 3 and 4); a ground
+			// dab stays.
+			bool wood_stroke = abs(role - 1.0) < 0.5;
+			vec4 crown = vec4(0.0);
+			if (!is_shadow && abs(role - ROLE_GROUND) > 0.5 && occlusion_token_count > 0) {
+				int crown_row = int(INSTANCE_CUSTOM.x + 0.5);
+				vec4 crown_c = texelFetch(tree_tex, ivec2(3, crown_row), 0);
+				vec4 crown_r = texelFetch(tree_tex, ivec2(4, crown_row), 0);
+				if (crown_c.w > 0.5) {
+					crown = vec4((VIEW_MATRIX * (MODEL_MATRIX * vec4(crown_c.xyz, 1.0))).xyz,
+						max(crown_r.x, crown_r.z) * length(MODEL_MATRIX[0].xyz));
+				}
+			}
 			if (!is_shadow && tree_token_stroke(centre_view, 0.5 * max(len, wid),
 					has_clump ? (VIEW_MATRIX * (MODEL_MATRIX * vec4(clump_p, 1.0))).xyz : centre_view,
-					anchor, fract(rnd * 13.7 + 0.31), abs(role - 1.0) < 0.5, VIEW_MATRIX, PROJECTION_MATRIX,
+					crown, anchor, fract(rnd * 13.7 + 0.31), wood_stroke, VIEW_MATRIX, PROJECTION_MATRIX,
 					VIEWPORT_SIZE)) {
 				VERTEX = vec3(0.0);
 			}

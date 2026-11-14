@@ -49,10 +49,12 @@ void fragment() {
 	float mul;
 	float wob;
 	float petal;
-	selector_fragment(v_wp, v_wn, v_o, v_scale, v_h, tex, n, variant, mul, wob, petal);
+	float snow;
+	selector_fragment(v_wp, v_wn, v_o, v_scale, v_h, tex, n, variant, mul, wob, petal, snow);
 	f_n = n;
 	f_variant = variant;
 	f_mul = mul;
 	f_wob = wob;
 	f_accent = petal;
+	f_frost = snow;
 }

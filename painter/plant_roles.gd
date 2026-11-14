@@ -64,15 +64,18 @@ const TREE_MASS_WORDS: Array[String] = ["bush", "shrub", "hedge"]
 ## {"kind", "role", "ground_cover"} for asset `asset_id` of wind category `wind_category`
 ## (WindFoliage: "tree", "grass" or "" for still) and the palette's `flower` flag, or {} when the
 ## Painted look leaves it Classic or the painted trees draw it (trees; a bush is a leaf mass).
+## The words are read in the asset's own name, never its biome's (painter-trees-fix2: every
+## "grassland_meadow_summer_s1/..." asset matched "grass", so a meadow's stones were painted as
+## grass tufts).
 static func of(asset_id: String, wind_category: String, flower: bool = false) -> Dictionary:
+	var id := asset_id.get_file().to_lower()
 	if wind_category == "tree":
 		for word in TREE_MASS_WORDS:
-			if asset_id.to_lower().contains(word):
+			if id.contains(word):
 				return _entry(KIND_CROWN, "leaf")
 		return {}
 	if flower:
 		return _entry(KIND_FLOWER, "grass")
-	var id := asset_id.to_lower()
 	for rule: Array in RULES:
 		for word: String in rule[2]:
 			if id.contains(word):

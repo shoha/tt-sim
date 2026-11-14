@@ -256,15 +256,20 @@
     tone-lo: 0.12;  tone-hi: 0.66;  shade-hue: 250;  shade-pull: 0.45;  shade-depth: 0.53;
     /* (painter-trees-fix: the lit ground a step under the crowns' lit, so a crown does not merge
        into the khaki ground behind it; it was 0.2.) */
-    lit-hue: 85;  lit-lift: 0.17;  ground-shade-pull: 0.45;  ground-lit-lift: 0.14;
+    lit-hue: 85;  lit-lift: 0.17;  ground-lit-lift: 0.14;
+    /* (painter-trees-fix2: the critic read one uniform teal-olive. The ground's lit side leans
+       further toward the warm light, khaki-ochre, and its shade further toward the slate; the
+       crowns' lit tops likewise toward olive-gold, their shade toward blue slate. Was ground
+       shade pull 0.45 and lit pull 0.45 (the default), crown shade pull 0.35 and lit pull 0.3.) */
+    ground-shade-pull: 0.6;  ground-lit-pull: 0.7;
     /* Crowns are readable grey-green masses (S18 grimdark), not black: a lighter leaf than the
        plants had, a slate-teal shade, a light cast step over an already dark palette. */
     needle: oklch(0.37 0.045 186);
-    crown-shade-hue: 225;  crown-shade-pull: 0.35;  crown-shade-keep: 0.7;  tree-cast: 0.35;
+    crown-shade-hue: 225;  crown-shade-pull: 0.5;  crown-shade-keep: 0.7;  tree-cast: 0.35;
     /* A wider value range so a crown's shape reads in the gloom (painter-trees-polish: flat
        grey-teal masses, spruce near black): a bone-lit top, a shade a step less deep (polish3:
        at 0.08 a crown's shade side merged with the ground's shadow into one near-black mass). */
-    crown-lit-lift: 0.15;  crown-lit-chroma: 1.3;  crown-lit-pull: 0.3;  crown-shade-lift: 0.22;
+    crown-lit-lift: 0.15;  crown-lit-chroma: 1.3;  crown-lit-pull: 0.55;  crown-shade-lift: 0.22;
     /* Bone walls and grey stone where the light falls (the spike's grimdark plaster). */
     plaster: oklch(0.64 0.030 85);  wall-stone: oklch(0.48 0.016 215);
     wall-log: oklch(0.40 0.040 60);  wall-boards: oklch(0.44 0.030 75);  timber: oklch(0.30 0.025 45);
@@ -315,7 +320,14 @@
      green (painter-a2a3: phase 1 keeps the leaves, and the spike's grey-violet bare-crown tone
      read as lavender trees). Grass and flowers stand as dry stalks over the snow. */
   :world {
-    floor: oklch(0.82 0.030 255);  shore: oklch(0.72 0.025 250);  grass: oklch(0.70 0.050 85);
+    floor: oklch(0.82 0.030 255);  shore: oklch(0.72 0.025 250);
+    /* Grass and flowers as dry straw over the snow (painter-trees-fix2: a pale straw under the full
+       lit lift read beige slabs, its shade pulled to the snow's violet grey-lilac ghosts). A
+       warmer straw, a small lit lift, and a shade that keeps its own hue over the pull (a keep
+       above 1: a muted russet, not grey); fewer tufts stand above the snow, and the snow caps
+       those (crown-deposit, which the plants take too). */
+    grass: oklch(0.67 0.062 72);  grass-lit-lift: 0.08;  grass-shade-keep: 1.8;
+    keep-grass: 0.45;  keep-flower: 0.25;
     drift: oklch(0.95 0.015 240);  litter: oklch(0.62 0.040 60);
     flower-gold: oklch(0.74 0.060 85);  flower-rose: oklch(0.62 0.060 20);
     flower-violet: oklch(0.58 0.050 300);  flower-white: oklch(0.95 0.015 240);
