@@ -323,3 +323,31 @@ func test_the_signal_fires_on_entering_and_leaving_painted_only() -> void:
 	assert_eq(got, [STATE, {}], "leaving Painted")
 	manager.clear()
 	assert_eq(got.size(), 2, "already Classic")
+
+
+# --- the tuft dabs ------------------------------------------------------------------------
+
+
+func test_a_wide_tuft_is_cut_by_the_dab_layouts_and_a_reed_is_not() -> void:
+	# Core's meadow tuft: 0.91 m across, 0.39 m tall.
+	var array := PainterTuftAtlas.for_tuft(Vector3(0.455, 0.195, 0.445), 0.39)
+	assert_not_null(array, "a meadow tuft is wide")
+	assert_eq(array.get_layers(), PainterTuftAtlas.LAYERS)
+	assert_eq(array.get_width(), PainterTuftAtlas.SIZE)
+	assert_null(PainterTuftAtlas.for_tuft(Vector3(0.1, 0.5, 0.1), 1.0), "a reed keeps its texture")
+	assert_eq(
+		PainterTuftAtlas.for_tuft(Vector3(0.46, 0.2, 0.45), 0.39),
+		array,
+		"a near aspect shares the array"
+	)
+	var src := FileAccess.get_file_as_string("res://painter/shaders/painter_selector.gdshaderinc")
+	assert_true(src.contains("TUFT_LAYERS = %.1f;" % PainterTuftAtlas.LAYERS), "the shader's layers")
+	assert_true(src.contains("TUFT_RANGE = %.1f;" % PainterTuftAtlas.RANGE), "the shader's range")
+	for layer in PainterTuftAtlas.LAYERS:
+		var image := PainterTuftAtlas.layer_image(1.17, layer)
+		var mid := PainterTuftAtlas.SIZE >> 1
+		assert_lt(image.get_pixel(0, 0).r, 0.5, "layer %d: the card's top corner is cut" % layer)
+		assert_gt(image.get_pixel(mid, mid).r, 0.5, "layer %d: its middle drawn" % layer)
+		assert_gt(
+			image.get_pixel(mid, PainterTuftAtlas.SIZE - 1).r, 0.5, "layer %d: its foot drawn" % layer
+		)

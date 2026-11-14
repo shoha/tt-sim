@@ -158,7 +158,9 @@ void vertex() {
 	v_tg = vec3(0.0, 1.0, 0.0);
 	v_lr = 0.0;
 	v_snow = vec3(0.0);
-	v_bseed = 0.0;
+	// A limb's bark seed (set below for wood); on a mass, 2 marks a bush's clump (t3.w 2,
+	// PainterTreeBush) for the fragment's dab edge (painter-cost-stripes).
+	v_bseed = t3.w > 1.5 ? 2.0 : 0.0;
 	v_rise = 1000.0;
 	bool wood_v = false;
 	vec3 wood_fn = vec3(0.0);
@@ -517,6 +519,12 @@ float e_lift_at(vec3 p, float near, float n_y, float spread) {
 	return 0.1 + 0.2 * step(0.44, m) + 0.2 * step(0.53, m) + 0.3 * step(0.63, m) * down;
 }
 
+// A bush's dab edge (painter-cost-stripes; see fragment()): the wobble's frequency per metre, its
+// reach on the light's turn and on the snow cap's edge.
+const float BUSH_DAB_F = 4.6;
+const float BUSH_DAB_JIT = 0.7;
+const float BUSH_SNOW_JIT = 0.9;
+
 void fragment() {
 	bool g_sun = abs(dot(normalize(INV_VIEW_MATRIX[2].xyz), normalize(sun_dir))) > 0.9995;
 	float role = floor(v_role + 0.5);
@@ -655,16 +663,23 @@ void fragment() {
 		ndl -= smoothstep(0.74, 0.98, e_an) * 0.45 * e_nr;
 		ndl += (p_noise(vec3(w_a * 4.0 + w_sd, w_s / (w_wl * 2.5), w_sd + 9.0)) - 0.5) * 0.7 * e_nr;
 	}
-	float wob = p_noise(v_wp * 1.9 + 5.0);
+	// tt-sim (painter-cost-stripes): a bush's clump is a small smooth pad, so its tone steps ran
+	// across it as straight parallel bands (striped beach balls). On a bush the wobble that breaks the
+	// steps is a dab's size (BUSH_DAB_F per metre), and as strong as a stroke's own tone jitter, so
+	// light and shade meet in a scalloped, broken edge as the oak's strokes do; the same noise, no
+	// other fetch.
+	bool bush = foliage && v_bseed > 1.5;
+	float wob = p_noise(v_wp * (bush ? BUSH_DAB_F : 1.9) + 5.0);
+	float jit = bush ? BUSH_DAB_JIT : 0.34 * (1.0 - calm * 0.85);
 	// Round 17 (turn-break): the edge between a crown's tones wanders in broad scallops.
 	float tb17 = foliage ? (p_noise(v_wp * 0.8 + 17.0) - 0.5) * turn17 : 0.0;
 	if (foliage) {
 		ndl = crown_ndl18(ndl);
 	}
-	float t = tone3(ndl, (wob - 0.5) * 0.34 * (1.0 - calm * 0.85) + tb17, 0.008);
+	float t = tone3(ndl, (wob - 0.5) * jit + tb17, 0.008);
 	if (foliage) {
 		// Round 18 (crown-lo, crown-hi, turn-half): a crown turns in five steps under its own thresholds.
-		t = crown_tone18(ndl + (wob - 0.5) * 0.34 * (1.0 - calm * 0.85) + tb17, 0.008);
+		t = crown_tone18(ndl + (wob - 0.5) * jit + tb17, 0.008);
 	}
 	float cast = 0.0;
 	if (calm > 0.5 && role != ROLE_GROUND && !(r16 > 0.5 && foliage && f_rp6.z > 0.5)) {
@@ -690,7 +705,9 @@ void fragment() {
 	}
 	float row = v_row;
 	float dep = deposit * rp2.z * smoothstep(0.1, 0.55, n.y);
-	bool dep_on = dep > dep_threshold(v_wp, 0.5);
+	// A bush's snow cap breaks along the same dab-sized wobble, into a cluster of rounded snow dabs
+	// and not one flat white ellipse (painter-cost-stripes).
+	bool dep_on = dep > dep_threshold(v_wp, 0.5) + (bush ? (wob - 0.5) * BUSH_SNOW_JIT : 0.0);
 	if (role > 7.5) {
 		// Round 18 (snow-shelf): an evergreen's snow is a shelf on what faces up.
 		dep_on = shelf18(n.y, rp2.z, v_wp, 0.5);

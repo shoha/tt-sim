@@ -31,29 +31,17 @@ varying vec3 v_wp;
 varying vec3 v_wn;
 // The instance's origin and scale (xyz, w).
 varying flat vec4 v_os;
-// A tuft card's point (painter_selector's tuft_layout: xy, z the tuft's seed) and w the height
-// fraction; then the card's dabs, constant over it, so read flat. Packed (painter-plants-fix4): the
-// shader is near Godot's 32 varying slots, and each slot is set up per triangle on a field of
-// small tuft cards.
-varying vec4 v_tp;
-varying flat vec4 v_dx;
-varying flat vec4 v_dy;
-varying flat vec4 v_di;
+// The height fraction, then a tuft card's atlas layer and the tuft's seed (painter_selector's
+// tuft_card: constant over a card).
+varying vec3 v_hk;
 
 void vertex() {
 	local_vertex_y = VERTEX.y;
-	float h = VERTEX.y / max(selector_height, 0.01);
-	vec3 tp = vec3(0.0);
-	vec4 dx = vec4(0.0);
-	vec4 dy = vec4(0.0);
-	vec4 di = vec4(1.0);
+	vec3 hk = vec3(VERTEX.y / max(selector_height, 0.01), 0.0, 0.0);
 	if (kind == 1 || kind == 3) {
-		tuft_layout(VERTEX, UV, MODEL_MATRIX[3].xyz, tp, dx, dy, di);
+		hk.yz = tuft_card(VERTEX, UV, MODEL_MATRIX[3].xyz);
 	}
-	v_tp = vec4(tp, h);
-	v_dx = dx;
-	v_dy = dy;
-	v_di = di;
+	v_hk = hk;
 	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
 	VERTEX *= grow_scale(MODEL_MATRIX[3].xyz) * selector_keep(MODEL_MATRIX[3].xyz, IN_SHADOW_PASS);
 	v_os = vec4(MODEL_MATRIX[3].xyz, length(MODEL_MATRIX[1].xyz));
@@ -65,7 +53,7 @@ void vertex() {
 void fragment() {
 	vec3 v_o = v_os.xyz;
 	float v_scale = v_os.w;
-	float v_h = v_tp.w;
+	float v_h = v_hk.x;
 	if (kind == 4) {
 		// A bush's outline breaks between its lobes (painter_selector's bush_cut), in the sun's pass
 		// too, so its shadow's edge is as round as its outline.
@@ -75,31 +63,36 @@ void fragment() {
 			discard;
 		}
 	}
-	// A tuft's dabs, snow cap and bury line (painter_selector's tuft_dab): a grass card's cut is its
-	// dabs, a flower keeps its texture's.
+	// A tuft's dabs, snow cap and bury line (painter_selector's tuft_dab): a wide grass card's cut is
+	// its dabs, read from the atlas in place of its texture (never fetched: a card is one fetch, as
+	// the texture's cut was); a flower or a narrow tuft keeps its texture's.
 	vec4 dab = vec4(1.0, 0.5, 0.0, 0.0);
 	if (kind == 1 || kind == 3) {
-		dab = tuft_dab(v_tp.xyz, v_dx, v_dy, v_di);
+		dab = tuft_dab(UV, v_hk.yz);
 		if (dab.x < 0.5) {
 			discard;
 		}
 	}
 	NORMAL = two_sided_foliage_normal(NORMAL, FRONT_FACING);
-	vec3 pbr_albedo;
-	float pbr_alpha;
-	float pbr_ao;
-	float pbr_roughness;
-	float pbr_metallic;
-	vec3 pbr_normal_map;
-	// The cutout and the fades (the ground-cover form: no canopy fade inputs, as ground cover).
-	apply_wind_foliage_pbr(UV, INV_VIEW_MATRIX, NORMAL, VERTEX, VERTEX, VIEW_MATRIX,
-		PROJECTION_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE, local_vertex_y, vec2(0.0), pbr_albedo,
-		pbr_alpha, pbr_ao, pbr_roughness, pbr_metallic, pbr_normal_map);
+	float alpha = 1.0;
+	vec4 tex = vec4(0.0, 1.0, 0.0, 1.0);
+	if (!tuft_wide()) {
+		vec3 pbr_albedo;
+		float pbr_ao;
+		float pbr_roughness;
+		float pbr_metallic;
+		vec3 pbr_normal_map;
+		// The cutout and the fades (the ground-cover form: no canopy fade inputs, as ground cover).
+		apply_wind_foliage_pbr(UV, INV_VIEW_MATRIX, NORMAL, VERTEX, VERTEX, VIEW_MATRIX,
+			PROJECTION_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE, local_vertex_y, vec2(0.0), pbr_albedo,
+			alpha, pbr_ao, pbr_roughness, pbr_metallic, pbr_normal_map);
+		tex = texture(albedo_texture, UV);
+	}
 	ALBEDO = vec3(1.0);
 	ROUGHNESS = 1.0;
 	SPECULAR = 0.0;
 	METALLIC = 0.0;
-	ALPHA = dab.x > 1.5 ? 1.0 : pbr_alpha;
+	ALPHA = alpha;
 	ALPHA_SCISSOR_THRESHOLD = alpha_scissor_threshold;
 	vec3 n;
 	float variant;
@@ -107,8 +100,7 @@ void fragment() {
 	float wob;
 	float petal;
 	float snow;
-	selector_fragment(v_wp, v_wn, v_o, v_scale, v_h, texture(albedo_texture, UV), n, variant, mul,
-		wob, petal, snow);
+	selector_fragment(v_wp, v_wn, v_o, v_scale, v_h, tex, n, variant, mul, wob, petal, snow);
 	if (kind == 1 || kind == 3) {
 		if (dab.x > 1.5) {
 			// Each dab its own value and variant (russet or straw in winter), darker at its foot

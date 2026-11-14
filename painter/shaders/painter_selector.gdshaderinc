@@ -113,14 +113,21 @@ const float TUFT_STEP = 0.15;
 // and takes its own value and variant. In winter the snow buries the tuft's foot under a scalloped
 // line (TUFT_BURY of its height at full frost) and caps each dab's top in a crescent (TUFT_CAP of
 // the dab at full frost), so the straw shows as scalloped bands between snow.
-// Cost (painter-plants-fix4: fix3's six dabs, laid per fragment in a loop of hashes and sines, cost
-// about 0.2 to 0.3 ms at the village's home view): the layout is the card's, worked out in the
-// vertex stage (tuft_layout) and read flat; the fragment tests the four dabs at once in vector
-// arithmetic with no sine. (A trapezoid card round the mound, drawn to save the empty top corners,
-// clipped the outer dabs into pointed shards and saved nothing measurable: gone.)
+// Cost (painter-cost-stripes): the dabs are not laid or tested here. A card's layout is one of
+// PainterTuftAtlas' TUFT_LAYERS layers (a texture array: the cut as a distance field, the dab's
+// hash and the point's place in its dab), picked per card in the vertex stage; the fragment reads
+// it in one fetch, in place of the texture's cut (a wide tuft never reads its texture). The dabs
+// tested per fragment, from three flat vec4 varyings a card, cost 0.10 to 0.13 ms at the village's
+// home view even with the test skipped at run time (the code's presence alone: GPU registers on a
+// field of small overlapping cards), and fix3's loop of hashes and sines no more. (A trapezoid card
+// round the mound clipped the outer dabs into pointed shards and saved nothing: gone.)
 const float TUFT_WIDE = 0.7;
 const float TUFT_BURY = 0.5;
 const float TUFT_CAP = 0.8;
+// PainterTuftAtlas.LAYERS and RANGE (a dab's place is stored as (x + RANGE) / (2 RANGE)).
+const float TUFT_LAYERS = 16.0;
+const float TUFT_RANGE = 1.5;
+uniform sampler2DArray tuft_atlas : filter_linear_mipmap, repeat_disable;
 
 // A tuft's half width in tuft heights (at most 2.5), and whether its cards are cut by dabs (a wide
 // grass tuft; a flower keeps its petals).
@@ -132,80 +139,48 @@ bool tuft_wide() {
 	return kind == 1 && tuft_half_w() >= TUFT_WIDE;
 }
 
-// The layout of the tuft card through the local `vertex` (before the sway) at `uv` (core's tuft
-// card: UV.x across it, UV.y 0 at its top and 1 at its foot) for an instance at `origin`: `p` the
-// point in tuft heights (x across from the card's middle, y up from its foot) and z the tuft's
-// seed; dx, dy the four dabs' centres and di their inverse radii in the same units. The dabs vary
-// with the card's direction from the axis toward its UV.x = 0 end, which both ends of a card share
-// (core's cards run through the axis and carry an up normal for ground lighting, so the card is
-// told by its vertices), so a card's layout is constant over it.
-void tuft_layout(vec3 vertex, vec2 uv, vec3 origin, out vec3 p, out vec4 dx, out vec4 dy,
-		out vec4 di) {
-	float half_w = tuft_half_w();
+// The tuft card through the local `vertex` (before the sway) at `uv` (core's tuft card: UV.x
+// across it, UV.y 0 at its top and 1 at its foot) for an instance at `origin`: x its layer in the
+// atlas, y the tuft's seed. The layer follows the card's direction from the axis toward its
+// UV.x = 0 end, which both ends of a card share (core's cards run through the axis and carry an up
+// normal for ground lighting, so the card is told by its vertices): constant over a card.
+vec2 tuft_card(vec3 vertex, vec2 uv, vec3 origin) {
 	float seed = p_hash(floor(origin * 10.0) + vec3(3.0, 5.0, 11.0));
-	float w = half_w * 0.8;
-	p = vec3((uv.x - 0.5) * 2.0 * half_w, 1.0 - uv.y, seed);
 	vec2 end = vertex.xz * (uv.x < 0.5 ? 1.0 : -1.0);
 	vec2 card = end / max(length(end), 1.0e-4);
 	float turn = card.x * 2.1 + card.y * 3.3;
-	// Each dab's hashes from the tuft's seed and the card's turn (fract chains: a field of tuft cards
-	// is many vertices, so no hash calls or sines here).
-	vec4 hk = fract(seed * vec4(97.13, 61.71, 43.97, 29.31) + turn * vec4(0.159, 0.211, 0.137, 0.173)
-		+ vec4(0.0, 0.31, 0.57, 0.83));
-	vec4 hk2 = fract(hk * 7.13 + seed * 3.7);
-	vec4 u = vec4(-0.75, -0.25, 0.25, 0.75);
-	dx = (u + (hk - 0.5) * 0.2) * w;
-	dy = 0.58 - 0.32 * u * u + (hk2 - 0.5) * 0.12;
-	di = 1.0 / (0.29 + 0.12 * hk2);
+	return vec2(floor(fract(seed * 97.13 + turn * 0.159) * TUFT_LAYERS), seed);
 }
 
-// The dab of the tuft card point `p` (tuft_layout's; the other arguments its flat outputs): x 2
-// when a dab draws the point (its texture's cut is not read), 1 when the texture's cut does (a
-// narrow tuft or a flower), 0 cut away; y its dab's hash, z its height in the dab (-1 the dab's
-// foot, 1 its top), w the snow on it (0 none, 1 lit snow, 0.75 a cap's shaded lower rim). A
-// texture-cut tuft takes the bury line and a top cap.
-vec4 tuft_dab(vec3 p, vec4 dx, vec4 dy, vec4 di) {
+// The dab of the tuft card point at `uv` (`card` tuft_card's): x 2 when a dab draws the point (the
+// texture's cut is not read), 1 when the texture's cut does (a narrow tuft or a flower), 0 cut away;
+// y its dab's hash, z its height in the dab (-1 the dab's foot, 1 its top; the body under the dabs
+// lower), w the snow on it (0 none, 1 lit snow, 0.75 a cap's shaded lower rim). A texture-cut tuft
+// takes the bury line and a top cap.
+vec4 tuft_dab(vec2 uv, vec2 card) {
 	float kept = 1.0;
-	float own_c = -1.0;
-	vec3 own = vec3(p.z, 0.0, 0.0);
+	vec3 own = vec3(card.y, -TUFT_RANGE, 0.0);
 	bool wide = tuft_wide();
 	if (wide) {
-		float w = tuft_half_w() * 0.8;
-		// Each dab's hash, from its centre (the plant shader has no varying to spare for it).
-		vec4 dh = fract((dx * 3.1 + dy) * 17.31);
-		vec4 ax = (p.x - dx) * di;
-		vec4 ay = (p.y - dy) * di;
-		// A brushed rim: each dab's edge wavers a little round its circle (a triangle wave).
-		vec4 rim = 1.0 + 0.3 * (abs(fract(ax * 0.55 + ay * 0.4 + dh * 3.0) - 0.5) - 0.25);
-		vec4 inside = step(ax * ax + ay * ay, rim * rim);
-		// The highest dab over the point draws it (the middle ones lie over the outer ones).
-		vec4 score = inside * (dy + 2.0);
-		float best = max(max(score.x, score.y), max(score.z, score.w));
-		if (best > 0.5) {
-			vec4 pick = step(best, score);
-			own = vec3(dot(pick, dh), dot(pick, ay), dot(pick, ax));
-			own_c = best - 2.0;
-			kept = 2.0;
-		} else if (p.y > 0.0 && p.y < 0.42 - 0.5 * (p.x / w) * (p.x / w)) {
-			// The body under the dabs' centres, so no gap opens between their feet.
-			kept = 2.0;
-			own = vec3(p.z, -0.7, 0.0);
-		} else {
-			kept = 0.0;
-		}
+		vec4 a = texture(tuft_atlas, vec3(uv, card.x));
+		kept = a.r < 0.5 ? 0.0 : 2.0;
+		own = vec3(a.g, a.ba * (2.0 * TUFT_RANGE) - TUFT_RANGE);
 	}
 	float snow = 0.0;
 	if (frost > 0.0 && kept > 0.5) {
+		// The point in tuft heights, x across from the card's middle, y up from its foot.
+		vec2 p = vec2((uv.x - 0.5) * 2.0 * tuft_half_w(), 1.0 - uv.y);
 		// The bury line's scallops (a parabola a period, as abs(sin(5 x)) drew them).
-		float s = fract(p.x * 1.59 + p.z);
+		float s = fract(p.x * 1.59 + card.y);
 		if (p.y < TUFT_BURY * frost * (0.7 + 1.8 * s * (1.0 - s))) {
 			snow = 1.0;
-		} else if (own_c > -0.5) {
+		} else if (wide) {
+			// A dab's cap: a crescent over its top (the body's texels sit below every line).
 			float top = sqrt(max(1.0 - own.z * own.z, 0.0));
 			float line = top * (1.0 - TUFT_CAP * frost);
 			snow = own.y > line ? (own.y > line + 0.15 * top ? 1.0 : 0.75) : 0.0;
-		} else if (!wide) {
-			float s2 = fract(p.x * 1.43 + p.z);
+		} else {
+			float s2 = fract(p.x * 1.43 + card.y);
 			snow = p.y > 1.0 - 0.3 * frost + 0.64 * s2 * (1.0 - s2) - 0.08 ? 1.0 : 0.0;
 		}
 	}

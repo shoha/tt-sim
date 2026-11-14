@@ -180,10 +180,21 @@ over its mesh box's half width) and a step lighter or darker than its neighbours
 so a bed of the core meadow's broad-bladed grass reads as rounded scallops, not one flat strip.
 A wide tuft (`TUFT_WIDE`: half as wide as tall or more; core's meadow grass is three vertical cards
 through its axis, UV.x across, UV.y 1 at the foot, every normal straight up) is not cut by its
-texture's teeth but by `TUFT_DABS` (6) round dabs laid on each card as a mound (`tuft_dab`,
+texture's teeth but by four round dabs laid on each card as a mound (`tuft_dab`,
 painter-plants-fix3): the outline is their upper arcs with a brushed rim, each dab darker at its
-foot and its own value and variant; a card's layout varies smoothly with its direction (a stepped
-hash split a card at its seam). Flowers keep their texture's petals.
+foot and its own value and variant. The layouts are drawn once, not tested per fragment
+(painter-cost-stripes): `PainterTuftAtlas` (`painter/painter_tuft_atlas.gd`) draws 16 of them into a
+texture array (32 px a layer: the cut as a distance field, the dab's hash, the point's place in its
+dab), one array per tuft aspect rounded to powers of 1.35 (core's 13 meadow aspects make 4, about
+30 ms each on the first painted look), and PainterSurfaces sets it on every wide grass stand-in
+(`tuft_atlas`). The vertex stage picks a card's layer from the tuft's seed and the card's
+direction (`tuft_card`); the fragment reads it in one fetch and never fetches the tuft's own
+texture, so a card costs what the texture's cut did. Why: the dab test in the fragment, from three
+flat vec4 varyings a card, cost 0.10 to 0.13 ms at the village's home view even with the test
+skipped at run time (its presence alone, measured by a run-time switch in one shader), the
+varyings 0.05 more in winter; running it, the early discard and the forced alpha cost nothing.
+The distance field also rounds the rim's points (the per-fragment dabs read as pointed leaves at
+eye level). Flowers keep their texture's petals.
 Thinning is the sheet's: `keep-grass` (0.6) and `keep-flower` (0.4) in groups of a slow world
 noise, both in the colour and the shadow pass (winter 0.45 and 0.25: fewer tufts stand above the
 snow).
@@ -251,12 +262,23 @@ tip's plant, selector and solid shaders and the small layout swapped in at run t
 A B A B, 1920x1080, vsync off, GPU medians): village home summer +0.17 to +0.20 ms, home winter
 +0.13 to +0.15, eye summer +0.00 to +0.01, eye winter +0.01 to +0.04; forest tokens summer and winter
 +0.00, forest home summer +0.04 to +0.07. The bushes cost nothing (tip shaders with the new layout:
-+0.00 at village home summer); all of the excess is the tuft path, and not its dab test: the same
-shader with the dabs switched off cost the same (+0.15 to +0.2 at home), and moving the layout to the
-vertex stage, four dabs and no sines, packing the varyings did not move it. Over the +0.05 budget at
-the village's home view; open for the owner. Also open: at sun 20 and token zoom a large bush's
-clumps show broad pale and dark bands with straight edges (the block-in's tone steps on each
-clump's smooth pad; larger with the four-pad layout), which the strokes do not break.
++0.00 at village home summer); all of the excess was the tuft path. painter-cost-stripes bisected it
+(one sitting, the plant shader swapped at run time: tip, tip on the branch's selector, plus the
+varyings, the branch with the dab test skipped by a uniform, without the early discard, without
+the forced alpha): the step is the dab test's presence in the shader, not its running (see
+"Surfaces": the dab layouts are now `PainterTuftAtlas`' texture array). After it, against
+b684d777's plant shader: village home summer +0.02 to +0.05, home winter +0.00 to +0.03, eye
+-0.01 to +0.02, forest tokens and home +0.00.
+
+A bush's clump is shaded with a dab edge (painter-cost-stripes): its tone steps ran as straight
+parallel bands across each smooth pad (striped beach balls at every zoom). The block-in marks a
+bush's masses (`v_bseed` 2 from the row's texel 3 w) and gives them the same one noise at a dab's
+size (`BUSH_DAB_F` 4.6 per metre) as strong as a stroke's tone jitter (`BUSH_DAB_JIT` 0.7), so
+light and shade meet in a broken, scalloped edge; the snow cap's edge takes the same noise
+(`BUSH_SNOW_JIT` 0.9) and breaks into a cluster of white dabs, not one flat ellipse. Oaks and the
+other crowns are unchanged; forest tokens summer 20: old block-in 4.649 / new 4.614 ms (no cost).
+Open: the patches read a little as camouflage blotches at token zoom (larger than a stroke), and
+winter bushes carry little snow at sun 45.
 
 - The host, `PainterTrees` (`painter/trees/painter_trees.gd`), is made by PainterSurfaces (by
   path) and driven by its events: paint() on a Painted state, sync() on the scatter's

@@ -416,7 +416,14 @@ func _paint_species() -> Array:
 				var stand_in := _stand_in(original, entry, float(record["height"]))
 				if stand_in == null:
 					continue
-				stand_in.set_shader_parameter(&"selector_extent", mesh.get_aabb().size * 0.5)
+				var extent := mesh.get_aabb().size * 0.5
+				stand_in.set_shader_parameter(&"selector_extent", extent)
+				if int(entry["kind"]) == PainterPlantRoles.KIND_GRASS:
+					# A wide tuft is cut by painted dabs from the layouts' array (PainterTuftAtlas).
+					stand_in.set_shader_parameter(
+						&"tuft_atlas",
+						PainterTuftAtlas.for_tuft(extent, maxf(float(record["height"]), 0.05))
+					)
 				mesh.surface_set_material(i, stand_in)
 				var swap := [mesh, i, original, stand_in, entry]
 				_swapped.append(swap)
