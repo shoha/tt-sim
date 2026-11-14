@@ -270,14 +270,18 @@ void fragment() {
 			dark += contact * (1.0 - smoothstep(0.0, contact_m, hm));
 		}
 		float cr = course_m > 0.05 ? course_m : (pattern == 2 ? 0.3 : (pattern == 3 ? 0.24 : 0.34));
+		float block = 0.0;
 		if (wall && pattern == 1) {
 			// Stone, dry-brushed (p_stones; card painter-buildings-fix: soft blurred blocks read as
 			// an upscaled texture): it reads at home zoom and fades when a course is under about
 			// three pixels.
 			vec3 st = p_stones(f, cr, fw, 3.0 + acc * 17.0);
-			float block = 1.0 - smoothstep(0.15, 0.35, fw / cr);
-			dark += st.x * block;
-			light += st.y * block;
+			block = 1.0 - smoothstep(0.15, 0.35, fw / cr);
+			// Where the stones are drawn, they carry the wall's light and dark: the wall's dabs
+			// (laid along the courses) read as long pale bands at eye level, so they give way to
+			// the stones' own (card painter-buildings-fix3).
+			dark += (st.x - smoothstep(dab_hi, dab_hi + 0.1, bn) * dab) * block;
+			light += (st.y - (1.0 - smoothstep(0.28, 0.38, bn)) * dab * 0.8) * block;
 			variant = clamp(variant + st.z * 0.6 * block, 0.0, 1.0);
 			// A tree's dappled light breaks along the stones: each stone moves the cast edge its
 			// own way (pale ovals of light on the wall read as glare, card painter-buildings-fix2).
@@ -314,10 +318,11 @@ void fragment() {
 			if (wall) {
 				if (pattern == 1) {
 					// Stone: one broad dry stroke along a course here and there (the stones and
-					// their joints are p_stones').
+					// their joints are p_stones'), only where the stones are not drawn: a light
+					// one read as a pale band along the course (card painter-buildings-fix3).
 					vec2 m = p_wash(f, cr, cr * 3.0, 0.3, 0.22, 0.5, 11.0 + acc * 9.0);
-					dark += m.x * 0.3 * broad;
-					light += m.y * 0.3 * broad;
+					dark += m.x * 0.3 * broad * (1.0 - block * 0.5);
+					light += m.y * 0.3 * broad * (1.0 - block);
 				} else if (pattern == 2 || pattern == 3) {
 					vec2 g = pattern == 2 ? f : f.yx;
 					dark += p_line(g.y / cr, 0.12) * step(0.3, p_n2(vec2(g.x * 0.9, floor(g.y / cr)), 4.0)) * 0.55;
@@ -365,7 +370,16 @@ void fragment() {
 				light += p_band(across_b, 0.66, 0.22) * 0.45 * smoothstep(0.1, 0.3, p_n2(vec2(f.x * 1.5, acc * 7.0), 1.0));
 				dark += p_band(across_b, 0.3, 0.2) * 0.4;
 				float rim = min(across_b, 1.0 - across_b) + (p_n2(vec2(f.x * 2.6, acc * 3.0), 9.0) - 0.5) * 0.14;
-				dark += (1.0 - smoothstep(0.04, 0.17, rim)) * 0.7 * (code == 4 ? 1.0 : 0.0);
+				// Up close a finer wander on the rim and a lighter, wandering outer lip, so the
+				// edge the eye follows is the brushed one, not the mesh's straight one (card
+				// painter-buildings-fix3: beams read ruler straight at eye level).
+				float side = across_b < 0.5 ? 1.0 : 2.0;
+				float fine = (p_n2(vec2(f.x * 7.0, side * 5.0 + acc * 3.0), 10.0) - 0.5) * detail;
+				rim += fine * 0.16;
+				float lip = (code == 4 ? detail : 0.0)
+					* (1.0 - smoothstep(0.0, 0.03 + 0.09 * (fine + 0.5), min(across_b, 1.0 - across_b)));
+				dark += (1.0 - smoothstep(0.04, 0.17, rim)) * 0.7 * (code == 4 ? 1.0 : 0.0) * (1.0 - lip);
+				light += lip * 0.7;
 			} else if (code == 5) {
 				// A door: plank seams, a wandering grain, one brace stroke, a darker head.
 				float x = f.y + sin(f.x * 4.0 + acc * 20.0) * 0.012;
@@ -411,19 +425,27 @@ void fragment() {
 	float snow_dark = 0.0;
 	float snow_light = 0.0;
 	float soft = 0.01;
+	float swell = 0.0;
 	if (snow > 0.0) {
 		if (code == 10 || (snow_body && code > 0 && roofy && code != 7)) {
 			// The blanket (code 10, PainterMannerBlanket), or a roof piece under it (its own
 			// marks hidden whole: dashes through the snow read as dirt, cards
 			// painter-buildings-fix and -fix2): all snow, with broad brush washes, lighter or
 			// bluer, laid along the eave, the light turning softly along them; a blanket's shade
-			// (the code's fraction) darkens it to blue under the eave's lip.
+			// (the code's fraction) darkens it to blue under the eave's lip. Under them the mass
+			// (card painter-buildings-fix3: the middle read flat white): broad soft strokes down
+			// the fall line, a hollow blue-white and a swell warm-white, their edges dragged dry,
+			// low, so the blanket reads modelled at home zoom without a pattern.
 			float under = code == 10 ? clamp(course_m / 0.9, 0.0, 1.0) : 0.0;
 			cover = 1.0;
 			hide = 1.0;
 			vec2 sw = p_wash(f, 0.5, 1.6, 0.55, 0.32, 0.45, 41.0 + acc * 7.0);
-			snow_dark = sw.x * 0.45 * broad * (1.0 - under) + under * 0.6;
-			snow_light = sw.y * 0.6 * broad * (1.0 - under);
+			float mass = p_n2(vec2(f.x * 0.55, f.y * 0.36) + acc * 13.0, 47.0)
+				+ (p_n2(vec2(f.x * 2.2, f.y * 1.4), 48.0) - 0.5) * 0.3;
+			float hollow = smoothstep(0.52, 0.66, mass) * (1.0 - under);
+			swell = (1.0 - smoothstep(0.34, 0.48, mass)) * (1.0 - under);
+			snow_dark = sw.x * 0.3 * broad * (1.0 - under) + under * 0.6 + hollow * 0.26;
+			snow_light = sw.y * 0.5 * broad * (1.0 - under);
 			wob = 0.5 + (sw.y - sw.x) * 0.45;
 			soft = 0.06;
 		} else if (strip || (snow_body && code == 6)) {
@@ -452,6 +474,7 @@ void fragment() {
 	f_shd = mix(mix(shd, deep, dark), mid, light * 0.5);
 	f_mid = mix(mix(mid, shd, dark), lit, light * 0.6);
 	f_lit = mix(mix(lit, mid, dark), lit * 1.06, light);
+	f_lit = mix(f_lit, f_lit * vec3(1.0, 0.975, 0.9), swell * 0.6);
 	f_n = n;
 	f_wob = wob;
 	bool paint_slope = on_slope && cover < 0.5;

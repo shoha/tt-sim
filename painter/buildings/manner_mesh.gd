@@ -94,6 +94,9 @@ const DOOR_LEAN := 0.045
 ## from the wall foot to the eave (walls, cut nowhere in the draw, stay whole).
 const COLLIDER_CUT_ABOVE := 0.6
 const FORMAT := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
+## The shortest wall edge searched for a T (_wall_ts): the wander's bend across a shorter edge opens
+## under a millimetre or two, and the short reveals and sills are most of a wall's edges.
+const T_EDGE_M := 0.5
 
 
 ## The wander at map point `p` (`foot` the wall foot and `eave` the eave height, map Y; `phase` from
@@ -282,15 +285,19 @@ static func build(
 			_cut(m, tri, mids, cut_idx, BEAM_SEG_M, m.rec[tri[0]]["u"])
 		else:
 			cut_idx.append_array(PackedInt32Array(tri))
+	var ts := _wall_ts(m, cut_idx)
 	if bool(opts.get("fringe", true)):
 		_fringe(m, recs, colours, cut_idx)
 	if cut:
 		_hand(m, opts)
 	for k in m.pos.size():
 		m.pos[k] += wander_at(m.pos[k], opts)
+	m.pos = _close_ts(m.pos, ts)
 	var moved := src.duplicate()
 	for k in moved.size():
 		moved[k] += wander_at(moved[k], opts)
+	# The walls are not cut, so their vertices are the source's, in order.
+	moved = _close_ts(moved, ts)
 	var shadow := arrays.duplicate()
 	shadow[Mesh.ARRAY_VERTEX] = moved
 	var draw: Array = []
@@ -389,6 +396,71 @@ static func _cut(
 
 static func _is_beam(rec: Variant) -> bool:
 	return rec != null and str(rec["kind"]) == "beam"
+
+
+## The Ts of a mesh's wall triangles: [vertex, edge end a, edge end b, share along a-b] for every
+## vertex that lies inside another wall triangle's edge (an opening's corner on the long edge
+## beside it). The wander bends such an edge's two ends but not the vertex's place on it, and the
+## gap, a few millimetres, drew a hairline down the plaster (card painter-buildings-fix3: gaps up
+## to 17 mm on the half-timber house; the T's vertex is often another wall record's, a pier's
+## beside the opening). Only upright edges, which drew the hairlines: searching the level ones
+## too (Ts under sills and at the eave, gaps up to 23 mm on the half-timber house, many under
+## beams and the roof) cost a house about 30 ms of its 100 ms build. An upright edge looks for
+## its Ts among the vertices in the 5 cm plan cells it passes over. Pure.
+static func _wall_ts(m: Grow, idx: PackedInt32Array) -> Array:
+	var pos := m.pos
+	var by_xz := {}
+	var seen := {}
+	var edges: Array[Vector2i] = []
+	for t in range(0, idx.size() - 2, 3):
+		if m.code(idx[t]) != CODE_WALL:
+			continue
+		for e in 3:
+			var a := idx[t + e]
+			var b := idx[t + (e + 1) % 3]
+			if not seen.has(a):
+				seen[a] = true
+				var kxz := Vector2i(roundi(pos[a].x * 20.0), roundi(pos[a].z * 20.0))
+				if by_xz.has(kxz):
+					by_xz[kxz].append(a)
+				else:
+					by_xz[kxz] = [a]
+			var ab := pos[b] - pos[a]
+			if absf(ab.y) > T_EDGE_M and absf(ab.y) > 0.95 * ab.length():
+				var key := Vector2i(mini(a, b), maxi(a, b))
+				if not seen.has(key):
+					seen[key] = true
+					edges.append(key)
+	var found := {}
+	for edge in edges:
+		var pa := pos[edge.x]
+		var pb := pos[edge.y]
+		var ab := pb - pa
+		var len2 := ab.length_squared()
+		var lo := Vector2i(roundi(minf(pa.x, pb.x) * 20.0), roundi(minf(pa.z, pb.z) * 20.0))
+		var hi := Vector2i(roundi(maxf(pa.x, pb.x) * 20.0), roundi(maxf(pa.z, pb.z) * 20.0))
+		for i in range(lo.x - 1, hi.x + 2):
+			for j in range(lo.y - 1, hi.y + 2):
+				var cell: Variant = by_xz.get(Vector2i(i, j))
+				if cell == null:
+					continue
+				for k: int in cell:
+					if k == edge.x or k == edge.y or found.has(k):
+						continue
+					var p := pos[k]
+					var s := (p - pa).dot(ab) / len2
+					if s > 0.001 and s < 0.999 and p.distance_squared_to(pa + ab * s) < 1e-6:
+						found[k] = [k, edge.x, edge.y, s]
+	return found.values()
+
+
+## `pos` with every T's vertex back on its edge (`ts` from _wall_ts; twice, for a T whose edge
+## ends on another T). Pure.
+static func _close_ts(pos: PackedVector3Array, ts: Array) -> PackedVector3Array:
+	for _pass in 2:
+		for t: Array in ts:
+			pos[t[0]] = pos[t[1]].lerp(pos[t[2]], float(t[3]))
+	return pos
 
 
 ## The outward normal of each wall face by its footprint side (`walls` for build's opts). Pure.

@@ -565,6 +565,43 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   read faceted; broad pale patches along the stone courses at eye level; vertical hairlines on
   the timber and dormered houses' plaster (likely T-junction cracks at the openings,
   undiagnosed); the dormered house's chimney pad reads as a white square frame.
+- **Buildings fix 3 (card painter-buildings-fix3, 2026-11-13; look-pending).** (1) Yard props:
+  the yard shader no longer flips its normal by FRONT_FACING. The dressing soup's shapes wind
+  the other way (their outer faces are back faces), so the flip lit and capped every prop from
+  inside: its top had n.y < 0 and never took snow. The authored normals point outward and are used
+  as they are. A blob (a leaf or stone prop that is not flat) takes the crown hand: it is cut
+  where its interpolated radial normal faces the eye less than 0.3 plus 0.32 times a ridged-noise
+  seam (a round, scalloped outline; the shadow pass cuts the same from the light), its light turns
+  by a lobe noise (0.5) and its seams darken. Winter snow caps it by the radial n.y with a
+  scalloped edge; stones, lids and steps cap whole, tuft blades in patches. Triangles unchanged.
+  (2) Blanket: broad strokes run down the fall line (a mass noise 0.55 by 0.36 per m, dragged),
+  with hollows toward the snow's mid blue (0.26) and swells warm-white (the lit tone times
+  (1, 0.975, 0.9) at 0.6); the small washes are softer (0.3 dark, 0.5 light). A verge's roll
+  normal turns halfway (`ROLL_TURN` 0.5) and the taper's normals lean back toward the slope's by
+  `THIN_FLAT` 0.5 times its thinness, so the porch's shaded verge no longer catches a bright
+  shoulder. A chimney's cushion has upright normals and its collar the slope's; a stack whose
+  collar would reach past the slope's top (at the ridge, where the plane runs on into the air:
+  the dormered house's "white square frame") gets no collar. (3) Plaster hairlines were
+  T-junctions: a wall vertex lying inside another face's long upright edge (the half-timber
+  pier edges, with Ts at the sill and head heights) moved apart from it under the wander, 4.6 to
+  16.6 mm. `PainterMannerMesh._wall_ts` finds each wall vertex lying inside an upright wall edge
+  of 0.5 m or more (5 cm plan buckets) and `_close_ts` puts it back on its moved edge, in the draw
+  and the shadow arrays; upright gaps measure 0 after. Level Ts are not searched (all edges cost
+  about 30 ms more a house); the worst level gap left is 23 mm on the half-timber plaster and
+  7.8 mm at the stone walls' eaves. (4) Stone: where the stones are drawn, the wall's light dabs
+  (laid along the courses) and the course wash give way to each stone's own light and dark, so a
+  pale patch is one stone with brushed edges; far views are unchanged. (5) Beams: a finer rim
+  wander (7 per m) and a lighter outer lip of wandering width, both close up only. Cost (one
+  interleaved sitting, 1920x1080, vsync off, sun 20, order tip new new tip per mood, the tip's
+  shaders swapped in at run time on the same meshes; indicative): new over the tip at home, mid,
+  far, eye +0.04, +0.01, +0.01, +0.02 ms for 3 houses and +0.00, +0.00, +0.02, +0.01 for 12 in
+  summer; -0.00, -0.02, +0.00, -0.00 and +0.01, +0.01, -0.00, +0.01 in winter. Primitives and
+  draw calls are identical in every view, main and shadow. The T search adds 1-7 ms a wall mesh
+  headless (half-timber plaster 15-23 ms against 13-16); nothing runs per frame. Open: level T
+  gaps; a diagonal pale cast-light streak across several stones at eye level; the beams still
+  read near straight at eye distance; the red bloom spikes stay small pyramids. Frames:
+  `docs/research/2026-11-09-prototypes/compare/painter_final5/`; numbers in
+  `docs/plans/handoffs/painter-a1.md` "Buildings fix 3".
 - **Its cost (card painter-manner-b, one interleaved sitting, 1920x1080, vsync off, summer sun
   45, order Classic A3b B B A3b Classic, each the mean of its pair; indicative, shared GPU, the
   pairs 0.0-0.06 ms apart).** B over Classic buildings (under the painted look): home, mid, far,

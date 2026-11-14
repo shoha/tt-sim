@@ -378,19 +378,21 @@ static func _pad(g: Strips, pad: Dictionary) -> void:
 			g.add(p + out * (depth + 0.025) + Vector3.UP * SILL_T_M * 0.2, out, 0.0, 2.0, size, 0.5)
 		g.band(rows[0], rows[1], 3)
 		return
+	# Upright normals throughout (card painter-buildings-fix3): turned out to the side, the
+	# cushion's rim took its own light and read as a white square frame round a blue top; one
+	# light over it reads as one cushion, its shape in its outline.
 	var rim := g.pos.size()
 	var corners := [-ha - hb, ha - hb, ha + hb, -ha + hb]
 	for corner: Vector3 in corners:
-		var dir := Vector3(corner.x, 0.0, corner.z).normalized()
-		g.add(c + corner * 1.08 - Vector3.UP * 0.02, dir + Vector3.UP * 0.3, 0.0, 0.0, size, 0.5)
+		g.add(c + corner * 1.08 - Vector3.UP * 0.02, Vector3.UP, 0.0, 0.0, size, 0.5)
 	var ring := g.pos.size()
 	for corner: Vector3 in corners:
-		var dir := Vector3(corner.x, 0.0, corner.z).normalized()
-		g.add(c + corner * 0.8 + Vector3.UP * PAD_T_M * 0.75, Vector3.UP + dir * 0.6, 0.0, 1.0, size, 0.5)
+		g.add(c + corner * 0.8 + Vector3.UP * PAD_T_M * 0.75, Vector3.UP, 0.0, 1.0, size, 0.5)
 	var crown := g.add(c + Vector3.UP * PAD_T_M, Vector3.UP, 0.0, 2.0, size, 0.5)
 	for j in 4:
 		var k := (j + 1) % 4
-		var facing := g.nor[rim + j] + g.nor[rim + k]
+		var out: Vector3 = corners[j] + corners[k]
+		var facing := Vector3(out.x, 0.0, out.z).normalized() + Vector3.UP * 0.3
 		g.tri(rim + j, ring + j, ring + k, facing)
 		g.tri(rim + j, ring + k, rim + k, facing)
 		g.tri(ring + j, crown, ring + k, Vector3.UP)
@@ -426,6 +428,15 @@ static func _collar(
 	var hb: Vector3 = pad["b"]
 	var size := Vector2(ha.length() * 2.0, 2.0)
 	var offs := [-ha - hb, -hb, ha - hb, ha, ha + hb, hb, -ha + hb, -ha]
+	# A stack at the ridge gets none: its uphill heap reached past the slope's top, where the plane
+	# runs on in the air, and drew a white frame floating round the stack (card
+	# painter-buildings-fix3, the dormered house).
+	var top := float(roof["v_len"])
+	for off: Vector3 in offs:
+		var heap := maxf(Vector3(off.x, 0.0, off.z).normalized().dot(uphill), 0.0)
+		var reach: Vector3 = c + off * (COLLAR_REACH + 0.8 * heap) - (roof["origin"] as Vector3)
+		if reach.dot(roof["v"]) > top:
+			return
 	var rim := g.pos.size()
 	for off: Vector3 in offs:
 		var dir := Vector3(off.x, 0.0, off.z).normalized()
@@ -439,7 +450,9 @@ static func _collar(
 		var p := c + off * 1.05
 		var rise := COLLAR_T_M * hold * (0.5 + heap)
 		p.y = _plane_y(roof, p) + _on_blanket(roof, lay, hold, p, phase) + rise
-		g.add(p, n + dir * 0.6 + Vector3.UP * 0.4, 0.0, 1.0, size, 0.5)
+		# The slope's own normal, so the collar shades as the blanket it heaps up from, not as a
+		# frame round the stack (card painter-buildings-fix3).
+		g.add(p, n, 0.0, 1.0, size, 0.5)
 	var ring := rim + offs.size()
 	for j in offs.size():
 		var k := (j + 1) % offs.size()

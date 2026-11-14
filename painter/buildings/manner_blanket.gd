@@ -43,6 +43,11 @@ const DROOP_M := 0.08
 ## How much the blanket cools toward a thin edge (its shade where the taper is at its thinnest),
 ## so the middle reads the thickest.
 const THIN_SHADE := 0.22
+## How far a thin edge's normal leans back to the slope's (at its thinnest) and how far a verge's
+## roll turns outward (card painter-buildings-fix3): the taper and the roll read by their shape and
+## their cooling, not as a band of their own light.
+const THIN_FLAT := 0.5
+const ROLL_TURN := 0.5
 const VERGE_OVER_M := 0.05
 ## The sag's share of the thickness, and the heap on a crest (full hold).
 const SAG := 0.25
@@ -287,10 +292,12 @@ static func lay_into(
 	var pos := PackedVector3Array()
 	var nor := PackedVector3Array()
 	var shade := PackedFloat32Array()
+	var thin := PackedFloat32Array()
 	var fixed := PackedByteArray()
 	pos.resize(nc * nr)
 	nor.resize(nc * nr)
 	shade.resize(nc * nr)
+	thin.resize(nc * nr)
 	fixed.resize(nc * nr)
 	for ri in nr:
 		var t := float(rows[ri][0])
@@ -302,13 +309,17 @@ static func lay_into(
 			var h := thickness(full, s, t, base)
 			var at := base + n * h
 			var dn := Vector3.ZERO
-			var sh := THIN_SHADE * pow(1.0 - tapers(full, s, t), 1.5)
+			var th := 1.0 - tapers(full, s, t)
+			var sh := THIN_SHADE * pow(th, 1.5)
+			thin[ri * nc + ci] = th
 			var bent := false
 			if ck == 1 or ck == 2:
 				var o := o_left if s < 0.5 else o_right
 				var tuck := ck == 2
 				at += o * (VERGE_OVER_M * (0.3 if tuck else 1.0)) - n * (h + (0.06 if tuck else 0.015))
-				dn += (-n + o * 0.3) if tuck else (o - n * 0.3)
+				# The roll turns halfway: turned whole, a shaded slope's verge facing the sun lit up
+				# as a bright band (card painter-buildings-fix3).
+				dn += (-n + o * 0.3) if tuck else (o * ROLL_TURN + n * (1.0 - ROLL_TURN))
 				sh = maxf(sh, 0.6 if tuck else 0.2)
 				bent = true
 			elif ck == 3:
@@ -364,7 +375,8 @@ static func lay_into(
 			if c.length_squared() < 1e-10:
 				nor[k] = n
 			else:
-				nor[k] = c if c.dot(n) > 0.0 else -c
+				c = (c if c.dot(n) > 0.0 else -c).normalized()
+				nor[k] = c.lerp(n, THIN_FLAT * thin[k]).normalized()
 	var size := Vector2(float(roof.get("u_len", 1.0)), float(roof.get("v_len", 1.0)))
 	var acc := float(seed % 1000) / 1000.0
 	var first := g.pos.size()
