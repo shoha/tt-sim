@@ -1,5 +1,7 @@
 {
 	"assets": {
+		"Bush_BerryBush": "bush",
+		"Bush_Bush_": "bush",
 		"Tree_Birch": "birch",
 		"Tree_Broadleaf": "lime",
 		"Tree_Oak": "oak",

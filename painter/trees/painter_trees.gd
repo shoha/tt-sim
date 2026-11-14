@@ -27,6 +27,15 @@ extends RefCounted
 ## document's biome density at the row, seed), so a peer grows the same tree. Colours are
 ## PainterTreeTones' (the sheet's, following the mood and the sun); the sun's direction is the
 ## foliage_sun global the shaders read, the wind tt-sim's globals.
+##
+## Bushes (painter-bushes). A row of a card-built bush (PainterTreeSpecies.BUSH) is drawn here too,
+## as a crown with no skeleton: PainterTreeBush lays a few leaf pads in the asset mesh's box at the
+## row's scale (no box until the asset has resolved, so no bush until then), and its GLB chunks hide
+## as a tree's do. A bush's strokes and pads are a crown's, in a row of its own (the tree table's
+## texel 3 w is 2: the token window thins it stroke by stroke but never takes it whole). Bushes sit
+## in cells of their own, BUSH_CELL_M wide, whose nodes instance smaller blocks (BUSH_ELL_PER_INST
+## spheres, BUSH_SLOT_PER_INST stroke slots), so a bush does not pay for a tree's 64 slots; and no
+## tree lists a bush among its neighbouring forms.
 
 const STROKE_SHADER := "res://painter/shaders/painter_tree_stroke.gdshader"
 const BLOCKIN_SHADER := "res://painter/shaders/painter_tree_blockin.gdshader"
@@ -46,11 +55,19 @@ const LEVELS := 3
 ## near-neutral step, so a stem in its crown's shadow stays its own brown (painter-a2a4: a red-heavy
 ## 0.6/0.55/0.55 read dark chocolate under every crown).
 const BARK_CAST_TINT := Vector3(0.66, 0.66, 0.68)
+## A bush cell's width (metres) and its nodes' instance blocks (a bush is at most four pads and,
+## but for a very large one, nine slots: PainterTreeBush).
+const BUSH_CELL_M := 15.0
+const BUSH_ELL_PER_INST := 4
+const BUSH_SLOT_PER_INST := 9
 
-## key (PainterTreeSpecies.key_of) -> {"row", "d", "pos", "cell", "species"} for every tree drawn.
+## key (PainterTreeSpecies.key_of) -> {"row", "d", "pos", "cell", "species", "bush"} for every tree
+## and bush drawn.
 var trees: Dictionary = {}
 ## cell -> {"keys": {key: true}, "nodes": [5 MultiMeshInstance3D]}.
 var cells: Dictionary = {}
+## The bushes' cells (BUSH_CELL_M), as `cells`.
+var bush_cells: Dictionary = {}
 
 var _map: Node3D = null
 var _scatters: Array[AuthoredScatter] = []
@@ -167,6 +184,7 @@ func release() -> void:
 	_root = null
 	trees.clear()
 	cells.clear()
+	bush_cells.clear()
 	_rows.clear()
 	_free_rows.clear()
 	_layers.clear()
@@ -211,8 +229,9 @@ func hidden_nodes() -> Array[Node3D]:
 	return out
 
 
-## Every mapped tree row of `scatters` as key -> {"pos", "species", "asset", "cx", "seed"} (pure in
-## the rows and the document).
+## Every mapped tree row of `scatters` as key -> {"pos", "species", "asset", "cx", "seed"}, and a
+## bush's also "box" (PainterTreeBush.box_of; a bush whose asset has not resolved is left out)
+## (pure in the rows, the document and the resolved meshes).
 static func wanted(scatters: Array[AuthoredScatter], doc: MapDocument) -> Dictionary:
 	var out := {}
 	var stride := MapDocument.ROW_STRIDE
@@ -220,10 +239,19 @@ static func wanted(scatters: Array[AuthoredScatter], doc: MapDocument) -> Dictio
 		if not is_instance_valid(scatter):
 			continue
 		var by_asset := scatter.rows_by_asset()
+		var resolved := {}
 		for asset_id: String in by_asset:
 			var species := PainterTreeSpecies.species_for(asset_id)
 			if species == "":
 				continue
+			var aabb := AABB()
+			if PainterTreeSpecies.is_bush(species):
+				if resolved.is_empty():
+					resolved = scatter.resolved_species()
+				var mesh: Mesh = (resolved.get(asset_id, {}) as Dictionary).get("mesh")
+				if mesh == null:
+					continue
+				aabb = mesh.get_aabb()
 			var rows: PackedFloat32Array = by_asset[asset_id]
 			for i in rows.size() / stride:
 				var p := Vector3(rows[i * stride], rows[i * stride + 1], rows[i * stride + 2])
@@ -236,6 +264,8 @@ static func wanted(scatters: Array[AuthoredScatter], doc: MapDocument) -> Dictio
 					"cx": PainterTreeSpecies.context(asset_id, scale, p, density_at(doc, p)),
 					"seed": PainterTreeSpecies.seed_of(key)
 				}
+				if PainterTreeSpecies.is_bush(species):
+					out[key]["box"] = PainterTreeBush.box_of(aabb, scale)
 	return out
 
 
@@ -359,7 +389,8 @@ func _grow(keys: Array, want: Dictionary) -> void:
 	for key: Vector3i in keys:
 		var w: Dictionary = want[key]
 		# (The architecture cache is filled here, on the main thread, before any worker reads it.)
-		PainterTreeSpecies.architecture(w["species"])
+		if not PainterTreeSpecies.is_bush(w["species"]):
+			PainterTreeSpecies.architecture(w["species"])
 		jobs.append(w)
 		_pending[key] = true
 	var out: Array = []
@@ -380,6 +411,13 @@ func _grow(keys: Array, want: Dictionary) -> void:
 static func _grow_job(i: int, start: int, jobs: Array, out: Array) -> void:
 	var w: Dictionary = jobs[start + i]
 	var species: String = w["species"]
+	if PainterTreeSpecies.is_bush(species):
+		var d := PainterTreePack.pack(
+			PainterTreeBush.masses(w["box"], int(w["seed"])), int(w["seed"]), 3.0, 0
+		)
+		d["bush"] = true
+		out[start + i] = d
+		return
 	var masses := PainterTreeGrowth.tree(
 		PainterTreeSpecies.architecture(species),
 		w["cx"],
@@ -451,12 +489,17 @@ func _install_tree(key: Vector3i, w: Dictionary, d: Dictionary, dirty: Dictionar
 	e["value"] = (PainterTreeSpecies._vnoise(p.x / 11.0 + 90.0, p.z / 11.0 + 7.0) - 0.5) * 0.09
 	e["moss"] = smoothstep(0.55, 1.0, float((w["cx"] as Dictionary)["age"]))
 	_place(row, d)
-	var cell := Vector2i(floori(p.x / CELL_M), floori(p.z / CELL_M))
-	if not cells.has(cell):
-		cells[cell] = {"keys": {}, "nodes": []}
-	cells[cell]["keys"][key] = true
-	dirty[cell] = true
-	trees[key] = {"row": row, "d": d, "pos": p, "cell": cell, "species": w["species"]}
+	var bush := bool(d.get("bush", false))
+	var cell_m := BUSH_CELL_M if bush else CELL_M
+	var cell := Vector2i(floori(p.x / cell_m), floori(p.z / cell_m))
+	var store := bush_cells if bush else cells
+	if not store.has(cell):
+		store[cell] = {"keys": {}, "nodes": []}
+	store[cell]["keys"][key] = true
+	dirty[_dirty_key(cell, bush)] = true
+	trees[key] = {
+		"row": row, "d": d, "pos": p, "cell": cell, "species": w["species"], "bush": bush
+	}
 
 
 func _erase_tree(key: Vector3i, dirty: Dictionary) -> void:
@@ -471,9 +514,15 @@ func _erase_tree(key: Vector3i, dirty: Dictionary) -> void:
 	e["layer"] = -1
 	e["texels"] = 0
 	_free_rows.append(row)
-	(cells[t["cell"]]["keys"] as Dictionary).erase(key)
-	dirty[t["cell"]] = true
+	var bush: bool = t["bush"]
+	((bush_cells if bush else cells)[t["cell"]]["keys"] as Dictionary).erase(key)
+	dirty[_dirty_key(t["cell"], bush)] = true
 	trees.erase(key)
+
+
+## A dirty set's key: a tree cell as itself, a bush cell as (x, z, 1).
+static func _dirty_key(cell: Vector2i, bush: bool) -> Variant:
+	return Vector3i(cell.x, cell.y, 1) if bush else cell
 
 
 func _new_row() -> int:
@@ -516,8 +565,11 @@ func _rebuild(dirty: Dictionary) -> void:
 		return
 	_flush()
 	_tables()
-	for cell: Vector2i in dirty:
-		_rebuild_cell(cell)
+	for k: Variant in dirty:
+		if k is Vector3i:
+			_rebuild_cell(bush_cells, Vector2i(k.x, k.y), true)
+		else:
+			_rebuild_cell(cells, k, false)
 
 
 func _layer_image(l: int) -> Image:
@@ -583,6 +635,9 @@ func _tables() -> void:
 	var grid := {}
 	for key: Vector3i in trees:
 		var t: Dictionary = trees[key]
+		if t["bush"]:
+			# (A bush is no tree's neighbouring form: the eight a tree lists stay its trees.)
+			continue
 		var gc := Vector2i(floori(t["pos"].x / 9.0), floori(t["pos"].z / 9.0))
 		if not grid.has(gc):
 			grid[gc] = []
@@ -636,8 +691,10 @@ static func _occluder(
 	occ[lines * 4 + ow + 2] = r.z
 
 
-func _rebuild_cell(cell: Vector2i) -> void:
-	var c: Dictionary = cells.get(cell, {})
+## Rebuilds the nodes of `cell` in `store` (cells, or bush_cells when `bush`: smaller blocks, no
+## limb ribbon, its slot left null).
+func _rebuild_cell(store: Dictionary, cell: Vector2i, bush: bool) -> void:
+	var c: Dictionary = store.get(cell, {})
 	if c.is_empty():
 		return
 	for node: Node in c["nodes"]:
@@ -648,8 +705,10 @@ func _rebuild_cell(cell: Vector2i) -> void:
 	c["nodes"] = []
 	var keys: Dictionary = c["keys"]
 	if keys.is_empty() or _root == null:
-		cells.erase(cell)
+		store.erase(cell)
 		return
+	var per_ell := BUSH_ELL_PER_INST if bush else PainterTreePack.ELL_PER_INST
+	var per_slot := BUSH_SLOT_PER_INST if bush else PainterTreePack.SLOT_PER_INST
 	var bufs: Array[PackedFloat32Array] = [
 		PackedFloat32Array(), PackedFloat32Array(), PackedFloat32Array()
 	]
@@ -660,22 +719,25 @@ func _rebuild_cell(cell: Vector2i) -> void:
 		var d: Dictionary = t["d"]
 		var xf := Transform3D(Basis.IDENTITY, t["pos"])
 		var row: int = t["row"]
-		PainterTreePack.add_instances(bufs[0], xf, row, int(d["n_ell"]), PainterTreePack.ELL_PER_INST)
+		PainterTreePack.add_instances(bufs[0], xf, row, int(d["n_ell"]), per_ell)
 		PainterTreePack.add_instances(bufs[1], xf, row, int(d["n_seg"]), PainterTreePack.SEG_PER_INST)
-		PainterTreePack.add_instances(bufs[2], xf, row, int(d["n_slots"]), PainterTreePack.SLOT_PER_INST)
+		PainterTreePack.add_instances(bufs[2], xf, row, int(d["n_slots"]), per_slot)
 		var b: AABB = d["aabb"]
 		b.position += t["pos"]
 		box = b if first else box.merge(b)
 		first = false
 	var meshes: Array[Mesh] = [
-		PainterTreeMeshes.block(),
-		PainterTreeMeshes.ribbon(),
-		PainterTreeMeshes.strokes(0),
-		PainterTreeMeshes.strokes(1),
-		PainterTreeMeshes.strokes(2)
+		PainterTreeMeshes.block(per_ell, bush),
+		null if bush else PainterTreeMeshes.ribbon(),
+		PainterTreeMeshes.strokes(0, per_slot),
+		PainterTreeMeshes.strokes(1, per_slot),
+		PainterTreeMeshes.strokes(2, per_slot)
 	]
 	var nodes: Array = []
 	for k in meshes.size():
+		if meshes[k] == null:
+			nodes.append(null)
+			continue
 		var node := MultiMeshInstance3D.new()
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -688,7 +750,7 @@ func _rebuild_cell(cell: Vector2i) -> void:
 		node.multimesh = mm
 		node.material_override = _materials[k]
 		node.custom_aabb = box.grow(BOUND_GROW)
-		node.name = "PainterTree_%d_%d_%d" % [cell.x, cell.y, k]
+		node.name = "%s_%d_%d_%d" % ["PainterBush" if bush else "PainterTree", cell.x, cell.y, k]
 		node.set_meta(META, true)
 		node.cast_shadow = (
 			GeometryInstance3D.SHADOW_CASTING_SETTING_ON
@@ -742,7 +804,8 @@ func _on_frame() -> void:
 	_lod = lod
 	for m in _materials:
 		m.set_shader_parameter(&"lod_level", lod)
-	for cell: Vector2i in cells:
-		var nodes: Array = cells[cell]["nodes"]
-		for k in range(2, nodes.size()):
-			(nodes[k] as Node3D).visible = level_shown(lod, k - 2)
+	for store: Dictionary in [cells, bush_cells]:
+		for cell: Vector2i in store:
+			var nodes: Array = store[cell]["nodes"]
+			for k in range(2, nodes.size()):
+				(nodes[k] as Node3D).visible = level_shown(lod, k - 2)

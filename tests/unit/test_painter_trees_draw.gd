@@ -9,6 +9,7 @@ extends GutTest
 ## built-in palette's temperate forest oak.
 
 const OAK := "temperate_forest_summer_s1/Tree_Oak_v0"
+const BUSH := "temperate_forest_summer_s1/Bush_Bush_v0_temperate_forest"
 const STATE := {"sheet": "core", "mood": "summer", "elevation": 45.0}
 const INCLUDE := "res://painter/shaders/painter_tree.gdshaderinc"
 
@@ -148,6 +149,41 @@ func test_painted_rows_become_cells_and_hide_the_glb_trees() -> void:
 		"strokes cast none"
 	)
 	surfaces.release()
+
+
+## painter-bushes: a card-built bush's row is drawn as a crown-only tree in a bush cell (smaller
+## blocks, no limb ribbon), its GLB chunk hides, and its tree-table row marks it a bush (texel 3 w
+## 2), so the token window never takes it whole.
+func test_a_bush_row_is_drawn_as_a_crown_and_hides_its_glb() -> void:
+	var scatter := _scatter()
+	scatter.set_cells({Vector2i(0, 0): {BUSH: _rows([Vector2(1, 1)]), OAK: _rows([Vector2(3, 1)])}})
+	var glb: Array[MultiMeshInstance3D] = []
+	for child in scatter.get_children():
+		if child is MultiMeshInstance3D and str(child.name).contains("Bush_Bush"):
+			glb.append(child)
+	assert_gt(glb.size(), 0, "the bush has GLB chunk nodes")
+	var surfaces := PainterSurfaces.new()
+	surfaces.paint(_map, STATE)
+	var trees := _painted(surfaces)
+	assert_eq(trees.trees.size(), 2, "the oak and the bush")
+	assert_eq(trees.cells.size(), 1, "the oak's cell")
+	assert_eq(trees.bush_cells.size(), 1, "the bush's cell")
+	var nodes: Array = trees.bush_cells.values()[0]["nodes"]
+	assert_eq(nodes.size(), 5)
+	assert_null(nodes[1], "a bush cell has no limb ribbon")
+	var block := (nodes[0] as MultiMeshInstance3D).multimesh
+	assert_eq(block.mesh, PainterTreeMeshes.block(PainterTrees.BUSH_ELL_PER_INST, true))
+	assert_eq(_node_count(), 9, "five tree nodes and four bush nodes")
+	for node in glb:
+		assert_false(node.visible, "GLB bush hidden")
+	for key: Vector3i in trees.trees:
+		var t: Dictionary = trees.trees[key]
+		if t["bush"]:
+			var row := PainterTreePack.tree_row(t["d"], 0, 0, 0, 0.0, 0.0, 0.0, 0.0)
+			assert_eq(row[15], 2.0, "the bush's crown flag")
+	surfaces.release()
+	for node in glb:
+		assert_true(node.visible, "GLB bush shown again")
 
 
 func test_a_paint_and_an_erase_change_exactly_those_trees() -> void:

@@ -182,15 +182,12 @@ Thinning is the sheet's: `keep-grass` (0.6) and `keep-flower` (0.4) in groups of
 noise, both in the colour and the shadow pass (winter 0.45 and 0.25: fewer tufts stand above the
 snow).
 
-A crown-kind plant (bushes, shrubs, hedges, ferns; the core berry bushes are card-built from long
-arching leaf straps) is painted on its ENVELOPE (painter-trees-fix2): a spheroid inscribed in its
-mesh's box (`selector_centre`, `selector_extent`, set from the mesh's AABB), round about the up
-axis. Each fragment is lit, toned and cut at the point where its view ray enters the envelope
-(`bush_front`), so every card along one ray takes the same lobe and tone, and a card reaching past
-the envelope is cut; the lobes (`bush_lobe`, a world Voronoi) turn as hemispheres over their
-cells, so the tone steps run round each lobe in arcs. The sun's shadow is read at the envelope
-point too (`LIGHT_VERTEX`). Before, each strap was toned at its own depth and the bush read as
-splayed hard-edged shards.
+A crown-kind plant (shrubs, hedges, ferns, the flowering bushes) is lit as one rounded form broken
+into lobes (`bush_lobe`, a world Voronoi) whose outline breaks between them (`bush_cut`).
+Core's card-built bushes (`Bush_BerryBush`, `Bush_Bush_`: long arching leaf straps) are not drawn
+here at all (painter-bushes): three shader rounds on their own cards read as splayed shards, then,
+painted on an envelope with Voronoi lobes (painter-trees-fix2), as faceted artichokes, and cost
+0.07 to 0.11 ms more. The painted trees' host draws them as crowns ("Trees", Bushes below).
 
 Snow on plants: the stand-ins take the sheet's `crown-deposit` (0 but in winter) as `frost`, in the
 snow's own two steps (the drift role on the ground's ramp): a tuft's top (by its height fraction,
@@ -209,6 +206,22 @@ Card A2a (painter-a2a, painter-a2a2) draws the painted trees: under Painted the 
 tree rows are grown by the painter's own generator and drawn by its block-in and stroke shaders in
 place of the GLB trees, which come back exactly when the look leaves Painted. Grow-in motion, the
 eye view's levels, rim trees, far meshes and fog are a later card's (A2b).
+
+Bushes (painter-bushes). Core's card-built bushes (`Bush_BerryBush`, `Bush_Bush_` in
+`species.json`'s asset table, species `bush`, not a grown species) are drawn by the same host as
+crowns with no skeleton: `PainterTreeBush` lays a dome and two or three lobes as leaf pads (the
+crowns' own `_pad` masses, one form group lit about the bush's middle) in the asset mesh's AABB at
+the row's scale (85 % of it; a bush waits for its asset to resolve). Its pads take a lower root
+floor (`min_roots` 6 a dome, 4 a lobe; spacing 0.7), so the village's 64 bushes hold 1001 roots,
+about 63 level-1 strokes a bush. Its colour is the sheet's bush (`bush-value`, `bush-chroma` of the
+leaf, `PainterTreeTones` row "bush" after the species), on a crown's ramp, so it frosts, gilds and
+darkens with the trees. Bushes sit in their own 15 m cells whose nodes instance smaller blocks (4
+spheres of 16 x 9, 9 stroke slots; no limb ribbon), never in a tree's eight neighbouring forms, and
+the tree row's texel 3 w is 2, so the token window never takes a bush whole. Measured against the
+tip's card bushes (interleaved, 1920x1080, vsync off, GPU medians): village eye -0.45 ms, home
+-1.0, forest tokens -0.75 to -0.78, forest home -0.95 (before the 16 x 9 sphere; that change is
+unmeasured). Open: at token zoom a large bush reads as a smooth dome with a banded light, fewer
+dabs than the trees beside it.
 
 - The host, `PainterTrees` (`painter/trees/painter_trees.gd`), is made by PainterSurfaces (by
   path) and driven by its events: paint() on a Painted state, sync() on the scatter's
@@ -290,7 +303,8 @@ eye view's levels, rim trees, far meshes and fog are a later card's (A2b).
   decide alike. It is for a small tree in front of a large token: the window used to take a
   birch's middle and limbs and leave its fringe floating beside Venusaur, and a crown taken alone
   would leave a bare trunk. A crown much wider than the zone (the oak over Venusaur, any tree over
-  an Eevee) keeps the plain rim. Letting the whole crown
+  an Eevee) keeps the plain rim. A bush (texel 3 w 2, below) is never taken whole: the window
+  thins it stroke by stroke and cuts its pads as a crown's. Letting the whole crown
   cast (`shadow_simple` 1) was tried for the window and dropped: it shaded nothing inside it (the
   crowns' shadows fall aside at sun 45). It runs after the canopy fades and only in the
   camera's pass (the sun's pass keeps the whole crown's shadow). Both shaders must hand their own

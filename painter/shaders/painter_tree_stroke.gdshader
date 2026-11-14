@@ -1012,7 +1012,8 @@ void vertex() {
 				int crown_row = int(INSTANCE_CUSTOM.x + 0.5);
 				vec4 crown_c = texelFetch(tree_tex, ivec2(3, crown_row), 0);
 				vec4 crown_r = texelFetch(tree_tex, ivec2(4, crown_row), 0);
-				if (crown_c.w > 0.5) {
+				// (w 2: a bush, PainterTreeBush: only thinned stroke by stroke, never taken whole.)
+				if (crown_c.w > 0.5 && crown_c.w < 1.5) {
 					crown = vec4((VIEW_MATRIX * (MODEL_MATRIX * vec4(crown_c.xyz, 1.0))).xyz,
 						max(crown_r.x, crown_r.z) * length(MODEL_MATRIX[0].xyz));
 				}

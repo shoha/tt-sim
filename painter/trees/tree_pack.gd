@@ -252,7 +252,8 @@ static func _pack12(
 		var ac: float = pow(sz.x * sz.z, 1.6)
 		var bc: float = pow(sz.y * sz.z, 1.6)
 		var area: float = 4.0 * PI * pow((ab + ac + bc) / 3.0, 0.625)
-		var roots: int = maxi(6, int(area / (sp0 * sp0)))
+		# (painter-bushes: a bush's pads take a lower floor, "min_roots"; a tree's never set it.)
+		var roots: int = maxi(int(pr.get("min_roots", 6)), int(area / (sp0 * sp0)))
 		var r0: float = minf(sz.x, minf(sz.y, sz.z))
 		var r2: float = maxf(sz.x, maxf(sz.y, sz.z))
 		var r1: float = sz.x + sz.y + sz.z - r0 - r2
@@ -490,7 +491,8 @@ static func tree_row(
 			c.x,
 			c.y,
 			c.z,
-			1.0 if d["has_crown"] else 0.0,
+			# 2 for a bush (PainterTreeBush, d "bush"): a crown the token window never takes whole.
+			(2.0 if d.get("bush", false) else 1.0) if d["has_crown"] else 0.0,
 			r.x,
 			r.y,
 			r.z,
