@@ -93,8 +93,11 @@ const float BUSH_LOBE = 0.34;
 const float BUSH_LOBE_MIN = 0.14;
 // How far a lobe's dome turns the form's normal at its edge (per lobe unit off its centre), and
 // the offset (lobe units) taken as the dome's edge.
-const float BUSH_TILT = 0.8;
+const float BUSH_TILT = 0.55;
 const float BUSH_LOBE_EDGE = 0.65;
+// How much a lobe darkens toward its seams (by its distance from its centre): a round puff with
+// dark creases between the lobes, not a run of flat-lit facets (painter-trees-fix2 round 2).
+const float BUSH_SEAM = 0.3;
 // How far round from the outline the lobes break it: |N.eye| under this between two lobes is not
 // drawn, so the outline is a run of round bumps rather than the GLB's polygon.
 const float BUSH_RIM = 0.4;
@@ -111,7 +114,7 @@ const float BUSH_ENVELOPE = 1.0;
 // how far one tuft's value steps from its neighbours', so a field of tufts reads as rounded
 // scallops, not one flat strip.
 const float TUFT_RIM = 0.3;
-const float TUFT_STEP = 0.1;
+const float TUFT_STEP = 0.15;
 
 // The bush's form centre for an instance at `origin` of `scale`.
 vec3 bush_mid(vec3 origin, float scale) {
@@ -215,7 +218,8 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 		vec3 d = lobe.xyz / BUSH_LOBE_EDGE;
 		n = normalize(n0 * sqrt(max(1.0 - min(dot(d, d), 0.96), 0.0)) + BUSH_TILT * d);
 		variant = mix(variant, lobe.w, 0.5);
-		mul = mix(0.9, 1.0, smoothstep(0.0, 0.3, h));
+		float seam = 1.0 - BUSH_SEAM * smoothstep(0.35, 0.8, length(lobe.xyz));
+		mul = mix(0.9, 1.0, smoothstep(0.0, 0.3, h)) * seam;
 		snow = frost > 0.0 && frost_up(n.y, wp) ? 1.0 : 0.0;
 	} else if (kind == 1 || kind == 3) {
 		n = vec3(0.0, 1.0, 0.0);
@@ -233,7 +237,7 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 			mul = 1.0;
 		}
 		// Snow caps a tuft's top, ragged by a small world noise.
-		snow = frost > 0.0 && h + 0.4 * (p_noise(wp * 3.1 + 7.0) - 0.5) > 1.0 - 0.6 * frost ? 1.0 : 0.0;
+		snow = frost > 0.0 && h + 0.4 * (p_noise(wp * 3.1 + 7.0) - 0.5) > 1.0 - 0.9 * frost ? 1.0 : 0.0;
 	} else {
 		variant = mix(variant, p_noise(wp * 0.9 + 17.0), 0.5);
 		snow = frost > 0.0 && frost_up(n.y - 0.3, wp) ? 1.0 : 0.0;
