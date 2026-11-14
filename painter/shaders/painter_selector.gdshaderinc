@@ -41,9 +41,8 @@ uniform float group_freq = 0.1;
 uniform bool casts_shadow = true;
 // The height of the selector's mesh in its own units (a leaf mass turns about its middle).
 uniform float selector_height = 1.0;
-// The mesh's box in its own units (PainterSurfaces sets them from its AABB): the centre and half
-// size. A bush's envelope and a tuft's rim read them.
-uniform vec3 selector_centre = vec3(0.0, 0.5, 0.0);
+// The mesh's half size in its own units (PainterSurfaces sets it from its AABB): a tuft's rim
+// reads it.
 uniform vec3 selector_extent = vec3(0.5);
 // Snow on the plants (the sheet's crown-deposit, 0 but in winter): the share of a plant's up side
 // (a tuft's top) under snow, and the snow's lit and shaded colours (the drift role on the ground's
@@ -91,25 +90,16 @@ vec3 selector_pal(float tone, float variant) {
 // BUSH_LOBE_MIN metres), its centre jittered inside the cell.
 const float BUSH_LOBE = 0.34;
 const float BUSH_LOBE_MIN = 0.14;
-// How far a lobe's dome turns the form's normal at its edge (per lobe unit off its centre), and
-// the offset (lobe units) taken as the dome's edge.
-const float BUSH_TILT = 0.55;
-const float BUSH_LOBE_EDGE = 0.65;
-// How much a lobe darkens toward its seams (by its distance from its centre): a round puff with
-// dark creases between the lobes, not a run of flat-lit facets (painter-trees-fix2 round 2).
-const float BUSH_SEAM = 0.3;
+// How far a lobe's dome turns the form's normal at its edge (per lobe unit off its centre).
+const float BUSH_TILT = 1.1;
 // How far round from the outline the lobes break it: |N.eye| under this between two lobes is not
 // drawn, so the outline is a run of round bumps rather than the GLB's polygon.
 const float BUSH_RIM = 0.4;
 // The highest tone a bush's lobe keeps in a cast shadow (0.1 shade, 0.5 middle).
 const float BUSH_CAST_T = 0.3;
-// painter-trees-fix2: a bush is painted on its ENVELOPE, a spheroid inscribed in its mesh's box
-// (round about the up axis, so a turned instance keeps it). Each fragment is lit, toned and cut at
-// the point where its view ray enters the envelope (bush_front), not at its own card: every card
-// along one ray takes the same lobe and tone, so a card-built bush (core's berry bushes: long
-// arching leaf straps) reads as lobed domes, not as the straps' splayed streaks; a card reaching
-// past the envelope is cut, so the outline is the lobes' run of round bumps.
-const float BUSH_ENVELOPE = 1.0;
+// (painter-bushes: core's card-built bushes, Bush_BerryBush and Bush_Bush, are not drawn here but
+// by the painted trees' host, as crown-only trees, PainterTreeBush; the envelope and its lobes that
+// painter-trees-fix2 tried for them read as faceted artichokes and are gone.)
 // A tuft's rim (grass and flowers): the share by which its outer blades darken toward its edge, and
 // how far one tuft's value steps from its neighbours', so a field of tufts reads as rounded
 // scallops, not one flat strip.
@@ -118,34 +108,7 @@ const float TUFT_STEP = 0.15;
 
 // The bush's form centre for an instance at `origin` of `scale`.
 vec3 bush_mid(vec3 origin, float scale) {
-	return origin + vec3(0.0, selector_centre.y * scale, 0.0);
-}
-
-// The envelope's radii (world) for an instance of `scale`.
-vec3 bush_radii(float scale) {
-	float across = max(selector_extent.x, selector_extent.z);
-	return max(vec3(across, selector_extent.y, across) * scale * BUSH_ENVELOPE, vec3(0.02));
-}
-
-// Where the ray from the bush point `wp` toward the viewer (`eye`, unit) leaves the envelope on the
-// viewer's side: xyz the point, w 1, or w 0 when the ray misses it (outside the outline).
-vec4 bush_front(vec3 wp, vec3 origin, float scale, vec3 eye) {
-	vec3 r = bush_radii(scale);
-	vec3 q = (wp - bush_mid(origin, scale)) / r;
-	vec3 d = eye / r;
-	float a = dot(d, d);
-	float b = dot(q, d);
-	float disc = b * b - a * (dot(q, q) - 1.0);
-	if (disc < 0.0) {
-		return vec4(wp, 0.0);
-	}
-	return vec4(wp + eye * ((-b + sqrt(disc)) / a), 1.0);
-}
-
-// The envelope's outward normal at its surface point `sp`.
-vec3 bush_normal(vec3 sp, vec3 origin, float scale) {
-	vec3 r = bush_radii(scale);
-	return normalize((sp - bush_mid(origin, scale)) / (r * r));
+	return origin + vec3(0.0, 0.5 * selector_height * scale, 0.0);
 }
 
 // The nearest lobe of the bush point `wp`: xyz the point's offset from the lobe's centre across the
@@ -173,12 +136,11 @@ vec4 bush_lobe(vec3 wp, vec3 origin, float scale, vec3 n0) {
 	return vec4(best - n0 * dot(best, n0), best_h);
 }
 
-// Whether the bush's envelope point `sp` (bush_front) lies in a break of its outline, seen along
-// `eye` (the unit vector toward the viewer: the camera, or the sun in the shadow pass, so the
-// shadow's edge breaks too).
-bool bush_cut(vec3 sp, vec3 origin, float scale, vec3 eye) {
-	vec3 n0 = bush_normal(sp, origin, scale);
-	float off = length(bush_lobe(sp, origin, scale, n0).xyz);
+// Whether the bush point `wp` lies in a break of its outline, seen along `eye` (the unit vector
+// toward the viewer: the camera, or the sun in the shadow pass, so the shadow's edge breaks too).
+bool bush_cut(vec3 wp, vec3 origin, float scale, vec3 eye) {
+	vec3 n0 = normalize(wp - bush_mid(origin, scale));
+	float off = length(bush_lobe(wp, origin, scale, n0).xyz);
 	return abs(dot(n0, eye)) < BUSH_RIM * smoothstep(0.25, 0.6, off);
 }
 
@@ -190,8 +152,7 @@ bool frost_up(float up, vec3 wp) {
 
 // The per-fragment choices light() reads: the normal it lights, the variant, the height shading,
 // the wobble, (on a petal, else -1) the accent and whether snow lies there (1) or not (0). `wp` is
-// the fragment's world position (a bush's: its envelope point, bush_front), `tex` the GLB
-// texture's sample.
+// the fragment's world position, `tex` the GLB texture's sample.
 void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4 tex,
 		out vec3 n, out float variant, out float mul, out float wob, out float petal,
 		out float snow) {
@@ -210,16 +171,11 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 		snow = frost > 0.0 && frost_up(n.y, wp) ? 1.0 : 0.0;
 	} else if (kind == 4) {
 		// A bush: its lobes' domes over the rounded form, each lobe a little its own colour.
-		vec3 n0 = bush_normal(wp, origin, scale);
+		vec3 n0 = normalize(wp - bush_mid(origin, scale));
 		vec4 lobe = bush_lobe(wp, origin, scale, n0);
-		// Each lobe turns as a dome (a hemisphere's normal over its cell, not a tilted plane), so a
-		// tone step runs round it in an arc: scallops, not the faceted gem a flat tilt drew
-		// (painter-trees-fix2 round 1).
-		vec3 d = lobe.xyz / BUSH_LOBE_EDGE;
-		n = normalize(n0 * sqrt(max(1.0 - min(dot(d, d), 0.96), 0.0)) + BUSH_TILT * d);
+		n = normalize(n0 + BUSH_TILT * lobe.xyz);
 		variant = mix(variant, lobe.w, 0.5);
-		float seam = 1.0 - BUSH_SEAM * smoothstep(0.35, 0.8, length(lobe.xyz));
-		mul = mix(0.9, 1.0, smoothstep(0.0, 0.3, h)) * seam;
+		mul = mix(0.9, 1.0, smoothstep(0.0, 0.3, h));
 		snow = frost > 0.0 && frost_up(n.y, wp) ? 1.0 : 0.0;
 	} else if (kind == 1 || kind == 3) {
 		n = vec3(0.0, 1.0, 0.0);

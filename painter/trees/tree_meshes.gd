@@ -16,16 +16,27 @@ extends RefCounted
 
 ## Pieces a limb ribbon has along one segment (the spike's SUB19).
 const RIBBON_SUB := 4
+## A bush pad's sphere (block(count, true)).
+const BUSH_SEGS := 16
+const BUSH_RINGS := 9
 const BOUNDS := AABB(Vector3(-20.0, -2.0, -20.0), Vector3(40.0, 45.0, 40.0))
 
 static var _cache: Dictionary = {}
 
 
-## The block-in's sphere block (cached).
-static func block() -> ArrayMesh:
-	if not _cache.has("block"):
-		_cache["block"] = _sphere_block(PainterTreePack.ELL_SEGS, PainterTreePack.ELL_RINGS)
-	return _cache["block"]
+## The block-in's sphere block of `count` spheres (cached). A bush's cell instances fewer and
+## rounder ones (PainterTrees.BUSH_ELL_PER_INST, BUSH_SEGS x BUSH_RINGS): one pad of a bush spans a
+## metre or two, and the tree's 8 x 5 sphere showed its faces there as straight-edged lit bands
+## (painter-bushes verdict, tokens_20).
+static func block(count: int = PainterTreePack.ELL_PER_INST, bush: bool = false) -> ArrayMesh:
+	var key := "block%d%s" % [count, "b" if bush else ""]
+	if not _cache.has(key):
+		_cache[key] = _sphere_block(
+			BUSH_SEGS if bush else PainterTreePack.ELL_SEGS,
+			BUSH_RINGS if bush else PainterTreePack.ELL_RINGS,
+			count
+		)
+	return _cache[key]
 
 
 ## The block-in's limb ribbon block (cached).
@@ -35,13 +46,12 @@ static func ribbon() -> ArrayMesh:
 	return _cache["ribbon"]
 
 
-## Stroke level `level`'s quad block (cached).
-static func strokes(level: int) -> ArrayMesh:
-	var key := "strokes%d" % level
+## Stroke level `level`'s quad block of `slots` slots (cached; a bush's cell instances fewer,
+## PainterTrees.BUSH_SLOT_PER_INST).
+static func strokes(level: int, slots: int = PainterTreePack.SLOT_PER_INST) -> ArrayMesh:
+	var key := "strokes%d_%d" % [level, slots]
 	if not _cache.has(key):
-		_cache[key] = _quad_block(
-			PainterTreePack.SLOT_PER_INST * PainterTreePack.ROOTS * int(pow(4.0, float(level)))
-		)
+		_cache[key] = _quad_block(slots * PainterTreePack.ROOTS * int(pow(4.0, float(level))))
 	return _cache[key]
 
 
@@ -89,7 +99,7 @@ static func _tri(v: PackedVector3Array, idx: PackedInt32Array, a: int, b: int, c
 		idx.append_array(PackedInt32Array([a, b, c]))
 
 
-static func _sphere_block(segs: int, rings: int) -> ArrayMesh:
+static func _sphere_block(segs: int, rings: int, count: int) -> ArrayMesh:
 	var soup := unit_sphere(segs, rings)
 	var points: PackedVector3Array = soup[0]
 	var tris: PackedInt32Array = soup[1]
@@ -97,7 +107,7 @@ static func _sphere_block(segs: int, rings: int) -> ArrayMesh:
 	var uv := PackedVector2Array()
 	var uv2 := PackedVector2Array()
 	var idx := PackedInt32Array()
-	for j in PainterTreePack.ELL_PER_INST:
+	for j in count:
 		var base := v.size()
 		v.append_array(points)
 		for k in points.size():

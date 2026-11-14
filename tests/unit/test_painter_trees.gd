@@ -132,3 +132,28 @@ func test_growing_on_a_worker_thread_gives_the_same_tree() -> void:
 	)
 	WorkerThreadPool.wait_for_task_completion(task)
 	assert_eq(out[0], here)
+
+
+## painter-bushes: core's card-built bushes are drawn by the host as crown-only trees. The table
+## maps them (not the flowering ones, nor the agaves), a bush's pads are pure in its box and seed,
+## and a bush stays a few pads and under twenty stroke roots (72 strokes at level 1).
+func test_a_bush_is_a_few_pads_in_its_box() -> void:
+	assert_eq(PainterTreeSpecies.species_for("x/Bush_BerryBush_v0_temperate_forest"), "bush")
+	assert_eq(PainterTreeSpecies.species_for("x/Bush_Bush_v1_grassland_meadow"), "bush")
+	assert_eq(PainterTreeSpecies.species_for("x/Bush_BushWithWildflowers_v0"), "")
+	assert_eq(PainterTreeSpecies.species_for("x/Bush_Agave_v0_rocky_badlands"), "")
+	assert_false(PainterTreeSpecies.names().has(PainterTreeSpecies.BUSH), "not a grown species")
+	var box := PainterTreeBush.box_of(AABB(Vector3(-0.9, 0.0, -0.8), Vector3(1.8, 1.6, 1.6)), 0.8)
+	assert_almost_eq(float(box["c"]), 0.64, 1e-5, "the box's middle at the row's scale")
+	assert_almost_eq((box["r"] as Vector3).x, 0.9 * 0.8 * PainterTreeBush.BOX_FILL, 1e-5)
+	for seed_v: int in [3, 77, 90210]:
+		var masses := PainterTreeBush.masses(box, seed_v)
+		assert_between(masses.size(), 3, 4, "a dome and two or three lobes")
+		var d := PainterTreePack.pack(masses, seed_v, 3.0, 0)
+		assert_lte(int(d["roots"]), 18, "a bush's stroke roots")
+		assert_eq(int(d["n_seg"]), 0, "no limbs")
+		assert_lte(int(d["n_slots"]), PainterTrees.BUSH_SLOT_PER_INST, "one instance of slots")
+		assert_true(bool(d["has_crown"]))
+		var again := PainterTreePack.pack(PainterTreeBush.masses(box, seed_v), seed_v, 3.0, 0)
+		assert_eq(_snapped_digest(again), _snapped_digest(d), "pure in the box and seed")
+		assert_lt((d["aabb"] as AABB).position.y, 0.1, "it stands on the ground")

@@ -465,9 +465,10 @@ void vertex() {
 	// tt-sim (painter-trees-fix2): every mass, limb and trunk goes with its tree when the token
 	// window takes it whole (tree_token_crown: the crown's form centre and radius across), as its
 	// strokes do, so neither a mass nor a bare trunk is left beside the opening. The camera's pass
-	// only; a ground mass stays.
+	// only; a ground mass stays, and a bush (t3.w 2, PainterTreeBush) is cut only as a crown's
+	// masses are.
 	bool crown_gone = false;
-	if (alive && abs(floor(role + 0.5) - ROLE_GROUND) > 0.5 && t3.w > 0.5
+	if (alive && abs(floor(role + 0.5) - ROLE_GROUND) > 0.5 && t3.w > 0.5 && t3.w < 1.5
 			&& occlusion_token_count > 0
 			&& abs(dot(normalize(INV_VIEW_MATRIX[2].xyz), normalize(sun_dir))) <= 0.9995) {
 		vec4 crown = vec4((VIEW_MATRIX * (MODEL_MATRIX * vec4(t3.xyz, 1.0))).xyz,

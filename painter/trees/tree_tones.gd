@@ -111,11 +111,12 @@ static func roles_of(species: String) -> Array[String]:
 	return out
 
 
-## species -> {role -> style row} for every species (pure in the data).
+## species -> {role -> style row} for every species, the bush (PainterTreeSpecies.BUSH) last
+## (pure in the data).
 static func row_table() -> Dictionary:
 	var table := {}
 	var row := GROUND_ROW + 1
-	for species in PainterTreeSpecies.names():
+	for species in PainterTreeSpecies.names() + [PainterTreeSpecies.BUSH]:
 		var rows := {}
 		for role in roles_of(species):
 			rows[role] = row
@@ -141,11 +142,11 @@ static func bake(sheet: Dictionary, mood: String, elevation: float) -> Dictionar
 	var palette := Image.create(TONES, MAX_ROWS * VARIANTS, false, Image.FORMAT_RGBA8)
 	var params := Image.create(MAX_ROWS, PARAM_ROWS, false, Image.FORMAT_RGBAF)
 	var world: Dictionary = data()["world"]
-	var styles: Array = [[_deposit(world), 0], [world, 1]]
+	var styles: Array = [[_deposit(world), 0, ""], [world, 1, ""]]
 	var table := row_table()
 	for species: String in table:
 		for role: String in table[species]:
-			styles.append([(data()["species"][species] as Dictionary)[role], role])
+			styles.append([(data()["species"][species] as Dictionary)[role], role, species])
 	for ri in mini(styles.size(), MAX_ROWS):
 		var props: Dictionary = styles[ri][0]
 		var tag: Variant = styles[ri][1]
@@ -154,6 +155,10 @@ static func bake(sheet: Dictionary, mood: String, elevation: float) -> Dictionar
 		if tag is String:
 			var spike := PainterSheet.parse_color(str(world.get(SPIKE_ROLE[tag], "")))
 			lch = _moved(lch, spike, PainterSheet.tone_lch(sheet, mood, SHEET_ROLE[tag], elevation))
+			if tag == "leaf" and PainterTreeSpecies.is_bush(str(styles[ri][2])):
+				# A bush's leaf is the sheet's bush (bush_ramp's colour: the leaf a step deeper and
+				# quieter), so it sits under the crowns in their family in every mood.
+				lch = _bush_lch(sheet, mood, elevation)
 			shape = _sheet_shade(_moved_shape(shape, sheet, mood, elevation), sheet, mood, elevation, tag)
 		elif int(tag) == GROUND_ROW:
 			lch = PainterSheet.tone_lch(sheet, mood, "ground", elevation)
@@ -170,12 +175,7 @@ static func bake(sheet: Dictionary, mood: String, elevation: float) -> Dictionar
 ## frosts and darkens with them (painter-trees-polish2: the plain leaf ramp read as lime gumdrops).
 static func bush_ramp(sheet: Dictionary, mood: String, elevation: float) -> Array[Color]:
 	var world: Dictionary = data()["world"]
-	var leaf := PainterSheet.tone_lch(sheet, mood, "leaf", elevation)
-	var lch := Vector3(
-		leaf.x * PainterSheet.number(sheet, mood, "bush-value", elevation),
-		leaf.y * PainterSheet.number(sheet, mood, "bush-chroma", elevation),
-		leaf.z
-	)
+	var lch := _bush_lch(sheet, mood, elevation)
 	var shape := _sheet_shade(
 		_moved_shape(_shape({}, world), sheet, mood, elevation), sheet, mood, elevation, "leaf"
 	)
@@ -192,6 +192,17 @@ static func bush_ramp(sheet: Dictionary, mood: String, elevation: float) -> Arra
 		for s: Vector3 in steps:
 			out.append(PainterSheet.color_of_lch(s))
 	return out
+
+
+## A bush's leaf colour (OKLCH): the sheet's leaf at `bush-value` of its lightness and `bush-chroma`
+## of its chroma.
+static func _bush_lch(sheet: Dictionary, mood: String, elevation: float) -> Vector3:
+	var leaf := PainterSheet.tone_lch(sheet, mood, "leaf", elevation)
+	return Vector3(
+		leaf.x * PainterSheet.number(sheet, mood, "bush-value", elevation),
+		leaf.y * PainterSheet.number(sheet, mood, "bush-chroma", elevation),
+		leaf.z
+	)
 
 
 ## The deposit's style: the spike world's deposit colour and ramp.

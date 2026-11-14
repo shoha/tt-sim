@@ -44,18 +44,14 @@ void vertex() {
 }
 
 void fragment() {
-	vec3 sp = v_wp;
 	if (kind == 4) {
-		// A bush is painted on its envelope (painter_selector's bush_front): the point where this
-		// fragment's view ray enters it. A card past the envelope, or in a break between its lobes
-		// (bush_cut), is cut, in the sun's pass too, so its shadow's edge is as round as its outline.
+		// A bush's outline breaks between its lobes (painter_selector's bush_cut), in the sun's pass
+		// too, so its shadow's edge is as round as its outline.
 		vec3 eye = PROJECTION_MATRIX[3][3] == 0.0 ? normalize(INV_VIEW_MATRIX[3].xyz - v_wp)
 			: normalize(INV_VIEW_MATRIX[2].xyz);
-		vec4 front = bush_front(v_wp, v_o, v_scale, eye);
-		if (front.w < 0.5 || bush_cut(front.xyz, v_o, v_scale, eye)) {
+		if (bush_cut(v_wp, v_o, v_scale, eye)) {
 			discard;
 		}
-		sp = front.xyz;
 	}
 	NORMAL = two_sided_foliage_normal(NORMAL, FRONT_FACING);
 	vec3 pbr_albedo;
@@ -80,7 +76,7 @@ void fragment() {
 	float wob;
 	float petal;
 	float snow;
-	selector_fragment(sp, v_wn, v_o, v_scale, v_h, texture(albedo_texture, UV), n, variant, mul,
+	selector_fragment(v_wp, v_wn, v_o, v_scale, v_h, texture(albedo_texture, UV), n, variant, mul,
 		wob, petal, snow);
 	f_n = n;
 	f_variant = variant;
@@ -88,10 +84,6 @@ void fragment() {
 	f_wob = wob;
 	f_accent = petal;
 	f_frost = snow;
-	if (kind == 4) {
-		// The sun's shadow is read at the envelope too, so the cards inside one lobe share its light.
-		LIGHT_VERTEX = (VIEW_MATRIX * vec4(sp, 1.0)).xyz;
-	}
 	if (kind == 1 || kind == 3) {
 		// Ground cover takes the cast shade of the ground at its foot: light and shadow are read
 		// straight below the fragment, a little over the tuft's root, with the ground's up normal,

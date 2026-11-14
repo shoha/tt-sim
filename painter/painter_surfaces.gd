@@ -416,9 +416,7 @@ func _paint_species() -> Array:
 				var stand_in := _stand_in(original, entry, float(record["height"]))
 				if stand_in == null:
 					continue
-				var box := mesh.get_aabb()
-				stand_in.set_shader_parameter(&"selector_centre", box.get_center())
-				stand_in.set_shader_parameter(&"selector_extent", box.size * 0.5)
+				stand_in.set_shader_parameter(&"selector_extent", mesh.get_aabb().size * 0.5)
 				mesh.surface_set_material(i, stand_in)
 				var swap := [mesh, i, original, stand_in, entry]
 				_swapped.append(swap)
