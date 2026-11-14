@@ -5844,6 +5844,46 @@ strength (0 authored, 0.35, 0.65, 1.0): close view 0.85, 0.79, 0.72, 0.60; home 
 0.72, 0.60; slab frame 0.84, 0.77, 0.69, 0.56. Share of them below 0.75: 0, 12-29, 75-92, 78-90 %.
 0.65 reads clearly shaded and keeps a cool lilac; at 1.0 the petals dull to a grey-lilac.
 
+## Painted forest cost (card painter-perf-forest, 2026-11-14)
+
+Pinned procedure (1920x1080 windowed, vsync off after each level load, GPU median of 3 s, states
+switched by uniforms in one run and interleaved, the first sample after vsync_off dropped). Forest:
+temperate forest seed 1234 with two houses, tokens view = size 8 at elevation 20, sun 20 summer.
+Logs and tables: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final11/notes.md`.
+
+Cost by part (Painted full minus the part switched off, ms; m1, before the card's changes):
+
+| part | forest tokens | forest home | taiga home |
+|---|---|---|---|
+| strokes | 2.24 | 0.76 | 1.19 |
+| block-in (masses, limbs) | 0.73 | 1.25 | 1.79 |
+| block-in shadow cast | 0.40 | 0.62 | 0.63 |
+| token window | 0.36 | 0.17 | 0.27 |
+| bushes, plants | 0.18 | 0.22 | 0.02 |
+| Painted full, Classic | 4.60, 3.05 | 3.79, 3.74 | 4.53, 2.57 |
+
+Painted is vertex-bound: stroke_scale 0.5 (a quarter of the area) costs the same, half the pixels
+saves 0.17-0.47 ms against Classic's 0.77-0.91. Camera-pass primitives at tokens: 1.39 M Painted, 0.22 M
+Classic; 21 of 58 cells drawn for 14 trees in view (the engine culls a cell whole).
+
+After (m6, e0b14831 = "old"; committed = back10 -0.5 and the token pre-test, view cull off):
+
+| view | committed | old | Classic | committed - Classic |
+|---|---|---|---|---|
+| forest tokens summer | 4.47 | 4.75 | 3.07 | +1.40 |
+| forest tokens winter | 3.28 (cull on at 2.5 m) | 3.45 | 3.06 | +0.22 (cull off: not measured) |
+| forest home summer | 3.82 (cull on at 2.5 m) | 3.85 | 3.70 | +0.12 |
+| forest home winter | 2.96 | 2.97 | 3.69 | -0.73 |
+| taiga home summer (m4) | 4.52 (cull on at 1.5 m) | 4.65 | 2.56 | +1.96 |
+
+The target (+0.3 ms at forest tokens and home in summer, no worse than Classic in winter) is met
+only at the home views. The per-tree view cull (`tree_view_box`) was worth 0.6 ms at tokens with a
+1.5 m margin but dropped a crown edge's strokes there, and still did at 2.5 m (worth 0.15 ms), so
+it ships off; why a tree's strokes reach past its box is open. The cheapest look, stroke level 2
+hidden at tokens (lod1), costs 2.64 ms (-0.45 against Classic) but thins every crown: coarser,
+sparser strokes, the block-in showing through at the edges. Next: find the cull's fault (view_cull
+2 draws only the culled trees), then the block-in and its shadow pass at the home views.
+
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
 What each Shadow quality tier (`directional_soft_shadow_filter_set_quality`) costs, and a "blur"

@@ -52,6 +52,11 @@ const ELL_SEGS: int = 8
 const ELL_RINGS: int = 5
 const TUBE_SIDES: int = 4
 const TREE_W: int = 8
+## Metres the tree's box (tree_row's texels 5 and 6) reaches past its masses: a stroke's size, shift
+## and lift and the wind's sway; the cells' engine box (PainterTrees.BOUND_GROW) uses the same. The
+## box serves the token pre-test (tree_token_near) and the per-tree view cull, which is off by
+## default: at 1.5 m and at 2.5 m it dropped a crown edge's strokes (painter-perf-forest).
+const BOUND_PAD: float = 2.5
 ## Stroke root spacing in metres per mass role (PainterTreeMass.Role), the research painter's.
 const SPACING: Array[float] = [0.34, 0.17, 0.24, 0.30, 0.30, 0.16, 0.70]
 
@@ -500,6 +505,19 @@ static func tree_row(
 		]
 	)
 	out.resize(TREE_W * 4)
+	# Texels 5 and 6 (painter-perf-forest): the tree's box in its own frame for the shaders' per-tree
+	# view cull (tree_view_box): its centre (w 1: a box) and its half extents plus BOUND_PAD.
+	var box: AABB = d["aabb"]
+	if box.size != Vector3.ZERO:
+		var mid := box.get_center()
+		var half := box.size * 0.5 + Vector3.ONE * BOUND_PAD
+		out[20] = mid.x
+		out[21] = mid.y
+		out[22] = mid.z
+		out[23] = 1.0
+		out[24] = half.x
+		out[25] = half.y
+		out[26] = half.z
 	out[28] = float(d["sh_base"])
 	out[29] = float(d["n_shadow"])
 	return out

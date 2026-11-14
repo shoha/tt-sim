@@ -15,7 +15,8 @@
 // Mesh: UV the quad corner, UV2.x the quad's index in the block.
 // tree_tex, one row per tree: 0 (layer, base texel, ellipsoids, segments) 1 (segment table,
 //   slot table, slots, instance line in row_map) 2 (hue + 0.5, value + 0.5, thin, moss)
-//   3 (crown centre, has crown) 4 (crown radii, several leaf forms) 5, 6 (A: box corner, box size).
+//   3 (crown centre, has crown) 4 (crown radii, several leaf forms) 5 (bounding sphere: centre,
+//   radius; tree_in_view) 7 (shadow table, shadow entries).
 
 #include "res://painter/shaders/painter_tree.gdshaderinc"
 
@@ -70,6 +71,10 @@ uniform float fix12 = 0.0;
 uniform float fix13 = 0.0;
 // Which strokes this node draws: 0, 1, 2 the level; 3 the shadow strokes.
 uniform float pass10 = 1.0;
+// painter-perf-forest's A/B switch (0 = the shipped path): 2 every stroke runs the token window's
+// loops (no tree_token_near). (Skipping form_occ's ray where it could not change the tone was
+// measured too: 0.007 ms at forest tokens, not kept.)
+uniform int perf_off = 0;
 
 varying flat vec3 v_col;
 varying flat float v_brush;
@@ -270,7 +275,13 @@ void vertex() {
 	v_uv = vec2(0.0);
 
 	// ---- Source B: derive the stroke from its mass (layouts in painter10.gd).
-	{
+	// (painter-perf-forest: with view_cull on, a tree outside this pass's view builds no stroke,
+	// tree_view_box; off by default, an open fault.)
+	vec3 box_c;
+	vec3 box_h;
+	if (tree_view_box(texelFetch(tree_tex, ivec2(5, int(INSTANCE_CUSTOM.x + 0.5)), 0),
+			texelFetch(tree_tex, ivec2(6, int(INSTANCE_CUSTOM.x + 0.5)), 0), MODEL_MATRIX, VIEW_MATRIX,
+			PROJECTION_MATRIX, box_c, box_h)) {
 		int trow = int(INSTANCE_CUSTOM.x + 0.5);
 		int first = int(INSTANCE_CUSTOM.y + 0.5);
 		vec4 t0 = texelFetch(tree_tex, ivec2(0, trow), 0);
@@ -1041,7 +1052,10 @@ void vertex() {
 						max(crown_r.x, crown_r.z) * length(MODEL_MATRIX[0].xyz));
 				}
 			}
-			if (!is_shadow && tree_token_stroke(centre_view, 0.5 * max(len, wid),
+			// (painter-perf-forest: a tree no token can reach skips the window's loops.)
+			bool near_token = (perf_off & 2) != 0 || tree_token_near(box_c, box_h, VIEW_MATRIX,
+				PROJECTION_MATRIX);
+			if (!is_shadow && near_token && tree_token_stroke(centre_view, 0.5 * max(len, wid),
 					has_clump ? (VIEW_MATRIX * (MODEL_MATRIX * vec4(clump_p, 1.0))).xyz : centre_view,
 					crown, anchor, fract(rnd * 13.7 + 0.31), wood_stroke, VIEW_MATRIX, PROJECTION_MATRIX,
 					VIEWPORT_SIZE)) {

@@ -1211,3 +1211,73 @@ float tree_cast(float attenuation, vec3 wp) {
 	float kv = (p_noise(wp * 1.7 + 5.0) - 0.5) * 2.0 * cut_amp;
 	return (1.0 - smoothstep(0.44 + kv, 0.56 + kv, attenuation)) * cast_amount;
 }
+
+// painter-perf-forest: a tree's box in view space (`c` its centre, `h` its half extents along the
+// view's axes; from its tree_tex texels 5 and 6: the centre in the tree's frame, w 1, and the half
+// extents with the margin; w 0 = no box, `h` then unbounded), and whether it lies inside the four
+// side planes of this pass's view (the camera's, or one sun cascade's). The engine culls a cell's
+// MultiMesh whole, so before this every tree of a cell that touched the view built every stroke even
+// off the screen (forest tokens view: 21 of 58 cells drawn for 14 trees in view). Near and far are not
+// tested. OFF by default (`view_cull` 0; 1 culls; 2 draws only the trees it would cull, to find
+// them): with the box padded 1.5 m (PainterTreePack.BOUND_PAD) it took 0.6 ms off the forest tokens
+// view but dropped a crown edge's strokes at the top right of that view (x 1560-1600, y 100-300 of
+// 1920x1080), and padded 2.5 m (the cells' own margin) it still dropped them and saved 0.15 ms.
+// Strokes reaching more than 2.5 m past their masses are not expected, so the box or the test is
+// suspect for one tree; open (painter-perf-forest handoff). With the cull off, `c` and `h` still
+// serve tree_token_near.
+uniform float view_cull = 0.0;
+
+bool tree_view_box(vec4 centre, vec4 half_ext, mat4 model, mat4 view, mat4 proj, out vec3 c,
+		out vec3 h) {
+	c = vec3(0.0);
+	h = vec3(1e6);
+	if (centre.w <= 0.0) {
+		return true;
+	}
+	c = (view * (model * vec4(centre.xyz, 1.0))).xyz;
+	mat3 vm = mat3(view) * mat3(model);
+	// The box's extent along each view axis (a box turned into view space, boxed again).
+	h = vec3(dot(abs(vec3(vm[0][0], vm[1][0], vm[2][0])), half_ext.xyz),
+		dot(abs(vec3(vm[0][1], vm[1][1], vm[2][1])), half_ext.xyz),
+		dot(abs(vec3(vm[0][2], vm[1][2], vm[2][2])), half_ext.xyz));
+	if (view_cull < 0.5) {
+		return true;
+	}
+	vec4 rx = vec4(proj[0][0], proj[1][0], proj[2][0], proj[3][0]);
+	vec4 ry = vec4(proj[0][1], proj[1][1], proj[2][1], proj[3][1]);
+	vec4 rw = vec4(proj[0][3], proj[1][3], proj[2][3], proj[3][3]);
+	vec4 side[4] = vec4[4](rw + rx, rw - rx, rw + ry, rw - ry);
+	bool inside = true;
+	for (int i = 0; i < 4; i++) {
+		if (dot(side[i].xyz, c) + side[i].w < -dot(abs(side[i].xyz), h)) {
+			inside = false;
+		}
+	}
+	return inside != (view_cull > 1.5);
+}
+
+// painter-perf-forest: whether any token's window can reach a tree whose view-space box is (`c`,
+// `h`) (tree_view_box), so a tree far from every token skips tree_token_stroke's loops. A part is
+// taken when it lies within TREE_TOKEN_EDGE_HI + TREE_TOKEN_STROKE_JIT zone radii of a token (a
+// clump or a crown by its centre, inside the box); a stroke reaches TREE_TOKEN_NEAR_M past its
+// centre. Orthographic views only (a perspective view runs the full test).
+const float TREE_TOKEN_NEAR_M = 1.0;
+
+bool tree_token_near(vec3 c, vec3 h, mat4 view_matrix, mat4 projection_matrix) {
+	if (!enable_occlusion || occlusion_token_count <= 0) {
+		return false;
+	}
+	if (projection_matrix[3][3] < 0.5) {
+		return true;
+	}
+	for (int i = 0; i < occlusion_token_count; i++) {
+		vec4 token_data = texelFetch(occlusion_tokens, ivec2(i, 0), 0);
+		vec2 token_xy = (view_matrix * vec4(token_data.xyz, 1.0)).xy;
+		vec2 reach = h.xy + abs(token_data.w) * (TREE_TOKEN_EDGE_HI + TREE_TOKEN_STROKE_JIT)
+			+ TREE_TOKEN_NEAR_M;
+		if (all(lessThanEqual(abs(token_xy - c.xy), reach))) {
+			return true;
+		}
+	}
+	return false;
+}
