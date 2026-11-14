@@ -239,6 +239,13 @@ void vertex() {
 				// A bare tree carries no berries or blossom either.
 				alive = false;
 			}
+			if (e0.w < 0.5 && tree_leaf_drop(inst) > 0.0) {
+				// tt-sim (painter-winter-trees): a tree in a bare season has no solid crown: the leaf
+				// clumps it keeps are loose strokes (round 1 kept their masses: pom-poms on a bare
+				// tree). In both passes, so the crown's solid sun shadow goes; the kept clumps'
+				// shadow strokes dapple the ground.
+				alive = false;
+			}
 		}
 	} else if (wood19 > 0.5) {
 		// Round 19: a limb is a brush stroke. The mesh is a ribbon (round19.gd `_ribbon_block`): UV.x
@@ -261,7 +268,9 @@ void vertex() {
 			vec4 pf = mt(hdr + 2, layer);
 			vec4 pl = mt(hdr + 2 + np - 1, layer);
 			bool stem = (hfl & 8) != 0;
-			bool bare17 = texelFetch(role_params, ivec2(int(row_of(0.0, inst) + 0.5), 6), 0).z > 0.5;
+			// tt-sim (painter-winter-trees): a tree that drops leaf clumps (row 6 w) is drawn in the
+			// bare wood's manner: its twigs at least twig-px wide, cut by bare-limb with distance.
+			bool bare17 = texelFetch(role_params, ivec2(int(row_of(0.0, inst) + 0.5), 6), 0).z > 0.5 || tree_leaf_drop(inst) > 0.0;
 			float px19 = 2.0 / (PROJECTION_MATRIX[1][1] * VIEWPORT_SIZE.y);
 			float twig = stem ? 0.0 : twig19(pf.w);
 			alive = pf.w >= max(min_r10, bare17 ? limb_cut18(px19) : 0.0);
@@ -786,7 +795,7 @@ void fragment() {
 	if (wood) {
 		// The twig manner: lighter and greyer (or the species' twig colour), one tone nearly.
 		vec4 lf6 = texelFetch(role_params, ivec2(int(row_of(0.0, int(v_inst + 0.5)) + 0.5), 6), 0);
-		if (w_twig > 0.0 && lf6.z > 0.5) {
+		if (w_twig > 0.0 && (lf6.z > 0.5 || lf6.w > 0.0)) {
 			ALBEDO = mix(ALBEDO, palette_at(0.5 + (t - 0.5) * 0.6 + v_value, row_of(0.0, int(v_inst + 0.5)), 0.5), w_twig * twig_tone19);
 		}
 		// Snow as dabs along the up side: it stands out past the limb's edge in rounded lumps (w_out),

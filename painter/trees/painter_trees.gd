@@ -131,7 +131,12 @@ func retone(sheet: Dictionary, mood: String, elevation: float) -> void:
 	var baked := PainterTreeTones.bake(sheet, mood, elevation)
 	var palette := ImageTexture.create_from_image(baked["palette"])
 	var params := ImageTexture.create_from_image(baked["params"])
+	# A bare season's broadleaf crowns shade nothing as whole forms (form_occ skips them): the
+	# clumps they keep and the limbs under them are lit.
+	var crown_occ := 1.0 if PainterSheet.number(sheet, mood, "leaf-keep", elevation) >= 0.999 else 0.0
 	for m in _materials:
+		m.set_shader_parameter(&"crown_occ", crown_occ)
+		m.set_shader_parameter(&"leaf_fall", 1.0 - crown_occ)
 		m.set_shader_parameter(&"palette", palette)
 		m.set_shader_parameter(&"role_params", params)
 		m.set_shader_parameter(&"tone_lo", PainterSheet.number(sheet, mood, "tone-lo", elevation))

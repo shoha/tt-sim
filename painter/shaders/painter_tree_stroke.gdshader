@@ -309,9 +309,15 @@ void vertex() {
 				seed = uint(e8.x + 0.5);
 				rnd = r10(seed, keyl, 4u);
 				bool leafy = e0.w < 0.5 || e0.w > 7.5;
+				// tt-sim (painter-winter-trees): a clump a bare season dropped draws nothing, nor
+				// its shadow strokes.
+				float drop = e0.w < 0.5 ? tree_leaf_drop(int(t1.w + 0.5)) : 0.0;
+				bool fallen = tree_leaf_fallen(e8.x, drop);
+				// A kept clump of a bare tree is loose: a share of its strokes (no block-in under them).
+				fallen = fallen || (drop > 0.0 && !is_shadow && r10(seed, keyl, 24u) > TREE_DRY_STROKES);
 				if (is_shadow) {
 					int n_sh = int(st.z + 0.5);
-					if (!(bare > 0.5 && e0.w < 0.5)) {
+					if (!(bare > 0.5 && e0.w < 0.5) && !fallen) {
 						alive = true;
 						vec4 e1 = mt(rec + 1, layer);
 						vec4 e2 = mt(rec + 2, layer);
@@ -331,7 +337,7 @@ void vertex() {
 				} else {
 					vec4 e6 = mt(rec + 6, layer);
 					int n_roots = int(e6.w + 0.5);
-					if (k < n_roots && level_shown(rnd, level, e_lam) && !(bare > 0.5 && leafy)) {
+					if (k < n_roots && !fallen && level_shown(rnd, level, e_lam) && !(bare > 0.5 && leafy)) {
 						clump_p = e0.xyz;
 						has_clump = leafy;
 						alive = true;
@@ -346,11 +352,16 @@ void vertex() {
 						ell_at(fib10(k, n_roots, r10(seed, 0u, 7u) * 6.2832), e0.xyz, e1.xyz, e2.xyz, e3.xyz, p, n);
 						vec3 p_root = p;
 						vec3 n_root = n;
-						// A root that faces well away from the camera is behind its own clump.
+						// A root that faces well away from the camera is behind its own clump. (A bare
+						// tree's kept clump has no block-in behind its strokes: its far side's strokes
+						// showed through as black dabs, so they are not built.)
 						alive = dot(mat3(MODEL_MATRIX) * n_root, vcam10) >= back10;
 						// Round 8's burial test, against the clump's four most overlapping
 						// neighbours: a root inside one of them paints nothing.
-						if (bury10 > 0.0) {
+						// (Not on a bare tree: its neighbours have mostly fallen, and burying in them cut
+							// the kept clumps into hollow rings.)
+							bool bury_on = bury10 > 0.0 && drop <= 0.0;
+							if (bury_on) {
 							vec4 e9 = mt(rec + 9, layer);
 							for (int nb = 0; nb < 4; nb++) {
 								if (alive && e9[nb] > -0.5) {
@@ -370,7 +381,7 @@ void vertex() {
 							ell_at(ell_u(pc, e0.xyz, e1.xyz, e2.xyz, e3.xyz), e0.xyz, e1.xyz, e2.xyz, e3.xyz, p, n);
 							// Round 11: the level 1 stroke is tested where it lies (round 8 did; its
 							// level 2 children go with it).
-							if ((fix & 16) != 0 && bury10 > 0.0 && buried11(p, rec, base, layer)) {
+							if ((fix & 16) != 0 && bury_on && buried11(p, rec, base, layer)) {
 								alive = false;
 							}
 						}
@@ -399,6 +410,11 @@ void vertex() {
 							a_p += ((a_p - e0.xyz) - e2.xyz * uy) * (lk - 1.0);
 							a_p += e2.xyz * (1.0 - 2.0 * (tq < 0.1 ? tq * 0.25 : 0.025 + (tq - 0.1) * (0.975 / 0.9)) - uy);
 							}
+						}
+						if (drop > 0.0) {
+							// A bare tree's kept clump is a small knot of dry leaves: its strokes drawn in
+							// toward the clump's middle (on the whole clump they read as a hollow ring).
+							a_p = mix(e0.xyz, a_p, TREE_DRY_SHRINK);
 						}
 						a_n = n;
 						a_tn = (efl & 128) != 0 ? normalize(mix(n_root, normalize(p_root - e6.xyz), 0.45)) : n_root;

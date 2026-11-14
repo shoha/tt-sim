@@ -268,8 +268,38 @@ dabs than the trees beside it.
   a low sun and in the dark moods; the limbs' material takes a near-neutral cast tint
   (`PainterTrees.BARK_CAST_TINT`), since a stem stands in its own crown's shadow and the crowns'
   cool tint made it maroon. Print the ramps with a tone printer before a render (painter-a2a3's
-  `tree_tones.gd` pattern). Winter's bare trees and limb snow are later: in phase 1 a deciduous
-  tree keeps its leaves in winter, a frosted green with snow caps (`crown-deposit`).
+  `tree_tones.gd` pattern).
+- A bare season (card painter-winter-trees, 2026-11-13; owner: "for winter: broadleaf trees should
+  move towards the prototype"). The sheet's `leaf-keep` (1 in leaf, winter 0.15) is the share of
+  its leaf clumps a broadleaf keeps; each species falls by its leaf role's `fall`
+  (`tree_roles.json`: oak 0.9, rowan 0.95, lime 1.05, poplar 1.1, willow 1.15, birch 1.2), so in
+  winter an oak keeps about a quarter of its clumps, a rowan a fifth, a lime a tenth, a willow two
+  in a hundred and a birch none; conifers and bushes have no fall. PainterTreeTones writes the drop
+  ((1 - leaf-keep) x fall) into the leaf row's role_params row 6 w. The shaders decide per CLUMP
+  (`tree_leaf_fallen`: a hash of the mass seed against the drop, in the stroke shader's vertex
+  stage and the block-in's), so a clump's strokes and its painted shadow strokes go together and
+  the stroke count is unchanged (a dropped stroke collapses to a point). A tree that drops draws
+  no solid crown: its block-in leaf masses are gone in both passes (round 1 kept them: pom-poms on
+  a bare tree), so the crown's solid sun shadow goes and the kept clumps' shadow strokes dapple
+  the ground; a kept clump draws `TREE_DRY_STROKES` (0.45) of its strokes, drawn in toward its
+  middle by `TREE_DRY_SHRINK` (0.75: at 1 a clump without its block-in read as a hollow ring, at
+  0.55 as a round seed ball), with the burial test off (its neighbours have fallen). Its limbs are
+  drawn in the bare wood's manner (`limb_r19` with the bare flag: twigs at least `twig_px19` wide,
+  cut by `bare_limb17` 0.008 m, three times that far off) and twigs tinted toward the leaf row (the
+  dry leaf); `limb_snow17` is 1 (snow ridges on level limbs, times `deposit`, so only in winter).
+  While leaf-keep is under 1, PainterTrees.retone sets the materials' `leaf_fall` 1 (at 0 the
+  shaders skip the row-6 fetch, so a leafy season pays nothing) and `crown_occ` 0 (a whole
+  broadleaf crown form no longer shades its own kept clumps and limbs). Open: kept clumps still
+  show near-black dabs (not the shade tone, not crown_occ, not the far-side strokes: each was
+  ruled out by a capture); the likely source is the leaf role's marks (`is_mark`, value
+  `mark-value`) on the dried tone, untested. Colours: `leaf-turn` (winter 1) turns a kept leaf
+  toward the sheet's `dry-leaf` (lightness and chroma by the species' ratio to the spike's leaf,
+  hue plus the role's `dry-turn`: oak -6 russet, rowan -22 red, lime 16, poplar 22, birch 24 and
+  willow 28 golden), its shade `dry-shade-lift` (0.45) less deep; the bushes keep the sheet's leaf.
+  `needle-snow` (winter 1.6) multiplies the evergreen rows' `settle`: heavier snow on the boughs.
+  Autumn and summer are unchanged (leaf-keep 1, leaf-turn 0, needle-snow 1). Open: the eye view's
+  distant Classic trees are EyeRim's (`utils/eye_rim.gd`, an AuthoredScatter made on entering the
+  eye view, 32 to 35 m out), which no painter host registers; painting them is A2b's rim work.
 - Canopy: `CameraController.CANOPY_CLEARANCE` (20 m) stands over the tallest grown painted tree
   (poplar 16.74 m at age 0.95; the GLB trees reach 16 m) plus `BOUND_GROW`;
   `test_painter_trees_draw` grows every species and fails if one outgrows it. The block-in's
