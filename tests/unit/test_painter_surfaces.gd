@@ -125,7 +125,11 @@ func test_plants_take_a_kind_and_trees_stay_classic() -> void:
 	assert_eq(bush["kind"], PainterPlantRoles.KIND_CROWN)
 	assert_eq(bush["role"], "leaf")
 	assert_eq(PainterPlantRoles.of("x/Shrub_Box", "grass")["kind"], PainterPlantRoles.KIND_CROWN)
-	assert_eq(PainterPlantRoles.of("x/Fern_Lady", "grass")["kind"], PainterPlantRoles.KIND_MASS)
+	# painter-trees-fix: a fern is a low leaf mass in the crowns' hand too (as a plain leaf mass its
+	# frond cards read as streaky shards); ivy and moss stay plain leaf masses.
+	var fern := BIOME + "/Fern_Fern_v0_temperate_forest"
+	assert_eq(PainterPlantRoles.of(fern, "grass")["kind"], PainterPlantRoles.KIND_CROWN)
+	assert_eq(PainterPlantRoles.of("x/Ivy_Wall", "grass")["kind"], PainterPlantRoles.KIND_MASS)
 	var ramp: Array = (load(PainterPlantRoles.CROWN_TONES) as GDScript).call(
 		"bush_ramp", PainterSheet.load_sheet("core"), "summer", 60.0
 	)

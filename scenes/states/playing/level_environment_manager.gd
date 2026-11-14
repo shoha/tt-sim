@@ -756,16 +756,20 @@ func _apply_render_style() -> void:
 	)
 
 
-## Emits painted_look_changed when `state` differs from the last one (see the signal), making the
-## PainterSurfaces that follows it on the first Painted state.
+## Emits painted_look_changed when `state` differs from the last one (see the signal). A Painted
+## state first points the PainterSurfaces that follows it (made on the first one) at this table's
+## map container: this manager lives on while every entry into play makes a new GameMap, so a
+## surfaces host attached once followed the first table's freed container and never painted a
+## second level (painter-trees-fix).
 func _publish_painted(state: Dictionary) -> void:
 	if state == _painted_state:
 		return
 	_painted_state = state
-	if not state.is_empty() and _surfaces == null and is_instance_valid(_game_map):
+	if not state.is_empty() and is_instance_valid(_game_map):
 		var container: Variant = _game_map.get("map_container")
 		if container is Node3D:
-			_surfaces = (load(PAINTER_SURFACES) as GDScript).new()
+			if _surfaces == null:
+				_surfaces = (load(PAINTER_SURFACES) as GDScript).new()
 			_surfaces.call("attach", self, container)
 	painted_look_changed.emit(state)
 

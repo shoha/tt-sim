@@ -917,6 +917,35 @@ const float TREE_TOKEN_MASS_PAD = 0.1;
 // in the opening beside it); wood keeps the shallow cut.
 const float TREE_TOKEN_BEHIND = 0.25;
 const float TREE_TOKEN_BEHIND_LEAF = 0.6;
+// painter-trees-fix: a small token's rim. A world noise in lobes of half its zone barely bends a rim
+// that small, so its window read as a pale circle cut into a dark crown. Below
+// TREE_TOKEN_SMALL_HI metres of zone radius (fully at TREE_TOKEN_SMALL_LO) the rim is a cloud's
+// outline instead: TREE_TOKEN_SCALLOPS round bulges out to TREE_TOKEN_EDGE_HI with cusps between
+// them in to TREE_TOKEN_CUSP, turned by where the token stands.
+const float TREE_TOKEN_SCALLOPS = 7.0;
+const float TREE_TOKEN_CUSP = 0.62;
+const float TREE_TOKEN_SMALL_LO = 0.45;
+const float TREE_TOKEN_SMALL_HI = 0.8;
+// painter-trees-fix: a crown's clump goes with its neighbours. A stroke whose clump's centre the
+// window takes goes too when its own nearest point lies within TREE_TOKEN_CLUMP_REACH zone radii
+// outside the rim (the critic's loose leaf clumps floating at the opening's edge, left over from a
+// clump the window had mostly taken).
+const float TREE_TOKEN_CLUMP_REACH = 0.4;
+
+// Where the rim lies (zone radii) for a token `token_data` of zone `radius` at the view-plane
+// offset `rel` (in zone radii) of a point whose rim lobes are read at `world`.
+float tree_token_edge(vec4 token_data, vec2 rel, vec3 world, float radius) {
+	float lobe = min(TREE_TOKEN_LOBE_M, TREE_TOKEN_LOBE_R * radius);
+	float edge = mix(TREE_TOKEN_EDGE_LO, TREE_TOKEN_EDGE_HI,
+		smoothstep(0.2, 0.8, p_noise(world / lobe + 11.0)));
+	float small = 1.0 - smoothstep(TREE_TOKEN_SMALL_LO, TREE_TOKEN_SMALL_HI, radius);
+	if (small > 0.0) {
+		float turn = dot(token_data.xz, vec2(1.7, 2.3));
+		float s = abs(sin(0.5 * TREE_TOKEN_SCALLOPS * atan(rel.y, abs(rel.x) < 1e-5 ? 1e-5 : rel.x) + turn));
+		edge = mix(edge, mix(TREE_TOKEN_CUSP, TREE_TOKEN_EDGE_HI, sqrt(s)), small);
+	}
+	return edge;
+}
 
 // How far outside one token's feathered rim a point (view space) lies, in zone radii (negative:
 // the window takes it); 1e3 when it is not in front of the token. `reach` (view units) is a
@@ -935,9 +964,6 @@ float tree_token_margin(vec4 token_data, vec3 vertex_view, float reach, vec3 wor
 	if (vertex_view.z <= token_view.z - radius * (wood ? TREE_TOKEN_BEHIND : TREE_TOKEN_BEHIND_LEAF)) {
 		return 1e3;
 	}
-	float lobe = min(TREE_TOKEN_LOBE_M, TREE_TOKEN_LOBE_R * radius);
-	float edge = mix(TREE_TOKEN_EDGE_LO, TREE_TOKEN_EDGE_HI,
-		smoothstep(0.2, 0.8, p_noise(world / lobe + 11.0))) + shift;
 	vec2 xy = vertex_view.xy;
 	if (projection_matrix[3][3] < 0.5 && vertex_view.z < -0.0001) {
 		float s = token_view.z / vertex_view.z;
@@ -946,9 +972,12 @@ float tree_token_margin(vec4 token_data, vec3 vertex_view, float reach, vec3 wor
 	}
 	vec2 offset = xy - token_view.xy;
 	if (token_data.w < 0.0) {
-		return length(offset / vec2(radius * FIGURE_WIDTH, radius)) - reach / (radius * FIGURE_WIDTH) - edge;
+		vec2 rel = offset / vec2(radius * FIGURE_WIDTH, radius);
+		return length(rel) - reach / (radius * FIGURE_WIDTH)
+			- tree_token_edge(token_data, rel, world, radius) - shift;
 	}
-	return (length(offset) - reach) / radius - edge;
+	vec2 rel = offset / radius;
+	return length(rel) - reach / radius - tree_token_edge(token_data, rel, world, radius) - shift;
 }
 
 // True when the feathered window takes a block-in fragment (its screen tile's tokens): the rim
@@ -979,12 +1008,27 @@ bool tree_token_frag(vec3 vertex_view, vec3 world, bool wood, mat4 view_matrix,
 	return near < 0.0;
 }
 
+// How far outside one token's rim a stroke lies for the window (negative: taken): its own margin,
+// or -1 when its clump's centre `clump_view` is taken and the stroke lies within
+// TREE_TOKEN_CLUMP_REACH of the rim (the clump goes whole).
+float tree_token_stroke_margin(vec4 token_data, vec3 centre_view, float reach, vec3 clump_view,
+		vec3 world, float shift, bool wood, mat4 view_matrix, mat4 projection_matrix) {
+	float own = tree_token_margin(token_data, centre_view, reach, world, shift, wood, view_matrix,
+		projection_matrix);
+	if (own < 0.0 || own > TREE_TOKEN_CLUMP_REACH) {
+		return own;
+	}
+	return tree_token_margin(token_data, clump_view, 0.0, world, 0.0, wood, view_matrix,
+		projection_matrix) < 0.0 ? -1.0 : own;
+}
+
 // True when the feathered window takes a whole stroke (vertex stage): its centre `centre_view`
-// and half size `reach` (view units), `world` its anchor (the rim's lobes), `key` its own 0..1.
+// and half size `reach` (view units), its clump's centre `clump_view` (the centre itself for a
+// stroke of no clump), `world` its anchor (the rim's lobes), `key` its own 0..1.
 // The tokens are those of every screen tile under the stroke, so a stroke whose nearest point
 // lies in a token's zone always finds it (the zone lies inside its tiles). `wood`: a bark stroke.
-bool tree_token_stroke(vec3 centre_view, float reach, vec3 world, float key, bool wood,
-		mat4 view_matrix, mat4 projection_matrix, vec2 viewport_size) {
+bool tree_token_stroke(vec3 centre_view, float reach, vec3 clump_view, vec3 world, float key,
+		bool wood, mat4 view_matrix, mat4 projection_matrix, vec2 viewport_size) {
 	if (!enable_occlusion || occlusion_token_count <= 0) {
 		return false;
 	}
@@ -1012,16 +1056,17 @@ bool tree_token_stroke(vec3 centre_view, float reach, vec3 world, float key, boo
 				int first = int(header.x);
 				int end = first + int(header.y);
 				for (int i = first; i < end; i++) {
-					near = min(near, tree_token_margin(texelFetch(occlusion_tokens, occlusion_texel(i), 0),
-						centre_view, reach, world, shift, wood, view_matrix, projection_matrix));
+					near = min(near, tree_token_stroke_margin(
+						texelFetch(occlusion_tokens, occlusion_texel(i), 0), centre_view, reach,
+						clump_view, world, shift, wood, view_matrix, projection_matrix));
 				}
 			}
 		}
 	} else {
 		// No tiles for this view, or a stroke wider than three tiles: every token.
 		for (int i = 0; i < occlusion_token_count; i++) {
-			near = min(near, tree_token_margin(texelFetch(occlusion_tokens, ivec2(i, 0), 0),
-				centre_view, reach, world, shift, wood, view_matrix, projection_matrix));
+			near = min(near, tree_token_stroke_margin(texelFetch(occlusion_tokens, ivec2(i, 0), 0),
+				centre_view, reach, clump_view, world, shift, wood, view_matrix, projection_matrix));
 		}
 	}
 	return near < 0.0;
