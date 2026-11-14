@@ -482,8 +482,9 @@ func test_no_roof_snow_adds_nothing_and_winter_adds_strips_that_cast_no_shadow()
 	if snow != null:
 		assert_eq(snow.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 		var tris: int = snow.mesh.surface_get_array_index_len(0) / 3
-		# Scalloped lips (a segment each 0.3 m of eave) and chimney collars: under a thousand.
-		assert_between(tris, 150, 1000, "a few hundred triangles a house")
+		# Scalloped lips (a segment each 0.3 m of eave), the blanket's columns each 0.5 m along the
+		# eave (card painter-buildings-fix4: its crown and lip need them) and chimney collars.
+		assert_between(tris, 150, 1400, "about a thousand triangles a house")
 	buildings.applied = STATE.duplicate()
 	host.retone(sheet)
 	assert_null(node.get_node_or_null(PainterMannerHost.SNOW), "leaving winter frees them")

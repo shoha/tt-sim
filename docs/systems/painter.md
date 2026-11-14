@@ -616,6 +616,50 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   read near straight at eye distance; the red bloom spikes stay small pyramids. Frames:
   `docs/research/2026-11-09-prototypes/compare/painter_final5/`; numbers in
   `docs/plans/handoffs/painter-a1.md` "Buildings fix 3".
+- **Buildings fix 4 (card painter-buildings-fix4, 2026-11-13; look-pending).** (1) The mason's
+  hand: a building whose walls are at least half masonry, stone or rubble gets
+  `PainterMannerMesh.hand_frame` (its centre, long axis, half size and top) in its wander field,
+  and `hand_at` adds to `wander_at`, so the draw, the shadow caster, the collider and the snow all
+  move alike: a lean that grows with height (0.12 m per 3 m, a slow plan noise), a bulge mid-wall
+  (0.06 m), and a sag toward the long axis' ends of 0.09 m at the eave and 0.15 m at the ridge
+  (piecewise in height). Those walls are cut every 1.1 m in their own plane so the hand bends them
+  (`WALL_SEG_M`); their T closing is skipped (the gaps stay under about 3 mm) and the T search runs
+  on the source before the cut (on the cut mesh it cost 44 ms a stone house; 27.5 ms after,
+  headless). The shadow caster of a cut part is inset 4 cm along its normals so the bent draw does
+  not shade itself. The shader adds quoins (irregular corner stones) on the stone pattern, a
+  contact shade whose reach wanders (0.55 to 1.45 of `contact_m`) so the base line wobbles, and
+  wandering courses. `PainterMannerHost.hand` is a static A/B switch. The "scalloped dark blot" at
+  the slate roof's right end is the big tree's crown shadow (it stays with the building's shadows
+  off and follows the crown when the camera turns), not a mesh fault; the dump shows no vertex past
+  the slopes' ends. (2) Roof snow: the eave's thickness 0.12 to 0.22 m, its overhang 0.16 to 0.2 m
+  and droop 0.08 to 0.1 m, the sag 0.25 to 0.4; a crown dome of 0.18 toward the middle of the run
+  along the eave that fades to a hip end's apex (it stood up as spikes there); a lee of up to 0.15
+  heavier (a slow swell keyed to the world, so two slopes agree at a ridge); the blanket's columns
+  each 0.5 m along the eave instead of 1.2 (`PainterMannerBlanket.step_s`, a static A/B switch;
+  the test house's strips 1004 triangles), with the lip's scallops one each 1.6 m. In the shader the light's steps are softer on the
+  blanket (0.15 against 0.06), the lit band carries a continuous N.L modelling, the sky lifts the
+  shaded blanket 0.4 toward its mid tone (the eye-level blue slab), and the fall-line hollow is
+  tamed (0.17 at 0.54-0.7; the dormered house's big hollow is now a soft patch). The chimney collar
+  skip of fix 3 is confirmed at full size. (3) Eye level, shader only: the ruled lines gain a
+  4.5 per m wobble (0.05), the beam rim a slow wander (0.32) and a lip of wandering width.
+  (4) Yard: `StructureDressingShapes.soup_dot` (the blooms) now has radial normals and paint alpha
+  0.5, which marks a bloom for the yard shader: it is cut round as a blob (at 0.12, no seam), so
+  the red pyramids read as soft dabs. The lime shrubs are yard props (they go with the props
+  hidden), not Bush_* plants; their lit side breaks into darker leaf dabs and the seams darken
+  0.7. `retone` no longer errors on the snow strips of a structure rebuilt since (a freed
+  instance in a typed variable). (5) Cost (one interleaved sitting as fix 3's, tip new new tip
+  per mood, the tip's shaders, `hand` off and `step_s` 1.2 at run time): new over the tip at
+  home, mid, far, eye +0.05, +0.04, +0.03, +0.00 ms for 3 houses and +0.00, +0.06, +0.04, +0.03 for
+  12 in summer; +0.03, +0.02, -0.00, +0.03 and +0.01, +0.02, +0.04, +0.04 in winter. Draw
+  triangles of the 12 houses 47254 to 52136 (the stone walls' cuts); shadow 20342 both, shadow
+  primitives identical in every measured view. Builds run on the worker pool: in-game medians
+  83-129 ms with the tip's settings as high as the new (12 builds at once share the pool); install
+  median 1.0-1.3 ms, max under 1.8 ms on every rebuild, but the first install after a level loads
+  had one at 44.9 ms (the card's 59.8 ms): a one-time warm-up, likely the first manner material
+  and its shader's threaded load, not split-timed. Open: the stone walls still read near vertical
+  at the corners; a pale lit wash on the stone wall at eye level; the timber eave and braces read
+  near straight. Frames: `docs/research/2026-11-09-prototypes/compare/painter_final7/`; numbers in
+  `docs/plans/handoffs/painter-a1.md` "Buildings fix 4".
 - **Its cost (card painter-manner-b, one interleaved sitting, 1920x1080, vsync off, summer sun
   45, order Classic A3b B B A3b Classic, each the mean of its pair; indicative, shared GPU, the
   pairs 0.0-0.06 ms apart).** B over Classic buildings (under the painted look): home, mid, far,

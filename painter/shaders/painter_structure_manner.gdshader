@@ -194,6 +194,28 @@ vec3 p_stones(vec2 f, float cr, float fw, float seed) {
 	return vec3(dk + joint * 0.55, lt, (fract(h * 3.7) - 0.5) * inside);
 }
 
+// The corner stones of a stone wall frame `f` (`ul` its length, courses `cr` high): from each
+// corner a long stone, then a short one, course by course (0.52 and 0.3 m, each its own length),
+// paler than the wall, each with a dark joint at its inner end and under it, its edge broken by
+// the dry brush (card painter-buildings-fix4: the stone house's corners read ruled). Returns
+// (dark, light, a value shift, the share that is corner stone).
+vec4 p_quoin(vec2 f, float cr, float ul, float fw, float seed) {
+	float r = f.y / cr;
+	float ri = floor(r);
+	float h = p_hash(vec3(ri, seed, 21.0));
+	float len = (mod(ri, 2.0) < 1.0 ? 0.52 : 0.3) * mix(0.8, 1.2, h);
+	float cd = min(f.x, ul - f.x);
+	float drag = p_n2(vec2(f.x * 4.0, f.y * 18.0), seed + 5.0);
+	float w = max(fw * 1.2, 0.006);
+	float in_q = 1.0 - smoothstep(len - w, len, cd + (drag - 0.5) * 0.05);
+	float qy = fract(r) * cr;
+	float jw = max(0.02, fw * 1.6);
+	float beside = (1.0 - smoothstep(jw * 0.5, jw, abs(cd + (drag - 0.5) * 0.05 - len)));
+	float under = (1.0 - smoothstep(jw * 0.5, jw, qy)) * (1.0 - smoothstep(len, len + 0.06, cd));
+	float dry = mix(0.5, 1.0, smoothstep(0.3, 0.6, drag));
+	return vec4(max(beside, under) * 0.6 * dry, in_q * 0.32 * dry, (fract(h * 5.3) - 0.5) * 0.5, in_q);
+}
+
 void fragment() {
 	ALBEDO = vec3(1.0);
 	ROUGHNESS = 1.0;
@@ -266,8 +288,10 @@ void fragment() {
 			light += 0.35 * smoothstep(0.82, 1.0, h);
 		}
 		if (code == 1 || code == 3) {
+			// The foot's contact shade, its top edge wandering (a hand-drawn base line).
 			float hm = h * 16.0;
-			dark += contact * (1.0 - smoothstep(0.0, contact_m, hm));
+			float reach = contact_m * (0.55 + 0.9 * p_n2(vec2(f.x * 0.9, acc * 4.0), 12.0));
+			dark += contact * (1.0 - smoothstep(reach * 0.25, reach, hm));
 		}
 		float cr = course_m > 0.05 ? course_m : (pattern == 2 ? 0.3 : (pattern == 3 ? 0.24 : 0.34));
 		float block = 0.0;
@@ -275,7 +299,15 @@ void fragment() {
 			// Stone, dry-brushed (p_stones; card painter-buildings-fix: soft blurred blocks read as
 			// an upscaled texture): it reads at home zoom and fades when a course is under about
 			// three pixels.
-			vec3 st = p_stones(f, cr, fw, 3.0 + acc * 17.0);
+			// The courses wander up and down along the wall (up to a fifth of a course), and from
+			// each corner the corner stones step long and short (card painter-buildings-fix4: ruled
+			// courses and a ruled corner at eye level).
+			vec2 fs = vec2(f.x, f.y + (p_n2(vec2(f.x * 0.6, acc * 3.0), 14.0) - 0.5) * cr * 0.4);
+			vec3 st = p_stones(fs, cr, fw, 3.0 + acc * 17.0);
+			if (code == 1) {
+				vec4 q = p_quoin(fs, cr, ul, fw, 5.0 + acc * 11.0);
+				st = vec3(st.x * (1.0 - q.w) + q.x, mix(st.y, q.y, q.w), mix(st.z, q.z, q.w));
+			}
 			block = 1.0 - smoothstep(0.15, 0.35, fw / cr);
 			// Where the stones are drawn, they carry the wall's light and dark: the wall's dabs
 			// (laid along the courses) read as long pale bands at eye level, so they give way to
@@ -294,7 +326,9 @@ void fragment() {
 				// three.
 				float lw = max(0.03, fw * 1.4);
 				float inset = max(0.07, fw * 3.0);
-				float wob = (p_n2(f * 1.4, acc * 9.0) - 0.5) * 0.06;
+				// Up close a finer wander too, so an edge read at eye level is drawn, not ruled.
+				float wob = (p_n2(f * 1.4, acc * 9.0) - 0.5) * 0.06
+					+ (p_n2(f * 4.5, acc * 9.0 + 3.0) - 0.5) * 0.05 * detail;
 				float dx = min(f.x - taper * f.y, ul - taper * f.y - f.x) / sqrt(1.0 + taper * taper);
 				float dy0 = f.y;
 				float dy1 = vl - f.y;
@@ -375,9 +409,13 @@ void fragment() {
 				// painter-buildings-fix3: beams read ruler straight at eye level).
 				float side = across_b < 0.5 ? 1.0 : 2.0;
 				float fine = (p_n2(vec2(f.x * 7.0, side * 5.0 + acc * 3.0), 10.0) - 0.5) * detail;
-				rim += fine * 0.16;
+				// and a slower, wider one (card painter-buildings-fix4: still near straight at eye
+				// level): the rim's inner edge, the one the eye follows, swings across a quarter of
+				// the beam every half metre or so.
+				float slow = (p_n2(vec2(f.x * 2.2, side * 7.0 + acc * 5.0), 12.0) - 0.5) * detail;
+				rim += fine * 0.16 + slow * 0.32;
 				float lip = (code == 4 ? detail : 0.0)
-					* (1.0 - smoothstep(0.0, 0.03 + 0.09 * (fine + 0.5), min(across_b, 1.0 - across_b)));
+					* (1.0 - smoothstep(0.0, 0.04 + 0.14 * (fine + slow + 0.5), min(across_b, 1.0 - across_b)));
 				dark += (1.0 - smoothstep(0.04, 0.17, rim)) * 0.7 * (code == 4 ? 1.0 : 0.0) * (1.0 - lip);
 				light += lip * 0.7;
 			} else if (code == 5) {
@@ -440,14 +478,18 @@ void fragment() {
 			cover = 1.0;
 			hide = 1.0;
 			vec2 sw = p_wash(f, 0.5, 1.6, 0.55, 0.32, 0.45, 41.0 + acc * 7.0);
-			float mass = p_n2(vec2(f.x * 0.55, f.y * 0.36) + acc * 13.0, 47.0)
+			// The mass's patches lie wider along the eave than down the slope (card
+			// painter-buildings-fix4: taller ones read as vertical blotches), its hollows lower.
+			float mass = p_n2(vec2(f.x * 0.42, f.y * 0.62) + acc * 13.0, 47.0)
 				+ (p_n2(vec2(f.x * 2.2, f.y * 1.4), 48.0) - 0.5) * 0.3;
-			float hollow = smoothstep(0.52, 0.66, mass) * (1.0 - under);
+			float hollow = smoothstep(0.54, 0.7, mass) * (1.0 - under);
 			swell = (1.0 - smoothstep(0.34, 0.48, mass)) * (1.0 - under);
-			snow_dark = sw.x * 0.3 * broad * (1.0 - under) + under * 0.6 + hollow * 0.26;
+			snow_dark = sw.x * 0.3 * broad * (1.0 - under) + under * 0.6 + hollow * 0.17;
 			snow_light = sw.y * 0.5 * broad * (1.0 - under);
 			wob = 0.5 + (sw.y - sw.x) * 0.45;
-			soft = 0.06;
+			// A blanket's light turns over a wide step, so its own shape (the crown, the sags, the
+			// lip's round) reads as soft light and shade instead of one flat tone.
+			soft = code == 10 ? 0.15 : 0.06;
 		} else if (strip || (snow_body && code == 6)) {
 			// A strip (or the ridge beam under a cap): all snow, a slightly darker foot where it
 			// sits and a blue underside under a lip's nose.
@@ -475,6 +517,13 @@ void fragment() {
 	f_mid = mix(mix(mid, shd, dark), lit, light * 0.6);
 	f_lit = mix(mix(lit, mid, dark), lit * 1.06, light);
 	f_lit = mix(f_lit, f_lit * vec3(1.0, 0.975, 0.9), swell * 0.6);
+	if (code == 10) {
+		// Snow facing the sky is never the deep shade blue: a blanket's top in the roof's own
+		// shade takes some of the mid tone (card painter-buildings-fix4: a shaded roof read as one
+		// mid-blue slab at eye level), its lip's front and underside stay blue.
+		float sky = clamp(n.y, 0.0, 1.0) * (1.0 - clamp(course_m / 0.9, 0.0, 1.0));
+		f_shd = mix(f_shd, f_mid, 0.4 * sky * sky);
+	}
 	f_n = n;
 	f_wob = wob;
 	bool paint_slope = on_slope && cover < 0.5;
@@ -492,6 +541,12 @@ void light() {
 		float x = dot(normalize(f_n), lw) + (f_wob - 0.5) * f_tune.z;
 		vec3 col = mix(f_shd, f_mid, smoothstep(tone_lo - f_tune.x, tone_lo + f_tune.x, x));
 		col = mix(col, f_lit, smoothstep(tone_hi - f_tune.x, tone_hi + f_tune.x, x));
+		if (f_tune.x > 0.1) {
+			// A blanket in the sun models softly with its own shape: what turns from the light
+			// greys a little toward the mid tone, what faces it is whitest (card
+			// painter-buildings-fix4: a sunlit blanket was one flat white).
+			col = mix(f_mid, col, 0.7 + 0.3 * smoothstep(0.35, 0.95, x));
+		}
 		DIFFUSE_LIGHT += mix(col, f_shd, cast * cast_amount);
 	}
 }

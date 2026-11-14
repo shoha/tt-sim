@@ -44,6 +44,10 @@ const COLLISION := "Collision/CollisionShape3D"
 ## false draws them as before card painter-roof-snow (an A/B switch for measurements). Read when
 ## a structure is dressed and a material made: change it, then release() and paint() again.
 static var snow_body := true
+## True (the default) gives a stone-walled building the mason's hand (PainterMannerMesh.hand_at);
+## false builds it as before card painter-buildings-fix4 (an A/B switch for measurements, read
+## when a structure is dressed).
+static var hand := true
 
 ## Per structure built: {"id", "eval_ms", "source" ("build": the records came with the structure's
 ## parts; "eval": evaluated again), "record_bytes", "build_ms", "install_ms",
@@ -183,8 +187,11 @@ func retone(sheet: Dictionary) -> void:
 	_snow_on = wanted
 	_snow_gen += 1
 	for id: int in _snow_nodes:
-		var node: Node = _snow_nodes[id]
-		if is_instance_valid(node):
+		# A structure rebuilt since its strips were made freed them with it: the entry then holds a
+		# freed instance, which a typed Node variable refuses (card painter-buildings-fix4).
+		var held: Variant = _snow_nodes[id]
+		if is_instance_valid(held):
+			var node := held as Node
 			_added.erase(node)
 			node.get_parent().remove_child(node)
 			node.queue_free()
@@ -284,7 +291,7 @@ static func _field(feed: Dictionary, structure: Structure) -> Dictionary:
 		if str(rec["kind"]) == "wall_face":
 			var top: float = (rec["origin"] as Vector3).y + float(rec["v_len"]) * (rec["v"] as Vector3).y
 			eave = maxf(eave, top)
-	return {
+	var field := {
 		"amp": AMP_M,
 		"phase": PainterMannerMesh.phase_of(structure.seed_value),
 		"foot": foot,
@@ -292,6 +299,10 @@ static func _field(feed: Dictionary, structure: Structure) -> Dictionary:
 		"walls": PainterMannerMesh.wall_normals(records),
 		"door_dir": PainterMannerMesh.door_dir(records)
 	}
+	# A stone-walled building gets the mason's hand (card painter-buildings-fix4).
+	if hand:
+		field.merge(PainterMannerMesh.hand_frame(records, eave))
+	return field
 
 
 # ---------------------------------------------------------------- main thread

@@ -46,11 +46,12 @@ uniform float lobe_freq = 3.2;
 uniform float rim = 0.3;
 uniform float scallop = 0.32;
 uniform float scallop_freq = 4.0;
-uniform float seam_dark = 0.5;
+uniform float seam_dark = 0.7;
 
 varying vec3 v_wp;
 varying vec3 v_wn;
-// The ramp (0 leaf, 1 stone, 2 timber, 3 flowers), plus 4 for a flat piece (every normal upright).
+// The ramp (0 leaf, 1 stone, 2 timber, 3 flowers), plus 4 for a flat piece (every normal upright)
+// and 8 for a bloom (its paint's alpha under 0.75, StructureDressingShapes.soup_dot).
 varying flat int v_kind;
 
 varying vec3 f_n;
@@ -81,7 +82,8 @@ void vertex() {
 	v_wn = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	// Classic stores the paint as sRGB (vertex_color_is_srgb). A tuft's blade, a stepping stone or
 	// a lid carries upright normals throughout; a blob's are its ellipsoid's, never quite upright.
-	v_kind = yard_tone(pow(max(COLOR.rgb, vec3(0.0)), vec3(2.2))) + (NORMAL.y > 0.999 ? 4 : 0);
+	v_kind = yard_tone(pow(max(COLOR.rgb, vec3(0.0)), vec3(2.2))) + (NORMAL.y > 0.999 ? 4 : 0)
+		+ (COLOR.a < 0.75 ? 8 : 0);
 }
 
 void fragment() {
@@ -90,8 +92,11 @@ void fragment() {
 	SPECULAR = 0.0;
 	METALLIC = 0.0;
 	int tone = v_kind & 3;
-	bool flat_piece = v_kind >= 4;
-	bool blob = !flat_piece && tone < 2;
+	bool flat_piece = (v_kind & 4) != 0;
+	// A bloom is a blob too, cut round with a lower rim (card painter-buildings-fix4: the blooms'
+	// face normals drew small hard pyramids; their normals are radial now).
+	bool bloom = (v_kind & 8) != 0;
+	bool blob = !flat_piece && (tone < 2 || bloom);
 	// Every piece's normals are authored outward (a blob's its ellipsoid's), but the soup's winding
 	// is not one way round: flipping by FRONT_FACING turned a blob's lit top inward, so it never
 	// took snow (card painter-buildings-fix3). The near side wins the depth test either way.
@@ -104,7 +109,7 @@ void fragment() {
 		vec3 eye = PROJECTION_MATRIX[3][3] == 0.0
 			? normalize(INV_VIEW_MATRIX[3].xyz - wp)
 			: normalize(INV_VIEW_MATRIX[2].xyz);
-		if (dot(n, eye) < rim + scallop * seam) {
+		if (dot(n, eye) < (bloom ? 0.12 : rim + scallop * seam)) {
 			discard;
 		}
 	}
@@ -132,6 +137,13 @@ void fragment() {
 	f_shd = mix(shd, snow_ramp[0], cover);
 	f_mid = mix(mid, snow_ramp[1], cover);
 	f_lit = mix(lit, snow_ramp[2], cover);
+	if (blob && tone == 0) {
+		// A shrub's lit side breaks into a few darker leaf dabs, as a crown's does (card
+		// painter-buildings-fix4: a small lime shrub read as one glossy tone).
+		float dab = smoothstep(0.52, 0.66, p_noise(wp * 6.5 + 3.0));
+		f_lit = mix(f_lit, f_mid, dab * 0.5 * (1.0 - cover));
+		f_mid = mix(f_mid, f_shd, dab * 0.3 * (1.0 - cover));
+	}
 	f_n = ln;
 	f_wob = p_noise(wp * 5.0 + 5.0) - (blob ? seam * seam_dark * (1.0 - cover) : 0.0);
 }

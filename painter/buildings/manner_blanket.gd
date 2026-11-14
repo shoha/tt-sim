@@ -32,14 +32,17 @@ const MID_T_M := 0.3
 const PILE := 0.3
 ## The thickness at a verge's edge and at the top of the eave's lip (at full hold), and how far in
 ## each taper reaches its whole.
+## The eave's is most of the middle's (card painter-buildings-fix4: at eye level a thin eave read
+## as a knife-straight edge; the snow rolls over the eave as thick as it lies, only the verges
+## thin, so no rim stands round a thinner field).
 const VERGE_T_M := 0.035
-const EAVE_T_M := 0.12
+const EAVE_T_M := 0.22
 const VERGE_R_M := 1.3
 const EAVE_R_M := 1.3
 ## The eave lip's overhang past the edge and the deepest droop of a scallop (full hold), and the
 ## verge roll's reach past its edge.
-const OVER_M := 0.16
-const DROOP_M := 0.08
+const OVER_M := 0.2
+const DROOP_M := 0.1
 ## How much the blanket cools toward a thin edge (its shade where the taper is at its thinnest),
 ## so the middle reads the thickest.
 const THIN_SHADE := 0.22
@@ -50,14 +53,26 @@ const THIN_FLAT := 0.5
 const ROLL_TURN := 0.5
 const VERGE_OVER_M := 0.05
 ## The sag's share of the thickness, and the heap on a crest (full hold).
-const SAG := 0.25
+const SAG := 0.4
 const CREST_M := 0.05
-## Grid steps in from an edge where a taper is drawn (metres); between them the field's step.
+## The crown (card painter-buildings-fix4: a big roof's blanket read as a flat white rectangle):
+## the blanket domes toward the middle of its run along the eave by DOME and lies up to LEE / 2
+## heavier toward the lee (a slow swell keyed to the world).
+const DOME := 0.18
+const LEE := 0.3
+## Grid steps in from an edge where a taper is drawn (metres); between them the field's step, up
+## the slope and along the eave (finer, so the lip's scallops and swell are drawn, not sampled
+## into straight runs a metre long).
 const EDGE_STEPS: Array[float] = [0.0, 0.15, 0.45, 0.95]
 const TOP_STEPS: Array[float] = [0.0, 0.4]
 const FIELD_STEP_M := 1.2
+const FIELD_STEP_S_M := 0.5
 ## Corners closer than this are one point (metres).
 const JOIN_M := 0.15
+
+## The step along the eave in use (FIELD_STEP_S_M; FIELD_STEP_M builds the grid as before card
+## painter-buildings-fix4, an A/B switch for measurements).
+static var step_s := FIELD_STEP_S_M
 
 
 ## The blanket's frame on roof record `roof`: {"p0", "p1" (the eave's ends), "q0", "q1" (the top's
@@ -162,7 +177,15 @@ static func sag(p: Vector3, phase: Vector3) -> float:
 static func thickness(lay: Dictionary, s: float, t: float, p: Vector3) -> float:
 	var f := tapers(lay, s, t)
 	var pile := 1.0 + PILE * smoothstep(0.35, 1.0, t)
-	return float(lay["t"]) * f * pile * (1.0 + SAG * sag(p, lay["phase"]) * smoothstep(0.0, 0.3, f))
+	var phase: Vector3 = lay["phase"]
+	var c := 2.0 * s - 1.0
+	# The lee keyed to the world (about 13 m a wave), so two slopes meeting at a ridge agree there.
+	var lee := 1.0 + LEE * 0.5 * sin(p.x * 0.45 + p.z * 0.3 + phase.z)
+	# A hip end's dome fades toward its apex, where every column meets one point (a dome there
+	# stood up as a spike).
+	var dome := DOME * (1.0 - c * c) * (1.0 - t if lay["top"] == "apex" else 1.0)
+	var crown := (1.0 + dome) * lee
+	return float(lay["t"]) * f * pile * crown * (1.0 + SAG * sag(p, phase) * smoothstep(0.0, 0.3, f))
 
 
 ## The product of the verge and eave tapers at (`s`, `t`) of layout `lay` (thickness() takes
@@ -209,15 +232,17 @@ static func _frame(roof: Dictionary, lay: Dictionary, hold: float, phase: Vector
 
 
 ## Grid stations from 0 to 1 over `length` metres: EDGE_STEPS in from the start (`lo`) and the end
-## (`hi`), the field's step between. Pure.
-static func stations(length: float, lo: Array[float], hi: Array[float]) -> PackedFloat32Array:
+## (`hi`), the field's step (`step` metres at most) between. Pure.
+static func stations(
+	length: float, lo: Array[float], hi: Array[float], step: float = FIELD_STEP_M
+) -> PackedFloat32Array:
 	var metres: Array[float] = []
 	for d in lo:
 		if d < length * 0.5:
 			metres.append(d)
 	var a := lo[lo.size() - 1] if lo[lo.size() - 1] < length * 0.5 else length * 0.5
 	var b := length - (hi[hi.size() - 1] if hi[hi.size() - 1] < length * 0.5 else length * 0.5)
-	var count := ceili((b - a) / FIELD_STEP_M)
+	var count := ceili((b - a) / step)
 	for k in range(1, count):
 		metres.append(lerpf(a, b, float(k) / count))
 	for k in range(hi.size() - 1, -1, -1):
@@ -265,7 +290,7 @@ static func lay_into(
 	# 5 the close of a ridge with no other half.
 	var cols: Array = []
 	var side_steps: Array[float] = EDGE_STEPS
-	var s_st := stations(w0, side_steps, side_steps)
+	var s_st := stations(w0, side_steps, side_steps, step_s)
 	if lay["left"] == "verge":
 		cols.append([0.0, 2])
 		cols.append([0.0, 1])

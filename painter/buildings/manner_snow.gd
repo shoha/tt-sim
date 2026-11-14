@@ -250,10 +250,11 @@ static func swell(s: float, seed: int) -> float:
 
 
 ## The hang of a lip's scallops along its edge, 0 to 1 (`s` metres along it, `seed` per edge):
-## about one scallop a metre, each its own width. Pure.
+## about one scallop every 1.6 m (a blanket's lip is sampled every half metre; card
+## painter-buildings-fix4), each its own width. Pure.
 static func scallop(s: float, seed: int) -> float:
 	var ph := float(seed % 991) * 0.53
-	return 0.5 + 0.5 * sin(s * 6.6 + ph + 0.9 * sin(s * 2.3 + ph))
+	return 0.5 + 0.5 * sin(s * 3.8 + ph + 0.9 * sin(s * 1.7 + ph))
 
 
 ## The direction in the slope's plane (normal `n`) across edge a-b, away from the slope's middle

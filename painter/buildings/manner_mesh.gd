@@ -97,6 +97,21 @@ const FORMAT := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
 ## The shortest wall edge searched for a T (_wall_ts): the wander's bend across a shorter edge opens
 ## under a millimetre or two, and the short reveals and sills are most of a wall's edges.
 const T_EDGE_M := 0.5
+## The mason's hand (hand_at; card painter-buildings-fix4) on a building whose wall faces are
+## mostly of these materials: its walls are cut every WALL_SEG_M (in space, so a wall bends up its
+## height too), its eave and ridge sag HAND_EAVE_SAG_M and HAND_SAG_M in the middle, its walls
+## bow out HAND_BULGE_M at mid-height and its ends lean HAND_LEAN_M a 3 m of height their own ways.
+const STONE_WALLS: Array[String] = ["masonry", "stone", "rubble"]
+const WALL_SEG_M := 1.1
+const HAND_EAVE_SAG_M := 0.09
+const HAND_SAG_M := 0.15
+const HAND_BULGE_M := 0.06
+const HAND_LEAN_M := 0.12
+## The shadow caster of a cut piece (the recipe's uncut triangles, wandered) moved this far in
+## along its normals: between its vertices the drawn, cut surface strays a few centimetres from
+## the caster's chords, and where it fell behind them the piece shadowed itself (card
+## painter-buildings-fix4: dark scalloped blots on the stone house's slate roof).
+const SHADOW_INSET_M := 0.04
 
 
 ## The wander at map point `p` (`foot` the wall foot and `eave` the eave height, map Y; `phase` from
@@ -124,15 +139,103 @@ static func wander(
 	return (lean * w + bow * 0.45 * r + Vector3.UP * wob * 0.35 * minf(w, 1.0)) * amp
 
 
-## wander() with its numbers from `field` ({"amp", "phase", "foot", "eave"}). Pure.
+## wander() with its numbers from `field` ({"amp", "phase", "foot", "eave"}), plus hand_at() on a
+## building with a mason's hand (`field` "hand", hand_frame). Pure.
 static func wander_at(p: Vector3, field: Dictionary) -> Vector3:
-	return wander(
+	var out := wander(
 		p,
 		float(field.get("amp", 0.0)),
 		field.get("phase", Vector3.ZERO),
 		float(field.get("foot", 0.0)),
 		float(field.get("eave", 0.0))
 	)
+	if float(field.get("hand", 0.0)) > 0.0:
+		out += hand_at(p, field)
+	return out
+
+
+## The mason's hand on a stone-walled building (card painter-buildings-fix4: the stone house read
+## as a ruled box beside the timber and thatch houses), three terms in the building's own frame
+## (`field` from hand_frame: "centre", "axis" along its long side, "half" its half extents, "top"
+## the ridge's height, "foot", "eave", "phase"):
+##   sag    down, HAND_EAVE_SAG_M at the middle of the eave and HAND_SAG_M of the ridge, none at
+##          the gable ends, growing with height (linear below the eave and above it, at about one
+##          rate, so a roof slope stays near a plane across itself and its shadow caster, the
+##          recipe's uncut slope, never stands above it): the eave and the ridge sway;
+##   bulge  outward from the middle, HAND_BULGE_M at mid-wall, none at the foot or the eave (the
+##          walls are cut, WALL_SEG_M, so a wall's face and corners bow; outward only, so the cut
+##          wall never falls behind its uncut shadow caster);
+##   lean   a second lean of about 11 m wavelength, HAND_LEAN_M a 3 m of height, so the two ends
+##          of a house lean their own ways.
+## Pure.
+static func hand_at(p: Vector3, field: Dictionary) -> Vector3:
+	var hand := float(field.get("hand", 0.0))
+	var axis: Vector3 = field.get("axis", Vector3.RIGHT)
+	var across := Vector3(-axis.z, 0.0, axis.x)
+	var half: Vector2 = field.get("half", Vector2.ONE)
+	var phase: Vector3 = field.get("phase", Vector3.ZERO)
+	var foot := float(field.get("foot", 0.0))
+	var eave := float(field.get("eave", foot + 2.5))
+	var top := float(field.get("top", eave + 2.0))
+	var d: Vector3 = p - (field.get("centre", Vector3.ZERO) as Vector3)
+	var ax := clampf(d.dot(axis) / maxf(half.x, 0.5), -1.0, 1.0)
+	var az := clampf(d.dot(across) / maxf(half.y, 0.5), -1.0, 1.0)
+	var sag := (
+		(1.0 - ax * ax)
+		* (
+			HAND_EAVE_SAG_M * clampf((p.y - foot) / maxf(eave - foot, 0.5), 0.0, 1.0)
+			+ (HAND_SAG_M - HAND_EAVE_SAG_M) * clampf((p.y - eave) / maxf(top - eave, 0.5), 0.0, 1.0)
+		)
+	)
+	var prof := sin(PI * clampf((p.y - foot) / maxf(eave - foot, 0.5), 0.0, 1.0))
+	var swell := 0.6 + 0.4 * sin(d.dot(axis) * 1.3 + d.dot(across) * 1.1 + phase.x)
+	var bulge := (axis * ax + across * az) * HAND_BULGE_M * prof * swell
+	var lean := Vector3(
+		sin(p.x * 0.55 + p.z * 0.35 + phase.z), 0.0, sin(p.z * 0.55 - p.x * 0.4 + phase.y)
+	)
+	lean *= HAND_LEAN_M * clampf((p.y - foot) / 3.0, 0.0, 2.0)
+	return (Vector3.DOWN * sag + bulge + lean) * hand
+
+
+## The mason's hand's frame for `records` (hand_at's keys, merged into the field): "hand" 1 when
+## most wall faces are stone (STONE_WALLS), else {} (no hand: the field as before). Pure.
+static func hand_frame(records: Dictionary, eave: float) -> Dictionary:
+	var walls: Array[Dictionary] = []
+	var stone := 0
+	var top := eave
+	for rec: Dictionary in records.values():
+		var kind := str(rec["kind"])
+		if kind == "wall_face":
+			walls.append(rec)
+			if STONE_WALLS.has(str(rec.get("material", ""))):
+				stone += 1
+		elif kind == "roof_slope" or kind == "roof_part":
+			var o: Vector3 = rec["origin"]
+			top = maxf(top, maxf(o.y, o.y + (rec["v"] as Vector3).y * float(rec["v_len"])))
+	if walls.is_empty() or stone * 2 < walls.size():
+		return {}
+	var centre := Vector3.ZERO
+	var longest: Dictionary = walls[0]
+	for rec in walls:
+		var u: Vector3 = rec["u"]
+		centre += (rec["origin"] as Vector3) + u * float(rec["u_len"]) * 0.5
+		if float(rec["u_len"]) > float(longest["u_len"]):
+			longest = rec
+	centre /= walls.size()
+	var axis: Vector3 = longest["u"]
+	axis.y = 0.0
+	axis = axis.normalized() if axis.length_squared() > 0.01 else Vector3.RIGHT
+	var hz := 0.5
+	for rec in walls:
+		if absf((rec["u"] as Vector3).dot(axis)) < 0.5:
+			hz = maxf(hz, float(rec["u_len"]) * 0.5)
+	return {
+		"hand": 1.0,
+		"centre": centre,
+		"axis": axis,
+		"half": Vector2(float(longest["u_len"]) * 0.5, hz),
+		"top": maxf(top, eave + 0.5),
+	}
 
 
 ## The field's phase for a structure seed. Pure.
@@ -277,25 +380,34 @@ static func build(
 	var cut_idx := PackedInt32Array()
 	var mids: Dictionary = {}
 	var cut := bool(opts.get("cut", true))
+	var hand_walls := cut and float(opts.get("hand", 0.0)) > 0.0
+	# The recipe's wall Ts (source vertices only). A hand's cut walls follow the field closely
+	# between short edges, so their drawn Ts open under about 3 mm and are left; the uncut shadow's
+	# are closed as everywhere.
+	var ts := _wall_ts(m, index)
 	for t in range(0, index.size() - 2, 3):
 		var tri := [index[t], index[t + 1], index[t + 2]]
 		if cut and CUT_CODES.has(m.code(tri[0])):
 			_cut(m, tri, mids, cut_idx, SEG_M, Vector3.ZERO)
+		elif hand_walls and m.code(tri[0]) == CODE_WALL:
+			_cut(m, tri, mids, cut_idx, WALL_SEG_M, Vector3.ZERO, true)
 		elif cut and _is_beam(m.rec[tri[0]]) and m.nor[tri[0]].dot(m.rec[tri[0]]["n"]) > -0.5:
 			_cut(m, tri, mids, cut_idx, BEAM_SEG_M, m.rec[tri[0]]["u"])
 		else:
 			cut_idx.append_array(PackedInt32Array(tri))
-	var ts := _wall_ts(m, cut_idx)
 	if bool(opts.get("fringe", true)):
 		_fringe(m, recs, colours, cut_idx)
 	if cut:
 		_hand(m, opts)
 	for k in m.pos.size():
 		m.pos[k] += wander_at(m.pos[k], opts)
-	m.pos = _close_ts(m.pos, ts)
+	if not hand_walls:
+		m.pos = _close_ts(m.pos, ts)
 	var moved := src.duplicate()
 	for k in moved.size():
 		moved[k] += wander_at(moved[k], opts)
+		if cut and CUT_CODES.has(m.code(k)):
+			moved[k] -= normals[k] * SHADOW_INSET_M
 	# The walls are not cut, so their vertices are the source's, in order.
 	moved = _close_ts(moved, ts)
 	var shadow := arrays.duplicate()
@@ -366,10 +478,16 @@ class Grow:
 
 
 ## Cuts triangle `tri` at the middle of its longest edge until none is over `seg` metres, the
-## edges measured along `axis` (a beam's own) or, where `axis` is zero, in plan (so a roof is cut
-## along its eave and ridge only).
+## edges measured in space (`space`: a hand's wall), along `axis` (a beam's own) or, where `axis`
+## is zero, in plan (so a roof is cut along its eave and ridge only).
 static func _cut(
-	m: Grow, tri: Array, mids: Dictionary, out: PackedInt32Array, seg: float, axis: Vector3
+	m: Grow,
+	tri: Array,
+	mids: Dictionary,
+	out: PackedInt32Array,
+	seg: float,
+	axis: Vector3,
+	space: bool = false
 ) -> void:
 	var horizontal := axis == Vector3.ZERO
 	var stack: Array = [tri]
@@ -379,7 +497,9 @@ static func _cut(
 		var best_len := seg
 		for e in 3:
 			var d: Vector3 = m.pos[t[(e + 1) % 3]] - m.pos[t[e]]
-			var h := Vector2(d.x, d.z).length() if horizontal else absf(d.dot(axis))
+			var h := (
+				d.length() if space else (Vector2(d.x, d.z).length() if horizontal else absf(d.dot(axis)))
+			)
 			if h > best_len:
 				best_len = h
 				best = e

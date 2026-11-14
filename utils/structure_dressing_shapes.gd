@@ -108,7 +108,9 @@ static func vary(color: Color, rng: Rng) -> Color:
 	return Color(color.r * tone, color.g * tone, color.b * tone * rng.between(0.95, 1.05))
 
 
-## A small tetrahedron, a bloom.
+## A small tetrahedron, a bloom. Its normals point out from its centre (a round dab's), so a
+## painted yard draws it as a soft dot (painter_yard.gdshader cuts its outline round; card
+## painter-buildings-fix4: face normals drew hard little pyramids).
 static func soup_dot(soup: Soup, centre: Vector3, radius: float, color: Color) -> void:
 	var corners := [
 		centre + Vector3(0.0, radius, 0.0),
@@ -121,12 +123,15 @@ static func soup_dot(soup: Soup, centre: Vector3, radius: float, color: Color) -
 		var a: Vector3 = corners[face[0]]
 		var b: Vector3 = corners[face[1]]
 		var c: Vector3 = corners[face[2]]
-		var normal := (b - a).cross(c - a).normalized()
-		if normal.dot((a + b + c) / 3.0 - centre) < 0.0:
-			normal = -normal
-		var tint := Color(color.r, color.g, color.b)
+		# Alpha 0.5 marks a bloom for the painted yard (the Classic material is opaque).
+		var tint := Color(color.r, color.g, color.b, 0.5)
+		# From a point a little off the centre, so the top's normal is not quite upright (an
+		# upright normal marks a flat piece in the painted yard).
+		var from := centre + Vector3(radius, 0.0, radius) * 0.06
 		soup.tri(
-			soup.vertex(a, normal, tint), soup.vertex(b, normal, tint), soup.vertex(c, normal, tint)
+			soup.vertex(a, (a - from).normalized(), tint),
+			soup.vertex(b, (b - from).normalized(), tint),
+			soup.vertex(c, (c - from).normalized(), tint)
 		)
 
 
