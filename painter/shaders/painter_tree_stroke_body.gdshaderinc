@@ -275,13 +275,13 @@ void vertex() {
 	v_uv = vec2(0.0);
 
 	// ---- Source B: derive the stroke from its mass (layouts in painter10.gd).
-	// (painter-perf-forest: with view_cull on, a tree outside this pass's view builds no stroke,
-	// tree_view_box; off by default, an open fault.)
+	// (painter-perf-forest, painter-perf-cull: with view_cull on, a tree outside this pass's view
+	// builds no stroke, tree_view_box.)
 	vec3 box_c;
 	vec3 box_h;
 	if (tree_view_box(texelFetch(tree_tex, ivec2(5, int(INSTANCE_CUSTOM.x + 0.5)), 0),
 			texelFetch(tree_tex, ivec2(6, int(INSTANCE_CUSTOM.x + 0.5)), 0), MODEL_MATRIX, VIEW_MATRIX,
-			PROJECTION_MATRIX, box_c, box_h)) {
+			PROJECTION_MATRIX, e_px, box_c, box_h)) {
 		int trow = int(INSTANCE_CUSTOM.x + 0.5);
 		int first = int(INSTANCE_CUSTOM.y + 0.5);
 		vec4 t0 = texelFetch(tree_tex, ivec2(0, trow), 0);
