@@ -219,6 +219,10 @@ void vertex() {
 	float thin_i = 0.0;
 	float moss = 0.0;
 	vec3 a_p = vec3(0.0);
+	// tt-sim (painter-trees-fix): the centre of a foliage stroke's clump (the token window takes a
+	// clump's strokes together); has_clump false for a stroke of no clump.
+	vec3 clump_p = vec3(0.0);
+	bool has_clump = false;
 	vec3 a_n = vec3(0.0, 1.0, 0.0);
 	vec3 a_d = vec3(1.0, 0.0, 0.0);
 	vec3 a_tn = vec3(0.0, 1.0, 0.0);
@@ -328,6 +332,8 @@ void vertex() {
 					vec4 e6 = mt(rec + 6, layer);
 					int n_roots = int(e6.w + 0.5);
 					if (k < n_roots && level_shown(rnd, level, e_lam) && !(bare > 0.5 && leafy)) {
+						clump_p = e0.xyz;
+						has_clump = leafy;
 						alive = true;
 						vec4 e1 = mt(rec + 1, layer);
 						vec4 e2 = mt(rec + 2, layer);
@@ -996,7 +1002,9 @@ void vertex() {
 			VERTEX = (VIEW_MATRIX * vec4(wp, 1.0)).xyz;
 			// tt-sim (painter-token-window): the token window takes a stroke whole, by where its
 			// nearest point lies (a ground dab under a crown is not in front of anything: it stays).
-			if (!is_shadow && tree_token_stroke((VIEW_MATRIX * vec4(centre, 1.0)).xyz, 0.5 * max(len, wid),
+			vec3 centre_view = (VIEW_MATRIX * vec4(centre, 1.0)).xyz;
+			if (!is_shadow && tree_token_stroke(centre_view, 0.5 * max(len, wid),
+					has_clump ? (VIEW_MATRIX * (MODEL_MATRIX * vec4(clump_p, 1.0))).xyz : centre_view,
 					anchor, fract(rnd * 13.7 + 0.31), abs(role - 1.0) < 0.5, VIEW_MATRIX, PROJECTION_MATRIX,
 					VIEWPORT_SIZE)) {
 				VERTEX = vec3(0.0);

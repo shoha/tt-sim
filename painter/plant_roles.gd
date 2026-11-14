@@ -15,8 +15,11 @@ const KIND_MASS := 0
 const KIND_GRASS := 1
 const KIND_SOLID := 2
 const KIND_FLOWER := 3
-## A bush, shrub or hedge: a leaf mass painted in the crowns' hand (painter-trees-polish2): lobed
-## domes over a rounded form with a broken outline, toned by the trees' crown ramp (CROWN_TONES).
+## A bush, shrub, hedge or fern: a leaf mass painted in the crowns' hand (painter-trees-polish2):
+## lobed domes over a rounded form with a broken outline, toned by the trees' crown ramp
+## (CROWN_TONES). painter-trees-fix: the ferns joined; as a plain leaf mass each frond card kept a
+## quarter of its own normal and read as splayed streaky shards with hard edges, grey-lilac in
+## winter.
 const KIND_CROWN := 4
 ## The script whose bush_ramp() tones a KIND_CROWN plant (loaded by path, as PainterSurfaces loads
 ## the painted trees, so a Classic start-up never compiles the trees' code).
@@ -49,8 +52,8 @@ const RULES: Array = [
 		"bark",
 		["log", "stump", "branch", "deadwood", "stick", "twig", "mushroom", "root", "snag"]
 	],
-	[KIND_CROWN, "leaf", ["bush", "shrub", "hedge"]],
-	[KIND_MASS, "leaf", ["fern", "bracken", "ivy", "moss"]],
+	[KIND_CROWN, "leaf", ["bush", "shrub", "hedge", "fern", "bracken"]],
+	[KIND_MASS, "leaf", ["ivy", "moss"]],
 ]
 ## Words of a tree-category asset that is a bush the plant shader paints, not a tree
 ## (painter-trees-polish: the core forest's bushes sway as trees, stayed Classic and read summer
