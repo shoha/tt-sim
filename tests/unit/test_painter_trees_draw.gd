@@ -12,9 +12,25 @@ const OAK := "temperate_forest_summer_s1/Tree_Oak_v0"
 const BUSH := "temperate_forest_summer_s1/Bush_Bush_v0_temperate_forest"
 const STATE := {"sheet": "core", "mood": "summer", "elevation": 45.0}
 const INCLUDE := "res://painter/shaders/painter_tree.gdshaderinc"
+## The stroke and block-in bodies each shader variant (in leaf, bare) includes.
+const STROKE_BODY := "res://painter/shaders/painter_tree_stroke_body.gdshaderinc"
+const BLOCKIN_BODY := "res://painter/shaders/painter_tree_blockin_body.gdshaderinc"
+const SHADERS: Array[String] = [
+	PainterTrees.STROKE_SHADER,
+	PainterTrees.BLOCKIN_SHADER,
+	PainterTrees.STROKE_BARE_SHADER,
+	PainterTrees.BLOCKIN_BARE_SHADER,
+]
 
 var _container: Node3D = null
 var _map: Node3D = null
+
+
+## A tree shader's source with its body (the variants are a render mode and an include).
+static func _code(path: String) -> String:
+	var code := FileAccess.get_file_as_string(path)
+	var body := STROKE_BODY if path.contains("stroke") else BLOCKIN_BODY
+	return code + "\n" + FileAccess.get_file_as_string(body)
 
 
 func before_each() -> void:
@@ -64,7 +80,7 @@ func _node_count() -> int:
 
 
 func test_both_shaders_compile_against_the_wind_sun_and_fade_globals() -> void:
-	for path: String in [PainterTrees.STROKE_SHADER, PainterTrees.BLOCKIN_SHADER]:
+	for path: String in SHADERS:
 		var names: Array = []
 		for u: Dictionary in (load(path) as Shader).get_shader_uniform_list():
 			names.append(u["name"])
@@ -88,13 +104,13 @@ func test_both_shaders_compile_against_the_wind_sun_and_fade_globals() -> void:
 ## tree shader binds the token texture, writes its own view-space VERTEX and tests the tokens
 ## there; the include walks the screen tile's list and the plain loop.
 func test_every_tree_shader_tests_the_tokens_at_its_own_fragment() -> void:
-	for path: String in [PainterTrees.STROKE_SHADER, PainterTrees.BLOCKIN_SHADER]:
+	for path: String in SHADERS:
 		var names: Array = []
 		for u: Dictionary in (load(path) as Shader).get_shader_uniform_list():
 			names.append(u["name"])
 		for wanted: String in ["enable_occlusion", "occlusion_tokens"]:
 			assert_has(names, wanted, "%s binds %s" % [path, wanted])
-		var code := FileAccess.get_file_as_string(path)
+		var code := _code(path)
 		assert_true(code.contains("skip_vertex_transform"), "%s places VERTEX itself" % path)
 		assert_true(
 			code.contains("VERTEX = (VIEW_MATRIX * vec4("), "%s writes its view-space point" % path
@@ -115,10 +131,10 @@ func test_every_tree_shader_tests_the_tokens_at_its_own_fragment() -> void:
 ## A stroke goes whole, decided in its vertex stage (never a ground shadow dab); the block-in is
 ## cut per fragment; no stroke is cut per fragment.
 func test_the_token_window_takes_whole_strokes() -> void:
-	var stroke := FileAccess.get_file_as_string(PainterTrees.STROKE_SHADER)
+	var stroke := _code(PainterTrees.STROKE_SHADER)
 	assert_true(stroke.contains("!is_shadow && tree_token_stroke("), "strokes go whole, dabs stay")
 	assert_true(stroke.contains("v_key, v_key < 0.0, true);"), "no per-fragment cut on a stroke")
-	var block := FileAccess.get_file_as_string(PainterTrees.BLOCKIN_SHADER)
+	var block := _code(PainterTrees.BLOCKIN_SHADER)
 	assert_true(block.contains("key, kind10 > 0.5, false);"), "the block-in is cut per fragment")
 
 
@@ -415,6 +431,46 @@ func test_stems_shade_brown_and_crowns_shade_green() -> void:
 		var mid := PainterSheet.lch_of_color(summer.get_pixel(15, leaf * 4 + 1))
 		assert_gt(shade.y, mid.y * 0.6, "%s crown shade keeps its chroma" % species)
 		assert_between(shade.z, 135.0, 200.0, "%s crown shade is green to teal" % species)
+
+
+## painter-winter-trees2: a bare season's kept leaf clumps shaded near-black (oak #070304: the
+## dry-shade-lift was taken off the share of the lightness the shade keeps). A dry leaf's shade
+## keeps most of its lightness and its warm hue.
+func test_a_bare_seasons_dry_leaf_shades_warm_never_black() -> void:
+	var sheet := PainterSheet.load_sheet("core")
+	var table := PainterTreeTones.row_table()
+	var winter: Image = PainterTreeTones.bake(sheet, "winter", 20.0)["palette"]
+	for species: String in ["oak", "lime", "rowan", "willow", "birch"]:
+		var leaf: int = table[species]["leaf"]
+		var shade := PainterSheet.lch_of_color(winter.get_pixel(0, leaf * 4 + 1))
+		var mid := PainterSheet.lch_of_color(winter.get_pixel(15, leaf * 4 + 1))
+		assert_gt(shade.x, mid.x * 0.7, "%s dry shade keeps its lightness" % species)
+		assert_gt(shade.y, 0.03, "%s dry shade keeps a colour" % species)
+		assert_between(shade.z, 15.0, 110.0, "%s dry shade stays warm (%.0f)" % [species, shade.z])
+
+
+## painter-winter-trees2: the leaf drop's code in every season cost the summer eye view 0.23 ms.
+## A bare season draws with the TREE_BARE variants and its bare uniforms; leaf with the plain ones
+## and the leaf values.
+func test_a_bare_season_swaps_to_the_bare_variants_and_back() -> void:
+	var scatter := _scatter()
+	scatter.set_cells({Vector2i(0, 0): {OAK: _rows([Vector2(1, 1)])}})
+	var surfaces := PainterSurfaces.new()
+	surfaces.paint(_map, STATE)
+	var trees := _painted(surfaces)
+	var sheet := PainterSheet.load_sheet("core")
+	for mood: String in ["winter", "summer", "autumn"]:
+		trees.retone(sheet, mood, 20.0)
+		var is_bare := mood == "winter"
+		var mats: Array = trees.get("_materials")
+		assert_eq(mats.size(), 5)
+		for i in mats.size():
+			var m: ShaderMaterial = mats[i]
+			var want := PainterTrees.shader_path(i < 2, is_bare)
+			assert_eq(m.shader.resource_path, want, "%s material %d" % [mood, i])
+			var snow: float = m.get_shader_parameter(&"limb_snow17")
+			assert_eq(snow, 1.0 if is_bare else 0.0, "%s limb snow" % mood)
+	surfaces.release()
 
 
 ## painter-a2a4: the stems read dark chocolate beside Classic's mid brown. On a summer midday a

@@ -1,4 +1,9 @@
 {
+	"bare": {
+		"bare_limb17": "0.008",
+		"limb_far18": "3.0",
+		"limb_snow17": "1.0"
+	},
 	"block": {
 		"bare": "0.0",
 		"bare_limb17": "0.024",

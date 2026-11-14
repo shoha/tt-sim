@@ -87,6 +87,43 @@ float row_of(float role, int inst) {
 	return texelFetch(row_map, ivec2(int(role + 0.5), inst), 0).r;
 }
 
+// tt-sim (painter-winter-trees): a bare season. The leaf row's row 6 w is the share of a tree's
+// leaf clumps it drops (PainterTreeTones: (1 - the sheet's leaf-keep) times the species' fall; 0 in
+// leaf). A clump falls whole, by its own mass seed, so its block-in mass, its strokes and its
+// ground shadow go together and the limbs and twigs show between the clumps that stay.
+// The share of a kept clump's strokes a bare tree draws (its block-in mass is not drawn).
+const float TREE_DRY_STROKES = 0.45;
+// How far a bare tree's kept clump is drawn in toward its middle (1 = its whole surface: a hollow
+// ring; 0.55: a round knot, a seed ball).
+const float TREE_DRY_SHRINK = 0.75;
+
+// Only the bare variants (TREE_BARE: painter_tree_stroke_bare.gdshader, painter_tree_blockin_bare)
+// read the drop; a tree in leaf draws with the plain ones, which have none of this code (card
+// painter-winter-trees2: in every season it cost the eye view 0.23 ms in summer).
+#ifdef TREE_BARE
+// 1 while the sheet's leaf-keep is under 1 (PainterTrees.retone): only then is the leaf row's drop
+// read (two texel reads a vertex in leaf cost the eye view about 0.2 ms, measured).
+uniform float leaf_fall = 0.0;
+
+float tree_leaf_drop(int inst) {
+	if (leaf_fall < 0.5) {
+		return 0.0;
+	}
+	return texelFetch(role_params, ivec2(int(row_of(0.0, inst) + 0.5), 6), 0).w;
+}
+
+bool tree_leaf_fallen(float mass_seed, float drop) {
+	if (drop <= 0.0) {
+		return false;
+	}
+	uint h = uint(mass_seed + 0.5) * 2654435769u + 40503u;
+	h ^= h >> 15u;
+	h *= 2246822519u;
+	h ^= h >> 13u;
+	return float(h >> 8u) / 16777216.0 < drop;
+}
+#endif
+
 float tone3(float ndl, float jit, float soft) {
 	float x = ndl + jit;
 	float a = smoothstep(tone_lo - soft, tone_lo + soft, x);

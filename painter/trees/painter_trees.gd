@@ -39,6 +39,10 @@ extends RefCounted
 
 const STROKE_SHADER := "res://painter/shaders/painter_tree_stroke.gdshader"
 const BLOCKIN_SHADER := "res://painter/shaders/painter_tree_blockin.gdshader"
+## The same bodies with TREE_BARE: a bare season's leaf drop (retone swaps them in), so a tree in
+## leaf runs none of its code.
+const STROKE_BARE_SHADER := "res://painter/shaders/painter_tree_stroke_bare.gdshader"
+const BLOCKIN_BARE_SHADER := "res://painter/shaders/painter_tree_blockin_bare.gdshader"
 const UNIFORMS := "res://painter/trees/tree_uniforms.json"
 const ROOT_NAME := "PainterTrees"
 ## Metadata on every material and node this draws with.
@@ -75,6 +79,8 @@ var _doc: MapDocument = null
 var _root: Node3D = null
 ## 0 block ellipsoids, 1 block limbs, 2..4 stroke levels 0..2.
 var _materials: Array[ShaderMaterial] = []
+## tree_uniforms.json: "block" and "stroke" (in leaf), "bare" (what a bare season sets instead).
+var _uniforms: Dictionary = {}
 var _hidden: Dictionary = {}
 var _free_rows: Array[int] = []
 var _rows: Array[Dictionary] = []
@@ -131,7 +137,27 @@ func retone(sheet: Dictionary, mood: String, elevation: float) -> void:
 	var baked := PainterTreeTones.bake(sheet, mood, elevation)
 	var palette := ImageTexture.create_from_image(baked["palette"])
 	var params := ImageTexture.create_from_image(baked["params"])
+	# A bare season's broadleaf crowns shade nothing as whole forms (form_occ skips them): the
+	# clumps they keep and the limbs under them are lit.
+	var crown_occ := 1.0 if PainterSheet.number(sheet, mood, "leaf-keep", elevation) >= 0.999 else 0.0
+	# Its leaf drop in the bare shader variants, its limbs drawn finer and snowy (tree_uniforms.json
+	# "bare"); in leaf the plain variants and the leaf values, so a summer or autumn tree costs what
+	# it did before the bare season (painter-winter-trees2). A variant is swapped only when the
+	# season changes (a shader swap compiles).
+	var bare: Dictionary = _uniforms.get("bare", {})
+	var is_bare := crown_occ < 0.5
+	for i in _materials.size():
+		var m := _materials[i]
+		var want := shader_path(i < 2, is_bare)
+		if m.shader == null or m.shader.resource_path != want:
+			m.shader = load(want) as Shader
+		var own: Dictionary = _uniforms.get("block" if i < 2 else "stroke", {})
+		for uniform_name: String in bare:
+			var v: String = bare[uniform_name] if is_bare else own.get(uniform_name, "0.0")
+			m.set_shader_parameter(uniform_name, str_to_var(v))
 	for m in _materials:
+		m.set_shader_parameter(&"crown_occ", crown_occ)
+		m.set_shader_parameter(&"leaf_fall", 1.0 - crown_occ)
 		m.set_shader_parameter(&"palette", palette)
 		m.set_shader_parameter(&"role_params", params)
 		m.set_shader_parameter(&"tone_lo", PainterSheet.number(sheet, mood, "tone-lo", elevation))
@@ -139,6 +165,14 @@ func retone(sheet: Dictionary, mood: String, elevation: float) -> void:
 		m.set_shader_parameter(&"cut_amp", PainterSheet.number(sheet, mood, "cut", elevation))
 		m.set_shader_parameter(&"cast_amount", PainterSheet.number(sheet, mood, "tree-cast", elevation))
 		m.set_shader_parameter(&"deposit", PainterSheet.number(sheet, mood, "crown-deposit", elevation))
+
+
+## The tree shader a material draws with: the block-in's (`block`) or the strokes', in leaf or in
+## a bare season (`is_bare`).
+static func shader_path(block: bool, is_bare: bool) -> String:
+	if block:
+		return BLOCKIN_BARE_SHADER if is_bare else BLOCKIN_SHADER
+	return STROKE_BARE_SHADER if is_bare else STROKE_SHADER
 
 
 ## Brings the painted trees in line with the scatters' rows: grows the new, frees the gone.
@@ -286,6 +320,7 @@ func _make_materials() -> void:
 	var stroke := load(STROKE_SHADER) as Shader
 	var block := load(BLOCKIN_SHADER) as Shader
 	var values: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(UNIFORMS))
+	_uniforms = values
 	var field := Image.create(1, 1, false, Image.FORMAT_RGBA8)
 	# Inert: a collector that ever reaches a tree material hands on this, never the tree shader.
 	var placeholder := StandardMaterial3D.new()

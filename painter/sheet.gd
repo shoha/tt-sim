@@ -54,7 +54,8 @@ const COLOR_ROLES: Array[String] = [
 const NUMBER_PROPS: Array[String] = ["sun-energy", "ambient-energy"]
 ## Colour roles a keyframe may leave to a `:world` default (see the header): the ground's forest
 ## floor and shore, the grass, the ground's pale drift and fallen-leaf marks, the four flower
-## accents (PainterSurfaces paints with them), the conifers' needles (PainterTreeTones), and the
+## accents (PainterSurfaces paints with them), the conifers' needles and a bare season's clinging
+## dry leaves (PainterTreeTones), and the
 ## buildings' walls and timber (PainterBuildings: plaster, a stone wall, log and board walls, the
 ## beams, frames and doors).
 const DEFAULT_ROLES: Array[String] = [
@@ -73,6 +74,7 @@ const DEFAULT_ROLES: Array[String] = [
 	"flower-rose",
 	"flower-violet",
 	"flower-white",
+	"dry-leaf",
 ]
 ## Numbers a keyframe may leave to a `:world` default. The tone ramp (PainterTones.ramp: how a
 ## role's shade and lit colours are drawn from it, the ground's own ramp under `ground-`), the
@@ -86,8 +88,14 @@ const DEFAULT_ROLES: Array[String] = [
 ## and keep in place of the species' (crown-*, bark-*), how much less deep a stem's shade is than
 ## a role's (bark-shade-lift), a crown's lit step's extra lift and chroma factor and its shade's
 ## extra lift (crown-lit-lift, crown-lit-chroma, crown-shade-lift), the share of a crown's up side
-## the frost deposit takes (crown-deposit), the share of the leaf's lightness and chroma a bush
-## takes on the crowns' ramp (bush-value, bush-chroma), and how far a sun's cast shadow steps a
+## the frost deposit takes (crown-deposit), the share of a broadleaf's leaf clumps it keeps
+## (leaf-keep, 1 in leaf; each species falls by its leaf role's `fall` from tree_roles.json), how
+## far a crown's kept leaves turn to the `dry-leaf` colour (leaf-turn) and how much less deep a
+## turned leaf's shade is (dry-shade-lift: the share of its lightness it keeps more), how much of
+## its own chroma it keeps and how far it pulls to the crowns' shade hue (dry-shade-keep,
+## dry-shade-pull), how much heavier the snow lies on a conifer's boughs
+## (needle-snow, times its `settle`), the share of the leaf's lightness and chroma a bush takes
+## on the crowns' ramp (bush-value, bush-chroma), and how far a sun's cast shadow steps a
 ## tree into its cool tint (tree-cast).
 ## The buildings' (PainterBuildings), all relative to the mood's ramp so one value
 ## serves every mood and sun: walls' shade hue turned from the mood's shade-hue (wall-shade-turn,
@@ -141,6 +149,12 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"crown-lit-chroma",
 	"crown-shade-lift",
 	"crown-deposit",
+	"leaf-keep",
+	"leaf-turn",
+	"dry-shade-lift",
+	"dry-shade-keep",
+	"dry-shade-pull",
+	"needle-snow",
 	"bush-value",
 	"bush-chroma",
 	"bark-shade-pull",

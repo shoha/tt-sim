@@ -15,7 +15,10 @@ extends RefCounted
 ## lit from PainterTones.steps. role_params (MAX_ROWS x PARAM_ROWS, RGBAF): the spike's PStyle6
 ## layout (size, aspect, brush, density), (align, lift, jitter, size-var), (patch-mix, patch-freq,
 ## settle, blockin), (hang, sky, layer, rise), (mark, mark-value, mark-turn + 2 mark-trim,
-## mark-size), (cap, far, mark-brush, mark-aspect), (grain, fill, 0, 0).
+## mark-size), (cap, far, mark-brush, mark-aspect), (grain, fill, 0, leaf drop): a leaf row's w is
+## the share of its leaf clumps a tree drops, (1 - the sheet's leaf-keep) times the role's `fall`
+## (painter-winter-trees; 0 in leaf), and an evergreen row's settle is times the sheet's
+## needle-snow.
 ##
 ## Colours follow the sheet. A species keeps its own colour (the spike's tuned birch, oak,
 ## spruce, ...), moved by how far the sheet's role at the level's mood and sun stands from the
@@ -152,19 +155,75 @@ static func bake(sheet: Dictionary, mood: String, elevation: float) -> Dictionar
 		var tag: Variant = styles[ri][1]
 		var lch: Vector3 = PainterSheet.parse_color(str(props.get("color", "")))
 		var shape := _shape(props, world)
+		var bush := PainterTreeSpecies.is_bush(str(styles[ri][2]))
 		if tag is String:
+			var own := lch
 			var spike := PainterSheet.parse_color(str(world.get(SPIKE_ROLE[tag], "")))
 			lch = _moved(lch, spike, PainterSheet.tone_lch(sheet, mood, SHEET_ROLE[tag], elevation))
-			if tag == "leaf" and PainterTreeSpecies.is_bush(str(styles[ri][2])):
+			if tag == "leaf" and bush:
 				# A bush's leaf is the sheet's bush (bush_ramp's colour: the leaf a step deeper and
 				# quieter), so it sits under the crowns in their family in every mood.
 				lch = _bush_lch(sheet, mood, elevation)
+			elif tag == "leaf":
+				var turn := clampf(PainterSheet.number(sheet, mood, "leaf-turn", elevation), 0.0, 1.0)
+				if turn > 0.0:
+					var dry := PainterSheet.tone_lch(sheet, mood, "dry-leaf", elevation)
+					var dried := _dried(own, spike, dry, _num(props, "dry-turn", 0.0))
+					lch = PainterSheet.lerp_lch(lch, dried, turn)
 			shape = _sheet_shade(_moved_shape(shape, sheet, mood, elevation), sheet, mood, elevation, tag)
+			if tag is String and tag == "leaf" and not bush:
+				shape = _dry_shape(shape, sheet, mood, elevation)
 		elif int(tag) == GROUND_ROW:
 			lch = PainterSheet.tone_lch(sheet, mood, "ground", elevation)
 		_paint_row(palette, ri, lch, shape, props)
 		_param_row(params, ri, props)
+		if tag is String and tag == "leaf" and not bush:
+			# Row 6 w of a leaf row: the share of its leaf clumps a tree drops (0 in leaf).
+			var keep := clampf(PainterSheet.number(sheet, mood, "leaf-keep", elevation), 0.0, 1.0)
+			var g6 := params.get_pixel(ri, 6)
+			g6.a = clampf((1.0 - keep) * _num(props, "fall", 0.0), 0.0, 1.0)
+			params.set_pixel(ri, 6, g6)
+		elif tag is String and tag == "evergreen":
+			var g2 := params.get_pixel(ri, 2)
+			g2.b *= maxf(PainterSheet.number(sheet, mood, "needle-snow", elevation), 0.0)
+			params.set_pixel(ri, 2, g2)
 	return {"palette": palette, "params": params}
+
+
+## A broadleaf's leaf ramp `shape` in a bare season: a dry leaf is thin and lit through, so its
+## shade keeps more of its lightness (`shade-depth` is the share of the lightness the shade keeps,
+## PainterTones.steps; painter-winter-trees subtracted the lift, and the kept clumps' shade halves
+## read as near-black dabs, oak #070304) by the sheet's `dry-shade-lift`, and its warm hue: its own
+## chroma by `dry-shade-keep`, the pull to the crowns' shade hue by `dry-shade-pull` (the crown's
+## keep and pull greyed it to mauve, oak #504749). Each by `leaf-turn` (pure).
+static func _dry_shape(
+	shape: Dictionary, sheet: Dictionary, mood: String, elevation: float
+) -> Dictionary:
+	var turn := clampf(PainterSheet.number(sheet, mood, "leaf-turn", elevation), 0.0, 1.0)
+	if turn <= 0.0:
+		return shape
+	var out := shape.duplicate()
+	var lift := PainterSheet.number(sheet, mood, "dry-shade-lift", elevation)
+	out["shade-depth"] = clampf(float(out["shade-depth"]) + lift * turn, 0.0, 1.0)
+	var keep := PainterSheet.number(sheet, mood, "dry-shade-keep", elevation)
+	out["shade-keep"] = clampf(lerpf(float(out["shade-keep"]), keep, turn), 0.0, 1.0)
+	var pull := PainterSheet.number(sheet, mood, "dry-shade-pull", elevation)
+	out["shade-pull"] = lerpf(float(out["shade-pull"]), maxf(pull, 0.0), turn)
+	return out
+
+
+## A species leaf `own` (tuned against the spike's leaf `spike`) as a dry leaf of the sheet's
+## `dry` colour: lightness and chroma by the species' ratio to the spike's leaf (chroma by its
+## square root), the hue the dry leaf's turned by the leaf role's `dry-turn` (degrees: a birch's
+## or willow's goes golden, an oak's stays russet, a rowan's goes red) (pure).
+static func _dried(own: Vector3, spike: Vector3, dry: Vector3, turn: float) -> Vector3:
+	var l_ratio := own.x / spike.x if spike.x > 0.001 else 1.0
+	var c_ratio := own.y / spike.y if spike.y > 0.001 else 1.0
+	return Vector3(
+		clampf(dry.x * l_ratio, 0.02, 0.985),
+		maxf(dry.y * sqrt(maxf(c_ratio, 0.0)), 0.0),
+		fposmod(dry.z + turn, 360.0)
+	)
 
 
 ## The six sRGB tones a painted bush paints with (PainterPlantRoles.KIND_CROWN; PainterTones.ramp's
