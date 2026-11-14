@@ -456,6 +456,18 @@ winter bushes carry little snow at sun 45.
 - Cost (headless, indicative, the 24-thread dev machine): one tree grows and packs in 1 to 10 ms on
   the main thread (willow and old oak the dearest, up to 5300 texels); 107 trees in chunks of 12 on
   the worker pool take 123 ms wall.
+- Frame cost (card painter-perf-forest, 2026-11-14; table in `docs/PERFORMANCE.md` "Painted
+  forest cost"): Painted is vertex-bound, not fill-bound (a quarter of the stroke area costs the
+  same). At the forest tokens view the strokes are the dearest part (2.24 ms of 4.60), at the home
+  views the block-in (1.25 forest, 1.79 taiga, half of it its shadow pass). Two cuts shipped: a
+  stroke whose root normal faces more than 120 degrees from the camera is not built (`back10`
+  -0.5 in `tree_uniforms.json`, -0.14 ms at tokens, no visible change), and a tree no token's
+  window can reach skips the token test's loops (`tree_token_near`, from the tree's box in
+  `tree_tex` texels 5 and 6, `PainterTreePack.BOUND_PAD` 2.5 m). A per-tree view cull of the
+  strokes (`tree_view_box`, `view_cull`) is in the shader but OFF: it dropped a crown edge's
+  strokes at the tokens view at both 1.5 and 2.5 m margins, cause open; at 1.5 m it was worth 0.6
+  ms there. Dead ends: the strokes in the alpha pass (no depth prepass: +1.5 to +2.5 ms), the
+  cull on the block-in (cost what it saved), skipping the form-occlusion ray (0.007 ms).
 
 ## Buildings
 

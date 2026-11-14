@@ -166,6 +166,8 @@ void vertex() {
 	vec3 wood_fn = vec3(0.0);
 	float wood_form = 0.0;
 	vec3 wood_axis = vec3(0.0);
+	// (painter-perf-forest: the strokes' per-tree view cull, tree_view_box, is not run here: a mass is
+	// 54 vertices against a tree's thousands of stroke corners, and the test cost what it saved.)
 	if (kind10 < 0.5) {
 		if (idx < int(t0.z + 0.5)) {
 			alive = true;

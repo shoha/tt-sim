@@ -132,7 +132,11 @@ func test_every_tree_shader_tests_the_tokens_at_its_own_fragment() -> void:
 ## cut per fragment; no stroke is cut per fragment.
 func test_the_token_window_takes_whole_strokes() -> void:
 	var stroke := _code(PainterTrees.STROKE_SHADER)
-	assert_true(stroke.contains("!is_shadow && tree_token_stroke("), "strokes go whole, dabs stay")
+	# painter-perf-forest: a tree no token's window can reach (tree_token_near) skips the test.
+	assert_true(
+		stroke.contains("!is_shadow && near_token && tree_token_stroke("),
+		"strokes go whole, dabs stay"
+	)
 	assert_true(stroke.contains("v_key, v_key < 0.0, true);"), "no per-fragment cut on a stroke")
 	var block := _code(PainterTrees.BLOCKIN_SHADER)
 	assert_true(block.contains("key, kind10 > 0.5, false);"), "the block-in is cut per fragment")
