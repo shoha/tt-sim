@@ -116,6 +116,8 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"grass-shade-keep",
 	"grass-lit-pull",
 	"grass-lit-lift",
+	"grass-hue-spread",
+	"grass-value-spread",
 	"ground-hue-spread",
 	"ground-value-spread",
 	"tone-lo",

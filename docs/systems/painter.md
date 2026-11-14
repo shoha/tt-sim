@@ -178,11 +178,17 @@ the horizon (no middle step for a low sun), with light and shadow read at the tu
 Each tuft is darker at its base and toward its rim (`TUFT_RIM`, by the distance from its axis
 over its mesh box's half width) and a step lighter or darker than its neighbours (`TUFT_STEP`),
 so a bed of the core meadow's broad-bladed grass reads as rounded scallops, not one flat strip.
+A wide tuft (`TUFT_WIDE`: half as wide as tall or more; core's meadow grass is three vertical cards
+through its axis, UV.x across, UV.y 1 at the foot, every normal straight up) is not cut by its
+texture's teeth but by `TUFT_DABS` (6) round dabs laid on each card as a mound (`tuft_dab`,
+painter-plants-fix3): the outline is their upper arcs with a brushed rim, each dab darker at its
+foot and its own value and variant; a card's layout varies smoothly with its direction (a stepped
+hash split a card at its seam). Flowers keep their texture's petals.
 Thinning is the sheet's: `keep-grass` (0.6) and `keep-flower` (0.4) in groups of a slow world
 noise, both in the colour and the shadow pass (winter 0.45 and 0.25: fewer tufts stand above the
 snow).
 
-A crown-kind plant (shrubs, hedges, ferns, the flowering bushes) is lit as one rounded form broken
+A crown-kind plant (shrubs, hedges, ferns) is lit as one rounded form broken
 into lobes (`bush_lobe`, a world Voronoi) whose outline breaks between them (`bush_cut`).
 Core's card-built bushes (`Bush_BerryBush`, `Bush_Bush_`: long arching leaf straps) are not drawn
 here at all (painter-bushes): three shader rounds on their own cards read as splayed shards, then,
@@ -190,11 +196,17 @@ painted on an envelope with Voronoi lobes (painter-trees-fix2), as faceted artic
 0.07 to 0.11 ms more. The painted trees' host draws them as crowns ("Trees", Bushes below).
 
 Snow on plants: the stand-ins take the sheet's `crown-deposit` (0 but in winter) as `frost`, in the
-snow's own two steps (the drift role on the ground's ramp): a tuft's top (by its height fraction,
-ragged by a small noise), a bush's or a leaf mass's up-facing lobes, a rock's or log's up faces.
+snow's own two steps (the drift role on the ground's ramp): a tuft's dabs each take a crescent cap
+(`TUFT_CAP` of the dab at full frost, its lower rim part way to the snow's shade) and its foot lies
+under a scalloped bury line (`TUFT_BURY` of its height), so straw shows as scalloped bands between
+snow (painter-plants-fix3: the old cap, the tuft's top by its height fraction ragged by a 3 m^-1
+noise, painted the top in the ground's snow and left only the straw under a jagged line: flat
+angular shards at eye level); a bush's or a leaf mass's up-facing lobes, a rock's or log's up faces.
 Winter's grass is a warm straw (`grass` oklch 0.67 0.062 72) with a small lit lift and a shade
 that keeps its own hue over the violet pull (`grass-shade-keep` 1.8, above 1): a muted russet in
-shade, where the full pull read as grey-lilac ghosts at eye level.
+shade, where the full pull read as grey-lilac ghosts at eye level. Its variants spread wide
+(`grass-hue-spread` 22, `grass-value-spread` 0.06; the defaults 12 and 0.035 are the sheet's
+plain spreads), so a tuft's dabs range from russet to pale straw.
 
 The foliage AA swap (`WindFoliage`, the eye view's alpha-to-coverage) collects stand-ins through
 `WindFoliage.META_STAND_IN`: it swaps the original wind material in their place, so a painted
@@ -220,8 +232,22 @@ spheres of 16 x 9, 9 stroke slots; no limb ribbon), never in a tree's eight neig
 the tree row's texel 3 w is 2, so the token window never takes a bush whole. Measured against the
 tip's card bushes (interleaved, 1920x1080, vsync off, GPU medians): village eye -0.45 ms, home
 -1.0, forest tokens -0.75 to -0.78, forest home -0.95 (before the 16 x 9 sphere; that change is
-unmeasured). Open: at token zoom a large bush reads as a smooth dome with a banded light, fewer
-dabs than the trees beside it.
+unmeasured).
+
+painter-plants-fix3: a large bush (across radius 0.7 m or more) is laid as a dark core (2 roots)
+and a shell of crown-sized clumps (0.36 of its radius, 0.3 to 0.55 m) round its shoulder and on
+its top, each clump its own form group, so the light turns clump by clump and the snow lies in
+scalloped clusters on each clump's top (one form read as a smooth ball with one lit band and a
+pale snow lens): at most 8 pads and 23 roots, 92 level-1 strokes (village: 50 bushes, 4564 strokes,
+against the small layout's 3108). `PainterTreeBush.shell` false restores the old layout (an A/B
+switch). Berry and flowering bushes are their own species rows (`bush_berry`: `Bush_BerryBush`;
+`bush_flower`: `Bush_FloweringBush`, `Bush_BushWithWildflowers`, which were plant cards before;
+`PainterTreeSpecies.BUSHES`) whose leaf strokes carry round trim-colour marks in bunches (red
+berries, rose flowers), as the rowan's berries. Cost against b684d777 (plant shaders and the small
+layout swapped in at run time, interleaved, GPU medians): +0.12 to +0.34 ms, over the card's
++0.05 budget; a split sitting puts about +0.19 to +0.30 ms on the tuft dabs and 0 to +0.26 on the
+bush shell (village home summer, eye winter). Open: the cost, and at sun 20 and
+token zoom a large bush's clumps still show broad flat lit plates, fewer dabs than the oaks.
 
 - The host, `PainterTrees` (`painter/trees/painter_trees.gd`), is made by PainterSurfaces (by
   path) and driven by its events: paint() on a Painted state, sync() on the scatter's

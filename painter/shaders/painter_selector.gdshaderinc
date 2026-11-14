@@ -105,6 +105,75 @@ const float BUSH_CAST_T = 0.3;
 // scallops, not one flat strip.
 const float TUFT_RIM = 0.3;
 const float TUFT_STEP = 0.15;
+// A tuft in the painted hand (painter-plants-fix3: a winter tuft drew its card's toothed blades as
+// flat straw shards under a ragged snow line, the worst thing in the winter frames). A wide tuft's
+// card (TUFT_WIDE of its height across or more: meadow grass, not reeds) is cut not by its texture
+// but by TUFT_DABS round dabs laid as a mound, the middle ones high and the outer ones low, each
+// card its own draw: the outline is their upper arcs, each dab turns from a darker foot to a lit
+// top and takes its own value and variant. In winter the snow buries the tuft's foot under a
+// scalloped line (TUFT_BURY of its height at full frost) and caps each dab's top in a crescent
+// (TUFT_CAP of the dab at full frost), so the straw shows as scalloped bands between snow.
+const int TUFT_DABS = 6;
+const float TUFT_WIDE = 0.7;
+const float TUFT_BURY = 0.5;
+const float TUFT_CAP = 0.8;
+
+// The dab of a tuft's card point at `uv` (core's tuft card: UV.x across it, UV.y 0 at its top and
+// 1 at its foot; `card` the card's unit direction, so each card lays its own dabs): x 2 when a dab
+// draws the point (its texture's cut is not read), 1 when the texture's cut does (a narrow tuft,
+// or `dabs` false: flowers keep their petals), 0 cut away; y its dab's hash, z its height in the
+// dab (-1 the dab's foot, 1 its top), w the snow on it (0 none, 1 lit snow, 0.75 a cap's shaded
+// lower rim). A texture-cut tuft takes the bury line and a top cap.
+vec4 tuft_dab(vec2 uv, vec2 card, vec3 origin, bool dabs) {
+	float hgt = max(selector_height, 0.01);
+	float half_w = max(selector_extent.x, selector_extent.z) / hgt;
+	// In tuft heights: x across from the card's middle, y up from its foot.
+	vec2 p = vec2((uv.x - 0.5) * 2.0 * min(half_w, 2.5), 1.0 - uv.y);
+	bool wide = dabs && half_w >= TUFT_WIDE;
+	float seed = p_hash(floor(origin * 10.0) + vec3(3.0, 5.0, 11.0));
+	float kept = wide ? 0.0 : 1.0;
+	float own_c = -1.0;
+	vec3 own = vec3(seed, 0.0, 0.0);
+	if (wide) {
+		float w = min(half_w, 2.5) * 0.8;
+		// Varies smoothly with the card's direction (a step would split a card at its seam).
+		float turn = card.x * 2.1 + card.y * 3.3;
+		for (int k = 0; k < TUFT_DABS; k++) {
+			float fk = float(k);
+			float hk = 0.5 + 0.5 * sin(p_hash(vec3(seed * 97.0, fk * 13.0, 1.0)) * 6.28 + turn + fk);
+			float hk2 = 0.5 + 0.5 * sin(hk * 7.13 + seed * 6.28);
+			float u = (fk + 0.5) / float(TUFT_DABS) * 2.0 - 1.0;
+			vec2 c = vec2((u + (hk - 0.5) * 0.2) * w, 0.6 - 0.3 * u * u + (hk2 - 0.5) * 0.12);
+			vec2 d = (p - c) / (0.21 + 0.1 * hk2);
+			// A brushed rim: the dab's edge wavers a little round its circle.
+			float rim = 1.0 + 0.07 * sin(d.x * 4.0 + d.y * 3.0 + hk * 6.28);
+			if (dot(d, d) < rim * rim && c.y > own_c) {
+				own_c = c.y;
+				own = vec3(hk, d.y, d.x);
+				kept = 2.0;
+			}
+		}
+		// The body under the dabs' centres, so no gap opens between their feet.
+		if (kept < 0.5 && p.y > 0.0 && p.y < 0.42 - 0.5 * (p.x / w) * (p.x / w)) {
+			kept = 2.0;
+			own = vec3(seed, -0.7, 0.0);
+		}
+	}
+	float snow = 0.0;
+	if (frost > 0.0 && kept > 0.5) {
+		float bury = TUFT_BURY * frost * (0.7 + 0.45 * abs(sin(p.x * 5.0 + seed * 6.28)));
+		if (p.y < bury) {
+			snow = 1.0;
+		} else if (own_c > -0.5) {
+			float top = sqrt(max(1.0 - own.z * own.z, 0.0));
+			float line = top * (1.0 - TUFT_CAP * frost);
+			snow = own.y > line ? (own.y > line + 0.15 * top ? 1.0 : 0.75) : 0.0;
+		} else if (!wide && p.y > 1.0 - 0.3 * frost + 0.08 * sin(p.x * 9.0 + seed * 6.28)) {
+			snow = 1.0;
+		}
+	}
+	return vec4(kept, own.x, own.y, snow);
+}
 
 // The bush's form centre for an instance at `origin` of `scale`.
 vec3 bush_mid(vec3 origin, float scale) {
@@ -192,8 +261,8 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 			petal = lo > 0.55 ? 3.0 : (grp < 0.44 ? 0.0 : (grp < 0.58 ? 1.0 : 2.0));
 			mul = 1.0;
 		}
-		// Snow caps a tuft's top, ragged by a small world noise.
-		snow = frost > 0.0 && h + 0.4 * (p_noise(wp * 3.1 + 7.0) - 0.5) > 1.0 - 0.9 * frost ? 1.0 : 0.0;
+		// Snow caps a tuft's top (painter_plant replaces this with tuft_dab()'s caps and bury line).
+		snow = frost > 0.0 && h > 1.0 - 0.3 * frost ? 1.0 : 0.0;
 	} else {
 		variant = mix(variant, p_noise(wp * 0.9 + 17.0), 0.5);
 		snow = frost > 0.0 && frost_up(n.y - 0.3, wp) ? 1.0 : 0.0;
@@ -227,8 +296,9 @@ void light() {
 		}
 		float mul = f_mul;
 		if (f_frost > 0.5) {
-			// Snow takes the snow's own two steps (lit by the same law as the plant's tone).
-			col = mix(c_frost_shd, c_frost_lit, smoothstep(0.3, 0.7, t));
+			// Snow takes the snow's own two steps (lit by the same law as the plant's tone); a tuft
+			// cap's lower rim (f_frost 0.75) stays part way to the shade, so the cap reads as a form.
+			col = mix(c_frost_shd, c_frost_lit, smoothstep(0.3, 0.7, t) * (f_frost > 0.9 ? 1.0 : 0.55));
 			shd = c_frost_shd;
 			mul = 1.0;
 		}

@@ -111,12 +111,12 @@ static func roles_of(species: String) -> Array[String]:
 	return out
 
 
-## species -> {role -> style row} for every species, the bush (PainterTreeSpecies.BUSH) last
+## species -> {role -> style row} for every species, the bushes (PainterTreeSpecies.BUSHES) last
 ## (pure in the data).
 static func row_table() -> Dictionary:
 	var table := {}
 	var row := GROUND_ROW + 1
-	for species in PainterTreeSpecies.names() + [PainterTreeSpecies.BUSH]:
+	for species in PainterTreeSpecies.names() + PainterTreeSpecies.BUSHES:
 		var rows := {}
 		for role in roles_of(species):
 			rows[role] = row

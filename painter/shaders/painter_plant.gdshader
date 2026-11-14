@@ -12,7 +12,9 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled;
  * and occlusion fades and the leaf shadow push (wind_foliage_include.gdshaderinc). PainterSurfaces
  * makes it as a duplicate of the plant's own wind material, so every wind, fade and cutout
  * uniform keeps its value. A plain alpha-scissor cutout, and the foliage AA swap leaves it alone
- * (WindFoliage.META_STAND_IN). Known fault (painter-a1c): in the eye view (4x MSAA, where the
+ * (WindFoliage.META_STAND_IN); a wide grass tuft's card is cut into round dabs instead of its
+ * texture's teeth, with winter snow on the dabs and over its foot (painter_selector's tuft_dab,
+ * painter-plants-fix3). Known fault (painter-a1c): in the eye view (4x MSAA, where the
  * Classic foliage swaps to its alpha-to-coverage twin) thin grass blades alias into fine broken
  * light lines where they cross a dark bush; an alpha-to-coverage twin swapped like the Classic's
  * is the planned fix.
@@ -30,10 +32,16 @@ varying vec3 v_wn;
 varying flat vec3 v_o;
 varying float v_h;
 varying flat float v_scale;
+// A tuft card's direction from the tuft's axis toward its UV.x = 0 end (painter_selector's
+// tuft_dab varies each card's dabs by it). Core's tuft cards run through the axis and carry an up
+// normal for ground lighting, so the card is told by its vertices, not its normal.
+varying vec2 v_card;
 
 void vertex() {
 	local_vertex_y = VERTEX.y;
 	v_h = VERTEX.y / max(selector_height, 0.01);
+	vec2 end = VERTEX.xz * (UV.x < 0.5 ? 1.0 : -1.0);
+	v_card = end / max(length(end), 1.0e-4);
 	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
 	VERTEX *= grow_scale(MODEL_MATRIX[3].xyz) * selector_keep(MODEL_MATRIX[3].xyz, IN_SHADOW_PASS);
 	v_o = MODEL_MATRIX[3].xyz;
@@ -53,6 +61,15 @@ void fragment() {
 			discard;
 		}
 	}
+	// A tuft's dabs, snow cap and bury line (painter_selector's tuft_dab): a grass card's cut is its
+	// dabs, a flower keeps its texture's.
+	vec4 dab = vec4(1.0, 0.5, 0.0, 0.0);
+	if (kind == 1 || kind == 3) {
+		dab = tuft_dab(UV, v_card, v_o, kind == 1);
+		if (dab.x < 0.5) {
+			discard;
+		}
+	}
 	NORMAL = two_sided_foliage_normal(NORMAL, FRONT_FACING);
 	vec3 pbr_albedo;
 	float pbr_alpha;
@@ -68,7 +85,7 @@ void fragment() {
 	ROUGHNESS = 1.0;
 	SPECULAR = 0.0;
 	METALLIC = 0.0;
-	ALPHA = pbr_alpha;
+	ALPHA = dab.x > 1.5 ? 1.0 : pbr_alpha;
 	ALPHA_SCISSOR_THRESHOLD = alpha_scissor_threshold;
 	vec3 n;
 	float variant;
@@ -78,6 +95,16 @@ void fragment() {
 	float snow;
 	selector_fragment(v_wp, v_wn, v_o, v_scale, v_h, texture(albedo_texture, UV), n, variant, mul,
 		wob, petal, snow);
+	if (kind == 1 || kind == 3) {
+		if (dab.x > 1.5) {
+			// Each dab its own value and variant (russet or straw in winter), darker at its foot
+			// where it overlaps the dab below, so the mound reads as laid dabs.
+			variant = mix(variant, dab.y, 0.6);
+			mul *= mix(1.0 - 0.7 * TUFT_STEP, 1.0 + 0.7 * TUFT_STEP, dab.y)
+				* mix(0.84, 1.04, smoothstep(-0.9, 0.6, dab.z));
+		}
+		snow = dab.w;
+	}
 	f_n = n;
 	f_variant = variant;
 	f_mul = mul;

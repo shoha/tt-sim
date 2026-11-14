@@ -16,8 +16,9 @@ extends RefCounted
 ## role has two VARIANTS, `value-spread` darker and lighter and `hue-spread` degrees either side,
 ## which a surface mixes between by a slow world noise so a field of one role is never one flat
 ## colour. A surface may read its own numbers under a prefix: the ground its `ground-` depth,
-## keep, pulls, lift and spreads, grass and flowers their `grass-` keep, lit pull and lift (a high
-## sun keeps a lawn green rather than lifting it to cream). A prefixed name the sheet's defaults
+## keep, pulls, lift and spreads, grass and flowers their `grass-` keep, lit pull, lift and spreads
+## (a high sun keeps a lawn green rather than lifting it to cream; winter straw spreads from russet
+## to pale straw). A prefixed name the sheet's defaults
 ## do not list falls back to the plain one. All numbers are the sheet's (keyframed, so they follow
 ## the sun), none are here.
 
