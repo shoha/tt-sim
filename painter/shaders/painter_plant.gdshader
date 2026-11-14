@@ -29,29 +29,43 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled;
 
 varying vec3 v_wp;
 varying vec3 v_wn;
-varying flat vec3 v_o;
-varying float v_h;
-varying flat float v_scale;
-// A tuft card's direction from the tuft's axis toward its UV.x = 0 end (painter_selector's
-// tuft_dab varies each card's dabs by it). Core's tuft cards run through the axis and carry an up
-// normal for ground lighting, so the card is told by its vertices, not its normal.
-varying vec2 v_card;
+// The instance's origin and scale (xyz, w).
+varying flat vec4 v_os;
+// A tuft card's point (painter_selector's tuft_layout: xy, z the tuft's seed) and w the height
+// fraction; then the card's dabs, constant over it, so read flat. Packed (painter-plants-fix4): the
+// shader is near Godot's 32 varying slots, and each slot is set up per triangle on a field of
+// small tuft cards.
+varying vec4 v_tp;
+varying flat vec4 v_dx;
+varying flat vec4 v_dy;
+varying flat vec4 v_di;
 
 void vertex() {
 	local_vertex_y = VERTEX.y;
-	v_h = VERTEX.y / max(selector_height, 0.01);
-	vec2 end = VERTEX.xz * (UV.x < 0.5 ? 1.0 : -1.0);
-	v_card = end / max(length(end), 1.0e-4);
+	float h = VERTEX.y / max(selector_height, 0.01);
+	vec3 tp = vec3(0.0);
+	vec4 dx = vec4(0.0);
+	vec4 dy = vec4(0.0);
+	vec4 di = vec4(1.0);
+	if (kind == 1 || kind == 3) {
+		tuft_layout(VERTEX, UV, MODEL_MATRIX[3].xyz, tp, dx, dy, di);
+	}
+	v_tp = vec4(tp, h);
+	v_dx = dx;
+	v_dy = dy;
+	v_di = di;
 	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
 	VERTEX *= grow_scale(MODEL_MATRIX[3].xyz) * selector_keep(MODEL_MATRIX[3].xyz, IN_SHADOW_PASS);
-	v_o = MODEL_MATRIX[3].xyz;
-	v_scale = length(MODEL_MATRIX[1].xyz);
+	v_os = vec4(MODEL_MATRIX[3].xyz, length(MODEL_MATRIX[1].xyz));
 	v_wn = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	v_wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	VERTEX += shadow_caster_offset(MODEL_MATRIX, INV_VIEW_MATRIX, IN_SHADOW_PASS);
 }
 
 void fragment() {
+	vec3 v_o = v_os.xyz;
+	float v_scale = v_os.w;
+	float v_h = v_tp.w;
 	if (kind == 4) {
 		// A bush's outline breaks between its lobes (painter_selector's bush_cut), in the sun's pass
 		// too, so its shadow's edge is as round as its outline.
@@ -65,7 +79,7 @@ void fragment() {
 	// dabs, a flower keeps its texture's.
 	vec4 dab = vec4(1.0, 0.5, 0.0, 0.0);
 	if (kind == 1 || kind == 3) {
-		dab = tuft_dab(UV, v_card, v_o, kind == 1);
+		dab = tuft_dab(v_tp.xyz, v_dx, v_dy, v_di);
 		if (dab.x < 0.5) {
 			discard;
 		}

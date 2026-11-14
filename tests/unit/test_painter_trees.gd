@@ -160,11 +160,13 @@ func test_a_bush_is_a_few_pads_in_its_box() -> void:
 		var again := PainterTreePack.pack(PainterTreeBush.masses(box, seed_v), seed_v, 3.0, 0)
 		assert_eq(_snapped_digest(again), _snapped_digest(d), "pure in the box and seed")
 		assert_lt((d["aabb"] as AABB).position.y, 0.1, "it stands on the ground")
-	# A large bush is a core and a shell of clumps, within the stroke budget (painter-plants-fix3).
+	# A large bush is a shell of four clumps with no core, within the pad and stroke budget (a pad
+	# costs what many strokes do; painter-plants-fix4).
 	var big := PainterTreeBush.box_of(AABB(Vector3(-1.5, 0.0, -1.5), Vector3(3.0, 2.6, 3.0)), 1.0)
 	for seed_v: int in [3, 77, 90210]:
 		var masses := PainterTreeBush.masses(big, seed_v)
-		assert_between(masses.size(), 5, 8, "a core and a shell of clumps")
+		assert_eq(masses.size(), PainterTreeBush.RING + 1, "a ring of clumps and a top clump")
 		var d := PainterTreePack.pack(masses, seed_v, 3.0, 0)
-		assert_lte(int(d["roots"]), 23, "at most 92 level-1 strokes")
-		assert_lte(int(d["n_ell"]), 2 * PainterTrees.BUSH_ELL_PER_INST, "two block instances")
+		assert_lte(int(d["roots"]), 16, "at most 64 level-1 strokes")
+		assert_lte(int(d["n_ell"]), PainterTrees.BUSH_ELL_PER_INST, "one block instance")
+		assert_lt((d["aabb"] as AABB).position.y, 0.1, "it stands on the ground")

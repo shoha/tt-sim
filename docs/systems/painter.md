@@ -234,20 +234,29 @@ tip's card bushes (interleaved, 1920x1080, vsync off, GPU medians): village eye 
 -1.0, forest tokens -0.75 to -0.78, forest home -0.95 (before the 16 x 9 sphere; that change is
 unmeasured).
 
-painter-plants-fix3: a large bush (across radius 0.7 m or more) is laid as a dark core (2 roots)
-and a shell of crown-sized clumps (0.36 of its radius, 0.3 to 0.55 m) round its shoulder and on
-its top, each clump its own form group, so the light turns clump by clump and the snow lies in
-scalloped clusters on each clump's top (one form read as a smooth ball with one lit band and a
-pale snow lens): at most 8 pads and 23 roots, 92 level-1 strokes (village: 50 bushes, 4564 strokes,
-against the small layout's 3108). `PainterTreeBush.shell` false restores the old layout (an A/B
-switch). Berry and flowering bushes are their own species rows (`bush_berry`: `Bush_BerryBush`;
+painter-plants-fix3 laid a large bush (across radius 0.7 m or more) as a dark core and up to seven
+clumps, eight pads; painter-plants-fix4 measured that a pad's block-in (drawn in the camera's and the
+sun's passes) costs about 0.001 ms at the village's home view where a level-1 stroke costs almost
+nothing, so a large bush is now four pads, one block instance: three clumps (0.52 of its radius,
+0.36 to 0.9 m) standing round its foot and overlapping round its axis, and one on its top, no core,
+each its own form group, so the light turns clump by clump and the snow lies on each clump's top;
+3 roots a clump, 48 level-1 strokes. A small bush's lobes are their own forms too (its snow lay as
+one pale lens). Village: 50 bushes, 199 pads, 2492 strokes (the tip's small layout 166 pads, 3108).
+`PainterTreeBush.shell` false lays every bush small (an A/B switch; `clump_roots` likewise).
+Berry and flowering bushes are their own species rows (`bush_berry`: `Bush_BerryBush`;
 `bush_flower`: `Bush_FloweringBush`, `Bush_BushWithWildflowers`, which were plant cards before;
 `PainterTreeSpecies.BUSHES`) whose leaf strokes carry round trim-colour marks in bunches (red
-berries, rose flowers), as the rowan's berries. Cost against b684d777 (plant shaders and the small
-layout swapped in at run time, interleaved, GPU medians): +0.12 to +0.34 ms, over the card's
-+0.05 budget; a split sitting puts about +0.19 to +0.30 ms on the tuft dabs and 0 to +0.26 on the
-bush shell (village home summer, eye winter). Open: the cost, and at sun 20 and
-token zoom a large bush's clumps still show broad flat lit plates, fewer dabs than the oaks.
+berries, rose flowers), as the rowan's berries. Cost against b684d777 (painter-plants-fix4: the
+tip's plant, selector and solid shaders and the small layout swapped in at run time, interleaved
+A B A B, 1920x1080, vsync off, GPU medians): village home summer +0.17 to +0.20 ms, home winter
++0.13 to +0.15, eye summer +0.00 to +0.01, eye winter +0.01 to +0.04; forest tokens summer and winter
++0.00, forest home summer +0.04 to +0.07. The bushes cost nothing (tip shaders with the new layout:
++0.00 at village home summer); all of the excess is the tuft path, and not its dab test: the same
+shader with the dabs switched off cost the same (+0.15 to +0.2 at home), and moving the layout to the
+vertex stage, four dabs and no sines, packing the varyings did not move it. Over the +0.05 budget at
+the village's home view; open for the owner. Also open: at sun 20 and token zoom a large bush's
+clumps show broad pale and dark bands with straight edges (the block-in's tone steps on each
+clump's smooth pad; larger with the four-pad layout), which the strokes do not break.
 
 - The host, `PainterTrees` (`painter/trees/painter_trees.gd`), is made by PainterSurfaces (by
   path) and driven by its events: paint() on a Painted state, sync() on the scatter's
