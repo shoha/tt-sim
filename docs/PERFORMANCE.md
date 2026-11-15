@@ -5970,16 +5970,16 @@ sample; warm means Godot's shader and pipeline caches on, cold means them off (`
 | first Painted level, worst covered frame, warm | 1117 to 1135 ms | 349 to 362 ms (392 without the early start) |
 | winter switch after, warm | 228 to 1583 ms | 44 to 52 ms |
 | Classic -> Painted switch, cold, worst frame | 1539 ms | not measured |
-| first Painted level, worst covered frame, cold | 1454 ms | 1084 to 1508 ms (not fixed) |
+| first Painted level, worst covered frame, cold | 1454 ms | 1084 to 1508 ms (not fixed; fixed by painter-perf-cold, see Round 2: 237 to 251 ms) |
 
 Cold, frames 163 to 165 of a load still hold 0.9 to 1.1 s with 57 surface pipelines compiled on the
 main thread, although the warm-up built the same shader and layout pairs: the engine compiles a
 mesh's pipelines for the lights, environment and framebuffer features it knows of, and the
 one-triangle samples miss what a level's real instances need (the multimesh layout, pass variants).
 Under the overlay that is 1.0 to 1.4 s of overlay time, not a window freeze. A run over compiled
-work costs 50 to 60 ms, and an exported release build was not measured. Next, if wanted: draw the
-samples through a `PipelineWarmer` in a viewport built like the game's, or add them to the
-first-launch warm-up's samples.
+work costs 50 to 60 ms, and an exported release build was not measured. (Round 2 below fixed this by
+order, not by new draws: one full run over the level's own world before the Painted apply; no
+`PipelineWarmer` was needed.)
 
 Dead ends (each measured side by side; do not retry without new evidence):
 
@@ -5998,14 +5998,129 @@ Dead ends (each measured side by side; do not retry without new evidence):
 - `thin2` (thin level-2 foliage strokes with growth): no saving, no visible change.
 - No burial test: 0.00 to -0.10, not separable from noise.
 
-Harness: the render jobs' `wind freeze` does NOT stop painted trees. It zeroes `sway_speed` and
+Harness: the render jobs' `wind freeze` used not to stop painted trees. It zeroed `sway_speed` and
 `flutter_speed`, which only the plant materials have; the painted tree shaders read the engine's TIME
-and the global wind. Two frames of one state differ along every crown edge (209,181 pixels over 24/255,
-the edge moved 20 px at tokens_20), which is what painter-perf-forest read as the cull dropping
-strokes. For any pixel comparison on painted trees set `wind_strength` 0 on the tree materials (the
-probe's `uniform` action, name `wind_strength`, value 0, which all) after each Painted look change,
-since a look change makes new materials. A fix for the harness (a card): make `Steady.freeze_wind`
-also zero `wind_strength` on materials that have it.
+and the global wind through `wind_strength`. Two frames of one state differed along every crown edge
+(209,181 pixels over 24/255, the edge moved 20 px at tokens_20), which is what painter-perf-forest read
+as the cull dropping strokes. Since painter-perf-cold (67835d3b) `Steady.freeze_wind`
+(`tools/render_jobs/steady.gd`, `WIND_SPEEDS`) also zeroes `wind_strength` on every material whose shader
+declares it, so a job's `wind freeze` is enough: two frames of one Painted state differ over 24/255 only
+in the animated tokens (about 2157 px at tokens_20, half size). The old per-material `uniform` probe
+step is not needed (the driver freezes again before every capture, so a look change's new materials are
+held too).
+
+### Round 2 (cards painter-perf-derive, -taiga, -cold, -buried, then painter-perf-final, 2026-11-14)
+
+Same pinned procedure as above. One scene per render job: the `gpu` op reads 0.000 after a second `play`
+in one run (a taiga after a forest, and the reverse), so each level is measured in its own job.
+
+What the stroke cost is. The strokes' cost sits in the VERTEX stage (a version of the shader whose
+fragment stage discards everything costs the same as the full one), and it is wave-divergence bound: a
+wave (32 vertices, about 10 strokes) runs the whole long path when any lane in it is alive. Killing half
+the strokes AT RANDOM saved 0.01 ms; killing half in contiguous blocks saved 0.24 ms of a possible 0.4
+(taiga home). So only a change that makes the dead set contiguous in the instance vertex index, or
+removes whole waves, pays: early-outs, fetch scheduling, constant folding and per-vertex tone savings do
+not. Lesson: dead strokes pay when they are contiguous, so make the pack put them together and let the
+draw skip the run.
+
+What shipped:
+
+| change | where | cost (Painted ms, same-run A/B) |
+|---|---|---|
+| no bark slots: `PainterTreePack.BARK_STROKES` false, tied to the stroke uniform `wood19` = 1 (every bark stroke died in the shader after its derive; 40 % of a forest tree's instance vertices, 60 % of a taiga tree's) | `tree_pack.gd` | taiga home -0.28, forest tokens summer -0.24, winter -0.25, forest home -0.15, village -0.15 |
+| a spruce packs no bough inside its crown: `PainterTreePack.BOUGH_R` 0.1 (a strand that starts inside the frond crown with a first radius under 10 cm, the stem apart) | `tree_pack.gd` | taiga home -0.49 summer, -0.64 winter |
+| buried roots last: the roots the stroke shader's own burial test kills are listed at pack time (`PainterTreeBurial.dead_roots`, `tree_burial.gd`), their slots go last in the table, and a leaf draw runs only the live prefix (`n_live` of `n_slots`) | `tree_pack.gd`, `tree_burial.gd`, `painter_trees.gd` | taiga home -0.04, forest tokens summer -0.08, forest home and village -0.03 |
+
+Spruce boughs and bark were invisible (the fronds hide them: the pixel diff at taiga_20 was 1281 px over
+24/255 of 2.07 M); the burial move is pixel-equal (village_20 0 px over 24/255). Cell gains from the burial
+move are smaller than the 9 to 13 % slot cut because a dead slot costs only its derive up to the burial
+test. Winter draws the whole table (a kept clump of a bare season has no burial test), so the winter cost
+does not move. The digest fixture `tests/fixtures/painter_tree_digests.json` was re-pinned for each of the
+three (a changed slot table moves every texel); flipping `BARK_STROKES` back on or changing `BOUGH_R` or
+`BURY_MARGIN` needs a re-pin too.
+
+Dead ends (each measured; do not retry without new evidence):
+
+- The stroke body's `lam` early-out, tone computed only at the provoking vertex, the token window only
+  at the provoking vertex, constant-folded shader variants and a one-round prefetch of the derive's fetch
+  chain: -0.00 to -0.09 ms, inside noise at forest tokens, forest home and taiga home. The provoking
+  vertex is NOT the first one (UV 0,0) on this GPU and driver: do not rely on a vertex index for flat
+  varyings without testing (the coloured-vertex trial showed the strokes red).
+- Compacting by rank (rows coherent for the level, density and thin tests, the roots' per-root
+  back-face and burial tests incoherent): net +0.10 ms.
+- CPU-baking the burial bits before the pack-time list existed (about 0.1 to 0.7 s a tree by estimate for
+  at most 0.1 ms): dropped unbuilt.
+- The wider burial drop (a root inside ANY leaf clump, `BURY_MARGIN` 0.15 or 0.0 instead of -1): -0.07 and
+  -0.14 ms at taiga home, but those roots DO draw in the shader today and the wind and stroke reach move them
+  about 0.2 to 0.3 m, so a safe margin leaves almost nothing beyond the exact drop. It changes the look; not
+  shipped (see the open items).
+- Taiga cost trials: depth prepass off (8.7 ms Painted, 5.87 Classic: the prepass is essential), half the
+  pixels (not fill-bound), `min_roots` 3 on foliage (look change, no gain), dropping built twigs (-0.02),
+  regrow A/B variants (noise). Mass spheres 5x3, 4x3 and 4x2 gave about -0.1 at best (an open item below).
+
+Warm-up (card painter-perf-cold, debug build, forest level, caches off, a fresh process per sample): the
+title run is LITE (scripts, the default sheet and the shader compiles; no sample meshes, `lite_title`), and
+the one full run is made over the level's own world, before the Painted apply. This supersedes the "cold,
+not fixed" row of the table above:
+
+| | worst covered frame (ms) | frames over 33 ms | load until the overlay lifts (ms) |
+|---|---|---|---|
+| before (6 runs, caches off) | 1459, 1429, 1437, 1488, 1521, 1438 | 11 to 12 | 5336 to 5550 |
+| after (3 runs, caches off) | 243, 251, 237 | 16 (0 after the overlay lifts) | 4905 to 5002 |
+| Classic to Painted toggle in a level, caches off | 243 (1539 before) | 11 | n/a |
+| winter switch after, caches off | 56 (1466 before) | 1 | n/a |
+| warm caches, first Painted level (2 runs) | 207, 213 (349 to 362 before) | 14 | 2343, 2398 (2104 to 2167 before) |
+
+Limits: a second level in one session with the caches off recompiles (nothing is reused) and shows 1.7 s;
+an exported release build and an enabled-but-empty cache were not measured. These numbers were not re-run
+at main 472259bc (a cold run needs a fresh process with `override.cfg`).
+
+Final cost table at main 472259bc (card painter-perf-final; 1920x1080, vsync off, GPU median of 2.5 s,
+Painted and Classic interleaved six times in a run, each row the median of 3 samples, wind frozen by the
+harness; logs and frames: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final15_main/`).
+Painted minus Classic, ms:
+
+| view | Painted | Classic | Painted - Classic | before the perf work |
+|---|---|---|---|---|
+| forest tokens summer | 3.13 | 3.10 | +0.03 | +1.40 |
+| forest tokens winter | 2.56 | 3.10 | -0.54 | +0.22 |
+| forest home summer | 3.20 | 3.76 | -0.55 | +0.12 |
+| forest home winter | 2.63 | 3.79 | -1.16 | -0.73 |
+| taiga home summer | 3.26 | 2.61 | +0.65 | +1.96 |
+| taiga home winter | 2.84 | 2.63 | +0.21 | not in the first table (+0.92 at the taiga card's start) |
+| village home, 3 houses, summer | 3.25 | 3.71 | -0.47 | -0.10 |
+| village home, 3 houses, winter | 2.88 | 3.75 | -0.87 | -0.33 |
+| village home, 12 houses, summer | 3.01 | 3.28 | -0.27 | n/a |
+| village home, 12 houses, winter | 2.55 | 3.29 | -0.74 | n/a |
+| village eye summer | 2.83 | 4.09 | -1.26 | -0.70 |
+| village eye winter | 2.19 | 4.07 | -1.88 | -1.70 |
+
+"Before the perf work" is the "Painted forest cost" row above (the village rows are painter-perf-cpu's
+3-house run). Painted is at or below Classic in ten of twelve views; the two that trail are the taiga
+(+0.65 summer, +0.21 winter) and forest tokens summer is level (+0.03; noise is about 0.05). Painted taiga
+drifts up across a run (3.22, 3.26, 3.31 in one state) while Classic stays put, so read that row as
++0.62 to +0.69. Frame info (the cpu card's sampler): at forest tokens summer Painted draws 446 calls and
+0.61 M camera primitives against Classic's 410 and 0.22 M (1.39 M before round 1 and 2), and 0.58 M shadow
+primitives against 0.32 M; at taiga home summer 502 calls and 0.54 M against 460 and 0.34 M camera, 0.78 M
+against 0.56 M shadow. The Painted shadow pass at the taiga is now the larger share of what is left.
+
+Open items (none is a bug; each needs an owner or look decision or a card):
+
+- Mass sphere 4x3 or 4x2 (now 6x3, `ELL_SEGS` x `ELL_RINGS`): about -0.1 ms at the taiga and forest
+  views, but angular spruce masses. Owner decision; frames `compare/painter_final13_taiga/mass_mesh_sheet_full.png`.
+- A coherent alive set (the compaction idea): order the roots of a clump by position (azimuth and
+  latitude bands) so the view-dependent back-face test and the static burial test kill whole runs of waves,
+  or a compute pass that derives the alive strokes once a frame into a compact list. It changes which
+  strokes are kept, a look decision (statistically equal, not pixel-identical); one-to-two-day cards, with the
+  `BURY_MARGIN` 0.0 to 0.15 drop (-0.07 to -0.14 ms at taiga home, a look change) as the cheap end of it.
+- House builds with manner records cost +4 to 30 ms each in procgen (`gen/manner_fit.gd`, `inputs.manner`;
+  +27 to 45 % of a build); not attacked.
+- 'Invalid Task ID' (`worker_thread_pool.cpp:408`) prints once at the first play in a render job, from
+  `painter_warmup.gd`'s `_work` in the engine's own `mesh_create_from_surfaces` off the main thread. It is
+  engine-internal, the renders are fine; if it ever matters, build the warm-up meshes on the main thread.
+- An eye-level near-crown render: a crown's block-in about 4 m from the eye (forest eye at (3, -2), yaw
+  45) reads as one flat dark mass. A look card (the same flat dark masses show at the upper left of
+  tokens_20 and tokens_45 in the verdict frames).
 
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 

@@ -489,9 +489,36 @@ winter bushes carry little snow at sun 45.
   view was captured with it on). Forest tokens summer -0.78 ms, winter -0.40, taiga home -0.16,
   forest home -0.05 to -0.11, village -0.10. The crown-edge strokes the earlier cull seemed to
   drop were the trees' own sway: see the harness note below.
-- Frame cost since (table in `docs/PERFORMANCE.md` "Painted perf round"): Painted minus Classic is
-  +0.50 ms at forest tokens summer, +1.28 at taiga home, and -0.16 to -0.13 at the winter, forest
-  home and village views. Where the rest is: the stroke vertex stage's derive from the data
+- The slot table (painter-perf-derive, -taiga, -buried; `PainterTreePack`, `PainterTreeBurial`):
+  it holds the ellipsoid slots (two roots a slot, `ROOTS`; the second root is named by the y texel,
+  -1 = the next root, else -(2 + root)) and the strand slots, with three things left out of it. (1) No
+  bark slots while `PainterTreePack.BARK_STROKES` is false: the shipped stroke uniforms carry `wood19` = 1
+  in every season, which kills every bark stroke in the shader after its derive, and those slots were
+  40 % (forest) to 60 % (taiga) of a tree's instance vertices, all dead. A test pins the constant to
+  `tree_uniforms.json`'s `wood19`: if `wood19` is ever turned off, flip the constant and re-pin
+  `tests/fixtures/painter_tree_digests.json` (`pack(masses, seed, shadow_k, wide, bough_r, bark, bury)`
+  takes the three switches; the spike port test packs with `bough_r` 0, `bark` true and `bury` false, to
+  match the spike's bytes). (2) No thin bough inside a spruce's crown (`BOUGH_R` 0.1). (3)
+  The roots the shader's own burial test kills (`bury10`: a root inside one of its clump's four listed
+  neighbours, tested on the root's position in the tree frame before the wind, so no camera or wind
+  dependence; 6 to 11 % of roots, lime 19 %) are listed by `PainterTreeBurial.dead_roots`
+  (`painter/trees/tree_burial.gd`) and their slots go LAST in the table. The tree dictionary carries
+  `n_slots`, `n_live` (the live prefix) and `buried_roots`; the tree row's texel 7 z holds `n_live`
+  (`tree_row(..., live)`), and the stroke body's loop bound (`n_run`) reads it in leaf (texel 1 z in a bare
+  season). `PainterTrees._slot_units(d)` is `n_live` in leaf and `n_slots` in a bare season: a bare
+  season draws the whole table, since a kept clump has no burial test, so winter cost is unchanged by it.
+  A season flip makes the stroke instances again (`_restroke()`, about 2 ms for 127 trees);
+  `set_live_counts(false)` draws every slot (the A/B switch). Bushes are not split (`pack_bush`, their
+  `n_live` equals `n_slots`; `BUSH_SLOT_PER_INST` 9 would overflow). `PainterTreePack.BURY_MARGIN`
+  is -1 (exactly the shader's test, pixel-equal); 0 or more also lists the roots inside ANY other leaf clump
+  with its axes shortened by that many metres: -0.07 ms at 0.15 and -0.14 ms at 0.0 at taiga home, but those
+  roots draw today, so it is an owner look decision and off. Changing it needs a digest re-pin.
+- Frame cost since (table in `docs/PERFORMANCE.md` "Painted perf round" and its "Round 2"): the stroke
+  vertex stage is wave-divergence bound, so only contiguous dead runs pay (the bark slots out of the table,
+  the buried roots last, the spruce's boughs unpacked). Final Painted minus Classic at main 472259bc: forest
+  tokens summer +0.03 ms, tokens winter -0.54, forest home -0.55 summer and -1.16 winter, taiga home +0.65
+  summer and +0.21 winter, village home -0.47 and -0.87 (3 houses), -0.27 and -0.74 (12 houses), village
+  eye -1.26 and -1.88 (the taiga is the one place Painted still trails). Where the rest is: the stroke vertex stage's derive from the data
   textures (0.70 ms of the tokens view's strokes, repeated per vertex, hence the one-triangle
   block) and the block-in's shadow cast. Frame CPU is not where Painted loses (script 0.24 to
   0.31 ms and render CPU 0.6 to 0.86 ms in both looks). Dead ends: the strokes in the alpha pass
@@ -500,10 +527,13 @@ winter bushes carry little snow at sun 45.
   `POINT_SIZE` slows the whole shader), a shadow-only caster node, a shadow cull, a shorter shadow
   distance or a single cascade (0, or Classic gains the same), thinning the level-2 strokes
   (`thin2`: no saving).
-- Measuring painted trees: the render jobs' `wind freeze` does not stop them (they read TIME and
-  the global wind; it zeroes `sway_speed` and `flutter_speed`, which only plants have). For a pixel
-  comparison set `wind_strength` 0 on the tree materials (the probe's `uniform` action), again
-  after every Painted look change (it makes new materials).
+- Measuring painted trees: the render jobs' `wind freeze` stops them since painter-perf-cold
+  (`Steady.freeze_wind`, `tools/render_jobs/steady.gd`, also zeroes `wind_strength`, the painted tree
+  shaders' amplitude, on each material whose shader declares it; the plants' `sway_speed` and
+  `flutter_speed` as before). Two frames of one Painted state then differ over 24/255 only in the
+  animated tokens (about 2157 px at tokens_20, half size); no per-material `uniform` probe step is needed.
+  While `wind freeze` is on the driver freezes again before every capture, so materials made since
+  (a Painted look change makes new ones) are held too.
 
 ## Baked textures
 
@@ -532,13 +562,26 @@ same palette: do not reintroduce shared state). The script names no painter scri
 compiles none.
 
 - Who starts it: Root behind the title when the Look choice can paint (`_start_painter_warmup`,
-  after the precompile and the first-launch warm-up); Settings Apply (`RenderStyle.start_warmup`);
-  `LevelEnvironmentManager._apply_render_style` requests a run (again at a level load, so the
-  pipelines are made for that level's world) and holds the Painted apply until `is_ready`, polled each
-  frame (`_warmup_held`); `LevelLoader` keeps the loading overlay up while `painter_pending()`; an
-  interactive switch (Settings Apply, `set_look`, the Level Editor's toggle) keeps the current look
-  until it is ready. A Classic session never loads it. Headless: `available()` is false and
-  `is_ready` true, so no test sees a change.
+  after the precompile and the first-launch warm-up); Settings Apply (`RenderStyle.start_warmup`).
+  The title's run is LITE (`PainterWarmup.lite_title`, phase `LITE_DONE`, not ready): it loads the
+  scripts and the default sheet and compiles every covered shader (`GraphicsWarmup.compile_shaders`),
+  and makes no sample meshes. The one FULL run (one tiny mesh per shader and vertex layout, 6 threads)
+  is made once per world, BEFORE the Painted apply: `LevelEnvironmentManager.apply_level_environment`
+  sets `_world_stale`, the first Painted check after it (`_painter_warm`) calls `request(true)` and
+  returns false until `is_ready`; `_apply_render_style` holds the Painted apply (`_warmup_held`, polled
+  each frame), `LevelLoader` keeps the loading overlay up while `painter_pending()`, and an interactive
+  switch (Settings Apply, `set_look`, the Level Editor's toggle) keeps the current look until it is
+  ready. A `request(true)` while a run is on queues one more behind it (`_again`; `is_ready` is false
+  meanwhile). A Classic session never loads it; a Settings Apply into a Classic level still marks the
+  world stale, so the toggle requests the full run and holds the look until it is ready. Headless:
+  `available()` is false and `is_ready` true, so no test sees a change. Why the order matters: a full
+  run at the title followed by a second one over the level stalled the main thread 1.3 s (the workers
+  against the RenderingDevice) and left the level's first draws 57 surface pipelines to compile in two
+  frames of 1.0 to 1.1 s; one full run over the level's own world, finished before the apply, leaves
+  none. Caches off, first Painted level: worst covered frame 1429 to 1521 ms before, 237 to 251 ms
+  after; the Classic to Painted toggle 1539 to 243 ms; warm caches 207 to 213 ms (the load until the
+  overlay lifts is 0.2 s longer warm, 2.3 to 2.4 s, and about 5 s cold). A second level in one session
+  with the caches off still recompiles (a test-setup artefact: nothing is reused).
 - Test: `tests/unit/test_painter_warmup.gd` (every `painter/shaders/*.gdshader` is in
   `covered_shaders()`, the copied shader constants equal the owners', each layout makes the format
   measured on a live level). A new painter shader must be added to `PainterWarmup`; the test fails
@@ -546,9 +589,8 @@ compiles none.
 - Measured (debug build, warm caches, forest, `docs/PERFORMANCE.md` "Painted perf round"): the
   Classic to Painted switch's worst frame 764 to 831 ms -> 161 to 206 ms, the first Painted level load
   3.2 s -> 2.1 to 2.9 s, its worst covered frame 1.1 s -> 0.35 to 0.39 s. With the pipeline caches
-  off (a first launch or a new driver) the first level's worst covered frame is still 1.1 to 1.5 s
-  (about 57 surface pipelines compile on the main thread despite the warm-up, under the overlay);
-  open, next step in that section. An exported release build was not measured.
+  off (a first launch or a new driver) the first level's worst covered frame was 1.1 to 1.5 s until the
+  warm-up's order changed (above: 0.24 to 0.25 s now). An exported release build was not measured.
 - One-offs left on the first Painted install: the painter scripts' GDScript compile (about 0.5 s
   debug; the warm-up's coordinator thread now loads them off the main thread) and `ground+plant retone` (about 130 ms the first
   time). House builds with manner records cost +27 to 45 % in procgen's recording, not in `painter/`.
