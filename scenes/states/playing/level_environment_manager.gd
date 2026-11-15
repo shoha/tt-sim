@@ -142,6 +142,9 @@ var _painted_state: Dictionary = {}
 var _surfaces: RefCounted = null
 ## True while an interactive switch to Painted waits for PainterWarmup (_hold_for_warmup).
 var _warmup_held := false
+## True from a level's environment apply until the first Painted check of that world asks
+## PainterWarmup for a run over it (_painter_warm).
+var _world_stale := false
 
 
 func setup(game_map: Node) -> void:
@@ -402,6 +405,8 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 	_cancel_warmup_hold()
 	_release_painter()
 	_publish_painted({})
+	# A new world: PainterWarmup's pipelines so far belong to another one (see _painter_warm).
+	_world_stale = true
 	_look = level_data.look
 	_preset = level_data.environment_preset
 	_sun_settings = level_data.visual_settings.sun
@@ -507,7 +512,7 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		lofi_config.merge(level_data.lofi.to_dict(), true)
 		_game_map.apply_lofi_overrides(lofi_config)
 
-	_apply_render_style(true)
+	_apply_render_style()
 
 	if level_data.environment_preset != "":
 		print(
@@ -717,7 +722,7 @@ func apply_rendering_toggles(ssao_enabled: bool, ssr_enabled: bool, sdfgi_enable
 ## the light in it: the Settings Look row and a changed look come in here.
 func apply_render_style() -> void:
 	var style := get_render_style()
-	if style["style"] == RenderStyle.PAINTED and not _painter_warm(style, false):
+	if style["style"] == RenderStyle.PAINTED and not _painter_warm(style):
 		# Not released: the look stays as it is until PainterWarmup is ready (_poll_warmup).
 		_hold_for_warmup()
 		return
@@ -744,7 +749,7 @@ func get_painter() -> RefCounted:
 ## Draws the light in the effective style. Under Classic it lets go of anything Painted held;
 ## under Painted the scene host takes the Environment and the sun for the level sun's elevation.
 ## Always after the Classic writes of the same apply (see PainterScene's header).
-func _apply_render_style(blocking: bool = false) -> void:
+func _apply_render_style() -> void:
 	var style := get_render_style()
 	if style["style"] != RenderStyle.PAINTED:
 		_cancel_warmup_hold()
@@ -753,7 +758,7 @@ func _apply_render_style(blocking: bool = false) -> void:
 			_after_style_change()
 		_publish_painted({})
 		return
-	if not _painter_warm(style, blocking):
+	if not _painter_warm(style):
 		# An interactive switch: the Painted pipelines compile on a worker (PainterWarmup) and the
 		# look stays as it is until they are ready, instead of freezing the window on the compile.
 		_hold_for_warmup()
@@ -773,13 +778,18 @@ func _apply_render_style(blocking: bool = false) -> void:
 	)
 
 
-## Whether the painter's shaders are compiled for `style` (PainterWarmup, which it starts). With
-## `again` (a level load) it asks for a new run even after an earlier one finished, so the
-## pipelines are made for this level's world.
-func _painter_warm(style: Dictionary, again: bool) -> bool:
+## Whether the painter's shaders are compiled for `style` (PainterWarmup, which it starts). The
+## first check after a level's environment apply asks for a new run even after an earlier one
+## finished, so the pipelines are made for this level's world (a run made at the title, or for
+## the last level, left the level's own first draws to compile on the main thread: measured with
+## the caches off, three frames of 1.0 to 1.8 s), and nothing is taken until it is done: the
+## look is applied only over a world whose pipelines exist.
+func _painter_warm(style: Dictionary) -> bool:
 	var warmup := load(PAINTER_WARMUP) as GDScript
 	if not bool(warmup.call("available")):
 		return true
+	var again := _world_stale
+	_world_stale = false
 	warmup.call("request", again)
 	# The sheet is read only once the worker is done with it (PainterWarmup parses the default one).
 	if not bool(warmup.call("is_ready", false)):
@@ -808,7 +818,7 @@ func _hold_for_warmup() -> void:
 
 func _poll_warmup() -> void:
 	var style := get_render_style()
-	if style["style"] == RenderStyle.PAINTED and not _painter_warm(style, false):
+	if style["style"] == RenderStyle.PAINTED and not _painter_warm(style):
 		return
 	_cancel_warmup_hold()
 	_apply_render_style()

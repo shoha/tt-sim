@@ -99,4 +99,11 @@ func test_headless_is_ready_and_starts_nothing() -> void:
 		pending("a window can draw: the warm-up would start")
 		return
 	PainterWarmup.start()
+	PainterWarmup.request(true)
 	assert_true(PainterWarmup.is_ready(true))
+
+
+func test_the_title_run_is_lite_by_default() -> void:
+	# Measured (header): a full run at the title left a level's first draws compiling on the main
+	# thread; the title makes no samples, the level's world gets the one full run.
+	assert_true(PainterWarmup.lite_title)
