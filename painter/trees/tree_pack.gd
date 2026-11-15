@@ -52,10 +52,10 @@ const ELL_SEGS: int = 8
 const ELL_RINGS: int = 5
 const TUBE_SIDES: int = 4
 const TREE_W: int = 8
-## Metres the tree's box (tree_row's texels 5 and 6) reaches past its masses: a stroke's size, shift
-## and lift and the wind's sway; the cells' engine box (PainterTrees.BOUND_GROW) uses the same. The
-## box serves the token pre-test (tree_token_near) and the per-tree view cull, which is off by
-## default: at 1.5 m and at 2.5 m it dropped a crown edge's strokes (painter-perf-forest).
+## Metres the token pre-test (tree_token_near) allows past a tree's box (tree_row's texels 5 and 6)
+## for a stroke's size, shift and lift and the wind's sway; the shaders' TREE_BOX_PAD, which a test
+## pins to this, and the cells' engine box (PainterTrees.BOUND_GROW) use the same. The per-tree view
+## cull (tree_view_box) has its own, smaller margin (view_margin) and is on (painter-perf-cull).
 const BOUND_PAD: float = 2.5
 ## Stroke root spacing in metres per mass role (PainterTreeMass.Role), the research painter's.
 const SPACING: Array[float] = [0.34, 0.17, 0.24, 0.30, 0.30, 0.16, 0.70]
@@ -137,8 +137,22 @@ static func _pack12(
 			)
 			var lo: Vector3 = m.xform.origin - ext
 			var hi: Vector3 = m.xform.origin + ext
-			b_lo = b_lo.min(lo)
-			b_hi = b_hi.max(hi)
+			# A strand mass (a willow's hem) draws its strokes on a spindle that may fill the whole
+			# cylinder round its axis (ay) and moves them by up to `bend` (the shaders' bend *
+			# (1 - (1 - t)^2)): the box takes the cylinder and the bend in, not the ellipsoid.
+			var box_lo := lo
+			var box_hi := hi
+			if m.params.has("bend"):
+				var bend: Vector3 = (m.params["bend"] as Vector3).abs()
+				var cyl := Vector3(
+					absf(ay.x) + sqrt(ax.x * ax.x + az.x * az.x),
+					absf(ay.y) + sqrt(ax.y * ax.y + az.y * az.y),
+					absf(ay.z) + sqrt(ax.z * ax.z + az.z * az.z)
+				)
+				box_lo = m.xform.origin - cyl - bend
+				box_hi = m.xform.origin + cyl + bend
+			b_lo = b_lo.min(box_lo)
+			b_hi = b_hi.max(box_hi)
 			var gi: int = -1
 			if m.params.has("form"):
 				gi = int(m.params["form"])
@@ -506,11 +520,12 @@ static func tree_row(
 	)
 	out.resize(TREE_W * 4)
 	# Texels 5 and 6 (painter-perf-forest): the tree's box in its own frame for the shaders' per-tree
-	# view cull (tree_view_box): its centre (w 1: a box) and its half extents plus BOUND_PAD.
+	# view cull and token pre-test (tree_view_box): its centre (w 1: a box) and its half extents,
+	# the masses' own (the shaders add their margins).
 	var box: AABB = d["aabb"]
 	if box.size != Vector3.ZERO:
 		var mid := box.get_center()
-		var half := box.size * 0.5 + Vector3.ONE * BOUND_PAD
+		var half := box.size * 0.5
 		out[20] = mid.x
 		out[21] = mid.y
 		out[22] = mid.z

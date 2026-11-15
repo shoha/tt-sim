@@ -12,6 +12,7 @@
 		"res://tests/unit/test_painter_manner.gd",
 		"res://tests/unit/test_painter_trees.gd",
 		"res://tests/unit/test_painter_trees_draw.gd",
+		"res://tests/unit/test_painter_trees_cull.gd",
 		"res://tests/unit/test_authoring_editor.gd",
 		"res://tests/unit/test_authoring_history_cap.gd",
 		"res://tests/unit/test_authoring_open.gd",

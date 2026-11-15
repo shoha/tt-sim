@@ -1212,23 +1212,39 @@ float tree_cast(float attenuation, vec3 wp) {
 	return (1.0 - smoothstep(0.44 + kv, 0.56 + kv, attenuation)) * cast_amount;
 }
 
-// painter-perf-forest: a tree's box in view space (`c` its centre, `h` its half extents along the
-// view's axes; from its tree_tex texels 5 and 6: the centre in the tree's frame, w 1, and the half
-// extents with the margin; w 0 = no box, `h` then unbounded), and whether it lies inside the four
-// side planes of this pass's view (the camera's, or one sun cascade's). The engine culls a cell's
-// MultiMesh whole, so before this every tree of a cell that touched the view built every stroke even
-// off the screen (forest tokens view: 21 of 58 cells drawn for 14 trees in view). Near and far are not
-// tested. OFF by default (`view_cull` 0; 1 culls; 2 draws only the trees it would cull, to find
-// them): with the box padded 1.5 m (PainterTreePack.BOUND_PAD) it took 0.6 ms off the forest tokens
-// view but dropped a crown edge's strokes at the top right of that view (x 1560-1600, y 100-300 of
-// 1920x1080), and padded 2.5 m (the cells' own margin) it still dropped them and saved 0.15 ms.
-// Strokes reaching more than 2.5 m past their masses are not expected, so the box or the test is
-// suspect for one tree; open (painter-perf-forest handoff). With the cull off, `c` and `h` still
-// serve tree_token_near.
-uniform float view_cull = 0.0;
+// painter-perf-forest, painter-perf-cull: a tree's box in view space (`c` its centre, `h` its half
+// extents along the view's axes plus TREE_BOX_PAD, for tree_token_near; from its tree_tex texels 5
+// and 6: the centre in the tree's frame, w 1, and the half extents of its masses; w 0 = no box, `h`
+// then unbounded), and whether it lies inside the four side planes of this pass's view (the camera's,
+// or one sun cascade's) with `margin` metres to spare. The engine culls a cell's MultiMesh whole, so
+// before this every tree of a cell that touched the view built every stroke even off the screen
+// (forest tokens view: 21 of 58 cells drawn for 14 trees in view). Near and far are not tested.
+// `view_cull` 1 culls; 2 draws only the trees it would cull (a diagnostic); 0 is off.
+//
+// The margin is how far a stroke reaches past the masses' box: its quad (a size of the order of a
+// quarter metre to a metre, more far away: e_px metres a pixel) and the wind's sway. Measured
+// 2026-11-14 (painter-perf-cull): with tree wind off, a frame with the cull on at a 0.5 m margin is
+// pixel-identical to the frame with it off at tokens_45, tokens_winter_45, far_winter_45 and the
+// forest home, everywhere but where the tokens animate. (The "sliver" painter-perf-forest saw at
+// tokens_20 was the trees' own sway: the painted trees read TIME and the global wind, which the job's
+// `wind` freeze does not stop, so two frames of one state differ along every crown edge.) The margin
+// shipped is `view_margin` (1 m) plus TREE_VIEW_MARGIN_PX pixels' worth.
+uniform float view_cull = 1.0;
+uniform float view_margin = 1.0;
+const float TREE_VIEW_MARGIN_PX = 8.0;
+// The metres past a tree's box that the token pre-test (tree_token_near) allows for a stroke or a
+// clump (PainterTreePack.BOUND_PAD, which a test pins to this).
+const float TREE_BOX_PAD = 2.5;
 
-bool tree_view_box(vec4 centre, vec4 half_ext, mat4 model, mat4 view, mat4 proj, out vec3 c,
-		out vec3 h) {
+vec3 tree_view_extent(mat3 vm, vec3 half_ext) {
+	// A box turned into view space, boxed again: its extent along each view axis.
+	return vec3(dot(abs(vec3(vm[0][0], vm[1][0], vm[2][0])), half_ext),
+		dot(abs(vec3(vm[0][1], vm[1][1], vm[2][1])), half_ext),
+		dot(abs(vec3(vm[0][2], vm[1][2], vm[2][2])), half_ext));
+}
+
+bool tree_view_box(vec4 centre, vec4 half_ext, mat4 model, mat4 view, mat4 proj, float px,
+		out vec3 c, out vec3 h) {
 	c = vec3(0.0);
 	h = vec3(1e6);
 	if (centre.w <= 0.0) {
@@ -1236,10 +1252,7 @@ bool tree_view_box(vec4 centre, vec4 half_ext, mat4 model, mat4 view, mat4 proj,
 	}
 	c = (view * (model * vec4(centre.xyz, 1.0))).xyz;
 	mat3 vm = mat3(view) * mat3(model);
-	// The box's extent along each view axis (a box turned into view space, boxed again).
-	h = vec3(dot(abs(vec3(vm[0][0], vm[1][0], vm[2][0])), half_ext.xyz),
-		dot(abs(vec3(vm[0][1], vm[1][1], vm[2][1])), half_ext.xyz),
-		dot(abs(vec3(vm[0][2], vm[1][2], vm[2][2])), half_ext.xyz));
+	h = tree_view_extent(vm, half_ext.xyz + vec3(TREE_BOX_PAD));
 	if (view_cull < 0.5) {
 		return true;
 	}
@@ -1248,8 +1261,9 @@ bool tree_view_box(vec4 centre, vec4 half_ext, mat4 model, mat4 view, mat4 proj,
 	vec4 rw = vec4(proj[0][3], proj[1][3], proj[2][3], proj[3][3]);
 	vec4 side[4] = vec4[4](rw + rx, rw - rx, rw + ry, rw - ry);
 	bool inside = true;
+	vec3 hp = tree_view_extent(vm, half_ext.xyz) + vec3(view_margin + TREE_VIEW_MARGIN_PX * px);
 	for (int i = 0; i < 4; i++) {
-		if (dot(side[i].xyz, c) + side[i].w < -dot(abs(side[i].xyz), h)) {
+		if (dot(side[i].xyz, c) + side[i].w < -dot(abs(side[i].xyz), hp)) {
 			inside = false;
 		}
 	}
