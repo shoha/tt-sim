@@ -16,14 +16,16 @@ const AGES: Array[float] = [0.3, 0.6, 0.9]
 const SNAP := 1e-4
 
 
-func _grow(species: String, age: float, openness: float, seed_v: int) -> Dictionary:
+func _grow(
+	species: String, age: float, openness: float, seed_v: int, bark: bool = PainterTreePack.BARK_STROKES
+) -> Dictionary:
 	var masses := PainterTreeGrowth.tree(
 		PainterTreeSpecies.architecture(species),
 		{"age": age, "openness": openness},
 		seed_v,
 		PainterTreeSpecies.is_conifer(species)
 	)
-	return PainterTreePack.pack(masses, seed_v, 3.0, PainterTreeSpecies.wide())
+	return PainterTreePack.pack(masses, seed_v, 3.0, PainterTreeSpecies.wide(), bark)
 
 
 static func _snapped_digest(d: Dictionary) -> String:
@@ -95,7 +97,9 @@ func test_the_port_grows_the_spikes_own_trees() -> void:
 	assert_eq(trees.size(), 24, "eight species at three ages")
 	for label: String in trees:
 		var parts := label.rsplit("_", true, 1)
-		var d := _grow(parts[0], float(parts[1]), fixture["openness"], int(fixture["seed"]))
+		# (The spike's trees carry the bark strokes' slots: painter-perf-derive leaves them out of the
+		# shipped pack, see test_the_slot_table_holds_no_bark_strokes_while_wood19_is_on.)
+		var d := _grow(parts[0], float(parts[1]), fixture["openness"], int(fixture["seed"]), true)
 		var ctx := HashingContext.new()
 		ctx.start(HashingContext.HASH_SHA256)
 		ctx.update((d["data"] as PackedFloat32Array).to_byte_array())
@@ -105,6 +109,31 @@ func test_the_port_grows_the_spikes_own_trees() -> void:
 		var sha := ctx.finish().hex_encode()
 		if OS.get_name() == "Windows":
 			assert_eq(sha, str(trees[label]["sha"]), label + " bytes")
+
+
+## painter-perf-derive: the stroke shader drops every bark stroke while wood19 is on (the limb is one
+## stroke drawn by the block-in), so the pack leaves their slots out of the table: 40 to 60 percent of
+## a tree's stroke vertices were dead ones. The slots that remain are the very same texels.
+func test_the_slot_table_holds_no_bark_strokes_while_wood19_is_on() -> void:
+	var uniforms: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string("res://painter/trees/tree_uniforms.json")
+	)
+	assert_eq(
+		float(str_to_var(uniforms["stroke"]["wood19"])) > 0.5,
+		not PainterTreePack.BARK_STROKES,
+		"the pack's bark slots follow the stroke uniform wood19"
+	)
+	for species in ["oak", "spruce", "willow"]:
+		var with_bark := _grow(species, 0.6, 0.4, 11, true)
+		var without := _grow(species, 0.6, 0.4, 11, false)
+		assert_gt(int(with_bark["n_slots"]), int(without["n_slots"]), species + " had bark slots")
+		var base := int(without["slot_base"]) * 4
+		var a: PackedFloat32Array = with_bark["data"]
+		var b: PackedFloat32Array = without["data"]
+		var same := true
+		for i in int(without["n_slots"]) * 4:
+			same = same and a[base + i] == b[base + i]
+		assert_true(same, species + ": the ellipsoid slots are unchanged")
 
 
 func test_golden_digests_per_species_seed_and_age() -> void:

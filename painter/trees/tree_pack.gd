@@ -44,6 +44,12 @@ const ELL_T: int = 10
 ## Roots a slot: 2, not 8, since a bark segment has about two roots and every quad of a slot
 ## past its roots is a vertex-stage dead end (8 a slot left half the quads of a tree dead).
 const ROOTS: int = 2
+## Whether the slot table holds the bark strokes' slots. The shipped stroke uniforms carry wood19 = 1
+## (tree_uniforms.json, every season): a limb is ONE stroke drawn by the block-in pass and no separate
+## bark stroke rides on it, so the stroke shader drops every bark stroke after deriving it. Their slots
+## were 40 to 60 percent of a tree's instance vertices (painter-perf-derive, 2026-11-14: forest 40 %,
+## taiga 60 % of the strokes of every level), all dead; a test pins this constant to the json's wood19.
+const BARK_STROKES: bool = false
 const ELL_PER_INST: int = 16
 const SEG_PER_INST: int = 32
 const SLOT_PER_INST: int = 64
@@ -75,9 +81,13 @@ static func _h01(v: int) -> float:
 ## texel 7 (xyz; otherwise used only by masses with a radial point, flag 32). The shaders move a
 ## point of the mass by bend * (1 - (1 - t)^2), t = 0 at the twig .. 1 at the hem.
 static func pack(
-	masses: Array[PainterTreeMass], rng_seed: int, shadow_k: float = 3.0, wide: int = 1
+	masses: Array[PainterTreeMass],
+	rng_seed: int,
+	shadow_k: float = 3.0,
+	wide: int = 1,
+	bark: bool = BARK_STROKES
 ) -> Dictionary:
-	var d: Dictionary = _pack12(masses, rng_seed, shadow_k, wide)
+	var d: Dictionary = _pack12(masses, rng_seed, shadow_k, wide, bark)
 	var data: PackedFloat32Array = d["data"]
 	var ei: int = 0
 	var any: bool = false
@@ -101,7 +111,7 @@ static func pack(
 ## `shadow_k` of round 8's, at most 8 a mass): (record or header address, -1 or segment, strokes
 ## of this mass, which of them).
 static func _pack12(
-	masses: Array[PainterTreeMass], rng_seed: int, shadow_k: float, wide: int
+	masses: Array[PainterTreeMass], rng_seed: int, shadow_k: float, wide: int, bark: bool
 ) -> Dictionary:
 	var n: int = masses.size()
 	# wide 0: round 10's neighbours (a window of 16 in list order); 1: a grid over the whole tree;
@@ -429,7 +439,8 @@ static func _pack12(
 			var steps: int = maxi(1, roundi(pts[i].distance_to(pts[i + 1]) / sp0))
 			var around: int = maxi(2, roundi(TAU * (radii[i] + radii[i + 1]) * 0.5 / sp0))
 			var roots: int = steps * around
-			bark_roots += roots
+			if bark:
+				bark_roots += roots
 			var packed: float = float(mini(steps, 255) + 256 * mini(around, 255))
 			var r0m: float = (radii[i] + radii[i + 1]) * 0.5
 			if r0m >= 0.06:
@@ -444,7 +455,7 @@ static func _pack12(
 						PackedFloat32Array([float(hdr), float(i), float(n_sh), float(k)])
 					)
 			var k0: int = 0
-			while k0 < roots:
+			while bark and k0 < roots:
 				if sw + 4 > data.size():
 					data.resize(data.size() + 1024)
 				data[sw] = float(hdr)
