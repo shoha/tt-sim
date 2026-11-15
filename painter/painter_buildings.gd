@@ -63,6 +63,8 @@ const PICK_YARD_GROUND := 5
 ## but winter; above 0 the hand-drawn manner also builds its strips, PainterMannerSnow).
 const SNOW_ROLE := "drift"
 const SNOW_NUMBER := "roof-snow"
+## The sheet role of the moss and lichen on stone and slate (the second ramp of such a material).
+const MOSS_ROLE := "leaf"
 ## The shader's patterns.
 const P_PLASTER := 0
 const P_STONE := 1
@@ -318,6 +320,10 @@ func _tone(material: ShaderMaterial, kind: Array, sheet: Dictionary) -> void:
 		families.append("stone")
 	else:
 		roles.append(str(kind[0]))
+		if int(kind[1]) == P_STONE or int(kind[1]) == P_SLATE:
+			# Stone and slate carry the leaf's ramp as a second role (slots 6 to 11) for the
+			# moss and lichen the manner shader lays on them (card painter-look-houses).
+			roles.append(MOSS_ROLE)
 	var ramps := PackedVector3Array()
 	for k in roles.size():
 		var family := families[k] if k < families.size() else str(kind[2])
