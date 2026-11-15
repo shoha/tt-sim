@@ -537,7 +537,7 @@ const float BUSH_DAB_JIT = 0.8;
 const float BUSH_SNOW_JIT = 0.9;
 // A bush's outline breaks into ragged lobes (its own reach and frequency per metre), and its foot
 // is ragged under BUSH_FOOT_H metres, so the pad is neither a perfect sphere nor a hard dark base.
-const float BUSH_RIM_BREAK = 0.55;
+const float BUSH_RIM_BREAK = 0.65;
 const float BUSH_RIM_F = 3.6;
 const float BUSH_FOOT_H = 0.22;
 
