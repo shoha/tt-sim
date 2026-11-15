@@ -5879,10 +5879,133 @@ After (m6, e0b14831 = "old"; committed = back10 -0.5 and the token pre-test, vie
 The target (+0.3 ms at forest tokens and home in summer, no worse than Classic in winter) is met
 only at the home views. The per-tree view cull (`tree_view_box`) was worth 0.6 ms at tokens with a
 1.5 m margin but dropped a crown edge's strokes there, and still did at 2.5 m (worth 0.15 ms), so
-it ships off; why a tree's strokes reach past its box is open. The cheapest look, stroke level 2
+it shipped off; the "dropped" strokes were the painted trees' own sway, not the cull (see "Painted
+perf round" below, where it ships on). The cheapest look, stroke level 2
 hidden at tokens (lod1), costs 2.64 ms (-0.45 against Classic) but thins every crown: coarser,
 sparser strokes, the block-in showing through at the edges. Next: find the cull's fault (view_cull
 2 draws only the culled trees), then the block-in and its shadow pass at the home views.
+
+## Painted perf round (cards painter-perf-cull, -shadow, -strokes, -cpu, 2026-11-14)
+
+Same pinned procedure and levels as "Painted forest cost" (1920x1080, vsync off after each level
+load, GPU median of 2.5 to 3 s, states interleaved in one run, the first sample after vsync_off
+dropped); village is 12 houses, home view summer. Frames, jobs and logs: `compare/painter_final12_*`
+under `D:/dev/tabletop/docs/research/2026-11-09-prototypes/`.
+
+Painted minus Classic at main (the strokes card's final run on the merged tree, cull on; each Painted
+cell is the median of its samples, Classic is that run's in-run anchor; ms):
+
+| view | Painted | Classic | Painted - Classic | before the round |
+|---|---|---|---|---|
+| forest tokens summer | 3.40 | 2.90 | +0.50 | +1.40 |
+| forest tokens winter | 2.74 | 2.90 | -0.16 | +0.22 |
+| forest home summer | 3.30 | 3.43 | -0.13 | +0.12 |
+| taiga home summer | 3.84 | 2.56 | +1.28 | +1.96 |
+| village home summer | 3.08 | 3.22 | -0.14 | -0.10 (3 houses) |
+
+"Before" is the committed row of "Painted forest cost" (the village one from painter-perf-cpu's
+3-house run). The remaining excess is the tokens summer view (+0.5) and the taiga (+1.3, all conifers:
+the block-in's shadow cast and the strokes' own placement).
+
+What each card moved (Painted ms, same run, on versus off or old versus new):
+
+| card | change | tokens summer | tokens winter | forest home | taiga home | village |
+|---|---|---|---|---|---|---|
+| cull | per-tree view cull on (`view_cull` 1) | -0.78 | -0.40 | -0.11 summer, -0.05 winter | -0.16 | -0.10 |
+| shadow | mass spheres 8x5 -> 6x3 (80 -> 36 triangles) | -0.13 | -0.06 | -0.28 summer, -0.10 winter | -0.38 | -0.22 |
+| strokes | dropped marks build nothing, one triangle a stroke | -0.11 | -0.16 | -0.10 | -0.19 | -0.12 |
+
+The cull is on with `view_margin` 1.0 m plus 8 px of the stroke's pixel size past the masses' own
+box (`tree_tex` texels 5 and 6; the margin sweep at tokens summer cost about 0.4 ms a metre). Its
+margin is not a proven bound on stroke reach; it rests on cull-on equal to cull-off at 0.5 m in five
+forest views and the village. `view_cull` 2 draws only the culled trees (a diagnostic).
+The shadow card's 6x3 spheres (`PainterTreePack.ELL_SEGS` x `ELL_RINGS`, inflated by `ELL_FIT` 1.146
+on x and z to keep the volume) cut both passes: the block-in's cost follows its triangles and
+overdraw, not its vertex ALU. Silhouette edges change a little (largest at tokens_45, about three
+times the noise floor of two identical frames, not visible).
+
+Cost by part at forest tokens summer, ms over an empty floor, measured by exit points that return the
+stroke vertex stage early (taken on the quad block, before the hoist and the triangle):
+
+| part of the stroke vertex stage | ms |
+|---|---|
+| derive from the data textures | 0.70 |
+| tone and colour | 0.34 |
+| token window | 0.28 |
+| wind and placement | 0.22 |
+| quad placement | 0.22 |
+| keep chain (density, thinning, season) | 0.15 |
+| limb and bough sizes | 0.14 |
+| header | 0.11 |
+| role params | 0.04 |
+
+The derive is the big one because every vertex of a primitive repeats the whole decode. The lesson: a
+vertex stage that derives per vertex pays N times for an N-vertex primitive, so use the smallest
+primitive (one triangle, UV 0..2, the fragment discards outside the unit square: 3x, not 4x), and
+let a dropped mark build nothing (the keep chain runs right after the role params and the rest is
+skipped). Camera-pass primitives in the village fell 14 % (1,156,143 -> 996,213); the shadow pass is
+unchanged (613,614, the stroke levels draw in the camera pass only).
+
+CPU: Painted adds no per-frame CPU beyond the trees' GPU work. Script 0.24 to 0.31 ms and render CPU
+0.6 to 0.86 ms in both looks; wall minus GPU is 0.49 ms in both; all of P - C is GPU (camera-pass
+primitives 1.39 M against 0.22 M at tokens). Draw calls are the same within 41 (446 against 410 at
+tokens, 722 against 725 at forest home); each tree cell is five multimesh nodes (two block-in, three
+stroke levels), 365 more nodes than Classic at tokens (merging cells would cut nodes, not primitives).
+One-offs: the zone map (`PainterSurfaces.zone_image`) is 144 -> 43 ms on a 245x245 forest level
+(identical bytes) and ran on every Painted level load and ground edit; the brush masks and tuft
+layouts (about 470 ms and 126 ms on the first Painted level of a session) are baked into
+`painter/baked/` (`PainterBaked`), and the first Painted forest load in a fresh windowed process went
+from 3.33 to 3.36 s down to 2.83 to 3.11 s (the first install's look call 1398 -> 533 ms headless).
+House builds with manner records cost +27 to 45 % (procgen's recording; not attacked).
+
+Painted warm-up (card painter-perf-warmup; `PainterWarmup` compiles the painter's surface pipelines on
+worker threads). Debug build (the editor binary), forest level, 1920x1080, a fresh process per
+sample; warm means Godot's shader and pipeline caches on, cold means them off (`override.cfg`);
+"covered" is a frame under the loading overlay:
+
+| measurement | before | after |
+|---|---|---|
+| Classic -> Painted switch, warm, worst frame | 764 to 831 ms | 161 to 206 ms |
+| first Painted level load (overlay up to lift), warm | 3.22 to 3.29 s | 2.10 to 2.17 s (2.90 s without the early start) |
+| first Painted level, worst covered frame, warm | 1117 to 1135 ms | 349 to 362 ms (392 without the early start) |
+| winter switch after, warm | 228 to 1583 ms | 44 to 52 ms |
+| Classic -> Painted switch, cold, worst frame | 1539 ms | not measured |
+| first Painted level, worst covered frame, cold | 1454 ms | 1084 to 1508 ms (not fixed) |
+
+Cold, frames 163 to 165 of a load still hold 0.9 to 1.1 s with 57 surface pipelines compiled on the
+main thread, although the warm-up built the same shader and layout pairs: the engine compiles a
+mesh's pipelines for the lights, environment and framebuffer features it knows of, and the
+one-triangle samples miss what a level's real instances need (the multimesh layout, pass variants).
+Under the overlay that is 1.0 to 1.4 s of overlay time, not a window freeze. A run over compiled
+work costs 50 to 60 ms, and an exported release build was not measured. Next, if wanted: draw the
+samples through a `PipelineWarmer` in a viewport built like the game's, or add them to the
+first-launch warm-up's samples.
+
+Dead ends (each measured side by side; do not retry without new evidence):
+
+- Strokes in the alpha pass (no depth prepass): +1.5 to +2.5 ms.
+- View cull on the block-in: cost what it saved; in the sun pass it gave 0.
+- Skipping the form-occlusion ray: 0.007 ms.
+- Point sprites for strokes (`POINT_SIZE`, `POINT_COORD`): slower than the triangle on its own (tokens
+  9.8 against 7.6), and merely declaring `POINT_SIZE` slowed the whole shader to 13 ms.
+- A shadow-only caster node: splitting it costs +0.03 to 0.1; low-poly casters -0.07 to -0.16; not worth
+  the nodes. Per-tree shadow cull and a 40 m shadow distance: 0 (the engine's cell cull already
+  covers it). Wind early-out for dead slots: 0 (7 % of slots). `shadow_simple`: -0.06 to -0.1 but
+  changes the dapple. Limb ribbons of 2 or 3 pieces and a 6 cm limb minimum radius in the sun pass:
+  -0.03 to -0.14, winter look risk.
+- A single cascade or unblended cascades: -0.6 to -0.8 and -0.4 to -0.5, but Classic gains the same
+  and the look changes; Settings already exposes them. Nothing changed.
+- `thin2` (thin level-2 foliage strokes with growth): no saving, no visible change.
+- No burial test: 0.00 to -0.10, not separable from noise.
+
+Harness: the render jobs' `wind freeze` does NOT stop painted trees. It zeroes `sway_speed` and
+`flutter_speed`, which only the plant materials have; the painted tree shaders read the engine's TIME
+and the global wind. Two frames of one state differ along every crown edge (209,181 pixels over 24/255,
+the edge moved 20 px at tokens_20), which is what painter-perf-forest read as the cull dropping
+strokes. For any pixel comparison on painted trees set `wind_strength` 0 on the tree materials (the
+probe's `uniform` action, name `wind_strength`, value 0, which all) after each Painted look change,
+since a look change makes new materials. A fix for the harness (a card): make `Steady.freeze_wind`
+also zero `wind_strength` on materials that have it.
 
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
