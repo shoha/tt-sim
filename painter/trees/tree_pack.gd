@@ -44,11 +44,12 @@ const ELL_T: int = 10
 ## Roots a slot: 2, not 8, since a bark segment has about two roots and every quad of a slot
 ## past its roots is a vertex-stage dead end (8 a slot left half the quads of a tree dead).
 const ROOTS: int = 2
-## Whether the slot table holds the bark strokes' slots. The shipped stroke uniforms carry wood19 = 1
-## (tree_uniforms.json, every season): a limb is ONE stroke drawn by the block-in pass and no separate
-## bark stroke rides on it, so the stroke shader drops every bark stroke after deriving it. Their slots
-## were 40 to 60 percent of a tree's instance vertices (painter-perf-derive, 2026-11-14: forest 40 %,
-## taiga 60 % of the strokes of every level), all dead; a test pins this constant to the json's wood19.
+## Whether the slot table holds the bark strokes' slots. The shipped stroke uniforms carry
+## wood19 = 1 (tree_uniforms.json, every season): a limb is ONE stroke drawn by the block-in pass
+## and no separate bark stroke rides on it, so the stroke shader drops every bark stroke after
+## deriving it. Their slots were 40 to 60 percent of a tree's instance vertices
+## (painter-perf-derive, 2026-11-14: forest 40 %, taiga 60 % of the strokes of every level), all
+## dead; a test pins this constant to the json's wood19.
 const BARK_STROKES: bool = false
 const ELL_PER_INST: int = 16
 const SEG_PER_INST: int = 32
@@ -63,6 +64,12 @@ const ELL_RINGS: int = 3
 const ELL_FIT: float = 1.146
 const TUBE_SIDES: int = 4
 const TREE_W: int = 8
+## The first radius (metres) under which a frond tree's (a spruce's) strand that starts inside the
+## crown is not packed, the stem apart (painter-perf-taiga: a bough lies inside its own fronds and
+## its whorl's dense heart, so its ribbon and bark strokes never showed; -0.5 ms at the taiga
+## view, pixels unchanged). A spruce's boughs are 1 to 9 cm at the ages the game grows. 0 keeps
+## every strand (the spike's own trees, which the port test compares).
+const BOUGH_R: float = 0.1
 ## Metres the token pre-test (tree_token_near) allows past a tree's box (tree_row's texels 5 and 6)
 ## for a stroke's size, shift and lift and the wind's sway; the shaders' TREE_BOX_PAD, which a test
 ## pins to this, and the cells' engine box (PainterTrees.BOUND_GROW) use the same. The per-tree view
@@ -85,9 +92,10 @@ static func pack(
 	rng_seed: int,
 	shadow_k: float = 3.0,
 	wide: int = 1,
+	bough_r: float = BOUGH_R,
 	bark: bool = BARK_STROKES
 ) -> Dictionary:
-	var d: Dictionary = _pack12(masses, rng_seed, shadow_k, wide, bark)
+	var d: Dictionary = _pack12(masses, rng_seed, shadow_k, wide, bough_r, bark)
 	var data: PackedFloat32Array = d["data"]
 	var ei: int = 0
 	var any: bool = false
@@ -111,7 +119,12 @@ static func pack(
 ## `shadow_k` of round 8's, at most 8 a mass): (record or header address, -1 or segment, strokes
 ## of this mass, which of them).
 static func _pack12(
-	masses: Array[PainterTreeMass], rng_seed: int, shadow_k: float, wide: int, bark: bool
+	masses: Array[PainterTreeMass],
+	rng_seed: int,
+	shadow_k: float,
+	wide: int,
+	bough_limit: float,
+	bark: bool
 ) -> Dictionary:
 	var n: int = masses.size()
 	# wide 0: round 10's neighbours (a window of 16 in list order); 1: a grid over the whole tree;
@@ -136,6 +149,19 @@ static func _pack12(
 	var str_texels: int = 0
 	var n_seg: int = 0
 	var n_seg_painted: int = 0
+	# A frond tree (a spruce: its boughs carry frond masses) packs no strand thinner than
+	# `bough_limit` that starts inside the crown (above the lowest frond's underside), the stem
+	# apart (BOUGH_R). A bare stub on the bole below the crown stays.
+	var bough_r: float = 0.0
+	var crown_floor: float = INF
+	for m0: PainterTreeMass in masses:
+		if m0.shape == PainterTreeMass.Shape.ELLIPSOID and m0.params.get("frond", 0.0) > 0.5:
+			var fb: Basis = m0.xform.basis
+			var ext_y: float = sqrt(
+				pow(fb.x.y * m0.size.x, 2.0) + pow(fb.y.y * m0.size.y, 2.0) + pow(fb.z.y * m0.size.z, 2.0)
+			)
+			crown_floor = minf(crown_floor, m0.xform.origin.y - ext_y)
+			bough_r = bough_limit
 	for mi: int in n:
 		var m: PainterTreeMass = masses[mi]
 		gid_of[mi] = -1
@@ -198,6 +224,16 @@ static func _pack12(
 			var pts: PackedVector3Array = m.params["pts"]
 			if pts.size() < 2:
 				continue
+			for q: Vector3 in pts:
+				b_lo = b_lo.min(q)
+				b_hi = b_hi.max(q)
+			if (
+				bough_r > 0.0
+				and not m.params.has("stem")
+				and (m.params["radii"] as PackedFloat32Array)[0] < bough_r
+				and pts[0].y > crown_floor
+			):
+				continue
 			if m.params.get("built", false):
 				twigs.append(mi)
 			else:
@@ -205,9 +241,6 @@ static func _pack12(
 				n_seg_painted += pts.size() - 1
 			str_texels += 2 + pts.size()
 			n_seg += pts.size() - 1
-			for q: Vector3 in pts:
-				b_lo = b_lo.min(q)
-				b_hi = b_hi.max(q)
 	var has_crown: bool = leaf_n > 0
 	var multi: bool = leaf_groups > 1
 	var crown_c := Vector3.ZERO
