@@ -114,6 +114,8 @@ const PROBE_CULL_MASK: int = 0xFFFFF & ~SCATTER_RENDER_LAYER
 const PAINTER_SCENE := "res://painter/painter_scene.gd"
 ## The painted look's surfaces (PainterSurfaces), loaded on the first Painted state.
 const PAINTER_SURFACES := "res://painter/painter_surfaces.gd"
+## The painted look's shader and pipeline warm-up (PainterWarmup), loaded when Painted is asked for.
+const PAINTER_WARMUP := "res://painter/painter_warmup.gd"
 
 var _world_environment: WorldEnvironment = null
 var _sun_light: DirectionalLight3D = null
@@ -138,6 +140,8 @@ var _painter: RefCounted = null
 ## The last painted_look_changed state, and the PainterSurfaces that follows it.
 var _painted_state: Dictionary = {}
 var _surfaces: RefCounted = null
+## True while an interactive switch to Painted waits for PainterWarmup (_hold_for_warmup).
+var _warmup_held := false
 
 
 func setup(game_map: Node) -> void:
@@ -395,6 +399,7 @@ static func configure_reflection_probe(
 func apply_level_environment(level_data: LevelData, world_viewport: Node) -> void:
 	# Classic writes first (the painted look, if any, lets go so it remembers Classic's values).
 	# A new level: the painted surfaces let go of the last map before this one's are painted.
+	_cancel_warmup_hold()
 	_release_painter()
 	_publish_painted({})
 	_look = level_data.look
@@ -502,7 +507,7 @@ func apply_level_environment(level_data: LevelData, world_viewport: Node) -> voi
 		lofi_config.merge(level_data.lofi.to_dict(), true)
 		_game_map.apply_lofi_overrides(lofi_config)
 
-	_apply_render_style()
+	_apply_render_style(true)
 
 	if level_data.environment_preset != "":
 		print(
@@ -711,6 +716,11 @@ func apply_rendering_toggles(ssao_enabled: bool, ssr_enabled: bool, sdfgi_enable
 ## Re-resolves the effective style (RenderStyle.choice, the level's look, its preset) and draws
 ## the light in it: the Settings Look row and a changed look come in here.
 func apply_render_style() -> void:
+	var style := get_render_style()
+	if style["style"] == RenderStyle.PAINTED and not _painter_warm(style, false):
+		# Not released: the look stays as it is until PainterWarmup is ready (_poll_warmup).
+		_hold_for_warmup()
+		return
 	_release_painter()
 	_apply_render_style()
 
@@ -734,14 +744,21 @@ func get_painter() -> RefCounted:
 ## Draws the light in the effective style. Under Classic it lets go of anything Painted held;
 ## under Painted the scene host takes the Environment and the sun for the level sun's elevation.
 ## Always after the Classic writes of the same apply (see PainterScene's header).
-func _apply_render_style() -> void:
+func _apply_render_style(blocking: bool = false) -> void:
 	var style := get_render_style()
 	if style["style"] != RenderStyle.PAINTED:
+		_cancel_warmup_hold()
 		if _painter != null and _painter.call("is_active"):
 			_release_painter()
 			_after_style_change()
 		_publish_painted({})
 		return
+	if not _painter_warm(style, blocking):
+		# An interactive switch: the Painted pipelines compile on a worker (PainterWarmup) and the
+		# look stays as it is until they are ready, instead of freezing the window on the compile.
+		_hold_for_warmup()
+		return
+	_cancel_warmup_hold()
 	if _painter == null:
 		_painter = (load(PAINTER_SCENE) as GDScript).new()
 	var env: Environment = (
@@ -754,6 +771,56 @@ func _apply_render_style() -> void:
 	_publish_painted(
 		{"sheet": style["sheet"], "mood": style["mood"], "elevation": elevation} if taken else {}
 	)
+
+
+## Whether the painter's shaders are compiled for `style` (PainterWarmup, which it starts). With
+## `again` (a level load) it asks for a new run even after an earlier one finished, so the
+## pipelines are made for this level's world.
+func _painter_warm(style: Dictionary, again: bool) -> bool:
+	var warmup := load(PAINTER_WARMUP) as GDScript
+	if not bool(warmup.call("available")):
+		return true
+	warmup.call("request", again)
+	# The sheet is read only once the worker is done with it (PainterWarmup parses the default one).
+	if not bool(warmup.call("is_ready", false)):
+		return false
+	var elevation := _sun_settings.elevation_degrees if _sun_settings != null else 45.0
+	var bare: bool = warmup.call("needs_bare", style["sheet"], style["mood"], elevation)
+	return bool(warmup.call("is_ready", bare))
+
+
+## True while a switch to Painted waits for PainterWarmup: a level load keeps its loading overlay
+## up until this is false (LevelLoader).
+func painter_pending() -> bool:
+	return _warmup_held
+
+
+## Draws the painted look once PainterWarmup is ready: polled each frame until then.
+func _hold_for_warmup() -> void:
+	if _warmup_held:
+		return
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	_warmup_held = true
+	tree.process_frame.connect(_poll_warmup)
+
+
+func _poll_warmup() -> void:
+	var style := get_render_style()
+	if style["style"] == RenderStyle.PAINTED and not _painter_warm(style, false):
+		return
+	_cancel_warmup_hold()
+	_apply_render_style()
+
+
+func _cancel_warmup_hold() -> void:
+	if not _warmup_held:
+		return
+	_warmup_held = false
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and tree.process_frame.is_connected(_poll_warmup):
+		tree.process_frame.disconnect(_poll_warmup)
 
 
 ## Emits painted_look_changed when `state` differs from the last one (see the signal). A Painted
@@ -825,6 +892,7 @@ func get_map_sky_resource() -> Sky:
 
 ## Clear environment state (called when level is unloaded).
 func clear() -> void:
+	_cancel_warmup_hold()
 	_release_painter()
 	_publish_painted({})
 	_look = {}

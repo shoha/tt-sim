@@ -63,6 +63,22 @@ const MOOD_FOR_PRESET: Dictionary = {
 static var choice: int = DEFAULT_CHOICE
 
 
+## Starts PainterWarmup (the painter's shaders compiling on a worker) when the Settings choice can
+## paint a level: Painted, or the map's choice. A Classic session never loads it. Root calls it
+## behind the title and Settings when the choice changes.
+static func start_warmup() -> void:
+	if choice == CHOICE_CLASSIC:
+		return
+	(load("res://painter/painter_warmup.gd") as GDScript).call("start")
+
+
+## Stops PainterWarmup at exit when it was loaded (Root's _exit_tree).
+static func release_warmup() -> void:
+	var path := "res://painter/painter_warmup.gd"
+	if ResourceLoader.has_cached(path):
+		(load(path) as GDScript).call("release")
+
+
 ## [param value] if it is one of CHOICES, else DEFAULT_CHOICE.
 static func sanitize(value: int) -> int:
 	return value if CHOICES.has(value) else DEFAULT_CHOICE

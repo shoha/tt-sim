@@ -62,13 +62,31 @@ static func atlas(half_w: float) -> Texture2DArray:
 	var key := int(roundf(drawn * 1000.0))
 	if _cache.has(key):
 		return _cache[key]
-	var images: Array[Image] = []
-	for layer in LAYERS:
-		images.append(layer_image(drawn, layer))
-	var array := Texture2DArray.new()
-	array.create_from_images(images)
+	# The baked file when there is one (PainterBaked), else drawn here.
+	var array := PainterBaked.load_array(PainterBaked.tuft_name(drawn))
+	if array == null:
+		array = Texture2DArray.new()
+		array.create_from_images(images(drawn))
 	_cache[key] = array
 	return array
+
+
+## The half widths an array is drawn at: WIDE times ASPECT_RATIO to a step, for the steps a tuft
+## of half width WIDE up to the widest the shader reads (2.5 tuft heights, half_width) rounds to.
+static func drawn_widths() -> Array[float]:
+	var out: Array[float] = []
+	var steps := int(roundf(log(2.5 / WIDE) / log(ASPECT_RATIO)))
+	for step in steps + 1:
+		out.append(WIDE * pow(ASPECT_RATIO, float(step)))
+	return out
+
+
+## The LAYERS layout images of an array drawn at half width `drawn` (pure).
+static func images(drawn: float) -> Array[Image]:
+	var out: Array[Image] = []
+	for layer in LAYERS:
+		out.append(layer_image(drawn, layer))
+	return out
 
 
 ## One layout's dabs for `layer`: [x, y, inverse radius, hash] each, in tuft heights.

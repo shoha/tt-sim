@@ -48,8 +48,13 @@ const ELL_PER_INST: int = 16
 const SEG_PER_INST: int = 32
 const SLOT_PER_INST: int = 64
 const SHADOW_PER_INST: int = 64
-const ELL_SEGS: int = 8
-const ELL_RINGS: int = 5
+## The mass sphere's tessellation (painter-perf-shadow: 8 x 5 was 80 triangles a sphere, 6 x 3 is
+## 36; the block-in's cost followed its triangles, -0.2 to -0.45 ms at the forest and taiga views)
+## and the factor its x and z are inflated by so the coarser solid keeps the 8 x 5's volume (the
+## polygon cuts the sphere's corners: 6 x 3 holds 0.62 of a sphere against 0.81).
+const ELL_SEGS: int = 6
+const ELL_RINGS: int = 3
+const ELL_FIT: float = 1.146
 const TUBE_SIDES: int = 4
 const TREE_W: int = 8
 ## Metres the token pre-test (tree_token_near) allows past a tree's box (tree_row's texels 5 and 6)

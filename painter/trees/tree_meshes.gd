@@ -25,7 +25,8 @@ const BOUNDS := AABB(Vector3(-20.0, -2.0, -20.0), Vector3(40.0, 45.0, 40.0))
 static var _cache: Dictionary = {}
 
 
-## The block-in's sphere block of `count` spheres (cached). A bush's cell instances fewer and
+## The block-in's sphere block of `count` spheres (cached; the tree's sphere is ELL_SEGS x ELL_RINGS
+## and its x and z are inflated by ELL_FIT, see PainterTreePack). A bush's cell instances fewer and
 ## rounder ones (PainterTrees.BUSH_ELL_PER_INST, BUSH_SEGS x BUSH_RINGS): one pad of a bush spans a
 ## metre or two, and the tree's 8 x 5 sphere showed its faces there as straight-edged lit bands
 ## (painter-bushes verdict, tokens_20).
@@ -35,7 +36,8 @@ static func block(count: int = PainterTreePack.ELL_PER_INST, bush: bool = false)
 		_cache[key] = _sphere_block(
 			BUSH_SEGS if bush else PainterTreePack.ELL_SEGS,
 			BUSH_RINGS if bush else PainterTreePack.ELL_RINGS,
-			count
+			count,
+			1.0 if bush else PainterTreePack.ELL_FIT
 		)
 	return _cache[key]
 
@@ -103,9 +105,11 @@ static func _tri(v: PackedVector3Array, idx: PackedInt32Array, a: int, b: int, c
 		idx.append_array(PackedInt32Array([a, b, c]))
 
 
-static func _sphere_block(segs: int, rings: int, count: int) -> ArrayMesh:
+static func _sphere_block(segs: int, rings: int, count: int, fit: float = 1.0) -> ArrayMesh:
 	var soup := unit_sphere(segs, rings)
 	var points: PackedVector3Array = soup[0]
+	for i in points.size():
+		points[i] = Vector3(points[i].x * fit, points[i].y, points[i].z * fit)
 	var tris: PackedInt32Array = soup[1]
 	var v := PackedVector3Array()
 	var uv := PackedVector2Array()

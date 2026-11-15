@@ -303,48 +303,109 @@ func _rebuild_zone() -> void:
 		)
 
 
-## The zone map of `doc` as an RGBA8 image (pure; see _rebuild_zone).
+## The zone map of `doc` as an RGBA8 image (pure; see _rebuild_zone). The document's arrays and the
+## roles' channels are read once, outside the sample loop (a property read on the document costs
+## more than the arithmetic it feeds), and the blur is written for the radius ZONE_BLUR has.
 static func zone_image(doc: MapDocument) -> Image:
 	var sx := doc.samples_x()
 	var sz := doc.samples_z()
 	var n := sx * sz
 	var base := _mix_role(Vector4.ZERO, PainterGroundRoles.surface_role(doc.base_surface), 1.0)
-	var biomes: Array[String] = []
+	var biome_channel := PackedInt32Array()
+	var biome_target := PackedFloat32Array()
 	for id in doc.biome_ids:
-		biomes.append(PainterGroundRoles.biome_role(id))
-	var surfaces: Array[String] = []
+		_role_channel(PainterGroundRoles.biome_role(id), biome_channel, biome_target)
+	var surface_channel := PackedInt32Array()
+	var surface_target := PackedFloat32Array()
 	for id in doc.surface_ids:
-		surfaces.append(PainterGroundRoles.surface_role(id))
-	var has_biomes := doc.biome_slots.size() == n and doc.biome_density.size() == n
-	var has_surfaces := doc.surface_weights.size() == n * MapDocument.SURFACE_BYTES
-	var has_wet := doc.water_dressing.size() == n * 4
-	var channels: Array[PackedFloat32Array] = []
-	for c in 4:
-		var plane := PackedFloat32Array()
-		plane.resize(n)
-		channels.append(plane)
+		_role_channel(PainterGroundRoles.surface_role(id), surface_channel, surface_target)
+	var slots := doc.biome_slots
+	var density := doc.biome_density
+	var weights := doc.surface_weights
+	var wet := doc.water_dressing
+	var has_biomes := slots.size() == n and density.size() == n
+	var has_surfaces := weights.size() == n * MapDocument.SURFACE_BYTES
+	var has_wet := wet.size() == n * 4
+	var biome_count := biome_channel.size()
+	var surface_count := surface_channel.size()
+	var plane_r := PackedFloat32Array()
+	var plane_g := PackedFloat32Array()
+	var plane_b := PackedFloat32Array()
+	var plane_a := PackedFloat32Array()
+	plane_r.resize(n)
+	plane_g.resize(n)
+	plane_b.resize(n)
+	plane_a.resize(n)
+	# Which channels any sample moved off the base: a channel nothing touched is one flat value,
+	# and a flat plane blurs to itself.
+	var touched := PackedByteArray([0, 0, 0, 0])
 	for i in n:
 		var v := base
-		if has_biomes and doc.biome_slots[i] > 0 and doc.biome_slots[i] <= biomes.size():
-			var pull := clampf(doc.biome_density[i] / 255.0 * BIOME_PULL, 0.0, 1.0)
-			v = _mix_role(v, biomes[doc.biome_slots[i] - 1], pull)
+		if has_biomes:
+			var slot := slots[i]
+			if slot > 0 and slot <= biome_count:
+				var channel := biome_channel[slot - 1]
+				if channel >= 0:
+					var pull := clampf(density[i] / 255.0 * BIOME_PULL, 0.0, 1.0)
+					v[channel] = lerpf(v[channel], biome_target[slot - 1], pull)
+					touched[channel] = 1
 		if has_surfaces:
 			for e in 4:
-				var w := doc.surface_weights[n * 4 + i * 4 + e] / 255.0
-				var at := doc.surface_weights[i * 4 + e]
-				if w > 0.0 and at < surfaces.size():
-					v = _mix_role(v, surfaces[at], w)
+				var w := weights[n * 4 + i * 4 + e] / 255.0
+				if w > 0.0:
+					var at := weights[i * 4 + e]
+					if at < surface_count and surface_channel[at] >= 0:
+						var channel := surface_channel[at]
+						v[channel] = lerpf(v[channel], surface_target[at], w)
+						touched[channel] = 1
 		if has_wet:
-			v.w = maxf(v.w, maxf(doc.water_dressing[i * 4], doc.water_dressing[i * 4 + 1]) / 255.0)
-		for c in 4:
-			channels[c][i] = v[c]
+			var shore := maxf(wet[i * 4], wet[i * 4 + 1]) / 255.0
+			if shore > v.w:
+				v.w = shore
+				touched[3] = 1
+		plane_r[i] = v.x
+		plane_g[i] = v.y
+		plane_b[i] = v.z
+		plane_a[i] = v.w
 	var bytes := PackedByteArray()
 	bytes.resize(n * 4)
+	var planes: Array[PackedFloat32Array] = [plane_r, plane_g, plane_b, plane_a]
 	for c in 4:
-		var plane := _box(channels[c], sx, sz, ZONE_BLUR)
+		if touched[c] == 0:
+			var flat := clampi(roundi(base[c] * 255.0), 0, 255)
+			for i in n:
+				bytes[i * 4 + c] = flat
+			continue
+		var plane := _box(planes[c], sx, sz, ZONE_BLUR)
 		for i in n:
 			bytes[i * 4 + c] = clampi(roundi(plane[i] * 255.0), 0, 255)
 	return Image.create_from_data(sx, sz, false, Image.FORMAT_RGBA8, bytes)
+
+
+## Appends the channel (0 r .. 3 a, -1 for a role the zone map has no channel for) and the value a
+## ground role pulls its channel to (_mix_role's table), for the sample loop.
+static func _role_channel(
+	role: String, channels: PackedInt32Array, targets: PackedFloat32Array
+) -> void:
+	match role:
+		"meadow":
+			channels.append(0)
+			targets.append(1.0)
+		"floor":
+			channels.append(0)
+			targets.append(0.0)
+		"path":
+			channels.append(1)
+			targets.append(1.0)
+		"rock":
+			channels.append(2)
+			targets.append(1.0)
+		"shore":
+			channels.append(3)
+			targets.append(1.0)
+		_:
+			channels.append(-1)
+			targets.append(0.0)
 
 
 ## `v` (r meadow share, g path, b rock, a shore) moved `w` of the way to ground role `role`.
@@ -363,8 +424,32 @@ static func _mix_role(v: Vector4, role: String, w: float) -> Vector4:
 	return v
 
 
-## A separable box blur of a w x h field, radius r samples (edges clamp).
+## A separable box blur of a w x h field, radius r samples (edges clamp). Radius 1, the zone map's,
+## takes a three-tap pass with the edges outside the loop.
 static func _box(a: PackedFloat32Array, w: int, h: int, r: int) -> PackedFloat32Array:
+	if r != 1 or w < 2 or h < 2:
+		return _box_generic(a, w, h, r)
+	var tmp := PackedFloat32Array()
+	tmp.resize(w * h)
+	var out := PackedFloat32Array()
+	out.resize(w * h)
+	for y in h:
+		var row := y * w
+		tmp[row] = (a[row] * 2.0 + a[row + 1]) / 3.0
+		for i in range(row + 1, row + w - 1):
+			tmp[i] = (a[i - 1] + a[i] + a[i + 1]) / 3.0
+		tmp[row + w - 1] = (a[row + w - 2] + a[row + w - 1] * 2.0) / 3.0
+	for y in h:
+		var above := maxi(y - 1, 0) * w
+		var here := y * w
+		var below := mini(y + 1, h - 1) * w
+		for x in w:
+			out[here + x] = (tmp[above + x] + tmp[here + x] + tmp[below + x]) / 3.0
+	return out
+
+
+## The general blur (any radius).
+static func _box_generic(a: PackedFloat32Array, w: int, h: int, r: int) -> PackedFloat32Array:
 	if r <= 0:
 		return a
 	var tmp := PackedFloat32Array()

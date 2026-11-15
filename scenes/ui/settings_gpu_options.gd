@@ -110,6 +110,7 @@ static func show_defaults(menu: SettingsMenu) -> void:
 ## map on screen through the rendering toggles' apply, which runs after this one.
 static func apply(menu: SettingsMenu, game_map: Node3D) -> void:
 	RenderStyle.choice = RenderStyle.sanitize(_look_option(menu).get_selected_id())
+	RenderStyle.start_warmup()
 	FoliageEdges.current = FoliageEdges.sanitize(menu.foliage_edges_option.get_selected_id())
 	FoliageEdges.eye_smoothing = _eye_check(menu).button_pressed
 	ShadowCascades.current = ShadowCascades.sanitize(menu.shadow_cascades_option.get_selected_id())

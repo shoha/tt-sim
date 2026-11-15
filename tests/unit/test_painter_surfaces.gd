@@ -306,6 +306,87 @@ func test_the_zone_map_reads_the_document() -> void:
 	assert_almost_eq(PainterSurfaces.zone_image(doc).get_pixel(3, 3).r, 1.0, 0.01)
 
 
+func test_the_zone_map_matches_the_plain_loop_on_a_painted_document() -> void:
+	# painter-perf-cpu: zone_image reads the document's arrays once, skips the blur of a channel
+	# nothing touched and blurs radius 1 in three-tap passes; the bytes are the plain loop's.
+	var doc := MapDocument.create_flat(Vector2i(14, 11), "grass_meadow", "test", 7)
+	var n := doc.samples_x() * doc.samples_z()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 41
+	doc.biome_ids = PackedStringArray(
+		["temperate_forest", "grassland_meadow", "desert_dunes", "unknown_x"]
+	)
+	doc.surface_ids = PackedStringArray(
+		["dirt_road_packed", "cliff_rock", "sand_beach", "unknown_y"]
+	)
+	doc.biome_slots.resize(n)
+	doc.biome_density.resize(n)
+	doc.surface_weights.resize(n * MapDocument.SURFACE_BYTES)
+	doc.water_dressing.resize(n * 4)
+	for i in n:
+		doc.biome_slots[i] = rng.randi_range(0, 5)
+		doc.biome_density[i] = rng.randi_range(0, 255)
+		doc.water_dressing[i * 4] = rng.randi_range(0, 255) if rng.randf() < 0.1 else 0
+	for i in n * MapDocument.SURFACE_BYTES:
+		var is_index := i < n * 4
+		doc.surface_weights[i] = (
+			rng.randi_range(0, 4) if is_index else rng.randi_range(0, 255) * (rng.randi() % 2)
+		)
+	var got := PainterSurfaces.zone_image(doc)
+	var want := _zone_plain(doc)
+	assert_eq(got.get_size(), want.get_size())
+	var off := 0
+	var a := got.get_data()
+	var b := want.get_data()
+	for i in a.size():
+		off += int(absi(int(a[i]) - int(b[i])) > 1)
+	assert_eq(off, 0, "no byte more than one step from the plain loop")
+	assert_lt(_differing(a, b), a.size() / 50, "and almost none at all")
+
+
+func _differing(a: PackedByteArray, b: PackedByteArray) -> int:
+	var count := 0
+	for i in a.size():
+		count += int(a[i] != b[i])
+	return count
+
+
+## The zone map as the document's arrays read one property at a time, the blur's general loop.
+func _zone_plain(doc: MapDocument) -> Image:
+	var sx := doc.samples_x()
+	var sz := doc.samples_z()
+	var n := sx * sz
+	var base := PainterSurfaces._mix_role(
+		Vector4.ZERO, PainterGroundRoles.surface_role(doc.base_surface), 1.0
+	)
+	var channels: Array[PackedFloat32Array] = []
+	for c in 4:
+		var plane := PackedFloat32Array()
+		plane.resize(n)
+		channels.append(plane)
+	for i in n:
+		var v := base
+		var slot: int = doc.biome_slots[i]
+		if slot > 0 and slot <= doc.biome_ids.size():
+			var pull := clampf(doc.biome_density[i] / 255.0 * PainterSurfaces.BIOME_PULL, 0.0, 1.0)
+			v = PainterSurfaces._mix_role(v, PainterGroundRoles.biome_role(doc.biome_ids[slot - 1]), pull)
+		for e in 4:
+			var w := doc.surface_weights[n * 4 + i * 4 + e] / 255.0
+			var at := doc.surface_weights[i * 4 + e]
+			if w > 0.0 and at < doc.surface_ids.size():
+				v = PainterSurfaces._mix_role(v, PainterGroundRoles.surface_role(doc.surface_ids[at]), w)
+		v.w = maxf(v.w, maxf(doc.water_dressing[i * 4], doc.water_dressing[i * 4 + 1]) / 255.0)
+		for c in 4:
+			channels[c][i] = v[c]
+	var bytes := PackedByteArray()
+	bytes.resize(n * 4)
+	for c in 4:
+		var plane := PainterSurfaces._box_generic(channels[c], sx, sz, PainterSurfaces.ZONE_BLUR)
+		for i in n:
+			bytes[i * 4 + c] = clampi(roundi(plane[i] * 255.0), 0, 255)
+	return Image.create_from_data(sx, sz, false, Image.FORMAT_RGBA8, bytes)
+
+
 # --- the signal ---------------------------------------------------------------------------
 
 
