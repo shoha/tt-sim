@@ -125,6 +125,10 @@
        them (painter-a1b read a 0.45 pull and a 0.12 to 0.2 lift as a pale cream field). */
     ground: var(--meadow);  grass: oklch(0.64 0.150 140);
     ground-lit-pull: 0.12;  ground-lit-lift: 0.05;  grass-lit-pull: 0.1;  grass-lit-lift: 0.06;
+    /* A crown's shade stays a deep but luminous teal green, never near black (painter-look-crowns:
+       a crown standing in another's shadow took the shade step, the cast tint and the painted
+       cast tone at once and read as one flat dark mass). */
+    crown-shade-lift: 0.07;  tree-cast: 0.58;
   }
   /* Golden hour. The sun goes gold, not red, and the shade stays a light blue-violet so walls
      facing away from it keep their own colour (the spike's cold front walls) and clay roofs do
@@ -146,6 +150,7 @@
     /* Near the horizon most of a crown lies in another's cast shadow: a lighter step. The lit
        side of a crown turns gold with the light, lighter and richer, not a muddy olive. */
     tree-cast: 0.45;  crown-lit-pull: 0.3;  crown-lit-lift: 0.05;  crown-lit-chroma: 1.05;
+    crown-shade-lift: 0.07;
   }
   /* Moonlight: a blue night where the board still reads. The moon (the level's sun under the
      horizon) is a strong cool key over a deeper ambient, so lit and shaded sides part. The shade

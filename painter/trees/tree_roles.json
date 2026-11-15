@@ -1009,8 +1009,8 @@
 				"fill": "1",
 				"grain": "0.12",
 				"hang": "0.35",
-				"hue-spread": "10",
-				"jitter": "0.24",
+				"hue-spread": "14",
+				"jitter": "0.34",
 				"layer": "0",
 				"lift": "0.18",
 				"lit-chroma": "1.0",
@@ -1026,13 +1026,13 @@
 				"patch-mix": "0.6",
 				"rise": "0",
 				"settle": "0.85",
-				"shade-depth": "0.62",
+				"shade-depth": "0.7",
 				"shade-hue": "250",
 				"shade-pull": "0.6",
 				"size-var": "0.3",
 				"sky": "0.12",
 				"stroke": "0.6",
-				"value-spread": "0.03"
+				"value-spread": "0.06"
 			},
 			"leaf": {
 				"align": "0",
