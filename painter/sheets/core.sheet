@@ -84,7 +84,7 @@
   dry-shade-keep: 1;  dry-shade-pull: 0.3;
   /* A bush is the leaf a step deeper and quieter, on a crown's ramp, so it sits under the oaks
      rather than glowing lime beside them (painter-trees-polish2). */
-  bush-value: 0.86;  bush-chroma: 0.74;
+  bush-value: 0.93;  bush-chroma: 0.88;
 
   /* The buildings (PainterBuildings; the spike's route A cottages, spike_built3): a cream lime
      wash, a pale warm stone, honey logs and boards, dark honey beams; the roofs are the five roof
@@ -375,8 +375,16 @@
     sky: oklch(0.84 0.030 240);  horizon: oklch(0.94 0.022 235);
     ambient: oklch(0.90 0.025 255);  ambient-energy: 0.6;
     haze: oklch(0.93 0.020 262);
-    ground: oklch(0.885 0.030 252);  leaf: oklch(0.67 0.066 154);  bark: oklch(0.42 0.045 50);
+    ground: oklch(0.88 0.040 250);  leaf: oklch(0.67 0.066 154);  bark: oklch(0.42 0.045 50);
     stone: oklch(0.62 0.015 250);  path: oklch(0.80 0.030 248);
+    /* The snow's ground block (painter-look-winter; the prototype's S19: a periwinkle white, soft
+       blue-lavender shade). The default lit pull (0.45 toward the sun's hue 95) carried the blue
+       ground through green to a mint (the short way round the hue wheel), so the daylight snow takes
+       no pull and a small lift, a wider hue spread (the lit variants run sky blue to lavender in
+       patches), and a lighter, less electric shade. The low key keeps the :world values (the rose
+       lit step of a low sun is unchanged). Also the ramp of the snow on plants and roofs (drift). */
+    ground-lit-pull: 0;  ground-lit-lift: 0.03;  ground-hue-spread: 13;  ground-value-spread: 0.022;
+    ground-shade-pull: 0.55;  ground-shade-depth: 0.86;
     roof-clay: oklch(0.52 0.110 36);  roof-slate: oklch(0.50 0.030 255);  roof-shingle: oklch(0.48 0.050 45);
     roof-turf: oklch(0.60 0.060 140);  roof-thatch: oklch(0.66 0.060 85);
   }

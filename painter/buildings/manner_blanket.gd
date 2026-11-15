@@ -154,7 +154,7 @@ static func _other_end(e: Dictionary, p: Vector3) -> Vector3:
 ## The whole thickness of the blanket on `roof` (its middle, before tapers, pile and sag). Pure.
 static func depth(roof: Dictionary, hold: float) -> float:
 	var n: Vector3 = roof["n"]
-	return MID_T_M * hold * lerpf(0.65, 1.0, smoothstep(0.5, 0.85, n.y))
+	return MID_T_M * hold * lerpf(0.8, 1.0, smoothstep(0.5, 0.85, n.y))
 
 
 ## The ease of a taper from `lo` at an edge (`x` 0) to 1 at its reach (`x` 1): steep at the edge,

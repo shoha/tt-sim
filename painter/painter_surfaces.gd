@@ -180,13 +180,37 @@ func _bind() -> void:
 			_dress(child)
 	for child in _map.get_children():
 		if child is AuthoredScatter:
-			var scatter := child as AuthoredScatter
-			scatter.cells_applied.connect(_on_cells_applied)
-			scatter.species_added.connect(_on_species_added)
-			_scatters.append(scatter)
+			_bind_scatter(child as AuthoredScatter)
+	# A scatter made later (the eye view's rim, EyeRim) is followed and painted like the first.
+	_map.child_entered_tree.connect(_on_map_child)
+
+
+func _bind_scatter(scatter: AuthoredScatter) -> void:
+	if scatter in _scatters:
+		return
+	scatter.cells_applied.connect(_on_cells_applied)
+	scatter.species_added.connect(_on_species_added)
+	scatter.visibility_changed.connect(_on_scatter_shown)
+	_scatters.append(scatter)
+
+
+func _on_map_child(node: Node) -> void:
+	if not node is AuthoredScatter or applied.is_empty():
+		return
+	_bind_scatter(node as AuthoredScatter)
+	# PainterTrees keeps the same array: it only needs its child watch on the new scatter.
+	_paint_trees()
+
+
+## A scatter shown or hidden (the eye view's rim): its painted trees come or go with it.
+func _on_scatter_shown() -> void:
+	if _trees != null:
+		_trees.call("sync")
 
 
 func _unbind() -> void:
+	if is_instance_valid(_map) and _map.child_entered_tree.is_connected(_on_map_child):
+		_map.child_entered_tree.disconnect(_on_map_child)
 	if is_instance_valid(_terrain):
 		if _terrain.child_entered_tree.is_connected(_on_terrain_child):
 			_terrain.child_entered_tree.disconnect(_on_terrain_child)
@@ -199,6 +223,8 @@ func _unbind() -> void:
 			scatter.cells_applied.disconnect(_on_cells_applied)
 		if scatter.species_added.is_connected(_on_species_added):
 			scatter.species_added.disconnect(_on_species_added)
+		if scatter.visibility_changed.is_connected(_on_scatter_shown):
+			scatter.visibility_changed.disconnect(_on_scatter_shown)
 
 
 func _on_terrain_child(node: Node) -> void:
