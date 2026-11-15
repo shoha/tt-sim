@@ -156,6 +156,15 @@ func test_the_token_fade_thins_strokes_in_the_vertex_stage() -> void:
 		block.contains("key, kind10 > 0.5, false, thin_key);"), "the block-in thins per fragment"
 	)
 	assert_false(block.contains("crown_gone"), "no mass is taken whole with its tree")
+	# painter-look-fade2: thin wood (a twig, a fine limb) narrows in the vertex stage as its points
+	# near a token, so it tapers out; the ribbon is never cut or dropped whole, and the sun's pass
+	# (the shadow) never thins.
+	assert_true(
+		block.contains("if (alive && rr < TREE_THIN_TWIG_R1 && abs(dot(normalize(INV_VIEW"),
+		"thin wood narrows only when alive, thin, and in the camera's pass"
+	)
+	assert_true(block.contains("rr = rr * s_t < 0.5 * px19 ? 0.0 : rr * s_t;"), "the ribbon narrows")
+	assert_false(block.contains("twig_mode"), "no exploration switch left in the shader")
 
 
 func test_painted_rows_become_cells_and_hide_the_glb_trees() -> void:

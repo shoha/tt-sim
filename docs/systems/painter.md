@@ -477,8 +477,24 @@ off, GPU medians, painted minus classic: forest tokens summer +0.06, +0.08, +0.0
   - WOOD (trunk and limb ribbons, `kind10` above 0.5) is thinned only to `TREE_THIN_WOOD` (0.55), in
     dry-brush streaks: the key is `p_noise` on the limb's own coordinates (`w_a` around, `w_s`
     along), so the wood breaks into lengthwise strokes and is never cut at an end. Twigs (`w_twig`
-    above 0.6) are never thinned, so no orphan twig is left (and none floats). Core
+    above 0.6) are never thinned per fragment (a cut twig would leave an orphan). Core
     `TREE_THIN_CORE` 0.4.
+  - THIN WOOD (painter-look-fade2, 2026-11-15; the block-in's vertex stage): round 1 left twigs whole,
+    and where a birch crown stood between the camera and a token its dark and straw-coloured twig
+    ribbons scribbled across the token like scratches on a lens. A ribbon vertex whose half width `rr`
+    is under `TREE_THIN_TWIG_R1` (0.05 m; by width, not by the strand's class, so a limb's tapering tip
+    and a leader's top count, and a trunk or a limb over 0.05 m does not) narrows by the thinning at
+    its own point: `a = tree_thin_at(...) * (1 - smoothstep(R0 0.02, R1, rr))`, `rr *= 1 -
+    smoothstep(0, TREE_THIN_TWIG_FULL 0.55, a)`, and a ribbon under half a pixel collapses to its axis.
+    The width follows the point's place on the screen (the same smooth profile as the strokes), never
+    the strand's own ends, so a twig tapers out toward the token like a brush stroke lifting: no blunt
+    cut, nothing orphaned, nothing floating, and a limb is whole again past the zone. Camera pass
+    only (the sun's pass keeps the shadow), live ribbons only (`alive`), the tile list's lookup only
+    for ribbons under R1. Tried against it and dropped (frames in
+    `compare/painter_final19_fade/variants_sheet_*.png`): whole strands by their hash at the strand's
+    midpoint (the dark thin limbs stayed over the token, and a strand that crosses the zone
+    from outside stayed whole) and a tone lift of thin wood toward the crown's light colour (the
+    lines stay, olive instead of dark).
   The vertex stage's `tree_token_near` pre-test (a tree's box against the tokens, `TREE_TOKEN_NEAR_M`
   beyond a token's reach) runs only for live strokes, after the other kills. It runs after the
   canopy fades and only in the camera's pass (the sun's pass keeps the whole crown's shadow; shadows
@@ -488,9 +504,10 @@ off, GPU medians, painted minus classic: forest tokens summer +0.06, +0.08, +0.0
   The vertex stage computes FRAGCOORD's tile as `(clip.xy / clip.w * 0.5 + 0.5) * VIEWPORT_SIZE`
   with no row flip (measured). Cost against the window (GPU ms, Painted minus Classic, pinned
   procedure; `docs/PERFORMANCE.md` "Painted token fade"): forest tokens summer +0.30 for the
-  window, +0.07 for the fade; no view got dearer. Still open: thin twigs are never thinned, so
-  faint dark lines cross a token in summer; a bush's block-in over a token (the eye view) breaks
-  up only by the noise edge of its clear zone. `test_painter_trees_draw` checks the binding, the
+  window, +0.07 for the fade; no view got dearer; the thin-wood taper cost nothing measurable
+  (forest tokens summer +0.05 against +0.06 for main, all five views within 0.02 ms of main). Still
+  open: a few hairline tips (just over half a pixel) remain across a token; a bush's block-in over a
+  token (the eye view) breaks up only by the noise edge of its clear zone. `test_painter_trees_draw` checks the binding, the
   VERTEX write, both functions in every tree shader, that no window function is left, that the
   stroke thins in the vertex stage and the block-in per fragment.
 - One hand (painter-trees-polish): every broadleaf crown and the spruce paint with the oak's

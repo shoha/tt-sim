@@ -941,9 +941,17 @@ const float TREE_CUT_BEHIND = 0.5;
 //     dither on each piece's rim) lies over the thinning, which reaches 1 inside TREE_THIN_MASS_CORE
 //     zone radii: the dark underlayer clears over the token and breaks up toward the zone's edge;
 //   wood (limbs, trunks, fragment): thinned in dry-brush streaks along its length (its own dry-break
-//     noise in limb coordinates) to TREE_THIN_WOOD at most, never a twig, so a limb stays one
-//     continuous thing.
+//     noise in limb coordinates) to TREE_THIN_WOOD at most, so a limb stays one continuous thing;
+//   thin wood (twigs, fine limbs, a leader's tip; the block-in's vertex stage): the ribbon narrows to
+//     nothing as its points near a token (TREE_THIN_TWIG_*), so it tapers out like a lifting brush
+//     stroke and no end is cut.
 // Only the camera's pass thins: the sun's pass keeps every shadow.
+// Thin wood (painter-look-fade2, the block-in's vertex stage): a ribbon under TREE_THIN_TWIG_R1 metres
+// of half width narrows by the thinning, fully weighted under TREE_THIN_TWIG_R0, to nothing where the
+// thinning reaches TREE_THIN_TWIG_FULL.
+const float TREE_THIN_TWIG_R0 = 0.02;
+const float TREE_THIN_TWIG_R1 = 0.05;
+const float TREE_THIN_TWIG_FULL = 0.55;
 const float TREE_THIN_STROKE = 0.9;
 const float TREE_THIN_MASS = 1.0;
 const float TREE_THIN_WOOD = 0.55;

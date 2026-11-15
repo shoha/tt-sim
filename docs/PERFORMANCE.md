@@ -6154,6 +6154,27 @@ halftone over a token; B with a hash-only key left dark clots of shaded dabs ove
 on light so shaded dabs go first, and its masses clear to 1.0 in a 0.8-radius core). Frames and notes:
 `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final18_fade/` (`Notes.md`).
 
+#### Thin wood taper (card painter-look-fade2, 2026-11-15, look-pending)
+
+Round 1 left twigs whole, so a birch crown between the camera and a token scribbled dark and straw
+twigs across it. The block-in's vertex stage now narrows a ribbon under 0.05 m of half width by the
+token thinning at its own point (docs/systems/painter.md "THIN WOOD"). Same procedure as above
+(1920x1080, vsync off, in-run Classic, interleaved P/C, GPU 2.5 s median, 3 samples), main (370231c8)
+and the taper measured back to back in one session; cell = Painted minus Classic, GPU ms:
+
+| view | main 370231c8 | thin wood taper |
+|------|---------------|-----------------|
+| forest tokens summer | +0.055 | +0.052 |
+| forest tokens winter | -0.511 | -0.527 |
+| forest home summer | -0.528 | -0.530 |
+| taiga home summer | +0.621 | +0.617 |
+| village home summer | -0.283 | -0.273 |
+
+Budget was at most +0.05 ms over main at forest tokens summer: the change is -0.003. The test runs only
+for live ribbon vertices under 0.05 m wide and the tile lookup rejects a vertex far from every token
+with one fetch, so it is free at these views. Raw logs: `compare/painter_final19_fade/cost_main_*` and
+`cost_new_*`. (The taiga row's Painted samples drift up 3.15 to 3.24 within each run, in both runs.)
+
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
 What each Shadow quality tier (`directional_soft_shadow_filter_set_quality`) costs, and a "blur"
