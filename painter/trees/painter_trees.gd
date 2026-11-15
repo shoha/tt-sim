@@ -279,7 +279,8 @@ static func wanted(scatters: Array[AuthoredScatter], doc: MapDocument) -> Dictio
 	var out := {}
 	var stride := MapDocument.ROW_STRIDE
 	for scatter in scatters:
-		if not is_instance_valid(scatter):
+		# A hidden scatter (the eye view's rim in the orbit view) draws nothing, painted or not.
+		if not is_instance_valid(scatter) or not scatter.visible:
 			continue
 		var by_asset := scatter.rows_by_asset()
 		var resolved := {}

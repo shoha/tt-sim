@@ -388,13 +388,20 @@ leave a twig mass).
   larger "lift" made them darker; the crown's keep 0.6 and blue pull alone greyed the dry shade
   to mauve, #504749.) The bushes keep the sheet's leaf.
   `needle-snow` (winter 1.6) multiplies the evergreen rows' `settle`: heavier snow on the boughs.
-  Autumn and summer are unchanged (leaf-keep 1, leaf-turn 0, needle-snow 1). Open: the eye view's
-  distant Classic trees are EyeRim's (`utils/eye_rim.gd`, an AuthoredScatter made on entering the
-  eye view, 32 to 35 m out), which no painter host registers, so they stay bright summer green in
-  winter; painting them is A2b's rim work. Open too: close up (zoom 9) a kept clump reads as a
+  Autumn and summer are unchanged (leaf-keep 1, leaf-turn 0, needle-snow 1). The eye view's rim
+  (`utils/eye_rim.gd`: hedges and copses on the skirt, an AuthoredScatter made on entering the eye
+  view) is painted since painter-look-winter (below). Open: close up (zoom 9) a kept clump reads as a
   dense round ball of dabs, some a ring; the prototype's bare crowns carry a fine twig mass where
   ours show limbs and sparse twigs; the willow's winter look is unseen (no core map grows one
   without water: willows come only from wetland_riparian).
+- The eye view's rim (painter-look-winter): PainterSurfaces follows a scatter added to the map after
+  the paint (`child_entered_tree` on the map root, `_bind_scatter`), so EyeRim's scatter gets the same
+  painted plants and, through PainterTrees, painted trees and bushes (`PainterTrees.wanted` skips a
+  scatter that is not `visible`, and its `visibility_changed` re-syncs: the rim's trees are drawn only
+  while the eye view shows it, and cost nothing in the orbit view). Classic is untouched. The snow
+  ground in winter (sheet `high` key: `ground-lit-pull` 0, `ground-lit-lift` 0.03, wider hue spread,
+  lighter `ground-shade-*`): the default lit pull toward the sun's hue 95 carried the blue ground
+  through green to a mint; the same numbers drive the snow on plants (`frost`) and the roofs' snow.
 - Canopy: `CameraController.CANOPY_CLEARANCE` (20 m) stands over the tallest grown painted tree
   (poplar 16.74 m at age 0.95; the GLB trees reach 16 m) plus `BOUND_GROW`;
   `test_painter_trees_draw` grows every species and fails if one outgrows it. The block-in's
@@ -949,6 +956,14 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   under `docs/research/2026-11-09-prototypes/compare/painter_manner/`. The owner chose B
   (2026-11-13); A and C (`PainterMannerStrokes`, `PainterMannerBake`, shader modes 0, 2 and 3)
   were deleted (card painter-manner-b) and B became the default (above).
+- **Houses' look (card painter-look-houses, 2026-11-15; look-pending).** A stone or slate material
+  carries the leaf's ramp in `ramps` 6 to 11 (`PainterBuildings.MOSS_ROLE`), a picked slate tile
+  roof uses its turf pick (slot 18): the manner shader lays moss up a stone wall from its foot in
+  ragged tongues, small lichen dabs on single stones and broad ones on slate, a warm straw lit
+  side on stone, and a bolder verge and ridge line on slate. A thatch tooth under snow is a short,
+  ragged, snow-topped stub (no dark tip). The blanket's default hold is 0.85 and its steepness
+  floor 0.8 (tile and slate roofs read thicker). Beams bow up to 9 cm (`BEAM_BOW_M`). The yard's
+  leaf blobs take a softer lit top, blooms are smaller dabs and mostly snowed in winter.
 
 ## The painted state signal
 

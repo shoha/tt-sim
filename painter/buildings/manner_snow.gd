@@ -29,7 +29,7 @@ extends RefCounted
 const CODE := 9
 ## How much snow a roof material holds (thatch the most); others take DEFAULT_HOLD.
 const HOLD: Dictionary = {"thatch": 1.0, "turf": 0.9, "wood": 0.75, "shingle": 0.75}
-const DEFAULT_HOLD := 0.7
+const DEFAULT_HOLD := 0.85
 ## Segment lengths along an eave, a verge and a ridge (metres; an eave's carries its scallops).
 const SEG_EAVE_M := 0.3
 const SEG_VERGE_M := 0.5

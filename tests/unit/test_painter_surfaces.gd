@@ -207,6 +207,30 @@ func test_species_and_chunks_built_later_are_painted_by_the_events() -> void:
 	surfaces.release()
 
 
+func test_a_scatter_made_later_is_followed_and_its_painted_trees_go_with_its_visibility() -> void:
+	# The eye view's rim (EyeRim) is an AuthoredScatter made on entering the eye view, after the
+	# map was painted; its trees are painted too, and drawn only while it is shown.
+	_terrain()
+	var main := _scatter()
+	main.build_all({GRASS: _rows([Vector2(1, 1)])})
+	var surfaces := PainterSurfaces.new()
+	surfaces.paint(_map, STATE)
+	var host: RefCounted = surfaces.trees()
+	assert_eq(host.trees.size(), 0, "no tree row yet")
+
+	var rim := _scatter()
+	rim.build_all({OAK: _rows([Vector2(30, 30), Vector2(33, 31)])})
+	host.call("complete")
+	assert_eq(host.trees.size(), 2, "the rim's trees are drawn painted")
+	rim.visible = false
+	assert_eq(host.trees.size(), 0, "hidden: none drawn")
+	rim.visible = true
+	host.call("complete")
+	assert_eq(host.trees.size(), 2, "shown again: drawn again")
+	surfaces.release()
+	assert_true(rim.visibility_changed.get_connections().is_empty(), "released: no watch left")
+
+
 func test_a_stand_in_survives_the_foliage_aa_swap_entering_and_leaving_the_eye_view() -> void:
 	var scatter := _scatter()
 	scatter.build_all({GRASS: _rows([Vector2(1, 1)])})

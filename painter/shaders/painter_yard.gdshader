@@ -109,7 +109,7 @@ void fragment() {
 		vec3 eye = PROJECTION_MATRIX[3][3] == 0.0
 			? normalize(INV_VIEW_MATRIX[3].xyz - wp)
 			: normalize(INV_VIEW_MATRIX[2].xyz);
-		if (dot(n, eye) < (bloom ? 0.12 : rim + scallop * seam)) {
+		if (dot(n, eye) < (bloom ? 0.3 + 0.2 * seam : rim + scallop * seam)) {
 			discard;
 		}
 	}
@@ -128,7 +128,9 @@ void fragment() {
 			up = p_noise(wp * 2.2 + 4.0) * 1.4 - 0.1;
 		}
 		float cap = up - seam * 0.25 + (p_noise(wp * 4.0 + 9.0) - 0.5) * 0.3;
-		cover = smoothstep(0.42, 0.48, cap) * clamp(snow * 2.2, 0.0, 1.0);
+		// A bloom is small: snow takes most of it, leaving a red base (card painter-look-houses: bare
+		// red cones in a snowed yard read as stray objects).
+		cover = smoothstep(0.42, 0.48, cap + (bloom ? 0.4 : 0.0)) * clamp(snow * 2.2, 0.0, 1.0);
 	}
 	int base = tone * 6;
 	vec3 shd = mix(ramps[base], ramps[base + 3], variant);
@@ -141,7 +143,9 @@ void fragment() {
 		// A shrub's lit side breaks into a few darker leaf dabs, as a crown's does (card
 		// painter-buildings-fix4: a small lime shrub read as one glossy tone).
 		float dab = smoothstep(0.52, 0.66, p_noise(wp * 6.5 + 3.0));
-		f_lit = mix(f_lit, f_mid, dab * 0.5 * (1.0 - cover));
+		// and its lit top sits nearer the crowns' greens than a lime highlight (card
+		// painter-look-houses: a bright lime blob read as a stray object by the stone door).
+		f_lit = mix(f_lit, f_mid, (dab * 0.5 + 0.3) * (1.0 - cover));
 		f_mid = mix(f_mid, f_shd, dab * 0.3 * (1.0 - cover));
 	}
 	f_n = ln;
