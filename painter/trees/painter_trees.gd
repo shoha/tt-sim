@@ -101,6 +101,11 @@ var _want: Dictionary = {}
 var _step_queued := false
 var _watching := false
 var _lod := -99.0
+## Whether the last retone chose a bare season's shader variants (every slot of a tree is drawn
+## then; in leaf only its live prefix, d "n_live": PainterTreeBurial).
+var _bare := false
+## False draws every slot in leaf too (the painter-perf-buried A/B; set_live_counts).
+var _live_counts := true
 
 
 ## Draws the mapped tree rows of `scatters` under `map` in `state` ({"sheet", "mood",
@@ -155,6 +160,10 @@ func retone(sheet: Dictionary, mood: String, elevation: float) -> void:
 		for uniform_name: String in bare:
 			var v: String = bare[uniform_name] if is_bare else own.get(uniform_name, "0.0")
 			m.set_shader_parameter(uniform_name, str_to_var(v))
+	if is_bare != _bare:
+		# The slots a tree draws change with the variant: its stroke instances are made again.
+		_bare = is_bare
+		_restroke()
 	for m in _materials:
 		m.set_shader_parameter(&"crown_occ", crown_occ)
 		m.set_shader_parameter(&"leaf_fall", 1.0 - crown_occ)
@@ -447,8 +456,8 @@ static func _grow_job(i: int, start: int, jobs: Array, out: Array) -> void:
 	var w: Dictionary = jobs[start + i]
 	var species: String = w["species"]
 	if PainterTreeSpecies.is_bush(species):
-		var d := PainterTreePack.pack(
-			PainterTreeBush.masses(w["box"], int(w["seed"])), int(w["seed"]), 3.0, 0
+		var d := PainterTreePack.pack_bush(
+			PainterTreeBush.masses(w["box"], int(w["seed"])), int(w["seed"])
 		)
 		d["bush"] = true
 		out[start + i] = d
@@ -626,7 +635,7 @@ func _layer_image(l: int) -> Image:
 func _write_row(row: int) -> void:
 	var e := _rows[row]
 	var r := PainterTreePack.tree_row(
-		e["d"], e["layer"], e["base"], row, e["hue"], e["value"], 0.0, e["moss"]
+		e["d"], e["layer"], e["base"], row, e["hue"], e["value"], 0.0, e["moss"], _live_counts
 	)
 	var w := row * PainterTreePack.TREE_W * 4
 	for k in r.size():
@@ -726,6 +735,48 @@ static func _occluder(
 	occ[lines * 4 + ow + 2] = r.z
 
 
+## The slots of tree data `d` a stroke node runs now: every slot in a bare season (or with
+## live counts off), else the live prefix (the rest are roots the shader's burial test kills).
+func _slot_units(d: Dictionary) -> int:
+	return int(d["n_live"]) if _live_counts and not _bare else int(d["n_slots"])
+
+
+## Draws every slot in leaf too (false), or only the live prefix (true, the shipped state): the
+## painter-perf-buried A/B in one run. Rewrites the tree rows' bound and the stroke instances.
+func set_live_counts(on: bool) -> void:
+	if on == _live_counts:
+		return
+	_live_counts = on
+	for row in _rows.size():
+		if int(_rows[row]["layer"]) >= 0:
+			_write_row(row)
+	_flush()
+	_restroke()
+
+
+## Makes the stroke levels' instances of every cell again (the slot counts changed, not the trees).
+func _restroke() -> void:
+	for bush in [false, true]:
+		var store: Dictionary = bush_cells if bush else cells
+		var per_slot := BUSH_SLOT_PER_INST if bush else PainterTreePack.SLOT_PER_INST
+		for cell: Vector2i in store:
+			var c: Dictionary = store[cell]
+			var nodes: Array = c["nodes"]
+			if nodes.size() < 5:
+				continue
+			var buf := PackedFloat32Array()
+			for key: Vector3i in c["keys"]:
+				var t: Dictionary = trees[key]
+				var xf := Transform3D(Basis.IDENTITY, t["pos"])
+				PainterTreePack.add_instances(buf, xf, t["row"], _slot_units(t["d"]), per_slot)
+			for k in range(2, 5):
+				if nodes[k] != null and is_instance_valid(nodes[k]):
+					var mm: MultiMesh = (nodes[k] as MultiMeshInstance3D).multimesh
+					mm.instance_count = buf.size() / 16
+					if not buf.is_empty():
+						mm.buffer = buf
+
+
 ## Rebuilds the nodes of `cell` in `store` (cells, or bush_cells when `bush`: smaller blocks, no
 ## limb ribbon, its slot left null).
 func _rebuild_cell(store: Dictionary, cell: Vector2i, bush: bool) -> void:
@@ -756,7 +807,7 @@ func _rebuild_cell(store: Dictionary, cell: Vector2i, bush: bool) -> void:
 		var row: int = t["row"]
 		PainterTreePack.add_instances(bufs[0], xf, row, int(d["n_ell"]), per_ell)
 		PainterTreePack.add_instances(bufs[1], xf, row, int(d["n_seg"]), PainterTreePack.SEG_PER_INST)
-		PainterTreePack.add_instances(bufs[2], xf, row, int(d["n_slots"]), per_slot)
+		PainterTreePack.add_instances(bufs[2], xf, row, _slot_units(d), per_slot)
 		var b: AABB = d["aabb"]
 		b.position += t["pos"]
 		box = b if first else box.merge(b)

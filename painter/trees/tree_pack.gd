@@ -34,8 +34,11 @@ extends RefCounted
 ##   (points, flags: 1 block-in only, 2 under a crown, 4 wind ramps along it, root spacing, seed);
 ##   then (point xyz, radius) per point.
 ## Segment table texel: (strand header address, segment index, 0, 0).
-## Slot table texel: ellipsoid (record address, -1, roots, first root of this slot);
+## Slot table texel: ellipsoid (record address, -1 or -(2 + second root), roots, first root of this
+##   slot; -1 = the second root is the next one; a second root >= roots draws nothing);
 ##   strand (header address, segment index, steps + 256 * around, first root of this slot).
+##   The ellipsoid slots of roots the shader's burial test kills (PainterTreeBurial) are the table's
+##   LAST d "n_slots" - d "n_live" texels, a leaf draw leaves them out.
 ## All addresses are relative to the tree's base texel. A layer is 256 x 256 texels.
 
 const W: int = 256
@@ -51,6 +54,14 @@ const ROOTS: int = 2
 ## (painter-perf-derive, 2026-11-14: forest 40 %, taiga 60 % of the strokes of every level), all
 ## dead; a test pins this constant to the json's wood19.
 const BARK_STROKES: bool = false
+## Whether the slots of the roots the shader's burial test kills (PainterTreeBurial) go last in the
+## table, for a leaf draw to leave out (d "n_live" slots of d "n_slots").
+const BURY_ROOTS: bool = true
+## Negative: only the roots the shader's own test kills (PainterTreeBurial; no look changes). A
+## margin in metres (measured 0.15 and 0.0, painter-perf-buried) also lists the roots inside ANY
+## other leaf clump with its axes that much shorter: more slots left out, but those roots DO draw
+## in the shader today (wind, stroke reach), so it is a look decision, not shipped.
+const BURY_MARGIN: float = -1.0
 const ELL_PER_INST: int = 16
 const SEG_PER_INST: int = 32
 const SLOT_PER_INST: int = 64
@@ -93,9 +104,10 @@ static func pack(
 	shadow_k: float = 3.0,
 	wide: int = 1,
 	bough_r: float = BOUGH_R,
-	bark: bool = BARK_STROKES
+	bark: bool = BARK_STROKES,
+	bury: bool = BURY_ROOTS
 ) -> Dictionary:
-	var d: Dictionary = _pack12(masses, rng_seed, shadow_k, wide, bough_r, bark)
+	var d: Dictionary = _pack12(masses, rng_seed, shadow_k, wide, bough_r, bark, bury)
 	var data: PackedFloat32Array = d["data"]
 	var ei: int = 0
 	var any: bool = false
@@ -115,6 +127,13 @@ static func pack(
 	return d
 
 
+## A bush's pack (PainterTreeBush masses): the narrow neighbour window, no burial split (a bush
+## draws its few slots in one instance of BUSH_SLOT_PER_INST, which a split into live and buried
+## slots could overfill; n_live is n_slots).
+static func pack_bush(masses: Array[PainterTreeMass], rng_seed: int) -> Dictionary:
+	return pack(masses, rng_seed, 3.0, 0, BOUGH_R, BARK_STROKES, false)
+
+
 ## After the slots comes the SHADOW TABLE, one texel per painted shadow stroke (one in
 ## `shadow_k` of round 8's, at most 8 a mass): (record or header address, -1 or segment, strokes
 ## of this mass, which of them).
@@ -124,7 +143,8 @@ static func _pack12(
 	shadow_k: float,
 	wide: int,
 	bough_limit: float,
-	bark: bool
+	bark: bool,
+	bury: bool
 ) -> Dictionary:
 	var n: int = masses.size()
 	# wide 0: round 10's neighbours (a window of 16 in list order); 1: a grid over the whole tree;
@@ -413,17 +433,48 @@ static func _pack12(
 		data[w + 39] = best[3]
 		w += ELL_T * 4
 		roots_total += roots
-		var k0: int = 0
-		while k0 < roots:
-			if sw + 4 > data.size():
-				data.resize(data.size() + 1024)
-			data[sw] = float(ei * ELL_T)
-			data[sw + 1] = -1.0
-			data[sw + 2] = float(roots)
-			data[sw + 3] = float(k0)
-			sw += 4
-			n_slots += 1
-			k0 += ROOTS
+	# The ellipsoids' slots, now that every record is written (the burial test reads the neighbours'):
+	# the roots the shader kills in leaf go in slots at the END of the table (`dead_slots`).
+	var dead_slots := PackedFloat32Array()
+	var buried_roots: int = 0
+	for ei: int in n_ell:
+		var roots: int = int(data[(ei * ELL_T + 6) * 4 + 3] + 0.5)
+		var dead := PackedByteArray()
+		dead.resize(roots)
+		if bury:
+			dead = PainterTreeBurial.dead_roots(data, ei, n_ell, ELL_T, BURY_MARGIN)
+		var live_ks := PackedInt32Array()
+		var dead_ks := PackedInt32Array()
+		for k: int in roots:
+			if dead[k] == 1:
+				dead_ks.append(k)
+			else:
+				live_ks.append(k)
+		buried_roots += dead_ks.size()
+		for in_dead: bool in [false, true]:
+			var ks: PackedInt32Array = dead_ks if in_dead else live_ks
+			var i: int = 0
+			while i < ks.size():
+				# (record, -1 or -(2 + second root), roots, first root): -1 = the next root.
+				var second: int = ks[i + 1] if i + 1 < ks.size() else roots
+				var slot := PackedFloat32Array(
+					[
+						float(ei * ELL_T),
+						-1.0 if second == ks[i] + 1 else -2.0 - float(second),
+						float(roots),
+						float(ks[i])
+					]
+				)
+				if in_dead:
+					dead_slots.append_array(slot)
+				else:
+					if sw + 4 > data.size():
+						data.resize(data.size() + 1024)
+					for q: int in 4:
+						data[sw + q] = slot[q]
+					sw += 4
+				n_slots += 1
+				i += ROOTS
 	# Strands: the painted ones first, so the stroke slots never reach a twig.
 	var gw: int = seg_base * 4
 	var twig_from: int = strands.size()
@@ -499,6 +550,10 @@ static func _pack12(
 				n_slots += 1
 				k0 += ROOTS
 	data.resize(sw)
+	# The slots whose roots the shader kills in leaf come last: a leaf draw takes the first n_live.
+	var n_live: int = n_slots - dead_slots.size() / 4
+	data.append_array(dead_slots)
+	sw = data.size()
 	var sh_base: int = sw / 4
 	data.append_array(shadow)
 	sw = data.size()
@@ -511,6 +566,8 @@ static func _pack12(
 		"n_ell": n_ell,
 		"n_seg": n_seg,
 		"n_slots": n_slots,
+		"n_live": n_live,
+		"buried_roots": buried_roots,
 		"seg_base": seg_base,
 		"slot_base": slot_base,
 		"crown_c": crown_c,
@@ -538,7 +595,8 @@ static func tree_row(
 	hue: float,
 	value: float,
 	thin: float,
-	moss: float
+	moss: float,
+	live: bool = true
 ) -> PackedFloat32Array:
 	var c: Vector3 = d["crown_c"]
 	var r: Vector3 = d["crown_r"]
@@ -584,6 +642,9 @@ static func tree_row(
 		out[26] = half.z
 	out[28] = float(d["sh_base"])
 	out[29] = float(d["n_shadow"])
+	# Texel 7 z: the slots a leaf draw runs (the plain stroke shaders' bound; the bare variants use
+	# texel 1 z, every slot). `live` false gives every slot (the painter-perf-buried A/B).
+	out[30] = float(d["n_live"] if live else d["n_slots"])
 	return out
 
 

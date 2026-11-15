@@ -303,10 +303,21 @@ void vertex() {
 		int slot = first + (is_shadow ? q : q / (2 * per_root));
 		int wi = is_shadow ? 0 : q % (2 * per_root);
 		vec4 t7 = texelFetch(tree_tex, ivec2(7, trow), 0);
-		if (slot < (is_shadow ? int(t7.y + 0.5) : int(t1.z + 0.5))) {
+		// The slots this draw runs: in leaf the pack's live prefix (the slots of roots the burial test
+		// below kills come last, PainterTreeBurial), a bare season's variant runs them all.
+#ifdef TREE_BARE
+		int n_run = int(t1.z + 0.5);
+#else
+		int n_run = int(t7.z + 0.5);
+#endif
+		if (slot < (is_shadow ? int(t7.y + 0.5) : n_run)) {
 			vec4 st = mt(base + (is_shadow ? int(t7.x + 0.5) : int(t1.y + 0.5)) + slot, layer);
 			int rec = base + int(st.x + 0.5);
+			// An ellipsoid slot's second root is the next one (st.y = -1) or st.y = -(2 + that root).
 			int k = int(st.w + 0.5) + wi / per_root;
+			if (wi >= per_root && st.y < -1.5) {
+				k = int(-st.y - 1.5);
+			}
 			int c1 = lvl >= 1 ? (wi / (per_root / 4)) % 4 : 0;
 			int c2 = wi % 4;
 			uint key0 = uint(k);

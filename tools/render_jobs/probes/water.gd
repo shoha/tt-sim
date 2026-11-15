@@ -134,6 +134,7 @@ const TEST_PREFIXES: Array[String] = [
 	"_painter-perf-derive_",
 	"_painter-perf-shadow_",
 	"_painter-perf-taiga_",
+	"_painter-perf-buried_",
 	"_clipmap3_",
 	"_clipmap4_",
 ]
