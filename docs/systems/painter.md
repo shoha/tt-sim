@@ -939,6 +939,14 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   under `docs/research/2026-11-09-prototypes/compare/painter_manner/`. The owner chose B
   (2026-11-13); A and C (`PainterMannerStrokes`, `PainterMannerBake`, shader modes 0, 2 and 3)
   were deleted (card painter-manner-b) and B became the default (above).
+- **Houses' look (card painter-look-houses, 2026-11-15; look-pending).** A stone or slate material
+  carries the leaf's ramp in `ramps` 6 to 11 (`PainterBuildings.MOSS_ROLE`), a picked slate tile
+  roof uses its turf pick (slot 18): the manner shader lays moss up a stone wall from its foot in
+  ragged tongues, small lichen dabs on single stones and broad ones on slate, a warm straw lit
+  side on stone, and a bolder verge and ridge line on slate. A thatch tooth under snow is a short,
+  ragged, snow-topped stub (no dark tip). The blanket's default hold is 0.85 and its steepness
+  floor 0.8 (tile and slate roofs read thicker). Beams bow up to 9 cm (`BEAM_BOW_M`). The yard's
+  leaf blobs take a softer lit top, blooms are smaller dabs and mostly snowed in winter.
 
 ## The painted state signal
 

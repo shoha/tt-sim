@@ -84,8 +84,8 @@ const TOOTH_LEN_M := 0.22
 ## little soft), uncut.
 const BEAM_SEG_M := 1.6
 const BEAM_WIDEN_M := 0.016
-const BEAM_WANDER_M := 0.03
-const BEAM_BOW_M := 0.055
+const BEAM_WANDER_M := 0.04
+const BEAM_BOW_M := 0.09
 const FRAME_BRUSH := 0.6
 const FRAME_KINDS: Array[String] = ["frame", "door_case"]
 ## A door leaf's lean: metres along the wall per metre above the wall foot.
