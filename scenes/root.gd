@@ -157,6 +157,7 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	GraphicsWarmup.finish_behind()
+	RenderStyle.release_warmup()
 	GraphicsWarmup.release_materials()
 
 
@@ -166,7 +167,16 @@ func _exit_tree() -> void:
 func _compile_shaders_behind() -> void:
 	if is_inside_tree() and GraphicsWarmup.compile_behind():
 		BootTrace.mark("shaders: compiling behind the title")
+	_start_painter_warmup()
 	_start_quality_pick()
+
+
+## A Look choice that can paint compiles the painter's shaders on a worker behind the title
+## (PainterWarmup); a Classic choice loads nothing of it.
+func _start_painter_warmup() -> void:
+	if is_inside_tree() and RenderStyle.choice != RenderStyle.CHOICE_CLASSIC:
+		RenderStyle.start_warmup()
+		BootTrace.mark("painter: compiling behind the title")
 
 
 ## Starts the first-run quality pick behind the quiet title (it waits for the shaders compiling
@@ -188,6 +198,7 @@ func _start_warmup() -> void:
 func _on_warmup_finished() -> void:
 	_warmup_pending = false
 	IdleThrottle.set_busy(false)
+	_start_painter_warmup()
 	var screen := _warmup_screen
 	_warmup_screen = null
 	if not _warmup_action.is_valid():

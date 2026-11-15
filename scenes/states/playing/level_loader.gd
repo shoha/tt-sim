@@ -227,6 +227,14 @@ func _play_level_async(level_data: LevelData) -> void:
 	for i in range(2):
 		await _level_play_controller.get_tree().process_frame
 
+	# A painted level shows Classic until the painter's shaders are compiled (PainterWarmup, on a
+	# worker, a frame at a time): the overlay stays up and keeps moving, so the table never appears
+	# in the wrong look and the window never freezes on the compile.
+	while _level_play_controller._environment_manager.painter_pending():
+		if _should_abort_load(generation):
+			return
+		await _level_play_controller.get_tree().process_frame
+
 	# Final check before flipping shared state / notifying listeners
 	if _should_abort_load(generation):
 		return

@@ -17,11 +17,13 @@ const NEEDLE := 13
 static var _texture: Texture2DArray = null
 
 
-## The shared brush array, made on first use.
+## The shared brush array, made on first use: the baked file (PainterBaked) or, without one, drawn.
 static func texture() -> Texture2DArray:
 	if _texture == null:
-		var tex := Texture2DArray.new()
-		tex.create_from_images(images())
+		var tex := PainterBaked.load_array(PainterBaked.TREE_BRUSHES)
+		if tex == null:
+			tex = Texture2DArray.new()
+			tex.create_from_images(images())
 		_texture = tex
 	return _texture
 

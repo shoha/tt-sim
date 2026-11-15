@@ -6,6 +6,8 @@
 		"res://tests/unit/test_authored_terrain.gd",
 		"res://tests/unit/test_authored_water.gd",
 		"res://tests/unit/test_painter_surfaces.gd",
+		"res://tests/unit/test_painter_baked.gd",
+		"res://tests/unit/test_painter_warmup.gd",
 		"res://tests/unit/test_painter_buildings.gd",
 		"res://tests/unit/test_painter_manner.gd",
 		"res://tests/unit/test_painter_trees.gd",
