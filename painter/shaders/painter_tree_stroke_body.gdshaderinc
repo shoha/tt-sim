@@ -274,6 +274,9 @@ void vertex() {
 	v_brush = 0.0;
 	v_uv = vec2(0.0);
 
+	// One pass: `break` leaves the stage early (a vertex stage cannot `return`), the outputs above
+	// stay as they are (a collapsed vertex).
+	for (int once = 0; once < 1; once++) {
 	// ---- Source B: derive the stroke from its mass (layouts in painter10.gd).
 	// (painter-perf-forest, painter-perf-cull: with view_cull on, a tree outside this pass's view
 	// builds no stroke, tree_view_box.)
@@ -629,7 +632,17 @@ void vertex() {
 		bool bare18 = texelFetch(role_params, ivec2(int(row_of(0.0, inst) + 0.5), 6), 0).z > 0.5;
 		float px18 = PROJECTION_MATRIX[3][3] == 0.0 ? e_px : 2.0 / (PROJECTION_MATRIX[1][1] * VIEWPORT_SIZE.y);
 		bool big18 = foliage && !is_shadow && fract(rnd * 47.3 + 0.9) < turn_big18;
-		vec3 wp = (MODEL_MATRIX * vec4(a_p, 1.0)).xyz;
+		if (!is_shadow) {
+			// painter-perf-strokes: a mark the density, the thinning or the season rule drops builds
+			// nothing: the same tests as further down (keep *= step(rnd2, rp0.w) * step(thin_i, ..), bare
+			// foliage, wood19 bark), made before the wind and the placement (the output is the same:
+			// a dropped stroke is a collapsed vertex either way).
+			float rnd2h = fract(rnd * 11.13 + 0.31);
+			if (step(rnd2h, rp0.w) * step(thin_i, fract(rnd2h * 7.31 + rnd)) < 0.5 || (bare > 0.5 && foliage) || (wood19 > 0.5 && limb_r > 0.0)) {
+				break;
+			}
+		}
+		vec3 wp =(MODEL_MATRIX * vec4(a_p, 1.0)).xyz;
 		if (wood19 > 0.5 && bare18 && foliage && !is_shadow) {
 			// Round 19: a bare crown's twig mass goes with the warp that carries its limbs.
 			wp += mat3(MODEL_MATRIX) * warp19(a_p, MODEL_MATRIX[3].xyz);
@@ -1064,7 +1077,6 @@ void vertex() {
 			v_brush = brush;
 			bool flip = fract(rnd * 5.3) > 0.5;
 			v_uv = brush > 2.5 ? vec2(UV.x, flip ? 1.0 - UV.y : UV.y) : mix(UV, 1.0 - UV, flip ? 1.0 : 0.0);
-
 			// Tone and colour, once per stroke.
 			float patch_n = p_noise(anchor * rp2.y + role * 17.0);
 			float per = mix(mix(tone_rnd, rnd, 0.2), 0.5, calm * 0.45);
@@ -1181,6 +1193,7 @@ void vertex() {
 				v_col = is_shadow ? vec3(1.0) : vec3(0.0);
 			}
 		}
+	}
 	}
 	// tt-sim: the canopy fade's key for the whole stroke; a stem's strokes stay (-1).
 	v_key = stem18 ? -1.0 : fract(rnd * 7.31 + 0.13);

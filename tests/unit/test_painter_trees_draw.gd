@@ -138,6 +138,8 @@ func test_the_token_window_takes_whole_strokes() -> void:
 		"strokes go whole, dabs stay"
 	)
 	assert_true(stroke.contains("v_key, v_key < 0.0, true);"), "no per-fragment cut on a stroke")
+	# painter-perf-strokes: a dropped mark leaves before the wind and the placement.
+	assert_true(stroke.contains("float rnd2h = fract(rnd * 11.13 + 0.31);"), "early density test")
 	var block := _code(PainterTrees.BLOCKIN_SHADER)
 	assert_true(block.contains("key, kind10 > 0.5, false);"), "the block-in is cut per fragment")
 
