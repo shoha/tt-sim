@@ -109,6 +109,17 @@ extends RefCounted
 const GOLDEN: float = 2.39996323
 const W_STEM: float = 0.12
 const W_PAD: float = 0.6
+## painter-look-wood: radius continuity. A strand narrows by at most this share of its width from
+## one node to the next (the pipe model's step where a heavy limb leaves the trunk was a cone: the
+## trunk above a fork stood a third of the width below it, under a limb thicker than itself).
+const NARROW_MIN: float = 0.62
+## A limb's base flares to this many times its own width where it leaves its parent (no pegs), but
+## never past FLARE_MAX of the parent's width there: the shader used to swell every limb 1.6 times
+## on top of the pack's own collar, so a limb began up to 1.47 times as wide as its parent.
+const FLARE: float = 1.6
+const FLARE_MAX: float = 0.92
+## Limbs thinner than this are not flared (a few millimetres on a twig, and a node per twig).
+const FLARE_MIN_R: float = 0.05
 
 
 class Sk:
@@ -482,6 +493,21 @@ static func _radii(sk: Sk, c: Dictionary) -> void:
 	sk.rad[0] = t
 
 
+## painter-look-wood: no strand narrows by more than 1 - NARROW_MIN from one node to the next. The
+## pipe model takes a limb's whole area off the trunk at the node it leaves from, so the trunk
+## above a heavy limb could stand at a third of the width below it. Raised from the base to the tip
+## (a dead stub keeps its own taper), so a child only ever stands under a thicker parent: the
+## children were fitted to their parent's radius at the joint, which this never lowers.
+static func _steady(sk: Sk) -> void:
+	for i: int in sk.pts.size():
+		if sk.state[i] == 2:
+			continue
+		var r: PackedFloat32Array = sk.rad[i]
+		for j: int in range(r.size() - 1):
+			r[j + 1] = maxf(r[j + 1], r[j] * NARROW_MIN)
+		sk.rad[i] = r
+
+
 ## The skeleton alone (for a bare tree, for measuring) and the context it was grown in.
 static func skeleton(
 	sp: Dictionary, cx: Dictionary, rng_seed: int, _conifer: bool, c: Dictionary
@@ -731,8 +757,7 @@ static func skeleton(
 			c["groups"] = int(c["groups"]) + 1
 			_grow(sk, c, 0, tp.size() - 1, top, dir, length, 0, int(c["groups"]), id, 0)
 	_radii(sk, c)
-	if float(c["collar"]) > 0.0:
-		_collars(sk, float(c["collar"]))
+	_collars(sk, float(c["collar"]))
 	return sk
 
 
@@ -755,20 +780,26 @@ static func _collars(sk: Sk, col: float) -> void:
 			for j: int in r.size():
 				r[j] = maxf(r[j] * k, 0.016)
 		sk.rad[i] = r
+	_steady(sk)
+	# The flare: on every limb of any order wide enough to show one (the shader used to swell all
+	# of them 1.6 times at the base, on top of this: a limb began wider than its parent). Baked
+	# here it is capped at FLARE_MAX of the parent's width at the joint, so a limb never starts
+	# wider than what it leaves.
 	for i: int in range(1, n):
-		if sk.parent[i] != 0 or sk.order[i] != 1 or sk.state[i] != 0:
+		if sk.state[i] != 0:
 			continue
 		var p: PackedVector3Array = sk.pts[i]
 		var r: PackedFloat32Array = sk.rad[i]
 		var seg: float = p[0].distance_to(p[1])
-		var pr: float = sk.rad[0][sk.at[i]]
+		var pr: float = sk.rad[sk.parent[i]][sk.at[i]]
 		var cl: float = clampf(pr * 2.2, 0.2, 0.9)
-		if r[0] < 0.05 or seg < cl * 1.5:
+		if r[0] < FLARE_MIN_R or seg < cl * 1.5:
 			continue
 		var f: float = cl / seg
 		p.insert(1, p[0].lerp(p[1], f))
 		r.insert(1, lerpf(r[0], r[1], f))
-		r[0] = minf(r[0] * lerpf(1.0, 1.55, col), 0.92 * pr)
+		# (and by the narrowing floor: the collar node beyond it is the limb's own width)
+		r[0] = maxf(r[0], minf(minf(r[0] * FLARE, FLARE_MAX * pr), r[1] / NARROW_MIN))
 		var a: PackedFloat32Array = sk.area[i]
 		a.insert(1, 0.0)
 		sk.pts[i] = p

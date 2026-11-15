@@ -311,16 +311,23 @@ void vertex() {
 			// (A stem keeps its grown taper: with the limbs' taper on top it stood as a bottle.)
 			// (and with none of it, as a log under a bunch of thin forks: half of it.)
 			float rr = limb_r19(mix(q1.w, q2.w, f), pf.w, stem ? along * 0.8 : along, px19, twig, bare17);
-			if (!stem) {
-				// A collar: a limb swells where it leaves its parent (no pegs).
-				rr *= 1.0 + 0.6 * (1.0 - twig) * (1.0 - smoothstep(0.0, 0.16, along));
-			}
+			// (painter-look-wood: the collar a limb swells with where it leaves its parent is baked into
+			// the pack's radii (PainterTreeSkeleton._collars), capped at the parent's width there. Here
+			// it was a fixed 1.6 times on top of the pack's own, so a limb began up to 1.47 times as
+			// wide as its parent.)
 			// The end: a point. A strand that ends thick (a stem that dissolves into its forks) closes
 			// over a short length, under the bases of its forks.
-			float thick_end = smoothstep(0.4, 0.7, pl.w / max(pf.w, 0.001)) * (1.0 - twig);
+			// (painter-look-wood: and one that limbs leave from its last node, flag 16, keeps it too.)
+			float thick_end = (hfl & 16) != 0 ? 1.0 - twig : smoothstep(0.4, 0.7, pl.w / max(pf.w, 0.001)) * (1.0 - twig);
 			// (Closing a thick end to a point left a gap under the forks: it keeps its width and the
 			// fragment stage rounds it.)
-			rr *= 1.0 - limb_point19 * (1.0 - thick_end) * smoothstep(0.78, 1.0, along);
+			// painter-look-wood: the point closes over the strand's LAST segment at most. It began at 0.78
+			// of the strand whatever its length, and a trunk or limb of twenty nodes was drawn narrowing
+			// to nothing over its last four, under the limbs that leave it there: a branch up to five
+			// times as wide as the trunk it grew from (the owner's "branch at the top thicker than the
+			// trunk below it").
+			float point_from = max(0.78, float(np - 2) / float(max(np - 1, 1)));
+			rr *= 1.0 - limb_point19 * (1.0 - thick_end) * smoothstep(point_from, 1.0, along);
 			if (stem) {
 				// The foot spreads into the ground in one curve (round 18: one wider ring).
 				rr *= 1.0 + 0.4 * exp(-max(pos.y, 0.0) / max(pf.w * 1.6, 0.08));

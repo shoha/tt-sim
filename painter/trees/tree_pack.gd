@@ -31,7 +31,8 @@ extends RefCounted
 ##   6 tone centre, number of roots           7 radial point, droop
 ##   8 seed, shadow strokes (before thinning), shadow stroke size, 0
 ## Strand header: (straight length, wind phase, wind weight, wind weight at the tip),
-##   (points, flags: 1 block-in only, 2 under a crown, 4 wind ramps along it, root spacing, seed);
+##   (points, flags: 1 block-in only, 2 under a crown, 4 wind ramps along it, 8 the stem, 16 limbs
+##   leave from its last node (painter-look-wood: it keeps its width there), root spacing, seed);
 ##   then (point xyz, radius) per point.
 ## Segment table texel: (strand header address, segment index, 0, 0).
 ## Slot table texel: ellipsoid (record address, -1 or -(2 + second root), roots, first root of this
@@ -501,6 +502,7 @@ static func _pack12(
 			+ (2.0 if has_crown and m.role == PainterTreeMass.Role.BARK else 0.0)
 			+ (4.0 if has_crown and pr.has("wind_tip") else 0.0)
 			+ (8.0 if pr.has("stem") else 0.0)
+			+ (16.0 if pr.has("forked") else 0.0)
 		)
 		data[w + 6] = sp0
 		data[w + 7] = float((rng_seed * 7919 + mi * 104729) & 0xFFFFF)

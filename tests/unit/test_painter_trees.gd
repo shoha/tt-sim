@@ -97,6 +97,9 @@ func test_a_rows_age_openness_and_seed_are_pure_in_the_row() -> void:
 		assert_between(o, 0.1, 0.9)
 
 
+# painter-look-wood re-pinned this fixture's texels and sha on purpose: the skeleton's radii are
+# continuous now (narrowing floor, a flare capped under the parent, the pack's flag 16), so the
+# port no longer matches the spike's bytes; the species, seed and age still do in their shape.
 func test_the_port_grows_the_spikes_own_trees() -> void:
 	var fixture: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SPIKE))
 	var trees: Dictionary = fixture["trees"]
