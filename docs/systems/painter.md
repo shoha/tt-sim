@@ -398,6 +398,29 @@ oaks' russet and the trunks. No bush drops its leaves (no skeleton to leave a tw
   dense round ball of dabs, some a ring; the prototype's bare crowns carry a fine twig mass where
   ours show limbs and sparse twigs; the willow's winter look is unseen (no core map grows one
   without water: willows come only from wetland_riparian).
+- Continuous wood (painter-look-wood, 2026-11-15; owner: "a branch at the very top is much
+  thicker than the trunk below it", "noticeable discontinuities in the trunks/branches"). Cause,
+  measured from the skeleton's own radii (`tests/unit/test_painter_tree_wood.gd` is the probe):
+  (1) the block-in closed every strand to a point over the last 22 percent of its length
+  (`smoothstep(0.78, 1, along)`), whatever its length, so a twenty-node trunk narrowed to nothing
+  over its last four nodes under the limbs that leave it there: limbs up to 4.9 times as wide as
+  the trunk at their joint (1280 where it had closed on a fork). The point now closes over the
+  strand's last segment at most (`point_from`), and a strand that limbs leave from its last node
+  keeps its width there (pack header flag 16, `forked`, set by PainterTreeGrowth). (2) The shader
+  swelled every limb 1.6 times at its base on top of the pack's own collar, so limbs began up to
+  1.47 times as wide as their parent: removed from the shader; PainterTreeSkeleton._collars bakes
+  the flare (FLARE 1.6, never past FLARE_MAX 0.92 of the parent's width at the joint, a node a
+  little way out, limbs of 5 cm or more) for every order. (3) The pipe model takes a heavy limb's
+  whole area off the trunk at its node: the trunk above stood at 0.21 to 0.35 of the width below
+  it. PainterTreeSkeleton._steady raises each strand from base to tip so no node narrows by more
+  than 1 - NARROW_MIN (0.62). The bare-season minimum pixel width is not a cause: `limb_px18` and
+  `limb_wide18` are 0 in every material and a twig's 0.65 px floor is under its own radius
+  (0.016 m) until about 27 m in the eye view, never in the orbit view. The test checks joints
+  (child at most 0.95 of the parent), the narrowing floor and the drawn width at the joint on every
+  species, three ages, three seeds. Digests moved: `painter_tree_spike.json` (texels, sha) and
+  `painter_tree_digests.json` re-pinned; test_painter_baked unchanged. Cost (GPU, painted minus
+  classic, 3 interleaved samples, 1920x1080): forest tokens summer +0.098 ms (main +0.126), winter
+  -0.521 (main -0.517), forest home summer -0.586 (main -0.596).
 - The eye view's rim (painter-look-winter): PainterSurfaces follows a scatter added to the map after
   the paint (`child_entered_tree` on the map root, `_bind_scatter`), so EyeRim's scatter gets the same
   painted plants and, through PainterTrees, painted trees and bushes (`PainterTrees.wanted` skips a

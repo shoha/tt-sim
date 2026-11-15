@@ -79,6 +79,10 @@ static func tree(
 			)
 		var phase: float = 0.0 if sk.grp[i] == 0 else _h(rng_seed, sk.grp[i], 20)
 		out.append(_strand(p, sk.rad[i], phase, w0[i], w1[i], sk.order[i] >= 3))
+	# A strand that limbs leave from its last node is not drawn to a point there (the pack's flag 16).
+	for i: int in range(1, n):
+		if sk.at[i] >= sk.pts[sk.parent[i]].size() - 1:
+			out[sk.parent[i]].params["forked"] = true
 	out[0].params["stem"] = true
 	# Buttress roots and the hollow of an old stem (round 5's).
 	var hollow_az: float = PI * 0.5 + (_h(rng_seed, 5, 1) - 0.5) * 2.4
