@@ -22,7 +22,9 @@ came from is the local branch `painterspike` (handoff `docs/plans/handoffs/paint
 | `PainterSurfaces` | `painter/painter_surfaces.gd` | The surface host: swaps the ground's and the scatter's materials for painted ones and back |
 | `PainterGroundRoles` | `painter/ground_roles.gd` | The pure surface-id and biome-id to ground-role table (meadow, floor, path, rock, shore) |
 | `PainterPlantRoles` | `painter/plant_roles.gd` | The pure asset-id to plant kind and tone role table; trees get none |
-| `PainterBrushes` | `painter/painter_brushes.gd` | The ground's three brush-mark layers, built once in code |
+| `PainterBrushes` | `painter/painter_brushes.gd` | The ground's three brush-mark layers; the generator, loaded baked (below) |
+| `PainterBaked` | `painter/painter_baked.gd`, `painter/baked/*.res`, `tools/bake_painter.gd` | The brush masks and tuft layouts as saved images, loaded instead of drawn (see "Baked textures") |
+| `PainterWarmup` | `painter/painter_warmup.gd` | Compiles the painter's shaders and pipelines on worker threads before the first Painted draw (see "Warm-up") |
 | painted ground, plant, solid | `painter/shaders/painter_ground.gdshader`, `painter_plant.gdshader`, `painter_solid.gdshader` | The ground's block-in and marks; the selector light on swaying and on still scatter (`painter_selector.gdshaderinc`, `painter_noise.gdshaderinc`) |
 | `PainterTreeSpecies` | `painter/trees/tree_species.gd`, `species.json` | Which scatter trees are grown (asset table), each species' form data, a row's age, openness and seed |
 | tree generator | `painter/trees/tree_skeleton.gd`, `tree_crown.gd`, `tree_growth.gd`, `tree_base.gd`, `tree_mass.gd` | `PainterTreeGrowth.tree(...)`: the skeleton and crown masses of one tree (the spike's family14) |
@@ -156,7 +158,8 @@ Ground roles. `PainterGroundRoles.surface_role(id)` sorts a surface id by its `_
 (first rule wins: rock, shore, floor, path, meadow; anything else is meadow), and
 `biome_role(id)` sorts a biome the same way. `test_painter_surfaces.gd` checks that every core
 surface resolves and that each core biome's role equals its own ground surface's. The zone
-texture (`PainterSurfaces.zone_image`, RGBA8 per map cell, box-blurred) holds the meadow share,
+texture (`PainterSurfaces.zone_image`, RGBA8 per map cell, box-blurred; about 43 ms on a 245 x 245
+map, was 144, and it runs on every Painted level load and ground edit) holds the meadow share,
 the path share, the rock share and wet ground (shore), from the map document's base surface,
 biome slots and surface weights. Real role data is still to come: a `paint_role` per surface in
 the library (and a biome's role read from its ground surface) would replace the word rules.
@@ -292,7 +295,14 @@ winter bushes carry little snow at sun 45.
   casts the sun's shadow (crowns cast a broad-lobed swollen shape in the sun's pass); strokes cast
   none. Both receive it as a tone step in light() (`tree_cast`: no lookup shift, only the threshold
   wiggle by the sheet's `cut`). Level l shows while |clamp(lod, 0, 2) - l| < 0.999, lod = 1 -
-  log2(camera size / 13.85).
+  log2(camera size / 13.85). The stroke levels' blocks (`PainterTreeMeshes.strokes`) are one
+  triangle per stroke (UV 0..2, the fragment discards outside the unit square) and the vertex stage
+  drops a mark the density, thinning or season rule removes before it derives anything
+  (painter-perf-strokes: -0.10 to -0.19 ms at the tokens, forest and taiga views, -14 % camera-pass
+  primitives in the village). The block-in's sphere is 6 x 3 (`PainterTreePack.ELL_SEGS`,
+  `ELL_RINGS`; 36 triangles, inflated by `ELL_FIT` 1.146 on x and z to keep the volume; a bush's
+  stays 16 x 9): its cost follows triangles and overdraw, not vertex work, in both passes
+  (painter-perf-shadow: -0.1 to -0.4 ms at 1080p).
 - The shaders (`painter_tree_stroke.gdshader`, `painter_tree_blockin.gdshader`, shared
   `painter_tree.gdshaderinc`) are the spike's final composed code, sliced, with tt-sim's wind
   globals (the gust is WindModel's field), the `foliage_sun` global for the light's direction, the
@@ -424,8 +434,8 @@ winter bushes carry little snow at sun 45.
   scalloped `lobed` brush (`tree_roles.json`; the lime's heart-shaped `scale`, the poplar's and
   rowan's `flick`, the spruce's `spray` and the birch's small `round` read as a second, cruder hand
   or as confetti); the birch is fewer, larger dabs in a yellow-green (the spike's lemon was the
-  brightest thing on the map); the willow keeps its strands. The block-in's crown masses are 8 x 5
-  spheres whose facets and polygon outline showed as flat slabs between the strokes of the
+  brightest thing on the map); the willow keeps its strands. The block-in's crown masses are spheres (8 x 5 then, 6 x 3
+  since painter-perf-shadow) whose facets and polygon outline showed as flat slabs between the strokes of the
   sparser species: their outline breaks into lobes by a world noise where they turn from the eye
   (`MASS_RIM_BREAK`, camera pass only; no geometry added).
 - A grazing sun (painter-a2a4): the long bands across the floor at a 3 degree sun were
@@ -463,11 +473,85 @@ winter bushes carry little snow at sun 45.
   stroke whose root normal faces more than 120 degrees from the camera is not built (`back10`
   -0.5 in `tree_uniforms.json`, -0.14 ms at tokens, no visible change), and a tree no token's
   window can reach skips the token test's loops (`tree_token_near`, from the tree's box in
-  `tree_tex` texels 5 and 6, `PainterTreePack.BOUND_PAD` 2.5 m). A per-tree view cull of the
-  strokes (`tree_view_box`, `view_cull`) is in the shader but OFF: it dropped a crown edge's
-  strokes at the tokens view at both 1.5 and 2.5 m margins, cause open; at 1.5 m it was worth 0.6
-  ms there. Dead ends: the strokes in the alpha pass (no depth prepass: +1.5 to +2.5 ms), the
-  cull on the block-in (cost what it saved), skipping the form-occlusion ray (0.007 ms).
+  `tree_tex` texels 5 and 6, `PainterTreePack.BOUND_PAD` 2.5 m).
+- View cull (painter-perf-cull): the per-tree view cull of the strokes (`tree_view_box`, the
+  uniform `view_cull`, default 1 in the shader; 2 draws only the trees it would cull, a
+  diagnostic; 0 is off) is ON: a tree whose box is outside the view collapses in the vertex
+  stage. `tree_tex` texels 5 and 6 hold the masses' own box (centre, half extents); the token
+  pre-test adds `TREE_BOX_PAD` (2.5, pinned to `PainterTreePack.BOUND_PAD` by a test, as is the
+  cells' `PainterTrees.BOUND_GROW`), the cull its own margin: `view_margin` (1 m) plus
+  `TREE_VIEW_MARGIN_PX` (8 px of the stroke's own size, so a perspective far view gets a wider
+  one). A willow's strand masses can draw strokes round their spindle outside the ellipsoid, so
+  the box takes the strand cylinder and its bend in (`tree_pack.gd`, aabb only).
+  `tests/unit/test_painter_trees_cull.gd` pins the box over every species, age and openness and
+  a GDScript twin of the shader's extent math. The margin is not a proven bound on stroke reach
+  (it rests on cull-on equal to cull-off at 0.5 m in five forest views and the village; no eye
+  view was captured with it on). Forest tokens summer -0.78 ms, winter -0.40, taiga home -0.16,
+  forest home -0.05 to -0.11, village -0.10. The crown-edge strokes the earlier cull seemed to
+  drop were the trees' own sway: see the harness note below.
+- Frame cost since (table in `docs/PERFORMANCE.md` "Painted perf round"): Painted minus Classic is
+  +0.50 ms at forest tokens summer, +1.28 at taiga home, and -0.16 to -0.13 at the winter, forest
+  home and village views. Where the rest is: the stroke vertex stage's derive from the data
+  textures (0.70 ms of the tokens view's strokes, repeated per vertex, hence the one-triangle
+  block) and the block-in's shadow cast. Frame CPU is not where Painted loses (script 0.24 to
+  0.31 ms and render CPU 0.6 to 0.86 ms in both looks). Dead ends: the strokes in the alpha pass
+  (no depth prepass: +1.5 to +2.5 ms), the cull on the block-in (cost what it saved), skipping the
+  form-occlusion ray (0.007 ms), point sprites for the strokes (slower than the triangle; declaring
+  `POINT_SIZE` slows the whole shader), a shadow-only caster node, a shadow cull, a shorter shadow
+  distance or a single cascade (0, or Classic gains the same), thinning the level-2 strokes
+  (`thin2`: no saving).
+- Measuring painted trees: the render jobs' `wind freeze` does not stop them (they read TIME and
+  the global wind; it zeroes `sway_speed` and `flutter_speed`, which only plants have). For a pixel
+  comparison set `wind_strength` 0 on the tree materials (the probe's `uniform` action), again
+  after every Painted look change (it makes new materials).
+
+## Baked textures
+
+The ground's three brush masks (`PainterBrushes`), the trees' fourteen (`PainterTreeBrushes`) and the
+grass tufts' five dab layouts (`PainterTuftAtlas`) are pure functions of their code; drawing them in
+GDScript took about 0.5 s on the first Painted level of a session. `PainterBaked`
+(`painter/painter_baked.gd`) loads them from `painter/baked/*.res` (about 0.6 MB: `ground_brushes`,
+`tree_brushes`, `tuft_<size>` x 5; each array's layers stacked in one Image, the mipmaps cut again at
+load), and a name with no file is drawn by the generator, so the files are a cache, never the source.
+`.gitattributes` marks them `-text` (binary). The bake rule: anyone who changes a brush or a tuft
+layout runs `godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/bake_painter.gd` and
+commits the files, or `tests/unit/test_painter_baked.gd` (bytes and mipmaps equal the generators) fails.
+The first Painted forest load in a fresh windowed process (debug) went from 3.33 to 3.36 s to 2.83 to
+3.11 s.
+
+## Warm-up
+
+`PainterWarmup` (`painter/painter_warmup.gd`) compiles the painter's shaders before the first Painted
+draw, off the main thread: a coordinator thread loads the painter scripts and the default sheet, then
+six threads make one one-triangle RenderingServer mesh per (painter shader, vertex layout) on a bare
+`ShaderMaterial`, which compiles the surface pipelines there (the mechanism `GraphicsWarmup` uses).
+Two groups: BASE (the summer shaders and the sky) and BARE (the two leaf-drop tree shaders of a bare
+season). The layouts are `LAYOUT_*` slot lists, pure data with no palette or scene state (a version
+that took them from live producers segfaulted on a cold cache against the main thread loading the
+same palette: do not reintroduce shared state). The script names no painter script, so loading it
+compiles none.
+
+- Who starts it: Root behind the title when the Look choice can paint (`_start_painter_warmup`,
+  after the precompile and the first-launch warm-up); Settings Apply (`RenderStyle.start_warmup`);
+  `LevelEnvironmentManager._apply_render_style` requests a run (again at a level load, so the
+  pipelines are made for that level's world) and holds the Painted apply until `is_ready`, polled each
+  frame (`_warmup_held`); `LevelLoader` keeps the loading overlay up while `painter_pending()`; an
+  interactive switch (Settings Apply, `set_look`, the Level Editor's toggle) keeps the current look
+  until it is ready. A Classic session never loads it. Headless: `available()` is false and
+  `is_ready` true, so no test sees a change.
+- Test: `tests/unit/test_painter_warmup.gd` (every `painter/shaders/*.gdshader` is in
+  `covered_shaders()`, the copied shader constants equal the owners', each layout makes the format
+  measured on a live level). A new painter shader must be added to `PainterWarmup`; the test fails
+  until it is.
+- Measured (debug build, warm caches, forest, `docs/PERFORMANCE.md` "Painted perf round"): the
+  Classic to Painted switch's worst frame 764 to 831 ms -> 161 to 206 ms, the first Painted level load
+  3.2 s -> 2.1 to 2.9 s, its worst covered frame 1.1 s -> 0.35 to 0.39 s. With the pipeline caches
+  off (a first launch or a new driver) the first level's worst covered frame is still 1.1 to 1.5 s
+  (about 57 surface pipelines compile on the main thread despite the warm-up, under the overlay);
+  open, next step in that section. An exported release build was not measured.
+- One-offs left on the first Painted install: the painter scripts' GDScript compile (about 0.5 s
+  debug; the warm-up's coordinator thread now loads them off the main thread) and `ground+plant retone` (about 130 ms the first
+  time). House builds with manner records cost +27 to 45 % in procgen's recording, not in `painter/`.
 
 ## Buildings
 

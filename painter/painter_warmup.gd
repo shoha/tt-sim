@@ -23,17 +23,26 @@ extends RefCounted
 ## season) follows.
 ##
 ## Who calls it. Root starts it behind the title when the Look choice can paint (RenderStyle.choice
-## is not Classic): that run loads the scripts and compiles the shaders. LevelEnvironmentManager
-## requests a run when a level or the Settings Look row asks for Painted (again at a level load, so
-## the pipelines are made for that level's world) and holds the Painted draw until is_ready():
+## is not Classic): that run is LITE (lite_title): it loads the scripts and the default sheet and
+## compiles the shaders, and makes no samples. LevelEnvironmentManager requests the full run for
+## each new world, before anything is drawn in it (a level's environment apply marks the world
+## stale, the first Painted check requests the run), and holds the Painted draw until is_ready():
 ## polled each frame, so the window never freezes, and a level load keeps its overlay up meanwhile
 ## (painter_pending). A Classic session never starts it. Headless runs draw nothing: is_ready() is
 ## true there and start() does nothing.
 ##
+## Why the title run makes no samples (card painter-perf-cold, first Painted level, Godot caches
+## off, debug build): a full run at the title, then a second run over the level's world, left the
+## main thread three frames of 1.0 to 1.8 s (the level's own first draws still compiled about 57
+## surface and 48 specialization pipelines, and the main thread stalled 1.3 s as the second run's
+## workers started), worst covered frame 1429 to 1521 ms in six runs. With the title run lite and
+## the full run made once, over the level's world, before the Painted apply, the same level shows
+## a worst frame of about 200 ms and no surface pipeline compiles at the apply.
+##
 ## This script names no painter script (their constants are copied below and a test compares them),
 ## so loading it compiles none of the painter's GDScript on the main thread.
 
-enum Phase { IDLE, BASE_RUNNING, BASE_DONE, ALL_DONE }
+enum Phase { IDLE, BASE_RUNNING, BASE_DONE, ALL_DONE, LITE_DONE }
 
 const SCRIPTS: PackedStringArray = [
 	"res://painter/painter_scene.gd",
@@ -111,6 +120,12 @@ static var _meshes: Array[RID] = []
 static var _stop := false
 ## True from request() until the thread's last step (under _mutex).
 static var _running := false
+## A run was asked for (request(true)) while one was running: the thread makes another when it ends.
+static var _again := false
+## The run in progress is the title's: scripts and shaders only, no samples.
+static var _lite := false
+## Whether start() (the title's run) is lite; false makes it a full run (probes compare the two).
+static var lite_title := true
 ## Whether the scripts and the default sheet were loaded (the first run does it).
 static var _loaded := false
 
@@ -150,22 +165,28 @@ static func needs_bare(sheet: String, mood: String, elevation: float) -> bool:
 ## Starts the warm-up on a thread of its own the first time (a no-op when it has run or is running,
 ## and headless). At the title it compiles the shaders and loads the scripts.
 static func start() -> void:
-	request(false)
+	request(false, lite_title)
 
 
 ## Starts a warm-up run: with `again` even after an earlier one finished, so the pipelines are made
 ## for the world a level has built (the engine compiles for the framebuffer, lights and environment
-## features it knows of; a run at the title made them for the title's: measured, the first Painted
-## level still compiled 43 pipelines in two frames, 2.4 s with the caches off). A run over finished
-## work costs a few milliseconds. A no-op while one is running.
-static func request(again: bool) -> void:
+## features it knows of). A full run is also what follows a lite one (`lite`: scripts and shaders
+## only, the title's). A run over finished work costs a few milliseconds. While one is running,
+## `again` queues one more run behind it (the running one may have been made for an earlier
+## world), and is_ready() is false until it is done.
+static func request(again: bool, lite: bool = false) -> void:
 	if not available():
 		return
 	_mutex.lock()
-	var go := not _running and (_phase == Phase.IDLE or again)
+	var go := not _running and (
+		again or _phase == Phase.IDLE or (_phase == Phase.LITE_DONE and not lite)
+	)
 	if go:
 		_running = true
+		_lite = lite and not again and _phase == Phase.IDLE
 		_phase = Phase.BASE_RUNNING
+	elif again and _running:
+		_again = true
 	_mutex.unlock()
 	if not go:
 		return
@@ -182,7 +203,10 @@ static func is_ready(bare: bool = false) -> bool:
 		return true
 	_mutex.lock()
 	var phase := _phase
+	var queued := _again
 	_mutex.unlock()
+	if queued:
+		return false
 	return phase == Phase.ALL_DONE or (phase == Phase.BASE_DONE and not bare)
 
 
@@ -263,13 +287,30 @@ static func _add(
 	)
 
 
+## The thread: runs once, then again for as long as a request(true) arrived meanwhile.
 static func _coordinate() -> void:
+	while _run_once():
+		_mutex.lock()
+		var more := _again and not _stop
+		_again = false
+		if more:
+			_phase = Phase.BASE_RUNNING
+			_lite = false
+		else:
+			_running = false
+		_mutex.unlock()
+		if not more:
+			return
+	_finish_run()
+
+
+## One run of the groups, true when it got to the end (false: release() stopped it).
+static func _run_once() -> bool:
 	var t0 := Time.get_ticks_msec()
 	if not _loaded:
 		for path in SCRIPTS:
 			if _stop:
-				_finish_run()
-				return
+				return false
 			ResourceLoader.load(path)
 		# The default sheet's parse (about 140 ms) off the main thread: nothing reads the sheet
 		# cache until is_ready() says the base group is done.
@@ -277,6 +318,15 @@ static func _coordinate() -> void:
 		sheets.load_sheet(DEFAULT_SHEET)
 		_loaded = true
 	var t1 := Time.get_ticks_msec()
+	if _lite:
+		var all: Array[Shader] = []
+		for path in covered_shaders():
+			var shader := load(path) as Shader
+			if shader != null:
+				all.append(shader)
+		GraphicsWarmup.compile_shaders(all)
+		_set_phase(Phase.LITE_DONE)
+		return true
 	var total := 0
 	var base := collect(false)
 	total += base.size()
@@ -294,7 +344,7 @@ static func _coordinate() -> void:
 	var t3 := Time.get_ticks_msec()
 	stats = {"scripts_ms": t1 - t0, "base_ms": t2 - t1, "bare_ms": t3 - t2, "samples": total}
 	_set_phase(Phase.ALL_DONE)
-	_finish_run()
+	return true
 
 
 static func _set_phase(phase: Phase) -> void:

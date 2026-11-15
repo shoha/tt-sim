@@ -63,6 +63,15 @@ func test_painted_takes_the_light_from_the_sheet_and_keeps_the_suns_direction() 
 	assert_eq(manager.get_render_style()["mood"], "summer")
 
 
+func test_a_level_apply_marks_its_world_stale_for_the_warm_up() -> void:
+	# PainterWarmup's pipelines belong to a world: the first Painted check after a level's apply asks
+	# for a run over the new one (a headless run never reaches it, so the flag stays set here).
+	var manager := LevelEnvironmentManager.new()
+	assert_false(manager._world_stale, "nothing applied yet")
+	manager.apply_level_environment(LevelData.new(), _root)
+	assert_true(manager._world_stale, "the level's world is new")
+
+
 func test_leaving_painted_restores_the_environment_and_sun_exactly() -> void:
 	var manager := _manager()
 	var env := manager.get_world_environment().environment
