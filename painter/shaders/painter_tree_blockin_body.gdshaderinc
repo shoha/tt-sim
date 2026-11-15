@@ -476,29 +476,13 @@ void vertex() {
 		wp += edge_push(v_wp, ww_v * (0.25 + 0.75 * rho_v * rho_v));
 	}
 	// The fragment stage's VERTEX and NORMAL are this point and its normal, in view space
-	// (skip_vertex_transform): the token window, the canopy fades, the haze and the sun's shadow
+	// (skip_vertex_transform): the token fade, the canopy fades, the haze and the sun's shadow
 	// lookup all read VERTEX. (painter-a2a5: with POSITION alone, Godot's VERTEX was the mesh's own
 	// unit sphere or ribbon block at the tree's foot, so a crown was tested at its foot and a token
 	// under it kept the masses and limbs over it.)
 	VERTEX = (VIEW_MATRIX * vec4(wp, 1.0)).xyz;
 	NORMAL = normalize(mat3(VIEW_MATRIX) * v_wn);
-	// tt-sim (painter-trees-fix2): every mass, limb and trunk goes with its tree when the token
-	// window takes it whole (tree_token_crown: the crown's form centre and radius across), as its
-	// strokes do, so neither a mass nor a bare trunk is left beside the opening. The camera's pass
-	// only; a ground mass stays, and a bush (t3.w 2, PainterTreeBush) is cut only as a crown's
-	// masses are.
-	bool crown_gone = false;
-	if (alive && abs(floor(role + 0.5) - ROLE_GROUND) > 0.5 && t3.w > 0.5 && t3.w < 1.5
-			&& occlusion_token_count > 0
-			&& abs(dot(normalize(INV_VIEW_MATRIX[2].xyz), normalize(sun_dir))) <= 0.9995) {
-		vec4 crown = vec4((VIEW_MATRIX * (MODEL_MATRIX * vec4(t3.xyz, 1.0))).xyz,
-			max(t4.x, t4.z) * length(MODEL_MATRIX[0].xyz));
-		// One answer per tree, so every vertex of a mass decides alike (a mass half collapsed would
-		// smear its triangles across the frame).
-		crown_gone = tree_token_crown(crown, VIEW_MATRIX, PROJECTION_MATRIX);
-	}
-	POSITION = alive && !crown_gone ? PROJECTION_MATRIX * vec4(VERTEX, 1.0)
-		: vec4(2.0, 2.0, 2.0, 1.0);
+	POSITION = alive ? PROJECTION_MATRIX * vec4(VERTEX, 1.0) : vec4(2.0, 2.0, 2.0, 1.0);
 	if (wood_v) {
 		// A limb stroke is painted in limb coordinates: its fragments get the axis point, not their own.
 		v_wp = wood_axis;
@@ -887,8 +871,14 @@ void fragment() {
 		// grain over a token at a close zoom (painter-a2a3), a quarter share still dotted every
 		// rim (painter-a2a4). The wood stays through the canopy fades to ground the tree.
 		float key = clamp(0.9 * p_noise(v_wp * 1.6 + 7.0) + 0.1 * bayer16(FRAGCOORD.xy / world_px_cell()), 0.0, 1.0);
+		// painter-look-fade: a limb thins in dry-brush streaks along its length (the noise of its own dry
+		// breaks), so it stays one continuous thing; a twig is never thinned.
+		float thin_key = -1.0;
+		if (wood) {
+			thin_key = w_twig > 0.6 ? 2.0 : smoothstep(0.15, 0.85, p_noise(vec3(w_a * 3.3 + w_sd + 17.0, w_s / (w_wl * 3.0), w_sd * 0.7 + 5.0)));
+		}
 		tree_fades(VERTEX, INV_VIEW_MATRIX, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy,
-			VIEWPORT_SIZE, key, kind10 > 0.5, false);
+			VIEWPORT_SIZE, key, kind10 > 0.5, false, thin_key);
 	}
 }
 

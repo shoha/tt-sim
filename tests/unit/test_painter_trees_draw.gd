@@ -121,29 +121,41 @@ func test_every_tree_shader_tests_the_tokens_at_its_own_fragment() -> void:
 		"occlusion_tiles_match(view_matrix, projection_matrix)",
 		"for (int i = first; i < end; i++)",
 		"for (int i = 0; i < occlusion_token_count; i++)",
-		"bool tree_token_frag(",
-		"bool tree_token_stroke(",
+		"float tree_thin_at(",
+		"float tree_thin_vertex(",
 	]:
-		assert_true(inc.contains(wanted), "the token window: %s" % wanted)
+		assert_true(inc.contains(wanted), "the token fade: %s" % wanted)
+	# The window it replaced (strokes taken whole, a tree taken whole, a rim) is gone.
+	for dead: String in [
+		"tree_token_stroke(", "tree_token_frag(", "tree_token_crown(", "tree_token_margin("
+	]:
+		assert_false(inc.contains(dead), "no window left: %s" % dead)
 
 
-## painter-token-window: a circular cut through every part read as a glass dome over the token.
-## A stroke goes whole, decided in its vertex stage (never a ground shadow dab); the block-in is
-## cut per fragment; no stroke is cut per fragment.
-func test_the_token_window_takes_whole_strokes() -> void:
+## painter-look-fade: the token fade thins, never clears (a cleared window left a trunk cut off in
+## mid air, strokes taken whole beside a token and a glass-dome rim). A stroke shrinks by its key
+## in its vertex stage (never a ground shadow dab, never the sun's pass); the block-in and the limbs
+## are thinned per fragment; no stroke is cut per fragment.
+func test_the_token_fade_thins_strokes_in_the_vertex_stage() -> void:
 	var stroke := _code(PainterTrees.STROKE_SHADER)
-	# painter-perf-forest: a tree no token's window can reach (tree_token_near) skips the test.
+	# painter-perf-forest: a tree no token's fade can reach (tree_token_near) skips the test.
 	assert_true(
-		stroke.contains("!is_shadow && near_token && tree_token_stroke("),
-		"strokes go whole, dabs stay"
+		stroke.contains("keep > 0.0 && !is_shadow && abs(role - ROLE_GROUND) > 0.5"),
+		"a live stroke that is no ground dab and not the sun's thins"
 	)
-	assert_true(stroke.contains("v_key, v_key < 0.0, true);"), "no per-fragment cut on a stroke")
+	assert_true(stroke.contains("tree_thin_vertex("), "strokes thin in the vertex stage")
+	assert_true(
+		stroke.contains("v_key, v_key < 0.0, true, -1.0);"), "no per-fragment cut on a stroke"
+	)
 	# painter-perf-strokes: a dropped mark leaves before the wind and the placement, and the
 	# triangle block's corner outside the unit square is discarded.
 	assert_true(stroke.contains("float rnd2h = fract(rnd * 11.13 + 0.31);"), "early density test")
 	assert_true(stroke.contains("v_uv.x > 1.0 || v_uv.y > 1.0"), "the triangle's spare corner")
 	var block := _code(PainterTrees.BLOCKIN_SHADER)
-	assert_true(block.contains("key, kind10 > 0.5, false);"), "the block-in is cut per fragment")
+	assert_true(
+		block.contains("key, kind10 > 0.5, false, thin_key);"), "the block-in thins per fragment"
+	)
+	assert_false(block.contains("crown_gone"), "no mass is taken whole with its tree")
 
 
 func test_painted_rows_become_cells_and_hide_the_glb_trees() -> void:
@@ -177,7 +189,7 @@ func test_painted_rows_become_cells_and_hide_the_glb_trees() -> void:
 
 ## painter-bushes: a card-built bush's row is drawn as a crown-only tree in a bush cell (smaller
 ## blocks, no limb ribbon), its GLB chunk hides, and its tree-table row marks it a bush (texel 3 w
-## 2), so the token window never takes it whole.
+## 2); the texel stays (a bush is flagged by it).
 func test_a_bush_row_is_drawn_as_a_crown_and_hides_its_glb() -> void:
 	var scatter := _scatter()
 	scatter.set_cells({Vector2i(0, 0): {BUSH: _rows([Vector2(1, 1)]), OAK: _rows([Vector2(3, 1)])}})

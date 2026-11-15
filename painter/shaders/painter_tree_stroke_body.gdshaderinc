@@ -225,10 +225,6 @@ void vertex() {
 	float thin_i = 0.0;
 	float moss = 0.0;
 	vec3 a_p = vec3(0.0);
-	// tt-sim (painter-trees-fix): the centre of a foliage stroke's clump (the token window takes a
-	// clump's strokes together); has_clump false for a stroke of no clump.
-	vec3 clump_p = vec3(0.0);
-	bool has_clump = false;
 	vec3 a_n = vec3(0.0, 1.0, 0.0);
 	vec3 a_d = vec3(1.0, 0.0, 0.0);
 	vec3 a_tn = vec3(0.0, 1.0, 0.0);
@@ -370,8 +366,6 @@ void vertex() {
 					vec4 e6 = mt(rec + 6, layer);
 					int n_roots = int(e6.w + 0.5);
 					if (k < n_roots && !fallen && level_shown(rnd, level, e_lam) && !(bare > 0.5 && leafy)) {
-						clump_p = e0.xyz;
-						has_clump = leafy;
 						alive = true;
 						vec4 e1 = mt(rec + 1, layer);
 						vec4 e2 = mt(rec + 2, layer);
@@ -1012,6 +1006,22 @@ void vertex() {
 			keep = 0.0;
 		}
 		keep *= 1.0 - kill10;
+		// painter-look-fade: the token fade. A stroke in front of a token (tree_token_near: a tree no token
+		// can reach skips the test; a ground dab and the sun's pass never thin) shrinks by how far its key
+		// lies over the thinning, so the crown thins smoothly as a token moves and a stroke is never cut
+		// at a rim. The key mixes the stroke's hash with its light (TREE_THIN_LIT), so the lit dabs stay
+		// longest and the shaded ones go first: the crown thins to its bright strokes, not to dark clots.
+		float thin_s = 1.0;
+		if (keep > 0.0 && !is_shadow && abs(role - ROLE_GROUND) > 0.5
+				&& ((perf_off & 2) != 0 || tree_token_near(box_c, box_h, VIEW_MATRIX, PROJECTION_MATRIX))) {
+			float thin_f = tree_thin_vertex((VIEW_MATRIX * vec4(anchor, 1.0)).xyz, VIEW_MATRIX,
+				PROJECTION_MATRIX, VIEWPORT_SIZE);
+			if (thin_f > 0.0) {
+				float tk = mix(fract(rnd * 13.7 + 0.31), clamp(ndl, 0.0, 1.0), TREE_THIN_LIT);
+				thin_s = clamp((tk - thin_f) / TREE_THIN_BAND, 0.0, 1.0);
+				keep *= step(0.02, thin_s);
+			}
+		}
 		if (big18) {
 			size *= 1.4;
 		}
@@ -1019,6 +1029,8 @@ void vertex() {
 		if (keep > 0.0) {
 			float len = size * sqrt(aspect);
 			float wid = size * inversesqrt(aspect);
+			len *= thin_s;
+			wid *= thin_s;
 			vec3 ax = wd - to_cam * dot(wd, to_cam);
 			ax = dot(ax, ax) < 0.003 ? normalize(INV_VIEW_MATRIX[0].xyz) : normalize(ax);
 			vec3 ay = cross(to_cam, ax);
@@ -1058,33 +1070,6 @@ void vertex() {
 			vec3 centre = wp + bx * shift * len;
 			wp = centre + bx * (UV.x - 0.5) * len + by * (UV.y - 0.5) * wid;
 			VERTEX = (VIEW_MATRIX * vec4(wp, 1.0)).xyz;
-			// tt-sim (painter-token-window): the token window takes a stroke whole, by where its
-			// nearest point lies (a ground dab under a crown is not in front of anything: it stays).
-			vec3 centre_view = (VIEW_MATRIX * vec4(centre, 1.0)).xyz;
-			// painter-trees-fix2: a stroke goes with its whole tree when the window takes the tree
-			// (tree_token_crown: the crown's form centre and radius across, texels 3 and 4); a ground
-			// dab stays.
-			bool wood_stroke = abs(role - 1.0) < 0.5;
-			vec4 crown = vec4(0.0);
-			if (!is_shadow && abs(role - ROLE_GROUND) > 0.5 && occlusion_token_count > 0) {
-				int crown_row = int(INSTANCE_CUSTOM.x + 0.5);
-				vec4 crown_c = texelFetch(tree_tex, ivec2(3, crown_row), 0);
-				vec4 crown_r = texelFetch(tree_tex, ivec2(4, crown_row), 0);
-				// (w 2: a bush, PainterTreeBush: only thinned stroke by stroke, never taken whole.)
-				if (crown_c.w > 0.5 && crown_c.w < 1.5) {
-					crown = vec4((VIEW_MATRIX * (MODEL_MATRIX * vec4(crown_c.xyz, 1.0))).xyz,
-						max(crown_r.x, crown_r.z) * length(MODEL_MATRIX[0].xyz));
-				}
-			}
-			// (painter-perf-forest: a tree no token can reach skips the window's loops.)
-			bool near_token = (perf_off & 2) != 0 || tree_token_near(box_c, box_h, VIEW_MATRIX,
-				PROJECTION_MATRIX);
-			if (!is_shadow && near_token && tree_token_stroke(centre_view, 0.5 * max(len, wid),
-					has_clump ? (VIEW_MATRIX * (MODEL_MATRIX * vec4(clump_p, 1.0))).xyz : centre_view,
-					crown, anchor, fract(rnd * 13.7 + 0.31), wood_stroke, VIEW_MATRIX, PROJECTION_MATRIX,
-					VIEWPORT_SIZE)) {
-				VERTEX = vec3(0.0);
-			}
 			v_brush = brush;
 			bool flip = fract(rnd * 5.3) > 0.5;
 			v_uv = brush > 2.5 ? vec2(UV.x, flip ? 1.0 - UV.y : UV.y) : mix(UV, 1.0 - UV, flip ? 1.0 : 0.0);
@@ -1266,7 +1251,7 @@ void fragment() {
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 	ROUGHNESS = 1.0;
 	tree_fades(VERTEX, INV_VIEW_MATRIX, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE,
-		v_key, v_key < 0.0, true);
+		v_key, v_key < 0.0, true, -1.0);
 	v_wp_light = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 

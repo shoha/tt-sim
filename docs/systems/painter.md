@@ -243,7 +243,7 @@ about 63 level-1 strokes a bush. Its colour is the sheet's bush (`bush-value`, `
 leaf, `PainterTreeTones` row "bush" after the species), on a crown's ramp, so it frosts, gilds and
 darkens with the trees. Bushes sit in their own 15 m cells whose nodes instance smaller blocks (4
 spheres of 16 x 9, 10 stroke slots; no limb ribbon), never in a tree's eight neighbouring forms, and
-the tree row's texel 3 w is 2, so the token window never takes a bush whole. Measured against the
+the tree row's texel 3 w is 2 (a bush thins as a crown does, never as wood). Measured against the
 tip's card bushes (interleaved, 1920x1080, vsync off, GPU medians): village eye -0.45 ms, home
 -1.0, forest tokens -0.75 to -0.78, forest home -0.95 (before the 16 x 9 sphere; that change is
 unmeasured).
@@ -411,46 +411,52 @@ oaks' russet and the trunks. No bush drops its leaves (no skeleton to leave a tw
   `test_painter_trees_draw` grows every species and fails if one outgrows it. The block-in's
   crown masses fade by a world noise of about half a metre with a light screen dither on each
   piece's rim (a plain 1 px dither read as halftone grain over a token).
-- The token window (painter-a2a4, painter-a2a5, painter-token-window): the include reads
-  OcclusionFadeManager's token texture and screen tiles as the plants do (the tile's list in the
-  camera's pass, the plain loop otherwise), but CLEARS instead of dithering to `min_alpha`, for
-  parts nearer the camera than a token (up to `TREE_TOKEN_BEHIND_LEAF`, 0.6 of the zone radius,
-  behind its centre for foliage; `TREE_TOKEN_BEHIND`, a quarter, for wood: a full radius cut the
-  trunk just behind a token). painter-token-window: the previous cut (every part along one
-  scalloped circle at about 0.8 to 0.9 of the radius) framed the ground behind in one light state
-  and read as a glass dome (a pale disc at sun 45, a dark one at sun 20, in winter and grimdark).
-  Now a STROKE goes whole: its vertex stage (`tree_token_stroke`) loops the tiles under the
-  stroke's screen box and collapses the quad when the stroke's nearest point lies inside the rim,
-  which a world noise sets per token between `TREE_TOKEN_EDGE_LO` and `_HI` (0.76 to 0.9 R, lobes
-  `TREE_TOKEN_LOBE_M` 0.9 m or half the radius for a small token) plus the stroke's own key
-  (+-0.05), so the rim is a ragged run of leaf dabs. Ground shadow dabs are never cut. The block-in
-  masses and limbs are cut per fragment (`tree_token_frag`) `TREE_TOKEN_MASS_PAD` (0.1) further
-  out, at most the radius (the tiles are binned by it). The vertex stage computes FRAGCOORD's tile
-  as `(clip.xy / clip.w * 0.5 + 0.5) * VIEWPORT_SIZE` with no row flip (measured: a flip left the
-  strokes over the token). Measured against the circle at 1920x1080 (vsync off, interleaved): tokens
-  view -0.18 ms, home -0.08, far -0.09; shadow and visible primitives unchanged. Still open: a small
-  token cut into a trunk shows a nearly round hole (the limb is one mass).
-  A tree goes whole (painter-trees-fix2, `tree_token_crown`): when a token's window reaches into a
-  crown by at least `TREE_TOKEN_CROWN_SHARE` (0.5) of its radius and the crown's radius is under
-  `TREE_TOKEN_CROWN_MAX` (2.6) zone radii, every stroke and block-in mass of that tree but its
-  ground dabs is collapsed in the vertex stage (camera pass only; its shadow stays). The test reads
-  the tree row's crown form centre and radii (`tree_tex` texels 3 and 4) against every token of the
-  plain list (a crown's centre may lie outside the token's tiles), once per tree, so all parts
-  decide alike. It is for a small tree in front of a large token: the window used to take a
-  birch's middle and limbs and leave its fringe floating beside Venusaur, and a crown taken alone
-  would leave a bare trunk. A crown much wider than the zone (the oak over Venusaur, any tree over
-  an Eevee) keeps the plain rim. A bush (texel 3 w 2, below) is never taken whole: the window
-  thins it stroke by stroke and cuts its pads as a crown's. Letting the whole crown
-  cast (`shadow_simple` 1) was tried for the window and dropped: it shaded nothing inside it (the
-  crowns' shadows fall aside at sun 45). It runs after the canopy fades and only in the
-  camera's pass (the sun's pass keeps the whole crown's shadow). Both shaders must hand their own
-  view-space point to `tree_fades`: the stroke shader and, since painter-a2a5, the block-in
-  (`skip_vertex_transform`, VERTEX and NORMAL in view space). The block-in wrote POSITION alone
-  before, so Godot's VERTEX was the mesh's unit sphere or ribbon block at the tree's FOOT: masses
-  and limbs over a token were tested at the foot and stayed as dark pieces, and the canopy fades,
-  the haze depth and the received sun shadow of the block-in read the foot too.
-  `test_painter_trees_draw` checks the binding, the VERTEX write and both loops in every tree
-  shader.
+- The token fade (painter-look-fade, 2026-11-15; it replaced the token window of painter-a2a4,
+  painter-a2a5, painter-token-window and painter-trees-fix2, which CLEARED a ragged rim of strokes,
+  masses and limbs in front of a token: a floating trunk with a limb tail, detached stubs, fringes,
+  a glass-dome rim). A tree part nearer the camera than a token is THINNED, never cleared whole and
+  never alpha-blended (the look stays opaque; no new pass). The include reads OcclusionFadeManager's
+  token texture and screen tiles as the plants do (the tile's list in the camera's pass, the plain
+  loop otherwise). `tree_thin_one` gives one token's amount: a depth ease-in (the part is in front
+  of the token: `smoothstep(-0.9, -0.3, dz)` in zone radii for foliage, `(-0.45, -0.05)` for wood,
+  so a trunk just behind a token stays) times
+  `1 - smoothstep(core, 1, d)`, d the distance in the view plane in zone radii (an avatar's
+  figure ellipse, negative radius, `TREE_THIN_FIG_W` 0.8 wide); `tree_thin_at` takes the largest over
+  the tile's tokens (`tree_thin_tile`). There is no rim to see: the amount falls continuously from
+  the core to the zone's edge, so nothing collapses as a group, and the whole-tree collapse
+  (`tree_token_crown`) is gone. Three parts, each with its own way of using the amount:
+  - STROKES (leaf dabs) shrink away in the vertex stage (`tree_thin_vertex`, amount x
+    `TREE_THIN_STROKE` 0.9, tested at the stroke's anchor): `thin_s = clamp((key - f) / TREE_THIN_BAND, 0, 1)`
+    scales the dab's length and width, and a dab under `thin_s` 0.02 is not built. The key is
+    half the stroke's own hash and half its light (`clamp(ndl, 0, 1)`, `TREE_THIN_LIT` 0.5), so
+    sunlit dabs stay longest and shaded (dark) dabs go first: the token reads through a lighter
+    canopy rather than dark clots. Never a ground shadow dab (role ground), never the sun's pass.
+    No stroke is cut per fragment (the stroke shader's fragment call is `tree_fades(..., v_key,
+    v_key < 0.0, true, -1.0)`: `whole` skips the thinning).
+  - MASSES (the block-in's crown spheres) are discarded per fragment against a coarse world noise
+    (`tree_thin_key`: 0.4 m cells, `TREE_THIN_CELL`, plus a light bayer rim so the edge is not a
+    hard step) when the key is under amount x `TREE_THIN_MASS` (1.0); the core is `TREE_THIN_MASS_CORE`
+    (0.8) of the radius, so a mass is fully gone in front of the token and breaks into patches
+    toward its edge.
+  - WOOD (trunk and limb ribbons, `kind10` above 0.5) is thinned only to `TREE_THIN_WOOD` (0.55), in
+    dry-brush streaks: the key is `p_noise` on the limb's own coordinates (`w_a` around, `w_s`
+    along), so the wood breaks into lengthwise strokes and is never cut at an end. Twigs (`w_twig`
+    above 0.6) are never thinned, so no orphan twig is left (and none floats). Core
+    `TREE_THIN_CORE` 0.4.
+  The vertex stage's `tree_token_near` pre-test (a tree's box against the tokens, `TREE_TOKEN_NEAR_M`
+  beyond a token's reach) runs only for live strokes, after the other kills. It runs after the
+  canopy fades and only in the camera's pass (the sun's pass keeps the whole crown's shadow; shadows
+  are unchanged). Both shaders hand their own view-space point to `tree_fades`: the stroke shader
+  and (painter-a2a5) the block-in (`skip_vertex_transform`, VERTEX and NORMAL in view space; it
+  wrote POSITION alone before, so Godot's VERTEX was the mesh's unit block at the tree's FOOT).
+  The vertex stage computes FRAGCOORD's tile as `(clip.xy / clip.w * 0.5 + 0.5) * VIEWPORT_SIZE`
+  with no row flip (measured). Cost against the window (GPU ms, Painted minus Classic, pinned
+  procedure; `docs/PERFORMANCE.md` "Painted token fade"): forest tokens summer +0.30 for the
+  window, +0.07 for the fade; no view got dearer. Still open: thin twigs are never thinned, so
+  faint dark lines cross a token in summer; a bush's block-in over a token (the eye view) breaks
+  up only by the noise edge of its clear zone. `test_painter_trees_draw` checks the binding, the
+  VERTEX write, both functions in every tree shader, that no window function is left, that the
+  stroke thins in the vertex stage and the block-in per fragment.
 - One hand (painter-trees-polish): every broadleaf crown and the spruce paint with the oak's
   scalloped `lobed` brush (`tree_roles.json`; the lime's heart-shaped `scale`, the poplar's and
   rowan's `flick`, the spruce's `spray` and the birch's small `round` read as a second, cruder hand
@@ -493,7 +499,7 @@ oaks' russet and the trunks. No bush drops its leaves (no skeleton to leave a tw
   views the block-in (1.25 forest, 1.79 taiga, half of it its shadow pass). Two cuts shipped: a
   stroke whose root normal faces more than 120 degrees from the camera is not built (`back10`
   -0.5 in `tree_uniforms.json`, -0.14 ms at tokens, no visible change), and a tree no token's
-  window can reach skips the token test's loops (`tree_token_near`, from the tree's box in
+  fade can reach skips the token test's loops (`tree_token_near`, from the tree's box in
   `tree_tex` texels 5 and 6, `PainterTreePack.BOUND_PAD` 2.5 m).
 - View cull (painter-perf-cull): the per-tree view cull of the strokes (`tree_view_box`, the
   uniform `view_cull`, default 1 in the shader; 2 draws only the trees it would cull, a

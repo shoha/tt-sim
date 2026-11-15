@@ -6122,6 +6122,38 @@ Open items (none is a bug; each needs an owner or look decision or a card):
   45) reads as one flat dark mass. A look card (the same flat dark masses show at the upper left of
   tokens_20 and tokens_45 in the verdict frames).
 
+### Painted token fade (card painter-look-fade, 2026-11-15, look-pending)
+
+The owner disliked the token window's artifacts (a floating trunk with a limb tail, detached stubs,
+a ragged rim) and asked for partial fading of blocking geometry and its cost against the window.
+Three mechanisms were built and measured against main's window (pinned procedure above: 1920x1080,
+vsync off, in-run Classic anchor, interleaved P0/C, GPU 2.5 s median, 3 samples, one scene per job;
+cell = Painted minus Classic, GPU ms):
+
+| view | main (window) | A fragment dither | B vertex thin + fragment | C (final) |
+|------|---------------|-------------------|--------------------------|-----------|
+| forest tokens summer | +0.30 | +0.59 | +0.29 | +0.07 |
+| forest tokens winter | -0.42 | -0.38 | -0.41 | -0.49 |
+| forest home summer | -0.44 | -0.28 | -0.41 | -0.57 |
+| taiga home summer | +0.67 | not run | not run | +0.60 |
+| village home summer | -0.29 | not run | not run | -0.31 |
+
+A, B and the first C row are the exploration build (thinning test run on every stroke, whether live or
+not); the final C column runs the test only for strokes that survive the other kills (back-face,
+burial, view cull, canopy), which is where the saving came from. The main and final columns are
+separate runs each with its own Classic anchor, so their difference carries the run-to-run noise
+(about 0.05 ms). Answer to "is partial fading more or less costly than the window": mechanism A (a
+per-fragment tile loop on stroke fragments, the plants' way) is dearer, +0.17 to +0.29 ms over the
+window at forest tokens summer, because stroke cost is vertex-stage and wave-divergence bound and a
+loop in the fragment stage over every dab's overdraw is not free; B costs the window; C, which
+shrinks strokes in the vertex stage, is 0.23 ms cheaper than the window at forest tokens summer
+(within budget: the card allowed +0.10), and level or cheaper everywhere else.
+
+Dead ends: A (fragment fade of everything, `discard` by a dither) costs most and its dither reads as
+halftone over a token; B with a hash-only key left dark clots of shaded dabs over the token (C keys
+on light so shaded dabs go first, and its masses clear to 1.0 in a 0.8-radius core). Frames and notes:
+`D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final18_fade/` (`Notes.md`).
+
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
 What each Shadow quality tier (`directional_soft_shadow_filter_set_quality`) costs, and a "blur"
