@@ -60,10 +60,10 @@ const LEVELS := 3
 ## 0.6/0.55/0.55 read dark chocolate under every crown).
 const BARK_CAST_TINT := Vector3(0.66, 0.66, 0.68)
 ## A bush cell's width (metres) and its nodes' instance blocks (a bush is at most four pads and,
-## but for a very large one, nine slots: PainterTreeBush).
+## but for a very large one, sixteen slots of two roots: PainterTreeBush; painter-look-bushes).
 const BUSH_CELL_M := 15.0
 const BUSH_ELL_PER_INST := 4
-const BUSH_SLOT_PER_INST := 9
+const BUSH_SLOT_PER_INST := 16
 
 ## key (PainterTreeSpecies.key_of) -> {"row", "d", "pos", "cell", "species", "bush"} for every tree
 ## and bush drawn.

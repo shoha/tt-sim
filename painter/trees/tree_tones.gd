@@ -164,6 +164,7 @@ static func bake(sheet: Dictionary, mood: String, elevation: float) -> Dictionar
 				# A bush's leaf is the sheet's bush (bush_ramp's colour: the leaf a step deeper and
 				# quieter), so it sits under the crowns in their family in every mood.
 				lch = _bush_lch(sheet, mood, elevation)
+				lch = _bush_dried(lch, props, sheet, mood, elevation)
 			elif tag == "leaf":
 				var turn := clampf(PainterSheet.number(sheet, mood, "leaf-turn", elevation), 0.0, 1.0)
 				if turn > 0.0:
@@ -171,7 +172,7 @@ static func bake(sheet: Dictionary, mood: String, elevation: float) -> Dictionar
 					var dried := _dried(own, spike, dry, _num(props, "dry-turn", 0.0))
 					lch = PainterSheet.lerp_lch(lch, dried, turn)
 			shape = _sheet_shade(_moved_shape(shape, sheet, mood, elevation), sheet, mood, elevation, tag)
-			if tag is String and tag == "leaf" and not bush:
+			if tag is String and tag == "leaf" and (not bush or _num(props, "dry-share", 0.0) > 0.0):
 				shape = _dry_shape(shape, sheet, mood, elevation)
 		elif int(tag) == GROUND_ROW:
 			lch = PainterSheet.tone_lch(sheet, mood, "ground", elevation)
@@ -251,6 +252,24 @@ static func bush_ramp(sheet: Dictionary, mood: String, elevation: float) -> Arra
 		for s: Vector3 in steps:
 			out.append(PainterSheet.color_of_lch(s))
 	return out
+
+
+## A bush's leaf `lch` in a bare season (painter-look-bushes): the species' share (`dry-share` of
+## its leaf role: 0 an evergreen shrub that keeps its green, 1 a deciduous one whose leaves hang
+## dry on the twigs) of the sheet's `leaf-turn` carries it toward the sheet's `dry-leaf` (the
+## lightness at the bush's own `bush-value`, the hue turned by the role's `dry-turn`). Pure.
+static func _bush_dried(
+	lch: Vector3, props: Dictionary, sheet: Dictionary, mood: String, elevation: float
+) -> Vector3:
+	var turn := clampf(PainterSheet.number(sheet, mood, "leaf-turn", elevation), 0.0, 1.0)
+	var share := clampf(_num(props, "dry-share", 0.0), 0.0, 1.0) * turn
+	if share <= 0.0:
+		return lch
+	var dry := PainterSheet.tone_lch(sheet, mood, "dry-leaf", elevation)
+	var bv := PainterSheet.number(sheet, mood, "bush-value", elevation)
+	var hue := fposmod(dry.z + _num(props, "dry-turn", 0.0), 360.0)
+	var dried := Vector3(dry.x * bv, dry.y * _num(props, "dry-chroma", 1.0), hue)
+	return PainterSheet.lerp_lch(lch, dried, share)
 
 
 ## A bush's leaf colour (OKLCH): the sheet's leaf at `bush-value` of its lightness and `bush-chroma`

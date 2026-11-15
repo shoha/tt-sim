@@ -242,7 +242,7 @@ floor (`min_roots` 6 a dome, 4 a lobe; spacing 0.7), so the village's 64 bushes 
 about 63 level-1 strokes a bush. Its colour is the sheet's bush (`bush-value`, `bush-chroma` of the
 leaf, `PainterTreeTones` row "bush" after the species), on a crown's ramp, so it frosts, gilds and
 darkens with the trees. Bushes sit in their own 15 m cells whose nodes instance smaller blocks (4
-spheres of 16 x 9, 9 stroke slots; no limb ribbon), never in a tree's eight neighbouring forms, and
+spheres of 16 x 9, 16 stroke slots; no limb ribbon), never in a tree's eight neighbouring forms, and
 the tree row's texel 3 w is 2, so the token window never takes a bush whole. Measured against the
 tip's card bushes (interleaved, 1920x1080, vsync off, GPU medians): village eye -0.45 ms, home
 -1.0, forest tokens -0.75 to -0.78, forest home -0.95 (before the 16 x 9 sphere; that change is
@@ -282,6 +282,16 @@ light and shade meet in a broken, scalloped edge; the snow cap's edge takes the 
 other crowns are unchanged; forest tokens summer 20: old block-in 4.649 / new 4.614 ms (no cost).
 Open: the patches read a little as camouflage blotches at token zoom (larger than a stroke), and
 winter bushes carry little snow at sun 45.
+
+painter-look-bushes (look-pending): near, a bush's solid is only its dark under-mass (the block-in
+caps its tone at `BUSH_LIT_CAP`, 0.2, by `lod_level`; far it keeps its light), so the lit side is
+the strokes' crisp dabs and not camouflage blotches; a clump has 8 roots (9 and 6 for a small
+bush's dome and lobes; spacing 0.5, leaf `stroke` 0.34), 16 slots an instance; the forest's 65 bushes
+hold 2087 roots (was 812), against 34184 tree roots. The sheet's `bush-value` and `bush-chroma` are 0.93 and
+0.88. A bush's winter is the species' `dry-share` (tree_roles.json, 0 an evergreen) of the sheet's
+`leaf-turn` toward `dry-leaf` (`PainterTreeTones._bush_dried`): `bush` 0.85, `bush_berry` and
+`bush_flower` 1: dry russet leaves under the snow caps. No bush drops its leaves (no skeleton to
+leave a twig mass).
 
 - The host, `PainterTrees` (`painter/trees/painter_trees.gd`), is made by PainterSurfaces (by
   path) and driven by its events: paint() on a Painted state, sync() on the scatter's
@@ -509,7 +519,7 @@ winter bushes carry little snow at sun 45.
   season draws the whole table, since a kept clump has no burial test, so winter cost is unchanged by it.
   A season flip makes the stroke instances again (`_restroke()`, about 2 ms for 127 trees);
   `set_live_counts(false)` draws every slot (the A/B switch). Bushes are not split (`pack_bush`, their
-  `n_live` equals `n_slots`; `BUSH_SLOT_PER_INST` 9 would overflow). `PainterTreePack.BURY_MARGIN`
+  `n_live` equals `n_slots`; `BUSH_SLOT_PER_INST` 16 holds a large bush's 32 roots). `PainterTreePack.BURY_MARGIN`
   is -1 (exactly the shader's test, pixel-equal); 0 or more also lists the roots inside ANY other leaf clump
   with its axes shortened by that many metres: -0.07 ms at 0.15 and -0.14 ms at 0.0 at taiga home, but those
   roots draw today, so it is an owner look decision and off. Changing it needs a digest re-pin.

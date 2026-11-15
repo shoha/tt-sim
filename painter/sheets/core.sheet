@@ -84,7 +84,7 @@
   dry-shade-keep: 1;  dry-shade-pull: 0.3;
   /* A bush is the leaf a step deeper and quieter, on a crown's ramp, so it sits under the oaks
      rather than glowing lime beside them (painter-trees-polish2). */
-  bush-value: 0.86;  bush-chroma: 0.74;
+  bush-value: 0.93;  bush-chroma: 0.88;
 
   /* The buildings (PainterBuildings; the spike's route A cottages, spike_built3): a cream lime
      wash, a pale warm stone, honey logs and boards, dark honey beams; the roofs are the five roof

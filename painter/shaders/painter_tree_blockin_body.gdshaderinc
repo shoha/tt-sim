@@ -526,6 +526,8 @@ float e_lift_at(vec3 p, float near, float n_y, float spread) {
 const float BUSH_DAB_F = 4.6;
 const float BUSH_DAB_JIT = 0.7;
 const float BUSH_SNOW_JIT = 0.9;
+// The highest tone the solid of a bush keeps near (painter-look-bushes; 0.5 the middle step).
+const float BUSH_LIT_CAP = 0.2;
 
 void fragment() {
 	bool g_sun = abs(dot(normalize(INV_VIEW_MATRIX[2].xyz), normalize(sun_dir))) > 0.9995;
@@ -749,6 +751,12 @@ void fragment() {
 		float blot = floor(n2 * 3.0) * 0.5;
 		variant += ((n1 - 0.5) * 1.0 + (blot - 0.5) * 0.45 + (t - 0.45) * 0.6) * ch;
 		mul *= 1.0 + ((n1 - 0.5) * 0.16 + (blot - 0.5) * 0.07) * ch;
+	}
+	if (bush && !dep_on) {
+		// painter-look-bushes: near, a bush's solid is its dark under-mass (the crowns' own
+		// arrangement) and its lit side is the strokes' dabs, so light and shade meet in
+		// crisp scallops; far (no level-2 dabs) the solid keeps its light.
+		t = min(t, mix(1.0, BUSH_LIT_CAP, smoothstep(0.4, 1.0, lod_level)));
 	}
 	ALBEDO = palette_at(t + v_value, row, variant) * mul;
 	if (cast > 0.0) {
