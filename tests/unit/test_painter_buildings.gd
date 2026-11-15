@@ -174,6 +174,26 @@ func test_every_tone_is_the_sheets_and_a_picked_roof_holds_the_roof_tones() -> v
 	buildings.release()
 
 
+func test_a_chimney_carries_the_clay_ramp_for_its_brick_and_pots() -> void:
+	assert_eq(PainterBuildings.kind_of("chimney_masonry")[3], PainterBuildings.PICK_STACK)
+	assert_eq(PainterBuildings.kind_of("chimney_brick")[3], PainterBuildings.PICK_STACK)
+	assert_eq(PainterBuildings.kind_of("chimney_stone")[3], PainterBuildings.PICK_CAP)
+	var sheet := PainterSheet.load_sheet("core")
+	_village()
+	var buildings := PainterBuildings.new()
+	buildings.paint(_map, STATE)
+	var want := PainterBuildings.ramp(sheet, "summer", PainterBuildings.BRICK_ROLE, 60.0, "stone")
+	var stone := PainterBuildings.ramp(sheet, "summer", "wall-stone", 60.0, "stone")
+	for key: String in ["chimney_masonry", "chimney_stone"]:
+		var material := buildings.material_of(key)
+		if material == null:
+			continue
+		var ramps: PackedVector3Array = material.get_shader_parameter(&"ramps")
+		assert_eq(ramps[1], stone[1], "%s: the stone's ramp is slot 0" % key)
+		assert_eq(ramps[13], want[1], "%s: the clay's ramp is slot 12" % key)
+	buildings.release()
+
+
 func test_a_shaded_wall_stays_light_and_timber_never_goes_maroon() -> void:
 	var sheet := PainterSheet.load_sheet("core")
 	for mood: String in PainterSheet.MOODS:

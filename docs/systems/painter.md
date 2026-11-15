@@ -968,6 +968,30 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   ragged, snow-topped stub (no dark tip). The blanket's default hold is 0.85 and its steepness
   floor 0.8 (tile and slate roofs read thicker). Beams bow up to 9 cm (`BEAM_BOW_M`). The yard's
   leaf blobs take a softer lit top, blooms are smaller dabs and mostly snowed in winter.
+- **Houses' look 2 (card painter-look-houses2, 2026-11-15; look-pending).** Shader and ramps only
+  (`painter_structure_manner.gdshader`, `PainterBuildings`); no mesh, sheet or procgen change.
+  (1) A slate roof (`pattern` 6, or a tile or shingle roof whose paint picks slate, which is what
+  the stone house wears: its `roof_wood` is a shingle pattern with the slate tone) is laid slate by
+  slate: rows 26 cm high, slates 36 cm wide and staggered, each its own value (the ramp's two
+  variants), a few weathered to the shingle's brown (a picked roof's slot 12) or lichened to the
+  turf's green, the foot of each row in shade and its lower edge lit; the broad lichen patches of
+  the last card (they never reached this roof) are quieter (0.3). A ridge cap 0.21 m down each
+  slope (edge wandering), cut every 0.6 m with a dark line under it, takes the clay's ramp (slot 0
+  of a picked roof, slot 12 of a plain slate material, which gains the clay as a third role).
+  (2) Plaster: its sun side leans warm and its shade cool, and a few broad washes (a 4 m by 2.6 m
+  noise on the wall's own frame) push a stretch warm peach and the next cool blue, with a warm
+  bounce at the wall's foot, a colour change across the wall rather than a value one (multipliers
+  on the lit, mid and shade colours, as the stone's straw lit side is). (3) Chimneys are two new
+  pick modes, `PICK_STACK` 6 (`chimney_masonry`, `chimney_brick`) and `PICK_CAP` 7
+  (`chimney_stone`: the cap and pots), whose material carries the stone, the leaf and the clay as
+  its ramps. A stack is brick (clay, 42 % of places, by a hash of where it stands, so a cap and
+  its stack agree) or stone, laid in staggered bricks by world height, a pale collar a hand
+  below its crown, soot under the cap and a dark foot; the cap is stone, the pots terracotta; sun
+  side warm, shade cool. A stack's record frame has `u` up it, so `f.x` is its height. (4) A tree's
+  shadow on a painted roof is a tint (0.55 of the shade) thinned by the brush wobble with a wide
+  ragged edge (`f_cast`), not a crisp dark shape; a wall's cast edge is a little wider. Not done:
+  the winter tufts at eye level (scatter plants, another card's) and the stone wall's pale
+  cast-light streak (smaller, still there).
 
 ## The painted state signal
 

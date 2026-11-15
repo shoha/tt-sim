@@ -62,7 +62,8 @@ int tone_of(int pick, vec3 c) {
 	if (pick == 3) {
 		return paint_tone(c);
 	}
-	return pick > 0 ? roof_tone(c, pick == 2) : 0;
+	// (6 and 7, a chimney's stack and cap: the stone's ramp, the shader picks among its own.)
+	return (pick > 0 && pick < 6) ? roof_tone(c, pick == 2) : 0;
 }
 
 // How much of a roof point lies under snow: `snow` the sheet's share (0 none), `wp` the world

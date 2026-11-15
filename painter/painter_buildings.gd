@@ -58,6 +58,13 @@ const YARD_GROUND_SHADER := "res://painter/shaders/painter_yard_ground.gdshader"
 ## The pick modes (KINDS' fourth field) that draw with the yard's shaders.
 const PICK_YARD := 4
 const PICK_YARD_GROUND := 5
+## The pick modes of a chimney's stack and of its cap and pots (card painter-look-houses2): the
+## ramps are the stone's, the moss leaf's and the clay's (a brick stack, a terracotta pot, a
+## roof's ridge cap), the shader picks among them; the tone never follows the recipe's paint.
+const PICK_STACK := 6
+const PICK_CAP := 7
+## The role a chimney's brick and pots, and a slate roof's ridge cap, take (the third ramp).
+const BRICK_ROLE := "roof-clay"
 ## The role the roofs' snow takes its colour from (winter's is the snow's white, under the
 ## ground's ramp numbers: snow_ramp) and the number that says how deep it lies (0 in every mood
 ## but winter; above 0 the hand-drawn manner also builds its strips, PainterMannerSnow).
@@ -95,9 +102,9 @@ const KINDS: Dictionary = {
 	"roof_wood": [PICK, P_SHINGLE, "roof", 2],
 	"trim_stone": ["wall-stone", P_STONE, "stone", 0],
 	"trim_masonry": ["wall-stone", P_STONE, "stone", 0],
-	"chimney_stone": ["wall-stone", P_STONE, "stone", 0],
-	"chimney_masonry": ["wall-stone", P_STONE, "stone", 0],
-	"chimney_brick": ["roof-clay", P_STONE, "stone", 0],
+	"chimney_stone": ["wall-stone", P_STONE, "stone", PICK_CAP],
+	"chimney_masonry": ["wall-stone", P_STONE, "stone", PICK_STACK],
+	"chimney_brick": ["roof-clay", P_STONE, "stone", PICK_STACK],
 	"trim_wood": ["timber", P_TIMBER, "timber", 0],
 	"trim_trim": ["timber", P_TIMBER, "timber", 0],
 	"frame_wood": ["timber", P_TIMBER, "timber", 0],
@@ -322,8 +329,12 @@ func _tone(material: ShaderMaterial, kind: Array, sheet: Dictionary) -> void:
 		roles.append(str(kind[0]))
 		if int(kind[1]) == P_STONE or int(kind[1]) == P_SLATE:
 			# Stone and slate carry the leaf's ramp as a second role (slots 6 to 11) for the
-			# moss and lichen the manner shader lays on them (card painter-look-houses).
+			# moss and lichen the manner shader lays on them (card painter-look-houses), and the
+			# clay's (slots 12 to 17): a chimney's brick and pots, a slate roof's ridge cap (card
+			# painter-look-houses2).
 			roles.append(MOSS_ROLE)
+			if int(kind[3]) >= PICK_STACK or int(kind[1]) == P_SLATE:
+				roles.append(BRICK_ROLE)
 	var ramps := PackedVector3Array()
 	for k in roles.size():
 		var family := families[k] if k < families.size() else str(kind[2])
