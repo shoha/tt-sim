@@ -1,21 +1,23 @@
 class_name PainterTreeBush
 extends RefCounted
 ## A bush drawn by the painted trees' host as a crown with no skeleton (painter-bushes;
-## docs/systems/painter.md "Trees"). Core's card-built bushes (Bush_BerryBush, Bush_Bush_: long
-## arching leaf straps) never read in the crowns' hand on their own cards: three shader rounds
-## left them as splayed shards, then faceted artichokes. Here a bush is a few leaf pads (leaf
-## ellipsoids, the crowns' own masses) laid in the asset's mesh box at the row's scale; the host
-## packs, tones and strokes them as a tree's crown, so a bush takes the crowns' scalloped dabs,
-## block-in, light, snow and moods with nothing of its own in the shaders.
+## docs/systems/painter.md "Trees"). Core's card-built bushes (Bush_Bush_: long arching leaf
+## straps) never read in the crowns' hand on their own cards: three shader rounds left them as
+## splayed shards, then faceted artichokes. Here a bush is four leaf pads (leaf ellipsoids, the
+## crowns' own masses) laid in the asset's mesh box at the row's scale; the host packs, tones and
+## strokes them as a tree's crown, so a bush takes the crowns' scalloped dabs, block-in, light, snow
+## and moods with nothing of its own in the shaders.
 ##
-## Two layouts by size (painter-plants-fix3: a large bush laid as one dome and two lobes, all one
-## form, read at token zoom as a smooth ball with one broad lit band and a hard light/shade split,
-## and its snow as one pale lens):
-##   small (across radius under LARGE_R): a dome and two or three lobes round it, each its own
-##          form, so a lobe turns from the light and takes its snow on its own top
-##   large: a SHELL of clumps (CLUMP_SHARE of the bush across, within its bounds), RING round its
-##          foot and one on its top, each its own form, so the light turns clump by clump and the
-##          snow lies on each clump's top, as on a crown's
+## ONE ORGANIC MASS (painter-look-bushes 3; the owner: bushes read as "ice cream scoops in a cone"):
+## the earlier layouts stood three equal balls round the foot and a fourth on top of them, each its
+## own form, so every ball took its own lit cap and the seams between them read as stacked spheres.
+## Now the four pads are one form group (the light turns over the whole bush as over one mound, and
+## the lit plane runs across the seams) and are unequal and overlapping:
+##   body      a wide, low, rotated ellipsoid (longer one way than the other) that carries the bush
+##   two lobes unequal ellipsoids at the body's flanks, tilted outward, one low and wide, one
+##             higher and smaller, so the outline is lumpy and no horizontal seam runs round it
+##   shoulder  a small flat ellipsoid on the high side, its top below the box's, bridging the lobes
+## No pad stands on another: the bush is wider than tall (its height is about 0.8 of its box).
 ## A berry or a flowering bush is another species row (species.json: bush_berry, bush_flower)
 ## whose leaf strokes carry the trim colour's marks in bunches (tree_roles.json), as the rowan's
 ## berries.
@@ -23,42 +25,29 @@ extends RefCounted
 ## Every value is the row's: the box (the shipped mesh's AABB times the row's scale) and the seed,
 ## so a peer lays the same bush. Pure static functions, safe on a worker thread.
 ##
-## Cost: the pads, not the strokes (painter-plants-fix4 measured fix3's shell, a core and up to
-## seven clumps, eight pads a bush: a pad's block-in, drawn in the camera's and the sun's passes,
-## cost about 0.001 ms at the village's home view and a level-1 stroke almost nothing). So a bush
-## keeps the tip's pad count: a small one three or four pads, about 6 + 3 x 4 = 18 stroke roots
-## (the pads' floors, MIN_ROOTS_*); a large one four pads (one block instance) and (RING + 1) x
-## ROOTS_CLUMP = 12 roots, 48 strokes at stroke level 1, against a tree's thousands. Its pads are
-## the block-in's ellipsoids (they cast the sun's shadow, as a crown's do), its strokes cast none.
+## Cost: the pads, not the strokes (painter-plants-fix4: a pad's block-in, drawn in the camera's and
+## the sun's passes, cost about 0.001 ms at the village's home view and a level-1 stroke almost
+## nothing). Four pads (one block instance) of ROOTS_PAD roots, 20 roots, 80 strokes at stroke
+## level 1, against a tree's thousands. Its pads are the block-in's ellipsoids (they cast the sun's
+## shadow, as a crown's do), its strokes cast none.
 
 ## The share of the mesh box the pads fill (a card bush's straps splay past its leafy mass).
 const BOX_FILL := 0.85
-const MIN_ROOTS_DOME := 6
-const MIN_ROOTS_LOBE := 4
-## The pads' root spacing (metres; a tree pad's is 0.4): wide, so a pad's roots stay at the floors
-## above (at 0.5 the village's 64 bushes averaged 22 roots, 89 level-1 strokes) and its four level-1
-## strokes a root spread over it.
+## The pads' root spacing (metres; a tree pad's is 0.4): wide, so a pad's roots stay at the floor
+## below and its level-1 strokes a root spread over it.
 const SPACING := 0.5
 ## A bush's sway against a crown pad's (PainterTreeBase.W_PAD): low, stiff and near the ground.
 const WIND_SHARE := 0.35
-## A bush's first form group (a small bush's dome; each lobe or clump takes the next).
+## The bush's one form group.
 const FORM := 1
-## The across radius (metres, the box's) from which a bush is laid as a shell of clumps.
-const LARGE_R := 0.7
-## A shell clump's radius against the bush's across radius (three of them close the bush round its
-## axis, with no core inside), and its bounds in metres.
-const CLUMP_SHARE := 0.52
-const CLUMP_MIN := 0.36
-const CLUMP_MAX := 0.9
-## The clumps round the foot (with the top one, four pads: one block instance) and a clump's roots.
-const RING := 3
-const ROOTS_CLUMP := 5
+## The pads of a bush (one block instance) and a pad's roots (the floor; a large pad takes more).
+const PADS := 4
+const ROOTS_PAD := 4
+## The bush's height against its box's (the mound stands lower than the mesh's tallest straps).
+const HEIGHT_SHARE := 0.82
 
-## False lays every bush as a small one, as before card painter-plants-fix3 (an A/B switch for a
-## cost sitting, as PainterBuildings.paint_yard; the host must regrow its bushes after a change).
-static var shell := true
-## A clump's roots (ROOTS_CLUMP; a switch for a look or cost sitting, regrown as `shell`).
-static var clump_roots := ROOTS_CLUMP
+## A pad's roots (ROOTS_PAD; a switch for a look or cost sitting, regrown).
+static var clump_roots := ROOTS_PAD
 
 
 ## The bush's box for the row: {"c": its centre's height above the row, "r": its radii (across,
@@ -75,82 +64,67 @@ static func box_of(aabb: AABB, scale: float) -> Dictionary:
 
 
 ## The pads of a bush in `box` (box_of) with seed `rng_seed`, in the bush's own frame (its foot at
-## the origin): a small bush's dome and lobes, a large one's core and shell.
+## the origin): the body, two flank lobes and the shoulder, all one form.
 static func masses(box: Dictionary, rng_seed: int) -> Array[PainterTreeMass]:
 	var r: Vector3 = box["r"]
-	if shell and r.x >= LARGE_R:
-		return _shell(box, rng_seed)
-	var cy: float = box["c"]
-	var foot := maxf(cy - r.y, 0.0)
-	var mid := Vector3(0.0, foot + r.y, 0.0)
+	var top := (float(box["c"]) + r.y) * HEIGHT_SHARE
+	var rx := r.x
 	var out: Array[PainterTreeMass] = []
-	var phase := _h(rng_seed, 1)
-	var dome := Vector3(r.x * 0.74, r.y * 0.82, r.z * 0.74)
-	var lean := Vector3(_h(rng_seed, 2) - 0.5, 0.0, _h(rng_seed, 3) - 0.5) * r.x * 0.2
-	out.append(_pad(mid + lean + Vector3.UP * r.y * 0.04, dome, mid, phase, MIN_ROOTS_DOME, FORM))
-	var lobes := 2 + int(_h(rng_seed, 4) * 1.99)
-	var a0 := _h(rng_seed, 5) * TAU
-	for k in lobes:
-		var a := a0 + TAU * float(k) / float(lobes) + (_h(rng_seed, 10 + k) - 0.5) * 0.9
-		var s := 0.46 + 0.14 * _h(rng_seed, 20 + k)
-		var lr := Vector3(r.x * s, r.y * (s + 0.06), r.z * s)
-		var out_r := r.x - lr.x
-		var at := Vector3(cos(a) * out_r, foot + lr.y * 0.95, sin(a) * out_r)
-		out.append(_pad(at, lr, mid, _h(rng_seed, 30 + k), MIN_ROOTS_LOBE, FORM + 1 + k))
-	return out
-
-
-## A large bush: RING clumps standing round its foot, their outer edges on the bush's bounds and
-## overlapping round its axis, and one on its top, each its own form.
-static func _shell(box: Dictionary, rng_seed: int) -> Array[PainterTreeMass]:
-	var r: Vector3 = box["r"]
-	var cy: float = box["c"]
-	var foot := maxf(cy - r.y, 0.0)
-	var mid := Vector3(0.0, foot + r.y, 0.0)
-	var out: Array[PainterTreeMass] = []
-	var cr := clampf(r.x * CLUMP_SHARE, CLUMP_MIN, CLUMP_MAX)
-	var ring_r := maxf(r.x - cr, 0.0)
-	var a0 := _h(rng_seed, 5) * TAU
-	for k in RING:
-		var a := a0 + TAU * float(k) / float(RING) + (_h(rng_seed, 10 + k) - 0.5) * 0.6
-		var s := 0.9 + 0.2 * _h(rng_seed, 20 + k)
-		# From the ground (not the box's foot, which the fill lifts) to a little over the bush's middle,
-		# so the ring closes its body.
-		var lr := Vector3(cr * s, r.y * 0.62 * s, cr * s)
-		var at := Vector3(cos(a) * ring_r, lr.y * 0.92, sin(a) * ring_r)
-		out.append(_pad(at, lr, mid, _h(rng_seed, 30 + k), clump_roots, FORM + 1 + k))
-	# The top clump, a little off the axis, its top on the bush's.
-	var top_r := Vector3(cr * 1.1, r.y * 0.52, cr * 1.1)
-	var top := Vector3(
-		(_h(rng_seed, 2) - 0.5) * cr * 0.5,
-		foot + 2.0 * r.y - top_r.y,
-		(_h(rng_seed, 3) - 0.5) * cr * 0.5
+	var yaw := _h(rng_seed, 5) * TAU
+	var mid := Vector3(0.0, top * 0.45, 0.0)
+	# The body: wide and low, longer along its yaw than across it.
+	var long_k := 0.84 + 0.12 * _h(rng_seed, 6)
+	var short_k := 0.58 + 0.12 * _h(rng_seed, 7)
+	var body := Vector3(rx * long_k, top * 0.34, rx * short_k)
+	var lean := Vector3(_h(rng_seed, 2) - 0.5, 0.0, _h(rng_seed, 3) - 0.5) * rx * 0.14
+	# (Roots come in twos, a slot: the body takes one slot more than a lobe, 9 slots in all.)
+	var roots_body := clump_roots + 2
+	out.append(
+		_pad(lean + Vector3(0.0, body.y * 0.92, 0.0), body, yaw, Vector2.ZERO, mid, 0.0, roots_body)
 	)
-	out.append(_pad(top, top_r, mid, _h(rng_seed, 6), clump_roots, FORM + 1 + RING))
+	# Two flank lobes, unequal, on opposite-ish sides of the body's long axis.
+	for k in 2:
+		var side := 1.0 if k == 0 else -1.0
+		var a := yaw + side * (0.2 + 0.5 * _h(rng_seed, 10 + k))
+		var s := (0.46 if k == 0 else 0.34) + 0.1 * _h(rng_seed, 20 + k)
+		var lz := rx * s * (0.8 + 0.3 * _h(rng_seed, 40 + k))
+		var lr := Vector3(rx * s, top * (0.27 if k == 0 else 0.3), lz)
+		var out_r := maxf(rx * long_k - lr.x * 0.55, 0.0)
+		var c := Vector3(cos(a) * out_r * side, 0.0, sin(a) * out_r * side)
+		c.y = lr.y * (0.92 if k == 0 else 1.55)
+		var jitter := Vector2(_h(rng_seed, 50 + k) - 0.5, _h(rng_seed, 60 + k) - 0.5) * 0.2
+		var tilt := Vector2(side * 0.18, -side * 0.12) + jitter
+		out.append(_pad(c, lr, yaw + _h(rng_seed, 30 + k) * TAU, tilt, mid, _h(rng_seed, 70 + k)))
+	# The shoulder: small and flat on the body's high side, its top under the box's.
+	var sa := yaw + PI * 0.5 + (_h(rng_seed, 4) - 0.5) * 1.4
+	var sr := Vector3(rx * 0.36, top * 0.2, rx * 0.3)
+	var sat := Vector3(cos(sa) * rx * 0.34, top * 0.58, sin(sa) * rx * 0.34)
+	out.append(_pad(sat, sr, sa, Vector2(0.1, 0.1), mid, _h(rng_seed, 6)))
 	return out
 
 
 static func _pad(
 	c: Vector3,
 	r: Vector3,
+	yaw: float,
+	tilt: Vector2,
 	centre: Vector3,
 	phase: float,
-	min_roots: int,
-	form: int,
-	spacing: float = SPACING
+	roots: int = -1
 ) -> PainterTreeMass:
+	var basis := Basis.from_euler(Vector3(tilt.x, yaw, tilt.y))
 	return PainterTreeMass.make(
 		PainterTreeMass.Shape.ELLIPSOID,
-		Transform3D(Basis.IDENTITY, c),
+		Transform3D(basis, c),
 		r,
 		PainterTreeMass.Role.LEAF,
 		{
-			"form": form,
+			"form": FORM,
 			"centre": centre,
-			"spacing": spacing,
+			"spacing": SPACING,
 			"wind": PainterTreeBase.W_PAD * WIND_SHARE,
 			"phase": phase,
-			"min_roots": min_roots
+			"min_roots": roots if roots > 0 else clump_roots
 		}
 	)
 

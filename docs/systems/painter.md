@@ -256,7 +256,8 @@ nothing, so a large bush is now four pads, one block instance: three clumps (0.5
 each its own form group, so the light turns clump by clump and the snow lies on each clump's top;
 3 roots a clump, 48 level-1 strokes. A small bush's lobes are their own forms too (its snow lay as
 one pale lens). Village: 50 bushes, 199 pads, 2492 strokes (the tip's small layout 166 pads, 3108).
-`PainterTreeBush.shell` false lays every bush small (an A/B switch; `clump_roots` likewise).
+(The ring-of-clumps layout above is superseded by painter-look-bushes round 3 below; the `shell`
+switch is gone, `PainterTreeBush.clump_roots` stays as the pad-roots switch.)
 Berry and flowering bushes are their own species rows (`bush_berry`: `Bush_BerryBush`;
 `bush_flower`: `Bush_FloweringBush`, `Bush_BushWithWildflowers`, which were plant cards before;
 `PainterTreeSpecies.BUSHES`) whose leaf strokes carry round trim-colour marks in bunches (red
@@ -296,6 +297,18 @@ bush's winter is the species' `dry-share` (tree_roles.json, 0 an evergreen) of t
 `leaf-turn` toward `dry-leaf` (`PainterTreeTones._bush_dried`, hue `dry-turn`, lightness
 `dry-lift`): `bush` golden ochre, `bush_flower` straw, `bush_berry` rust, each apart from the
 oaks' russet and the trunks. No bush drops its leaves (no skeleton to leave a twig mass).
+
+Round 3 (the owner: bushes "read as spheres placed on top of each other, like ice cream scoops in a
+cone"): the scoops were three equal clumps round the foot and one on top, each its own form group,
+so each took its own lit cap. A bush is now ONE mass (`PainterTreeBush.masses`): four unequal,
+overlapping, rotated and tilted pads in one form group (`FORM` 1; the light runs across the seams as
+over one mound): a wide low body (longer one way, `HEIGHT_SHARE` 0.82 of its box tall), two flank
+lobes (one low and wide, one higher and smaller) and a small flat shoulder. Nothing stands on
+anything, so no horizontal seam runs round it; it is wider than tall. The body takes 6 roots, the
+others 4 (9 slots of `BUSH_SLOT_PER_INST` 10; an odd root count wastes a slot), and `BUSH_RIM_BREAK`
+is 0.65. Forest: 65 bushes, 260 pads, 1317 roots (was 1488). Cost, interleaved, 1920x1080, vsync
+off, GPU medians, painted minus classic: forest tokens summer +0.06, +0.08, +0.09 (round 2:
++0.12), tokens winter -0.53, forest home summer -0.59, home winter -1.11.
 
 - The host, `PainterTrees` (`painter/trees/painter_trees.gd`), is made by PainterSurfaces (by
   path) and driven by its events: paint() on a Painted state, sync() on the scatter's
