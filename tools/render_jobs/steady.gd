@@ -7,17 +7,22 @@ extends RefCounted
 ##
 ## Wind sway reads the shader clock (TIME) times each material's sway, flutter and gust
 ## speeds; with those at 0 the plants hold still at their rest offsets, whatever the clock.
+## The painted trees (painter/shaders/painter_tree.gdshaderinc) have no speeds: their motion is
+## TIME times the global wind times `wind_strength` (wind_amp), so `wind_strength` 0 holds them
+## still. Before that, two frames of one state differed by 200k px along every painted crown edge
+## (card painter-perf-cull: the "sliver" at tokens_20 was this sway, not the per-tree cull).
 
-## The wind shader include's speed uniforms (shaders/wind_foliage_include.gdshaderinc).
+## The wind uniforms freeze_wind() zeroes where a material's shader has them: the wind shader
+## include's speeds (shaders/wind_foliage_include.gdshaderinc) and the painted trees' strength.
 ## The gust field follows the global wind clock instead (autoloads/wind.gd): freeze_wind pins
 ## it at 0 and thaw_wind releases it.
-const WIND_SPEEDS: Array[String] = ["sway_speed", "flutter_speed"]
+const WIND_SPEEDS: Array[String] = ["sway_speed", "flutter_speed", "wind_strength"]
 
 
-## Sets the wind speeds of every ShaderMaterial under `root` that has them to 0, recording
-## each material's own values in `saved` (material -> {uniform: value}) the first time it is
-## frozen, so thaw_wind() can put them back (one frozen before is set to 0 again, in case a
-## foliage override re-applied its speeds). Returns how many materials it froze for the
+## Sets the wind uniforms (WIND_SPEEDS) of every ShaderMaterial under `root` that has them to 0,
+## recording each material's own values in `saved` (material -> {uniform: value}) the first
+## time it is frozen, so thaw_wind() can put them back (one frozen before is set to 0 again, in
+## case a foliage override re-applied its speeds). Returns how many materials it froze for the
 ## first time.
 static func freeze_wind(root: Node, saved: Dictionary) -> int:
 	var frozen := 0
@@ -28,18 +33,28 @@ static func freeze_wind(root: Node, saved: Dictionary) -> int:
 		if material.shader == null:
 			continue
 		if not has_wind.has(material.shader):
-			has_wind[material.shader] = _has_uniform(material.shader, WIND_SPEEDS[0])
-		if not has_wind[material.shader]:
+			has_wind[material.shader] = _wind_uniforms(material.shader)
+		var present: Array = has_wind[material.shader]
+		if present.is_empty():
 			continue
 		if not saved.has(material):
 			var values := {}
-			for uniform in WIND_SPEEDS:
+			for uniform: String in present:
 				values[uniform] = material.get_shader_parameter(uniform)
 			saved[material] = values
 			frozen += 1
-		for uniform in WIND_SPEEDS:
+		for uniform: String in present:
 			material.set_shader_parameter(uniform, 0.0)
 	return frozen
+
+
+## The WIND_SPEEDS names `shader` declares.
+static func _wind_uniforms(shader: Shader) -> Array:
+	var present := []
+	for uniform in WIND_SPEEDS:
+		if _has_uniform(shader, uniform):
+			present.append(uniform)
+	return present
 
 
 ## Puts back the speeds freeze_wind() saved and empties `saved`. Returns how many.
