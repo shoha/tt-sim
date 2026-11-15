@@ -555,7 +555,9 @@ void fragment() {
 	// as slabs between the strokes (the strokes carry the crown's edge). Camera pass only.
 	if (foliage && v_form < 1.5 && !g_sun) {
 		vec3 rim_eye = PROJECTION_MATRIX[3][3] == 0.0 ? normalize(INV_VIEW_MATRIX[3].xyz - v_wp) : normalize(INV_VIEW_MATRIX[2].xyz);
-		if (abs(dot(normalize(v_wn), rim_eye)) < MASS_RIM_BREAK * p_noise(v_wp * 1.7 + 13.0)) {
+		// (painter-perf-shadow: the noise is under 1, so a facing fragment cannot break: skip its lookup.)
+		float rim_d = abs(dot(normalize(v_wn), rim_eye));
+		if (rim_d < MASS_RIM_BREAK && rim_d < MASS_RIM_BREAK * p_noise(v_wp * 1.7 + 13.0)) {
 			discard;
 		}
 	}
@@ -567,11 +569,13 @@ void fragment() {
 		float g_c = dot(normalize(v_wn), g_sd);
 		float g_r = sqrt(max(1.0 - g_c * g_c, 0.0));
 		float g_hi = smoothstep(0.9, 1.8, v_height);
-		if (g_r > mix(1.0, mix(0.72, 1.0, smoothstep(0.15, 0.85, p_noise(vec3(g_q * 0.55, 3.0)))), g_hi)) {
+		// (painter-perf-shadow: the edge's threshold is never under 0.72 and the gaps need g_open over 0,
+		// so most fragments skip both noise lookups; the result is the same.)
+		if (g_r > 0.72 && g_r > mix(1.0, mix(0.72, 1.0, smoothstep(0.15, 0.85, p_noise(vec3(g_q * 0.55, 3.0)))), g_hi)) {
 			discard;
 		}
 		float g_open = (role > 7.5 ? 0.0 : mix(0.55, 1.0, smoothstep(0.0, 0.35, f_rp3.y))) * g_hi;
-		if (p_noise(vec3(g_q * 0.4, 9.0)) < 0.2 * g_open) {
+		if (g_open > 0.0 && p_noise(vec3(g_q * 0.4, 9.0)) < 0.2 * g_open) {
 			discard;
 		}
 	}
