@@ -1200,6 +1200,11 @@ void vertex() {
 }
 
 void fragment() {
+	// painter-perf-strokes: a stroke is ONE triangle (UV 0..2, PainterTreeMeshes.strokes) that holds
+	// the quad's unit square; what lies outside the square is not part of the stroke.
+	if (v_uv.x < 0.0 || v_uv.y < 0.0 || v_uv.x > 1.0 || v_uv.y > 1.0) {
+		discard;
+	}
 	ALBEDO = v_col;
 	if (abs(v_brush - 14.0) < 0.5) {
 		// Round 19: a spray of twigs is drawn as lines of a fixed width on screen (twig-px), from one

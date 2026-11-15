@@ -9,8 +9,9 @@ extends RefCounted
 ##                unit point, UV2.x which sphere of the instance (painter_tree_blockin kind10 0)
 ##   ribbon()     PainterTreePack.SEG_PER_INST limb ribbons of RIBBON_SUB pieces each; UV (which
 ##                edge 0 | 1, how far along the segment), UV2.x which segment (kind10 1)
-##   strokes(l)   SLOT_PER_INST slots of ROOTS roots, each root 4^l quads (stroke level l); UV the
-##                corner, UV2.x which quad (painter_tree_stroke pass10 l)
+##   strokes(l)   SLOT_PER_INST slots of ROOTS roots, each root 4^l strokes (stroke level l), each a
+##                triangle; UV the corner (0..2: the stroke's unit square lies inside the triangle),
+##                UV2.x which stroke (painter_tree_stroke pass10 l)
 ## Made once per session and shared by every cell; positions are zero or unit, so each carries a
 ## wide custom AABB (the cells set their own).
 
@@ -46,12 +47,15 @@ static func ribbon() -> ArrayMesh:
 	return _cache["ribbon"]
 
 
-## Stroke level `level`'s quad block of `slots` slots (cached; a bush's cell instances fewer,
-## PainterTrees.BUSH_SLOT_PER_INST).
+## Stroke level `level`'s block of `slots` slots (cached; a bush's cell instances fewer,
+## PainterTrees.BUSH_SLOT_PER_INST): ONE triangle a stroke, UV (0,0) (2,0) (0,2). The stroke's unit
+## square lies inside it and the fragment discards what is outside, so the vertex stage runs three
+## times a stroke, not four (painter-perf-strokes: -0.2 ms at the forest tokens view, where the
+## vertex stage is the cost).
 static func strokes(level: int, slots: int = PainterTreePack.SLOT_PER_INST) -> ArrayMesh:
 	var key := "strokes%d_%d" % [level, slots]
 	if not _cache.has(key):
-		_cache[key] = _quad_block(slots * PainterTreePack.ROOTS * int(pow(4.0, float(level))))
+		_cache[key] = _tri_block(slots * PainterTreePack.ROOTS * int(pow(4.0, float(level))))
 	return _cache[key]
 
 
@@ -137,28 +141,23 @@ static func _ribbon_block() -> ArrayMesh:
 	return _mesh(v, uv, uv2, idx)
 
 
-static func _quad_block(quads: int) -> ArrayMesh:
+## `count` strokes, a triangle each: UV (0,0) (2,0) (0,2) (the unit square lies inside), UV2.x the
+## stroke's index in the block.
+static func _tri_block(count: int) -> ArrayMesh:
 	var v := PackedVector3Array()
 	var uv := PackedVector2Array()
 	var uv2 := PackedVector2Array()
 	var idx := PackedInt32Array()
-	v.resize(quads * 4)
-	uv.resize(quads * 4)
-	uv2.resize(quads * 4)
-	idx.resize(quads * 6)
-	for q in quads:
-		var b := q * 4
+	v.resize(count * 3)
+	uv.resize(count * 3)
+	uv2.resize(count * 3)
+	idx.resize(count * 3)
+	for q in count:
+		var b := q * 3
 		uv[b] = Vector2(0.0, 0.0)
-		uv[b + 1] = Vector2(1.0, 0.0)
-		uv[b + 2] = Vector2(1.0, 1.0)
-		uv[b + 3] = Vector2(0.0, 1.0)
-		for k in 4:
+		uv[b + 1] = Vector2(2.0, 0.0)
+		uv[b + 2] = Vector2(0.0, 2.0)
+		for k in 3:
 			uv2[b + k] = Vector2(float(q), 0.0)
-		var i := q * 6
-		idx[i] = b
-		idx[i + 1] = b + 1
-		idx[i + 2] = b + 2
-		idx[i + 3] = b
-		idx[i + 4] = b + 2
-		idx[i + 5] = b + 3
+			idx[b + k] = b + k
 	return _mesh(v, uv, uv2, idx)

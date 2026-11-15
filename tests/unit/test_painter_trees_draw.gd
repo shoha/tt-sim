@@ -138,8 +138,10 @@ func test_the_token_window_takes_whole_strokes() -> void:
 		"strokes go whole, dabs stay"
 	)
 	assert_true(stroke.contains("v_key, v_key < 0.0, true);"), "no per-fragment cut on a stroke")
-	# painter-perf-strokes: a dropped mark leaves before the wind and the placement.
+	# painter-perf-strokes: a dropped mark leaves before the wind and the placement, and the
+	# triangle block's corner outside the unit square is discarded.
 	assert_true(stroke.contains("float rnd2h = fract(rnd * 11.13 + 0.31);"), "early density test")
+	assert_true(stroke.contains("v_uv.x > 1.0 || v_uv.y > 1.0"), "the triangle's spare corner")
 	var block := _code(PainterTrees.BLOCKIN_SHADER)
 	assert_true(block.contains("key, kind10 > 0.5, false);"), "the block-in is cut per fragment")
 
@@ -501,8 +503,15 @@ func test_summer_stems_are_mid_brown() -> void:
 func test_the_shared_meshes_and_brushes() -> void:
 	assert_eq(PainterTreeMeshes.block().get_surface_count(), 1)
 	var quads := PainterTreePack.SLOT_PER_INST * PainterTreePack.ROOTS
+	# One triangle a stroke (UV 0..2: the unit square lies inside it; the fragment cuts the rest).
 	var arrays := PainterTreeMeshes.strokes(1).surface_get_arrays(0)
-	assert_eq((arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size(), quads * 4 * 4)
+	var uv := arrays[Mesh.ARRAY_TEX_UV] as PackedVector2Array
+	assert_eq((arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size(), quads * 4 * 3)
+	assert_eq((arrays[Mesh.ARRAY_INDEX] as PackedInt32Array).size(), quads * 4 * 3)
+	assert_eq(uv[0], Vector2(0.0, 0.0))
+	assert_eq(uv[1], Vector2(2.0, 0.0))
+	assert_eq(uv[2], Vector2(0.0, 2.0))
+	assert_eq((arrays[Mesh.ARRAY_TEX_UV2] as PackedVector2Array)[5].x, 1.0, "UV2.x is the stroke")
 	var ribbon := PainterTreeMeshes.ribbon().surface_get_arrays(0)
 	assert_eq(
 		(ribbon[Mesh.ARRAY_INDEX] as PackedInt32Array).size(),
