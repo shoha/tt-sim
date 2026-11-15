@@ -33,8 +33,8 @@ extends RefCounted
 
 ## The share of the mesh box the pads fill (a card bush's straps splay past its leafy mass).
 const BOX_FILL := 0.85
-const MIN_ROOTS_DOME := 9
-const MIN_ROOTS_LOBE := 6
+const MIN_ROOTS_DOME := 6
+const MIN_ROOTS_LOBE := 4
 ## The pads' root spacing (metres; a tree pad's is 0.4): wide, so a pad's roots stay at the floors
 ## above (at 0.5 the village's 64 bushes averaged 22 roots, 89 level-1 strokes) and its four level-1
 ## strokes a root spread over it.
@@ -52,7 +52,7 @@ const CLUMP_MIN := 0.36
 const CLUMP_MAX := 0.9
 ## The clumps round the foot (with the top one, four pads: one block instance) and a clump's roots.
 const RING := 3
-const ROOTS_CLUMP := 8
+const ROOTS_CLUMP := 5
 
 ## False lays every bush as a small one, as before card painter-plants-fix3 (an A/B switch for a
 ## cost sitting, as PainterBuildings.paint_yard; the host must regrow its bushes after a change).

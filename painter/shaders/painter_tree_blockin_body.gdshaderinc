@@ -523,11 +523,16 @@ float e_lift_at(vec3 p, float near, float n_y, float spread) {
 
 // A bush's dab edge (painter-cost-stripes; see fragment()): the wobble's frequency per metre, its
 // reach on the light's turn and on the snow cap's edge.
-const float BUSH_DAB_F = 4.6;
-const float BUSH_DAB_JIT = 0.7;
+// (painter-look-bushes 2: the wobble is a few big soft lobes, 1.8 per metre, so the lit plane and the
+// shade side meet in broad scallops, not mottle.)
+const float BUSH_DAB_F = 1.8;
+const float BUSH_DAB_JIT = 0.8;
 const float BUSH_SNOW_JIT = 0.9;
-// The highest tone the solid of a bush keeps near (painter-look-bushes; 0.5 the middle step).
-const float BUSH_LIT_CAP = 0.2;
+// A bush's outline breaks into ragged lobes (its own reach and frequency per metre), and its foot
+// is ragged under BUSH_FOOT_H metres, so the pad is neither a perfect sphere nor a hard dark base.
+const float BUSH_RIM_BREAK = 0.55;
+const float BUSH_RIM_F = 3.6;
+const float BUSH_FOOT_H = 0.22;
 
 void fragment() {
 	bool g_sun = abs(dot(normalize(INV_VIEW_MATRIX[2].xyz), normalize(sun_dir))) > 0.9995;
@@ -555,13 +560,18 @@ void fragment() {
 	// tt-sim (painter-trees-polish): a crown mass's outline breaks into soft lobes by a world noise
 	// where it turns from the eye, so its 8-sided polygon and the flat facets at its rim never read
 	// as slabs between the strokes (the strokes carry the crown's edge). Camera pass only.
-	if (foliage && v_form < 1.5 && !g_sun) {
+	bool bush_m = foliage && v_bseed > 1.5;
+	if (foliage && (v_form < 1.5 || bush_m) && !g_sun) {
 		vec3 rim_eye = PROJECTION_MATRIX[3][3] == 0.0 ? normalize(INV_VIEW_MATRIX[3].xyz - v_wp) : normalize(INV_VIEW_MATRIX[2].xyz);
 		// (painter-perf-shadow: the noise is under 1, so a facing fragment cannot break: skip its lookup.)
 		float rim_d = abs(dot(normalize(v_wn), rim_eye));
-		if (rim_d < MASS_RIM_BREAK && rim_d < MASS_RIM_BREAK * p_noise(v_wp * 1.7 + 13.0)) {
+		float rim_k = bush_m ? BUSH_RIM_BREAK : MASS_RIM_BREAK;
+		if (rim_d < rim_k && rim_d < rim_k * p_noise(v_wp * (bush_m ? BUSH_RIM_F : 1.7) + 13.0)) {
 			discard;
 		}
+	}
+	if (bush_m && !g_sun && v_height < BUSH_FOOT_H && v_height < BUSH_FOOT_H * p_noise(v_wp * 5.0 + 3.0)) {
+		discard;
 	}
 	if (g_sun && shadow_simple < 0.5 && foliage && v_form < 1.5) {
 		vec3 g_sd = normalize(sun_dir);
@@ -753,10 +763,9 @@ void fragment() {
 		mul *= 1.0 + ((n1 - 0.5) * 0.16 + (blot - 0.5) * 0.07) * ch;
 	}
 	if (bush && !dep_on) {
-		// painter-look-bushes: near, a bush's solid is its dark under-mass (the crowns' own
-		// arrangement) and its lit side is the strokes' dabs, so light and shade meet in
-		// crisp scallops; far (no level-2 dabs) the solid keeps its light.
-		t = min(t, mix(1.0, BUSH_LIT_CAP, smoothstep(0.4, 1.0, lod_level)));
+		// painter-look-bushes 2: the ground's bounce keeps a bush's foot out of its deepest shade, so it
+		// does not stand on a hard dark base.
+		t = max(t, 0.3 * (1.0 - smoothstep(0.0, 0.35, v_height)));
 	}
 	ALBEDO = palette_at(t + v_value, row, variant) * mul;
 	if (cast > 0.0) {

@@ -268,7 +268,8 @@ static func _bush_dried(
 	var dry := PainterSheet.tone_lch(sheet, mood, "dry-leaf", elevation)
 	var bv := PainterSheet.number(sheet, mood, "bush-value", elevation)
 	var hue := fposmod(dry.z + _num(props, "dry-turn", 0.0), 360.0)
-	var dried := Vector3(dry.x * bv, dry.y * _num(props, "dry-chroma", 1.0), hue)
+	var lift := _num(props, "dry-lift", 1.0)
+	var dried := Vector3(minf(dry.x * bv * lift, 0.97), dry.y * _num(props, "dry-chroma", 1.0), hue)
 	return PainterSheet.lerp_lch(lch, dried, share)
 
 
