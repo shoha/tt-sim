@@ -16,14 +16,20 @@ const AGES: Array[float] = [0.3, 0.6, 0.9]
 const SNAP := 1e-4
 
 
-func _grow(species: String, age: float, openness: float, seed_v: int) -> Dictionary:
+func _grow(
+	species: String,
+	age: float,
+	openness: float,
+	seed_v: int,
+	bough_r: float = PainterTreePack.BOUGH_R
+) -> Dictionary:
 	var masses := PainterTreeGrowth.tree(
 		PainterTreeSpecies.architecture(species),
 		{"age": age, "openness": openness},
 		seed_v,
 		PainterTreeSpecies.is_conifer(species)
 	)
-	return PainterTreePack.pack(masses, seed_v, 3.0, PainterTreeSpecies.wide())
+	return PainterTreePack.pack(masses, seed_v, 3.0, PainterTreeSpecies.wide(), bough_r)
 
 
 static func _snapped_digest(d: Dictionary) -> String:
@@ -95,7 +101,8 @@ func test_the_port_grows_the_spikes_own_trees() -> void:
 	assert_eq(trees.size(), 24, "eight species at three ages")
 	for label: String in trees:
 		var parts := label.rsplit("_", true, 1)
-		var d := _grow(parts[0], float(parts[1]), fixture["openness"], int(fixture["seed"]))
+		# (bough_r 0: the spike packs every strand; the game's spruce drops its boughs, below.)
+		var d := _grow(parts[0], float(parts[1]), fixture["openness"], int(fixture["seed"]), 0.0)
 		var ctx := HashingContext.new()
 		ctx.start(HashingContext.HASH_SHA256)
 		ctx.update((d["data"] as PackedFloat32Array).to_byte_array())
@@ -124,6 +131,23 @@ func test_golden_digests_per_species_seed_and_age() -> void:
 	assert_eq(got.size(), want.size(), "cases")
 	for label: String in want:
 		assert_eq(got.get(label, ""), want[label], label)
+
+
+## painter-perf-taiga: a spruce packs its stem and the strands under its crown only where they
+## show; no other species, and no strand outside the crown, is touched.
+func test_a_spruce_drops_the_boughs_inside_its_crown() -> void:
+	for age: float in AGES:
+		var all := _grow("spruce", age, 0.4, 11, 0.0)
+		var cut := _grow("spruce", age, 0.4, 11)
+		assert_eq(int(cut["n_ell"]), int(all["n_ell"]), "the masses stay (age %.1f)" % age)
+		assert_lt(int(cut["n_seg"]), int(all["n_seg"]) / 3, "the boughs go (age %.1f)" % age)
+		assert_lt(int(cut["n_slots"]), int(all["n_slots"]) * 2 / 3, "and their bark strokes")
+		assert_gt(int(cut["n_seg"]), 5, "the stem stays")
+		assert_eq(cut["aabb"], all["aabb"], "the tree's box does not move")
+	for species in ["birch", "oak", "willow", "scotspine", "rowan"]:
+		var a := _grow(species, 0.6, 0.4, 11, 0.0)
+		var b := _grow(species, 0.6, 0.4, 11)
+		assert_eq(_snapped_digest(a), _snapped_digest(b), species + " keeps every strand")
 
 
 func test_growing_on_a_worker_thread_gives_the_same_tree() -> void:
