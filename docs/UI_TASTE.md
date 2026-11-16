@@ -401,6 +401,18 @@ chrome" (round 3).
   basics at 1280x720 (a long catalogue such as Paint's surfaces or the buildings scrolls past its
   first row, as before).
 
+## 2026-11-16 owner answers (card ui-authoring5, on the review board)
+
+- **Keys: just the letters.** B Biome, P Place, T Sculpt, K Paint, H Water, U Build, F Fire. The
+  digit 1 to 7 binding, the digit corner on the rail items, "or 5" in tooltips, the F1 digit row and
+  the welcome card's "or 1 to 7" are removed (this supersedes the digit sentences of "map building
+  3" above). In play the digits stay the F3 debug toggles.
+- **Hub label.** The heading and its first tab were both "Place". The tool keeps the name Place
+  (rail tooltip, key P, card title) and its first tab is "Add", beside "Thin / Clear". Water
+  (River, Pond, Crossing) and Build (Walls, Buildings, Villages) have no tab named like the tool.
+- **Paper kept.** The authoring chrome stays paper; no change.
+- **Rail tooltip accepted** as it is.
+
 ## Verdicts
 
 The user's decisions about the interface, newest last. They outrank every rule above; a card

@@ -14,7 +14,7 @@ signal dismissed
 
 const TITLE := "Your first strokes"
 const BODY := "Pick Biome or Place on the left, then drag across the map to paint it."
-const KEYS := "Keys %s, or 1 to 7, pick a tool; F1 lists them all."
+const KEYS := "Keys %s pick a tool; F1 lists them all."
 const BUTTON := "Got it"
 ## The card's widest, so its wrapped lines stay short.
 const MAX_WIDTH := 340.0
@@ -57,9 +57,8 @@ func _init() -> void:
 	column.add_child(button)
 
 
-## The keys line: each rail tool's letter in rail order and the digits that also pick them
-## ("Keys B P T K H U F, or 1 to 7, pick a tool; F1 lists them all."), the same keys the rail's
-## corners, its tooltips and F1 show.
+## The keys line: each rail tool's letter in rail order ("Keys B P T K H U F pick a tool; F1 lists
+## them all."), the same keys the rail's corners, its tooltips and F1 show.
 static func keys_line() -> String:
 	var letters: PackedStringArray = []
 	for tool in ToolRegistry.rail_tools(ToolDescriptor.AUTHORING):

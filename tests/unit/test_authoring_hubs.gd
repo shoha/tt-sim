@@ -95,7 +95,7 @@ func test_the_rail_lists_seven_tools_in_order_and_each_hub_tab_has_its_tool() ->
 func test_the_hubs_hold_the_tabs_the_owner_asked_for() -> void:
 	var labels := func(rail_id: StringName) -> Array:
 		return ToolRegistry.find(rail_id).tabs.map(func(tab: Dictionary) -> String: return tab["label"])
-	assert_eq(labels.call(PlaceTool.ID), ["Place", "Thin / Clear"])
+	assert_eq(labels.call(PlaceTool.ID), ["Add", "Thin / Clear"])
 	assert_eq(labels.call(WaterTool.ID), ["River", "Pond", "Crossing"])
 	assert_eq(labels.call(BuildTool.ID), ["Walls", "Buildings", "Villages"])
 	for rail_id in [BiomeTool.ID, SculptTool.ID, PaintTool.ID, FireTool.ID]:
@@ -164,30 +164,25 @@ func test_the_help_names_each_tab_under_its_hub_and_each_rail_tool_with_its_key(
 	var names: Array = []
 	for row in ToolRegistry.help_rows(ToolDescriptor.AUTHORING):
 		names.append(row[0])
-	# The row says the letter and the digit, as the rail's tooltip does.
-	for expect in [
-		"Place (P or 2)", "Place: Thin / Clear", "Water (H or 5)", "Water: Crossing", "Build (U or 6)"
-	]:
+	# The row says the letter, as the rail's tooltip does.
+	for expect in ["Place (P)", "Place: Thin / Clear", "Water (H)", "Water: Crossing", "Build (U)"]:
 		assert_true(names.has(expect), expect)
 	assert_true(names.has("Build: Walls"), "Wall's help row is named under its hub")
 	assert_true(names.has("Build: Villages"))
-	assert_true(names.has("Biome (B or 1)") and names.has("Sculpt (T or 3)"))
-	assert_true(names.has("Fire (F or 7)") and names.has("Paint (K or 4)"))
+	assert_true(names.has("Biome (B)") and names.has("Sculpt (T)"))
+	assert_true(names.has("Fire (F)") and names.has("Paint (K)"))
 
 
-func test_the_rail_corner_shows_the_letter_and_the_digit_and_the_welcome_card_names_them() -> void:
+func test_the_rail_corner_shows_the_letter_only_and_the_welcome_card_names_the_letters() -> void:
 	var panel := _panel()
 	var item := ToolRegistry.find(WaterTool.ID).rail_item(true)
 	assert_eq(item["key"], "H")
-	assert_eq(item["digit"], "5", "the digit shows beside the letter, not only in the tooltip")
-	assert_eq(
-		AuthoringWelcome.keys_line(), "Keys B P T K H U F, or 1 to 7, pick a tool; F1 lists them all."
-	)
+	assert_false(item.has("digit"), "the letters are the only keys (owner, 2026-11-16)")
+	assert_eq(AuthoringWelcome.keys_line(), "Keys B P T K H U F pick a tool; F1 lists them all.")
 	var key := panel._rail._buttons[WaterTool.ID].get_node_or_null("ItemKey") as Label
-	var digit := panel._rail._buttons[WaterTool.ID].get_node_or_null("ItemDigit") as Label
 	assert_not_null(key)
-	assert_not_null(digit)
-	assert_eq(digit.text, "5")
+	assert_eq(key.text, "H")
+	assert_null(panel._rail._buttons[WaterTool.ID].get_node_or_null("ItemDigit"), "no digit corner")
 
 
 # -- Tabs route to the tool they were -----------------------------------------------------
@@ -440,15 +435,12 @@ func test_the_pill_buttons_emit_the_same_signals_and_hold_the_same_states() -> v
 		assert_ne(pill.button(id).focus_mode, Control.FOCUS_NONE, "%s takes focus" % id)
 
 
-func test_a_digit_picks_the_tool_in_that_place_of_the_rail() -> void:
-	var rail := ToolRegistry.rail_tools(ToolDescriptor.AUTHORING)
-	assert_eq(rail.size(), 7)
-	for i in rail.size():
-		assert_eq(rail[i].slot, i + 1, "%s: its digit is its place" % rail[i].id)
-		assert_eq(ToolRegistry.for_digit(_key(KEY_1 + i), ToolDescriptor.AUTHORING), rail[i])
-	assert_null(ToolRegistry.for_digit(_key(KEY_8), ToolDescriptor.AUTHORING), "only seven")
-	assert_null(ToolRegistry.for_digit(_key(KEY_1, true), ToolDescriptor.AUTHORING), "Ctrl+1")
-	assert_null(ToolRegistry.for_digit(_key(KEY_1), ToolDescriptor.PLAY), "not in play")
+func test_a_digit_picks_no_tool_in_authoring() -> void:
+	# Owner, 2026-11-16: "just keep the letters". The digits stay the play state's F3 toggles.
+	assert_eq(ToolRegistry.rail_tools(ToolDescriptor.AUTHORING).size(), 7)
+	for i in 8:
+		for context in [ToolDescriptor.AUTHORING, ToolDescriptor.PLAY]:
+			assert_null(ToolRegistry.for_shortcut(_key(KEY_1 + i), context), "digit %d" % (i + 1))
 
 
 func test_leave_is_set_apart_from_save_by_a_gap() -> void:

@@ -528,7 +528,7 @@ func _build_rail() -> void:
 		group = item_group
 		_rail.add_item(item["id"], item["icon"], item.get("tooltip", ""))
 		if item.has("key"):
-			_rail.set_item_key(item["id"], String(item["key"]), String(item.get("digit", "")))
+			_rail.set_item_key(item["id"], String(item["key"]))
 	_rail.item_pressed.connect(_on_rail_item_pressed)
 	var column := VBoxContainer.new()
 	column.name = "RailColumn"

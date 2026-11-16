@@ -99,7 +99,6 @@ func _get_shortcut_data() -> Array:
 			"Pick a size, a biome and a landform; the seed draws the water and the way across",
 		],
 		["Left-drag", "Paint, thin, place, sculpt or lay a surface (hold still to build)"],
-		["1 to 7", "Pick a tool by its place in the rail (the same as its letter: B or 1, P or 2...)"],
 		[
 			"Ctrl + left-drag",
 			"Clear, lower (Raise), cut a tier down (Tier), erase paint or water",

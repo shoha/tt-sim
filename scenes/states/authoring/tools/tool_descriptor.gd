@@ -47,9 +47,6 @@ var summary: String = ""
 var icon: String = ""
 ## A bare key that picks the tool (no modifiers), or KEY_NONE.
 var shortcut: Key = KEY_NONE
-## The digit (1 to 7) that also picks the tool in the authoring rail, its place in the rail; 0 for
-## a tool with no place in it. A second binding beside the letter, easier to learn.
-var slot: int = 0
 ## Where the tool exists: AUTHORING, PLAY, or both.
 var contexts: int = AUTHORING
 ## The BrushMode subclass its gestures run in, or null for a tool without brush gestures.
@@ -84,37 +81,33 @@ func shortcut_label() -> String:
 
 
 ## The rail tooltip while the tool can be picked: its label, with the shortcut when it has
-## one ("Biome (B)"); `with_slot` adds the digit of its place in the authoring rail
-## ("Biome (B or 1)").
-func rail_tooltip(with_slot: bool = false) -> String:
+## one ("Biome (B)"). The letter is the only binding (owner, 2026-11-16: "just keep the letters").
+func rail_tooltip() -> String:
 	var key := shortcut_label()
 	if key == "":
 		return label
-	if with_slot and slot > 0:
-		return "%s (%s or %d)" % [label, key, slot]
 	return "%s (%s)" % [label, key]
 
 
 ## What the rail icon's tooltip says (owner, 2026-10-30: every icon explains itself): the name with
 ## its shortcut, then the one-line summary in plain words ("Biome (B)", a line, "Paint a place
 ## onto the map."). Never empty for a tool with a label.
-func rail_tip(with_slot: bool = false) -> String:
-	var head := rail_tooltip(with_slot)
+func rail_tip() -> String:
+	var head := rail_tooltip()
 	return head if summary == "" else "%s\n%s" % [head, summary]
 
 
 ## The tooltip while the open map cannot take the tool: why, else the usual tip (never empty).
 func rail_tip_for(available: bool) -> String:
-	return rail_tip(true) if available or unavailable_tooltip == "" else unavailable_tooltip
+	return rail_tip() if available or unavailable_tooltip == "" else unavailable_tooltip
 
 
-## The tool's entry in DrawerContainer.rail_items; in the authoring rail (`authoring`) its tooltip
-## also says its digit, and the entry carries the key the item shows in its corner.
+## The tool's entry in DrawerContainer.rail_items; in the authoring rail (`authoring`) the entry
+## also carries the key the item shows in its top-left corner.
 func rail_item(authoring: bool = false) -> Dictionary:
-	var item := {"id": id, "icon": icon, "tooltip": rail_tip(authoring and slot > 0)}
-	if authoring and slot > 0:
+	var item := {"id": id, "icon": icon, "tooltip": rail_tip()}
+	if authoring and shortcut != KEY_NONE:
 		item["key"] = shortcut_label()
-		item["digit"] = str(slot)
 	return item
 
 
@@ -122,7 +115,7 @@ func rail_item(authoring: bool = false) -> Dictionary:
 ## the hub and the tab ("Water: Crossing"), since the tab has no key of its own.
 func help_name() -> String:
 	if hub == &"":
-		return rail_tooltip(true)
+		return rail_tooltip()
 	var hub_tool := ToolRegistry.find(hub)
 	if hub_tool == null:
 		return rail_tooltip()
