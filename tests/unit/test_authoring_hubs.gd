@@ -178,7 +178,7 @@ func test_the_rail_corner_shows_the_letter_only_and_the_welcome_card_names_the_l
 	var item := ToolRegistry.find(WaterTool.ID).rail_item(true)
 	assert_eq(item["key"], "H")
 	assert_false(item.has("digit"), "the letters are the only keys (owner, 2026-11-16)")
-	assert_eq(AuthoringWelcome.keys_line(), "Keys B P T K H U F pick a tool; F1 lists them all.")
+	assert_eq(AuthoringWelcome.keys_line(), "Keys B P T K H U F pick a tool; F1 lists all.")
 	var key := panel._rail._buttons[WaterTool.ID].get_node_or_null("ItemKey") as Label
 	assert_not_null(key)
 	assert_eq(key.text, "H")
