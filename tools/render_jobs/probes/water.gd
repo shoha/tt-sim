@@ -152,6 +152,7 @@ const TEST_PREFIXES: Array[String] = [
 	"_painter-grounding_",
 	"_painter-loose-ends_",
 	"_painter-default-gate_",
+	"_painter-edges_",
 	"_clipmap3_",
 	"_clipmap4_",
 ]

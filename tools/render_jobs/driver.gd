@@ -483,9 +483,7 @@ func _library_dev(step: Dictionary) -> void:
 
 ## `foliage_library`: serves the libraries again (FoliageLibrary.refresh_libraries) and, when a
 ## map is open, rebuilds it from the document in memory (Root's handler of
-## EventBus.foliage_library_changed); follow it with `wait_ready`. `fades_off` (default true)
-## holds the occlusion fade and the close-zoom canopy fade off, so two captures differ by the
-## plants alone. A failure stops the job, since every capture after it would show the wrong
+## EventBus.foliage_library_changed); follow it with `wait_ready`. A failure stops the job, since every capture after it would show the wrong
 ## plants. (Until 2026-10-25 it switched between the treecube palette and a plantgen package.)
 func _foliage_library(step: Dictionary) -> void:
 	var result := FoliageLibrary.refresh_libraries()
@@ -493,8 +491,6 @@ func _foliage_library(step: Dictionary) -> void:
 		log_line("foliage library FAILED: %s; stopping the job" % result["error"])
 		_i = steps.size()
 		return
-	if bool(step.get("fades_off", true)) and gm() != null:
-		CanopyFade.play_strength = 0.0
 	log_line(
 		(
 			"foliage library: %d assets in the palette"

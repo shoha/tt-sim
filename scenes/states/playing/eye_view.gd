@@ -211,7 +211,7 @@ func process(delta: float) -> void:
 	if absf(_foot_y - ground) < 0.001:
 		_foot_y = ground
 	_place()
-	CanopyFade.publish(camera, camera.size, WorldView.canvas_size(game_map.world_viewport), delta)
+	CanopyFade.publish(camera, delta)
 
 
 ## WASD and Shift: held keys, read from the key events (the controller passes on the ones it did
@@ -351,7 +351,7 @@ func _process_glide(delta: float, env: Environment = null) -> void:
 	var camera := game_map.camera_node
 	var running := glide.step(delta)
 	_sync_painted_sky(env)
-	CanopyFade.publish(camera, camera.size, WorldView.canvas_size(game_map.world_viewport), delta)
+	CanopyFade.publish(camera, delta)
 	if not running:
 		_land_glide(true)
 

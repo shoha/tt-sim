@@ -8,8 +8,9 @@ extends RefCounted
 ## about 0.3 ms and the discards' own work about 0.3 more. So a cell's masses draw with a variant
 ## compiled with TREE_FAST, which has none (the two whole-fragment kills collapse the mass in the
 ## vertex stage), and cast no shadow; a twin node over the same MultiMesh, SHADOWS_ONLY with the
-## full shader, casts the crown's shadow with its eroded edge and gaps. While a canopy fade is live
-## (the fade is a discard) the camera masses draw with the full shader again.
+## full shader, casts the crown's shadow with its eroded edge and gaps. Play always draws the
+## discard-free masses; only while an authoring fade is live (a brush's window or the Village
+## tool's cut, which are discards) do the camera masses draw with the full shader again.
 ## docs/systems/painter.md "The cost of a discard".
 
 const SHADER := "res://painter/shaders/painter_tree_blockin_fast.gdshader"

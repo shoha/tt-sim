@@ -160,17 +160,9 @@ wind_gust={
 "type": "vec4",
 "value": Vector4(0.35, 0, 0, 1)
 }
-canopy_fade_centre={
-"type": "vec4",
-"value": Vector4(0, 0, 0, 0)
-}
 canopy_fade_view={
 "type": "vec4",
 "value": Vector4(0, 0, 1, 1)
-}
-canopy_fade_shape={
-"type": "vec4",
-"value": Vector4(1, 2, 1, 0)
 }
 canopy_brush={
 "type": "vec4",

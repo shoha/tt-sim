@@ -415,7 +415,11 @@ void fragment() {
 	float lap = (1.0 - smoothstep(thr - 0.03, thr + 0.02, d_h)) * smoothstep(0.0, 0.03, d_h + 0.02);
 	float dash_n = p_noise(vec3(p.x * 3.1, 4.0 + floor(TIME * 0.4), p.y * 3.1));
 	float outer = lap_w * 1.5;
-	float dashes = (1.0 - smoothstep(0.03, 0.06, abs(d_h - outer))) * smoothstep(0.64, 0.72, dash_n);
+	// The outer dashes sit on a gently sloped shore only: on a steep bank the gradient (and so d_h)
+	// jumps from one mesh triangle to the next and the dashes broke into small glitter triangles
+	// (card painter-edges), so they thin out as the bank steepens.
+	float dash_gate = 1.0 - smoothstep(0.6, 1.4, slope);
+	float dashes = (1.0 - smoothstep(0.03, 0.06, abs(d_h - outer))) * smoothstep(0.64, 0.72, dash_n) * dash_gate;
 	float shore_foam = max(lap, dashes) * ground_like * smoothstep(0.0, 0.01, column_raw + 0.004);
 	// Riffles: dense short dashes along the flow on fast, shallow water.
 	float rapid = smoothstep(0.18, 0.4, flow_speed) * (1.0 - smoothstep(0.25, 0.7, column));

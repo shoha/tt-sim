@@ -18,7 +18,6 @@ func _init() -> void:
 	summary = "Walls, buildings and villages."
 	icon = "home"
 	shortcut = KEY_U  # the second letter of Build (B is Biome's)
-	slot = 6
 	contexts = AUTHORING
 	brush_mode = null
 	unavailable_tooltip = "Build: not on a Blender map, whose ground is the map file's"

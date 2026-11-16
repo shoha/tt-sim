@@ -47,10 +47,15 @@ const WALL_PARTS: Dictionary = {
 	"Wood": "trim_wood",
 	"Roof": "roof_wood",
 	# A crossing's parts (AuthoredCrossings: `Wood` above, and its stone, arch and ford meshes).
-	"Stones": "wall_stone",
-	"Arch": "wall_stone",
-	"Ford": "wall_stone",
+	"Stones": "crossing_stone",
+	"Arch": "crossing_stone",
+	"Ford": "crossing_stone",
 }
+## The role a crossing's stone (stepping stones, arch, ford slabs) takes (card painter-edges): the
+## wall-stone tone, derived at tone time (crossing_tone) so it follows every mood and sun.
+const CROSSING_ROLE := "crossing-stone"
+## The role CROSSING_ROLE is derived from.
+const CROSSING_FROM := "wall-stone"
 ## The prefixes of a mill's and a vane's mesh names (AuthoredStructures.mill_node, vane_node).
 const PART_PREFIXES: Array[String] = ["cap_", "wheel_", "vane_"]
 ## A picked roof's tones, in the shader's order.
@@ -113,6 +118,7 @@ const KINDS: Dictionary = {
 	"wall_adobe": ["plaster", P_PLASTER, "wall", 0],
 	"wall_masonry": ["wall-stone", P_STONE, "stone", 0],
 	"wall_stone": ["wall-stone", P_STONE, "stone", 0],
+	"crossing_stone": [CROSSING_ROLE, P_STONE, "stone", 0],
 	"wall_brick": ["roof-clay", P_STONE, "stone", 0],
 	"wall_log": ["wall-log", P_LOG, "wall", 0],
 	"wall_boards": ["wall-boards", P_BOARDS, "wall", 0],
@@ -517,7 +523,11 @@ static func snow_ramp(sheet: Dictionary, mood: String, elevation: float) -> Pack
 static func ramp(
 	sheet: Dictionary, mood: String, role: String, elevation: float, family: String
 ) -> PackedVector3Array:
-	var base := PainterSheet.tone_lch(sheet, mood, role, elevation)
+	var base := (
+		crossing_tone(sheet, mood, elevation)
+		if role == CROSSING_ROLE
+		else PainterSheet.tone_lch(sheet, mood, role, elevation)
+	)
 	var shape := shape_of(sheet, mood, elevation, family)
 	var hue_spread := PainterSheet.number(sheet, mood, "hue-spread", elevation)
 	var value_spread := PainterSheet.number(sheet, mood, "value-spread", elevation)
@@ -530,6 +540,22 @@ static func ramp(
 		for step: Vector3 in steps:
 			out.append(PainterTones.linear(PainterSheet.color_of_lch(step)))
 	return out
+
+
+## The middle tone (OKLCH) of a crossing's stone: the wall stone's, its hue turned by
+## `crossing-turn` degrees, its chroma times `crossing-chroma` and its lightness times
+## `crossing-value`, so the arch, the ford slabs and the stepping stones read as a darker warm grey
+## that parts from sand banks and water in every mood (pale cream bleached against the sand).
+## Relative, so night's cool stone stays cool. Pure.
+static func crossing_tone(sheet: Dictionary, mood: String, elevation: float) -> Vector3:
+	var base := PainterSheet.tone_lch(sheet, mood, CROSSING_FROM, elevation)
+	var num := func(prop: String) -> float:
+		return PainterSheet.number(sheet, mood, prop, elevation)
+	return Vector3(
+		clampf(base.x * float(num.call("crossing-value")), 0.05, 0.98),
+		base.y * float(num.call("crossing-chroma")),
+		fposmod(base.z + float(num.call("crossing-turn")), 360.0)
+	)
 
 
 ## A building role's lit step: `lit-lift` lighter and its chroma moved toward `lit-hue` as a

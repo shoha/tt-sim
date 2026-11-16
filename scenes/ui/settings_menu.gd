@@ -122,7 +122,6 @@ var _quality: RefCounted = null
 @onready var token_shading_option: OptionButton = %TokenShadingOption
 @onready var token_ghost_check: CheckButton = %TokenGhostCheck
 @onready var token_pins_option: OptionButton = %TokenPinsOption
-@onready var canopy_fade_check: CheckButton = %CanopyFadeCheck
 @onready var wind_motion_slider: HSlider = %WindMotionSlider
 @onready var wind_motion_label: Label = %WindMotionLabel
 @onready var antialiasing_option: OptionButton = %AntialiasingOption

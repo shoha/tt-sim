@@ -714,10 +714,12 @@ vertex stage instead; the camera pass's thinning and rim-break dissolves, the bu
 edge shape and the canopy fade's `tree_fades` are compiled out of it. The masses cast no shadow; a
 twin node (`PainterTreeFast.SHADOW_NODE`, index 5 of the cell's nodes) shares node 0's MultiMesh,
 draws with the full block-in shader and is SHADOWS_ONLY, so the crown's shadow keeps its eroded edge
-and gaps (the sun pass's own discards). While a canopy fade is live (`CanopyFade.live()`, the view
-window, the brush or the cut published with w above 0) `PainterTreeFast.follow_fade` puts the full
-shader on the camera masses again, since the fade is a discard; a shader swap compiles, so it
-happens only when a fade starts or ends. An event's tree (`take`) and the limb ribbons keep the full
+and gaps (the sun pass's own discards). The view-centre canopy window (Settings > Canopy fade) that
+also forced the full shader was removed on 2026-11-16 (owner decision, review board `d_canopy`), so
+a play view always draws the discard-free masses. Only authoring raises a fade now: while a map
+brush's window or the Village tool's cut is live (`CanopyFade.live()`, published with w above 0)
+`PainterTreeFast.follow_fade` puts the full shader on the camera masses, since those fades are
+discards; a shader swap compiles, so it happens only when one starts or ends. An event's tree (`take`) and the limb ribbons keep the full
 shaders and one node. Rules for a change to the block-in body: any new `discard` goes inside
 `#ifndef TREE_FAST ... #endif` (`tests/unit/test_painter_tree_fast.gd` cuts those regions out and
 asserts none is left); a new whole-fragment kill of a mass belongs in the vertex stage's TREE_FAST
@@ -1455,9 +1457,27 @@ painter_final25_coverage/matrix.md`. What the card filled:
   the ash instead of honey wood on brown ground. `for_surface` returns it for a `charred` entry's
   bark surface; other biomes' snags and logs keep the bark role.
 - **Crossings** (timber `Wood`, `Stones`, `Arch`, `Ford`) were captured over a river at full size:
-  all four are painted and match the painted water and ground. The arch and the ford's bank slabs
-  take the wall-stone tone, which is pale and slightly bleached against sand banks (open: a
-  crossing-specific darker stone key).
+  all four are painted and match the painted water and ground. Their stone took the wall-stone tone,
+  pale cream and bleached against sand banks; fixed in card painter-edges (below).
+- **Crossing stone and the map edge** (card painter-edges, 2026-11-16; frames
+  `compare/painter_final32_edges/before` and `after`, notes.md there).
+  - The stepping stones, the arch and the ford's slabs (`Stones`, `Arch`, `Ford`) are the kind
+    `crossing_stone`, role `crossing-stone`: `PainterBuildings.crossing_tone()` derives it from
+    `wall-stone` by the sheet numbers `crossing-turn` (hue turned, degrees), `crossing-chroma` (a
+    factor) and `crossing-value` (a lightness factor; relative, so night's cool stone stays cool),
+    now -14, 0.8, 0.76: a warm grey that parts from sand banks and water in summer, dusk, winter and
+    night. The timber `Wood` keeps its trim_wood.
+  - A river that leaves the map draws its channel patch (the skirt's `Channel` child, which carries
+    the skirt ring's Classic material) as a dark, unbrushed olive rectangle against the painted ground:
+    `PainterSurfaces._dress` now dresses it with the painted skirt material too (UV is the map-frame
+    XZ), so the seam at the edge is gone. No ground shader change.
+  - The water's outer shore dashes thin out on a steep bank (`dash_gate`, slope 0.6 to 1.4): they
+    broke into small glitter triangles because the gradient changes per mesh triangle. Partly
+    helps; the lap band itself still shows triangle shards on a steep pond bank (open: cap the
+    slope used for `d_h`).
+  - Open: one row of mirrored white dabs sits across a river at the map edge (inside the map, at the
+    boundary; probably the depth-slope wrap foam on a crease between the terrain's and the patch's
+    bed), and the ribbon fades through a pale turquoise before the green.
 - **Known gaps** are listed in the matrix with their effort: baked settlement furnishings, field
   plants, round and profile roofs (procgen records).
 

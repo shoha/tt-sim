@@ -130,6 +130,10 @@
   /* A burnt forest's dead wood (snags, logs, stumps): the bark role turned nearly neutral and a
      step darker, so the standing trunks read as char against the ash ground. */
   charcoal-hue: 45;  charcoal-chroma: 0.45;  charcoal-lift: -0.2;
+  /* A crossing's stone (stepping stones, the arch, the ford's slabs; PainterBuildings.crossing_tone):
+     the wall stone a quarter deeper, a little quieter and turned a few degrees toward grey brown,
+     so it parts from sand banks and water (painter-edges; the pale cream bleached against sand). */
+  crossing-turn: -14;  crossing-chroma: 0.8;  crossing-value: 0.76;
 
   /* The water (PainterWater, painter_water.gdshader; card painter-water): one luminous wash in
      three depth bands, shallows lightest and most turquoise, the deep the most saturated blue,

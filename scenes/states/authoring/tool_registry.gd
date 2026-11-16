@@ -10,7 +10,7 @@ extends RefCounted
 ##
 ## The rail lists seven tools (rail_tools: Biome, Place, Sculpt, Paint, Water, Build, Fire); the
 ## rest are tabs of one of them and keep their descriptors, brush modes and panes. A rail tool with
-## `tabs` is a hub: Place (Place, Thin / Clear), Water (River, Pond, Crossing) and Build (Walls,
+## `tabs` is a hub: Place (Add, Thin / Clear), Water (River, Pond, Crossing) and Build (Walls,
 ## Buildings, Villages). A tab's tool says `hub` (hub_of maps a tool id to its rail id), so the
 ## controller, saves, tests and the F1 help keep every id.
 ##
@@ -68,20 +68,6 @@ static func find(id: StringName) -> ToolDescriptor:
 static func for_shortcut(event: InputEvent, context: int) -> ToolDescriptor:
 	for tool in tools(context):
 		if tool.matches_shortcut(event):
-			return tool
-	return null
-
-
-## The rail tool a bare digit key picks in `context` (1 is the first tool of the rail, in rail
-## order), or null. Authoring only: the digits are the play state's own while a perf overlay is up.
-static func for_digit(event: InputEvent, context: int) -> ToolDescriptor:
-	var key := event as InputEventKey
-	if key == null or not key.pressed or key.echo or context != ToolDescriptor.AUTHORING:
-		return null
-	if key.ctrl_pressed or key.shift_pressed or key.alt_pressed or key.meta_pressed:
-		return null
-	for tool in rail_tools(context):
-		if tool.slot > 0 and int(key.keycode) == int(KEY_0) + tool.slot:
 			return tool
 	return null
 

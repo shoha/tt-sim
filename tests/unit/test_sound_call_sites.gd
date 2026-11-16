@@ -50,7 +50,6 @@ func _checks(menu: SettingsMenu) -> Array[CheckButton]:
 		menu.vsync_check,
 		menu.lofi_check,
 		menu.token_ghost_check,
-		menu.canopy_fade_check,
 		menu.ssao_check,
 		menu.ssr_check,
 		menu.sdfgi_check,

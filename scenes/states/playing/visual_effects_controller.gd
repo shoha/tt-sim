@@ -111,26 +111,17 @@ func apply_grid_visual_settings(
 		)
 
 
-## The saved Canopy fade setting (the close-zoom window round the screen centre), off by
-## default, and the saved Token ghost setting, on by default. Loaded once at setup; the
-## Settings menu calls the setters below to apply a change at once. (graphics/occlusion_fade_enabled
-## in an old settings file is never read: the per-token occlusion fade was removed.)
+## The saved Token ghost setting, on by default. Loaded once at setup; the Settings menu calls
+## the setter below to apply a change at once. (graphics/occlusion_fade_enabled and
+## graphics/canopy_fade_enabled in an old settings file are never read: both fades were removed.)
 func _load_see_through_settings() -> void:
 	var config := ConfigFile.new()
 	config.load(Paths.SETTINGS_PATH)
-	set_canopy_fade_enabled(
-		config.get_value("graphics", "canopy_fade_enabled", CanopyFade.DEFAULT_ENABLED)
-	)
 	set_token_ghost_enabled(
 		config.get_value("graphics", "token_ghost_enabled", TokenGhost.DEFAULT_ENABLED)
 	)
 	TokenToon.painted = SettingsTokenShading.saved_id(config) == TokenToon.SHADING_PAINTED
 	SettingsTokenPins.apply_id(SettingsTokenPins.saved_id(config))
-
-
-## Turns the close-zoom canopy window on or off.
-func set_canopy_fade_enabled(enabled: bool) -> void:
-	CanopyFade.enabled = enabled
 
 
 ## Turns the token ghost (the see-through silhouette of a covered token) on or off for every

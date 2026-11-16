@@ -8,6 +8,8 @@ extends ToolDescriptor
 ## are in the help overlay's shared rows.
 
 const ID := &"place"
+## The label of the first tab (the tool itself stays Place: rail tooltip, key P, pane title).
+const ADD_LABEL := "Add"
 
 
 func _init() -> void:
@@ -17,14 +19,15 @@ func _init() -> void:
 	icon = "map-pin"
 	brush_mode = PlaceBrush
 	shortcut = KEY_P
-	slot = 2
-	# Thin / Clear is Place's erase mode: its own tool and brush, a tab of this one on the rail.
+	# Thin / Clear is Place's erase mode: its own tool and brush, a tab of this one on the rail. The
+	# first tab says "Add", not "Place": a card titled Place whose tab is also Place read as the
+	# same word twice (owner, 2026-11-16, on l21_hubs).
 	tabs = [
 		{
 			"id": ID,
-			"label": "Place",
+			"label": ADD_LABEL,
 			"tool": ID,
-			"tip": "Place: set a hero tree, rock or log where you click",
+			"tip": "Add: set a hero tree, rock or log where you click",
 		},
 		{
 			"id": ThinTool.ID,
