@@ -412,7 +412,7 @@ func test_the_sculpt_rail_item_is_disabled_with_a_reason_on_a_dressed_map() -> v
 	panel.set_sculpt_available(true)
 	assert_false(item.disabled)
 	assert_string_starts_with(item.tooltip_text, AuthoringPanel.SCULPT_TOOLTIP)
-	assert_eq(item.tooltip_text, ToolRegistry.find(AuthoringPanel.TOOL_SCULPT).rail_tip(true))
+	assert_eq(item.tooltip_text, ToolRegistry.find(AuthoringPanel.TOOL_SCULPT).rail_tip())
 
 
 # --- The ring's fill -----------------------------------------------------------------

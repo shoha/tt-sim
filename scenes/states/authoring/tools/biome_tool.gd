@@ -16,7 +16,6 @@ func _init() -> void:
 	icon = "landscape"
 	brush_mode = BiomeBrush
 	shortcut = KEY_B
-	slot = 1
 	contexts = AUTHORING | PLAY
 
 
