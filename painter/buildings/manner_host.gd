@@ -210,6 +210,16 @@ func _snow_wanted() -> bool:
 	return snow_body and owner != null and owner.snow_amount() > 0.0
 
 
+## The building's own two numbers (0 to 1, from its structure id) for the shader's per-building
+## choices: a door's paint, a wooden roof's tone, a wall's and the straw's tint (card
+## painter-look-houses3: houses of one kind looked alike). Pure; set per mesh instance, so the
+## shared materials stay shared.
+static func building_seed(id: Variant) -> Vector2:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("bld:%s" % str(id))
+	return Vector2(rng.randf(), rng.randf())
+
+
 static func _skipped(node_name: String) -> bool:
 	for prefix in SKIP_PREFIXES:
 		if node_name.begins_with(prefix):
@@ -351,6 +361,7 @@ func _install(out: Dictionary) -> void:
 	var t0 := Time.get_ticks_usec()
 	var tris := {"src": 0, "draw": 0, "shadow": 0, "snow": 0}
 	var bytes := 0
+	var bld := building_seed(AuthoredStructures._id_of(structure))
 	for part_name: String in out.parts:
 		var mi := structure.get_node_or_null(NodePath(part_name)) as MeshInstance3D
 		if mi == null:
@@ -371,6 +382,7 @@ func _install(out: Dictionary) -> void:
 		var casts := mi.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mi.mesh = _mesh(built.draw, null, PainterMannerMesh.FORMAT)
 		mi.material_override = _surface_material(part_name)
+		mi.set_instance_shader_parameter(&"bld", bld)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		tris.draw += int(built.triangles[1])
 		bytes += _bytes(built.draw, 56)
@@ -422,6 +434,7 @@ func _install_snow(step: Dictionary) -> void:
 	mi.name = SNOW
 	mi.mesh = _mesh(arrays, null, PainterMannerMesh.FORMAT)
 	mi.material_override = _surface_material(SNOW_KEY)
+	mi.set_instance_shader_parameter(&"bld", building_seed(AuthoredStructures._id_of(structure)))
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	structure.add_child(mi)
 	_added.append(mi)

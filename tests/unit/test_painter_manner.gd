@@ -356,6 +356,56 @@ func test_a_beam_is_brushed_wider_and_a_door_leans() -> void:
 	assert_eq(at_foot, Vector3.ZERO, "a door stands on its sill")
 
 
+func test_a_chimney_grows_in_plan_about_its_own_axis_and_keeps_its_height() -> void:
+	# card painter-look-houses3: small pale boxes on every house.
+	var chimney := {
+		"id": "chimney/stack0",
+		"kind": "chimney",
+		"origin": Vector3(0, 0, 0),
+		"u": Vector3.UP,
+		"v": Vector3.RIGHT,
+		"n": Vector3.BACK,
+		"u_len": 2.0,
+		"v_len": 1.0,
+		"accent": 0.5
+	}
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(1, 2, 0), Vector3(0, 2, 0)]
+	)
+	var back := Vector3.BACK
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([back, back, back, back])
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 2, 1, 0, 3, 2])
+	var opts := {"amp": 0.0, "phase": Vector3.ZERO, "foot": 0.0, "eave": 3.0}
+	var built := PainterMannerMesh.build(
+		arrays, PackedInt32Array([0, 0, 0, 0]), PackedStringArray(["chimney/stack0"]),
+		{"chimney/stack0": chimney}, opts
+	)
+	var lo := INF
+	var hi := -INF
+	var top := -INF
+	for p: Vector3 in built.draw[Mesh.ARRAY_VERTEX]:
+		lo = minf(lo, p.x)
+		hi = maxf(hi, p.x)
+		top = maxf(top, p.y)
+	assert_almost_eq(hi - lo, PainterMannerMesh.CHIMNEY_SCALE, 0.001, "wider by the scale")
+	assert_almost_eq((hi + lo) * 0.5, 0.5, 0.001, "about its own middle")
+	assert_almost_eq(top, 2.0, 0.001, "as tall as before")
+
+
+func test_a_building_seed_is_pure_in_range_and_differs_by_structure() -> void:
+	var a := PainterMannerHost.building_seed(12)
+	assert_eq(a, PainterMannerHost.building_seed(12), "pure")
+	var seen := {}
+	for id in 20:
+		var s := PainterMannerHost.building_seed(id)
+		assert_between(s.x, 0.0, 1.0)
+		assert_between(s.y, 0.0, 1.0)
+		seen[snappedf(s.x, 0.05)] = true
+	assert_gt(seen.size(), 8, "twenty structures spread over the range")
+
+
 func test_snow_strips_stand_proud_along_the_edges_and_are_pure() -> void:
 	# card painter-roof-snow: a lip along the eave and verge, a cap along the ridge.
 	var roof := _roof()
