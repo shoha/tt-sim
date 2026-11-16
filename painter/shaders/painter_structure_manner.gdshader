@@ -863,7 +863,7 @@ void fragment() {
 	f_tune = vec4(
 		paint_slope ? 0.025 : soft,
 		on_course ? 0.7 : (on_slope ? 0.45 : (code == 10 ? 0.5 : 0.2)),
-		paint_slope ? 0.06 : (code == 10 ? 0.4 : 0.12),
+		paint_slope ? 0.06 : (code == 10 ? 0.32 : 0.12),
 		on_slope || code == 10 ? 0.3 : 0.5);
 }
 

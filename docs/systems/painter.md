@@ -1127,6 +1127,27 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   lower edge is a smooth wavy fade, so a roof reads as painted bands more than bare tiles; every
   tongue's colour is flat apart from a few dabs; a bare tongue keeps the blanket's rounded shading
   (it stands as a raised plateau), not the roof's plane; thatch gold leans mustard.
+- **Winter snow reads as thick painted snow (card painter-look-roofs-winter2, 2026-11-15;
+  look-pending).** Shader only (the blanket, code 10); no mesh, sheet or procgen change. Cause of
+  the milky, glossy look, measured by drawing each term away in a debug variant (frames in
+  `painter_final23_roofs/diag`): there is no alpha, blend or specular in the shader; the milky,
+  see-through snow was `thin`, the roof ramp's veil laid over the whole blanket (0.08 base, up
+  to 0.58 at the eave and verges), and the gloss was the blanket's wide light step (`soft` 0.15,
+  plus a soft-modelling mix in `light()`) on its rounded mesh. Now: (1) the veil is a few ragged
+  streaks (a steep step on a stretched noise, `vein`), strongest at the eave and verges, none
+  elsewhere; (2) a bare tongue's edge is a narrow threshold (0.42 to 0.52) on a three-scale dab
+  noise (broad dabs stretched along the eave, a drag, a fine rag), with snow flecks inside and
+  the roof's own short stroke rows (`p_strokes`, 0.2 m) in the bare part; (3) the blanket's light
+  step is 0.06 and the light's turn is shifted by a two-scale dab noise through a steep step
+  (`f_tune.z` 0.32), the cast edge by 0.5, so the rounded shading breaks into broad brush dabs,
+  and a dry-brush grain (long fine streaks along the eave, fading with `broad`) shows at close
+  zoom; (4) winter stone's shade is bluer (`f_shd *= (0.9, 0.93, 1.3)`). Cost (pinned A/B,
+  `painter_final23_roofs/cost`, new against the starting shader on the same meshes): winter home
+  12 +0.014 ms, winter eye +0.014, winter home 3 +0.015, summer -0.01 to -0.006 (inside the
+  +0.02 bound). Not done: thatch gold still leans mustard; the dab blue shade across a large
+  thatch or tile slope can read as cloud shadow at close zoom (the grain is a faint horizontal
+  tick); slate tongues are dark navy dabs; a bare tongue still keeps the blanket's rounded
+  shading; half-timber roofs show little colour; winter walls are bluer but still grey-violet.
 
 ## The painted state signal
 
