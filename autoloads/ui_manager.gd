@@ -61,6 +61,7 @@ func _ready() -> void:
 	# Listen for state changes via the EventBus (no Root import needed)
 	EventBus.state_changed.connect(_on_state_changed)
 
+	UiMotion.user_reduce = UiPreferences.load_reduce_motion()
 	_interface_size = UiPreferences.load_interface_size()
 	get_tree().root.size_changed.connect(apply_interface_size)
 	apply_interface_size()

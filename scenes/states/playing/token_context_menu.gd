@@ -38,13 +38,13 @@ var heal_hurt_toggle: CheckButton = $MenuPanel/VBoxContainer/CustomDamageContain
 
 
 func _ready() -> void:
-	# Quick snap-in menu with a subtle bounce for game feel
-	fade_in_duration = 0.12
-	fade_out_duration = 0.08
-	scale_in_from = Vector2(0.85, 0.85)
-	scale_out_to = Vector2(0.92, 0.92)
-	trans_in_type = Tween.TRANS_BACK
-	trans_out_type = Tween.TRANS_CUBIC
+	# A small context menu: quick in (feedback band), quicker out, no overshoot (UI_TASTE M2)
+	fade_in_duration = UiMotion.FEEDBACK_IN_S
+	fade_out_duration = UiMotion.FEEDBACK_OUT_S
+	scale_in_from = Vector2(0.92, 0.92)
+	scale_out_to = Vector2(0.96, 0.96)
+	trans_in_type = UiMotion.ARRIVE_TRANS
+	trans_out_type = UiMotion.EXIT_TRANS
 	super._ready()
 
 

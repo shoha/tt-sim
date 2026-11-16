@@ -93,6 +93,7 @@ var _quality: RefCounted = null
 # Graphics controls
 @onready var fullscreen_check: CheckButton = %FullscreenCheck
 @onready var interface_size_option: OptionButton = %InterfaceSizeOption
+@onready var reduce_motion_check: CheckButton = %ReduceMotionCheck
 @onready var vsync_check: CheckButton = %VSyncCheck
 @onready var idle_throttle_check: CheckButton = %IdleThrottleCheck
 @onready var lofi_check: CheckButton = %LofiCheck
@@ -334,6 +335,9 @@ func _on_panel_ready() -> void:
 		interface_size_option, get_tree().root, UIManager.get_interface_size()
 	)
 	interface_size_option.item_selected.connect(_on_interface_size_selected)
+	# Reduce motion saves and applies the moment it is toggled, like Interface size.
+	reduce_motion_check.set_pressed_no_signal(UiMotion.user_reduce)
+	reduce_motion_check.toggled.connect(UiPreferences.save_reduce_motion)
 	# Each fixed size is named against Auto on this window, which Fullscreen can change, and
 	# each Render scale choice by its render size on it (_refill_window_labels).
 	SettingsRenderScale.fill(self)
@@ -797,6 +801,7 @@ func _on_reset_pressed() -> void:
 	InputProfile.set_profile(InputProfile.Profile.AUTO)
 	interface_size_option.select(0)
 	UIManager.set_interface_size(InterfaceSize.AUTO)
+	reduce_motion_check.button_pressed = false
 
 
 func _on_interface_size_selected(index: int) -> void:

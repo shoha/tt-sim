@@ -813,15 +813,18 @@ func _animate_popup_in(_popup: Window, content: Control) -> void:
 
 	# Start scaled down and transparent
 	content.modulate.a = 0.0
-	content.scale = Vector2(0.9, 0.9)
+	content.scale = UiMotion.travel(Vector2.ONE * UiMotion.PANEL_SCALE_FROM, Vector2.ONE)
 	content.pivot_offset = content.size / 2
 
 	_popup_tween = create_tween()
 	_popup_tween.set_parallel(true)
 	_popup_tween.set_ease(Tween.EASE_OUT)
-	_popup_tween.set_trans(Tween.TRANS_BACK)
-	_popup_tween.tween_property(content, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
-	_popup_tween.tween_property(content, "scale", Vector2.ONE, Constants.ANIM_FADE_IN_DURATION)
+	_popup_tween.set_trans(UiMotion.ARRIVE_TRANS)
+	_popup_tween.tween_property(
+		content, "modulate:a", 1.0, UiMotion.fade_s(Constants.ANIM_FADE_IN_DURATION)
+	)
+	if content.scale != Vector2.ONE:
+		_popup_tween.tween_property(content, "scale", Vector2.ONE, Constants.ANIM_FADE_IN_DURATION)
 
 	AudioManager.play(&"open")
 
