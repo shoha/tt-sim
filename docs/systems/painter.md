@@ -1060,6 +1060,34 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   the slate roof's curled right edge (mesh: the verge's wander), chimney height and the snow
   plate over a grown cap (procgen's chimney size, `snow` strips), the stone wall's pale
   cast-light streak and the semi-transparent stone corner base (mesh).
+- **Winter roofs show their colour (card painter-look-roofs-winter, 2026-11-15; look-pending).**
+  Shader, the snow mesh and the host's snow material; no sheet or procgen change. (1) **The
+  blanket carries its roof.** The snow child draws with its own material (`roof_snow`, pick mode
+  `PainterBuildings.PICK_SNOW` 8, `PainterMannerHost.SNOW_KEY`), whose ramps are the four picked
+  roofs' and the thatch's (30 slots: every manner material now holds `MANNER_RAMP_SLOTS`, the A3b
+  and yard shaders 24). `PainterMannerSnow._roof_tones` reads each roof record's mesh kind
+  (`roof_tile`, `_wood`, `_thatch`, `_slate`, `_shingle`, `_turf`) and its first vertex's paint and
+  lays them in the blanket's vertex colour (rgb the paint, alpha the kind in eighths,
+  `ROOF_MESH_KINDS`; strips and caps stay white = no kind); the shader's vertex step turns that
+  into `v_tone` with the roof piece's own rules (tile by hue, a wooden roof's slate, shingle or
+  turf by `bld.y`). (2) **No cut-away, no rim.** The blanket no longer discards: where the snow is
+  thin it is drawn in its roof's ramp, feathered by the noises that thin it (`cover`), and the
+  roof piece under it is plain snow again (one mask evaluation instead of two). Bare strokes: long
+  tongues down from the ridge (0.25 to 1.5 m, their tips wandering, about 40 % of the run), ragged
+  stretches of each gable edge, and broken dry strokes above the eave (never the lip's edge, at
+  most 62 % bare). Under them `thin`, a veil (0.08 to 0.58): long soft streaks down the fall line,
+  more toward the eave and the verges, through which the roof's colour shows in the whole snow. The
+  snow takes a faint cast of its roof (warm over clay, thatch and shingle, cool over slate and
+  turf), and where a roof shows its ramp is lifted (`bare_tint`: the straw pale cream to gold, the
+  slate clearer blue, the shingle warmer). (3) **Stone** in winter takes warm sandstone on its lit
+  faces and a blue-violet shade (`snow > 0`). (4) The chimney snow plate is sized to the grown cap
+  (`PainterMannerMesh.chimney_growth`, shared by the mesh and `PainterMannerSnow._pads`).
+  Cost (pinned A/B against the pre-card shader on the same meshes, `painter_final22_roofs/cost`):
+  winter home 12 -0.04 ms, home 3 0.00, eye 0.00; summer within noise. Not done: slate is still a
+  grey-blue slab with a dark band at the ridge (the sheet's winter slate is dull); the tongues'
+  lower edge is a smooth wavy fade, so a roof reads as painted bands more than bare tiles; every
+  tongue's colour is flat apart from a few dabs; a bare tongue keeps the blanket's rounded shading
+  (it stands as a raised plateau), not the roof's plane; thatch gold leans mustard.
 
 ## The painted state signal
 

@@ -631,6 +631,13 @@ static func _stand_off(m: Grow, walls: Dictionary) -> void:
 		m.pos[k] += lifts[id]
 
 
+## How much a building's chimneys grow in plan (CHIMNEY_SCALE plus up to CHIMNEY_VARY by the
+## structure's field phase `phase`); the snow's cushion on a cap takes the same (card
+## painter-look-roofs-winter: a plate of the recipe's size sat on a grown cap). Pure.
+static func chimney_growth(phase: Vector3) -> float:
+	return CHIMNEY_SCALE + CHIMNEY_VARY * phase.y / TAU
+
+
 ## The hand: every beam vertex moved out across the beam by brush_at (a widened, wandering brush
 ## edge) and across it by the beam's bow (none at its ends, so joints stay met), every frame and
 ## door case vertex by FRAME_BRUSH of brush_at, every door leaf and panel vertex by door_lean.
@@ -640,7 +647,7 @@ static func _hand(m: Grow, opts: Dictionary) -> void:
 	var foot := float(opts.get("foot", 0.0))
 	var dir: Vector3 = opts.get("door_dir", Vector3.ZERO)
 	var centres := _chimney_centres(m)
-	var chimney_scale := CHIMNEY_SCALE + CHIMNEY_VARY * phase.y / TAU
+	var chimney_scale := chimney_growth(phase)
 	for k in m.pos.size():
 		var rec: Variant = m.rec[k]
 		if rec == null:

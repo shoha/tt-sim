@@ -406,6 +406,22 @@ func test_a_building_seed_is_pure_in_range_and_differs_by_structure() -> void:
 	assert_gt(seen.size(), 8, "twenty structures spread over the range")
 
 
+func test_chimney_snow_follows_the_grown_cap_and_the_snow_material_picks_its_roof() -> void:
+	# card painter-look-roofs-winter: the cushion's plan grows with the chimney's; the snow draws
+	# with the pick mode that takes a roof's ramp from the vertex colour.
+	assert_almost_eq(
+		PainterMannerMesh.chimney_growth(Vector3.ZERO), PainterMannerMesh.CHIMNEY_SCALE, 0.0001
+	)
+	assert_almost_eq(
+		PainterMannerMesh.chimney_growth(Vector3(0.0, TAU, 0.0)),
+		PainterMannerMesh.CHIMNEY_SCALE + PainterMannerMesh.CHIMNEY_VARY,
+		0.0001
+	)
+	var snow_kind := PainterBuildings.kind_of(PainterMannerHost.SNOW_KEY)
+	assert_eq(int(snow_kind[3]), PainterBuildings.PICK_SNOW)
+	assert_eq(PainterBuildings.MANNER_RAMP_SLOTS, 30, "four roofs and the thatch, six steps each")
+
+
 func test_snow_strips_stand_proud_along_the_edges_and_are_pure() -> void:
 	# card painter-roof-snow: a lip along the eave and verge, a cap along the ridge.
 	var roof := _roof()
@@ -436,6 +452,38 @@ func test_snow_strips_stand_proud_along_the_edges_and_are_pure() -> void:
 	)
 	assert_eq(int(none.triangles), 0, "no roof, no strips")
 	assert_true((none.arrays as Array).is_empty())
+
+
+func test_a_blanket_carries_its_roofs_kind_and_paint_in_its_vertex_colour() -> void:
+	# card painter-look-roofs-winter: the snow's shader takes the roof's ramp from the blanket's
+	# colour (rgb the roof's paint, alpha its kind in eighths); a strip keeps white.
+	StructureRecipes.ensure_served()
+	var doc := MapDocument.create_flat(Vector2i(40, 40), "grass", "v", 9)
+	var plan := PackedVector2Array(
+		[Vector2(-3.5, -2.5), Vector2(3.5, -2.5), Vector2(3.5, 2.5), Vector2(-3.5, 2.5)]
+	)
+	var still := {"amp": 0.0, "phase": Vector3.ZERO, "foot": 0.0, "eave": 2.0}
+	var recipes := {"core:thatched_cottage": 3, "core:half_timber_house": 1}
+	var k := 0
+	for ref: String in recipes:
+		k += 1
+		StructureGeometry.manner_records = true
+		var parts := StructureGeometry.build_one(doc, Structure.make(k, ref, plan, 11 + k))
+		StructureGeometry.manner_records = false
+		var feed := PainterMannerSource.of_parts(parts)
+		var src := PainterMannerSnow.source(feed.records, feed.meshes, feed.table, still)
+		var kinds := {}
+		for roof: Dictionary in src.roofs:
+			kinds[roundi((roof["tone"] as Color).a * PainterMannerSnow.KIND_SCALE)] = true
+		var want := "%s: a roof of kind %d (%s)" % [ref, recipes[ref], kinds]
+		assert_true(kinds.has(int(recipes[ref])), want)
+		var built := PainterMannerSnow.build(src)
+		var cols: PackedColorArray = built.arrays[Mesh.ARRAY_COLOR]
+		assert_eq(cols.size(), (built.arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size())
+		var seen := {}
+		for c in cols:
+			seen[roundi(c.a * PainterMannerSnow.KIND_SCALE)] = true
+		assert_true(seen.has(int(recipes[ref])), "%s: blanket vertices carry the kind %s" % [ref, seen])
 
 
 func test_snow_blanket_is_thickest_in_the_middle_and_thin_at_the_verges() -> void:

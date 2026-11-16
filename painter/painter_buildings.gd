@@ -63,6 +63,12 @@ const PICK_YARD_GROUND := 5
 ## roof's ridge cap), the shader picks among them; the tone never follows the recipe's paint.
 const PICK_STACK := 6
 const PICK_CAP := 7
+## The pick mode of the roofs' snow (card painter-look-roofs-winter): the ramps are PICK_ROLES' and
+## the thatch's (a fifth), the tone comes from the kind and paint the snow mesh's vertex colour
+## carries (PainterMannerSnow, the shader's vertex step), so the snow can show its roof's colour.
+const PICK_SNOW := 8
+## The ramp slots a manner material holds (PICK_ROLES' four, the thatch's, one spare).
+const MANNER_RAMP_SLOTS := 30
 ## The role a chimney's brick and pots, and a slate roof's ridge cap, take (the third ramp).
 const BRICK_ROLE := "roof-clay"
 ## The role the roofs' snow takes its colour from (winter's is the snow's white, under the
@@ -100,6 +106,7 @@ const KINDS: Dictionary = {
 	"roof_turf": ["roof-turf", P_TURF, "roof", 0],
 	"roof_tile": [PICK, P_TILE, "roof", 1],
 	"roof_wood": [PICK, P_SHINGLE, "roof", 2],
+	"roof_snow": [PICK, P_TILE, "roof", PICK_SNOW],
 	"trim_stone": ["wall-stone", P_STONE, "stone", 0],
 	"trim_masonry": ["wall-stone", P_STONE, "stone", 0],
 	"chimney_stone": ["wall-stone", P_STONE, "stone", PICK_CAP],
@@ -317,6 +324,8 @@ func _tone(material: ShaderMaterial, kind: Array, sheet: Dictionary) -> void:
 	var families: Array[String] = []
 	if str(kind[0]) == PICK:
 		roles.assign(PICK_ROLES)
+		if int(kind[3]) == PICK_SNOW:
+			roles.append("roof-thatch")
 	elif str(kind[0]) == ACCENT:
 		roles.assign(ACCENT_ROLES)
 	elif str(kind[0]) == YARD and int(kind[3]) == PICK_YARD:
@@ -339,7 +348,10 @@ func _tone(material: ShaderMaterial, kind: Array, sheet: Dictionary) -> void:
 	for k in roles.size():
 		var family := families[k] if k < families.size() else str(kind[2])
 		ramps.append_array(ramp(sheet, mood, roles[k], elevation, family))
-	ramps.resize(PICK_ROLES.size() * 6)
+	var manner := (
+		material.shader != null and material.shader.resource_path.ends_with("_manner.gdshader")
+	)
+	ramps.resize(MANNER_RAMP_SLOTS if manner else PICK_ROLES.size() * 6)
 	material.set_shader_parameter(&"ramps", ramps)
 	material.set_shader_parameter(
 		&"snow", PainterSheet.number(sheet, mood, SNOW_NUMBER, elevation)

@@ -57,6 +57,17 @@ const SILL_T_M := 0.06
 ## Edge kinds that get a lip and a cap.
 const LIP_KINDS: Array[String] = ["eave", "verge"]
 const CAP_KINDS: Array[String] = ["ridge", "hip"]
+## The roof meshes (`<role>_<kind>`) and the kind number their snow's vertex colour carries, in
+## eighths of the alpha (the shader's vertex step reads it back).
+const ROOF_MESH_KINDS: Dictionary = {
+	"roof_tile": 1,
+	"roof_wood": 2,
+	"roof_thatch": 3,
+	"roof_slate": 4,
+	"roof_shingle": 5,
+	"roof_turf": 6,
+}
+const KIND_SCALE := 8.0
 ## Record kinds whose edges carry snow.
 const ROOF_KINDS: Array[String] = ["roof_slope", "roof_part", "roof_flat"]
 ## Mesh name prefixes that may hold chimney caps and sills.
@@ -75,16 +86,50 @@ static func source(
 	records: Dictionary, meshes: Dictionary, table: PackedStringArray, opts: Dictionary
 ) -> Dictionary:
 	var roofs: Array = []
+	var tones := _roof_tones(records, meshes, table)
 	for rec: Dictionary in records.values():
 		if not ROOF_KINDS.has(str(rec["kind"])):
 			continue
+		var tone: Color = tones.get(str(rec["id"]), Color.WHITE)
 		if not (rec.get("edges", []) as Array).is_empty():
-			roofs.append(rec)
+			var toned := rec.duplicate()
+			toned["tone"] = tone
+			roofs.append(toned)
 		elif str(rec["kind"]) == "roof_part":
 			var framed := _framed(rec)
 			if not framed.is_empty():
+				framed["tone"] = tone
 				roofs.append(framed)
 	return {"roofs": roofs, "pads": _pads(records, meshes, table, opts), "opts": opts}
+
+
+## The tone each roof record's snow carries in its vertex colour: {record id: Color}, the colour's
+## rgb the roof's paint (its first vertex's) and its alpha the roof's kind in eighths
+## (ROOF_MESH_KINDS), which the shader reads to take the roof's ramp and tint the snow by it. A roof
+## on no known roof mesh is absent (white). Pure.
+static func _roof_tones(
+	records: Dictionary, meshes: Dictionary, table: PackedStringArray
+) -> Dictionary:
+	var out: Dictionary = {}
+	for mesh_name: String in ROOF_MESH_KINDS:
+		if not meshes.has(mesh_name):
+			continue
+		var mesh: Dictionary = meshes[mesh_name]
+		var tags: PackedInt32Array = mesh.tags
+		var arrays: Array = mesh.arrays
+		var cols: Variant = arrays[Mesh.ARRAY_COLOR]
+		for k in tags.size():
+			var tag := tags[k]
+			if tag < 0 or tag >= table.size():
+				continue
+			var rec: Variant = records.get(table[tag])
+			if rec == null or out.has(str(rec["id"])):
+				continue
+			var c := (cols as PackedColorArray)[k] if cols != null else Color.WHITE
+			out[str(rec["id"])] = Color(
+				c.r, c.g, c.b, float(ROOF_MESH_KINDS[mesh_name]) / KIND_SCALE
+			)
+	return out
 
 
 ## A roof piece with no edges (a dormer's or a porch's roof) as a slope: its frame's lowest side the
@@ -168,9 +213,11 @@ static func build(src: Dictionary) -> Dictionary:
 				which = "right"
 			partners[which] = other["n"]
 		var hold := float(HOLD.get(str(roof.get("material", "")), DEFAULT_HOLD))
+		g.tone = roof.get("tone", Color.WHITE)
 		counts.blanket += PainterMannerBlanket.lay_into(
 			g, roof, lay, partners, hold, phase, seed + g.pos.size()
 		)
+		g.tone = Color.WHITE
 	var before_caps := g.idx.size()
 	for cap: Dictionary in caps:
 		if not cap["blanket"]:
@@ -190,10 +237,7 @@ static func build(src: Dictionary) -> Dictionary:
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = g.pos
 	arrays[Mesh.ARRAY_NORMAL] = g.nor
-	var colours := PackedColorArray()
-	colours.resize(g.pos.size())
-	colours.fill(Color(1, 1, 1, 1))
-	arrays[Mesh.ARRAY_COLOR] = colours
+	arrays[Mesh.ARRAY_COLOR] = g.col
 	arrays[Mesh.ARRAY_TEX_UV2] = g.uv2
 	arrays[Mesh.ARRAY_CUSTOM0] = g.cus
 	arrays[Mesh.ARRAY_INDEX] = g.idx
@@ -206,7 +250,11 @@ class Strips:
 	var nor := PackedVector3Array()
 	var uv2 := PackedVector2Array()
 	var cus := PackedFloat32Array()
+	var col := PackedColorArray()
 	var idx := PackedInt32Array()
+	## The vertex colour of the vertices put next: white, or a blanket's roof tone (see
+	## PainterMannerSnow._roof_tones).
+	var tone := Color.WHITE
 
 	func add(p: Vector3, n: Vector3, along: float, step: float, size: Vector2, acc: float) -> int:
 		return put(p, n, Vector2(along, step), PackedFloat32Array([size.x, size.y, float(CODE), acc]))
@@ -217,6 +265,7 @@ class Strips:
 		nor.append(n.normalized())
 		uv2.append(uv)
 		cus.append_array(data)
+		col.append(tone)
 		return pos.size() - 1
 
 	## Triangle (a, b, c) wound so its front faces along `facing` (clockwise seen from the front,
@@ -553,6 +602,10 @@ static func _pads(
 			sills.append(top)
 		else:
 			top["kind"] = "chimney"
+			# The cap grows in plan (PainterMannerMesh.chimney_growth), so its cushion does.
+			var grow := PainterMannerMesh.chimney_growth(opts.get("phase", Vector3.ZERO))
+			top["a"] = (top["a"] as Vector3) * grow
+			top["b"] = (top["b"] as Vector3) * grow
 			out.append(top)
 	sills.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return x["top"] > y["top"])
 	var kept: Array = []

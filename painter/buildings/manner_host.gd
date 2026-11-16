@@ -31,8 +31,9 @@ extends RefCounted
 const SHADER := "res://painter/shaders/painter_structure_manner.gdshader"
 const SHADOW := "MannerShadow"
 const SNOW := "MannerSnow"
-## The material the snow strips draw with (any roof's: the strips' own code picks their branch).
-const SNOW_KEY := "roof_thatch"
+## The material the snow strips draw with (PainterBuildings.PICK_SNOW: a blanket's vertex colour
+## names its roof's kind and paint, the strips' own code picks their branch).
+const SNOW_KEY := "roof_snow"
 ## Mesh names that are the yard, not the building (not wandered).
 const SKIP_PREFIXES: Array[String] = ["dressing", "decor", "cap_", "wheel_", "vane_"]
 ## The wander amplitude (metres at full height).
