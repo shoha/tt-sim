@@ -76,9 +76,38 @@ func test_the_rail_and_its_actions_fit_a_720p_window() -> void:
 	assert_lt(need, CANVAS_720P.y, "the whole rail, tools and actions, is %.0f px tall" % need)
 
 
+func test_the_drawer_card_is_as_tall_as_its_pane_and_never_taller_than_the_window() -> void:
+	_host.size = Vector2(1920.0, 1080.0)
+	var panel := _panel()
+	panel.reveal()
+	panel.open()
+	panel.show_tool_pane(AuthoringPanel.TOOL_SCULPT)
+	await get_tree().create_timer(UiMotion.PANEL_IN_S + 0.2).timeout
+	var short := panel._panel.size.y
+	assert_lt(short, 0.6 * panel.size.y, "Sculpt is short: the board shows below its card")
+	assert_almost_eq(panel._panel.position.y, panel.tab_top_margin, 0.5, "level with the rail's top")
+	panel.show_tool_pane(AuthoringPanel.TOOL_PLACE)
+	await get_tree().create_timer(0.3).timeout
+	assert_gt(panel._panel.size.y, short, "Place has more to show")
+	assert_lte(
+		panel._panel.size.y, panel.size.y - 2.0 * panel.tab_top_margin + 0.5, "inside the window"
+	)
+
+
+func test_without_fit_the_panel_runs_the_whole_edge() -> void:
+	_host.size = Vector2(1920.0, 1080.0)
+	var panel := _panel()
+	panel.fit_height = false
+	panel.fit_panel_height(0.0)
+	await get_tree().process_frame
+	assert_almost_eq(panel._panel.size.y, panel.size.y, 0.5)
+	assert_almost_eq(panel._panel.position.y, 0.0, 0.01)
+
+
 func test_tooltips_carry_the_keys() -> void:
 	var panel := _panel()
-	assert_string_contains(panel._footer_rail._buttons[AuthoringPanel.ACTION_SAVE].tooltip_text, "Ctrl+S")
+	var save_button: Control = panel._footer_rail._buttons[AuthoringPanel.ACTION_SAVE]
+	assert_string_contains(save_button.tooltip_text, "Ctrl+S")
 	assert_string_contains(
 		panel._footer_rail._buttons[AuthoringPanel.ACTION_LEAVE].tooltip_text, "Esc"
 	)
@@ -189,20 +218,22 @@ func test_the_drawer_is_drawn_by_the_theme_and_follows_its_leaf() -> void:
 	var panel := _panel()
 	assert_false(panel._panel.has_theme_stylebox_override("panel"), "no panel style in code")
 	assert_false(panel._rail_panel.has_theme_stylebox_override("panel"), "no rail style in code")
-	assert_eq(panel._panel.theme_type_variation, &"DrawerPanelLeft")
+	assert_eq(panel._panel.theme_type_variation, &"DrawerCardLeft", "a card, as tall as its pane")
 	assert_eq(panel._rail_panel.theme_type_variation, &"DrawerRailLeft")
 	assert_eq(panel._margin.theme_type_variation, &"DrawerMarginRoomy")
 	for leaf: Theme in [ThemeColors.paper_theme(), ThemeColors.glass_theme()]:
 		panel.theme = leaf
 		var box := panel._panel.get_theme_stylebox("panel") as StyleBoxFlat
 		assert_eq(box.bg_color, ThemeColors.of(panel, ThemeColors.SURFACE), "the leaf's surface")
-		assert_eq(box.corner_radius_top_right, 0, "square where the board would peek through")
+		assert_eq(box.corner_radius_top_left, 0, "square against the screen's edge")
+		assert_gt(box.corner_radius_top_right, 0, "rounded toward the board")
 
 
 func test_both_leaves_define_every_drawer_variation() -> void:
 	for leaf: Theme in [ThemeColors.paper_theme(), ThemeColors.glass_theme()]:
 		for side in ["Left", "Right"]:
 			assert_true(leaf.has_stylebox("panel", "DrawerPanel" + side))
+			assert_true(leaf.has_stylebox("panel", "DrawerCard" + side))
 			assert_true(leaf.has_stylebox("panel", "DrawerRail" + side))
 			for state in ["normal", "hover", "pressed"]:
 				assert_true(leaf.has_stylebox(state, "DrawerTab" + side), "%s %s" % [side, state])

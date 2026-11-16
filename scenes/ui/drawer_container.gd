@@ -80,6 +80,10 @@ const _TAB_BADGE_MARGIN := 4.0
 ## The theme variation of the margin the content stands in: DrawerMargin (12 px) or
 ## DrawerMarginRoomy (16 px). Set in _on_ready().
 @export var margin_variation: StringName = &"DrawerMargin"
+## Fit mode: the panel is a card as tall as its content (the host reports it with
+## fit_panel_height()), level with the rail's top, and the board shows below it. Off: the panel
+## runs the whole edge. Set in _on_ready().
+@export var fit_height: bool = false
 
 # -- Public state ------------------------------------------------------------
 
@@ -119,6 +123,7 @@ var tab_icon: Texture2D = null:
 var _sled: Control  ## Container that slides panel + tab as one unit
 var _panel: PanelContainer  ## The sliding content panel
 var _margin: MarginContainer  ## The content's margin inside the panel
+var _fit_px: float = 0.0  ## Fit mode: the content's height the host last reported, 0 for none
 var _tab_button: Button  ## The clickable tab handle
 var _tab_label: Label
 var _tab_icon_rect: TextureRect
@@ -160,6 +165,9 @@ func _ready() -> void:
 	_apply_tab_style()
 	_layout_sled()
 	_apply_initial_position()
+	# The parent may have no size yet (its anchors resolve on the first layout): take its height
+	# once it has one, so the panel and the handle's frame always run the whole edge.
+	_on_parent_resized.call_deferred()
 
 
 ## Override in subclasses for custom initialisation.
@@ -515,7 +523,7 @@ func _build_rail() -> void:
 func _apply_panel_style() -> void:
 	# The panel and the content's margin take their theme variations by the edge, which a subclass
 	# may set in _on_ready(), so this runs after it.
-	_panel.theme_type_variation = _edge_variation("DrawerPanel")
+	_panel.theme_type_variation = _edge_variation("DrawerCard" if fit_height else "DrawerPanel")
 	_margin.theme_type_variation = margin_variation
 
 
@@ -539,10 +547,31 @@ func _edge_variation(base: String) -> StringName:
 	return StringName(base + ("Left" if edge == DrawerEdge.LEFT else "Right"))
 
 
+## Fit mode: tells the drawer how tall its content wants the panel (the margin, the head of the
+## pane and the pane itself). The panel takes that, or the room the window leaves, whichever is
+## less.
+func fit_panel_height(content_px: float) -> void:
+	_fit_px = content_px
+	_apply_panel_height()
+
+
+## The panel's height and top: the whole edge, or in fit mode its content's, below the rail's top.
+func _apply_panel_height() -> void:
+	if _panel == null:
+		return
+	if not fit_height:
+		_panel.size.y = size.y
+		_panel.position.y = 0.0
+		return
+	var room := maxf(size.y - tab_top_margin * 2.0, 0.0)
+	_panel.size.y = minf(_fit_px, room) if _fit_px > 0.0 else room
+	_panel.position.y = tab_top_margin
+
+
 func _on_parent_resized() -> void:
 	if _sled:
 		_sled.size.y = size.y
-		_panel.size.y = size.y
+		_apply_panel_height()
 		# Right-edge drawers depend on size.x for their sled position.
 		if not _is_animating:
 			_sled.position.x = _get_sled_x()
@@ -565,6 +594,7 @@ func _layout_sled() -> void:
 		_panel.position = Vector2(tab_width, 0)
 
 	_panel.size = Vector2(drawer_width, size.y)
+	_apply_panel_height()
 
 
 # -- Position Helpers --------------------------------------------------------

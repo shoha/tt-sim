@@ -13,6 +13,11 @@ extends RefCounted
 ## drawer, its rail and every pane follow (the styles are theme variations, not code).
 const SURFACE_PAPER := true
 
+## The drawer's panel is a card as tall as its pane (DrawerContainer.fit_height), so a short pane
+## (Sculpt, Water) leaves the board visible below it instead of a pale slab down the whole edge.
+## Set false for the full-height panel.
+const FIT_HEIGHT := true
+
 const ACTION_UNDO := &"undo"
 const ACTION_REDO := &"redo"
 const ACTION_SAVE := &"save_map"
@@ -30,6 +35,16 @@ const FOOTER_ITEMS: Array[Dictionary] = [
 ## The theme leaf the map tools wear (SURFACE_PAPER).
 static func surface_theme() -> Theme:
 	return ThemeColors.paper_theme() if SURFACE_PAPER else ThemeColors.glass_theme()
+
+
+## The height the drawer's panel wants for the pane on show: what its margin needs (the name
+## field, the pane's head, the stack) with the stack's share swapped for the pane's own height,
+## because the pane scrolls inside the stack and the stack asks for none. 0 with no pane.
+static func panel_height(margin: Control, stack: Control, pane: Control) -> float:
+	if pane == null:
+		return 0.0
+	var rest := margin.get_combined_minimum_size().y - stack.get_combined_minimum_size().y
+	return rest + pane.get_combined_minimum_size().y
 
 
 ## The tooltip of an Undo or Redo item: its verb, the edit it acts on and its key when it can act

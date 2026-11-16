@@ -491,6 +491,23 @@ func _define_drawer() -> void:
 			"PanelContainer",
 			{panel = box(c(ThemeColors.SURFACE), 0, 0, 0, panel_extra)}
 		)
+		# A card that is only as tall as its content (DrawerContainer.fit_height): the panel's
+		# surface, rounded on the side facing the board, a pencil edge and the lifted shadow, so
+		# the board shows below a short pane. Stands level with the rail's top.
+		var card_corners := {
+			corner_radius_top_right = RADIUS_CARD if left else 0,
+			corner_radius_bottom_right = RADIUS_CARD if left else 0,
+			corner_radius_top_left = 0 if left else RADIUS_CARD,
+			corner_radius_bottom_left = 0 if left else RADIUS_CARD,
+		}
+		var card_trim: Dictionary = inherit(edge(1, c(ThemeColors.EDGE)), lift(), card_corners)
+		if on_glass:
+			card_trim = inherit(rim(), lift(), card_corners)
+		define_variant_style(
+			"DrawerCard" + side,
+			"PanelContainer",
+			{panel = box(c(ThemeColors.SURFACE), 0, 0, 0, card_trim)}
+		)
 		var corners := {
 			corner_radius_top_right = RADIUS_CHIP if left else 0,
 			corner_radius_bottom_right = RADIUS_CHIP if left else 0,
