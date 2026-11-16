@@ -643,20 +643,25 @@ func _tables() -> void:
 	var occ := PackedFloat32Array()
 	occ.resize(lines * 8)
 	var grid := {}
+	var conifers := {}
 	for key: Vector3i in trees:
 		var t: Dictionary = trees[key]
 		if t["bush"]:
 			# (A bush is no tree's neighbouring form: the eight a tree lists stay its trees.)
 			continue
+		if PainterTreeTones.has_variants(t["species"]):
+			conifers[key] = t["pos"]
 		var gc := Vector2i(floori(t["pos"].x / 9.0), floori(t["pos"].z / 9.0))
 		if not grid.has(gc):
 			grid[gc] = []
 		grid[gc].append(t)
+	# Each conifer's needle variant (painter-look-taiga): its seed's pick, none shared by near trees.
+	var variants := PainterConiferVariants.assign(conifers)
 	for key: Vector3i in trees:
 		var t: Dictionary = trees[key]
 		var p: Vector3 = t["pos"]
 		var row: int = t["row"]
-		var line := PainterTreeTones.role_rows(t["species"])
+		var line := PainterTreeTones.role_rows(t["species"], int(variants.get(key, 0)))
 		for r in line.size():
 			rows[row * MAP_W + r] = float(line[r])
 		var near: Array = []

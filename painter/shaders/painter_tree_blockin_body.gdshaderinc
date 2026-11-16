@@ -48,6 +48,9 @@ uniform float fix12 = 0.0;
 //   2  MOSS is a soft low patch on the shaded side of the foot of the stem (round 12: bands of
 //      leaf colour wherever a noise fell, at any height and on every limb)
 uniform float fix13 = 0.0;
+// painter-look-wood3: how far past its last node a strand that limbs leave from there runs on, in
+// its own widths (and how far into its parent a thick limb starts).
+const float cap_ext19 = 0.5;
 varying vec3 v_tg;
 varying float v_lr;
 // Round 17: (the cosine to the limb's up side, how much snow the limb carries here).
@@ -301,6 +304,17 @@ void vertex() {
 				pos = mix(pos, q2.xyz, f);
 			}
 			tgl = dot(tgl, tgl) > 1e-10 ? normalize(tgl) : normalize(q2.xyz - q1.xyz + vec3(0.0, 1e-5, 0.0));
+			// painter-look-wood3: a strand that limbs leave from its last node (flag 16: a trunk dividing)
+			// runs on past it by half its width and ends in a torn brush-end (fragment stage, w_cap) over
+			// the forks' bases, which in turn start inside it: the trunk and its forks overlap in a broken
+			// edge, where they met in one straight horizontal line (the ring under the crown).
+			bool capd = (hfl & 16) != 0 && twig < 0.5;
+			if (capd && pi0 >= np - 2) {
+				pos += tgl * (cap_ext19 * q2.w * f * f);
+			}
+			if (pi0 == 0 && !stem && q1.w > 0.1) {
+				pos -= tgl * (cap_ext19 * q1.w * (1.0 - f) * (1.0 - f));
+			}
 			float along = (float(pi0) + f) / float(max(np - 1, 1));
 			vec3 seed19 = MODEL_MATRIX[3].xyz;
 			// (The warp turns the tangent by a few degrees at most: the spline's own is used.)
@@ -379,7 +393,7 @@ void vertex() {
 			}
 			wood_v = true;
 			wood_fn = vec3(along * max(h0.x, 0.05), along, pf.w);
-			wood_form = 2.0 + twig;
+			wood_form = 2.0 + twig + (capd ? 2.0 : 0.0);
 			wood_axis = wc;
 		}
 	} else if (idx < int(t0.w + 0.5) && (INSTANCE_CUSTOM.z < 0.5 || idx < int(INSTANCE_CUSTOM.z + 0.5))) {
@@ -608,7 +622,9 @@ void fragment() {
 	vec3 w_up = vec3(0.0, 1.0, 0.0);
 	bool w_drift = false;
 	if (wood) {
-		w_twig = clamp(v_form - 2.0, 0.0, 1.0);
+		// (painter-look-wood3: a form above 3.5 is a strand that limbs leave from its last node, w_cap)
+		bool w_cap = v_form > 3.5;
+		w_twig = clamp(v_form - (w_cap ? 4.0 : 2.0), 0.0, 1.0);
 		w_a = v_snow.x;
 		w_s = v_fn.x;
 		w_sa = v_snow.y;
@@ -653,7 +669,16 @@ void fragment() {
 		}
 		// A limb that ends thick ends round, never cut square.
 		float over19 = (w_s - (w_s / max(v_fn.y, 1e-4) - v_lr * 0.5)) / max(v_lr * 0.5, 1e-4);
-		if (over19 > 0.0 && over19 > sqrt(max(1.0 - an * an, 0.0))) {
+		if (w_cap) {
+			// A torn brush-end over the last stretch (about a width long): tongues of bark of different
+			// lengths, the edge wandering across, never a line. It ends past the strand's last node
+			// (the vertex stage ran it on), over the bases of the forks.
+			float tear = (w_s - (w_s / max(v_fn.y, 1e-4) - v_lr * 1.4)) / max(v_lr * 1.4, 1e-4);
+			float tn = 0.25 + 1.0 * p_noise(vec3(w_a * 2.2 + w_sd, 3.0, w_sd * 0.5)) + 0.35 * (p_noise(vec3(w_a * 7.0 + w_sd, 8.0, w_sd * 0.5)) - 0.5);
+			if (tear > tn) {
+				discard;
+			}
+		} else if (over19 > 0.0 && over19 > sqrt(max(1.0 - an * an, 0.0))) {
 			discard;
 		}
 		if (!w_out && !w_drift) {

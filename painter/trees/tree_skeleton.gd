@@ -129,6 +129,10 @@ const FORK_LEAD: float = 0.72
 ## The thinnest a stick on a thin parent is made (metres of radius).
 const LEAST_STICK: float = 0.011
 const FORK_TIP: float = 0.2
+## painter-look-wood3: the widest fork's share of the stem's width where they meet (`_shoulder`).
+const FORK_JOIN: float = 0.9
+## The stem's area (to the power of the pipe exponent) that the forks after the lead share.
+const FORK_REST: float = 0.9
 
 
 class Sk:
@@ -593,6 +597,10 @@ static func skeleton(
 	c["lean"] = cx.get("lean", Vector2.ZERO)
 	c["wob"] = Vector2(_h(rng_seed, 1, 1) * TAU, _h(rng_seed, 2, 1) * TAU)
 	c["amp"] = (0.2 * g + 0.03 * h * crook) * (0.6 + 0.6 * old) + float(sp["sway"]) * 0.02 * h
+	# painter-look-wood3: a sapling is not a ruled pole: it bends a little, to a side and by an
+	# amount each seed draws (a third of that on a whorled conifer, which stands straight).
+	var bend: float = young * h * (0.03 + 0.04 * _h(rng_seed, 6, 1))
+	c["amp"] = float(c["amp"]) + bend * (1.0 if whorl == 0 else 0.35)
 	c["phi0"] = _h(rng_seed, 3, 1) * TAU
 	c["rc"] = (
 		maxf(
@@ -758,7 +766,9 @@ static func skeleton(
 	# straighter; each carries limbs as the stem did.
 	var top: Vector3 = tp[tp.size() - 1]
 	if h - h_lead > 0.05 * h:
-		var nf: int = clampi(int(sp["forks"]), 2, 5)
+		# (painter-look-wood3: one more or one fewer than the species' count, by seed, and each fork's
+		# spread and length drawn too: the flat-topped trees all stood as one umbrella)
+		var nf: int = clampi(int(sp["forks"]) + int(_h(rng_seed, 4, 2) * 3.0) - 1, 2, 5)
 		var phi_s: float = _h(rng_seed, 4, 1) * TAU
 		for k: int in nf:
 			var id: int = 500 + k
@@ -766,10 +776,12 @@ static func skeleton(
 			var theta: float = (
 				deg_to_rad(float(sp["angle_top"])) * (0.3 if k == 0 else 0.85) * float(c["open_k"])
 			)
-			theta = lerpf(theta, deg_to_rad(74.0 if k > 0 else 58.0), ft)
+			var spread: float = (74.0 if k > 0 else 58.0) + (_h(rng_seed, id, 15) - 0.5) * 22.0
+			theta = lerpf(theta, deg_to_rad(spread), ft)
 			var dir := Vector3(cos(az) * sin(theta), cos(theta), sin(az) * sin(theta))
 			var length: float = minf(
-				(h - h_lead) / maxf(cos(theta), 0.45) * (1.0 if k == 0 else 0.86), h * 0.6
+				(h - h_lead) / maxf(cos(theta), 0.45) * (1.0 if k == 0 else 0.72 + 0.28 * _h(rng_seed, id, 16)),
+				h * 0.6
 			)
 			c["groups"] = int(c["groups"]) + 1
 			_grow(sk, c, 0, tp.size() - 1, top, dir, length, 0, int(c["groups"]), id, 0)
@@ -778,6 +790,7 @@ static func skeleton(
 	_steady(sk)
 	_forks(sk, clampf(float(c["pipe"]), 1.6, 3.2))
 	_collars(sk, float(c["collar"]))
+	_shoulder(sk)
 	return sk
 
 
@@ -797,9 +810,10 @@ static func _forks(sk: Sk, e: float) -> void:
 	if forks.size() < 2:
 		return
 	var big: float = sk.rad[0][top]
-	var share: float = clampf(
-		pow((1.0 - pow(FORK_LEAD, e)) / float(forks.size() - 1), 1.0 / e), 0.3, FORK_LEAD
-	)
+	# (painter-look-wood3: the rest take FORK_REST of the stem's area between them, not what the
+	# lead leaves: a mature oak's crown forks are wider than the pipe law's slender ones, which left
+	# the trunk's top a shoulder.)
+	var share: float = clampf(pow(FORK_REST / float(forks.size() - 1), 1.0 / e), 0.3, FORK_LEAD)
 	for f: int in forks.size():
 		var i: int = forks[f]
 		var target: float = big * (FORK_LEAD if f == 0 else share)
@@ -808,6 +822,52 @@ static func _forks(sk: Sk, e: float) -> void:
 		for j: int in r.size():
 			r[j] = maxf(r[j], target * lerpf(1.0, FORK_TIP, float(j) / float(m)))
 		sk.rad[i] = r
+
+
+## painter-look-wood3: the trunk narrows into its forks. Where the stem divides it stood at full
+## girth to its last node, a flat shoulder with the widest fork at 0.72 of its width (the others at
+## half) pushed into it: seen from the side the trunk ended in a horizontal edge (the "ring" under
+## the crown, critic item 1). The stem's top now comes down to the widest fork over its last nodes
+## (FORK_JOIN: the fork is that share of the stem where they meet), never by more than
+## NARROW_STEM per node, and the limbs that leave the stem there are kept thinner than it as before.
+## Only ever narrows, and only where the stem divides (two forks or more at its last node).
+static func _shoulder(sk: Sk) -> void:
+	var top: int = sk.pts[0].size() - 1
+	var widest := 0.0
+	var forks: int = 0
+	for i: int in range(1, sk.pts.size()):
+		if sk.parent[i] == 0 and sk.order[i] == 0 and sk.at[i] == top:
+			forks += 1
+			widest = maxf(widest, sk.rad[i][0])
+	if forks < 2 or top < 2 or sk.rad[0][top] < FLARE_MIN_R:
+		return
+	var r: PackedFloat32Array = sk.rad[0]
+	var to: float = maxf(widest / FORK_JOIN, r[top] * NARROW_STEM)
+	if to >= r[top]:
+		return
+	r[top] = to
+	for j: int in range(top - 1, 0, -1):
+		r[j] = minf(r[j], r[j + 1] / NARROW_STEM)
+	sk.rad[0] = r
+	# The limbs that leave the stem on the narrowed nodes stay thinner than it, and what they carry
+	# thinner than they (a limb is after its parent in the lists).
+	var touched := {}
+	for i: int in range(1, sk.pts.size()):
+		var par: int = sk.parent[i]
+		var on_stem: bool = par == 0 and sk.at[i] < top and sk.at[i] >= top - 3
+		if not on_stem and not touched.has(par):
+			continue
+		var cr: PackedFloat32Array = sk.rad[i]
+		var pr: float = sk.rad[par][sk.at[i]]
+		var cap: float = FORK_JOIN * pr
+		if cr[0] < FLARE_MIN_R:
+			cap = maxf(0.8 * pr, LEAST_STICK)
+		if cr[0] > cap:
+			var k: float = cap / cr[0]
+			for j: int in cr.size():
+				cr[j] = maxf(cr[j] * k, minf(cr[j], LEAST_STICK))
+			sk.rad[i] = cr
+			touched[i] = true
 
 
 ## Round 13: a limb leaving the stem tapers along its whole length (the pipe model alone leaves
