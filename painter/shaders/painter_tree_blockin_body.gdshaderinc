@@ -17,6 +17,8 @@
 #endif
 
 uniform float silhouette = 0.0;
+// A stem's step darker at its foot (PainterOcclusion: 0 off, the sheet's base-dark).
+uniform float base_dark = 0.0;
 uniform float lod_level = 1.0;
 // tt-sim: how far round from a crown mass's edge its outline may break (|N.eye| under this times a
 // world noise is not drawn).
@@ -908,6 +910,12 @@ void fragment() {
 		if (v_snow.x > bnd) {
 			ALBEDO = palette_at(v_snow.x > bnd + 0.3 ? 0.9 : (v_snow.x > bnd + 0.13 ? 0.5 : 0.12), dep_row, 0.5);
 		}
+	}
+	if (!wood && base_dark > 0.0 && abs(role - 1.0) < 0.5) {
+		// The stem grows out of the ground: a step darker, a touch cooler, over its lowest 0.9 m
+		// (PainterOcclusion's base-dark; the snow heaped at the foot below still wins).
+		float foot = 1.0 - smoothstep(0.0, 0.9, v_height);
+		ALBEDO *= 1.0 - base_dark * foot * vec3(1.0, 0.92, 0.9);
 	}
 	if (!wood && v_snow.z > 0.5 && snow_foot18 > 0.0 && limb_snow17 > 0.0 && deposit > 0.0 && abs(role - 1.0) < 0.5) {
 		// Round 18 (snow-foot): snow heaped against the foot of the stem, lit on the sun's side.

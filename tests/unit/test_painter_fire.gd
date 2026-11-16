@@ -160,11 +160,14 @@ func test_a_held_tree_whose_row_left_is_erased_when_the_event_lets_go() -> void:
 
 func test_the_ground_roles_know_burnt_ground() -> void:
 	assert_eq(PainterGroundRoles.surface_role("ash"), "char", "the event fire's ash")
-	assert_eq(PainterGroundRoles.biome_role("burnt_forest"), "char", "and its burnt biome")
+	assert_eq(
+		PainterGroundRoles.biome_role("burnt_forest"), "ash", "its burnt biome is a biome ground"
+	)
 	assert_eq(PainterGroundRoles.biome_role("temperate_forest_summer_s1"), "floor")
 	assert_eq(PainterGroundRoles.surface_role("forest_floor_litter"), "floor")
 	assert_has(PainterGroundRoles.ROLES, "char")
-	assert_eq(PainterGroundRoles.index("char"), 5, "the shader's role number")
+	assert_eq(PainterGroundRoles.index("char"), 8, "the shader's role number, after the biome roles")
+	assert_ne(PainterGroundRoles.index("char"), PainterGroundRoles.index("ash"))
 	var burnt := PainterGroundRoles.char_of(Vector3(0.1, 0.3, 0.05))
 	assert_gt(burnt.x, burnt.z, "warm, not the floor's green")
 	assert_gt(burnt.x, burnt.y * 0.99, "red leads green")
@@ -183,10 +186,18 @@ func test_the_char_map_exists_only_for_a_document_with_burnt_ground() -> void:
 	for i in n:
 		doc.biome_slots[i] = 2 if i < n / 2 else 0
 		doc.biome_density[i] = 255
+	assert_null(PainterSurfaces.char_image(doc), "a burnt biome alone is ash ground, not a scar")
+	doc.surface_ids = PackedStringArray(["grass_meadow", "ash"])
+	doc.surface_weights.resize(n * MapDocument.SURFACE_BYTES)
+	doc.surface_weights.fill(0)
+	for i in n:
+		var burnt := i < n / 2
+		doc.surface_weights[i * 4] = 1 if burnt else 0
+		doc.surface_weights[n * 4 + i * 4] = 255
 	var image := PainterSurfaces.char_image(doc)
 	assert_not_null(image)
 	assert_eq(image.get_size(), Vector2i(doc.samples_x(), doc.samples_z()))
-	assert_gt(image.get_pixel(1, 1).r, 0.9, "burnt where the slot is")
+	assert_gt(image.get_pixel(1, 1).r, 0.9, "scorched where the ash surface is")
 	assert_eq(image.get_pixel(doc.samples_x() - 2, doc.samples_z() - 2).r, 0.0, "not elsewhere")
 
 

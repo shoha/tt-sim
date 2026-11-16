@@ -6,8 +6,9 @@ extends RefCounted
 ## materials coloured from the sheet (docs/systems/painter.md "Surfaces"). The scatter's mapped
 ## trees are drawn by PainterTrees (painter/trees/painter_trees.gd, loaded by path here), which
 ## hides their GLB nodes, and the built structures' walls, roofs and timber by PainterBuildings
-## (painter/painter_buildings.gd, loaded by path here too); water and tokens keep their Classic
-## materials (later cards).
+## (painter/painter_buildings.gd, loaded by path here too), the water and the falls by PainterWater
+## (painter/painter_water.gd, loaded by path here too: the shader of the two shared materials);
+## tokens keep their Classic materials (later cards).
 ##
 ## Events, never a poll. LevelEnvironmentManager owns one (made by path on the first Painted
 ## level, so neither the start-up nor a Classic level compiles it) and its signal
@@ -48,6 +49,10 @@ const SOLID_SHADER := "res://painter/shaders/painter_solid.gdshader"
 const TREES := "res://painter/trees/painter_trees.gd"
 ## The painted buildings' host (PainterBuildings), loaded by path on the first painted map.
 const BUILDINGS := "res://painter/painter_buildings.gd"
+## The ground's contact occlusion host (PainterOcclusion), loaded by path on the first painted map.
+const OCCLUSION := "res://painter/painter_occlusion.gd"
+## The painted water's host (PainterWater), loaded by path on the first painted map.
+const WATER := "res://painter/painter_water.gd"
 ## Metadata on every material this paints with.
 const META := &"painter_surface"
 ## The map root's name under the map container (MapSourceLoader.install).
@@ -77,6 +82,10 @@ var _zone_queued := false
 var _trees: RefCounted = null
 ## The painted buildings (a PainterBuildings), made on the first paint().
 var _buildings: RefCounted = null
+## The contact occlusion host (a PainterOcclusion), made on the first paint().
+var _occlusion: RefCounted = null
+## The painted water (a PainterWater), made on the first paint().
+var _water: RefCounted = null
 
 
 ## Follows `manager`'s painted_look_changed for the map under `map_container`; called again with
@@ -113,15 +122,23 @@ func paint(map: Node3D, state: Dictionary) -> bool:
 	if _buildings == null:
 		_buildings = (load(BUILDINGS) as GDScript).new()
 	_buildings.call("paint", _map, applied)
+	_ground_occlusion()
+	if _water == null:
+		_water = (load(WATER) as GDScript).new()
+	_water.call("paint", _map, applied)
 	return true
 
 
 ## Puts every material back as it was before the first paint() and stops following the map.
 func release() -> void:
+	if _occlusion != null:
+		_occlusion.call("release")
 	if _trees != null:
 		_trees.call("release")
 	if _buildings != null:
 		_buildings.call("release")
+	if _water != null:
+		_water.call("release")
 	_unbind()
 	if _ground != null:
 		FireLook.unmirror_glow(_ground)
@@ -238,18 +255,97 @@ func _on_terrain_child(node: Node) -> void:
 
 func _on_ground_edited(_rect: Rect2i) -> void:
 	_queue_zone()
+	_queue_occlusion()
 
 
 func _on_cells_applied(_cells: Array[Vector2i]) -> void:
 	_tone_new(_paint_species())
 	if _trees != null:
 		_trees.call("sync")
+	_queue_occlusion()
 
 
 func _on_species_added(_materials: Array[ShaderMaterial]) -> void:
 	_tone_new(_paint_species())
 	if _trees != null:
 		_trees.call("sync")
+	_queue_occlusion()
+
+
+# ---------------------------------------------------------------- contact occlusion
+
+
+## Starts (or re-tones) the contact occlusion host (PainterOcclusion) and follows what changes its
+## footprints: the painted trees' installs, the structures coming and going.
+func _ground_occlusion() -> void:
+	if _occlusion == null:
+		_occlusion = (load(OCCLUSION) as GDScript).new()
+	_occlusion.call("bind", self, _map)
+	var sheet := PainterSheet.load_sheet(applied["sheet"])
+	_occlusion.call("retone", sheet, applied["mood"], applied["elevation"])
+	if _trees != null and not _trees.is_connected(&"changed", _queue_occlusion):
+		_trees.connect(&"changed", _queue_occlusion)
+	var structures: Node = _buildings.get("_structures") if _buildings != null else null
+	if structures != null and not structures.child_entered_tree.is_connected(_on_structures_changed):
+		structures.child_entered_tree.connect(_on_structures_changed)
+		structures.child_exiting_tree.connect(_on_structures_changed)
+
+
+func _on_structures_changed(_node: Node) -> void:
+	_queue_occlusion()
+
+
+func _queue_occlusion() -> void:
+	if _occlusion != null and not applied.is_empty():
+		_occlusion.call("queue")
+
+
+## The contact occlusion host (a PainterOcclusion), null before the first paint().
+func occlusion() -> RefCounted:
+	return _occlusion
+
+
+## The ground's materials: the chunks' and the skirt's.
+func ground_materials() -> Array[ShaderMaterial]:
+	var out: Array[ShaderMaterial] = [_ground_material()]
+	if _skirt != null:
+		out.append(_skirt)
+	return out
+
+
+## The materials that darken at their base: the rocks' and logs' stand-ins and the trees' own.
+func base_materials() -> Array[ShaderMaterial]:
+	var out: Array[ShaderMaterial] = []
+	for entry: Array in _swapped:
+		if int(entry[4]["kind"]) == PainterPlantRoles.KIND_SOLID:
+			out.append(entry[3])
+	if _trees != null:
+		out.append_array(_trees.call("materials"))
+	return out
+
+
+## The instance ids of the scatter meshes drawn as stones and wood (rocks, logs, stumps): the solids
+## whose footprint the ground's field holds.
+func solid_meshes() -> Dictionary:
+	var out := {}
+	for entry: Array in _swapped:
+		if (
+			int(entry[4]["kind"]) == PainterPlantRoles.KIND_SOLID
+			and str(entry[4]["role"]) in ["stone", "bark"]
+		):
+			out[(entry[0] as Mesh).get_instance_id()] = true
+	return out
+
+
+func scatters() -> Array[AuthoredScatter]:
+	return _scatters
+
+
+## The map's extent in metres (zero before a terrain is bound).
+func map_extent() -> Vector2:
+	if is_instance_valid(_terrain) and _terrain.document != null:
+		return _terrain.document.extent_m()
+	return Vector2.ZERO
 
 
 ## Draws the scatter's mapped trees painted (PainterTrees), or re-tones and re-syncs them.
@@ -268,6 +364,11 @@ func trees() -> RefCounted:
 ## The painted buildings (a PainterBuildings), null before the first paint().
 func buildings() -> RefCounted:
 	return _buildings
+
+
+## The painted water (a PainterWater), null before the first paint().
+func water() -> RefCounted:
+	return _water
 
 
 # ---------------------------------------------------------------- the ground
@@ -319,11 +420,16 @@ func _queue_zone() -> void:
 ## b rock, a shore, one texel per height sample, blurred ZONE_BLUR samples.
 func _rebuild_zone() -> void:
 	_zone_queued = false
+	_queue_occlusion()
 	if not is_instance_valid(_terrain) or _terrain.document == null:
 		return
 	var doc := _terrain.document
 	var image := zone_image(doc)
 	var burnt := char_image(doc)
+	var biome_image := biome_zone_image(doc)
+	var biome_texture: ImageTexture = (
+		null if biome_image == null else ImageTexture.create_from_image(biome_image)
+	)
 	var extent := doc.extent_m()
 	for material: ShaderMaterial in [_ground_material(), _skirt]:
 		material.set_shader_parameter(&"zone_map", ImageTexture.create_from_image(image))
@@ -332,25 +438,35 @@ func _rebuild_zone() -> void:
 			&"char_map", ImageTexture.create_from_image(burnt) if burnt != null else null
 		)
 		material.set_shader_parameter(&"char_present", burnt != null)
+		material.set_shader_parameter(&"zone2_map", biome_texture)
+		material.set_shader_parameter(&"zone2_present", biome_texture != null)
 		material.set_shader_parameter(&"layer_grid_origin", -extent * 0.5)
 		material.set_shader_parameter(&"layer_grid_step", doc.sample_step())
 		material.set_shader_parameter(&"half_extent", extent * 0.5)
 		material.set_shader_parameter(
 			&"base_meadow", 1.0 if PainterGroundRoles.surface_role(doc.base_surface) == "meadow" else 0.0
 		)
+	_bind_wet()
 
 
-## The burnt ground's share per height sample as an R8 image (the char role has no channel in the
-## zone map: it is rare, so its map exists only when the document names a burnt biome or an ash
-## surface, and costs nothing else), null when it names none (pure; painter-fire). A biome slot
-## pulls its density as the zone map's do; a surface weight is its share.
+## Gives the ground the terrain's wet dressing (its wet line darkens the bank in a brush-edged
+## band); the skirt has none. The texture is updated in place by the terrain, so one bind serves
+## every edit; a terrain that had no water yet binds it when its first one is made.
+func _bind_wet() -> void:
+	if _ground == null or not is_instance_valid(_terrain):
+		return
+	var wet := _terrain.get_water_texture()
+	_ground.set_shader_parameter(&"water_weights", wet)
+	_ground.set_shader_parameter(&"water_present", wet != null)
+
+
+## The scorched ground's share per height sample as an R8 image (the `char` role has no channel in the
+## zone maps: it is rare, so its map exists only when the document names an ash surface, the scar a
+## fire event stamps, and costs nothing else), null when it names none (pure; painter-fire). A burnt
+## BIOME is not char: it is the `ash` role of the biome zone map (painter-coverage), and the scar
+## lies over it. A surface weight is the share.
 static func char_image(doc: MapDocument) -> Image:
-	var biome_char := PackedByteArray()
 	var any := false
-	for id in doc.biome_ids:
-		var burnt := PainterGroundRoles.biome_role(id) == "char"
-		biome_char.append(1 if burnt else 0)
-		any = any or burnt
 	var surface_char := PackedByteArray()
 	for id in doc.surface_ids:
 		var burnt := PainterGroundRoles.surface_role(id) == "char"
@@ -363,17 +479,10 @@ static func char_image(doc: MapDocument) -> Image:
 	var n := sx * sz
 	var plane := PackedFloat32Array()
 	plane.resize(n)
-	var slots := doc.biome_slots
-	var density := doc.biome_density
 	var weights := doc.surface_weights
-	var has_biomes := slots.size() == n and density.size() == n
 	var has_surfaces := weights.size() == n * MapDocument.SURFACE_BYTES
 	for i in n:
 		var v := 0.0
-		if has_biomes:
-			var slot := slots[i]
-			if slot > 0 and slot <= biome_char.size() and biome_char[slot - 1] == 1:
-				v = clampf(density[i] / 255.0 * BIOME_PULL, 0.0, 1.0)
 		if has_surfaces:
 			for e in 4:
 				var w := weights[n * 4 + i * 4 + e] / 255.0
@@ -396,7 +505,10 @@ static func zone_image(doc: MapDocument) -> Image:
 	var sx := doc.samples_x()
 	var sz := doc.samples_z()
 	var n := sx * sz
-	var base := _mix_role(Vector4.ZERO, PainterGroundRoles.surface_role(doc.base_surface), 1.0)
+	var base_role := PainterGroundRoles.surface_role(doc.base_surface)
+	if base_role == "shore" and has_dominant_dry(doc):
+		base_role = "meadow"
+	var base := _mix_role(Vector4.ZERO, base_role, 1.0)
 	var biome_channel := PackedInt32Array()
 	var biome_target := PackedFloat32Array()
 	for id in doc.biome_ids:
@@ -466,6 +578,87 @@ static func zone_image(doc: MapDocument) -> Image:
 		for i in n:
 			bytes[i * 4 + c] = clampi(roundi(plane[i] * 255.0), 0, 255)
 	return Image.create_from_data(sx, sz, false, Image.FORMAT_RGBA8, bytes)
+
+
+## The biome zone map of `doc` (card painter-coverage): an RGBA8 image, one texel per height
+## sample, r the share of the dry biome's role (savanna straw), g ash (a burnt forest), b earth
+## (the badlands), blurred like the zone map; null when no biome of the map paints in one of those
+## roles (the shader then never reads it). Pure.
+static func biome_zone_image(doc: MapDocument) -> Image:
+	var targets := PackedInt32Array()
+	var any := false
+	for id in doc.biome_ids:
+		var at := PainterGroundRoles.index(PainterGroundRoles.biome_role(id))
+		var channel := at - PainterGroundRoles.BIOME_ROLES_FROM
+		targets.append(channel if channel >= 0 and channel < 3 else -1)
+		any = any or channel >= 0
+	var sx := doc.samples_x()
+	var sz := doc.samples_z()
+	var n := sx * sz
+	var slots := doc.biome_slots
+	var density := doc.biome_density
+	if not any or slots.size() != n or density.size() != n:
+		return null
+	var planes: Array[PackedFloat32Array] = []
+	for c in 3:
+		var plane := PackedFloat32Array()
+		plane.resize(n)
+		planes.append(plane)
+	var dominant := _dominant_channel(targets, slots)
+	for i in n:
+		var slot := slots[i]
+		var own := -1
+		if slot > 0 and slot <= targets.size():
+			own = targets[slot - 1]
+		if own >= 0 and own != dominant:
+			planes[own][i] = clampf(density[i] / 255.0 * BIOME_PULL, 0.0, 1.0)
+		elif dominant >= 0 and (own == dominant or slot == 0):
+			# The map's own dry biome paints the whole ground, not only where its scatter is dense.
+			planes[dominant][i] = 1.0
+	var bytes := PackedByteArray()
+	bytes.resize(n * 4)
+	for c in 3:
+		var plane := _box(planes[c], sx, sz, ZONE_BLUR)
+		for i in n:
+			bytes[i * 4 + c] = clampi(roundi(plane[i] * 255.0), 0, 255)
+	return Image.create_from_data(sx, sz, false, Image.FORMAT_RGBA8, bytes)
+
+
+## The biome zone map's channel (0 dry, 1 ash, 2 earth) of the map's dominant dry biome, -1 when
+## none: the dry biome whose cells are at least a quarter of the map and more than any other
+## biome's. `targets` is the channel of each biome slot (-1 for a biome that is none of them),
+## `slots` the document's biome_slots. Such a map's whole ground paints in that role (a savanna is
+## straw everywhere, not in patches).
+static func _dominant_channel(targets: PackedInt32Array, slots: PackedByteArray) -> int:
+	var counts := PackedInt32Array()
+	counts.resize(targets.size() + 1)
+	for slot in slots:
+		if slot <= targets.size():
+			counts[slot] += 1
+	var best := -1
+	var best_count := 0
+	var other := 0
+	for k in targets.size():
+		if targets[k] >= 0 and counts[k + 1] > best_count:
+			best = targets[k]
+			best_count = counts[k + 1]
+	for k in targets.size():
+		if targets[k] != best:
+			other = maxi(other, counts[k + 1])
+	if best >= 0 and best_count * 4 >= slots.size() and best_count > other:
+		return best
+	return -1
+
+
+## Whether `doc`'s ground is painted by one dry biome throughout (_dominant_channel): the zone map
+## then drops the base surface's shore (a savanna or badlands map's base is sand).
+static func has_dominant_dry(doc: MapDocument) -> bool:
+	var targets := PackedInt32Array()
+	for id in doc.biome_ids:
+		var at := PainterGroundRoles.index(PainterGroundRoles.biome_role(id))
+		var channel := at - PainterGroundRoles.BIOME_ROLES_FROM
+		targets.append(channel if channel >= 0 and channel < 3 else -1)
+	return doc.biome_slots.size() > 0 and _dominant_channel(targets, doc.biome_slots) >= 0
 
 
 ## Appends the channel (0 r .. 3 a, -1 for a role the zone map has no channel for) and the value a
@@ -584,19 +777,20 @@ func _paint_species() -> Array:
 				continue
 			for i in mesh.get_surface_count():
 				var original := mesh.surface_get_material(i)
-				var stand_in := _stand_in(original, entry, float(record["height"]))
+				var surface_entry := PainterPlantRoles.for_surface(entry, original)
+				var stand_in := _stand_in(original, surface_entry, float(record["height"]))
 				if stand_in == null:
 					continue
 				var extent := mesh.get_aabb().size * 0.5
 				stand_in.set_shader_parameter(&"selector_extent", extent)
-				if int(entry["kind"]) == PainterPlantRoles.KIND_GRASS:
+				if int(surface_entry["kind"]) == PainterPlantRoles.KIND_GRASS:
 					# A wide tuft is cut by painted dabs from the layouts' array (PainterTuftAtlas).
 					stand_in.set_shader_parameter(
 						&"tuft_atlas",
 						PainterTuftAtlas.for_tuft(extent, maxf(float(record["height"]), 0.05))
 					)
 				mesh.surface_set_material(i, stand_in)
-				var swap := [mesh, i, original, stand_in, entry]
+				var swap := [mesh, i, original, stand_in, surface_entry]
 				_swapped.append(swap)
 				added.append(swap)
 	return added
@@ -638,6 +832,7 @@ func _retone() -> void:
 	var mood: String = applied["mood"]
 	var elevation: float = applied["elevation"]
 	_tone_ground(sheet, mood, elevation)
+	_bind_wet()
 	for swap: Array in _swapped:
 		_tone_plant(swap[3], swap[4], sheet, mood, elevation)
 
@@ -654,8 +849,11 @@ func _tone_ground(sheet: Dictionary, mood: String, elevation: float) -> void:
 	var lit := PackedVector3Array()
 	var shade := PackedVector3Array()
 	for role: String in PainterGroundRoles.ROLES:
+		var base := Vector3(-1.0, 0.0, 0.0)
+		if PainterGroundRoles.DERIVED.has(role):
+			base = PainterGroundRoles.derived(sheet, mood, role, elevation)
 		var ramp := PainterTones.ramp(
-			sheet, mood, PainterGroundRoles.TONE_ROLE[role], elevation, "ground-"
+			sheet, mood, PainterGroundRoles.TONE_ROLE[role], elevation, "ground-", base
 		)
 		var colors: Array[Vector3] = []
 		for at: int in [2, 5, 0, 3]:
@@ -694,7 +892,12 @@ static func _tone_plant(
 	# Logs and stumps shade like the painted stems, to their own brown (painter-trees-polish: the
 	# mood's full violet pull read maroon on a log's shaded side at a lower sun).
 	var prefix := "grass-" if low else ("bark-" if str(entry["role"]) == "bark" else "")
-	var colors := PainterTones.ramp(sheet, mood, str(entry["role"]), elevation, prefix)
+	var tone_role := str(entry["role"])
+	var derived := Vector3(-1.0, 0.0, 0.0)
+	if PainterGroundRoles.DERIVED.has(tone_role):
+		derived = PainterGroundRoles.derived(sheet, mood, tone_role, elevation)
+		tone_role = str(PainterGroundRoles.DERIVED[tone_role][0])
+	var colors := PainterTones.ramp(sheet, mood, tone_role, elevation, prefix, derived)
 	if int(entry["kind"]) == PainterPlantRoles.KIND_CROWN:
 		# A bush takes the crowns' ramp (painter-trees-polish2).
 		var tones := load(PainterPlantRoles.CROWN_TONES) as GDScript

@@ -339,7 +339,7 @@ loading_overlay.show_indeterminate(RoomScreen.OPENING, true, RoomScreen.OPENING_
   it fades off the finished table on hide (0.4 s). `show_indeterminate()` lays the shared
   `Scrim` (C4) over the screen behind it.
 - Determinate bar: tweened to each new value (0.25 s). Indeterminate: a lake segment glides
-  back and forth along the bar; under Reduce motion (`UiMotion.reduced()`, the OS setting)
+  back and forth along the bar; under Reduce motion (`UiMotion.reduced()`, the OS setting or Settings)
   it rests in the middle and breathes in opacity. The glide stops when the overlay hides.
 - Blocks mouse input while visible (the sky and the scrim are full-rect `ColorRect`s).
 
@@ -1086,8 +1086,14 @@ live one ends the silence; see `docs/SOUND_EFFECTS.md`.
   an old settings file's `graphics/occlusion_fade_enabled` is ignored.)
 - **Wind motion** slider (`SettingsWindMotion`, `graphics/wind_motion`, 0 to 100 percent, default
   100): scales how far plants, cloth and weather lean and sway on this player's screen. It moves the
-  `Wind` autoload as the slider moves (Apply saves it); 0 holds everything still, and the OS
-  reduce-motion setting also holds it still and wins. Not a level field and never networked.
+  `Wind` autoload as the slider moves (Apply saves it); 0 holds everything still, and Reduce
+  motion (the OS flag or the Settings row below) also holds it still and wins. Not a level field and
+  never networked.
+- **Reduce motion** check (below Interface size, `ui/reduce_motion`, default off; saves and applies
+  the moment it is toggled like Interface size, `UiPreferences`): `UiMotion.reduced()` is true when
+  it is on or the OS reduce-animation flag is. Every UI animation reads it (UI_TASTE.md "2026-11-15
+  foundation pass": fades of at most 0.12 s, no scale, lift, slide or stagger; hover and press keep
+  their colour). Reset to defaults turns it off.
 - Antialiasing, shadow quality, water quality option buttons
 - **Eye view smoothing** (`graphics/eye_smoothing`, below Foliage edges, default on): the eye view's
   MSAA 4x raise; off keeps the Antialiasing setting there (`SettingsGpuOptions`)
@@ -1703,6 +1709,43 @@ Picking a rail item selects and activates that brush (`tool_selected`); the Biom
 for a biome. The active tool's rail item stays tinted (`set_active_tool`,
 `DrawerContainer.set_rail_item_active`) while the drawer is closed, so the map can be painted
 full screen. Save keeps the drawer open and shows a success toast.
+
+### Map building chrome (card ui-authoring, 2026-11-15)
+
+The frame around the panes, as the card left it; the rules are UI_TASTE.md "2026-11-15 map
+building". `AuthoringChrome` (`scenes/states/authoring/authoring_chrome.gd`) holds what is
+neither a pane nor the controller: the material, the footer actions and their words, the keys.
+
+- **Material.** The drawer, its rail and every pane wear `AuthoringChrome.surface_theme()`:
+  paper (`SURFACE_PAPER := true`), because building a map stops play. Glass is one constant
+  away (`SURFACE_PAPER := false`; `AuthoringController` sets the theme on the panel and the
+  first-strokes card). `DrawerContainer` no longer builds StyleBoxes: the panel, the handle and
+  the rail's backdrop are theme variations (`DrawerPanelLeft/Right`, `DrawerCardLeft/Right`,
+  `DrawerTabLeft/Right`, `DrawerRailLeft/Right`) and the content margin is `DrawerMargin` (12) or
+  `DrawerMarginRoomy` (16, `margin_variation`), all defined in
+  `themes/painted_theme_base.gd` `_define_drawer`, so a drawer follows its leaf at any time and
+  the play drawers (glass) look as before. `drawer_container.gd` fell from 12 theme overrides to
+  none.
+- **A card, not a slab.** `fit_height` (`AuthoringChrome.FIT_HEIGHT`) makes the panel a card
+  as tall as the pane on show, level with the rail's top and rounded toward the board, so a
+  short pane (Sculpt, Water) leaves the board visible below it. `AuthoringPanel` reports the
+  pane's height (`AuthoringChrome.panel_height`, `fit_panel_height`), one fit per frame, after a
+  pane swap and after anything that changes a pane's minimum size; a long pane (Place, Buildings)
+  takes the room the window leaves and scrolls. Off, the panel runs the whole edge.
+- **Rail.** Four runs of related tools with a gap between them (`ToolRegistry.GROUPS`: land =
+  Biome, Thin / Clear, Place; shape = Sculpt, Paint; features = Fire, Water, Bridge; build = Wall,
+  Buildings, Village; `rail_items` entries carry `group`, `IconRail.add_gap`). Actions sit under
+  it, after a bigger gap. The rail and its actions fit a 1280x720 window (771 virtual px tall).
+- **Words and keys.** Every rail item's tooltip is its name, key and one line; Undo and Redo name
+  the edit they act on ("Undo Raise (Ctrl+Z)", "Nothing to undo") and toast it ("Undid Raise"),
+  Save says whether anything is unsaved and answers Ctrl+S, Leave says Esc. The map name field
+  has no caption line (tooltip and accessible name instead).
+- **First strokes.** `AuthoringWelcome`: a paper card at the top centre of the board, two lines
+  and "Got it", shown the first time a user opens map building, put away by the button or by the
+  first edit and then never again (`UiPreferences` `authoring_welcome_done`). It fades in
+  (`UiMotion.fade_s`), never moves.
+- **Brush feedback** is unchanged: the ring at the brush's size, the readout chip beside it
+  and the hint bar's keys. Chips over the board stay glass (legibility over any biome).
 
 ### Brushes and gestures
 

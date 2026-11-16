@@ -34,6 +34,23 @@ const SHADER := "res://painter/shaders/painter_structure.gdshader"
 const META := &"painter_building"
 ## The structures' node under a map root (AuthoredStructures.NODE_NAME).
 const STRUCTURES := "AuthoredStructures"
+## The map's other wall layers (card painter-coverage): drawn walls, wall rows and the streets' lots
+## (AuthoredWalls.NODE_NAME) and the villages' stone boundaries (AuthoredBoundaries.BOUNDARY_NODE).
+## Their `Wall_<id>` nodes hold parts named `Stone`, `Masonry`, `Wood`, `Roof`, `Glass`,
+## `<Wall|Roof|Door>_<kind>`; wall_part_key() names the structures' `<role>_<kind>` each is
+## painted as (no manner records exist for them: the A3b look).
+const WALL_LAYERS: Array[String] = ["AuthoredWalls", "AuthoredBoundaries", "AuthoredCrossings"]
+## The wall layers' fixed part names -> the structures' key (`Glass` and `Collision` keep Classic).
+const WALL_PARTS: Dictionary = {
+	"Stone": "wall_stone",
+	"Masonry": "wall_masonry",
+	"Wood": "trim_wood",
+	"Roof": "roof_wood",
+	# A crossing's parts (AuthoredCrossings: `Wood` above, and its stone, arch and ford meshes).
+	"Stones": "wall_stone",
+	"Arch": "wall_stone",
+	"Ford": "wall_stone",
+}
 ## The prefixes of a mill's and a vane's mesh names (AuthoredStructures.mill_node, vane_node).
 const PART_PREFIXES: Array[String] = ["cap_", "wheel_", "vane_"]
 ## A picked roof's tones, in the shader's order.
@@ -112,11 +129,24 @@ const KINDS: Dictionary = {
 	"chimney_stone": ["wall-stone", P_STONE, "stone", PICK_CAP],
 	"chimney_masonry": ["wall-stone", P_STONE, "stone", PICK_STACK],
 	"chimney_brick": ["roof-clay", P_STONE, "stone", PICK_STACK],
+	"trim_plaster": ["plaster", P_PLASTER, "wall", 0],
+	"frame_plaster": ["plaster", P_PLASTER, "wall", 0],
+	"frame_stone": ["wall-stone", P_STONE, "stone", 0],
+	# The toon styles' accent trim: a tone from the recipe's paint, as a door's (painter-coverage).
+	"wall_trim": [ACCENT, P_TIMBER, "timber", 3],
+	"frame_trim": [ACCENT, P_TIMBER, "timber", 3],
+	"door_trim": [ACCENT, P_TIMBER, "timber", 3],
 	"trim_wood": ["timber", P_TIMBER, "timber", 0],
 	"trim_trim": ["timber", P_TIMBER, "timber", 0],
 	"frame_wood": ["timber", P_TIMBER, "timber", 0],
 	"opening_wood": [ACCENT, P_TIMBER, "timber", 3],
 	"door_wood": [ACCENT, P_TIMBER, "timber", 3],
+	# Ornament and canopy parts (card painter-coverage); glass (a light) and metal (door and
+	# ornament ironwork, a decision of the structures' cards) keep Classic.
+	"ornament_wood": ["timber", P_TIMBER, "timber", 0],
+	"ornament_bark": ["timber", P_TIMBER, "timber", 0],
+	"ornament_cloth": [ACCENT, P_TIMBER, "timber", 3],
+	"canopy_leaf": ["roof-turf", P_TURF, "roof", 0],
 	"dressing_props": [YARD, 0, "yard", PICK_YARD],
 	"dressing_ground": [YARD, 0, "yard", PICK_YARD_GROUND],
 }
@@ -137,6 +167,8 @@ var manner: PainterMannerHost = null
 
 var _map: Node3D = null
 var _structures: Node = null
+## The map's wall layers now followed (WALL_LAYERS).
+var _wall_layers: Array[Node] = []
 ## `<role>_<kind>` -> the shared stand-in.
 var _materials: Dictionary = {}
 ## Node instance id -> [node, the material_override it had].
@@ -163,6 +195,8 @@ func paint(map: Node3D, state: Dictionary) -> bool:
 		_map = map
 		_map.child_entered_tree.connect(_on_map_child)
 		_bind(_map.get_node_or_null(STRUCTURES))
+		for layer_name in WALL_LAYERS:
+			_bind_walls(_map.get_node_or_null(layer_name))
 	_retone()
 	return true
 
@@ -172,6 +206,7 @@ func release() -> void:
 	if is_instance_valid(_map) and _map.child_entered_tree.is_connected(_on_map_child):
 		_map.child_entered_tree.disconnect(_on_map_child)
 	_unbind()
+	_unbind_walls()
 	if manner != null:
 		manner.restore_all()
 	for id: int in _swapped:
@@ -270,6 +305,48 @@ static func part_key(node_name: String) -> String:
 func _on_map_child(node: Node) -> void:
 	if str(node.name) == STRUCTURES and node != _structures:
 		_bind(node)
+	elif WALL_LAYERS.has(str(node.name)):
+		_bind_walls(node)
+
+
+## Follows wall layer `layer` (null: nothing): dresses its walls now and each one built later.
+func _bind_walls(layer: Node) -> void:
+	if layer == null or _wall_layers.has(layer):
+		return
+	_wall_layers.append(layer)
+	layer.child_entered_tree.connect(_on_wall)
+	for child in layer.get_children():
+		_dress_wall(child)
+
+
+func _on_wall(node: Node) -> void:
+	_prune()
+	_dress_wall(node)
+
+
+## The structures' `<role>_<kind>` key a wall layer's part named `node_name` is painted as, "" for a
+## part that keeps Classic (panes, collision, anything unknown). Pure.
+static func wall_part_key(node_name: String) -> String:
+	if WALL_PARTS.has(node_name):
+		return str(WALL_PARTS[node_name])
+	var at := node_name.find("_")
+	if at <= 0:
+		return ""
+	var key := node_name.to_lower()
+	return key if not kind_of(key).is_empty() else ""
+
+
+## Puts the stand-ins on the painted parts of a wall node.
+func _dress_wall(wall: Node) -> void:
+	if applied.is_empty():
+		return
+	for node: Node in wall.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := node as MeshInstance3D
+		var key := wall_part_key(str(node.name))
+		if key.is_empty() or _swapped.has(mesh_instance.get_instance_id()):
+			continue
+		_swapped[mesh_instance.get_instance_id()] = [mesh_instance, mesh_instance.material_override]
+		mesh_instance.material_override = _material(key)
 
 
 func _bind(structures: Node) -> void:
@@ -286,6 +363,13 @@ func _unbind() -> void:
 	if is_instance_valid(_structures) and _structures.child_entered_tree.is_connected(_on_structure):
 		_structures.child_entered_tree.disconnect(_on_structure)
 	_structures = null
+
+
+func _unbind_walls() -> void:
+	for layer in _wall_layers:
+		if is_instance_valid(layer) and layer.child_entered_tree.is_connected(_on_wall):
+			layer.child_entered_tree.disconnect(_on_wall)
+	_wall_layers.clear()
 
 
 func _on_structure(node: Node) -> void:
@@ -352,6 +436,10 @@ func _retone() -> void:
 	if is_instance_valid(_structures):
 		for child in _structures.get_children():
 			_dress(child)
+	for layer in _wall_layers:
+		if is_instance_valid(layer):
+			for child in layer.get_children():
+				_dress_wall(child)
 
 
 func _tone(material: ShaderMaterial, kind: Array, sheet: Dictionary) -> void:

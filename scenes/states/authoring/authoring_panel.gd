@@ -102,10 +102,10 @@ const TOOL_BRIDGE := BridgeTool.ID
 const OWN_PANES := [
 	TOOL_BIOME, TOOL_THIN, TOOL_PLACE, TOOL_SCULPT, TOOL_PAINT, TOOL_WATER, TOOL_BRIDGE
 ]
-const ACTION_UNDO := &"undo"
-const ACTION_REDO := &"redo"
-const ACTION_SAVE := &"save_map"
-const ACTION_LEAVE := &"leave_authoring"
+const ACTION_UNDO := AuthoringChrome.ACTION_UNDO
+const ACTION_REDO := AuthoringChrome.ACTION_REDO
+const ACTION_SAVE := AuthoringChrome.ACTION_SAVE
+const ACTION_LEAVE := AuthoringChrome.ACTION_LEAVE
 
 ## Rail tooltips of the tools a map can refuse, from their descriptors.
 const SCULPT_TOOLTIP := SculptTool.LABEL
@@ -131,40 +131,9 @@ const PAINT_TILE_PREFIX := "paint_"
 ## The surface the Paint tool starts with: a path is what a new map most often wants. The legacy
 ## value of the `paint.default` library binding (LibraryBindings.paint_default).
 const DEFAULT_PAINT_SURFACE := "dirt_road_packed"
-## Sculpt tiles: id (the HeightBrush operation), label, icon, tooltip.
-const SCULPT_TILES: Array[Dictionary] = [
-	{
-		"op": HeightBrush.RAISE,
-		"label": "Raise",
-		"icon": "arrow-bar-up",
-		"tooltip": "Raise a mound; hold Ctrl as you press to lower",
-	},
-	{
-		"op": HeightBrush.SMOOTH,
-		"label": "Smooth",
-		"icon": "wave-sine",
-		"tooltip": "Soften slopes, edges and faces (Shift with any tile)",
-	},
-	{
-		"op": HeightBrush.FLATTEN,
-		"label": "Flatten",
-		"icon": "fold",
-		"tooltip": "Level the ground to the height where you press",
-	},
-	{
-		"op": HeightBrush.TIER,
-		"label": "Tier",
-		"icon": "stairs-up",
-		"tooltip": "Build a rock-faced level one tier up; hold Ctrl as you press to cut one down",
-	},
-]
+## Sculpt tiles: id (the HeightBrush operation), label, icon, tooltip (SculptTool owns them).
+const SCULPT_TILES: Array[Dictionary] = SculptTool.TILES
 const SCULPT_TILE_SIZE := Vector2(64, 56)
-const RAIL_FOOTER_ITEMS: Array[Dictionary] = [
-	{"id": ACTION_UNDO, "icon": "arrow-back-up", "tooltip": "Undo (Ctrl+Z)"},
-	{"id": ACTION_REDO, "icon": "arrow-forward-up", "tooltip": "Redo (Ctrl+Y)"},
-	{"id": ACTION_SAVE, "icon": "device-floppy", "tooltip": "Save map"},
-	{"id": ACTION_LEAVE, "icon": "door-exit", "tooltip": "Leave map building"},
-]
 ## Tools whose panes exist but whose brushes are not built yet (none since phase 2 T6).
 const TOOLS_NOT_READY: Array[StringName] = []
 
@@ -199,6 +168,7 @@ var _paint_picked: bool = false
 ## The biomes the Built tiles were last ordered for (order_paint_tiles).
 var _paint_order_biomes: PackedStringArray = PackedStringArray()
 var _active_tool: StringName = &""
+var _fit_queued: bool = false
 ## True while the controller's leave prompt is on screen, so Escape does not stack another.
 var _leave_pending: bool = false
 ## The card a right click puts up while a brush is down (PutDownNotice).
@@ -213,12 +183,9 @@ func _on_ready() -> void:
 	play_sounds = true
 	start_revealed = false
 	rail_items = ToolRegistry.rail_items(ToolDescriptor.AUTHORING)
-	rail_footer_items = RAIL_FOOTER_ITEMS.duplicate()
+	rail_footer_items = AuthoringChrome.FOOTER_ITEMS.duplicate()
 
-	var margin_node := _panel.get_child(0) as MarginContainer
-	if margin_node:
-		for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-			margin_node.add_theme_constant_override(side, 16)
+	margin_variation = &"DrawerMarginRoomy"
 
 	_build_name_field()
 	_put_down = PutDownNotice.new()
@@ -230,14 +197,22 @@ func _on_ready() -> void:
 	_stack.bar_in_margin = true
 	_stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content_container.add_child(_stack)
+	fit_height = AuthoringChrome.FIT_HEIGHT
+	# The card is as tall as the pane on show: it follows a swap and anything that changes the
+	# pane's height (a foldout, a filter, the put-down card).
+	_stack.pane_changed.connect(func(_id: StringName) -> void: _queue_fit())
 	_stack.pane_built.connect(
-		func(id: StringName, pane: Control) -> void: tool_pane_built.emit(id, pane)
+		func(id: StringName, pane: Control) -> void:
+			pane.minimum_size_changed.connect(_queue_fit)
+			tool_pane_built.emit(id, pane)
 	)
+	_margin.minimum_size_changed.connect(_queue_fit)
 	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
 		if tool.id in OWN_PANES:
 			var pane := tool.build_pane(self)
 			if pane == null:
 				pane = _build_pane(tool)
+			pane.minimum_size_changed.connect(_queue_fit)
 			_stack.add_pane(tool.id, pane)
 		else:
 			# A tool's own pane (fire's EventsPane, the structure and village tiles and their
@@ -254,16 +229,32 @@ func _ready() -> void:
 	for tool_id in TOOLS_NOT_READY:
 		set_rail_item_enabled(tool_id, false)
 	set_history_state(false, false)
+	_queue_fit()
 
 
+## Asks for the card to be fitted once this frame's changes are in (one fit per frame).
+func _queue_fit() -> void:
+	if _fit_queued:
+		return
+	_fit_queued = true
+	_fit_to_pane.call_deferred()
+
+
+func _fit_to_pane() -> void:
+	_fit_queued = false
+	if not fit_height or _stack == null:
+		return
+	var pane := _stack.get_pane(_stack.current) if _stack.current != &"" else null
+	fit_panel_height(AuthoringChrome.panel_height(_margin, _stack, pane))
+
+
+## The map's name, one field at the head of every pane. It has no caption line of its own (the
+## pane's title is what the drawer is about): the tooltip and the accessible name say what it is.
 func _build_name_field() -> void:
-	var caption := Label.new()
-	caption.name = "MapNameCaption"
-	caption.text = "Map name"
-	caption.theme_type_variation = &"Caption"
-	content_container.add_child(caption)
 	name_edit = LineEdit.new()
 	name_edit.name = "MapNameEdit"
+	name_edit.tooltip_text = "Map name: click to rename"
+	name_edit.accessibility_name = "Map name"
 	name_edit.placeholder_text = NewMap.DEFAULT_NAME
 	name_edit.text_changed.connect(func(text: String) -> void: name_changed.emit(text))
 	name_edit.text_submitted.connect(func(_text: String) -> void: name_edit.release_focus())
@@ -271,8 +262,6 @@ func _build_name_field() -> void:
 	content_container.add_child(HSeparator.new())
 
 
-## The pane of one of the seven tools that predate ToolRegistry, titled from its
-## descriptor, or null for any other tool.
 ## Builds the pane of a tool that brings its own (ToolDescriptor.build_pane); a placeholder
 ## that says so when it brings none.
 func _tool_pane_builder(tool: ToolDescriptor) -> Control:
@@ -895,14 +884,21 @@ func get_map_name() -> String:
 ## Badges Save while there are unsaved changes.
 func set_dirty(dirty: bool) -> void:
 	set_footer_badge(ACTION_SAVE, dirty)
-	set_footer_item_tooltip(
-		ACTION_SAVE, "Save map (unsaved changes)" if dirty else "Save map (all changes saved)"
-	)
+	set_footer_item_tooltip(ACTION_SAVE, AuthoringChrome.save_tip(dirty))
 
 
-func set_history_state(can_undo: bool, can_redo: bool) -> void:
+## Undo and Redo are drawn live only while they have something to do, and their tooltips say
+## what: "Undo Raise (Ctrl+Z)" while there is an edit to take back, "Nothing to undo" when not.
+## `undo_label` and `redo_label` name the edit each would act on ("" when unknown).
+func set_history_state(
+	can_undo: bool, can_redo: bool, undo_label: String = "", redo_label: String = ""
+) -> void:
 	set_footer_item_enabled(ACTION_UNDO, can_undo)
 	set_footer_item_enabled(ACTION_REDO, can_redo)
+	var undo_tip := AuthoringChrome.history_tip("Undo", "Ctrl+Z", can_undo, undo_label)
+	var redo_tip := AuthoringChrome.history_tip("Redo", "Ctrl+Y", can_redo, redo_label)
+	set_footer_item_tooltip(ACTION_UNDO, undo_tip)
+	set_footer_item_tooltip(ACTION_REDO, redo_tip)
 
 
 ## Selects a biome tile without emitting biome_selected, and opens that biome's Place group.

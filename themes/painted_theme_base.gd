@@ -33,6 +33,7 @@ func define_theme() -> void:
 	_define_buttons()
 	_define_flat_buttons()
 	_define_panels()
+	_define_drawer()
 	define_fields()
 	define_toggles()
 	define_ranges()
@@ -191,22 +192,32 @@ func _define_buttons() -> void:
 	for state: String in ["pressed_", "hover_pressed_"]:
 		toggle_chip["font_%scolor" % state] = c(ThemeColors.ON_STATE)
 	define_variant_style("ToggleChip", "Button", toggle_chip)
-	# Madder has one step: the press reads through the dropped shadow.
-	var danger := ThemeColors.DANGER_FILL
-	define_variant_style("Danger", "Button", _filled(danger, danger, danger, ThemeColors.ON_DANGER))
-	var clear := Color(c(ThemeColors.SURFACE), 0.0)
-	var bare := box(clear, RADIUS_CONTROL, CONTROL_PAD_H, CONTROL_PAD_V)
+	# Madder deepens a step on hover and another on press (the danger button once had one
+	# colour for all three and gave the pointer no answer).
 	define_variant_style(
-		"Ghost",
+		"Danger",
 		"Button",
-		_button(
-			bare,
-			inherit(bare, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
-			inherit(bare, {bg_color = c(ThemeColors.SURFACE_PRESS)}),
-			ThemeColors.TEXT_SOFT,
-			ThemeColors.TEXT
+		_filled(
+			ThemeColors.DANGER_FILL,
+			ThemeColors.DANGER_FILL_HOVER,
+			ThemeColors.DANGER_FILL_PRESS,
+			ThemeColors.ON_DANGER
 		)
 	)
+	var clear := Color(c(ThemeColors.SURFACE), 0.0)
+	var bare := box(clear, RADIUS_CONTROL, CONTROL_PAD_H, CONTROL_PAD_V)
+	var ghost := _button(
+		bare,
+		inherit(bare, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
+		inherit(bare, {bg_color = c(ThemeColors.SURFACE_PRESS)}),
+		ThemeColors.TEXT_SOFT,
+		ThemeColors.TEXT
+	)
+	# Its rest text is already the soft role, so a disabled Ghost steps down to the track role
+	# (3:1 on every surface): otherwise it read as live.
+	ghost.font_disabled_color = c(ThemeColors.TRACK)
+	ghost.icon_disabled_color = c(ThemeColors.TRACK)
+	define_variant_style("Ghost", "Button", ghost)
 	# A quiet action set in a column of words (the map panel's Add details): no pad at its sides,
 	# so its icon stands on the words' left edge, the caption size, soft ink at rest and ink under
 	# the pointer; the focus ring still draws outside it.
@@ -456,6 +467,93 @@ func _define_panels() -> void:
 	define_variant_style(
 		"StateChip", "PanelContainer", {panel = box(c(ThemeColors.STATE), RADIUS_PILL, SPACE_2, 2)}
 	)
+
+
+## The edge drawer (DrawerContainer), by the screen edge it sits on ("Left" or "Right"): its
+## panel, its tab handle and its icon rail's backdrop, and the margin its content stands in.
+## All square on the panel's side so the board never peeks through; the handle and rail are
+## rounded on the side facing away from the panel and carry the top rim. No shadow, because a
+## closed panel rests just off-screen, where one would smudge the screen's edge. Paper adds a
+## pencil edge on the side facing the board; glass has none. Hover and press only deepen (C6).
+## Because the styles live here, a drawer follows its theme leaf (paper or glass) at any time.
+func _define_drawer() -> void:
+	for side: String in ["Left", "Right"]:
+		var left := side == "Left"
+		var panel_extra := {}
+		if not on_glass:
+			panel_extra = {
+				border_color = c(ThemeColors.EDGE),
+				border_width_right = 1 if left else 0,
+				border_width_left = 0 if left else 1,
+			}
+		define_variant_style(
+			"DrawerPanel" + side,
+			"PanelContainer",
+			{panel = box(c(ThemeColors.SURFACE), 0, 0, 0, panel_extra)}
+		)
+		# A card that is only as tall as its content (DrawerContainer.fit_height): the panel's
+		# surface, rounded on the side facing the board, a pencil edge and the lifted shadow, so
+		# the board shows below a short pane. Stands level with the rail's top.
+		var card_corners := {
+			corner_radius_top_right = RADIUS_CARD if left else 0,
+			corner_radius_bottom_right = RADIUS_CARD if left else 0,
+			corner_radius_top_left = 0 if left else RADIUS_CARD,
+			corner_radius_bottom_left = 0 if left else RADIUS_CARD,
+		}
+		var card_trim: Dictionary = inherit(edge(1, c(ThemeColors.EDGE)), lift(), card_corners)
+		if on_glass:
+			card_trim = inherit(rim(), lift(), card_corners)
+		define_variant_style(
+			"DrawerCard" + side,
+			"PanelContainer",
+			{panel = box(c(ThemeColors.SURFACE), 0, 0, 0, card_trim)}
+		)
+		var corners := {
+			corner_radius_top_right = RADIUS_CHIP if left else 0,
+			corner_radius_bottom_right = RADIUS_CHIP if left else 0,
+			corner_radius_top_left = 0 if left else RADIUS_CHIP,
+			corner_radius_bottom_left = 0 if left else RADIUS_CHIP,
+		}
+		var handle: Dictionary = box(
+			c(ThemeColors.SURFACE),
+			0,
+			SPACE_2,
+			SPACE_3,
+			inherit(corners, {border_color = c(ThemeColors.EDGE), border_width_top = 1})
+		)
+		var handle_hover: Dictionary = inherit(handle, {bg_color = c(ThemeColors.SURFACE_HOVER)})
+		var handle_press: Dictionary = inherit(handle, {bg_color = c(ThemeColors.SURFACE_PRESS)})
+		define_variant_style(
+			"DrawerTab" + side,
+			"Button",
+			_button(handle, handle_hover, handle_press, ThemeColors.TEXT)
+		)
+		# The rail's backdrop: the handle's surface with 4 px at its sides round the rail's items
+		# and 8 above and below.
+		define_variant_style(
+			"DrawerRail" + side,
+			"PanelContainer",
+			{
+				panel =
+				inherit(
+					handle,
+					{
+						content_margin_left = SPACE_1,
+						content_margin_right = SPACE_1,
+						content_margin_top = SPACE_2,
+						content_margin_bottom = SPACE_2,
+					}
+				)
+			}
+		)
+	# What a drawer's content stands in: 12 px round it (a play drawer), or 16 (the map tools').
+	for margin_name: String in ["DrawerMargin", "DrawerMarginRoomy"]:
+		var step := SPACE_4 if margin_name.ends_with("Roomy") else SPACE_3
+		define_variant_style(
+			margin_name,
+			"MarginContainer",
+			{margin_left = step, margin_top = step, margin_right = step, margin_bottom = step}
+		)
 
 
 func _define_containers() -> void:

@@ -37,6 +37,9 @@ extends RefCounted
 ## spheres, BUSH_SLOT_PER_INST stroke slots), so a bush does not pay for a tree's 64 slots; and no
 ## tree lists a bush among its neighbouring forms.
 
+## Emitted when trees were installed or erased (the ground's contact occlusion follows it).
+signal changed
+
 const STROKE_SHADER := "res://painter/shaders/painter_tree_stroke.gdshader"
 const BLOCKIN_SHADER := "res://painter/shaders/painter_tree_blockin.gdshader"
 ## The same bodies with TREE_BARE: a bare season's leaf drop (retone swaps them in), so a tree in
@@ -665,6 +668,7 @@ func _rebuild(dirty: Dictionary) -> void:
 			_rebuild_cell(bush_cells, Vector2i(k.x, k.y), true)
 		else:
 			_rebuild_cell(cells, k, false)
+	changed.emit()
 
 
 func _layer_image(l: int) -> Image:

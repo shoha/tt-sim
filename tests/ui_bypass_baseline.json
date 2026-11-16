@@ -12,29 +12,23 @@
 			"colour": 1,
 			"override": 4
 		},
-		"res://scenes/states/authoring/authoring_controller.gd": {
-			"colour": 3
-		},
 		"res://scenes/states/authoring/authoring_panel.gd": {
-			"override": 6
+			"override": 5
 		},
 		"res://scenes/states/authoring/biome_brush.gd": {
 			"colour": 1
 		},
 		"res://scenes/states/authoring/bridge_brush.gd": {
-			"colour": 21
-		},
-		"res://scenes/states/authoring/wall_brush.gd": {
 			"colour": 19
-		},
-		"res://scenes/states/authoring/structure_brush.gd": {
-			"colour": 2
 		},
 		"res://scenes/states/authoring/bridge_tool_pane.gd": {
 			"override": 1
 		},
 		"res://scenes/states/authoring/brush_cursor.gd": {
-			"colour": 6
+			"colour": 3
+		},
+		"res://scenes/states/authoring/cursor_tints.gd": {
+			"colour": 3
 		},
 		"res://scenes/states/authoring/new_map_dialog.gd": {
 			"override": 1
@@ -42,17 +36,20 @@
 		"res://scenes/states/authoring/paint_brush.gd": {
 			"colour": 1
 		},
-		"res://scenes/states/authoring/place_brush.gd": {
-			"colour": 1
-		},
 		"res://scenes/states/authoring/sculpt_brush.gd": {
 			"colour": 3
+		},
+		"res://scenes/states/authoring/structure_brush.gd": {
+			"colour": 2
 		},
 		"res://scenes/states/authoring/thin_brush.gd": {
 			"colour": 1
 		},
+		"res://scenes/states/authoring/wall_brush.gd": {
+			"colour": 19
+		},
 		"res://scenes/states/authoring/water_brush.gd": {
-			"colour": 10
+			"colour": 1
 		},
 		"res://scenes/states/authoring/water_tool_pane.gd": {
 			"override": 1
@@ -96,9 +93,6 @@
 		"res://scenes/states/playing/events/forest_fall.gd": {
 			"colour": 2
 		},
-		"res://scenes/states/playing/events/ground_burn.gd": {
-			"colour": 9
-		},
 		"res://scenes/states/playing/events/smoke_puffs.gd": {
 			"colour": 2
 		},
@@ -140,8 +134,7 @@
 			"colour": 4
 		},
 		"res://scenes/states/title_screen/title_screen.tscn": {
-			"colour": 4,
-			"override": 7
+			"override": 4
 		},
 		"res://scenes/ui/add_pack_dialog.tscn": {
 			"override": 1
@@ -157,9 +150,6 @@
 		},
 		"res://scenes/ui/download_queue.tscn": {
 			"override": 6
-		},
-		"res://scenes/ui/drawer_container.gd": {
-			"override": 12
 		},
 		"res://scenes/ui/help_overlay.gd": {
 			"override": 6

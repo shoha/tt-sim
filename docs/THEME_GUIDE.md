@@ -370,13 +370,13 @@ func close() -> void:
 
 | Property            | Default     | Description                        |
 | ------------------- | ----------- | ---------------------------------- |
-| `fade_in_duration`  | 0.3s        | Duration of show animation         |
-| `fade_out_duration` | 0.2s        | Duration of hide animation         |
-| `scale_in_from`     | (0.8, 0.8)  | Starting scale when appearing      |
-| `scale_out_to`      | (0.9, 0.9)  | Ending scale when disappearing     |
+| `fade_in_duration`  | `UiMotion.PANEL_IN_S` 0.22s | Duration of show animation (Reduce motion: at most 0.12s, fade only) |
+| `fade_out_duration` | `UiMotion.PANEL_OUT_S` 0.16s | Duration of hide animation |
+| `scale_in_from`     | (0.96, 0.96) | Starting scale when appearing (none under Reduce motion) |
+| `scale_out_to`      | (0.98, 0.98) | Ending scale when disappearing |
 | `ease_in_type`      | EASE_OUT    | Easing for show animation          |
 | `ease_out_type`     | EASE_IN     | Easing for hide animation          |
-| `trans_in_type`     | TRANS_BACK  | Transition curve for show (bouncy) |
+| `trans_in_type`     | TRANS_QUART | Transition curve for show (`UiMotion.ARRIVE_TRANS`, no overshoot) |
 | `trans_out_type`    | TRANS_CUBIC | Transition curve for hide (smooth) |
 | `start_hidden`      | true        | Whether to start hidden on ready   |
 
@@ -531,17 +531,50 @@ It preserves each theme resource's UID when it has one (captured before saving, 
 
 ## Motion
 
-Timing tokens live in `Constants`:
+The numbers live in `UiMotion` (`utils/ui_motion.gd`), the one place motion is decided;
+`Constants.ANIM_*` are aliases for the call sites that read them. Principles and bands:
+UI_TASTE.md "2026-11-15 foundation pass". Use `UiMotion.fade_s()` / `travel()` /
+`stagger_step()` / `reduced()` in any new animation so Reduce motion (Settings > Graphics, saved
+`ui/reduce_motion`, plus the OS flag) is honoured: no scale, lift, slide or stagger, only short
+fades.
 
-| Token | Value | Used by |
+| Token (`UiMotion`, alias in `Constants`) | Value | Used by |
 |---|---|---|
-| `ANIM_HOVER_IN` / `ANIM_HOVER_OUT` | 0.12 s back-out / 0.10 s cubic-out | IconButton, Tile hover scale to `UI_HOVER_SCALE` (1.06) |
-| `ANIM_HOVER_SOFT_IN` / `ANIM_HOVER_SOFT_OUT` | 0.24 s / 0.20 s sine in-out | LevelCard zooms its thumbnail 4% (`THUMB_HOVER_SCALE`) inside a clipped slot instead of scaling the whole card -- a whole-card scale clips against the grid |
-| `ANIM_PRESS` | 0.06 s | press to `UI_PRESS_SCALE` (0.96) |
-| `ANIM_PANE_SWAP` / `ANIM_PANE_SWAP_OFFSET_PX` | 0.16 s cubic-out, 8 px | PaneStack crossfade, IconRail indicator |
-| `ANIM_FOLDOUT` | 0.16 s cubic-out | Foldout body and chevron |
-| `DrawerContainer.slide_duration` | 0.25 s cubic-out | drawer sled |
-| `ANIM_ENTRANCE` / `ANIM_ENTRANCE_STAGGER` | 0.3 s cubic-out, 0.08 s apart | `UiMotion.stagger_in()`: title and pause menu bodies fade and lift 12 px into place |
+| `FEEDBACK_IN_S` / `FEEDBACK_OUT_S` (`ANIM_HOVER_IN` / `_OUT`) | 0.12 s / 0.10 s, quart / cubic | IconButton, Tile hover scale to `UI_HOVER_SCALE` (1.06), no overshoot |
+| `SOFT_IN_S` / `SOFT_OUT_S` (`ANIM_HOVER_SOFT_IN` / `_OUT`) | 0.24 s / 0.20 s sine in-out | LevelCard zooms its thumbnail 4% (`THUMB_HOVER_SCALE`) inside a clipped slot instead of scaling the whole card -- a whole-card scale clips against the grid |
+| `PRESS_S` (`ANIM_PRESS`) | 0.09 s | press to `UI_PRESS_SCALE` (0.96) |
+| `STATE_S` (`ANIM_PANE_SWAP`, `ANIM_FOLDOUT`) and `ANIM_PANE_SWAP_OFFSET_PX` | 0.16 s quart-out, 8 px | PaneStack crossfade, IconRail indicator, Foldout body and chevron |
+| `PANEL_IN_S` / `PANEL_OUT_S` (`ANIM_FADE_IN_DURATION` / `_OUT_`) | 0.22 s quart-out / 0.16 s cubic-in, scale 0.96 to 1.0 | sheets, popups, `AnimatedVisibilityContainer`, `DrawerContainer.slide_duration` |
+| `ENTRANCE_S` / `STAGGER_S` / `STAGGER_CAP_S` (`ANIM_ENTRANCE`, `ANIM_ENTRANCE_STAGGER`) | 0.24 s, 30 ms apart, whole entrance within 0.36 s | `UiMotion.stagger_in()`: title and pause menu bodies fade and lift 12 px into place |
+| `FADE_ONLY_S` | 0.12 s | every fade under Reduce motion |
+
+## Foundation pass (2026-11-15): what each screen still needs
+
+The theme is one design for both Looks (UI_TASTE.md says why). Remaining work is per screen,
+for the three menu cards (read off the `painter_ui1` captures, 1920x1080). Worst theme bypasses (counts from `tests/ui_bypass_baseline.json`,
+which may only fall): `drawer_container.gd` 12 overrides, `download_queue.gd` / `.tscn` 11,
+`avatar_swatch_row.gd` 7, `title_screen.tscn` 7 overrides and 4 colour literals,
+`help_overlay.gd` 6, `volume_overlay.gd` 4 and `sky_pane.gd` 3 colour literals.
+
+- **Settings:** the dialog is 600 wide and about 560 tall at 1080p, so Graphics clips its last
+  rows (Lo-fi filter half cut at the bottom edge) behind a scroll; give the sheet its height
+  budget or split Graphics (Display, Performance, Accessibility). Reduce motion sits under
+  Interface size for now and should live in an Accessibility group with Interface size.
+  Toggle rows (`CheckButton`) are small 120 px label columns; rows have no description
+  line, so what a switch does is only in its tooltip.
+- **Map building (authoring):** done by card ui-authoring (2026-11-15; UI_TASTE "2026-11-15 map
+  building", UI_SYSTEMS "Map building chrome"): the tool drawer and rail are paper (a one-constant
+  glass alternative), a card as tall as its pane, drawn by the `Drawer*` theme variations
+  (`_define_drawer`: `DrawerPanel`, `DrawerCard`, `DrawerTab`, `DrawerRail` by `Left` or `Right`,
+  and `DrawerMargin`, `DrawerMarginRoomy`), so `drawer_container.gd` has no theme overrides left.
+  `avatar_swatch_row.gd` (7 overrides) is the avatar builder's, not map building's, and is open.
+- **Gameplay HUD:** glass is right here (play continues), but the toasts and hint bar are
+  low-contrast small chips over a bright board, the top-right camera disc cluster and the
+  right rail carry no labels, and `Add token` is the lone bottom-right button with no
+  relation to the rail. Toast text and icon sizes are at the 14 px floor.
+- **Shared:** title, room, pause and confirms are already paper on the sky and need only the
+  per-card polish above; the avatar builder and asset browser (glass over play) were not
+  audited in this pass beyond their capture.
 
 Scale and position animations use `Control.offset_transform_scale` / `offset_transform_position` (Godot 4.7) via `UiMotion.scale_to()`, so containers never relayout during motion. Sounds reuse `AudioManager.play(&"tick")`, `&"open"` and `&"close"`.
 

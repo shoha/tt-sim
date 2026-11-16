@@ -416,6 +416,9 @@ func _on_hover(entered: bool) -> void:
 		return
 	if _tween and _tween.is_valid():
 		_tween.kill()
+	if UiMotion.reduced():
+		_thumb.scale = Vector2.ONE
+		return
 	var target := THUMB_HOVER_SCALE if entered else Vector2.ONE
 	var duration := Constants.ANIM_HOVER_SOFT_IN if entered else Constants.ANIM_HOVER_SOFT_OUT
 	_tween = create_tween()

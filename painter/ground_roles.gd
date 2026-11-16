@@ -23,26 +23,48 @@ extends RefCounted
 ## library (a `paint_role` field beside a surface's PBR set, and a biome's taken from its ground
 ## surface), so an imported library's surfaces keep their meaning; then these tables go.
 
-const ROLES: Array[String] = ["meadow", "floor", "path", "rock", "shore", "char"]
-## The sheet role each ground role paints with (index for index with ROLES). `char` is the burnt
-## ground (painter-fire): the forest floor's ramp scaled to charcoal (CHAR_SCALE), so it follows
-## the mood and the sun like every ground and is never a fixed colour.
+const ROLES: Array[String] = [
+	"meadow", "floor", "path", "rock", "shore", "dry", "ash", "earth", "char"
+]
+## The sheet role each ground role paints with (index for index with ROLES). A role in DERIVED
+## paints with its base role's tone moved by the sheet's numbers. `ash` is a biome's ground (a burnt
+## forest's, from the stone tone); `char` is the scorch a fire event leaves (painter-fire): the
+## floor's luminance in a warm charcoal tint (char_of), never a keyed colour, laid over whatever
+## ground was there. They are different things and both stay.
 const TONE_ROLE: Dictionary = {
 	"meadow": "ground",
 	"floor": "floor",
 	"path": "path",
 	"rock": "stone",
 	"shore": "shore",
+	"dry": "ground",
+	"ash": "stone",
+	"earth": "path",
 	"char": "floor",
 }
-## The tint the floor's luminance takes for the burnt ground (char_of): a warm charcoal, never the
-## floor's green.
+## The tint the floor's luminance takes for the scorched ground (char_of): a warm charcoal, never
+## the floor's green.
 const CHAR_TINT := Vector3(0.84, 0.58, 0.42)
-## The most luminance the burnt ground keeps from the floor's ramp (linear).
+## The most luminance the scorched ground keeps from the floor's ramp (linear).
 const CHAR_MAX := 0.1
+## The tones the painted look derives from a keyframed role instead of keying them (card
+## painter-coverage): name -> [the sheet role it is derived from, the prefix of its three sheet
+## numbers `<prefix>-hue` (degrees), `<prefix>-chroma` (a factor) and `<prefix>-lift`]. dry, ash
+## and earth are ground roles (the savanna's straw, a burnt forest's ash, the badlands' baked
+## earth, the third texel group of the zone map); dry-grass is the tufts of a dry biome
+## (PainterPlantRoles).
+const DERIVED: Dictionary = {
+	"dry": ["ground", "dry"],
+	"ash": ["stone", "ash"],
+	"earth": ["path", "earth"],
+	"dry-grass": ["grass", "drygrass"],
+	"cactus": ["leaf", "cactus"],
+}
+## The zone map's second texture holds these (r dry, g ash, b earth): index in ROLES from here.
+const BIOME_ROLES_FROM := 5
 const DEFAULT_ROLE := "meadow"
-## [role, words], first match wins (see the header). The char role is the burnt ground: the
-## event fire's ash surface and its burnt biome (FireSweep.ASH, BURNT_BIOME).
+## [role, words], first match wins (see the header). The char role is the event fire's scar: the
+## ash surface it stamps (FireSweep.ASH); a burnt biome is the `ash` role (BIOME_RULES).
 const SURFACE_RULES: Array = [
 	["char", ["ash", "char", "charred", "cinder", "scorched"]],
 	["rock", ["cliff", "scree", "rock", "boulder"]],
@@ -70,9 +92,11 @@ const SURFACE_RULES: Array = [
 	["meadow", ["grass", "meadow", "glade", "lawn", "snow"]],
 ]
 const BIOME_RULES: Array = [
-	["char", ["burnt", "burned", "scorched"]],
-	["shore", ["badlands", "desert", "beach", "dunes"]],
-	["meadow", ["meadow", "grassland", "savanna", "alpine", "wetland", "birch", "woodland"]],
+	["ash", ["burnt"]],
+	["earth", ["badlands", "desert"]],
+	["dry", ["savanna"]],
+	["shore", ["beach", "dunes"]],
+	["meadow", ["meadow", "grassland", "alpine", "wetland", "birch", "woodland"]],
 	["floor", ["forest", "taiga", "jungle"]],
 ]
 
@@ -105,6 +129,22 @@ static func surface_rule(surface_id: String) -> int:
 ## The index in BIOME_RULES that resolves `biome_id`, or -1 when it falls to DEFAULT_ROLE.
 static func biome_rule(biome_id: String) -> int:
 	return _rule(BIOME_RULES, biome_id)
+
+
+## The middle tone (OKLCH) of derived role `role` (a key of DERIVED) in `mood` at `elevation`: its
+## base role's tone with the hue turned to `<prefix>-hue`, the chroma times `<prefix>-chroma` and
+## the lightness moved by `<prefix>-lift`. Pure.
+static func derived(sheet: Dictionary, mood: String, role: String, elevation: float) -> Vector3:
+	var spec: Array = DERIVED[role]
+	var base := PainterSheet.tone_lch(sheet, mood, str(spec[0]), elevation)
+	var p := str(spec[1])
+	var num := func(suffix: String) -> float:
+		return PainterSheet.number(sheet, mood, "%s-%s" % [p, suffix], elevation)
+	return Vector3(
+		clampf(base.x + float(num.call("lift")), 0.05, 0.98),
+		base.y * float(num.call("chroma")),
+		float(num.call("hue"))
+	)
 
 
 ## The index of `role` in ROLES (the ground shader's role number), DEFAULT_ROLE's for an unknown.

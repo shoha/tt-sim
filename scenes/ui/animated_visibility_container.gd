@@ -6,14 +6,14 @@ extends Control
 
 # Animation configuration - override these in child classes for different effects
 @export_group("Animation Settings")
-@export var fade_in_duration: float = 0.3
-@export var fade_out_duration: float = 0.2
-@export var scale_in_from: Vector2 = Vector2(0.8, 0.8)
-@export var scale_out_to: Vector2 = Vector2(0.9, 0.9)
+@export var fade_in_duration: float = UiMotion.PANEL_IN_S
+@export var fade_out_duration: float = UiMotion.PANEL_OUT_S
+@export var scale_in_from: Vector2 = Vector2.ONE * UiMotion.PANEL_SCALE_FROM
+@export var scale_out_to: Vector2 = Vector2.ONE * UiMotion.PANEL_SCALE_TO
 @export var ease_in_type: Tween.EaseType = Tween.EASE_OUT
 @export var ease_out_type: Tween.EaseType = Tween.EASE_IN
-@export var trans_in_type: Tween.TransitionType = Tween.TRANS_BACK
-@export var trans_out_type: Tween.TransitionType = Tween.TRANS_CUBIC
+@export var trans_in_type: Tween.TransitionType = UiMotion.ARRIVE_TRANS
+@export var trans_out_type: Tween.TransitionType = UiMotion.EXIT_TRANS
 @export var start_hidden: bool = true
 
 @export_group("Sound")
@@ -52,12 +52,13 @@ func animate_in() -> void:
 	tween.set_ease(ease_in_type)
 	tween.set_trans(trans_in_type)
 
-	# Animate opacity
-	tween.tween_property(self, "modulate:a", 1.0, fade_in_duration)
+	# Animate opacity; under Reduce motion only the fade stays
+	var duration := UiMotion.fade_s(fade_in_duration)
+	tween.tween_property(self, "modulate:a", 1.0, duration)
 
-	# Animate scale
-	scale = scale_in_from
-	tween.tween_property(self, "scale", Vector2.ONE, fade_in_duration)
+	scale = UiMotion.travel(scale_in_from, Vector2.ONE)
+	if scale != Vector2.ONE:
+		tween.tween_property(self, "scale", Vector2.ONE, duration)
 
 	# Callback when animation completes
 	tween.finished.connect(_on_animate_in_finished, CONNECT_ONE_SHOT)
@@ -83,11 +84,10 @@ func animate_out() -> void:
 	tween.set_ease(ease_out_type)
 	tween.set_trans(trans_out_type)
 
-	# Animate opacity
-	tween.tween_property(self, "modulate:a", 0.0, fade_out_duration)
-
-	# Animate scale
-	tween.tween_property(self, "scale", scale_out_to, fade_out_duration)
+	var duration := UiMotion.fade_s(fade_out_duration)
+	tween.tween_property(self, "modulate:a", 0.0, duration)
+	if not UiMotion.reduced():
+		tween.tween_property(self, "scale", scale_out_to, duration)
 
 	# Hide after animation completes
 	tween.finished.connect(_on_animate_out_finished, CONNECT_ONE_SHOT)

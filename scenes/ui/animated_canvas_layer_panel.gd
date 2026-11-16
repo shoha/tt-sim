@@ -157,17 +157,18 @@ func animate_in() -> void:
 
 	var panel = $CenterContainer/PanelContainer
 	panel.pivot_offset = panel.size / 2
-	panel.scale = Vector2(0.9, 0.9)
+	panel.scale = UiMotion.travel(Vector2.ONE * UiMotion.PANEL_SCALE_FROM, Vector2.ONE)
+	var duration := UiMotion.fade_s(Constants.ANIM_FADE_IN_DURATION)
 
+	# Ease out with no overshoot (UI_TASTE M2): the sheet settles, it does not bounce.
 	_panel_tween = create_tween()
 	_panel_tween.set_parallel(true)
 	_panel_tween.set_ease(Tween.EASE_OUT)
-	_panel_tween.set_trans(Tween.TRANS_BACK)
-	_panel_tween.tween_property($ColorRect, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
-	_panel_tween.tween_property(
-		$CenterContainer, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION
-	)
-	_panel_tween.tween_property(panel, "scale", Vector2.ONE, Constants.ANIM_FADE_IN_DURATION)
+	_panel_tween.set_trans(UiMotion.ARRIVE_TRANS)
+	_panel_tween.tween_property($ColorRect, "modulate:a", 1.0, duration)
+	_panel_tween.tween_property($CenterContainer, "modulate:a", 1.0, duration)
+	if panel.scale != Vector2.ONE:
+		_panel_tween.tween_property(panel, "scale", Vector2.ONE, duration)
 
 	if play_sounds:
 		AudioManager.play(&"open")
@@ -194,14 +195,12 @@ func animate_out() -> void:
 	_panel_tween = create_tween()
 	_panel_tween.set_parallel(true)
 	_panel_tween.set_ease(Tween.EASE_IN)
-	_panel_tween.set_trans(Tween.TRANS_CUBIC)
-	_panel_tween.tween_property($ColorRect, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
-	_panel_tween.tween_property(
-		$CenterContainer, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION
-	)
-	_panel_tween.tween_property(
-		panel, "scale", Vector2(0.95, 0.95), Constants.ANIM_FADE_OUT_DURATION
-	)
+	_panel_tween.set_trans(UiMotion.EXIT_TRANS)
+	var duration := UiMotion.fade_s(Constants.ANIM_FADE_OUT_DURATION)
+	_panel_tween.tween_property($ColorRect, "modulate:a", 0.0, duration)
+	_panel_tween.tween_property($CenterContainer, "modulate:a", 0.0, duration)
+	if not UiMotion.reduced():
+		_panel_tween.tween_property(panel, "scale", Vector2.ONE * UiMotion.PANEL_SCALE_TO, duration)
 
 	if play_sounds:
 		AudioManager.play(&"close")

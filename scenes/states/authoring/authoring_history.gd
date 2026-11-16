@@ -126,6 +126,16 @@ func can_redo() -> bool:
 	return not _redo.is_empty()
 
 
+## The label of the entry undo() would take back next, "" when there is none.
+func next_undo_label() -> String:
+	return "" if _undo.is_empty() else String(_undo.back().get("label", ""))
+
+
+## The label of the entry redo() would put back next, "" when there is none.
+func next_redo_label() -> String:
+	return "" if _redo.is_empty() else String(_redo.back().get("label", ""))
+
+
 ## True when `entry` is the one undo() would take back next (an undo toast's entry is undone
 ## only while nothing newer stands on it).
 func is_newest(entry: Dictionary) -> bool:

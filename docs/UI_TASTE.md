@@ -182,6 +182,89 @@ use it).
 | G13 | A modal or full-screen notice for a table event peers did not choose | bridge collapse, fire, a forest falling: a glass chip, and the world shows it |
 | G14 | Host-only truth shown as if shared | GM-only download progress or pending edits, unlabelled |
 
+## 2026-11-15 foundation pass (card ui-painted-theme)
+
+Written after the owner asked for the UI to match the painterly look, with colour and motion
+chosen on good UX principles. The audit found the Painted Table already is that language (warm
+paper, ink, persimmon and lake over a sky gradient, plum glass in play; the 2026-11-09 painter
+frames agree with it: teal conifers, lime birch, lilac rock, cream stone), so the pass fixes
+what was measurably wrong and centralises the rest. It changes no owner verdict.
+
+- **Decision: one theme, not one per look.** The Look setting (Classic, Painted, Map's choice)
+  paints the board only; the paper and glass leaves are the painterly UI for both, and nothing
+  switches the UI theme with it. Reasons: the UI is never drawn by the painter, a Classic board
+  under the same chrome costs nothing, and a second theme doubles every contrast and focus check
+  for no player-visible gain. A map in Classic still gets glass over it, which is dark plum.
+- **Decision: no brush-edge or paper-grain texture on panels.** The 2026-10-10 verdict
+  (solid colours and subtle gradients until painterly UI is revisited) stands. Panels keep their
+  flat fill, pencil edge and ink shadow. The place to spend painterly effort is the backdrop and
+  the board, not chrome.
+- **C9 Colour-vision safety.** Success, warning, danger and info are told apart in simulated
+  protanopia and deuteranopia by CIE76 dE of 15 or more, in tritanopia by 7 or more, on both
+  leaves (`tests/unit/test_ui_accessibility.gd`, Machado 2009 matrices), and each kind also
+  carries its own icon (C7). Moss and madder collapsed to one olive-brown for a deuteranope (dE
+  2.3), so SUCCESS is now `SEA_GREEN #1B7653` on paper and `MINT #86E3B4` on glass; `MOSS` and
+  `MOSS_LIGHT` stay for the 3D tints that read them.
+- **C6 addendum.** Every button type answers the pointer: rest, hover and press are three
+  different fills. The danger button had one colour for all three; it now steps `MADDER`,
+  `MADDER_HOVER #962B35`, `MADDER_PRESS #84252E`. A disabled Ghost steps from the soft text
+  role down to the track role (its rest text is the soft role, so it read as live).
+- **M-tokens.** `UiMotion` (`utils/ui_motion.gd`) is the one place motion is decided and
+  `Constants.ANIM_*` alias it. Bands: feedback 90 to 120 ms (`FEEDBACK_IN_S` 0.12,
+  `FEEDBACK_OUT_S` 0.10, `PRESS_S` 0.09), state and panels 160 to 240 ms (`STATE_S` 0.16,
+  `PANEL_IN_S` 0.22, `PANEL_OUT_S` 0.16, `ENTRANCE_S` 0.24), nothing past 400 ms
+  (`LARGE_MAX_S`). `ARRIVE_TRANS` is `TRANS_QUART` ease out, `EXIT_TRANS` `TRANS_CUBIC` ease in;
+  `CELEBRATE_TRANS` (`TRANS_BACK`) is named so a celebration can use it and nothing else does.
+  `tests/unit/test_ui_motion.gd` also fails if a panel, drawer, hover or toast source uses
+  `TRANS_BACK`, `TRANS_ELASTIC` or `TRANS_BOUNCE`.
+- **M2 amended.** The 6% back-out on a tile or icon hover is gone: hover scale eases out with
+  `ARRIVE_TRANS`, so no functional control overshoots. Sheets start at 0.96 and settle at 1.0
+  (they started at 0.9 and overshot under `TRANS_BACK`, G4); the token menu and asset browser
+  follow.
+- **M4 amended.** A list staggers by `STAGGER_S` 30 ms (it was 80 ms, which put an eight-row
+  menu at 0.94 s), trimmed by `UiMotion.stagger_step()` so the whole entrance ends within
+  `STAGGER_CAP_S` 0.36 s. The lift rides `offset_transform_position`, so rows no longer move by
+  `position` (M3) and no container re-sorts at the end.
+- **M5 implemented: Reduce motion.** Settings > Graphics > Reduce motion (saved `ui/reduce_motion`,
+  applied at once, `UiPreferences.load_reduce_motion` / `save_reduce_motion`) joins the OS
+  reduce-animation flag in `UiMotion.reduced()`. Under it, sheets, popups, the asset browser,
+  the download panel and pane swaps fade over at most `FADE_ONLY_S` 0.12 with no scale, lift or
+  slide; a drawer fades in and cuts out; hover and press keep their colour but not their scale;
+  stagger collapses to one simultaneous fade; the level card thumbnail does not zoom. Input is
+  never blocked in either mode.
+- **Not done here (for the menu cards).** The glass HUD (authoring, gameplay) is still dark
+  plum at 0.90 opacity, which is the least painterly surface left; whether authoring, which
+  does not run a table, should be paper rather than glass is the map-building card's call, with
+  the owner. See `docs/THEME_GUIDE.md` "Foundation pass" for the per-screen list.
+
+## 2026-11-15 map building (card ui-authoring)
+
+Written after the owner asked for the menus to match the look; this is map building's part.
+Code: `docs/UI_SYSTEMS.md` "Map building chrome". Decisions are the card's and the owner may
+reverse the first with one constant.
+
+- **Decision: the map tools are paper, glass one constant away.** Building a map stops play, so
+  by C8 ("if it stops play it is paper") its drawer and rail are paper (`AuthoringChrome.
+  SURFACE_PAPER`). Why: the dark plum slab sat over the brightest painted board as the heaviest
+  thing on screen, and the owner's own menus are paper. The risk is the opposite: a cream
+  panel is the brightest thing beside a dense dark forest (G12), so the panel is a card as tall
+  as its pane (`FIT_HEIGHT`) and leaves the board visible under a short pane. The glass
+  variant is complete (drawer, rail, panes, first-strokes card, all theme-driven) and was
+  captured at runtime. Chips over the board (brush readout, hint bar, toasts) stay glass,
+  because they sit over any biome and need the dark plate for legibility.
+- **Grouped rail.** Twelve tools in one column read as noise; four runs with a gap between
+  them (land, shape, features, build) let the eye find a tool by what it does, and the actions
+  sit apart under them (G-grouping, nothing is hidden or removed).
+- **Words say the state.** Undo and Redo name the edit they act on and say "Nothing to undo"
+  when off; each does so in a toast ("Undid Raise") so the effect is seen without looking at the
+  drawer. Save says whether anything is unsaved and answers Ctrl+S. The map name field lost its
+  caption: the pane's title is what the drawer is about.
+- **Once-only onboarding.** A small paper card says the first strokes in two lines, the first
+  time only, and goes at "Got it" or at the first edit; it fades, never slides.
+- **Motion.** The drawer keeps UiMotion's panel in and out (0.22 and 0.16 s, quart out);
+  under Reduce motion it fades in and cuts out. The card's height follows a pane swap without
+  animation (a tween on a size that content also drives would fight the layout).
+
 ## Verdicts
 
 The user's decisions about the interface, newest last. They outrank every rule above; a card
