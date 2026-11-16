@@ -1475,9 +1475,19 @@ painter_final25_coverage/matrix.md`. What the card filled:
     broke into small glitter triangles because the gradient changes per mesh triangle. Partly
     helps; the lap band itself still shows triangle shards on a steep pond bank (open: cap the
     slope used for `d_h`).
-  - Open: one row of mirrored white dabs sits across a river at the map edge (inside the map, at the
-    boundary; probably the depth-slope wrap foam on a crease between the terrain's and the patch's
-    bed), and the ribbon fades through a pale turquoise before the green.
+  - Round 2 (card painter-edges2, frames `after2`, `after3`): the skirt now takes the terrain's wet-bank
+    texture too (`_bind_wet`; it clamps at the map's edge, so the bank band runs on along the patch
+    instead of ending in a hard line). The row of mirrored white dabs across a river at the map edge
+    is gone: the shore effects keyed to a shallow column (depth-slope wrap, lap dashes, the ice rim,
+    the wash's shoreline alpha) fade within a metre of the map's edge (`edge_band` in
+    painter_water.gdshader; `p_exit` is set by `SkirtExits.ribbon_material`, so a map with no river
+    exit is untouched). `d_h = column_raw / min(slope, 1.0)` for the pond's glitter was tried and
+    changed nothing visible, so it was dropped; the shards on a steep pond bank remain (the bed's
+    depth, per terrain triangle, is the likely source).
+  - Open: a hairline across the river exactly at the map edge (white over snow in winter, a faint sliver
+    in summer, also in Classic): a gap or T-junction between the in-map water mesh's last row and the
+    ribbon's first (`RiverExitMesh._ribbon_piece`), not a shader effect. The ribbon fades through a
+    pale turquoise before the green.
 - **Known gaps** are listed in the matrix with their effort: baked settlement furnishings, field
   plants, round and profile roofs (procgen records).
 
