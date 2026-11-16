@@ -91,6 +91,10 @@ const TABS := {
 					"desc": "Show a see-through outline of a token hidden behind trees, rocks or walls.",
 				},
 				{
+					"row": "TokenPins",
+					"desc": "Always keeps a pin over every token; Top-down only shows it from a high view.",
+				},
+				{
 					"row": "CanopyFade",
 					"desc": "Zoomed in, thin the treetops around the middle of the screen so the table shows.",
 				},

@@ -170,6 +170,23 @@ func test_every_setting_round_trips_through_save_and_load() -> void:
 		)
 
 
+func test_token_pins_row_is_in_view_and_camera_and_is_covered_by_reset_and_round_trip() -> void:
+	var group := _group("Graphics", "View and camera")
+	assert_true(group.controls.has(_menu.token_pins_option), "the row is in its group")
+	assert_eq(_menu.session.defaults()["TokenPinsOption"], TokenMarkers.PinMode.ALWAYS)
+	assert_true(_menu.session.value_controls().has(_menu.token_pins_option))
+	_menu.token_pins_option.select(
+		_menu.token_pins_option.get_item_index(TokenMarkers.PinMode.TOP_DOWN)
+	)
+	_menu.session.refresh()
+	assert_false((group.reset as Button).disabled, "a changed pin mode wakes the group's Reset")
+	_menu._save_settings(TMP_SETTINGS)
+	_menu.session.reset_group(group)
+	assert_eq(_menu.token_pins_option.get_selected_id(), TokenMarkers.PinMode.ALWAYS)
+	_menu._load_settings(TMP_SETTINGS)
+	assert_eq(_menu.token_pins_option.get_selected_id(), TokenMarkers.PinMode.TOP_DOWN)
+
+
 func test_search_hides_what_does_not_match() -> void:
 	_menu.layout.set_filter("shadow")
 	var shadow := _menu.find_child("RowBlock_ShadowQuality", true, false) as Control

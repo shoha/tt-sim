@@ -20,7 +20,9 @@ extends GutTest
 ## names, kept apart so the clipmap's own scripts are not in the start-up graph.
 ## 345 with RenderStyle (painter-a1): the Look row's 140-line constants and resolver class, which
 ## LevelData and the Settings graphics helper name; the rest of painter/ loads on first use.
-const LIMIT_SCRIPTS := 345
+## 346 with SettingsTokenPins (painter-look-ghost2): the Settings row's helper, as the other
+## graphics rows have; TokenMarkers and the pin code load by path.
+const LIMIT_SCRIPTS := 346
 
 var _classes: Dictionary = {}
 var _strings := RegEx.create_from_string(

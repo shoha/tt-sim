@@ -24,6 +24,7 @@ static func apply(menu: SettingsMenu) -> void:
 	menu.lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
 	SettingsTokenShading.apply_tooltip(menu)
 	SettingsSeeThrough.apply_tooltips(menu)
+	SettingsTokenPins.apply_tooltip(menu)
 	SettingsWindMotion.apply_tooltip(menu)
 	menu.antialiasing_option.tooltip_text = "Smooths jagged edges on foliage (uses more GPU memory)"
 	menu.shadow_quality_option.tooltip_text = (

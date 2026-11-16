@@ -121,6 +121,7 @@ var _quality: RefCounted = null
 @onready var lofi_check: CheckButton = %LofiCheck
 @onready var token_shading_option: OptionButton = %TokenShadingOption
 @onready var token_ghost_check: CheckButton = %TokenGhostCheck
+@onready var token_pins_option: OptionButton = %TokenPinsOption
 @onready var canopy_fade_check: CheckButton = %CanopyFadeCheck
 @onready var wind_motion_slider: HSlider = %WindMotionSlider
 @onready var wind_motion_label: Label = %WindMotionLabel
@@ -617,6 +618,7 @@ func _show_saved_values(config: ConfigFile) -> void:
 	vsync_check.set_pressed_no_signal(config.get_value("graphics", "vsync", true))
 	lofi_check.set_pressed_no_signal(config.get_value("graphics", "lofi_enabled", true))
 	SettingsTokenShading.show_saved(self, config)
+	SettingsTokenPins.show_saved(self, config)
 	SettingsSeeThrough.show_saved(self, config)
 	SettingsWindMotion.show_saved(self, config)
 	ssao_check.set_pressed_no_signal(
@@ -669,6 +671,7 @@ func _write_values(config: ConfigFile) -> void:
 	config.set_value("graphics", "vsync", vsync_check.button_pressed)
 	config.set_value("graphics", "lofi_enabled", lofi_check.button_pressed)
 	SettingsTokenShading.save(self, config)
+	SettingsTokenPins.save(self, config)
 	SettingsSeeThrough.save(self, config)
 	SettingsWindMotion.save(self, config)
 	config.set_value("graphics", "ssao_enabled", ssao_check.button_pressed)
@@ -863,6 +866,7 @@ func _show_defaults(instant: bool = false) -> void:
 	vsync_check.set_pressed_no_signal(true)
 	lofi_check.set_pressed_no_signal(true)
 	SettingsTokenShading.show_defaults(self)
+	SettingsTokenPins.show_defaults(self)
 	SettingsSeeThrough.show_defaults(self)
 	antialiasing_option.select(antialiasing_option.get_item_index(Viewport.MSAA_DISABLED))
 	shadow_quality_option.select(shadow_quality_option.get_item_index(DEFAULT_SHADOW_QUALITY))

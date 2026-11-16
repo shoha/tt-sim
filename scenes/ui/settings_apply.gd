@@ -39,6 +39,7 @@ static func preview(menu: SettingsMenu) -> void:
 	if game_map:
 		game_map.set_lofi_enabled(menu.lofi_check.button_pressed)
 	SettingsTokenShading.apply(menu)
+	SettingsTokenPins.apply(menu)
 	SettingsSeeThrough.apply(menu, game_map)
 	# Global renderer settings: no map is needed, so they apply from the title screen too. Shadow
 	# quality is scoped to directional shadows, as DebugRenderToggles' "Hard sun shadows" tested.

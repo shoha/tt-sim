@@ -1,15 +1,21 @@
 class_name TokenMarkers
 extends Node3D
 
-## The top-down token marker: from straight above an avatar is a 20 px speck at the usual zoom
-## (camera-2, 2026-11-02), so above about 55 degrees of camera pitch every token gets a map pin
-## drawn on top of the board: a round head holding the token's own picture (TokenPortraits) with
-## a short tail whose tip touches the top edge of the token, so the token itself is never
-## covered. The head is HEAD_PX across whatever the zoom; the tip stands on the token's edge as
-## it looks from the camera (a large token's footprint edge, a standing figure's head), found
-## from the token's footprint and height. It fades in between 55 and 70 degrees
-## (CameraRig.marker_strength) and is off below, where the model reads and the token ghost
-## shows a token under cover.
+## The token marker: from straight above an avatar is a 20 px speck at the usual zoom
+## (camera-2, 2026-11-02), so every token gets a map pin drawn on top of the board: a round head
+## holding the token's own picture (TokenPortraits) with a short tail whose tip touches the top
+## edge of the token, so the token itself is never covered. The head is HEAD_PX across whatever
+## the zoom; the tip stands on the token's edge as it looks from the camera (a large token's
+## footprint edge, a standing figure's head), found from the token's footprint and height.
+##
+## When it shows is Settings > Graphics > "Token pins" (`mode`, graphics/token_pins): ALWAYS
+## (the default since painter-look-ghost2, 2026-11-15: a small token such as Eevee under foliage
+## or behind a wall is found by its pin, whatever the camera) or TOP_DOWN (the earlier rule: off
+## below 55 degrees of camera pitch, full from 70, CameraRig.marker_strength, where the model
+## reads and the token ghost shows a token under cover). In ALWAYS the pin is quiet at low pitch,
+## a QUIET_HEAD_PX head at QUIET_ALPHA opacity so it does not clutter the table view, and grows
+## to the full HEAD_PX head and opacity as the camera climbs from 55 to 70 degrees (the same
+## smoothstep); the hovered pin is full strength at any pitch. The quiet pin is still a target.
 ##
 ## Hover and click (camerarig-5): the pin is large (44 px, constant in the world viewport's own
 ## pixels, which under the canvas_items stretch are the UI's pixels, so it grows and shrinks
@@ -23,9 +29,9 @@ extends Node3D
 ## target (HIT_MIN_STRENGTH) and a token with no pin (hidden from a player) is no target.
 ##
 ## One MultiMesh of camera-facing quads with a no-depth-test shader (shaders/token_marker.gdshader):
-## one draw call whatever the token count (the pictures are cells of one atlas texture), and
-## nothing at all while the pitch is low (the node does no work below the threshold, and the
-## atlas is not even made). Pins are drawn from the top of the screen down, so a pin lower on
+## one draw call whatever the token count (the pictures are cells of one atlas texture); in
+## TOP_DOWN nothing at all while the pitch is low (the node does no work below the threshold, and
+## the atlas is not even made). Pins are drawn from the top of the screen down, so a pin lower on
 ## the screen lies over one above it. The pin's body colour is the token's own: the most vivid
 ## colour of its palette texture, material or vertex colours (what the token ghost is dressed
 ## in), made readable; it is the disc a token shows until its picture is ready.
@@ -43,6 +49,10 @@ extends Node3D
 
 ## A click on an edge arrow: turn the view toward this world point (the token's position).
 signal turn_requested(world_position: Vector3)
+
+## When the pins show (Settings > Graphics > "Token pins", graphics/token_pins): at every pitch
+## (the item ids of the option are these values) or only from above.
+enum PinMode { ALWAYS = 0, TOP_DOWN = 1 }
 
 const SHADER := preload("res://shaders/token_marker.gdshader")
 ## The pin head's diameter on screen, in pixels, whatever the zoom or the token's size.
@@ -67,15 +77,27 @@ const REFRESH_PERIOD_S := 0.5
 ## The alpha a token hidden from the players has in the GM's view (as the token's own 0.4).
 const GM_HIDDEN_ALPHA := 0.4
 ## The disc of a token whose colours cannot be read at all: a soft periwinkle, never white.
-const NO_COLOUR := Color(0.62, 0.66, 0.78)
+const NO_COLOUR := TokenColours.NO_COLOUR
 ## Most vertex colours sampled from a mesh surface.
-const VERTEX_SAMPLES := 64
+const VERTEX_SAMPLES := TokenColours.VERTEX_SAMPLES
 ## The eye view's far pins: a token nearer than EYE_PIN_NEAR_M shows its own
 ## model and has no pin, one farther than EYE_PIN_FULL_M has the whole pin, smooth between.
 const EYE_PIN_NEAR_M := 9.0
 const EYE_PIN_FULL_M := 18.0
 ## The pin's index of its eye-view fade in the per-frame pin arrays.
 const PIN_FADE := 5
+## The pin's alpha before the quiet scaling (the hovered pin is drawn at it), in the pin arrays.
+const PIN_FULL_ALPHA := 6
+## The saved key (graphics/token_pins, the PinMode value) and the default mode.
+const SETTINGS_KEY := "token_pins"
+const DEFAULT_MODE := PinMode.ALWAYS
+## The quiet pin of a low camera: a smaller head, a little translucent, so the table view is
+## not cluttered (ALWAYS mode, orbit camera, below 55 degrees of pitch; full from 70).
+const QUIET_HEAD_PX := 30.0
+const QUIET_ALPHA := 0.8
+
+## The mode in force (a probe or the Settings menu changes it; the saved value is read at setup).
+static var mode: int = DEFAULT_MODE
 
 ## The eye view shows pins for far tokens and edge arrows for tokens out of frame (card eyepin;
 ## on by the owner's verdict of 2026-11-04). Switches for probes and tests.
@@ -92,6 +114,9 @@ var _instances: MultiMeshInstance3D = null
 var _arrows: TokenEdgeArrows = null
 var _portraits: TokenPortraits = null
 var _since_refresh: float = REFRESH_PERIOD_S
+## This frame's pin head size in pixels and opacity factor (head_px_for, alpha_scale_for).
+var _head_px: float = HEAD_PX
+var _alpha_scale: float = 1.0
 ## The pointer in the world viewport's pixels, from the motion events that reach the viewport,
 ## and whether it is inside the window.
 var _pointer: Vector2 = Vector2.ZERO
@@ -105,8 +130,6 @@ var _hit_ids: Array[int] = []
 ## BoardToken instance id -> {"offset": Vector3, "radius": float, "half_height": float,
 ## "colour": Color, "key": String ("" while the model is not loaded)}.
 var _look: Dictionary = {}
-## Palette, material or mesh (by instance id) -> its colours, so a shared palette is read once.
-var _colours: Dictionary = {}
 
 
 ## A TokenMarkers under `viewport` (the world SubViewport), looking through `camera`.
@@ -186,8 +209,30 @@ static func eye_pin_fade(distance_m: float, scale: float = 1.0) -> float:
 
 ## The pins' strength: the eye view (a perspective camera) with `eye_pins_on` has them whole at
 ## any pitch; every other view keeps the pitch rule's `pitch_strength` (CameraRig.marker_strength).
-static func strength_for(pitch_strength: float, perspective: bool, eye_pins_on: bool) -> float:
-	return 1.0 if perspective and eye_pins_on else pitch_strength
+## ALWAYS mode has them whole at any pitch too (quiet below the threshold, see head_px_for).
+static func strength_for(
+	pitch_strength: float, perspective: bool, eye_pins_on: bool, pin_mode: int = PinMode.TOP_DOWN
+) -> float:
+	if pin_mode == PinMode.ALWAYS or (perspective and eye_pins_on):
+		return 1.0
+	return pitch_strength
+
+
+## The head diameter in pixels: HEAD_PX, except in ALWAYS mode with the orbit camera, where it
+## shrinks to QUIET_HEAD_PX as the pitch falls (`pitch_strength` is CameraRig.marker_strength).
+## The eye view (perspective) keeps the full head: its pins are far tokens.
+static func head_px_for(pitch_strength: float, perspective: bool, pin_mode: int) -> float:
+	if pin_mode != PinMode.ALWAYS or perspective:
+		return HEAD_PX
+	return lerpf(QUIET_HEAD_PX, HEAD_PX, pitch_strength)
+
+
+## The factor on a pin's opacity: 1, except in ALWAYS mode with the orbit camera, where it falls
+## to QUIET_ALPHA as the pitch falls.
+static func alpha_scale_for(pitch_strength: float, perspective: bool, pin_mode: int) -> float:
+	if pin_mode != PinMode.ALWAYS or perspective:
+		return 1.0
+	return lerpf(QUIET_ALPHA, 1.0, pitch_strength)
 
 
 ## Whether the edge arrows are shown: only in the eye view (a perspective camera), when on.
@@ -273,20 +318,7 @@ static func pin_transform(tip: Vector3, head: float, camera_basis: Basis) -> Tra
 ## made readable on the board: at least half saturated (unless it is grey) and bright.
 ## NO_COLOUR when there are none.
 static func vivid(colours: PackedColorArray) -> Color:
-	var best := NO_COLOUR
-	var best_score := -1.0
-	for c in colours:
-		if c.a < 0.5 or c.v < 0.12 or (c.s < 0.12 and c.v > 0.92):
-			continue
-		var score := c.s * c.v + 0.05 * c.v
-		if score > best_score:
-			best_score = score
-			best = c
-	if best_score < 0.0:
-		return NO_COLOUR
-	# A grey token keeps a grey pin (forcing saturation on it would paint it pink).
-	var saturation := best.s if best.s < 0.15 else maxf(best.s, 0.5)
-	return Color.from_hsv(best.h, saturation, maxf(best.v, 0.8))
+	return TokenColours.vivid(colours)
 
 
 ## Up to `count` colours spread over a vertex colour array, each times `tint` (the material's
@@ -294,11 +326,7 @@ static func vivid(colours: PackedColorArray) -> Color:
 static func sample_colours(
 	vertex_colours: PackedColorArray, tint: Color, count: int = VERTEX_SAMPLES
 ) -> PackedColorArray:
-	var out := PackedColorArray()
-	var step := maxi(1, vertex_colours.size() / maxi(count, 1))
-	for i in range(0, vertex_colours.size(), step):
-		out.append(vertex_colours[i] * tint)
-	return out
+	return TokenColours.sample_colours(vertex_colours, tint, count)
 
 
 # --- input ---
@@ -360,9 +388,12 @@ func _process(delta: float) -> void:
 	if _camera == null or not is_instance_valid(_camera):
 		return
 	var eye := _camera.projection == Camera3D.PROJECTION_PERSPECTIVE
-	var strength := strength_for(
-		CameraRig.marker_strength(CameraRig.pitch_of_back_y(_camera.global_basis.z.y)), eye, eye_pins
+	var pitch_strength := CameraRig.marker_strength(
+		CameraRig.pitch_of_back_y(_camera.global_basis.z.y)
 	)
+	var strength := strength_for(pitch_strength, eye, eye_pins, mode)
+	_head_px = head_px_for(pitch_strength, eye, mode)
+	_alpha_scale = alpha_scale_for(pitch_strength, eye, mode)
 	_sync_arrows()
 	if strength <= 0.0:
 		if _instances.visible:
@@ -419,8 +450,8 @@ func _draw(strength: float, refresh: bool) -> void:
 		var centre := token.rigid_body.global_position + (look.offset as Vector3)
 		var tip := centre + up * top_edge_metres(look.radius, look.half_height, up)
 		var colour: Color = look.colour
-		colour.a = alpha
-		pins.append([tip.dot(up), tip, colour, cell, id, fade])
+		colour.a = alpha * _alpha_scale
+		pins.append([tip.dot(up), tip, colour, cell, id, fade, alpha])
 	# Higher on the screen first, so a lower pin lies over the one above it.
 	pins.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
 	_update_hits(pins, strength)
@@ -431,7 +462,10 @@ func _draw(strength: float, refresh: bool) -> void:
 		var hover: bool = _hovered != 0 and pin[PIN_ID] == _hovered
 		var scale := _head_at(pin[1]) * (HOVER_SCALE if hover else 1.0)
 		multi.set_instance_transform(i, pin_transform(pin[1], scale, camera_basis))
-		multi.set_instance_color(i, pin[2])
+		var colour: Color = pin[2]
+		if hover:
+			colour.a = pin[PIN_FULL_ALPHA]  # the hovered pin is never quiet
+		multi.set_instance_color(i, colour)
 		var cell: int = pin[3]
 		var uv := TokenPortraits.picture_uv(maxi(cell, 0))
 		multi.set_instance_custom_data(
@@ -459,8 +493,8 @@ func _update_hits(pins: Array[Array], strength: float) -> void:
 		var tip_px: Variant = CameraRig.screen_of(_camera, pin[1])
 		if tip_px == null:
 			continue  # behind the eye: not a target
-		_hit_centres.append(pin_head_centre(tip_px, HEAD_PX * scale))
-		_hit_radii.append(HEAD_PX * 0.5 * scale)
+		_hit_centres.append(pin_head_centre(tip_px, _head_px * scale))
+		_hit_radii.append(_head_px * 0.5 * scale)
 		_hit_ids.append(id)
 	if not _pointer_in or _is_blocked():
 		return
@@ -468,14 +502,15 @@ func _update_hits(pins: Array[Array], strength: float) -> void:
 	_hovered = _hit_ids[i] if i >= 0 else 0
 
 
-## The pin head's diameter in metres at `tip`: HEAD_PX across whatever the zoom. Orthographic: from
-## the camera size, the same everywhere; perspective (the eye view): from the field of view at the
-## tip's distance in front of the camera, so a near pin is small in metres and a far one large.
+## The pin head's diameter in metres at `tip`: this frame's head size in pixels (HEAD_PX, or the
+## quiet size) across whatever the zoom. Orthographic: from the camera size, the same everywhere;
+## perspective (the eye view): from the field of view at the tip's distance in front of the
+## camera, so a near pin is small in metres and a far one large.
 func _head_at(tip: Vector3) -> float:
 	if _camera.projection != Camera3D.PROJECTION_PERSPECTIVE:
-		return head_metres(_camera.size, WorldView.canvas_size(_viewport).y)
+		return head_metres(_camera.size, WorldView.canvas_size(_viewport).y, _head_px)
 	var depth := maxf((-_camera.global_basis.z).dot(tip - _camera.global_position), 0.0)
-	return HEAD_PX * CameraRig.metres_per_pixel(_camera, WorldView.canvas_size(_viewport), depth)
+	return _head_px * CameraRig.metres_per_pixel(_camera, WorldView.canvas_size(_viewport), depth)
 
 
 ## The edge arrows node (TokenEdgeArrows): made on first need in the eye view, null before.
@@ -595,47 +630,4 @@ func _read_look(token: BoardToken) -> Dictionary:
 ## material that takes its colour from the vertices (the free "chunky" game art does, its
 ## albedo is plain white) is read from the mesh's vertex colours, which was the white pin.
 func _colours_of(source: Variant, mesh: Mesh) -> PackedColorArray:
-	var out := PackedColorArray()
-	if source == null:
-		return out
-	var from_vertices := (
-		source is BaseMaterial3D
-		and (source as BaseMaterial3D).vertex_color_use_as_albedo
-		and mesh != null
-	)
-	var key: int = mesh.get_instance_id() if from_vertices else (source as Object).get_instance_id()
-	if _colours.has(key):
-		return _colours[key]
-	var texture: Texture2D = null
-	if source is Texture2D:
-		texture = source
-	elif source is BaseMaterial3D:
-		var material := source as BaseMaterial3D
-		if from_vertices:
-			out.append_array(sample_colours(_vertex_colours(mesh), material.albedo_color))
-		else:
-			out.append(material.albedo_color)
-		texture = material.albedo_texture
-	if texture != null:
-		var image := texture.get_image()
-		if image != null and not image.is_empty():
-			if image.is_compressed():
-				image.decompress()
-			if image.get_width() * image.get_height() > 1024:
-				image.resize(16, 16, Image.INTERPOLATE_NEAREST)
-			for y in image.get_height():
-				for x in image.get_width():
-					out.append(image.get_pixel(x, y))
-	_colours[key] = out
-	return out
-
-
-## Every surface's vertex colours, spread to at most VERTEX_SAMPLES each.
-func _vertex_colours(mesh: Mesh) -> PackedColorArray:
-	var out := PackedColorArray()
-	for surface in mesh.get_surface_count():
-		var arrays := mesh.surface_get_arrays(surface)
-		var colours: Variant = arrays[Mesh.ARRAY_COLOR] if arrays.size() > Mesh.ARRAY_COLOR else null
-		if colours is PackedColorArray:
-			out.append_array(sample_colours(colours, Color.WHITE))
-	return out
+	return TokenColours.colours_of(source, mesh)
