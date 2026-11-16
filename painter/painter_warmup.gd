@@ -339,6 +339,7 @@ static func _run_once() -> bool:
 			var shader := load(path) as Shader
 			if shader != null:
 				all.append(shader)
+		all.append_array(FireVariants.all_variants())
 		GraphicsWarmup.compile_shaders(all)
 		_set_phase(Phase.LITE_DONE)
 		return true
@@ -349,6 +350,8 @@ static func _run_once() -> bool:
 	var sky := load(SKY) as Shader
 	if sky != null:
 		shaders.append(sky)
+	# The Painted fire's variants (FireVariants), so the first event fire compiles nothing.
+	shaders.append_array(FireVariants.all_variants())
 	GraphicsWarmup.compile_shaders(shaders)
 	_build(base)
 	var t2 := Time.get_ticks_msec()

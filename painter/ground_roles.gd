@@ -37,7 +37,7 @@ const TONE_ROLE: Dictionary = {
 }
 ## The tint the floor's luminance takes for the burnt ground (char_of): a warm charcoal, never the
 ## floor's green.
-const CHAR_TINT := Vector3(0.62, 0.5, 0.44)
+const CHAR_TINT := Vector3(0.86, 0.56, 0.38)
 const DEFAULT_ROLE := "meadow"
 ## [role, words], first match wins (see the header). The char role is the burnt ground: the
 ## event fire's ash surface and its burnt biome (FireSweep.ASH, BURNT_BIOME).

@@ -199,6 +199,43 @@ func painted() -> Array[MeshInstance3D]:
 	return out
 
 
+## Hands the building `structure` (a child of AuthoredStructures) to an event that burns it (card
+## painter-fire): {"structure", "nodes", "burning"} where nodes are its parts painted now (the base
+## and the hand-drawn shaders both carry the `burn` instance uniform, from
+## painter_building_burn.gdshaderinc), or {} when nothing of it is painted. A structure's parts
+## are nodes already, so no pivot is needed to burn one; the structure's own transform is the
+## event's to move. Nothing calls it yet: no event burns a building (docs/systems/painter.md "Fire
+## and events").
+func take(structure: Node, burning: bool = true) -> Dictionary:
+	var nodes: Array[MeshInstance3D] = []
+	if is_instance_valid(structure):
+		for node: Node in structure.find_children("*", "MeshInstance3D", true, false):
+			var mi := node as MeshInstance3D
+			var material := mi.material_override as ShaderMaterial
+			if material != null and material.shader != null and _burnable(material.shader):
+				nodes.append(mi)
+	if nodes.is_empty():
+		return {}
+	return {"structure": structure, "nodes": nodes, "burning": burning}
+
+
+## Sets the burn of a taken building (0 untouched; char climbs from the foot as it rises to about
+## 1.4, FireSweep.burn_progress's scale).
+func set_burn(actor: Dictionary, value: float) -> void:
+	for mi: MeshInstance3D in actor.get("nodes", []):
+		if is_instance_valid(mi):
+			mi.set_instance_shader_parameter(&"burn", value)
+
+
+## Lets a taken building go: its parts draw unburnt again.
+func drop(actor: Dictionary) -> void:
+	set_burn(actor, 0.0)
+
+
+func _burnable(shader: Shader) -> bool:
+	return shader.resource_path in [SHADER, PainterMannerHost.SHADER]
+
+
 ## The stand-in of `<role>_<kind>` `key` (null before it was needed).
 func material_of(key: String) -> ShaderMaterial:
 	return _materials.get(key)

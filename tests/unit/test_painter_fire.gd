@@ -188,6 +188,59 @@ func test_the_char_map_exists_only_for_a_document_with_burnt_ground() -> void:
 	assert_eq(image.get_pixel(doc.samples_x() - 2, doc.samples_z() - 2).r, 0.0, "not elsewhere")
 
 
+func test_a_painted_building_can_be_taken_and_burned_and_let_go() -> void:
+	StructureRecipes.ensure_served()
+	var doc := MapDocument.create_flat(Vector2i(40, 40), "grass", "v", 9)
+	var plan := PackedVector2Array(
+		[Vector2(-3, -2.5), Vector2(3, -2.5), Vector2(3, 2.5), Vector2(-3, 2.5)]
+	)
+	doc.structures.append(Structure.make(1, "core:stone_house", plan, 5))
+	var structures := AuthoredStructures.create(doc)
+	_map.add_child(structures)
+	var buildings := PainterBuildings.new()
+	assert_true(buildings.paint(_map, STATE))
+	var actor := buildings.take(structures.get_child(0))
+	assert_false(actor.is_empty(), "a painted house hands over its painted parts")
+	var nodes: Array = actor["nodes"]
+	assert_gt(nodes.size(), 3)
+	buildings.set_burn(actor, 0.8)
+	for mi: MeshInstance3D in nodes:
+		assert_eq(mi.get_instance_shader_parameter(&"burn"), 0.8, "%s burns" % mi.name)
+	buildings.drop(actor)
+	for mi: MeshInstance3D in nodes:
+		assert_eq(mi.get_instance_shader_parameter(&"burn"), 0.0)
+	assert_eq(buildings.take(autofree(Node3D.new())), {}, "an unpainted node hands over nothing")
+	buildings.release()
+	assert_eq(buildings.take(structures.get_child(0)), {}, "released: nothing painted")
+
+
+func test_every_painted_fire_edit_still_finds_its_text() -> void:
+	for path: String in FireVariants.EDITS:
+		var code := FileAccess.get_file_as_string(path)
+		for edit: Array in FireVariants.EDITS[path]:
+			assert_true(code.contains(edit[0]), "%s still has: %s" % [path, edit[0]])
+
+
+func test_classic_draws_the_original_fire_shaders_and_painted_the_variants() -> void:
+	FireVariants.set_painted(false)
+	for path: String in FireVariants.EDITS:
+		assert_eq(FireVariants.shader_for(path), load(path), "Classic keeps %s" % path)
+	FireVariants.set_painted(true)
+	for path: String in FireVariants.EDITS:
+		var variant := FireVariants.shader_for(path)
+		var original := load(path) as Shader
+		assert_ne(variant.code, original.code, "%s differs" % path)
+		var names: Array = []
+		for u: Dictionary in variant.get_shader_uniform_list():
+			names.append(u["name"])
+		var want: Array = []
+		for u: Dictionary in original.get_shader_uniform_list():
+			want.append(u["name"])
+		assert_eq(names, want, "%s keeps its uniforms" % path)
+	assert_true(FireVariants.variant(FireVariants.PUFF).code.contains(FireVariants.STEPPED))
+	FireVariants.set_painted(false)
+
+
 func test_the_painted_ground_mirrors_the_terrains_fire_bake_and_lets_go() -> void:
 	var terrain := ShaderMaterial.new()
 	var painted := ShaderMaterial.new()

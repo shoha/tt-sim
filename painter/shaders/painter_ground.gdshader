@@ -172,12 +172,19 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, out vec3 lit, o
 			role = 4;
 		}
 	}
+	float scorch_rim = 0.0;
 	if (char_present) {
 		// Burnt ground over the meadow, the floor and the shore (a road through it stays a road).
 		vec2 csize = vec2(textureSize(char_map, 0));
 		float cw = textureLod(char_map, ((q + w * 0.5 - layer_grid_origin) / layer_grid_step + 0.5) / csize, 0.0).r;
-		if (cw + (p_noise(p * 1.3 + 77.0) - 0.5) * 0.35 > 0.5) {
+		// A brush edge: two scales of noise break the texel-straight border into dabs.
+		float brushed = cw + (p_noise(p * 2.6 + 77.0) - 0.5) * 0.55 + (p_noise(p * 7.0 + 13.0) - 0.5) * 0.22;
+		if (brushed > 0.5) {
 			role = 5;
+		} else {
+			// The grass just outside the char is singed to a warm orange-brown (not a glow: the
+			// fire is out), a few dabs wide.
+			scorch_rim = smoothstep(0.28, 0.5, brushed);
 		}
 	}
 	if (pv > 0.46) {
@@ -201,6 +208,8 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, out vec3 lit, o
 	}
 	lit = role_col(true, role, variant);
 	shd = role_col(false, role, variant);
+	lit = mix(lit, lit * vec3(1.45, 0.78, 0.4), scorch_rim * 0.65);
+	shd = mix(shd, shd * vec3(1.35, 0.8, 0.5), scorch_rim * 0.65);
 	// A mark's own small step in value.
 	float vk = 1.0 + (fract(h * 41.7 + 0.3) - 0.5) * 0.1 * min(mk, 1.0);
 	lit *= vk;

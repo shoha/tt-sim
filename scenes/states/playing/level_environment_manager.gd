@@ -841,6 +841,7 @@ func _cancel_warmup_hold() -> void:
 func _publish_painted(state: Dictionary) -> void:
 	# Before the unchanged-state return: the flag is static and outlives the manager that set it.
 	TokenGhost.set_painted(not state.is_empty(), Engine.get_main_loop() as SceneTree)
+	FireVariants.set_painted(not state.is_empty())
 	if state == _painted_state:
 		return
 	_painted_state = state

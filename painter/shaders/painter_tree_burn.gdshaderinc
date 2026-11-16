@@ -42,12 +42,13 @@ vec3 burn_paint(vec3 col, float s, float r, out float heat) {
 	float e = s / BURN_EMBER;
 	if (e < 1.0) {
 		if (e < 0.22) {
-			heat = 1.0;
-			return vec3(1.0, 0.86, 0.42);
+			// A warm gold, not cream: a cream mark tonemaps to white and reads as confetti.
+			heat = 0.75;
+			return vec3(1.0, 0.64, 0.14);
 		}
 		if (e < 0.55) {
-			heat = 0.8;
-			return vec3(1.0, 0.52, 0.1);
+			heat = 0.7;
+			return vec3(1.0, 0.4, 0.06);
 		}
 		heat = 0.55;
 		return vec3(0.62, 0.14, 0.05);
