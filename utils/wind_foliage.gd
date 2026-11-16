@@ -337,6 +337,9 @@ static func _build_shader_material(
 ) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = get_shader()
+	# The GLB material's own name (`Tree_Palm_v0_Bark`): the Painted look reads it to tell a
+	# tree's bark from its leaf (PainterPlantRoles.for_surface). Nothing in Classic reads it.
+	material.resource_name = source.resource_name
 	if FoliageLight.is_painted(source):
 		material.shader = FoliageLight.get_shader()
 		material.set_meta(FoliageLight.META_PAINTED, true)

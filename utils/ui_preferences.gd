@@ -16,6 +16,9 @@ const KEY_REDUCE_MOTION := "reduce_motion"
 const KEY_STRUCTURE_HINTS_DONE := "structure_hints_done"
 const KEY_STRUCTURE_TILES_SMALL := "structure_tiles_small"
 
+## The card that explains a first stroke (AuthoringWelcome) was put away.
+const KEY_AUTHORING_WELCOME_DONE := "authoring_welcome_done"
+
 static var settings_path: String = Paths.SETTINGS_PATH
 
 
@@ -72,6 +75,15 @@ static func load_structure_tiles_small() -> bool:
 
 static func save_structure_tiles_small(small: bool) -> void:
 	_save(KEY_STRUCTURE_TILES_SMALL, small)
+
+
+## Whether this user has put the first-strokes card away (AuthoringWelcome); false when unsaved.
+static func load_authoring_welcome_done() -> bool:
+	return bool(_load().get_value(SECTION, KEY_AUTHORING_WELCOME_DONE, false))
+
+
+static func save_authoring_welcome_done(done: bool) -> void:
+	_save(KEY_AUTHORING_WELCOME_DONE, done)
 
 
 static func _load() -> ConfigFile:

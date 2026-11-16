@@ -14,6 +14,8 @@ const GRASS := BIOME + "/Grass_Grass_v0_temperate_forest"
 const BOULDER := BIOME + "/Rock_Boulder_summer_08_temperate_forest"
 const SURFACES_DIR := "res://libraries/core/surfaces"
 const BIOMES_DIR := "res://libraries/core/biomes"
+## The core biomes that paint in a derived ground role (painter-coverage).
+const DRY_BIOMES := {"savanna": "dry", "burnt_forest": "ash", "rocky_badlands": "earth"}
 const STATE := {"sheet": "core", "mood": "summer", "elevation": 45.0}
 
 var _container: Node3D = null
@@ -101,14 +103,111 @@ func test_every_core_biome_paints_in_its_own_ground_surface_role() -> void:
 		var id := file.get_basename()
 		var surface: String = (data.get("ground", {}) as Dictionary).get("surface", "")
 		assert_gt(PainterGroundRoles.biome_rule(id), -1, "%s resolves by a rule" % id)
-		assert_eq(
-			PainterGroundRoles.biome_role(id),
-			PainterGroundRoles.surface_role(surface),
-			"%s paints as its ground surface %s" % [id, surface]
-		)
+		var role := PainterGroundRoles.biome_role(id)
+		if DRY_BIOMES.has(id):
+			# painter-coverage: these three paint in a derived tone of their own, not their
+			# surface's role (a lush meadow green in a savanna, a burnt forest and the badlands).
+			assert_eq(role, DRY_BIOMES[id], "%s paints in its own derived role" % id)
+		else:
+			assert_eq(
+				role,
+				PainterGroundRoles.surface_role(surface),
+				"%s paints as its ground surface %s" % [id, surface]
+			)
 		seen += 1
 	assert_eq(seen, 9, "the nine core biomes")
 	assert_eq(PainterGroundRoles.biome_role(BIOME), "floor", "a compiled biome id")
+
+
+func test_a_dry_biome_derives_its_tone_from_the_role_it_comes_from_and_follows_the_mood() -> void:
+	var sheet := PainterSheet.load_sheet("core")
+	for role: String in PainterGroundRoles.DERIVED:
+		var spec: Array = PainterGroundRoles.DERIVED[role]
+		var base := PainterSheet.tone_lch(sheet, "summer", str(spec[0]), 60.0)
+		var got := PainterGroundRoles.derived(sheet, "summer", role, 60.0)
+		assert_ne(snappedf(got.z, 1.0), snappedf(base.z, 1.0), "%s turns its hue" % role)
+		var night := PainterGroundRoles.derived(sheet, "summer", role, -8.0)
+		assert_lt(night.x, got.x, "%s is darker at night" % role)
+		var snow := PainterGroundRoles.derived(sheet, "winter", role, 60.0)
+		assert_ne(snow.snappedf(0.01), got.snappedf(0.01), "%s follows the mood" % role)
+	# dry reads straw, ash a dark ember brown, earth a baked orange (hue in degrees).
+	assert_between(PainterGroundRoles.derived(sheet, "summer", "dry", 60.0).z, 70.0, 100.0)
+	var ash := PainterGroundRoles.derived(sheet, "summer", "ash", 60.0)
+	assert_lt(ash.x, 0.55, "ash is dark")
+	assert_between(ash.z, 30.0, 70.0)
+	assert_between(PainterGroundRoles.derived(sheet, "summer", "earth", 60.0).z, 35.0, 70.0)
+
+
+func test_the_biome_zone_map_exists_only_for_a_map_with_a_dry_biome() -> void:
+	var doc := MapDocument.create_flat(Vector2i(10, 10), "grass_meadow", "test", 7)
+	var n := doc.samples_x() * doc.samples_z()
+	doc.biome_ids = PackedStringArray(["temperate_forest_summer_s1"])
+	doc.biome_slots.resize(n)
+	doc.biome_density.resize(n)
+	doc.biome_slots.fill(1)
+	doc.biome_density.fill(255)
+	assert_null(PainterSurfaces.biome_zone_image(doc), "no dry biome, no second map")
+	doc.biome_ids = PackedStringArray(["savanna_summer_s1", "rocky_badlands_summer_s1"])
+	var image := PainterSurfaces.biome_zone_image(doc)
+	assert_not_null(image)
+	assert_almost_eq(image.get_pixel(3, 3).r, 1.0, 0.01, "slot 1 is savanna: r dry")
+	assert_almost_eq(image.get_pixel(3, 3).b, 0.0, 0.01)
+	doc.biome_slots.fill(2)
+	image = PainterSurfaces.biome_zone_image(doc)
+	assert_almost_eq(image.get_pixel(3, 3).b, 1.0, 0.01, "slot 2 is the badlands: b earth")
+
+
+func test_a_dry_map_paints_its_whole_ground_dry_and_a_mixed_map_only_where_the_biome_is() -> void:
+	var doc := MapDocument.create_flat(Vector2i(10, 10), "grass_meadow", "test", 7)
+	var n := doc.samples_x() * doc.samples_z()
+	doc.biome_ids = PackedStringArray(["savanna_summer_s1", "temperate_forest_summer_s1"])
+	doc.biome_slots.resize(n)
+	doc.biome_density.resize(n)
+	doc.biome_slots.fill(1)
+	doc.biome_density.fill(30)
+	assert_true(PainterSurfaces.has_dominant_dry(doc))
+	var image := PainterSurfaces.biome_zone_image(doc)
+	assert_almost_eq(image.get_pixel(4, 4).r, 1.0, 0.01, "sparse scatter, still all straw")
+	doc.biome_slots.fill(0)
+	assert_true(not PainterSurfaces.has_dominant_dry(doc), "no cell, no dominant biome")
+	# Half forest, a tenth savanna: the forest is the larger biome, nothing is dominant.
+	for i in n:
+		doc.biome_slots[i] = 2 if i % 10 > 0 else 1
+	assert_false(PainterSurfaces.has_dominant_dry(doc))
+	image = PainterSurfaces.biome_zone_image(doc)
+	var dry_cell := 0
+	for i in n:
+		if doc.biome_slots[i] == 1:
+			dry_cell = i
+			break
+	var px := Vector2i(dry_cell % doc.samples_x(), dry_cell / doc.samples_x())
+	assert_lt(image.get_pixel(px.x, px.y).r, 0.5, "a sparse patch keeps its density pull")
+
+
+func test_a_dry_maps_base_sand_does_not_paint_shore_under_the_biome() -> void:
+	var doc := MapDocument.create_flat(Vector2i(10, 10), "sand", "test", 7)
+	var n := doc.samples_x() * doc.samples_z()
+	doc.biome_ids = PackedStringArray(["rocky_badlands_summer_s1"])
+	doc.biome_slots.resize(n)
+	doc.biome_density.resize(n)
+	doc.biome_slots.fill(1)
+	doc.biome_density.fill(200)
+	var zone := PainterSurfaces.zone_image(doc)
+	assert_lt(zone.get_pixel(4, 4).a, 0.1, "no shore from the base surface")
+	doc.biome_ids = PackedStringArray(["temperate_forest_summer_s1"])
+	assert_gt(PainterSurfaces.zone_image(doc).get_pixel(4, 4).a, 0.9, "a forest map keeps it")
+
+
+func test_a_dry_biomes_tufts_are_straw_and_the_others_stay_green() -> void:
+	var dry := PainterPlantRoles.of("savanna_summer_s1/Grass_Grass_v1", "grass")
+	assert_eq(dry["role"], PainterPlantRoles.DRY_GRASS_ROLE)
+	assert_eq(dry["kind"], PainterPlantRoles.KIND_GRASS)
+	var badlands := PainterPlantRoles.of("rocky_badlands_summer_s1/Grass_Grass_v1", "grass")
+	assert_eq(badlands["role"], "dry-grass")
+	var meadow := PainterPlantRoles.of("grassland_meadow_summer_s1/Grass_Grass_v1", "grass")
+	assert_eq(meadow["role"], "grass")
+	var rock := PainterPlantRoles.of("savanna_summer_s1/Rock_Medium_summer_06", "")
+	assert_eq(rock["role"], "stone")
 
 
 func test_every_ground_role_paints_a_sheet_role() -> void:

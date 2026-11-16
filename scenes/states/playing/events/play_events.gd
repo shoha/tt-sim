@@ -483,7 +483,7 @@ func _prepare(tool_id: StringName) -> void:
 	match tool_id:
 		PaintTool.ID:
 			var surface := PaintTool.of(_brush).surface
-			PaintTool.of(_brush).tint = AuthoringController.surface_tint(surface)
+			PaintTool.of(_brush).tint = CursorTints.surface_tint(surface)
 			var terrain := _brush.editor.terrain
 			if is_instance_valid(terrain):
 				terrain.warm_surface(surface)
@@ -555,7 +555,7 @@ func _on_biome_selected(biome_id: String) -> void:
 	_biome_id = biome_id
 	var wired := _wired_brush()
 	BiomeTool.of(wired).biome_id = biome_id
-	BiomeTool.of(wired).tint = AuthoringController.biome_tint(biome_id)
+	BiomeTool.of(wired).tint = CursorTints.biome_tint(biome_id)
 	if wired.editor != null:
 		wired.editor.prepare_biome(biome_id)
 	_pick_again(BiomeTool.ID)

@@ -34,11 +34,11 @@ enum DrawerEdge { LEFT, RIGHT }
 const GROUP := &"drawer_containers"
 const WATCHERS := &"drawer_watchers"
 
-# -- Glass -------------------------------------------------------------------
-# The panel and its handle are glass (UI_TASTE.md C8: play continues under a drawer). Their
-# colours are read from the roles of the glass theme the drawer's host root carries:
-# SURFACE for the panel and the handle at rest, SURFACE_HOVER and SURFACE_PRESS for the
-# handle, and EDGE for the handle's top rim.
+# -- Surface -----------------------------------------------------------------
+# The panel, its handle and its rail are drawn by theme variations (DrawerPanelLeft/Right,
+# DrawerTabLeft/Right, DrawerRailLeft/Right, DrawerMargin; themes/painted_theme_base.gd
+# `_define_drawer`), so they follow the leaf the drawer's host root carries: glass over a live
+# table (UI_TASTE.md C8), paper where play is stopped (the map tools). Nothing is styled here.
 
 # -- Icon tab padding -------------------------------------------------------
 # Standard insets for icon-mode tabs so all icon tabs look consistent.
@@ -77,6 +77,13 @@ const _TAB_BADGE_MARGIN := 4.0
 ## Rail mode: extra items drawn under the pane items after a gap, outside the
 ## single-select group. Same entry shape as rail_items.
 @export var rail_footer_items: Array[Dictionary] = []
+## The theme variation of the margin the content stands in: DrawerMargin (12 px) or
+## DrawerMarginRoomy (16 px). Set in _on_ready().
+@export var margin_variation: StringName = &"DrawerMargin"
+## Fit mode: the panel is a card as tall as its content (the host reports it with
+## fit_panel_height()), level with the rail's top, and the board shows below it. Off: the panel
+## runs the whole edge. Set in _on_ready().
+@export var fit_height: bool = false
 
 # -- Public state ------------------------------------------------------------
 
@@ -115,6 +122,8 @@ var tab_icon: Texture2D = null:
 
 var _sled: Control  ## Container that slides panel + tab as one unit
 var _panel: PanelContainer  ## The sliding content panel
+var _margin: MarginContainer  ## The content's margin inside the panel
+var _fit_px: float = 0.0  ## Fit mode: the content's height the host last reported, 0 for none
 var _tab_button: Button  ## The clickable tab handle
 var _tab_label: Label
 var _tab_icon_rect: TextureRect
@@ -156,6 +165,9 @@ func _ready() -> void:
 	_apply_tab_style()
 	_layout_sled()
 	_apply_initial_position()
+	# The parent may have no size yet (its anchors resolve on the first layout): take its height
+	# once it has one, so the panel and the handle's frame always run the whole edge.
+	_on_parent_resized.call_deferred()
 
 
 ## Override in subclasses for custom initialisation.
@@ -379,21 +391,18 @@ func _build_ui() -> void:
 	_panel.size = Vector2(drawer_width, size.y)
 	_sled.add_child(_panel)
 
-	var margin := MarginContainer.new()
-	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_bottom", 12)
-	_panel.add_child(margin)
+	_margin = MarginContainer.new()
+	_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_margin.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	_margin.theme_type_variation = margin_variation
+	_panel.add_child(_margin)
 
 	content_container = VBoxContainer.new()
 	content_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	content_container.theme_type_variation = &"BoxContainerSpaced"
 	content_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	margin.add_child(content_container)
+	_margin.add_child(content_container)
 
 
 func _build_tab() -> void:
@@ -480,13 +489,18 @@ func _build_rail() -> void:
 	# as the avatar builder's rail does. On the outer edge it ran to the rail's rim and read as
 	# cut there (2026-10-10 once-over).
 	_rail.indicator_at_end = edge == DrawerEdge.RIGHT
+	# An item's optional "group" breaks the rail into runs of related tools: a gap where it changes.
+	var group: StringName = &""
 	for item in rail_items:
+		var item_group := StringName(item.get("group", &""))
+		if _rail.get_child_count() > 0 and item_group != group:
+			_rail.add_gap()
+		group = item_group
 		_rail.add_item(item["id"], item["icon"], item.get("tooltip", ""))
 	_rail.item_pressed.connect(_on_rail_item_pressed)
 	var column := VBoxContainer.new()
 	column.name = "RailColumn"
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_theme_constant_override("separation", 0)
 	_rail_panel.add_child(column)
 	column.add_child(_rail)
 	if rail_footer_items.is_empty():
@@ -494,7 +508,7 @@ func _build_rail() -> void:
 	var gap := Control.new()
 	gap.name = "FooterGap"
 	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	gap.custom_minimum_size = Vector2(0, 12)
+	gap.custom_minimum_size = Vector2(0, IconRail.GROUP_GAP + IconRail.ITEM_GAP)
 	column.add_child(gap)
 	_footer_rail = IconRail.new()
 	_footer_rail.name = "FooterRail"
@@ -507,40 +521,13 @@ func _build_rail() -> void:
 
 
 func _apply_panel_style() -> void:
-	# Square-cornered panel — no rounded corners so the 3D scene behind
-	# the drawer never peeks through at the edges. No shadow: a closed panel
-	# rests just off-screen, where a shadow would smudge the screen edge.
-	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeColors.of(self, ThemeColors.SURFACE)
-	_panel.add_theme_stylebox_override("panel", style)
+	# The panel and the content's margin take their theme variations by the edge, which a subclass
+	# may set in _on_ready(), so this runs after it.
+	_panel.theme_type_variation = _edge_variation("DrawerCard" if fit_height else "DrawerPanel")
+	_margin.theme_type_variation = margin_variation
 
 
 func _apply_tab_style() -> void:
-	# The tab is the panel's glass, with rounded corners on the side facing
-	# away from the panel and the glass top rim. Hover and press only deepen.
-	var corner_r := 6
-
-	var style_normal := StyleBoxFlat.new()
-	style_normal.bg_color = ThemeColors.of(self, ThemeColors.SURFACE)
-	style_normal.border_color = ThemeColors.of(self, ThemeColors.EDGE)
-	style_normal.border_width_top = 1
-	if edge == DrawerEdge.LEFT:
-		style_normal.corner_radius_top_right = corner_r
-		style_normal.corner_radius_bottom_right = corner_r
-	else:
-		style_normal.corner_radius_top_left = corner_r
-		style_normal.corner_radius_bottom_left = corner_r
-	style_normal.content_margin_left = 8
-	style_normal.content_margin_right = 8
-	style_normal.content_margin_top = 12
-	style_normal.content_margin_bottom = 12
-
-	var style_hover := style_normal.duplicate()
-	style_hover.bg_color = ThemeColors.of(self, ThemeColors.SURFACE_HOVER)
-
-	var style_pressed := style_normal.duplicate()
-	style_pressed.bg_color = ThemeColors.of(self, ThemeColors.SURFACE_PRESS)
-
 	# Badge position depends on tab_width, which a subclass may change in
 	# _on_ready(). This runs again afterwards, so it lands on the final width.
 	# Null on the first call, made from _build_tab_button() before the badge
@@ -549,26 +536,42 @@ func _apply_tab_style() -> void:
 		_tab_badge.position = Vector2(
 			tab_width - _TAB_BADGE_SIZE - _TAB_BADGE_MARGIN, _TAB_BADGE_MARGIN
 		)
-
 	if _tab_button:
-		_tab_button.add_theme_stylebox_override("normal", style_normal)
-		_tab_button.add_theme_stylebox_override("hover", style_hover)
-		_tab_button.add_theme_stylebox_override("pressed", style_pressed)
-		_tab_button.add_theme_stylebox_override("hover_pressed", style_pressed)
-		_tab_button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		_tab_button.theme_type_variation = _edge_variation("DrawerTab")
 	if _rail_panel:
-		var rail_style: StyleBoxFlat = style_normal.duplicate()
-		rail_style.content_margin_left = _RAIL_PAD_H
-		rail_style.content_margin_right = _RAIL_PAD_H
-		rail_style.content_margin_top = 8
-		rail_style.content_margin_bottom = 8
-		_rail_panel.add_theme_stylebox_override("panel", rail_style)
+		_rail_panel.theme_type_variation = _edge_variation("DrawerRail")
+
+
+## The theme variation `base` has for this drawer's edge ("DrawerPanelLeft", "DrawerTabRight").
+func _edge_variation(base: String) -> StringName:
+	return StringName(base + ("Left" if edge == DrawerEdge.LEFT else "Right"))
+
+
+## Fit mode: tells the drawer how tall its content wants the panel (the margin, the head of the
+## pane and the pane itself). The panel takes that, or the room the window leaves, whichever is
+## less.
+func fit_panel_height(content_px: float) -> void:
+	_fit_px = content_px
+	_apply_panel_height()
+
+
+## The panel's height and top: the whole edge, or in fit mode its content's, below the rail's top.
+func _apply_panel_height() -> void:
+	if _panel == null:
+		return
+	if not fit_height:
+		_panel.size.y = size.y
+		_panel.position.y = 0.0
+		return
+	var room := maxf(size.y - tab_top_margin * 2.0, 0.0)
+	_panel.size.y = minf(_fit_px, room) if _fit_px > 0.0 else room
+	_panel.position.y = tab_top_margin
 
 
 func _on_parent_resized() -> void:
 	if _sled:
 		_sled.size.y = size.y
-		_panel.size.y = size.y
+		_apply_panel_height()
 		# Right-edge drawers depend on size.x for their sled position.
 		if not _is_animating:
 			_sled.position.x = _get_sled_x()
@@ -591,6 +594,7 @@ func _layout_sled() -> void:
 		_panel.position = Vector2(tab_width, 0)
 
 	_panel.size = Vector2(drawer_width, size.y)
+	_apply_panel_height()
 
 
 # -- Position Helpers --------------------------------------------------------
