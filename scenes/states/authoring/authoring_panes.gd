@@ -22,6 +22,39 @@ static func hide_titles(pane: Control) -> void:
 		(header as MenuHeader).title_label.visible = false
 		if has_lead:
 			(header as MenuHeader).caption_label.visible = false
+	if has_lead:
+		_lead_first(pane)
+
+
+## Whether a visible control (a size row, a picker: not a caption) sits among `pane`'s children
+## from index `from` up to, not including, `to`.
+static func _control_between(pane: Control, from: int, to: int) -> bool:
+	for i in range(from, to):
+		var child := pane.get_child(i) as Control
+		if child != null and child.visible and not child is Label:
+			return true
+	return false
+
+
+## Moves a pane's lead (a direct "...Hint" label, with its "...HintMore" foldout) up under the
+## header when the size row or another control sits between them, so the lead is the first line
+## of the card (Paint and Sculpt had the header's rule, a gap, Size and only then the lead).
+static func _lead_first(pane: Control) -> void:
+	var at := -1
+	for child in pane.get_children():
+		if child is MenuHeader:
+			at = child.get_index() + 1
+			break
+	if at < 0:
+		return
+	for child in pane.get_children():
+		if child is Label and String(child.name).ends_with("Hint") and child.visible:
+			if _control_between(pane, at, child.get_index()):
+				var more := pane.get_node_or_null(NodePath(String(child.name) + "More"))
+				pane.move_child(child, at)
+				if more != null:
+					pane.move_child(more, at + 1)
+			return
 
 
 ## A wrapped caption line saying a pane's gestures.

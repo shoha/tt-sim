@@ -225,6 +225,67 @@ func test_each_tab_shows_its_old_pane_and_picks_its_old_tool() -> void:
 	assert_eq(asked.slice(0, 2), [PlaceTool.ID, ThinTool.ID], "Place first, then its erase mode")
 
 
+## The leads a pane shows: its header's summary and any "...Hint" caption that is a direct child
+## (not the depth line under Water's tiles, which says what the pick means, not what to do).
+func _leads(pane: Control) -> Array[String]:
+	var leads: Array[String] = []
+	for child in pane.get_children():
+		if child is MenuHeader and (child as MenuHeader).caption_label.visible:
+			leads.append((child as MenuHeader).caption_label.text)
+		elif (
+			child is Label
+			and String(child.name).ends_with("Hint")
+			and not String(child.name).ends_with("DepthHint")
+			and (child as Label).visible
+		):
+			leads.append((child as Label).text)
+	return leads
+
+
+func test_every_hub_tab_shows_exactly_one_lead() -> void:
+	var panel := _panel()
+	panel._on_rail_item_pressed(PlaceTool.ID)
+	var shown: Array = [[PlaceTool.ID, PlaceTool.ID]]
+	for tab: Array in [
+		[PlaceTool.ID, ThinTool.ID],
+		[WaterTool.ID, &"river"],
+		[WaterTool.ID, &"pond"],
+		[WaterTool.ID, BridgeTool.ID],
+		[BuildTool.ID, WallTool.ID],
+		[BuildTool.ID, StructureTool.ID],
+		[BuildTool.ID, VillageTool.ID],
+	]:
+		shown.append(tab)
+	for entry: Array in shown:
+		var rail: StringName = entry[0]
+		var tab: StringName = entry[1]
+		panel._on_rail_item_pressed(rail)
+		if tab != PlaceTool.ID:
+			panel.hub_tabs(rail).tab(tab).button_pressed = true
+		var leads := _leads(panel._stack.get_pane(panel._stack.current))
+		assert_eq(leads.size(), 1, "%s / %s shows one lead, not %s" % [rail, tab, leads])
+		var pane: Control = panel._stack.get_pane(panel._stack.current)
+		var first_label := ""
+		var headed := false  # the lead is the header's summary (Buildings, Villages)
+		for child in pane.get_children():
+			if child is MenuHeader:
+				headed = (child as MenuHeader).caption_label.visible
+			elif child is Control and (child as Control).visible:
+				first_label = "Label" if child is Label else "other"
+				break
+		if not headed:
+			assert_eq(first_label, "Label", "%s / %s: the lead comes first" % [rail, tab])
+	# With no water the Crossing tab's lead is the line saying so, above its More and picker.
+	panel.bridge_pane.set_has_water(false)
+	var bridge: Control = panel._stack.get_pane(BridgeTool.ID)
+	var first: Node = null
+	for child in bridge.get_children():
+		if child is Control and (child as Control).visible and not child is MenuHeader:
+			first = child
+			break
+	assert_eq(String(first.name), "BridgeWaterHint", "the no-water line leads the Crossing tab")
+
+
 func test_a_hub_reopens_on_the_tab_it_last_showed() -> void:
 	var panel := _panel()
 	_follow(panel)
