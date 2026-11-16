@@ -17,6 +17,10 @@ extends RefCounted
 
 ## Pieces a limb ribbon has along one segment (the spike's SUB19).
 const RIBBON_SUB := 4
+## Children a level 2 root draws, of the 16 (4 x 4) its two levels name: the first three quarters
+## of each level 1 child's footprint (the stroke shader's `L2_CHILDREN`, pinned by a test;
+## painter-perf-veg: 0.036 ms a child at the forest tokens view). Level 0 draws 1, level 1 draws 4.
+const L2_CHILDREN := 12
 ## A bush pad's sphere (block(count, true)).
 const BUSH_SEGS := 16
 const BUSH_RINGS := 9
@@ -55,9 +59,10 @@ static func ribbon() -> ArrayMesh:
 ## times a stroke, not four (painter-perf-strokes: -0.2 ms at the forest tokens view, where the
 ## vertex stage is the cost).
 static func strokes(level: int, slots: int = PainterTreePack.SLOT_PER_INST) -> ArrayMesh:
-	var key := "strokes%d_%d" % [level, slots]
+	var per_root := L2_CHILDREN if level == 2 else int(pow(4.0, float(level)))
+	var key := "strokes%d_%d_%d" % [level, slots, per_root]
 	if not _cache.has(key):
-		_cache[key] = _tri_block(slots * PainterTreePack.ROOTS * int(pow(4.0, float(level))))
+		_cache[key] = _tri_block(slots * PainterTreePack.ROOTS * per_root)
 	return _cache[key]
 
 

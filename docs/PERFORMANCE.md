@@ -6362,6 +6362,48 @@ plants; Painted's `Ps` hides the same scatter nodes and the stroke layer. The ey
 river pose were set by hand (a forest eye at (-4.5, -6.5), the river at (-3.5, 1.5)); they match no
 earlier card's pose.
 
+## Painted vegetation cost round (card painter-perf-veg, 2026-11-16)
+
+Goal: bring the three cells over the 0.3 ms criterion (forest tokens summer, taiga home summer, river zoom 8)
+under it without a worse look. Pinned procedure as above (1920x1080, vsync off, in-run P C P C P C, GPU 2.5 s
+median, the lane held, noise about 0.05). Evidence: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final27_perf_veg/`
+(`notes.md`, one folder per job); probe `tools/render_jobs/local/painter-perf-veg/` (local, not committed).
+
+Profile (hiding parts in-run): the whole tree layer costs 1.18 ms at forest tokens summer, 1.07 at taiga home,
+1.39 at river zoom 8; at taiga the block-in (masses and limb ribbons, camera and sun passes) is about 1.02 and the
+strokes about 0.42 (per-pass detail in the evidence folder). Strokes are vertex-bound and paid twice (depth
+prepass and opaque). Painted without the tree layer is already under Classic. Strokes cost by vertices launched: a random kill saves nothing, only fewer
+vertices or contiguous dead runs do. At zoom 8 (lod 1.79) levels 1 and 2 draw; level 2 (16 strokes a root) is
+the bigger share (a child costs 0.036 ms at the forest view).
+
+Levers, ms are Painted GPU at forest tokens summer unless noted (noise 0.05):
+
+| Lever | ms | Look | Verdict |
+|-------|----|------|---------|
+| Level 2 children 16 -> 12 (size x sqrt(16/12)) | -0.12 forest, -0.17 river zoom 8 | none visible at full size (same masses, silhouettes, tones) | kept |
+| Level 2 children 16 -> 8 | -0.27 forest | crown interiors read blotchier, edges coarser | rejected |
+| Cells 5 m -> 2.5 m | -0.02 | none | rejected, no gain |
+| `min_r10` (drop thin limbs from the block-in) 0.02 to 0.08 | -0.03 to -0.1 | limbs vanish in crowns | rejected |
+| `stroke_scale` 0.8, 0.6 | about 0 | strokes smaller | rejected |
+| `back10` -0.3 / 0.0 | 0 / -0.07 | silhouette risk at 0.0 | rejected |
+| Limb ribbon subdivision 4 -> 3 or 2 | 0 to -0.06 (prims -4 to -12 %) | none | rejected, inside the noise |
+| Sun-pass thin-limb kill (block-in `sun_min_r` 0.15 to 0.5, taiga) | 0 to -0.05 | shadow edges change | rejected |
+| Masses cast no shadow (`nocast0`, taiga) | -0.14 | shadows lose the crown shape | rejected, look |
+
+Final cells (Painted minus Classic, three interleaved pairs, ms; before from `painter-perf-recheck` and this
+card's own baseline run):
+
+| Cell | before | after |
+|------|--------|-------|
+| forest tokens summer | +0.42 .. +0.46 (card: +0.50) | +0.30 .. +0.34 |
+| river zoom 8 summer | +0.56 .. +0.70 (card: +0.73) | +0.41 .. +0.49 |
+| taiga home summer | +0.85 .. +0.91 | +0.82 .. +0.86 |
+
+Still over: river zoom 8 and taiga home summer, and the forest sits on the line. Taiga is at the home size
+(lod 1), where only level 1 draws, so the level-2 lever does not touch it; its gap is the block-in (about
+1.0 ms) plus level 1 strokes (about 0.4). No look-neutral lever remained for it. The 0.3 ms criterion is a
+guardrail; the remaining gap is the painted trees' crown masses, which are the look.
+
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
 What each Shadow quality tier (`directional_soft_shadow_filter_set_quality`) costs, and a "blur"

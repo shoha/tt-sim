@@ -27,6 +27,11 @@ varying flat float v_heat;
 uniform sampler2DArray brushes : filter_linear_mipmap, repeat_disable;
 uniform float stroke_scale = 1.0;
 uniform float lod_level = 1.0;
+// painter-perf-veg: a level 2 root draws 12 of its 16 children (the fourth quarter of each level 1
+// child's footprint is not drawn), the others larger by the root of 16 / 12; pinned to
+// PainterTreeMeshes.L2_CHILDREN by a test. The stroke vertex stage is the cost: 0.036 ms a child at
+// the forest tokens view, the vertices launched, not the strokes that live.
+const int L2_CHILDREN = 12;
 uniform float painted_shadows = 1.0;
 uniform float ground_y = 0.0;
 uniform float silhouette = 0.0;
@@ -296,7 +301,7 @@ void vertex() {
 		is_shadow = pass == 3;
 		int lvl = is_shadow ? 0 : pass;
 		level = is_shadow ? 1.0 : float(lvl);
-		int per_root = lvl == 0 ? 1 : (lvl == 1 ? 4 : 16);
+		int per_root = lvl == 0 ? 1 : (lvl == 1 ? 4 : L2_CHILDREN);
 		int q = int(UV2.x + 0.5);
 		// A level's quad is root `wi / per_root` of slot `slot` (two roots a slot); a shadow quad
 		// is one entry of the tree's shadow table.
@@ -319,7 +324,7 @@ void vertex() {
 				k = int(-st.y - 1.5);
 			}
 			int c1 = lvl >= 1 ? (wi / (per_root / 4)) % 4 : 0;
-			int c2 = wi % 4;
+			int c2 = wi % (lvl == 2 ? per_root / 4 : 4);
 			uint key0 = uint(k);
 			uint key1 = uint(k * 4 + c1) + 1000000u;
 			uint key2 = uint(k * 16 + c1 * 4 + c2) + 2000000u;
@@ -724,7 +729,9 @@ void vertex() {
 		float grow = mix(0.72, 1.0, clamp((vis - thr) / 0.3, 0.0, 1.0));
 		float comp = exp2(clamp(-(lam - level) * 0.5, -1.0, 1.0));
 		float sv = mix(1.0 - rp1.w, 1.0 + rp1.w, size_rnd);
-		float size = rp0.x * stroke_scale * exp2(1.0 - level) * comp * grow * sv;
+		// (painter-perf-veg: fewer level 2 children, each larger by the root of their ratio, same coverage.)
+		float l2c = level > 1.5 ? inversesqrt(float(L2_CHILDREN) / 16.0) : 1.0;
+		float size = rp0.x * stroke_scale * exp2(1.0 - level) * comp * grow * sv * l2c;
 		float aspect = rp0.y;
 		float align = rp1.x;
 		float lift = rp1.y;

@@ -392,7 +392,10 @@ summer +0.07 to +0.12 against +0.06.
   triangle per stroke (UV 0..2, the fragment discards outside the unit square) and the vertex stage
   drops a mark the density, thinning or season rule removes before it derives anything
   (painter-perf-strokes: -0.10 to -0.19 ms at the tokens, forest and taiga views, -14 % camera-pass
-  primitives in the village). The block-in's sphere is 6 x 3 (`PainterTreePack.ELL_SEGS`,
+  primitives in the village). Level 2 draws 12 of its root's 16 children (`PainterTreeMeshes.L2_CHILDREN`
+  and the stroke shader's `L2_CHILDREN`, pinned equal by a test; the first three quarters of each level
+  1 child's footprint, the others larger by sqrt(16 / 12), same coverage; painter-perf-veg: -0.12 to
+  -0.17 ms at forest tokens and river zoom 8, no visible change at full size). The block-in's sphere is 6 x 3 (`PainterTreePack.ELL_SEGS`,
   `ELL_RINGS`; 36 triangles, inflated by `ELL_FIT` 1.146 on x and z to keep the volume; a bush's
   stays 16 x 9): its cost follows triangles and overdraw, not vertex work, in both passes
   (painter-perf-shadow: -0.1 to -0.4 ms at 1080p).

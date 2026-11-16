@@ -516,6 +516,28 @@ func test_the_shared_meshes_and_brushes() -> void:
 		assert_true(img.has_mipmaps())
 
 
+## painter-perf-veg: a level 2 root draws L2_CHILDREN of its 16 children, the mesh and the shader
+## agree on the count, and the count splits into four equal quarters (the shader reads the child's
+## parent quarter as `wi / (per_root / 4)`).
+func test_level_two_draws_twelve_children() -> void:
+	assert_eq(PainterTreeMeshes.L2_CHILDREN, 12)
+	assert_eq(PainterTreeMeshes.L2_CHILDREN % 4, 0, "four equal quarters")
+	var slots := PainterTreePack.SLOT_PER_INST * PainterTreePack.ROOTS
+	var arrays := PainterTreeMeshes.strokes(2).surface_get_arrays(0)
+	assert_eq(
+		(arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size(),
+		slots * PainterTreeMeshes.L2_CHILDREN * 3,
+		"a triangle a child"
+	)
+	var body := FileAccess.get_file_as_string(
+		"res://painter/shaders/painter_tree_stroke_body.gdshaderinc"
+	)
+	assert_true(
+		body.contains("const int L2_CHILDREN = %d;" % PainterTreeMeshes.L2_CHILDREN),
+		"the shader's constant is the mesh's"
+	)
+
+
 func test_stroke_levels_follow_the_camera_size() -> void:
 	assert_almost_eq(PainterTrees.lod_for(PainterTrees.HOME_SIZE), 1.0, 1e-5, "home: level 1")
 	assert_almost_eq(PainterTrees.lod_for(PainterTrees.HOME_SIZE * 2.0), 0.0, 1e-5)
