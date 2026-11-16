@@ -11,7 +11,7 @@ extends DrawerContainer
 ## every interactive Control is named so the validation bridge can click it.
 ##
 ## Hubs. The rail lists seven tools; three of them are hubs whose card has top tabs
-## (SegmentedTabs): Place (Place, Thin / Clear), Water (River, Pond, Crossing) and Build (Walls,
+## (SegmentedTabs): Place (Add, Thin / Clear), Water (River, Pond, Crossing) and Build (Walls,
 ## Buildings, Villages). A tab is a former rail tool: it shows that tool's own pane and picks its
 ## brush, exactly as its rail item did, so every tool id, brush mode and pane is unchanged
 ## (ToolDescriptor.hub and tabs). A rail press or the tool's key opens the hub's last tab, and the

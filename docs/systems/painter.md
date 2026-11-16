@@ -1457,9 +1457,27 @@ painter_final25_coverage/matrix.md`. What the card filled:
   the ash instead of honey wood on brown ground. `for_surface` returns it for a `charred` entry's
   bark surface; other biomes' snags and logs keep the bark role.
 - **Crossings** (timber `Wood`, `Stones`, `Arch`, `Ford`) were captured over a river at full size:
-  all four are painted and match the painted water and ground. The arch and the ford's bank slabs
-  take the wall-stone tone, which is pale and slightly bleached against sand banks (open: a
-  crossing-specific darker stone key).
+  all four are painted and match the painted water and ground. Their stone took the wall-stone tone,
+  pale cream and bleached against sand banks; fixed in card painter-edges (below).
+- **Crossing stone and the map edge** (card painter-edges, 2026-11-16; frames
+  `compare/painter_final32_edges/before` and `after`, notes.md there).
+  - The stepping stones, the arch and the ford's slabs (`Stones`, `Arch`, `Ford`) are the kind
+    `crossing_stone`, role `crossing-stone`: `PainterBuildings.crossing_tone()` derives it from
+    `wall-stone` by the sheet numbers `crossing-turn` (hue turned, degrees), `crossing-chroma` (a
+    factor) and `crossing-value` (a lightness factor; relative, so night's cool stone stays cool),
+    now -14, 0.8, 0.76: a warm grey that parts from sand banks and water in summer, dusk, winter and
+    night. The timber `Wood` keeps its trim_wood.
+  - A river that leaves the map draws its channel patch (the skirt's `Channel` child, which carries
+    the skirt ring's Classic material) as a dark, unbrushed olive rectangle against the painted ground:
+    `PainterSurfaces._dress` now dresses it with the painted skirt material too (UV is the map-frame
+    XZ), so the seam at the edge is gone. No ground shader change.
+  - The water's outer shore dashes thin out on a steep bank (`dash_gate`, slope 0.6 to 1.4): they
+    broke into small glitter triangles because the gradient changes per mesh triangle. Partly
+    helps; the lap band itself still shows triangle shards on a steep pond bank (open: cap the
+    slope used for `d_h`).
+  - Open: one row of mirrored white dabs sits across a river at the map edge (inside the map, at the
+    boundary; probably the depth-slope wrap foam on a crease between the terrain's and the patch's
+    bed), and the ribbon fades through a pale turquoise before the green.
 - **Known gaps** are listed in the matrix with their effort: baked settlement furnishings, field
   plants, round and profile roofs (procgen records).
 

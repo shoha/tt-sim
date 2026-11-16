@@ -389,7 +389,20 @@ func _dress(node: Node) -> void:
 	elif named == AuthoredTerrain.SKIRT_NAME:
 		_ground_material()
 		material = _skirt
+		# The channel patch where a river leaves the map is a child of the skirt with the skirt's
+		# own Classic material: it showed as a dark, unbrushed rectangle against the painted ground
+		# (card painter-edges). UV is the map-frame XZ, as the skirt's.
+		var patch := node.get_node_or_null(SkirtExits.CHANNEL_NAME)
+		if patch != null:
+			_dress_as(patch as GeometryInstance3D, material)
 	if material == null:
+		return
+	_dress_as(geometry, material)
+
+
+## Draws `geometry` with `material`, remembering what it had (released with the rest).
+func _dress_as(geometry: GeometryInstance3D, material: ShaderMaterial) -> void:
+	if geometry == null or _overrides.has(geometry.get_instance_id()):
 		return
 	_overrides[geometry.get_instance_id()] = [geometry, geometry.material_override]
 	geometry.material_override = material

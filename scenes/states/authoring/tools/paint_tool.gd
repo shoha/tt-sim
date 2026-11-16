@@ -19,7 +19,6 @@ func _init() -> void:
 	icon = "brush"
 	brush_mode = PaintBrush
 	shortcut = KEY_K  # K for colour (C is the camera's reset)
-	slot = 4
 	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 
