@@ -23,13 +23,12 @@ func before_each() -> void:
 	_map = Node3D.new()
 	_map.name = "LevelMap"
 	_container.add_child(_map)
-	_fade_before = [CanopyFade._last_centre, CanopyFade._last_brush, CanopyFade._last_cut]
+	_fade_before = [CanopyFade._last_brush, CanopyFade._last_cut]
 
 
 func after_each() -> void:
-	CanopyFade._last_centre = _fade_before[0]
-	CanopyFade._last_brush = _fade_before[1]
-	CanopyFade._last_cut = _fade_before[2]
+	CanopyFade._last_brush = _fade_before[0]
+	CanopyFade._last_cut = _fade_before[1]
 
 
 ## A painted oak at (1, 1) in its own cell: the surfaces and the painted trees.
@@ -62,8 +61,6 @@ static func _fast_text(text: String) -> String:
 
 static func _set_window(window: String, value: Vector4) -> void:
 	match window:
-		"_last_centre":
-			CanopyFade._last_centre = value
 		"_last_brush":
 			CanopyFade._last_brush = value
 		_:
@@ -122,17 +119,19 @@ func test_a_cell_draws_its_masses_fast_and_casts_through_a_twin() -> void:
 	made[0].release()
 
 
-## The fast masses hold no fade discard, so a live canopy fade (the view window, the brush or the
-## cut published with a w above 0) puts the full shader on them, and the discard-free one comes
-## back when it ends.
+## The fast masses hold no fade discard, so a live canopy fade (an authoring brush's window or
+## the Village tool's cut, published with a w above 0) puts the full shader on them, and the
+## discard-free one comes back when it ends. Play raises neither, so a play view always draws
+## the discard-free masses (the view-centre window that also did was removed 2026-11-16).
 func test_a_live_canopy_fade_swaps_the_fast_masses_to_the_full_shader() -> void:
 	var made := _painted()
 	var trees: PainterTrees = made[1]
-	CanopyFade._last_centre = Vector4.ZERO
 	CanopyFade._last_brush = Vector4.ZERO
 	CanopyFade._last_cut = Vector4.ZERO
 	assert_false(CanopyFade.live(), "no fade live")
-	for window: String in ["_last_centre", "_last_brush", "_last_cut"]:
+	trees.call("_on_frame")
+	assert_eq(trees.fast_material.shader.resource_path, PainterTreeFast.SHADER, "play: fast")
+	for window: String in ["_last_brush", "_last_cut"]:
 		_set_window(window, Vector4(0.0, 0.0, 0.0, 1.0))
 		assert_true(CanopyFade.live(), "%s live" % window)
 		trees.call("_on_frame")

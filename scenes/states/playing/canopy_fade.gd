@@ -1,25 +1,22 @@
 class_name CanopyFade
 extends RefCounted
 
-## The canopy fade: the crowns standing in front of the ground at the view centre dissolve
-## over a soft round window in the middle of the screen (wind_foliage_include.gdshaderinc,
-## apply_canopy_fade), so the ground and the tokens under a forest read while the trees at the
-## frame's edges stay whole. In the window a tree keeps its trunk; its leaf cards drop out
-## card by card and its limbs limb by limb. At play zooms (home to 20) the window is gentle
-## and small, thinning the crowns over the stage; below the home zoom it ramps up to a full
-## clearing; past the play camera's zoom-out it fades away (authoring's whole-map views).
-## CameraController calls publish() once a frame; the global shader parameters it writes
-## reach every tree material at once.
+## The canopy fades that remain: the brush window and the cut (authoring tools) and the eye
+## view's near fade. The view-centre window (the crowns standing in front of the ground at the
+## view centre dissolving over a soft round window in the middle of the screen; Settings > Canopy
+## fade, default off) was removed on 2026-11-16 (owner decision, review board d_canopy): the token
+## ghost and the map pins carry the find-a-covered-token job, and the window was a discard that kept
+## the painted crown masses off their discard-free shader whenever it was on. The camera's global
+## shader parameters (canopy_fade_view, the brush, the cut, the eye) are written here once a frame
+## by publish() and reach every tree material at once.
 ##
-## The eye view (a perspective camera, EyeView): Camera3D.size means nothing there, so publish()
-## takes the eye, the camera's forward and a focus point instead (EyeCanopy has the maths): a
-## near fade thins every crown within a few metres of the eye whether or not the Settings switch
-## is on, the same globals carry the eye to the token ghost's range fade, and the window (Settings
-## switch) uses the eye-to-focus distance in place of the size. The orthographic path is the
-## code it always was.
+## The eye view (a perspective camera, EyeView): publish() takes the eye (EyeCanopy has the
+## maths): a near fade thins every crown within a few metres of the eye, and the same global
+## carries the eye to the token ghost's range fade.
 ##
 ## The camera's near plane stands clear of every canopy (CameraController
-## _hold_near_plane_over_canopies), so without this fade a dense forest fills the frame.
+## _hold_near_plane_over_canopies), so a dense forest fills the frame close to the ground; the
+## near fade (eye view) and the brush window (authoring) are what open it.
 ##
 ## The brush window: a map brush whose mode `fades` (BrushTool, BrushMode.fade_focus) opens
 ## the canopy over its ring by the same law, card by card with the trunks kept, in a soft
@@ -37,9 +34,8 @@ extends RefCounted
 ## mode asks for it (BrushMode.fade_cut), so play never sees it.
 
 ## Global shader parameters (project.godot [shader_globals]).
-const GLOBAL_CENTRE := &"canopy_fade_centre"
+## xyz the camera's back axis (the shaders' mark of the camera's own pass).
 const GLOBAL_VIEW := &"canopy_fade_view"
-const GLOBAL_SHAPE := &"canopy_fade_shape"
 const GLOBAL_BRUSH := &"canopy_brush"
 const GLOBAL_CUT := &"canopy_cut"
 ## xyz the eye, w the map scale in the eye view, 0 otherwise (EyeCanopy).
@@ -56,45 +52,15 @@ const BRUSH_CLOSE_S := 0.4
 const CUT_INNER := 0.6
 const CUT_BARK := 1.5
 const CUT_BEHIND_M := 0.5
-## The ramp to the full close-zoom fade runs from the home zoom down to FULL_FRACTION of it.
-const FULL_FRACTION := 0.55
-## The full close-zoom window, per unit of orthographic size: inner and outer radius on screen
-## and the depth band.
-const CLOSE_INNER := 0.3
-const CLOSE_OUTER := 0.75
-const BAND := 0.35
-## Above the play camera's zoom-out (CameraController.max_zoom's play value) the fade fades
-## out, gone by FADE_OUT_SIZE.
-const PLAY_MAX_SIZE := 20.0
-const FADE_OUT_SIZE := 30.0
-## Terrain collision layer for the view-centre ground ray.
-const GROUND_MASK := 1
-const RAY_LENGTH := 400.0
-## The Settings default of the close-zoom window (graphics/canopy_fade_enabled).
-const DEFAULT_ENABLED := false
 
-## The play-zoom window (home to PLAY_MAX_SIZE): strength, and inner and outer radius per unit
-## of orthographic size. Chosen by eye on forest and taiga maps (Polish, 2026-10-05). Vars, not
-## constants, so a render probe can tune them in-run (probes/close_zoom.gd play).
-static var play_strength := 0.9
-## False holds the whole close-zoom window off, whatever the zoom (the brush window is not
-## affected). The Settings menu's "Canopy fade" sets it (VisualEffectsController
-## .set_canopy_fade_enabled), off by default: the window follows the screen centre and players
-## found the tunnel disruptive (2026-10-24); the token ghost shows tokens under foliage without it
-## (the per-token occlusion fade that once helped was removed 2026-11-15).
-static var enabled := DEFAULT_ENABLED
 ## False holds the eye view's near fade and the ghost's range fade off (EyeCanopy), the way the
 ## orbit view has them; on by default. A switch for render probes (before and after stills).
 static var eye_fade_enabled := true
 ## False holds the eye view's near grass off (EyeCanopy GRASS_*: thinned, softened tufts near the
 ## eye); on by default. A switch for render probes (before and after stills, the cost A/B).
 static var eye_grass_enabled := true
-static var play_inner := 0.2
-static var play_outer := 0.55
 
-static var _last_centre := Vector4(INF, INF, INF, INF)
 static var _last_view := Vector4(INF, INF, INF, INF)
-static var _last_shape := Vector4(INF, INF, INF, INF)
 static var _last_brush := Vector4(INF, INF, INF, INF)
 static var _last_eye := Vector4(INF, INF, INF, INF)
 static var _last_eye_grass := INF
@@ -149,11 +115,12 @@ static func clear_cut() -> void:
 	_cut_asked = Vector4.ZERO
 
 
-## Whether any tree fade shows now: the view window, the brush or the cut last published with a w
-## above 0 (nothing published yet is not live). The painted trees' discard-free crown masses read
-## it, because only the full shader fades (painter-perf-blockin).
+## Whether any tree fade shows now: the brush or the cut last published with a w above 0
+## (nothing published yet is not live). Only authoring raises either, so play never does. The
+## painted trees' discard-free crown masses read it, because only the full shader fades
+## (painter-perf-blockin).
 static func live() -> bool:
-	for window: Vector4 in [_last_centre, _last_brush, _last_cut]:
+	for window: Vector4 in [_last_brush, _last_cut]:
 		if is_finite(window.w) and window.w > 0.0:
 			return true
 	return false
@@ -185,44 +152,10 @@ static func scaled(window: Vector4, open: float) -> Vector4:
 	return Vector4(window.x, window.y, window.z, window.w * smoothstep(0.0, 1.0, open))
 
 
-## How far the camera has closed in past the home zoom: 0 at home and above, 1 at
-## FULL_FRACTION of it and below. Pure.
-static func closeness(size: float, home: float) -> float:
-	if home <= 0.0:
-		return 0.0
-	return 1.0 - smoothstep(home * FULL_FRACTION, home, size)
-
-
-## Fade strength (0 off, 1 full) at orthographic size `size`, for a camera whose home size is
-## `home`: play_strength from the home zoom out to PLAY_MAX_SIZE, rising to 1 as the camera
-## closes in, falling to 0 between PLAY_MAX_SIZE and FADE_OUT_SIZE. Pure but for the play
-## settings.
-static func strength(size: float, home: float) -> float:
-	if home <= 0.0:
-		return 0.0
-	var close := lerpf(play_strength, 1.0, closeness(size, home))
-	return close * (1.0 - smoothstep(PLAY_MAX_SIZE, FADE_OUT_SIZE, size))
-
-
-## The window at size `size`: Vector4(inner radius, outer radius, depth band, 0) in metres.
-## Pure but for the play settings.
-static func shape(size: float, home: float) -> Vector4:
-	var t := closeness(size, home)
-	return Vector4(
-		lerpf(play_inner, CLOSE_INNER, t) * size,
-		lerpf(play_outer, CLOSE_OUTER, t) * size,
-		BAND * size,
-		0.0
-	)
-
-
-## Writes the fade's globals for `camera` at home size `home`: the ground under the view
-## centre (a layer-1 ray, or the y = 0 plane when it misses), the strength, the camera's back
-## axis and the window, and the brush window `seconds` on. Only pushes values that changed;
-## while off, no ray is cast.
-static func publish(
-	camera: Camera3D, home: float, viewport_size: Vector2, seconds: float = 0.0
-) -> void:
+## Writes the fade's globals for `camera`: the brush window and the cut `seconds` on, the camera's
+## back axis (the shaders' mark of the camera's own pass) and, for a perspective camera, the eye
+## view's globals. Only pushes values that changed.
+static func publish(camera: Camera3D, seconds: float = 0.0) -> void:
 	var brush := step_brush(seconds)
 	if brush != _last_brush:
 		_last_brush = brush
@@ -232,46 +165,23 @@ static func publish(
 		_last_cut = cut
 		RenderingServer.global_shader_parameter_set(GLOBAL_CUT, cut)
 	if camera.projection == Camera3D.PROJECTION_PERSPECTIVE:
-		_publish_eye(camera, viewport_size)
+		_publish_eye(camera)
 		return
 	_push_eye(Vector4.ZERO)
 	_push_eye_grass(0.0)
-	var s := strength(camera.size, home) if enabled else 0.0
 	var back := camera.global_basis.z.normalized()
-	var centre := Vector4.ZERO
-	if s > 0.0:
-		var ground := view_centre_ground(camera, viewport_size)
-		centre = Vector4(ground.x, ground.y, ground.z, s)
-	var view := Vector4(back.x, back.y, back.z, 0.0)
-	var window := shape(camera.size, home)
-	_push(centre, view, window)
+	_push_view(Vector4(back.x, back.y, back.z, 0.0))
 
 
-## The eye view's fade (a perspective camera; EyeCanopy has the maths). Camera3D.size means
-## nothing here, so the inputs are the eye, the camera's forward and a focus point (the ground
-## under the centre ray, or FOCUS_AHEAD_M ahead when it misses): `canopy_eye` carries the eye
-## and the map scale for the near fade and the ghost range, and the focus window (only while
-## `enabled`) takes the eye-to-focus distance in place of the orthographic size.
-static func _publish_eye(camera: Camera3D, viewport_size: Vector2) -> void:
+## The eye view's fade (a perspective camera; EyeCanopy has the maths): `canopy_eye` carries the
+## eye and the map scale for the near fade and the ghost range.
+static func _publish_eye(camera: Camera3D) -> void:
 	var scale := map_scale(camera)
 	var eye := camera.global_position
-	var forward := -camera.global_basis.z.normalized()
-	var back := -forward
-	var centre := Vector4.ZERO
-	var window := Vector4(1.0, 2.0, 1.0, 0.0)
-	if enabled:
-		var ground := view_centre_ground(camera, viewport_size)
-		var hit := ground != eye and absf(forward.y) > 0.0001 and (ground - eye).dot(forward) > 0.0
-		var focus := EyeCanopy.focus_point(eye, forward, hit, ground, scale)
-		var size := EyeCanopy.window_size((focus - eye).length(), camera.fov, scale)
-		var home := EyeCanopy.home_size(camera.fov)
-		var s := strength(size, home)
-		if s > 0.0:
-			centre = Vector4(focus.x, focus.y, focus.z, s)
-			window = shape(size, home) * scale
+	var back := camera.global_basis.z.normalized()
 	_push_eye(Vector4(eye.x, eye.y, eye.z, scale if eye_fade_enabled else 0.0))
 	_push_eye_grass(scale if eye_grass_enabled else 0.0)
-	_push(centre, Vector4(back.x, back.y, back.z, 0.0), window)
+	_push_view(Vector4(back.x, back.y, back.z, 0.0))
 
 
 ## The map's scale (world metres per map metre) as the eye sees it: the "LevelMap" under the
@@ -299,38 +209,8 @@ static func _push_eye_grass(scale: float) -> void:
 		RenderingServer.global_shader_parameter_set(GLOBAL_EYE_GRASS, scale)
 
 
-## Pushes the centre, view and window globals that changed.
-static func _push(centre: Vector4, view: Vector4, window: Vector4) -> void:
-	if centre != _last_centre:
-		_last_centre = centre
-		RenderingServer.global_shader_parameter_set(GLOBAL_CENTRE, centre)
+## Pushes the view global when it changed.
+static func _push_view(view: Vector4) -> void:
 	if view != _last_view:
 		_last_view = view
 		RenderingServer.global_shader_parameter_set(GLOBAL_VIEW, view)
-	if window != _last_shape:
-		_last_shape = window
-		RenderingServer.global_shader_parameter_set(GLOBAL_SHAPE, window)
-
-
-## The ground point at the centre of the view: the first layer-1 hit along the centre ray,
-## or where the ray crosses y = 0.
-static func view_centre_ground(camera: Camera3D, viewport_size: Vector2) -> Vector3:
-	var screen := viewport_size * 0.5
-	var origin := camera.project_ray_origin(screen)
-	var dir := camera.project_ray_normal(screen)
-	var world := camera.get_world_3d()
-	if world:
-		var query := PhysicsRayQueryParameters3D.create(origin, origin + dir * RAY_LENGTH)
-		query.collision_mask = GROUND_MASK
-		var hit := world.direct_space_state.intersect_ray(query)
-		if not hit.is_empty():
-			return hit.position
-	return plane_hit(origin, dir, 0.0)
-
-
-## Where the ray (origin, dir) crosses the plane y = `y`; the origin when it runs parallel.
-## Pure.
-static func plane_hit(origin: Vector3, dir: Vector3, y: float) -> Vector3:
-	if absf(dir.y) < 0.0001:
-		return origin
-	return origin + dir * ((y - origin.y) / dir.y)

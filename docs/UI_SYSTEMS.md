@@ -1218,11 +1218,11 @@ live one ends the silence; see `docs/SOUND_EFFECTS.md`.
 - "See tokens through scenery" rows (`SettingsSeeThrough`, `graphics/*` keys, applied at once by
   Apply and read again at every map load): **Token ghost** (default on; a see-through silhouette
   with an ink rim, gold while selected or hovered, of a token that foliage, rocks or walls cover:
-  `TokenGhost`, `shaders/token_ghost.gdshader`; the Painted look gives it its own wash) and
-  **Canopy fade** (default off; the close-zoom window of thinned crowns round the screen centre:
-  `CanopyFade`). The two are independent. Tooltips are in `SettingsSeeThrough.apply_tooltips`.
-  (The third row, **Occlusion fade**, the per-token reveal of map geometry, was removed 2026-11-15;
-  an old settings file's `graphics/occlusion_fade_enabled` is ignored.)
+  `TokenGhost`, `shaders/token_ghost.gdshader`; the Painted look gives it its own wash). Its
+  tooltip is in `SettingsSeeThrough.apply_tooltips`. (**Occlusion fade**, the per-token reveal of
+  map geometry, was removed 2026-11-15, and **Canopy fade**, the view-centre window of thinned
+  crowns, on 2026-11-16; an old settings file's `graphics/occlusion_fade_enabled` and
+  `graphics/canopy_fade_enabled` are ignored.)
 - **Wind motion** slider (`SettingsWindMotion`, `graphics/wind_motion`, 0 to 100 percent, default
   100): scales how far plants, cloth and weather lean and sway on this player's screen. It moves the
   `Wind` autoload as the slider moves (Apply saves it); 0 holds everything still, and Reduce

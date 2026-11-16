@@ -19,7 +19,7 @@ pin tools work there, and authoring is an orbit-only tool (SL2). The decisions a
 | `scenes/states/playing/eye_sky.gd` | `EyeSky` | Installs the painted sky and the depth fog in the level's Environment while the eye is on, restores every field on leaving |
 | `utils/street_sky_look.gd` | `StreetSkyLook` | The per-biome look table, `fog_range`, `map_reach`, `sun_angles`, `dominant_biome` |
 | `shaders/street_sky.gdshader` | | The sky shader: gradient, warm band, cumulus banks and cloudlets, up to four ridge layers |
-| `utils/eye_canopy.gd` | `EyeCanopy` | Pure foliage maths of the eye: near fade, focus window, ghost range, eye light, near grass; mirrored in `shaders/wind_foliage_include.gdshaderinc` and `wind_foliage_main.gdshaderinc` |
+| `utils/eye_canopy.gd` | `EyeCanopy` | Pure foliage maths of the eye: near fade, ghost range, eye light, near grass; mirrored in `shaders/wind_foliage_include.gdshaderinc` and `wind_foliage_main.gdshaderinc` |
 | `scenes/states/playing/canopy_fade.gd` | `CanopyFade` | Publishes `canopy_eye` and `eye_grass` (perspective camera) beside the orbit view's fade globals |
 | `utils/eye_rim.gd` | `EyeRim` | Hedgerows and copses past the map edge: the pure plan and the `EyeRim` node |
 | `scenes/terrain/skirt_backdrop.gd` | `SkirtBackdrop` | Fades the skirt and the water to the sky's foot colour; `EYE_HOLD_M` holds the fade at the eye |
@@ -117,9 +117,8 @@ pass (the fragment's camera within `PASS_TOLERANCE_M` 0.25 of the eye), so shado
 the map scale. The terms:
 
 - Near fade: a leaf card or limb inside 1.2 m is gone, thinned out to 4.0 m, card by card; trunks stay. It does not
-  depend on the Settings "Canopy fade" switch (`NEAR_FULL_M`, `NEAR_NONE_M`).
-- Focus window: the existing canopy window, centred on the ground the centre ray meets (8 m ahead when it misses),
-  with the eye-to-focus distance standing in for the orthographic size. Only when the Settings switch is on.
+  need a Settings switch (`NEAR_FULL_M`, `NEAR_NONE_M`). (The eye's focus window, the view-centre canopy window
+  centred on the ground the centre ray met, went with the window on 2026-11-16.)
 - Ghost range: a token ghost fades from 30 m, gone by 50 m.
 - Eye light (FO1): at street level the crown's underside and far side were near black. In the eye's pass a tree's painted
   card lifts its shade end to 0.3 of its lit tone (`SHADE_FLOOR`), keeps its ambient, and glows warm where the sun

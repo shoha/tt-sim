@@ -714,10 +714,12 @@ vertex stage instead; the camera pass's thinning and rim-break dissolves, the bu
 edge shape and the canopy fade's `tree_fades` are compiled out of it. The masses cast no shadow; a
 twin node (`PainterTreeFast.SHADOW_NODE`, index 5 of the cell's nodes) shares node 0's MultiMesh,
 draws with the full block-in shader and is SHADOWS_ONLY, so the crown's shadow keeps its eroded edge
-and gaps (the sun pass's own discards). While a canopy fade is live (`CanopyFade.live()`, the view
-window, the brush or the cut published with w above 0) `PainterTreeFast.follow_fade` puts the full
-shader on the camera masses again, since the fade is a discard; a shader swap compiles, so it
-happens only when a fade starts or ends. An event's tree (`take`) and the limb ribbons keep the full
+and gaps (the sun pass's own discards). The view-centre canopy window (Settings > Canopy fade) that
+also forced the full shader was removed on 2026-11-16 (owner decision, review board `d_canopy`), so
+a play view always draws the discard-free masses. Only authoring raises a fade now: while a map
+brush's window or the Village tool's cut is live (`CanopyFade.live()`, published with w above 0)
+`PainterTreeFast.follow_fade` puts the full shader on the camera masses, since those fades are
+discards; a shader swap compiles, so it happens only when one starts or ends. An event's tree (`take`) and the limb ribbons keep the full
 shaders and one node. Rules for a change to the block-in body: any new `discard` goes inside
 `#ifndef TREE_FAST ... #endif` (`tests/unit/test_painter_tree_fast.gd` cuts those regions out and
 asserts none is left); a new whole-fragment kill of a mass belongs in the vertex stage's TREE_FAST
