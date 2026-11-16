@@ -120,6 +120,7 @@ static func _pad(
 		PainterTreeMass.Role.LEAF,
 		{
 			"form": FORM,
+			"bush": true,
 			"centre": centre,
 			"spacing": SPACING,
 			"wind": PainterTreeBase.W_PAD * WIND_SHARE,

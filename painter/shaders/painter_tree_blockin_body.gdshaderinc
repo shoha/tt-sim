@@ -732,7 +732,7 @@ void fragment() {
 		if (r8 > 0.5 && role > 1.5 && role < 5.5) {
 			cast = occ_soft(v_wp + n * 0.05, to_sun, int(v_inst + 0.5));
 		} else if (form_occ(v_wp + n * 0.05, to_sun, int(v_inst + 0.5)) > 0.5) {
-			t = min(t, foliage ? crown_cast18 : 0.1);
+			t = min(t, bush ? bush_cast_tone(wob, n.y) : (foliage ? crown_cast18 : 0.1));
 		}
 	}
 	if (foliage && PROJECTION_MATRIX[3][3] == 0.0 && e_far < 0.5) {

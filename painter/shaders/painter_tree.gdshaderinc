@@ -207,6 +207,17 @@ float form_occ(vec3 o, vec3 d, int inst) {
 	return 0.0;
 }
 
+// painter-look-eyebush: a bush another form shades is not one flat dark tone. Its shade keeps a
+// value structure in broad lobes (BUSH_CAST_F per metre, the block-in's wobble and each stroke's
+// own draw): the tops of the mound turn sky-lit mid teal, the sides break between deep and mid
+// teal, the underside stays the deepest. `q` is a 0..1 noise (lobe), `n_y` the surface's up.
+const float BUSH_CAST_F = 1.8;
+
+float bush_cast_tone(float q, float n_y) {
+	float w = q + 0.45 * (n_y - 0.15);
+	return 0.1 + 0.2 * step(0.5, w) + 0.2 * step(0.68, w);
+}
+
 // ---- wind (round 3's sway; the gust is tt-sim's).
 // The gust at xz in 0.15 .. 1: WindModel.gust_at's field (wind_foliage_include's
 // wind_gust_field, term for term), so a front moves through the trees and the plants together.

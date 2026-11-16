@@ -6,6 +6,8 @@ extends RefCounted
 ## spike/painter/painter12.gd and painter13.gd (the spike's PPainter13.pack); the research
 ## rounds' notes follow.
 ##
+## painter-look-eyebush: ellipsoid flag 1024, a bush's pad (params "bush"): a bush another form
+## shades keeps a value structure in broad lobes instead of one flat shade tone.
 ## Round 12: round 11's pack with one more ellipsoid flag:
 ##   512   a willow's hanging strand mass (params "strands"): the shaders taper it to a hem
 ## Round 11: round 10's pack with three additions (the layouts are unchanged):
@@ -334,6 +336,8 @@ static func _pack12(
 			flags += 256.0
 		if pr.has("strands"):
 			flags += 512.0
+		if pr.has("bush"):
+			flags += 1024.0
 		var sp0: float = float(pr.get("spacing", SPACING[m.role])) * 2.0
 		# Knud Thomsen's ellipsoid area, as PPainter2._ell_area.
 		var ab: float = pow(sz.x * sz.y, 1.6)

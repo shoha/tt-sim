@@ -306,6 +306,25 @@ func test_a_bush_is_a_few_pads_in_its_box() -> void:
 		assert_lt((d["aabb"] as AABB).position.y, 0.1, "it stands on the ground")
 		var bb: AABB = d["aabb"]
 		assert_gt(maxf(bb.size.x, bb.size.z), bb.size.y, "a bush is wider than tall")
+	# painter-look-eyebush: every pad is marked as a bush's (ellipsoid flag 1024, texel 1 w of each
+	# ten-texel record), so its strokes keep a value structure in another form's shade.
+	for seed_v: int in [3, 77]:
+		var bd := PainterTreePack.pack_bush(PainterTreeBush.masses(box, seed_v), seed_v)
+		var data: PackedFloat32Array = bd["data"]
+		for ei: int in int(bd["n_ell"]):
+			var flags := int(data[ei * PainterTreePack.ELL_T * 4 + 7])
+			assert_ne(flags & 1024, 0, "pad %d carries the bush flag" % ei)
+	# A tree's pad never takes it.
+	var oak := PainterTreeMass.make(
+		PainterTreeMass.Shape.ELLIPSOID,
+		Transform3D(Basis.IDENTITY, Vector3(0.0, 2.0, 0.0)),
+		Vector3(1.5, 1.0, 1.5),
+		PainterTreeMass.Role.LEAF,
+		{"form": 1}
+	)
+	var oak_pack := PainterTreePack.pack_bush([oak] as Array[PainterTreeMass], 5)
+	var oak_data: PackedFloat32Array = oak_pack["data"]
+	assert_eq(int(oak_data[7]) & 1024, 0, "a crown pad is not a bush's")
 	# A large bush is the same four pads, within the pad and stroke budget (a pad costs what many
 	# strokes do; painter-plants-fix4).
 	var big := PainterTreeBush.box_of(AABB(Vector3(-1.5, 0.0, -1.5), Vector3(3.0, 2.6, 3.0)), 1.0)

@@ -207,6 +207,7 @@ void vertex() {
 	float rnd = 0.0;
 	float level = 1.0;
 	float rho = 0.0;
+	bool bush_s = false;
 	float tone_rnd = 0.0;
 	float size_rnd = 0.0;
 	float shadow_size = 0.0;
@@ -441,6 +442,7 @@ void vertex() {
 						a_n = n;
 						a_tn = (efl & 128) != 0 ? normalize(mix(n_root, normalize(p_root - e6.xyz), 0.45)) : n_root;
 						a_fn = a_tn;
+						bush_s = (efl & 1024) != 0;
 						if ((efl & 4) != 0) {
 							vec4 t3 = texelFetch(tree_tex, ivec2(3, trow), 0);
 							vec4 t4 = texelFetch(tree_tex, ivec2(4, trow), 0);
@@ -1101,7 +1103,11 @@ void vertex() {
 				t += patch17(anchor) * 0.45;
 				if (calm > 0.5) {
 					if (form_occ(anchor + wn * 0.05, to_sun, inst) > 0.5) {
-						t = max(min(t, clamp((foliage ? crown_cast18 : 0.1) + jit * 0.35, 0.03, foliage ? 0.5 : 0.3)), e_lift);
+						float t_cast = clamp((foliage ? crown_cast18 : 0.1) + jit * 0.35, 0.03, foliage ? 0.5 : 0.3);
+						if (bush_s) {
+							t_cast = bush_cast_tone(mix(p_noise(anchor * BUSH_CAST_F + 5.0), fract(rnd * 17.3 + 0.2), 0.45), wn.y);
+						}
+						t = max(min(t, t_cast), e_lift);
 					}
 				}
 				value = 1.0 + (fract(rnd * 41.7 + 0.3) - 0.5) * 2.0 * rp6.x + (e_persp && foliage ? (fract(rnd * 13.3 + 0.1) - 0.5) * 0.3 * e_near : 0.0);
