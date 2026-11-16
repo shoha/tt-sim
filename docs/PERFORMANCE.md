@@ -6287,6 +6287,81 @@ no draw count. The portrait atlas is now made on the first frame instead of at t
 view, and each pin is read and sorted every frame as before (a CPU cost per token, unmeasured).
 Frames: `compare/painter_final24_ghost2/` (`notes.md`; `r6` the final constants).
 
+## Painted vs Classic after the 2026-11-15 night merges (card painter-perf-recheck, 2026-11-16)
+
+Painted minus Classic on main `91d67bc2` (painted water, grounding contact AO, coverage grounds, painted
+fire, ghost single outline with always-on pins, the HUD and settings work). Pinned procedure:
+1920x1080 window, vsync off, one scene per render job, in-run interleaved Painted/Classic (P C P C P C),
+GPU 2.5 s median per window after a warm-up drop, debug build, RTX 3080, the lane held. Cell = median of
+the three Painted windows minus median of the three Classic windows, GPU ms, Painted look (sun elevation
+in degrees where it is not 20); "pairs" = the range of the three P_i minus the C that follows it.
+Raw logs and jobs: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final23_perf/`
+(`notes.md`, one folder per job). The forest, taiga and village levels were built once at 472259bc
+(`_painter-perf-buried_*`); the river level is the ghost2 card's `_painter-look-ghost_g2_water` (two rivers,
+alpacas wading), the savanna and badlands levels are the coverage card's, the fire level a 200 m forest
+with three flames strokes and one blaze stroke, in play.
+
+| Cell | Painted | Classic | Painted minus Classic | pairs |
+|------|---------|---------|-----------------------|-------|
+| forest tokens summer (zoom 8, 5 tokens) | 2.942 | 2.445 | +0.50 | +0.49 .. +0.50 |
+| forest tokens summer, 21 tokens (ghost cap of 16 hit) | 3.094 | 2.599 | +0.49 | +0.48 .. +0.50 |
+| forest eye (pitch 6) summer | 2.571 | 2.744 | -0.17 | -0.18 .. -0.16 |
+| taiga home summer | 3.111 | 2.201 | +0.91 | +0.85 .. +0.94 |
+| village home winter, sun 12 degrees (12 houses) | 2.260 | 3.437 | -1.18 | -1.20 .. -1.16 |
+| village home summer, sun 20 | 2.666 | 3.441 | -0.78 | -0.79 .. -0.77 |
+| river zoom 8 summer | 3.583 | 2.854 | +0.73 | +0.66 .. +0.74 |
+| river zoom 20 summer | 3.860 | 3.707 | +0.15 | +0.15 .. +0.16 |
+| river eye summer | 3.594 | 4.878 | -1.28 | -1.33 .. -1.27 |
+| savanna home | 2.222 | 2.563 | -0.34 | -0.39 .. -0.34 |
+| savanna zoom 8 | 1.936 | 2.082 | -0.15 | -0.15 .. -0.14 |
+| badlands home | 2.190 | 2.086 | +0.10 | +0.11 .. +0.13 |
+| badlands zoom 8 | 1.885 | 1.872 | +0.01 | +0.00 .. +0.01 |
+| fire (live) home | 2.871 | 2.732 | +0.14 | +0.11 .. +0.14 |
+| fire (live) zoom 8 | 2.660 | 2.350 | +0.31 | +0.30 .. +0.32 |
+
+Over the 0.3 ms default criterion: forest tokens summer (+0.50, and +0.47 in a second run with a 21-token
+cap), taiga home summer (+0.91; its Painted windows climb 3.05, 3.11, 3.14 within a run as before), river
+zoom 8 (+0.73, +0.66 in the second run) and, on the line, fire zoom 8 (+0.31). Painted is cheaper than
+Classic at every eye view, in the village (12 houses) and on the savanna, and level at badlands.
+
+What moved forest tokens summer (same scene, same level, the card's bisect; Painted minus Classic):
+472259bc +0.026, 160a36a0 +0.041 (fade still on in both looks), 8c5ff401 +0.438 (the occlusion fade
+removed), 91d67bc2 +0.47 to +0.50. The step is the fade removal: Painted fell 3.098 -> 2.931 ms, Classic
+fell 3.057 -> 2.493 ms (Classic paid the fade on every foliage and map fragment), so the gap widened by
+Classic getting cheaper. The 0.03 to 0.06 ms after it is not bisected (wood, taiga, eyebush, roofs, water,
+grounding, coverage and fire all landed in between). Bushes r2 and r3 and fade r1 and r2 did not move it
+measurably (160a36a0 is inside the +0.05 bound of the old +0.026), so no bush dab constant is involved.
+
+Contributors at the three over-bound cells, by hiding the vegetation of each look in-run (`Ps` = Painted
+with the painted tree layer and every scatter node hidden, `Cs` = Classic with every scatter node hidden;
+"vegetation" = trees, bushes, plants and grass; "rest" = ground, water, tokens, structures, sky, shadows):
+
+| Cell | Painted | Classic | gap | Painted vegetation (P - Ps) | Classic vegetation (C - Cs) | vegetation delta | rest (Ps - Cs) |
+|------|---------|---------|-----|-----------------------------|-----------------------------|------------------|----------------|
+| forest tokens summer | 2.984 | 2.512 | +0.47 | 1.085 | 0.322 | +0.76 | -0.29 |
+| taiga home summer | 3.087 | 2.177 | +0.91 | 0.939 | 0.251 | +0.69 | +0.22 |
+| river zoom 8 | 3.516 | 2.852 | +0.66 | 1.294 | 0.348 | +0.95 | -0.28 |
+
+The whole gap is vegetation: Painted foliage (stroke trees and bushes, painted plants and grass) costs
+0.94 to 1.29 ms where Classic's costs 0.25 to 0.35. Everything else in the frame is 0.28 to 0.29 ms
+cheaper than Classic on the forest and the river (painted water, ground, tokens) and 0.22 ms dearer in
+taiga (the moss floor and its contact AO are heavier than Classic's ground). The painted tree layer alone
+is 0.17 to 1.92 ms across the cells (hiding it: forest 1.18, taiga 1.07, river zoom 8 1.39, forest eye 1.50,
+river eye 1.92, village 0.46, fire zoom 8 0.84, savanna 0.17); it is the biggest single cost in the
+Painted frame, and the eye views are cheap against Classic only because Classic's near foliage is
+dearer there still. Ghost: with 21 tokens (16 at the cap, 69 token meshes, 593 draw calls) the ghost
+costs +0.040 ms (new ghost, pins Always 3.064 against ghost off 3.024); pins Top-down only 3.082
+(+0.018 over Always, inside the noise). Pins at every pitch cost nothing measurable on the GPU.
+
+Not isolated: buildings (the `_wall_layers` switch found no layers in these levels, so "Pb" changed
+nothing), the water shader on its own (the 2026-11-15 water card measured it at -0.07 to -0.11 ms
+against Classic) and the ground. Fire was verified live by one half-size capture (flames, ash rings and
+smoke over a forest floor); its Painted-only cost over a burning Classic frame was not split further.
+The Classic vegetation figure is Classic with every scatter node hidden, which also drops its grass and
+plants; Painted's `Ps` hides the same scatter nodes and the stroke layer. The eye framing and the
+river pose were set by hand (a forest eye at (-4.5, -6.5), the river at (-3.5, 1.5)); they match no
+earlier card's pose.
+
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
 What each Shadow quality tier (`directional_soft_shadow_filter_set_quality`) costs, and a "blur"
