@@ -743,6 +743,11 @@ func _on_section_selected(id: StringName) -> void:
 	var tab := tab_container.get_node_or_null(String(id))
 	if tab:
 		tab_container.current_tab = tab.get_index()
+	# The keyboard ring stays on the chosen section when it was on the rail (Ctrl+Page Down, the
+	# shoulder buttons), instead of marking the one that was left.
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused and section_rail.is_ancestor_of(focused):
+		section_rail.grab_item_focus(id)
 
 
 ## The player's saved Shadow quality from a loaded settings file, exactly as saved (Hard and

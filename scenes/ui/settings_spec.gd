@@ -55,7 +55,7 @@ const TABS := {
 					"desc":
 					"One choice for shadows, ambient occlusion and render scale, picked for your graphics card.",
 				},
-				{"row": "QualityNoteRow"},
+				{"row": "QualityNoteRow", "attach": true},
 				{
 					"row": "Look",
 					"desc": "How the board is lit and coloured on your screen. Other players keep their own.",
@@ -178,10 +178,8 @@ const TABS := {
 			[
 				{
 					"row": "InterfaceSize",
-					"desc": (
-						"How large menus and text are. Auto keeps text readable on this screen. "
-						+ "The board is not scaled. Changes at once."
-					),
+					"desc":
+					"How large menus and text are. Auto keeps text readable on this screen. Changes at once.",
 				},
 			],
 		},
@@ -191,10 +189,8 @@ const TABS := {
 			[
 				{
 					"row": "ReduceMotion",
-					"desc": (
-						"Menus fade in place instead of sliding or scaling. Follows your system's "
-						+ "setting too. Changes at once."
-					),
+					"desc":
+					"Menus fade instead of sliding. Follows your system's setting too. Changes at once.",
 				},
 				{
 					"row": "WindMotion",
@@ -276,7 +272,7 @@ const TABS := {
 	"About":
 	[
 		{
-			"title": "TTSim",
+			"title": "Version and credits",
 			"reset": false,
 			"rows":
 			[

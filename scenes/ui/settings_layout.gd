@@ -138,6 +138,7 @@ func _build_tab(tab_name: String) -> void:
 	if tab == null:
 		return
 	var content := tab.get_node("Margin/Content") as VBoxContainer
+	content.theme_type_variation = &"BoxContainerGroups"
 	var listed := {}
 	for spec in SettingsSpec.TABS[tab_name]:
 		listed[spec.get("foldout", "")] = true
@@ -213,6 +214,11 @@ func _build_row(
 	if row == null:
 		push_warning("SettingsLayout: no row %s in %s" % [row_spec.row, tab_name])
 		return
+	if bool(row_spec.get("attach", false)) and not entries.is_empty():
+		# A line that belongs to the row above it (a note the row's own code shows and hides):
+		# it joins that row's block, flush under its sentence, and takes no entry of its own.
+		_move(row, (entries.back().block as Control))
+		return
 	var block := VBoxContainer.new()
 	block.name = "RowBlock_" + String(row_spec.row)
 	var old_parent := row.get_parent()
@@ -229,6 +235,8 @@ func _build_row(
 		if node:
 			_move(node, block)
 			_left(node)
+			# A hard line break in a scene label would leave a ragged second line.
+			node.text = node.text.replace("\n", " ")
 			sentence = node.text
 	elif not sentence.is_empty():
 		block.add_child(_describe(sentence))
