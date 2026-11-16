@@ -26,6 +26,8 @@ func _init() -> void:
 	summary = StructureToolPane.SUMMARY
 	icon = "home"
 	brush_mode = StructureBrush
+	on_rail = false
+	hub = BuildTool.ID
 	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [

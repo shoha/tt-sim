@@ -24,6 +24,7 @@
 		"res://tests/unit/test_authoring_sculpt.gd",
 		"res://tests/unit/test_authoring_session.gd",
 		"res://tests/unit/test_authoring_ui.gd",
+		"res://tests/unit/test_authoring_hubs.gd",
 		"res://tests/unit/test_base_scatter_eraser.gd",
 		"res://tests/unit/test_biome_designer_ab.gd",
 		"res://tests/unit/test_biome_designer_entry.gd",

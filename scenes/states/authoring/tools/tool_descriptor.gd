@@ -10,7 +10,7 @@ extends RefCounted
 ##
 ## Declared: the id (the rail item and the pane share it), the label (rail tooltip and pane
 ## title), a one-line summary (pane caption and the tool's help row), the rail icon, an
-## optional shortcut (a bare key; none of the seven tools of 2026-10 has one), the BrushMode
+## optional shortcut (a bare key: every rail tool has one since 2026-11-16), the BrushMode
 ## class its gestures run in, its own help rows, and the contexts it exists in (authoring,
 ## play, or both).
 ##
@@ -56,6 +56,18 @@ var brush_mode: GDScript = null
 var help: Array = []
 ## The rail tooltip while the open map cannot take the tool ("" for a tool that always can).
 var unavailable_tooltip: String = ""
+## Whether the authoring rail lists the tool. The rail holds seven tools; the others are tabs of
+## one of them (hub), so they keep their descriptors, brush modes, panes and ids but have no rail
+## item of their own (card ui-authoring3).
+var on_rail: bool = true
+## The rail tool this one is a tab of ("place" for Thin / Clear, "water" for Bridge, "build" for
+## Wall, Structure and Village), or &"" for a tool that stands on its own.
+var hub: StringName = &""
+## A rail tool that holds tabs: the top tabs its card shows, each {"id": StringName (the tab and
+## its node name), "label": String, "tool": StringName (the tool whose brush mode and pane the tab
+## runs), "tip": String, optionally "shape": int (Water's River and Pond are two tabs of the one
+## tool, told apart by the brush's shape)}. Empty for a tool without tabs.
+var tabs: Array[Dictionary] = []
 
 
 ## Whether the tool exists in `context` (AUTHORING or PLAY).
@@ -92,9 +104,23 @@ func rail_item() -> Dictionary:
 	return {"id": id, "icon": icon, "tooltip": rail_tip()}
 
 
-## The tool's F1 help rows: its name row (the rail tooltip and the summary), then `help`.
+## The name the F1 help gives the tool: the rail tooltip ("Water (L)"), or for a tab of a hub
+## the hub and the tab ("Water: Crossing"), since the tab has no key of its own.
+func help_name() -> String:
+	if hub == &"":
+		return rail_tooltip()
+	var hub_tool := ToolRegistry.find(hub)
+	if hub_tool == null:
+		return rail_tooltip()
+	for tab in hub_tool.tabs:
+		if StringName(tab.get("tool", &"")) == id:
+			return "%s: %s" % [hub_tool.label, String(tab["label"])]
+	return rail_tooltip()
+
+
+## The tool's F1 help rows: its name row (the help name and the summary), then `help`.
 func help_rows() -> Array:
-	var rows: Array = [[rail_tooltip(), summary.trim_suffix(".")]]
+	var rows: Array = [[help_name(), summary.trim_suffix(".")]]
 	rows.append_array(help)
 	return rows
 

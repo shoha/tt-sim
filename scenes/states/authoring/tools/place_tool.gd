@@ -16,6 +16,22 @@ func _init() -> void:
 	summary = "Set a hero tree, rock or log."
 	icon = "tree"
 	brush_mode = PlaceBrush
+	shortcut = KEY_P
+	# Thin / Clear is Place's erase mode: its own tool and brush, a tab of this one on the rail.
+	tabs = [
+		{
+			"id": ID,
+			"label": "Place",
+			"tool": ID,
+			"tip": "Place: set a hero tree, rock or log where you click",
+		},
+		{
+			"id": ThinTool.ID,
+			"label": "Thin / Clear",
+			"tool": ThinTool.ID,
+			"tip": "Thin / Clear: brush away trees and plants (Ctrl: clear the ground)",
+		},
+	]
 
 
 ## The tool's mode on `brush`.

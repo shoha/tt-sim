@@ -563,6 +563,7 @@ func _define_drawer() -> void:
 				)
 			}
 		)
+	_define_floating_chrome()
 	# What a drawer's content stands in: 12 px round it (a play drawer), or 16 (the map tools').
 	for margin_name: String in ["DrawerMargin", "DrawerMarginRoomy"]:
 		var step := SPACE_4 if margin_name.ends_with("Roomy") else SPACE_3
@@ -571,6 +572,46 @@ func _define_drawer() -> void:
 			"MarginContainer",
 			{margin_left = step, margin_top = step, margin_right = step, margin_bottom = step}
 		)
+
+
+## The map tools' floating chrome (card, rail, actions pill, segmented tabs; the 2026-11-16 map
+## building 3 card): three separate paper shapes with the same RADIUS_CARD on every corner, the same
+## pencil edge and the same rest shadow, so no flat edge ever meets a curve. The tabs are a sunken
+## pill track with a SELECTED pill sliding behind the chosen word, as a picked tile reads.
+func _define_floating_chrome() -> void:
+	var trim: Dictionary = inherit(edge(1, c(ThemeColors.EDGE)), lift())
+	if on_glass:
+		trim = inherit(rim(), lift())
+	define_variant_style(
+		"DrawerCardFloat", "PanelContainer", {panel = box(c(ThemeColors.SURFACE), RADIUS_CARD, 0, 0, trim)}
+	)
+	var rail_box := box(
+		c(ThemeColors.SURFACE), RADIUS_CARD, SPACE_1, SPACE_2, trim
+	)
+	define_variant_style("DrawerRailFloat", "PanelContainer", {panel = rail_box})
+	define_variant_style(
+		"ActionPill",
+		"PanelContainer",
+		{panel = box(c(ThemeColors.SURFACE), RADIUS_CARD, SPACE_2, SPACE_1, trim)}
+	)
+	define_variant_style(
+		"SegmentTrack",
+		"PanelContainer",
+		{panel = box(c(ThemeColors.SURFACE_INSET), RADIUS_PILL, 3, 3)}
+	)
+	var clear := Color(c(ThemeColors.SURFACE), 0.0)
+	var rest := box(clear, RADIUS_PILL, SPACE_3, SPACE_1)
+	var picked: Dictionary = inherit(rest, {bg_color = c(ThemeColors.SELECTED)})
+	var segment := _button(
+		rest, inherit(rest, {bg_color = c(ThemeColors.SURFACE_HOVER)}), picked, ThemeColors.TEXT
+	)
+	segment.hover_pressed = inherit(picked, {bg_color = c(ThemeColors.SELECTED_HOVER)})
+	for key: String in [
+		"font_pressed_color", "font_hover_pressed_color", "icon_pressed_color", "icon_hover_pressed_color"
+	]:
+		segment[key] = c(ThemeColors.ON_SELECTED)
+	segment.font = font_strong
+	define_variant_style("SegmentTab", "Button", segment)
 
 
 func _define_containers() -> void:

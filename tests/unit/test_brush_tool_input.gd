@@ -109,6 +109,8 @@ func test_the_brush_runs_each_tool_s_own_mode_and_keeps_it() -> void:
 	add_child_autofree(brush)
 	assert_null(brush.tool, "no tool before one is picked")
 	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
+		if tool.brush_mode == null:
+			continue  # The Build hub has tabs, not a brush: its tabs' tools are listed here.
 		brush.use_tool(tool)
 		assert_eq(brush.tool, tool)
 		assert_true(is_instance_of(brush.mode, tool.brush_mode), "%s runs its mode" % tool.id)

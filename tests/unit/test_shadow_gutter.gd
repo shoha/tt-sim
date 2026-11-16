@@ -377,9 +377,15 @@ func test_the_title_with_a_selected_map_and_the_drawers_keep_every_shadow() -> v
 		AuthoringPanel.TOOL_WATER,
 		AuthoringPanel.TOOL_THIN,
 		AuthoringPanel.TOOL_BRIDGE,
+		WallTool.ID,
+		StructureTool.ID,
+		VillageTool.ID,
+		FireTool.ID,
 	]:
-		if pane != panel._rail.selected or not panel.is_open:
-			panel._on_rail_item_pressed(pane)
+		var hub := ToolRegistry.hub_of(pane)
+		if hub != panel._rail.selected or not panel.is_open:
+			panel._on_rail_item_pressed(hub)
+		panel.show_tool_pane(pane)
 		await _audit("authoring drawer on %s" % pane, panel)
 	layer.free()
 

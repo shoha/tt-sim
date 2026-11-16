@@ -18,7 +18,31 @@ func _init() -> void:
 	summary = "Rivers, streams and ponds."
 	icon = "droplet"
 	brush_mode = WaterBrush
+	shortcut = KEY_L
 	contexts = AUTHORING | PLAY
+	# River and Pond are the one tool's two shapes; Crossing is the Bridge tool.
+	tabs = [
+		{
+			"id": &"river",
+			"label": "River",
+			"tool": ID,
+			"shape": WaterBrush.Shape.RIVER,
+			"tip": "River: draw it the way it flows, always downhill; a steep drop makes a waterfall",
+		},
+		{
+			"id": &"pond",
+			"label": "Pond",
+			"tool": ID,
+			"shape": WaterBrush.Shape.POND,
+			"tip": "Pond: paint a pond or a lake, still water in a basin",
+		},
+		{
+			"id": BridgeTool.ID,
+			"label": "Crossing",
+			"tool": BridgeTool.ID,
+			"tip": "Crossing: a bridge, stepping stones, an arch or a ford over water",
+		},
+	]
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [
 		["Left Drag (Water)", "River: draw it the way it flows. Pond: paint its area"],

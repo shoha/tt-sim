@@ -2,7 +2,7 @@ class_name AuthoringChrome
 extends RefCounted
 
 ## What the map tools' frame is made of, apart from the panes: the material of the drawer and
-## rail (paper or glass), the actions under the rail and their words, and the keys the frame
+## rail (paper or glass), the actions in the pill and their words, and the keys the frame
 ## answers. AuthoringPanel builds the frame from these and AuthoringController answers its keys;
 ## they are here so the two hubs stay short and the words are in one place (docs/UI_SYSTEMS.md
 ## "Map building chrome").
@@ -18,12 +18,22 @@ const SURFACE_PAPER := true
 ## Set false for the full-height panel.
 const FIT_HEIGHT := true
 
-## The rail's items are 46 px squares (43 real px in a 1280x720 window, the target size the critic
-## asked for), the tools in one column and the actions in a second beside it, so the rail's 11
-## tools and its runs still fit 720p. RAIL_GROUP_GAP is the extra step between runs: with the
-## rail's own 4 px either side it reads as 20 px.
-const RAIL_ITEM_SIZE := 46.0
-const RAIL_GROUP_GAP := 12.0
+## The rail is one column of seven tools, each a 52 px square (48 real px in a 1280x720 window, over
+## the 44 px target), in a rounded capsule that stands still beside the card (DrawerContainer.
+## rail_detached). RAIL_GROUP_GAP is the extra step between its three runs (Land, Shape, Make):
+## with the rail's own 4 px either side it reads as 18 px, and the rail is about 420 px tall.
+const RAIL_ITEM_SIZE := 52.0
+const RAIL_GROUP_GAP := 10.0
+## The pill's buttons: 46 px squares (43 real px at 720p); the word "Unsaved" under Save fits one.
+const ACTION_ITEM_SIZE := 46.0
+
+## Keys that other things already own, which a rail tool's letter must never be (a test checks the
+## seven descriptors' shortcuts against it): WASD, C, M, G, R, Q, E, V, O and T are the camera, the
+## measure tool, the brush's own keys and the roster (docs/UI_SYSTEMS.md "Map building chrome" has
+## the final list: B, P, H, I, L, U, F).
+const TAKEN_LETTERS: Array[Key] = [
+	KEY_W, KEY_A, KEY_S, KEY_D, KEY_C, KEY_M, KEY_G, KEY_R, KEY_Q, KEY_E, KEY_V, KEY_O, KEY_T
+]
 
 ## The card's opacity while a brush is down on the board (it steps back, the stroke shows).
 const STROKE_DIM := 0.3
@@ -36,8 +46,9 @@ const ACTION_REDO := &"redo"
 const ACTION_SAVE := &"save_map"
 const ACTION_LEAVE := &"leave_authoring"
 
-## The actions under the rail, apart from the tools: each one's words say its key.
-const FOOTER_ITEMS: Array[Dictionary] = [
+## The actions in the pill beside the rail (AuthoringActions), apart from the tools: each one's
+## words say its key. A gap in the pill sets Save and Leave apart.
+const ACTION_ITEMS: Array[Dictionary] = [
 	{"id": ACTION_UNDO, "icon": "arrow-back-up", "tooltip": "Undo (Ctrl+Z)"},
 	{"id": ACTION_REDO, "icon": "arrow-forward-up", "tooltip": "Redo (Ctrl+Y)"},
 	{"id": ACTION_SAVE, "icon": "device-floppy", "tooltip": "Save map (Ctrl+S)"},

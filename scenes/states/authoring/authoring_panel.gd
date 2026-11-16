@@ -1,13 +1,22 @@
 class_name AuthoringPanel
 extends DrawerContainer
 
-## Authoring mode's tool drawer on the left edge, in rail mode: one rail item per tool above
-## a footer of session actions (Undo, Redo, Save, Leave). The drawer content is the map's
-## name, the one text field in authoring, over one pane per tool. The tools, their order,
-## rail items and pane titles come from ToolRegistry (one ToolDescriptor each); the panes of
-## the seven tools that predate it are built here (_build_pane), and a tool added since
-## brings its own (ToolDescriptor.build_pane). Built in code; every interactive Control is
-## named so the validation bridge can click it.
+## Authoring mode's tool drawer on the left edge, in detached rail mode (card ui-authoring3): a
+## rounded rail capsule of seven tools that stands still, a separate rounded card beside it, and a
+## small floating pill of session actions (AuthoringActions: Undo, Redo, Save, Leave) to the right
+## of whichever is outermost. The card's content is the map's name, the one text field in
+## authoring, over one pane per tool. The tools, their order, rail items and pane titles come from
+## ToolRegistry (one ToolDescriptor each); the panes of the tools that predate it are built here
+## (_build_pane), and a tool added since brings its own (ToolDescriptor.build_pane). Built in code;
+## every interactive Control is named so the validation bridge can click it.
+##
+## Hubs. The rail lists seven tools; three of them are hubs whose card has top tabs
+## (SegmentedTabs): Place (Place, Thin / Clear), Water (River, Pond, Crossing) and Build (Walls,
+## Buildings, Villages). A tab is a former rail tool: it shows that tool's own pane and picks its
+## brush, exactly as its rail item did, so every tool id, brush mode and pane is unchanged
+## (ToolDescriptor.hub and tabs). A rail press or the tool's key opens the hub's last tab, and the
+## key pressed again steps to the next tab. Signals still carry tool ids (tool_selected(&"bridge"));
+## the rail item that is tinted and pressed is the hub's.
 ##
 ## The panel owns no map state. It relays what the author does as signals to
 ## AuthoringController and shows what the controller tells it (dirty, undo/redo
@@ -25,25 +34,16 @@ extends DrawerContainer
 ## Paint are disabled, with a tooltip saying why, on a dressed Blender map
 ## (set_sculpt_available, set_paint_available).
 ##
-## Water (P4-4): River and Pond tiles, Ankle / Waist / Deep tiles with a hint line saying
-## what the depth means for tokens, and an Advanced foldout with the exact width and flow.
-## On a dressed Blender map the tool only erases water painted over it
-## (set_water_available).
+## Water (P4-4): the River and Pond tabs, then Ankle / Waist / Deep tiles with a hint line and
+## the Width row; on a dressed Blender map it only erases water painted over it
+## (set_water_available). Bridge (P4b-2) is Water's Crossing tab, its own tool and pane
+## (set_bridge_available).
 ##
-## Bridge (P4b-2): its own rail item after Water (a crossing is an object laid over water,
-## with its own gesture and its own Ctrl, not a kind of water), a pane with Plank bridge and
-## Stepping stones tiles and the gesture hint. Disabled on a dressed Blender map without
-## document water (set_bridge_available).
-##
-## Paint (P3-6): one TileField per surface role (Built, Ground, Rock; built first because
-## paths and yards are what the tool is mostly for) of palette surface swatches, one
-## selection across the groups. The swatches cost a texture decode each (the whole albedo
-## tile, cropped and scaled), so they are built once, by ensure_paint_tiles(), which the
-## controller calls under the loading screen and the pane calls on first show. The Built
-## tiles are ordered for the map (order_paint_tiles, 2026-09-27): the path surfaces of the
-## biomes on it first (palette path_surfaces, in biome order), then the rest in palette
-## order, so a badlands map offers its caliche track and sandstone flags before the grey
-## flagstone; until the author picks a surface, the first of them is the one selected.
+## Paint (P3-6): one TileField per surface role (Built, Ground, Rock) of palette surface swatches,
+## one selection across the groups, built once by ensure_paint_tiles() (the controller calls it
+## under the loading screen). The Built tiles are ordered for the map (order_paint_tiles): the
+## path surfaces of the biomes on it first, then the rest in palette order; until the author
+## picks a surface, the first of them is the one selected.
 
 signal save_pressed
 signal leave_pressed
@@ -78,10 +78,10 @@ signal tool_pane_built(tool_id: StringName, pane: Control)
 ## 364 virtual px is about 340 real px in a 1280x720 window; the Wall pane's tiles are the widest
 ## content (a narrower drawer pushed them a pixel past the name field).
 const DRAWER_WIDTH := 364.0
-const BIOME_TILE_SIZE := Vector2(64, 84)
-const BIOME_THUMB_PX := 52
+const BIOME_TILE_SIZE := Vector2(64, 72)
+const BIOME_THUMB_PX := 44
 const BIOME_COLUMNS := 2
-## The extra step over a section label after a hint paragraph (_section_gap).
+## The extra step over a section label after a hint paragraph (AuthoringPanes.section_gap).
 const SECTION_ABOVE := 8
 const PLACE_TILE_SIZE := Vector2(64, 56)
 const PLACE_COLUMNS := 3
@@ -136,8 +136,6 @@ const DEFAULT_PAINT_SURFACE := "dirt_road_packed"
 ## Sculpt tiles: id (the HeightBrush operation), label, icon, tooltip (SculptTool owns them).
 const SCULPT_TILES: Array[Dictionary] = SculptTool.TILES
 const SCULPT_TILE_SIZE := Vector2(64, 56)
-## Tools whose panes exist but whose brushes are not built yet (none since phase 2 T6).
-const TOOLS_NOT_READY: Array[StringName] = []
 
 ## Palette root the biome tiles come from; tests point it elsewhere.
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
@@ -155,6 +153,13 @@ var water_pane: WaterToolPane
 var bridge_pane: BridgeToolPane
 
 var _stack: PaneStack
+## The actions pill (AuthoringActions), which glides with the card.
+var _actions: AuthoringActions
+## The hubs' top tabs by rail id, the tab each last showed, and the shape Water's River and Pond
+## tabs stand for (WaterBrush.Shape).
+var _hub_tabs: Dictionary = {}
+var _hub_last: Dictionary = {}
+var _water_shape: int = WaterBrush.Shape.RIVER
 ## Every Advanced size / strength row, kept in step with the brush.
 var _size_rows: Array[PropertyRow] = []
 var _strength_rows: Array[PropertyRow] = []
@@ -185,11 +190,10 @@ func _on_ready() -> void:
 	play_sounds = true
 	start_revealed = false
 	rail_items = ToolRegistry.rail_items(ToolDescriptor.AUTHORING)
-	rail_footer_items = AuthoringChrome.FOOTER_ITEMS.duplicate()
 	rail_item_size = AuthoringChrome.RAIL_ITEM_SIZE
 	rail_group_gap = AuthoringChrome.RAIL_GROUP_GAP
 	rail_chip = true
-	rail_footer_beside = true
+	rail_detached = true
 
 	margin_variation = &"DrawerMarginRoomy"
 
@@ -197,6 +201,11 @@ func _on_ready() -> void:
 	_put_down = PutDownNotice.new()
 	_put_down.pick_up_requested.connect(func(id: StringName) -> void: pick_up_requested.emit(id))
 	content_container.add_child(_put_down)
+	_build_hub_tabs()
+	_actions = AuthoringActions.new()
+	_actions.visible = false
+	_actions.action_pressed.connect(_on_action_pressed)
+	add_child(_actions)
 	_stack = PaneStack.new()
 	_stack.name = "PaneStack"
 	_stack.slide_from_right = false
@@ -215,6 +224,8 @@ func _on_ready() -> void:
 	)
 	_margin.minimum_size_changed.connect(_queue_fit)
 	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
+		if tool.brush_mode == null:
+			continue  # A hub with no brush (Build): its tabs' tools have the panes.
 		if tool.id in OWN_PANES:
 			var pane := tool.build_pane(self)
 			if pane == null:
@@ -228,14 +239,12 @@ func _on_ready() -> void:
 	_stack.show_pane(TOOL_BIOME, false)
 
 	pane_requested.connect(_on_pane_requested)
-	rail_footer_pressed.connect(_on_footer_pressed)
 
 
 func _ready() -> void:
 	super._ready()
-	for tool_id in TOOLS_NOT_READY:
-		set_rail_item_enabled(tool_id, false)
 	set_history_state(false, false)
+	_place_actions(false)
 	_queue_fit()
 	var dimmer := CardDimmer.new()
 	dimmer.name = "CardDimmer"
@@ -288,13 +297,13 @@ func _tool_pane_builder(tool: ToolDescriptor) -> Control:
 func _build_pane(tool: ToolDescriptor) -> Control:
 	match tool.id:
 		TOOL_BIOME:
-			return _build_biome_pane(tool)
+			return AuthoringPanes.biome(self, tool)
 		TOOL_PLACE:
-			return _build_place_pane(tool)
+			return AuthoringPanes.place(self, tool)
 		TOOL_SCULPT:
-			return _build_sculpt_pane(tool)
+			return AuthoringPanes.sculpt(self, tool)
 		TOOL_PAINT:
-			return _build_paint_pane(tool)
+			return AuthoringPanes.paint(self, tool)
 		TOOL_WATER:
 			return _build_water_pane()
 		TOOL_BRIDGE:
@@ -302,182 +311,9 @@ func _build_pane(tool: ToolDescriptor) -> Control:
 	return null
 
 
-func _build_biome_pane(tool: ToolDescriptor) -> Control:
-	var pane := VBoxContainer.new()
-	pane.name = "BiomePane"
-	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pane.add_theme_constant_override("separation", 8)
-	var header := MenuHeader.new()
-	header.name = "BiomeHeader"
-	header.setup(tool.label, tool.summary)
-	pane.add_child(header)
-	_add_help(
-		pane,
-		"BiomeHint",
-		"Pick a biome, then drag on the map. Linger to thicken it.",
-		"Shift + scroll or [ and ] size the brush; right-click puts the brush down."
-	)
-	pane.add_child(_section_gap("BiomeGap"))
-	biome_field = TileField.new()
-	biome_field.name = "BiomeField"
-	biome_field.caption = "Biomes"
-	biome_field.tiles.photo_icons = true
-	biome_field.tiles.tile_min_size = BIOME_TILE_SIZE
-	biome_field.tiles.columns = BIOME_COLUMNS
-	for biome in PaletteLibrary.biomes(palette_root):
-		var id := String(biome["id"])
-		biome_field.tiles.add_tile(
-			StringName(id),
-			short_name(String(biome["name"])),
-			"",
-			String(biome["name"]),
-			# Deferred: the drawer is built in the open's first frame, and a cold ground albedo
-			# bakes on the prebake lane instead (card authbake).
-			BiomeThumbnail.of(biome, BIOME_THUMB_PX, palette_root, true)
-		)
-	biome_field.tiles.selection_changed.connect(
-		func(id: StringName) -> void: biome_selected.emit(String(id))
-	)
-	pane.add_child(biome_field)
-	pane.add_child(build_advanced("Biome"))
-	return pane
-
-
-## Place: one foldout per palette biome (headed by its thumbnail), holding a tile per
-## species big enough to place by hand. The selected biome's group starts open.
-func _build_place_pane(tool: ToolDescriptor) -> Control:
-	var pane := VBoxContainer.new()
-	pane.name = "PlacePane"
-	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pane.add_theme_constant_override("separation", 8)
-	var header := MenuHeader.new()
-	header.name = "PlaceHeader"
-	header.setup(tool.label, tool.summary)
-	pane.add_child(header)
-	_add_help(
-		pane,
-		"PlaceHint",
-		"Pick one, then click the map. Drag while pressed to turn it.",
-		"Over a placed one, Shift + scroll resizes it and right-click or Delete removes it."
-	)
-	for biome in PaletteLibrary.biomes(palette_root):
-		var biome_id := String(biome["id"])
-		var groups := place_species(biome_id, palette_root)
-		if groups.is_empty():
-			continue
-		var foldout := Foldout.new()
-		foldout.name = "Place_" + biome_id.validate_node_name()
-		# The same short name as the Biome pane's tile, in ink: "Deciduous Forest" in both places.
-		foldout.title = short_name(String(biome["name"]))
-		foldout.title_variation = &"FoldoutTitle"
-		foldout.icon = BiomeThumbnail.of(biome, 28, palette_root, true)
-		var row := TileRow.new()
-		row.name = "PlaceTiles"
-		row.tile_min_size = PLACE_TILE_SIZE
-		row.columns = PLACE_COLUMNS
-		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		for rule in groups:
-			var key := String(rule.get("key", ""))
-			row.add_tile(
-				StringName(biome_id + "|" + key),
-				species_label(key),
-				AuthoringChrome.place_icon(
-					key, PLACE_ICONS.get(String(rule.get("kind", "")), PLACE_DEFAULT_ICON)
-				),
-				"%s (%s)" % [species_label(key), String(biome["name"])]
-			)
-		row.selection_changed.connect(_on_place_tile.bind(row))
-		foldout.add_child(row)
-		pane.add_child(foldout)
-		place_rows[biome_id] = row
-		_place_foldouts[biome_id] = foldout
-	return pane
-
-
-## Sculpt: four tiles (Raise, Smooth, Flatten, Tier), Raise preselected; the gestures and
-## modifiers in the hint line.
-func _build_sculpt_pane(tool: ToolDescriptor) -> Control:
-	var pane := VBoxContainer.new()
-	pane.name = "SculptPane"
-	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pane.add_theme_constant_override("separation", 8)
-	var header := MenuHeader.new()
-	header.name = "SculptHeader"
-	header.setup(tool.label, tool.summary)
-	pane.add_child(header)
-	_add_help(
-		pane,
-		"SculptHint",
-		"Pick a brush, then drag on the map; linger to build.",
-		(
-			"Hold Ctrl as you press to lower or cut down, Shift to smooth. Tier steps up a level"
-			+ " from where you press, or extends the level whose edge you start on."
-		)
-	)
-	pane.add_child(_section_gap("SculptGap"))
-	sculpt_field = TileField.new()
-	sculpt_field.name = "SculptField"
-	sculpt_field.caption = "Brush"
-	sculpt_field.tiles.tile_min_size = SCULPT_TILE_SIZE
-	sculpt_field.tiles.columns = SCULPT_TILES.size()
-	for tile in SCULPT_TILES:
-		sculpt_field.tiles.add_tile(
-			sculpt_tile_id(int(tile.op)),
-			String(tile.label),
-			String(tile.icon),
-			String(tile.tooltip)
-		)
-	sculpt_field.tiles.select(sculpt_tile_id(HeightBrush.RAISE))
-	sculpt_field.tiles.selection_changed.connect(
-		func(id: StringName) -> void:
-			var op := sculpt_tile_op(id)
-			if op >= 0:
-				sculpt_selected.emit(op)
-	)
-	pane.add_child(sculpt_field)
-	pane.add_child(build_advanced("Sculpt"))
-	return pane
-
-
-## Paint: the header, the gestures, and the surface groups (filled by ensure_paint_tiles()),
-## ending in the Advanced foldout.
-func _build_paint_pane(tool: ToolDescriptor) -> Control:
-	var pane := VBoxContainer.new()
-	pane.name = "PaintPane"
-	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pane.add_theme_constant_override("separation", 8)
-	var header := MenuHeader.new()
-	header.name = "PaintHeader"
-	header.setup(tool.label, tool.summary)
-	pane.add_child(header)
-	pane.add_child(
-		_hint(
-			"PaintHint",
-			(
-				"Pick a surface, then drag on the map; linger to cover it fully. Hold Ctrl as you"
-				+ " press to erase paint back to the natural ground. Paths stop at rock faces:"
-				+ " climb them with a ramp. Built surfaces clear the plants under them."
-			)
-		)
-	)
-	for group in PAINT_GROUPS:
-		var field := TileField.new()
-		field.name = "Paint" + String(group.caption) + "Field"
-		field.caption = String(group.caption)
-		field.tiles.photo_icons = true
-		field.tiles.tile_min_size = PAINT_TILE_SIZE
-		field.tiles.columns = PAINT_COLUMNS
-		field.tiles.selection_changed.connect(_on_paint_tile.bind(field.tiles))
-		pane.add_child(field)
-		paint_fields[group.role] = field
-	pane.add_child(build_advanced("Paint"))
-	return pane
-
-
 ## Water (P4-4): WaterToolPane, its signals relayed (the width row sets the brush radius).
 func _build_water_pane() -> Control:
 	water_pane = WaterToolPane.new()
-	water_pane.shape_selected.connect(func(shape: int) -> void: water_shape_selected.emit(shape))
 	water_pane.depth_selected.connect(func(depth: int) -> void: water_depth_selected.emit(depth))
 	water_pane.speed_changed.connect(func(speed: float) -> void: water_speed_changed.emit(speed))
 	water_pane.width_changed.connect(
@@ -509,8 +345,18 @@ func set_tool_available(id: StringName, available: bool) -> void:
 	var tool := ToolRegistry.find(id)
 	if tool == null:
 		return
-	set_rail_item_enabled(id, available)
-	set_rail_item_tooltip(id, tool.rail_tip_for(available))
+	if tool.on_rail:
+		set_rail_item_enabled(id, available)
+		set_rail_item_tooltip(id, tool.rail_tip_for(available))
+		return
+	# A tab of a hub (Bridge, Wall, Structure, Village, Thin / Clear): its tab, with the reason.
+	var strip: SegmentedTabs = _hub_tabs.get(tool.hub)
+	var tab_id := _tab_id_for(tool.hub, id)
+	if strip != null and tab_id != &"":
+		var tip := String(_tab_of(tool.hub, tab_id)["tip"])
+		strip.set_tab_enabled(
+			tab_id, available, tip if available else tool.unavailable_tooltip
+		)
 
 
 ## Shows the Water tool's exact width (metres, the full channel) and flow, without signals.
@@ -754,35 +600,10 @@ func _on_place_tile(id: StringName, source: TileRow) -> void:
 		place_selected.emit(parts[0], parts[1])
 
 
-## A wrapped caption line saying a pane's gestures.
-func _hint(hint_name: String, text: String) -> Label:
-	return AuthoringChrome.help_label(hint_name, text)
-
-
-## A pane's help: a lead of two lines that says enough to start, and the rest behind "More".
-func _add_help(pane: Control, hint_name: String, lead: String, more: String) -> void:
-	pane.add_child(_hint(hint_name, lead))
-	if more != "":
-		pane.add_child(AuthoringChrome.more_foldout(hint_name + "More", more))
-
-
-## The step a section label (Biomes, Brush) keeps over and above the pane's gap, so it reads
-## as the start of its tiles and not as a last line of the hint paragraph above it (S4: more
-## room above a label than below it).
-func _section_gap(gap_name: String) -> Control:
-	var gap := Control.new()
-	gap.name = gap_name
-	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	gap.custom_minimum_size = Vector2(0, SECTION_ABOVE)
-	return gap
-
-
-## The Advanced foldout of a brush pane: exact size and strength, values hidden by default.
-## Its rows follow the brush (set_brush_values); a tool's own pane (FireToolPane) adds one too.
-func build_advanced(prefix: String) -> Foldout:
-	var foldout := Foldout.new()
-	foldout.name = prefix + "Advanced"
-	foldout.title = "Advanced"
+## A brush pane's Size row, in the main flow under the header (the picker and the size are the
+## basics, ui-authoring3; they were behind Advanced): the label over a full-width slider, values
+## hidden. It follows the brush (set_brush_values), as do all the panes' rows.
+func build_size_row(prefix: String) -> PropertyRow:
 	var size_row := PropertyRow.new()
 	size_row.name = prefix + "BrushSize"
 	size_row.label = "Size"
@@ -796,7 +617,16 @@ func build_advanced(prefix: String) -> Foldout:
 	size_row.hint_high = "Large"
 	size_row.formatter = func(value: float) -> String: return "%.1f m" % value
 	size_row.value_changed.connect(func(value: float) -> void: brush_size_changed.emit(value))
-	foldout.add_child(size_row)
+	_size_rows.append(size_row)
+	return size_row
+
+
+## The Advanced foldout of a brush pane: the strength row, value hidden by default. Its row
+## follows the brush (set_brush_values); a tool's own pane (FireToolPane) adds one too.
+func build_advanced(prefix: String) -> Foldout:
+	var foldout := Foldout.new()
+	foldout.name = prefix + "Advanced"
+	foldout.title = "Advanced"
 	var strength_row := PropertyRow.new()
 	strength_row.name = prefix + "BrushStrength"
 	strength_row.label = "Strength"
@@ -811,7 +641,6 @@ func build_advanced(prefix: String) -> Foldout:
 		func(value: float) -> void: brush_strength_changed.emit(value)
 	)
 	foldout.add_child(strength_row)
-	_size_rows.append(size_row)
 	_strength_rows.append(strength_row)
 	return foldout
 
@@ -829,25 +658,174 @@ static func short_name(full_name: String) -> String:
 ## Goes to a tool as its rail item does when pressed (a pane's own button, such as the Village
 ## pane's "Draw a street"): the rail selects it and its pane shows.
 func request_tool(id: StringName) -> void:
-	if is_open:
+	if not is_open:
+		return
+	var rail_id := ToolRegistry.hub_of(id)
+	if not _hub_tabs.has(rail_id):
 		_on_rail_item_pressed(id)
+		return
+	_hub_last[rail_id] = _tab_id_for(rail_id, id)
+	if _rail.selected == rail_id:
+		# Already on this hub (the Village pane's "Draw a street" goes to Walls): only the tab
+		# changes, and the rail item pressed again would close the card.
+		_open_tab(_hub_last[rail_id], rail_id)
+	else:
+		_on_rail_item_pressed(rail_id)
 
 
-func _on_pane_requested(id: StringName) -> void:
-	if id == TOOL_PAINT:
-		ensure_paint_tiles()
-	_stack.show_pane(id)
-	tool_selected.emit(id)
+## A rail item was pressed (the rail's id: a tool, or a hub): its pane shows and its tool is picked.
+func _on_pane_requested(rail_id: StringName) -> void:
+	_enter_rail(rail_id, false)
 
 
-## Shows a tool's pane (the controller follows a tool chosen by other means).
+## Shows the pane of tool `id` (a rail tool or a tab's tool; the controller follows a tool chosen by
+## other means), with its hub's tabs and the tab marked.
 func show_tool_pane(id: StringName) -> void:
 	if id == TOOL_PAINT:
 		ensure_paint_tiles()
+	var rail_id := ToolRegistry.hub_of(id)
+	_show_hub_tabs(rail_id)
+	_mark_tab(rail_id, id)
 	_stack.show_pane(id)
 
 
-func _on_footer_pressed(id: StringName) -> void:
+## Picks rail tool `rail_id` as its key does: the rail item is selected (while the card is open),
+## the pane shows, and a hub opens on its last tab, or on the next one when this tool is the one
+## already out (the key pressed again steps through Build's Walls, Buildings, Villages).
+func pick_rail_tool(rail_id: StringName) -> void:
+	var again := _active_tool != &"" and ToolRegistry.hub_of(_active_tool) == rail_id
+	if is_open and _rail != null and _rail.has_item(rail_id):
+		_rail.select(rail_id)
+	_enter_rail(rail_id, again)
+
+
+## The tab of hub `rail_id` that is showing (&"" for a tool without tabs).
+func current_tab(rail_id: StringName) -> StringName:
+	var strip: SegmentedTabs = _hub_tabs.get(rail_id)
+	return strip.selected if strip != null else &""
+
+
+## The hub's top tabs (SegmentedTabs), or null for a tool without tabs.
+func hub_tabs(rail_id: StringName) -> SegmentedTabs:
+	return _hub_tabs.get(rail_id)
+
+
+func _build_hub_tabs() -> void:
+	for tool in ToolRegistry.rail_tools(ToolDescriptor.AUTHORING):
+		if tool.tabs.is_empty():
+			continue
+		var strip := SegmentedTabs.new()
+		strip.name = String(tool.id).capitalize() + "Tabs"
+		strip.visible = false
+		for tab in tool.tabs:
+			strip.add_tab(StringName(tab["id"]), String(tab["label"]), String(tab["tip"]))
+		strip.tab_selected.connect(_open_tab.bind(tool.id))
+		content_container.add_child(strip)
+		_hub_tabs[tool.id] = strip
+		_hub_last[tool.id] = StringName(tool.tabs[0]["id"])
+
+
+## Shows only hub `rail_id`'s tabs (&"" or a tool without tabs: none).
+func _show_hub_tabs(rail_id: StringName) -> void:
+	for id: StringName in _hub_tabs:
+		(_hub_tabs[id] as Control).visible = id == rail_id
+
+
+## Opens rail tool `rail_id`: a plain tool shows its pane and is picked; a hub opens its last tab,
+## or with `step` the next enabled one (and its first enabled one when the last is disabled).
+func _enter_rail(rail_id: StringName, step: bool) -> void:
+	var strip: SegmentedTabs = _hub_tabs.get(rail_id)
+	if strip == null:
+		_show_hub_tabs(&"")
+		if rail_id == TOOL_PAINT:
+			ensure_paint_tiles()
+		_stack.show_pane(rail_id)
+		tool_selected.emit(rail_id)
+		return
+	var tab_id: StringName = _hub_last[rail_id]
+	if step or strip.tab(tab_id).disabled:
+		tab_id = strip.next_enabled(tab_id)
+	_open_tab(tab_id, rail_id)
+
+
+## Shows tab `tab_id` of hub `rail_id` and picks its tool as the old rail item did: Water's River
+## and Pond set the brush's shape, any other tab selects its tool.
+func _open_tab(tab_id: StringName, rail_id: StringName) -> void:
+	var tab := _tab_of(rail_id, tab_id)
+	if tab.is_empty():
+		return
+	_hub_last[rail_id] = tab_id
+	_show_hub_tabs(rail_id)
+	(_hub_tabs[rail_id] as SegmentedTabs).select(tab_id)
+	var tool_id := StringName(tab["tool"])
+	if tool_id == TOOL_PAINT:
+		ensure_paint_tiles()
+	_stack.show_pane(tool_id)
+	_quiet_header(tool_id)
+	if tab.has("shape"):
+		_water_shape = int(tab["shape"])
+		water_shape_selected.emit(_water_shape)
+	else:
+		tool_selected.emit(tool_id)
+
+
+## A tab's pane keeps its summary line but not its title: the tab above it is the title ("Walls"
+## over a pane headed "Wall" read as two names for one thing, and the line is height a 720p card
+## needs).
+func _quiet_header(tool_id: StringName) -> void:
+	var pane := _stack.get_pane(tool_id)
+	if pane == null:
+		return
+	for header: Node in pane.find_children("*", "MenuHeader", true, false):
+		(header as MenuHeader).title_label.visible = false
+
+
+## Hub `rail_id`'s tab `tab_id` as the descriptor declares it, {} when there is none.
+func _tab_of(rail_id: StringName, tab_id: StringName) -> Dictionary:
+	var rail_tool := ToolRegistry.find(rail_id)
+	if rail_tool != null:
+		for tab in rail_tool.tabs:
+			if StringName(tab["id"]) == tab_id:
+				return tab
+	return {}
+
+
+## The id of the tab of hub `rail_id` that runs tool `tool_id`, preferring the River or Pond tab
+## that matches the Water shape, or &"" when there is none.
+func _tab_id_for(rail_id: StringName, tool_id: StringName) -> StringName:
+	var rail_tool := ToolRegistry.find(rail_id)
+	if rail_tool == null:
+		return &""
+	var found: StringName = &""
+	for tab in rail_tool.tabs:
+		if StringName(tab["tool"]) != tool_id:
+			continue
+		if found == &"":
+			found = StringName(tab["id"])
+		if tab.has("shape") and int(tab["shape"]) == _water_shape:
+			return StringName(tab["id"])
+	return found
+
+
+## Marks the tab of hub `rail_id` for tool `tool_id` as the one showing, without a signal.
+func _mark_tab(rail_id: StringName, tool_id: StringName) -> void:
+	var tab_id := _tab_id_for(rail_id, tool_id)
+	if tab_id == &"":
+		return
+	_hub_last[rail_id] = tab_id
+	(_hub_tabs[rail_id] as SegmentedTabs).select(tab_id)
+
+
+## Water's tabs follow a shape picked another way (Tab on the board), without a signal.
+func select_water_shape(shape: int) -> void:
+	_water_shape = shape
+	var strip: SegmentedTabs = _hub_tabs.get(TOOL_WATER)
+	if strip == null or strip.selected == BridgeTool.ID:
+		return
+	_mark_tab(TOOL_WATER, TOOL_WATER)
+
+
+func _on_action_pressed(id: StringName) -> void:
 	match id:
 		ACTION_UNDO:
 			undo_pressed.emit()
@@ -857,6 +835,35 @@ func _on_footer_pressed(id: StringName) -> void:
 			save_pressed.emit()
 		ACTION_LEAVE:
 			leave_pressed.emit()
+
+
+# ============================================================================
+# The actions pill
+# ============================================================================
+
+
+## Slides the pill and the card together: both follow the board's free edge, so the pill stands
+## right of whichever is outermost (the rail alone when the card is shut, the card when open).
+func _animate_to_state() -> void:
+	super._animate_to_state()
+	_place_actions(true)
+
+
+## Puts the pill beside the rail, or the card while it is open, level with their tops, and shows it
+## once the drawer is revealed. `animate`: it eases with the card (cut under Reduce motion).
+func _place_actions(animate: bool) -> void:
+	if _actions == null:
+		return
+	var x := FLOAT_MARGIN + tab_width + FLOAT_GAP
+	if is_open:
+		x += drawer_width + FLOAT_GAP
+	var seconds := slide_duration if is_open else UiMotion.PANEL_OUT_S
+	_actions.glide_to(Vector2(x, tab_top_margin), is_revealed, seconds if animate else 0.0)
+
+
+## The actions pill (AuthoringActions).
+func actions() -> AuthoringActions:
+	return _actions
 
 
 # ============================================================================
@@ -876,8 +883,7 @@ func get_map_name() -> String:
 
 ## Badges Save while there are unsaved changes.
 func set_dirty(dirty: bool) -> void:
-	set_footer_badge(ACTION_SAVE, dirty, AuthoringChrome.UNSAVED_WORD)
-	set_footer_item_tooltip(ACTION_SAVE, AuthoringChrome.save_tip(dirty))
+	_actions.set_dirty(dirty, AuthoringChrome.save_tip(dirty))
 
 
 ## Undo and Redo are drawn live only while they have something to do, and their tooltips say
@@ -886,12 +892,12 @@ func set_dirty(dirty: bool) -> void:
 func set_history_state(
 	can_undo: bool, can_redo: bool, undo_label: String = "", redo_label: String = ""
 ) -> void:
-	set_footer_item_enabled(ACTION_UNDO, can_undo)
-	set_footer_item_enabled(ACTION_REDO, can_redo)
-	var undo_tip := AuthoringChrome.history_tip("Undo", "Ctrl+Z", can_undo, undo_label)
-	var redo_tip := AuthoringChrome.history_tip("Redo", "Ctrl+Y", can_redo, redo_label)
-	set_footer_item_tooltip(ACTION_UNDO, undo_tip)
-	set_footer_item_tooltip(ACTION_REDO, redo_tip)
+	_actions.set_history(
+		can_undo,
+		can_redo,
+		AuthoringChrome.history_tip("Undo", "Ctrl+Z", can_undo, undo_label),
+		AuthoringChrome.history_tip("Redo", "Ctrl+Y", can_redo, redo_label)
+	)
 
 
 ## Selects a biome tile without emitting biome_selected, and opens that biome's Place group.
@@ -917,10 +923,13 @@ func select_place(biome_id: String, species_key: String) -> void:
 ## Tints the rail item of the active brush tool (&"" for none).
 func set_active_tool(tool_id: StringName) -> void:
 	if _active_tool != &"":
-		set_rail_item_active(_active_tool, false)
+		set_rail_item_active(ToolRegistry.hub_of(_active_tool), false)
 	_active_tool = tool_id
 	if tool_id != &"":
-		set_rail_item_active(tool_id, true)
+		var rail_id := ToolRegistry.hub_of(tool_id)
+		set_rail_item_active(rail_id, true)
+		if _hub_tabs.has(rail_id):
+			_mark_tab(rail_id, tool_id)
 		hide_put_down()
 
 

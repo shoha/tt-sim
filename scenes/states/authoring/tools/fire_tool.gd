@@ -21,6 +21,7 @@ func _init() -> void:
 	summary = "Ground fire that keeps burning and leaves ash."
 	icon = "campfire"
 	brush_mode = FireBrush
+	shortcut = KEY_F
 	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [

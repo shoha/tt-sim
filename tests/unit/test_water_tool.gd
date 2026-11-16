@@ -145,15 +145,17 @@ func test_width_clamps_to_the_narrowest_channel_of_each_depth() -> void:
 	assert_almost_eq(WaterCarve.min_half_width(WaterBody.Depth.DEEP), 2.96, 0.01)
 
 
-func test_the_pane_has_shape_and_depth_tiles_and_no_numbers_in_the_main_flow() -> void:
+func test_the_pane_has_depth_tiles_and_the_shape_is_a_tab() -> void:
 	var panel := AuthoringPanel.new()
 	add_child_autofree(panel)
 	var pane := panel.water_pane
-	for id in [&"water_river", &"water_pond"]:
-		assert_true(pane.shape_field.tiles.has_tile(id))
+	var strip := panel.hub_tabs(AuthoringPanel.TOOL_WATER)
+	for id in [&"river", &"pond"]:
+		assert_not_null(strip.tab(id), "%s is a tab of Water" % id)
+	assert_null(pane.shape_field, "the authoring pane has no shape field: the tabs are it")
 	for id in [&"water_ankle", &"water_waist", &"water_deep"]:
 		assert_true(pane.depth_field.tiles.has_tile(id))
-	assert_eq(pane.shape_field.tiles.selected, &"water_river", "River preselected")
+	assert_eq(strip.selected, &"river", "River preselected")
 	assert_eq(pane.depth_field.tiles.selected, &"water_waist", "waist deep preselected")
 	var hint: Label = pane.get_node("WaterDepthHint")
 	assert_string_contains(hint.text, "wade")
@@ -163,7 +165,7 @@ func test_the_pane_has_shape_and_depth_tiles_and_no_numbers_in_the_main_flow() -
 	assert_eq(picked, [WaterBody.Depth.DEEP], "a depth tile says which")
 	assert_string_contains(hint.text, "swim")
 	var advanced: Foldout = pane.get_node("WaterAdvanced")
-	assert_false(advanced.expanded, "exact width and flow are folded away")
+	assert_false(advanced.expanded, "the flow speed is folded away")
 
 
 # --- confluence --------------------------------------------------------------------------------
@@ -392,11 +394,13 @@ func test_on_a_dressed_map_water_only_erases() -> void:
 	assert_eq(item.tooltip_text, AuthoringPanel.WATER_UNAVAILABLE_TOOLTIP)
 	panel.set_water_available(false, true)
 	assert_false(item.disabled, "water to erase")
-	var river: Button = panel.water_pane.shape_field.tiles.get_node("water_river")
-	assert_true(river.disabled, "but no River tile")
+	var depth: Button = panel.water_pane.depth_field.tiles.get_node("water_waist")
+	assert_true(depth.disabled, "but no depth tiles: nothing to carve")
+	var strip := panel.hub_tabs(AuthoringPanel.TOOL_WATER)
+	assert_false(strip.tab(&"river").disabled, "the River tab stays, for Ctrl+drag erasing")
 	assert_eq(item.tooltip_text, AuthoringPanel.WATER_ERASE_ONLY_TOOLTIP, "and says why")
 	panel.set_water_available(true, false)
-	assert_false(river.disabled)
+	assert_false(depth.disabled)
 
 
 # --- history and the worker --------------------------------------------------------------------

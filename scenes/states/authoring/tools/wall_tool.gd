@@ -20,6 +20,8 @@ func _init() -> void:
 	summary = "Build a stone wall, a fence or a street of buildings."
 	icon = "wall"
 	brush_mode = WallBrush
+	on_rail = false
+	hub = BuildTool.ID
 	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [

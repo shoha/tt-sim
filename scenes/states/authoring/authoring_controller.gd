@@ -127,9 +127,10 @@ func setup(game_map: GameMap) -> void:
 	)
 	PaintTool.of(brush).surface = panel.get_paint_surface()
 	brush.radius_changed.connect(func(_radius: float) -> void: _show_brush_values())
-	# Tab switched Water's shape: its tiles follow (Fire's pane follows in FireTool.connect_pane).
+	# Tab switched Water's shape: its River and Pond tabs follow (Fire's pane follows in
+	# FireTool.connect_pane).
 	brush.shape_toggled.connect(
-		func() -> void: panel.water_pane.select_shape(WaterTool.of(brush).shape)
+		func() -> void: panel.select_water_shape(WaterTool.of(brush).shape)
 	)
 	_show_brush_values()
 	saving = AuthoringSaving.new(self)
@@ -550,11 +551,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		save_async()
 		get_viewport().set_input_as_handled()
 	elif event is InputEventKey:
-		# A tool's shortcut picks it as its rail item would (no tool of 2026-10 has one).
+		# A rail tool's bare letter picks it as its rail item would: its pane shows, a hub opens on
+		# its last tab, and the letter pressed again steps to the hub's next tab. The panel's pick
+		# signals the controller back (_on_tool_selected).
 		var tool := ToolRegistry.for_shortcut(event, ToolDescriptor.AUTHORING)
-		if tool != null:
-			panel.show_tool_pane(tool.id)
-			_select_tool(tool.id)
+		if tool != null and tool.on_rail:
+			panel.pick_rail_tool(tool.id)
 			get_viewport().set_input_as_handled()
 
 

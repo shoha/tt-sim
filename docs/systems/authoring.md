@@ -148,6 +148,14 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 
 ## Tools
 
+- Rail and hubs (2026-11-16, card ui-authoring3): the registry still holds twelve descriptors, but
+  only seven are on the rail (`on_rail`; `ToolRegistry.rail_tools`): Biome (B), Place (P), Sculpt
+  (H), Paint (I), Water (L), Build (U), Fire (F). Thin / Clear is a tab of Place, Bridge a tab of
+  Water (Crossing), Wall, Structure and Village are tabs of Build (a hub with no brush of its
+  own, `BuildTool`). A tab is a `hub` / `tabs` entry on the descriptor; `AuthoringPanel` shows the
+  hub's `SegmentedTabs` over the tab tool's pane, and a tab selects its brush exactly as its rail
+  item did, so `tool_selected`, `BrushTool.mode_for` and every tool id are unchanged. The play
+  context's Events pane is unchanged. Details: `docs/UI_SYSTEMS.md` "Map building chrome".
 - One registry (2026-10-09): `ToolRegistry` lists one `ToolDescriptor` per tool, in rail
   order (Biome, Thin / Clear, Place, Sculpt, Paint, Water, Bridge), and nothing else lists
   tools. `AuthoringPanel` builds its rail items (`ToolRegistry.rail_items`) and one pane per

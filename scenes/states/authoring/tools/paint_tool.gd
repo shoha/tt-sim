@@ -18,6 +18,7 @@ func _init() -> void:
 	summary = "Lay paths, yards and rock."
 	icon = "brush"
 	brush_mode = PaintBrush
+	shortcut = KEY_I
 	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 

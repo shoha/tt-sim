@@ -3,7 +3,8 @@ extends PanelContainer
 
 ## The card a newcomer sees the first time they open map building: what to do for a first stroke,
 ## in two lines, and one quiet button to put it away. It stands at the top centre of the board
-## (clear of the tool drawer on its left and the camera compass on its right), fades in, and goes
+## (clear of the tool drawer on its left, the actions pill above it and the camera compass on its
+## right), fades in, and goes
 ## for good the first time the author makes an edit or presses Got it: the choice is saved in the
 ## settings file (UiPreferences.load_authoring_welcome_done), so it is never shown again, and it
 ## never blocks a click. docs/UI_TASTE.md "Re-showing dismissed onboarding" is an anti-pattern.
@@ -12,16 +13,20 @@ extends PanelContainer
 signal dismissed
 
 const TITLE := "Your first strokes"
-const BODY := "Pick a tool on the left, then drag across the map to paint it."
-const KEYS := "Right-click puts the brush down. Ctrl+Z undoes. F1 lists every key."
+const BODY := "Pick Biome or Place on the left, then drag across the map to paint it."
+const KEYS := (
+	"Each of the seven tools has a key, shown on hover; Water and Build have tabs inside."
+	+ " Right-click puts the brush down. F1 lists every key."
+)
 const BUTTON := "Got it"
 ## The card's widest, so its wrapped lines stay short beside the drawer.
 const MAX_WIDTH := 420.0
-## Its distance from the top edge of the screen.
-const TOP_MARGIN := 16.0
-## How far right of the window's centre it stands: the rail is two columns of large items now, so
-## the board's centre has moved by about half the rail's growth.
-const BOARD_SHIFT := 30.0
+## Its distance from the top edge of the screen: below the actions pill, which stands at the top
+## beside the rail and the card.
+const TOP_MARGIN := 84.0
+## How far right of the window's centre it stands: the rail and the card take the board's left, so
+## its centre has moved right by about half of that (the rail is one column since ui-authoring3).
+const BOARD_SHIFT := 190.0
 
 var _fade: Tween
 

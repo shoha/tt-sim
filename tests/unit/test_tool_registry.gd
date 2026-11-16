@@ -46,14 +46,19 @@ func test_the_seven_tools_are_registered_once_each() -> void:
 		AuthoringPanel.TOOL_PAINT,
 		AuthoringPanel.TOOL_WATER,
 		AuthoringPanel.TOOL_BRIDGE,
+		BuildTool.ID,
+		WallTool.ID,
+		StructureTool.ID,
+		VillageTool.ID,
+		FireTool.ID,
 	]:
 		assert_true(id in ids, "%s is a registered tool" % id)
 	assert_null(ToolRegistry.find(&"no_such_tool"))
 
 
-func test_every_tool_is_on_the_rail_in_registry_order() -> void:
+func test_the_rail_lists_the_registry_s_rail_tools_in_order() -> void:
 	var panel := _panel()
-	var tools := ToolRegistry.tools(ToolDescriptor.AUTHORING)
+	var tools := ToolRegistry.rail_tools(ToolDescriptor.AUTHORING)
 	var rail_ids: Array = panel.rail_items.map(func(item: Dictionary) -> StringName: return item.id)
 	var tool_ids: Array = tools.map(func(tool: ToolDescriptor) -> StringName: return tool.id)
 	assert_eq(rail_ids, tool_ids, "the rail lists the registry, in its order")
@@ -73,34 +78,40 @@ func test_every_authoring_rail_button_has_a_tooltip() -> void:
 	# Owner, 2026-10-30: every rail icon explains itself. The tool icons and the footer's undo, redo,
 	# save and leave all carry words, in every state a tool can be in.
 	var panel := _panel()
-	var rails: Array[IconRail] = [panel.get("_rail") as IconRail]
-	var footer := panel.get("_footer_rail") as IconRail
-	assert_not_null(footer, "the footer rail exists")
-	rails.append(footer)
 	var checked := 0
-	for rail in rails:
-		var buttons: Dictionary = rail.get("_buttons")
-		assert_gt(buttons.size(), 0)
-		for id: StringName in buttons:
-			var button: IconButton = buttons[id]
-			assert_ne(button.tooltip_text.strip_edges(), "", "rail item %s has a tooltip" % id)
-			checked += 1
-	assert_gte(checked, ToolRegistry.tools(ToolDescriptor.AUTHORING).size() + 4)
-	var tools_rail: Dictionary = (panel.get("_rail") as IconRail).get("_buttons")
-	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
+	var buttons: Dictionary = (panel.get("_rail") as IconRail).get("_buttons")
+	assert_gt(buttons.size(), 0)
+	for id: StringName in buttons:
+		var button: IconButton = buttons[id]
+		assert_ne(button.tooltip_text.strip_edges(), "", "rail item %s has a tooltip" % id)
+		checked += 1
+	for action: Dictionary in AuthoringChrome.ACTION_ITEMS:
+		var action_button := panel.actions().button(action["id"])
+		assert_ne(action_button.tooltip_text.strip_edges(), "", "%s has a tooltip" % action["id"])
+		checked += 1
+	assert_gte(checked, ToolRegistry.rail_tools(ToolDescriptor.AUTHORING).size() + 4)
+	for tool in ToolRegistry.rail_tools(ToolDescriptor.AUTHORING):
 		panel.set_tool_available(tool.id, false)
 		assert_ne(
-			(tools_rail[tool.id] as IconButton).tooltip_text,
-			"",
-			"%s unavailable still says why" % tool.id
+			(buttons[tool.id] as IconButton).tooltip_text, "", "%s unavailable still says why" % tool.id
 		)
 		panel.set_tool_available(tool.id, true)
-		assert_string_contains((tools_rail[tool.id] as IconButton).tooltip_text, tool.summary)
+		assert_string_contains((buttons[tool.id] as IconButton).tooltip_text, tool.summary)
+	# A tab's tool says why through its tab.
+	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
+		if tool.on_rail or tool.hub == &"":
+			continue
+		var strip := panel.hub_tabs(tool.hub)
+		panel.set_tool_available(tool.id, true)
+		var tab := strip.tab(panel._tab_id_for(tool.hub, tool.id))
+		assert_ne(tab.tooltip_text, "", "%s's tab has a tooltip" % tool.id)
 
 
 func test_every_tool_has_a_pane_titled_from_its_descriptor() -> void:
 	var panel := _panel()
 	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
+		if tool.brush_mode == null:
+			continue  # A hub with no brush (Build): its tabs' tools have the panes.
 		var pane := panel.tool_pane(tool.id)
 		assert_not_null(pane, "%s has a pane" % tool.id)
 		if pane == null:
@@ -119,10 +130,14 @@ func test_every_tool_is_in_help_with_its_shortcut() -> void:
 	var last := -1
 	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
 		var rows := tool.help_rows()
-		assert_eq(rows[0][0], tool.rail_tooltip(), "%s's help row is named for it" % tool.id)
+		assert_eq(rows[0][0], tool.help_name(), "%s's help row is named for it" % tool.id)
 		assert_string_starts_with(tool.rail_tip(), tool.rail_tooltip())
 		if tool.shortcut != KEY_NONE:
 			assert_string_contains(rows[0][0], tool.shortcut_label())
+		if tool.on_rail:
+			assert_ne(tool.shortcut, KEY_NONE, "%s: every rail tool has a key" % tool.id)
+		else:
+			assert_string_contains(rows[0][0], ": ", "a tab is named under its hub")
 		for row in rows:
 			var index := _row_index(building, row)
 			assert_gt(index, last, "%s's row %s is in help, after the tool before" % [tool.id, row])
@@ -167,15 +182,23 @@ func test_a_shortcut_is_a_bare_key_press() -> void:
 	var release := press.duplicate() as InputEventKey
 	release.pressed = false
 	assert_false(tool.matches_shortcut(release))
-	assert_null(
+	assert_eq(
 		ToolRegistry.for_shortcut(press, ToolDescriptor.AUTHORING),
-		"no registered tool has B (none has a shortcut yet)"
+		ToolRegistry.find(BiomeTool.ID),
+		"B is the Biome tool's key"
+	)
+	press.keycode = KEY_W
+	assert_null(
+		ToolRegistry.for_shortcut(press, ToolDescriptor.AUTHORING), "W is the camera's, not a tool's"
 	)
 
 
 func test_every_tool_brings_its_own_brush_mode() -> void:
 	var modes := {}
 	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
+		if tool.id == BuildTool.ID:
+			assert_null(tool.brush_mode, "the Build hub has tabs, not a brush")
+			continue
 		assert_not_null(tool.brush_mode, "%s has a brush mode" % tool.id)
 		if tool.brush_mode == null:
 			continue
@@ -187,7 +210,7 @@ func test_every_tool_brings_its_own_brush_mode() -> void:
 func test_a_tool_with_an_unavailable_tooltip_says_why_on_the_rail() -> void:
 	var panel := _panel()
 	var buttons: Dictionary = (panel.get("_rail") as IconRail).get("_buttons")
-	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
+	for tool in ToolRegistry.rail_tools(ToolDescriptor.AUTHORING):
 		if tool.unavailable_tooltip == "":
 			continue
 		var button: IconButton = buttons[tool.id]

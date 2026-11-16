@@ -371,7 +371,7 @@ func _build_tool_options(tool_id: StringName) -> Control:
 			fire_pane.intensity_selected.connect(fire_intensity_selected.emit)
 			return fire_pane
 		WaterTool.ID:
-			water_pane = WaterToolPane.new()
+			water_pane = WaterToolPane.new(true)
 			water_pane.get_node("WaterHeader").visible = false
 			(water_pane.get_node("WaterHint") as Label).text = String(TOOL_HINTS[tool_id])
 			water_pane.shape_selected.connect(water_shape_selected.emit)

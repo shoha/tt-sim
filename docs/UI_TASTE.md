@@ -365,6 +365,31 @@ reverse the first with one constant.
   reaches the end. It is a band and a chevron, not the Settings card's words, because a drawer
   has no free line to keep (SettingsChrome's line is that card's).
 
+## 2026-11-16 map building 3 (card ui-authoring3, the owner's verdict on round 2)
+
+The owner disliked the rail going to two columns and the card's rounded corners meeting a straight
+rail edge, and asked for the most-used tools to be simpler. Code: `UI_SYSTEMS.md` "Map building
+chrome" (round 3).
+
+- **One column of seven (C1, S3).** Biome, Place, Sculpt, Paint, Water, Build, Fire, 52 px items
+  (about 48 real px at 720p), in three runs (land, shape, make). Thin / Clear is Place's erase
+  tab, Bridge is Water's Crossing tab, Wall, Buildings and Villages are Build's tabs: the rail was
+  twelve tools, and a person looks for "Water", not for "Bridge" beside it. Every tool id, brush
+  mode and pane is unchanged; a tab is the old rail item moved inside its hub.
+- **No flat edge meets a curve (G-shape).** The rail is a rounded capsule that stands still; the
+  card is a separate rounded card 12 px beside it, the same radius and paper. The card no longer
+  slides out of the rail's edge, so the pair reads as a tool belt and its panel.
+- **Actions leave the rail.** Undo, Redo, Save and Leave are a small paper pill at the top, right
+  of whichever of rail or card is outermost, with a wider gap before Leave and the word "Unsaved"
+  beside Save's dot. They are not tools, so they do not share the tools' column.
+- **A key per tool, shown where it is read.** B Biome, P Place, H Sculpt, I Paint, L Water, U
+  Build, F Fire (bare keys only; the camera's W A S D Q E and the Ctrl chords are untouched); the
+  tooltip and F1 say the key, and the key pressed again steps a hub's tabs.
+- **The basics sit above the fold (S4).** Each pane opens with its picker and a Size row; the
+  gesture lead sits behind More and strength behind Advanced. The card needs no scroll for the
+  basics at 1280x720 (a long catalogue such as Paint's surfaces or the buildings scrolls past its
+  first row, as before).
+
 ## Verdicts
 
 The user's decisions about the interface, newest last. They outrank every rule above; a card

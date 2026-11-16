@@ -46,6 +46,11 @@ const _TAB_ICON_PAD_H := 6  # Horizontal (left + right) padding
 const _TAB_ICON_PAD_V := 14  # Vertical (top + bottom) padding
 ## Rail mode: the rail panel's padding each side of its items (tab_width 44 fits 36 px items).
 const _RAIL_PAD_H := 4.0
+## Detached mode: the rail's distance from the screen's edge, the card's distance from the rail,
+## and how far the card slides while it fades (it comes from beside the rail).
+const FLOAT_MARGIN := 12.0
+const FLOAT_GAP := 12.0
+const _FLOAT_SLIDE := 20.0
 
 # -- Tab badge ---------------------------------------------------------------
 # Small accent dot drawn at the tab's top-right corner, e.g. for unsaved changes.
@@ -82,9 +87,12 @@ const _TAB_BADGE_MARGIN := 4.0
 @export var rail_group_gap: float = IconRail.GROUP_GAP
 ## Rail mode: a state-colour chip behind the active item (IconRail.chip).
 @export var rail_chip: bool = false
-## Rail mode: the footer items stand in a second column beside the rail, bottom-aligned, so the
-## tools can have large targets and all of it fits a 720p window.
-@export var rail_footer_beside: bool = false
+## Detached mode (the map tools, card ui-authoring3), left edge only: the rail is a rounded capsule
+## that stands still FLOAT_MARGIN in from the screen's edge, and the panel is a separate rounded
+## card FLOAT_GAP to its right that fades and slides in from beside the rail when the drawer opens
+## and out when it closes. No flat edge of one meets a curve of the other. Needs fit_height (the
+## card is as tall as its content) and the DrawerCardFloat / DrawerRailFloat theme variations.
+@export var rail_detached: bool = false
 ## The theme variation of the margin the content stands in: DrawerMargin (12 px) or
 ## DrawerMarginRoomy (16 px). Set in _on_ready().
 @export var margin_variation: StringName = &"DrawerMargin"
@@ -130,6 +138,9 @@ var tab_icon: Texture2D = null:
 
 var _sled: Control  ## Container that slides panel + tab as one unit
 var _panel: PanelContainer  ## The sliding content panel
+## Detached mode: the card's holder, which carries the slide and the fade so the card's own
+## modulate stays free for the host (CardDimmer).
+var _slot: Control
 var _margin: MarginContainer  ## The content's margin inside the panel
 var _fit_px: float = 0.0  ## Fit mode: the content's height the host last reported, 0 for none
 var _tab_button: Button  ## The clickable tab handle
@@ -166,6 +177,7 @@ func _ready() -> void:
 	# The handle depends on rail_items, so it is built after _on_ready().
 	_build_tab()
 	_apply_panel_style()
+	_attach_card_slot()
 
 	# Re-apply panel size, tab style, sled layout, and positions AFTER
 	# _on_ready(), because the subclass may have changed drawer_width,
@@ -281,6 +293,8 @@ static func free_span(viewport: Viewport) -> Vector2:
 func covered_span() -> Vector2:
 	var rect := get_global_transform_with_canvas() * Rect2(Vector2.ZERO, size)
 	var width := drawer_width + tab_width
+	if rail_detached:
+		width = _detached_width() + FLOAT_GAP
 	if edge == DrawerEdge.LEFT:
 		return Vector2(rect.position.x, rect.position.x + width)
 	return Vector2(rect.end.x - width, rect.end.x)
@@ -485,9 +499,7 @@ func _build_tab_button() -> void:
 func _build_rail() -> void:
 	# The rail is its items and the panel's side padding, never narrower: the sled places the
 	# panel by tab_width, so a rail wider than it would hang past its own frame.
-	var columns := 2.0 if rail_footer_beside and not rail_footer_items.is_empty() else 1.0
-	var items_w := rail_item_size * columns + IconRail.ITEM_GAP * (columns - 1.0)
-	tab_width = maxf(tab_width, items_w + _RAIL_PAD_H * 2.0)
+	tab_width = maxf(tab_width, rail_item_size + _RAIL_PAD_H * 2.0)
 	_rail_panel = PanelContainer.new()
 	_rail_panel.name = "RailPanel"
 	_rail_panel.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -501,7 +513,7 @@ func _build_rail() -> void:
 	# The indicator sits on the edge facing the panel, joining the item to the pane it opened,
 	# as the avatar builder's rail does. On the outer edge it ran to the rail's rim and read as
 	# cut there (2026-10-10 once-over).
-	_rail.indicator_at_end = edge == DrawerEdge.RIGHT
+	_rail.indicator_at_end = edge == DrawerEdge.RIGHT or rail_detached
 	_rail.item_size = rail_item_size
 	_rail.chip = rail_chip
 	# An item's optional "group" breaks the rail into runs of related tools: a gap where it changes.
@@ -513,8 +525,7 @@ func _build_rail() -> void:
 		group = item_group
 		_rail.add_item(item["id"], item["icon"], item.get("tooltip", ""))
 	_rail.item_pressed.connect(_on_rail_item_pressed)
-	var beside := rail_footer_beside and not rail_footer_items.is_empty()
-	var column: BoxContainer = HBoxContainer.new() if beside else VBoxContainer.new()
+	var column := VBoxContainer.new()
 	column.name = "RailColumn"
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_rail_panel.add_child(column)
@@ -529,18 +540,6 @@ func _build_rail() -> void:
 	for item in rail_footer_items:
 		_footer_rail.add_item(item["id"], item["icon"], item.get("tooltip", ""))
 	_footer_rail.item_pressed.connect(_on_rail_footer_pressed)
-	if beside:
-		var actions := VBoxContainer.new()
-		actions.name = "ActionColumn"
-		actions.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var spacer := Control.new()
-		spacer.name = "ActionSpacer"
-		spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		actions.add_child(spacer)
-		actions.add_child(_footer_rail)
-		column.add_child(actions)
-		return
 	var gap := Control.new()
 	gap.name = "FooterGap"
 	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -552,7 +551,10 @@ func _build_rail() -> void:
 func _apply_panel_style() -> void:
 	# The panel and the content's margin take their theme variations by the edge, which a subclass
 	# may set in _on_ready(), so this runs after it.
-	_panel.theme_type_variation = _edge_variation("DrawerCard" if fit_height else "DrawerPanel")
+	if rail_detached:
+		_panel.theme_type_variation = &"DrawerCardFloat"
+	else:
+		_panel.theme_type_variation = _edge_variation("DrawerCard" if fit_height else "DrawerPanel")
 	_margin.theme_type_variation = margin_variation
 
 
@@ -568,7 +570,9 @@ func _apply_tab_style() -> void:
 	if _tab_button:
 		_tab_button.theme_type_variation = _edge_variation("DrawerTab")
 	if _rail_panel:
-		_rail_panel.theme_type_variation = _edge_variation("DrawerRail")
+		_rail_panel.theme_type_variation = (
+			&"DrawerRailFloat" if rail_detached else _edge_variation("DrawerRail")
+		)
 
 
 ## The theme variation `base` has for this drawer's edge ("DrawerPanelLeft", "DrawerTabRight").
@@ -618,11 +622,46 @@ func _on_parent_resized() -> void:
 # -- Sled Layout -------------------------------------------------------------
 
 
+## Detached mode: the width from the screen's edge to the card's far side.
+func _detached_width() -> float:
+	return FLOAT_MARGIN + tab_width + FLOAT_GAP + drawer_width
+
+
+## Detached mode: where the card stands when open, in the sled.
+func _card_x() -> float:
+	return FLOAT_MARGIN + tab_width + FLOAT_GAP
+
+
+## Detached mode: the card goes into its own slot, a sibling of the rail in the sled, so the slot
+## can slide and fade while the card's own modulate stays the host's.
+func _attach_card_slot() -> void:
+	if not rail_detached:
+		return
+	_slot = Control.new()
+	_slot.name = "CardSlot"
+	_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_sled.add_child(_slot)
+	_sled.remove_child(_panel)
+	_slot.add_child(_panel)
+	# The rail is drawn over the slot, so a card that slides out passes from behind it.
+	_sled.move_child(_slot, 0)
+
+
 ## Arrange the panel and tab at fixed positions inside the sled.
 ## Called once after _on_ready() so subclass config is already applied.
 func _layout_sled() -> void:
 	_sled.size = Vector2(drawer_width + tab_width, size.y)
 	_sled.position.y = 0
+
+	if rail_detached:
+		_sled.size = Vector2(_detached_width(), size.y)
+		_tab_control.position = Vector2(FLOAT_MARGIN, tab_top_margin)
+		_slot.size = Vector2(drawer_width, size.y)
+		_panel.position = Vector2.ZERO
+		_panel.size = Vector2(drawer_width, size.y)
+		_set_card_state(is_open)
+		_apply_panel_height()
+		return
 
 	if edge == DrawerEdge.LEFT:
 		_panel.position = Vector2(0, 0)
@@ -646,14 +685,27 @@ func _apply_initial_position() -> void:
 		is_revealed = true
 
 	_sled.position.x = _get_sled_x()
+	_set_card_state(is_open)
 	if is_open:
 		_notify_watchers()
+
+
+## Detached mode: puts the card slot at its open (or closed) rest, with no motion.
+func _set_card_state(open_now: bool) -> void:
+	if _slot == null:
+		return
+	_slot.visible = open_now
+	_slot.modulate.a = 1.0 if open_now else 0.0
+	_slot.position.x = _card_x() if open_now else _card_x() - _FLOAT_SLIDE
 
 
 func _get_sled_x() -> float:
 	## Sled X for the current state.
 	## The sled holds both the panel and the tab, so moving it slides
 	## both in perfect lock-step.
+	if rail_detached:
+		# The rail stands still once revealed; only an unrevealed drawer waits off-screen.
+		return 0.0 if is_revealed else -(_detached_width() + 20.0)
 	if edge == DrawerEdge.LEFT:
 		if is_open:
 			return 0.0
@@ -681,7 +733,9 @@ func _animate_to_state() -> void:
 	_slide_tween = create_tween()
 	_slide_tween.set_ease(Tween.EASE_OUT)
 	_slide_tween.set_trans(UiMotion.ARRIVE_TRANS)
-	if UiMotion.reduced():
+	if rail_detached:
+		_animate_detached(target)
+	elif UiMotion.reduced():
 		# Reduce motion: no travel. Opening fades the sled in where it stands; closing cuts.
 		_sled.position.x = target
 		_sled.modulate.a = 0.0 if is_open else 1.0
@@ -696,6 +750,38 @@ func _animate_to_state() -> void:
 			AudioManager.play(&"open")
 		elif is_revealed:
 			AudioManager.play(&"close")
+
+
+## Detached mode's motion, added to the running tween: the whole sled slides in from off-screen on
+## reveal (the rail then stands still), and the card fades and slides from beside the rail on open,
+## the reverse on close. Under Reduce motion nothing travels: the sled cuts, the card fades in and
+## cuts out (the panel's own rule above).
+func _animate_detached(sled_x: float) -> void:
+	var reduced := UiMotion.reduced()
+	if reduced:
+		_sled.position.x = sled_x
+	elif not is_equal_approx(_sled.position.x, sled_x):
+		_slide_tween.tween_property(_sled, "position:x", sled_x, slide_duration)
+	if _slot == null:
+		return
+	var rest := _card_x()
+	if is_open:
+		if not _slot.visible:
+			_slot.visible = true
+			_slot.modulate.a = 0.0
+			_slot.position.x = rest if reduced else rest - _FLOAT_SLIDE
+		_slide_tween.parallel().tween_property(_slot, "modulate:a", 1.0, slide_duration)
+		if not reduced:
+			_slide_tween.parallel().tween_property(_slot, "position:x", rest, slide_duration)
+	elif reduced:
+		_set_card_state(false)
+		# A tween with nothing to do never finishes, which would leave the drawer "animating".
+		_slide_tween.tween_interval(0.01)
+	else:
+		var out := UiMotion.PANEL_OUT_S
+		_slide_tween.parallel().tween_property(_slot, "modulate:a", 0.0, out)
+		_slide_tween.parallel().tween_property(_slot, "position:x", rest - _FLOAT_SLIDE, out)
+		_slide_tween.tween_callback(_set_card_state.bind(false))
 
 
 func _on_slide_finished() -> void:

@@ -37,7 +37,7 @@ func test_the_field_is_a_shape_caption_over_line_then_area() -> void:
 
 
 func test_water_and_fire_build_the_same_field() -> void:
-	var water := WaterToolPane.new()
+	var water := WaterToolPane.new(true)
 	var fire := FireToolPane.new()
 	add_child_autofree(water)
 	add_child_autofree(fire)

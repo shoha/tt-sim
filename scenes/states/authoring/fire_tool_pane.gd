@@ -74,6 +74,8 @@ func _init(panel: AuthoringPanel = null) -> void:
 	var tool := ToolRegistry.find(FireTool.ID)
 	header.setup(tool.label, tool.summary)
 	add_child(header)
+	if panel != null:
+		add_child(panel.build_size_row("Fire"))
 	add_child(_caption("FireHint", HINT))
 	shape_field = ShapeField.build("FireShapeField", SHAPE_TILES[0], SHAPE_TILES[1])
 	select_shape(FireBrush.Shape.AREA)

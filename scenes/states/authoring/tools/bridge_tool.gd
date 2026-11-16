@@ -21,6 +21,8 @@ func _init() -> void:
 	summary = "Cross water on planks, stones, an arch or a ford."
 	icon = "building-bridge"
 	brush_mode = BridgeBrush
+	on_rail = false
+	hub = WaterTool.ID
 	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [

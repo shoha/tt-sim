@@ -9,6 +9,9 @@ extends GutTest
 const TEMP_PATH := "user://test_authoring_ui.cfg"
 ## The 1280x720 window at Auto interface size: its canvas is 1371 x 771 virtual px.
 const CANVAS_720P := Vector2(1371.0, 771.0)
+## The theme's card radius (painted_theme_kit.gd RADIUS_CARD): every corner of the rail, card and
+## the pill.
+const RADIUS_CARD := 16
 
 var _host: Control
 
@@ -33,8 +36,10 @@ func _panel(theme: Theme = null) -> AuthoringPanel:
 	_host.add_child(layer)
 	var panel := AuthoringPanel.new()
 	panel.theme = theme if theme != null else AuthoringChrome.surface_theme()
-	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layer.add_child(panel)
+	# A canvas layer's children fill the test window, so the panel takes the host's size by hand.
+	panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	panel.size = _host.size
 	return panel
 
 
@@ -45,41 +50,47 @@ func _gaps(rail: Control) -> Array[Node]:
 # -- The rail ---------------------------------------------------------------------------------
 
 
-func test_every_tool_is_still_on_the_rail_and_every_action_under_it() -> void:
+func test_the_rail_holds_seven_tools_and_the_actions_are_in_the_pill() -> void:
 	var panel := _panel()
-	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
-		assert_true(panel._rail.has_item(tool.id), "%s is on the rail" % tool.id)
-	for action: Dictionary in AuthoringChrome.FOOTER_ITEMS:
-		assert_true(panel._footer_rail.has_item(action["id"]), "%s is under it" % action["id"])
+	var ids: Array[StringName] = []
+	for item in ToolRegistry.rail_items(ToolDescriptor.AUTHORING):
+		ids.append(item["id"])
+		assert_true(panel._rail.has_item(item["id"]), "%s is on the rail" % item["id"])
+	assert_eq(ids.size(), 7)
+	assert_eq(panel._rail.get_child_count() - _gaps(panel._rail).size(), 7, "nothing else on it")
+	assert_null(panel._footer_rail, "no footer column")
+	for action: Dictionary in AuthoringChrome.ACTION_ITEMS:
+		assert_not_null(panel.actions().button(action["id"]), "%s is in the pill" % action["id"])
 
 
-func test_the_rail_breaks_into_four_runs_of_related_tools() -> void:
+func test_the_rail_breaks_into_three_runs_of_related_tools() -> void:
 	var panel := _panel()
-	assert_eq(_gaps(panel._rail).size(), 3, "four runs have three breaks between them")
+	assert_eq(_gaps(panel._rail).size(), 2, "three runs have two breaks between them")
 	var groups: Dictionary = {}
-	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
+	for tool in ToolRegistry.rail_tools(ToolDescriptor.AUTHORING):
 		groups[ToolRegistry.GROUPS[tool.id]] = true
-	assert_eq(groups.size(), 4, "land, shape, features and build")
+	assert_eq(groups.size(), 3, "land, shape and make")
 	var previous := &""
 	var changes := 0
 	for item: Dictionary in ToolRegistry.rail_items(ToolDescriptor.AUTHORING):
 		if previous != &"" and item["group"] != previous:
 			changes += 1
 		previous = item["group"]
-	assert_eq(changes, 3, "runs are contiguous: each group is one run in rail order")
+	assert_eq(changes, 2, "runs are contiguous: each group is one run in rail order")
 
 
-func test_the_rail_and_its_actions_fit_a_720p_window() -> void:
+func test_the_rail_fits_a_720p_window() -> void:
 	var panel := _panel()
 	await get_tree().process_frame
 	var need := panel._rail_panel.get_combined_minimum_size().y + panel.tab_top_margin
-	assert_lt(need, CANVAS_720P.y, "the whole rail, tools and actions, is %.0f px tall" % need)
+	assert_lt(need, CANVAS_720P.y, "the whole rail is %.0f px tall" % need)
 
 
 func test_the_drawer_card_is_as_tall_as_its_pane_and_never_taller_than_the_window() -> void:
 	_host.size = Vector2(1920.0, 1080.0)
 	var panel := _panel()
 	panel.reveal()
+	await get_tree().create_timer(UiMotion.PANEL_IN_S + 0.2).timeout
 	panel.open()
 	panel.show_tool_pane(AuthoringPanel.TOOL_SCULPT)
 	await get_tree().create_timer(UiMotion.PANEL_IN_S + 0.2).timeout
@@ -106,14 +117,13 @@ func test_without_fit_the_panel_runs_the_whole_edge() -> void:
 
 func test_tooltips_carry_the_keys() -> void:
 	var panel := _panel()
-	var save_button: Control = panel._footer_rail._buttons[AuthoringPanel.ACTION_SAVE]
+	var save_button: Control = panel.actions().button(AuthoringPanel.ACTION_SAVE)
 	assert_string_contains(save_button.tooltip_text, "Ctrl+S")
-	assert_string_contains(
-		panel._footer_rail._buttons[AuthoringPanel.ACTION_LEAVE].tooltip_text, "Esc"
-	)
-	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
+	assert_string_contains(panel.actions().button(AuthoringPanel.ACTION_LEAVE).tooltip_text, "Esc")
+	for tool in ToolRegistry.rail_tools(ToolDescriptor.AUTHORING):
 		var tip: String = panel._rail._buttons[tool.id].tooltip_text
 		assert_true(tip.begins_with(tool.label), "%s names itself first: %s" % [tool.id, tip])
+		assert_string_contains(tip, "(%s)" % tool.shortcut_label())
 
 
 # -- The tool's state and its option pane ----------------------------------------------------
@@ -160,8 +170,8 @@ func test_the_name_field_is_named_without_a_caption_line() -> void:
 func test_undo_and_redo_say_what_they_act_on() -> void:
 	var panel := _panel()
 	panel.set_history_state(true, true, "Raise", "Flatten")
-	var undo: Button = panel._footer_rail._buttons[AuthoringPanel.ACTION_UNDO]
-	var redo: Button = panel._footer_rail._buttons[AuthoringPanel.ACTION_REDO]
+	var undo: Button = panel.actions().button(AuthoringPanel.ACTION_UNDO)
+	var redo: Button = panel.actions().button(AuthoringPanel.ACTION_REDO)
 	assert_eq(undo.tooltip_text, "Undo Raise (Ctrl+Z)")
 	assert_eq(redo.tooltip_text, "Redo Flatten (Ctrl+Y)")
 	assert_false(undo.disabled)
@@ -185,7 +195,7 @@ func test_the_history_names_its_next_edits() -> void:
 func test_save_says_whether_there_is_anything_to_save() -> void:
 	var panel := _panel()
 	panel.set_dirty(true)
-	var save: Button = panel._footer_rail._buttons[AuthoringPanel.ACTION_SAVE]
+	var save: Button = panel.actions().button(AuthoringPanel.ACTION_SAVE)
 	assert_string_contains(save.tooltip_text, "unsaved changes")
 	panel.set_dirty(false)
 	assert_string_contains(save.tooltip_text, "all changes saved")
@@ -218,21 +228,33 @@ func test_the_drawer_is_drawn_by_the_theme_and_follows_its_leaf() -> void:
 	var panel := _panel()
 	assert_false(panel._panel.has_theme_stylebox_override("panel"), "no panel style in code")
 	assert_false(panel._rail_panel.has_theme_stylebox_override("panel"), "no rail style in code")
-	assert_eq(panel._panel.theme_type_variation, &"DrawerCardLeft", "a card, as tall as its pane")
-	assert_eq(panel._rail_panel.theme_type_variation, &"DrawerRailLeft")
+	assert_eq(panel._panel.theme_type_variation, &"DrawerCardFloat", "a floating card")
+	assert_eq(panel._rail_panel.theme_type_variation, &"DrawerRailFloat", "and a floating capsule")
+	assert_eq(panel.actions().theme_type_variation, &"ActionPill")
 	assert_eq(panel._margin.theme_type_variation, &"DrawerMarginRoomy")
 	for leaf: Theme in [ThemeColors.paper_theme(), ThemeColors.glass_theme()]:
 		panel.theme = leaf
-		var box := panel._panel.get_theme_stylebox("panel") as StyleBoxFlat
-		assert_eq(box.bg_color, ThemeColors.of(panel, ThemeColors.SURFACE), "the leaf's surface")
-		assert_eq(box.corner_radius_top_left, 0, "square against the screen's edge")
-		assert_eq(box.corner_radius_top_right, 0, "square where it meets the rail: no notch")
-		assert_eq(box.corner_radius_bottom_right, 0, "square where it meets the rail: no notch")
-		assert_gt(box.corner_radius_bottom_left, 0, "its free corner is rounded")
+		var boxes: Array[StyleBoxFlat] = []
+		for shape: Control in [panel._panel, panel._rail_panel, panel.actions()]:
+			boxes.append(shape.get_theme_stylebox("panel") as StyleBoxFlat)
+		for box in boxes:
+			assert_eq(box.bg_color, ThemeColors.of(panel, ThemeColors.SURFACE), "the leaf's surface")
+			# No flat edge ever meets a curve: every corner of every shape is the same card radius.
+			for corner in [
+				box.corner_radius_top_left,
+				box.corner_radius_top_right,
+				box.corner_radius_bottom_left,
+				box.corner_radius_bottom_right,
+			]:
+				assert_eq(corner, RADIUS_CARD, "one radius family on every corner")
 
 
 func test_both_leaves_define_every_drawer_variation() -> void:
 	for leaf: Theme in [ThemeColors.paper_theme(), ThemeColors.glass_theme()]:
+		for variation in ["DrawerCardFloat", "DrawerRailFloat", "ActionPill", "SegmentTrack"]:
+			assert_true(leaf.has_stylebox("panel", variation), variation)
+		for state in ["normal", "hover", "pressed"]:
+			assert_true(leaf.has_stylebox(state, "SegmentTab"), "SegmentTab %s" % state)
 		for side in ["Left", "Right"]:
 			assert_true(leaf.has_stylebox("panel", "DrawerPanel" + side))
 			assert_true(leaf.has_stylebox("panel", "DrawerCard" + side))
@@ -246,19 +268,21 @@ func test_both_leaves_define_every_drawer_variation() -> void:
 # -- Round 2 (the critic's ranked fixes, 2026-11-16) ----------------------------------------
 
 
-func test_rail_targets_are_46_wide_with_20_px_between_runs_and_still_fit_720p() -> void:
+func test_rail_targets_are_52_wide_with_a_break_between_runs_in_one_column() -> void:
 	var panel := _panel()
 	await get_tree().process_frame
 	for id: StringName in panel._rail._buttons:
 		var button: Control = panel._rail._buttons[id]
-		assert_gte(button.custom_minimum_size.x, 46.0, "%s is a large target" % id)
+		assert_gte(button.custom_minimum_size.x, 52.0, "%s is a large target" % id)
+		# At 1280x720 the canvas is 1371 virtual px wide: the real size is 0.934 of it.
+		assert_gte(button.custom_minimum_size.y * 1280.0 / CANVAS_720P.x, 44.0, "44 real px at 720p")
 	for gap in _gaps(panel._rail):
 		var step: float = (gap as Control).custom_minimum_size.y + 2.0 * IconRail.ITEM_GAP
-		assert_gte(step, 20.0, "a run ends with a 20 px break")
-	var actions := panel._footer_rail.get_parent()
-	assert_eq(actions.name, "ActionColumn", "the actions stand in a column beside the tools")
+		assert_gte(step, 16.0, "a run ends with a clear break")
+	assert_eq(panel._rail_panel.get_child(0).name, "RailColumn")
+	assert_eq(panel._rail_panel.get_child(0).get_child_count(), 1, "the rail is the only column")
+	assert_lt(panel._rail_panel.get_combined_minimum_size().x, 70.0, "one column of items, no second")
 	assert_true(panel._rail.chip, "the active tool wears a chip")
-	assert_false(panel._footer_rail.chip, "actions are not tools: no chip")
 
 
 func test_the_active_tool_has_a_chip_not_only_a_stripe() -> void:
@@ -270,7 +294,7 @@ func test_the_active_tool_has_a_chip_not_only_a_stripe() -> void:
 	await get_tree().process_frame
 	var chip := panel._rail.chip_rect()
 	assert_gt(chip.size.x, 40.0, "the chip spans the item")
-	assert_almost_eq(chip.size.y, 46.0, 0.01)
+	assert_almost_eq(chip.size.y, AuthoringChrome.RAIL_ITEM_SIZE, 0.01)
 	var item: Control = panel._rail._buttons[AuthoringPanel.TOOL_SCULPT]
 	assert_true(chip.has_point(item.get_rect().get_center()), "it sits behind the icon")
 
@@ -284,9 +308,9 @@ func test_the_longest_help_has_a_two_line_lead_and_the_rest_behind_more() -> voi
 	}
 	for hint_name: StringName in panes:
 		var pane: Control = panes[hint_name]
-		var lead := pane.get_node(String(hint_name)) as Label
+		var lead := pane.find_child(String(hint_name), true, false) as Label
 		assert_lt(lead.text.length(), 95, "%s: a lead of two short lines" % hint_name)
-		var more := pane.get_node(String(hint_name) + "More") as Foldout
+		var more := pane.find_child(String(hint_name) + "More", true, false) as Foldout
 		assert_false(more.expanded, "%s: the rest is behind More" % hint_name)
 		assert_eq(more.title, "More")
 
@@ -315,7 +339,7 @@ func test_place_tiles_name_species_by_picture_and_the_biome_rows_read_in_ink() -
 
 func test_the_unsaved_cue_is_a_word_as_well_as_a_dot() -> void:
 	var panel := _panel()
-	var save: Button = panel._footer_rail._buttons[AuthoringPanel.ACTION_SAVE]
+	var save: Button = panel.actions().button(AuthoringPanel.ACTION_SAVE)
 	panel.set_dirty(true)
 	var word := save.get_node("ItemCaption") as Label
 	assert_eq(word.text, AuthoringChrome.UNSAVED_WORD)
@@ -460,16 +484,20 @@ func test_the_card_stays_clear_of_the_drawer_at_720p() -> void:
 # -- Motion ----------------------------------------------------------------------------------
 
 
-func test_the_drawer_slides_normally_and_does_not_travel_under_reduce_motion() -> void:
+func test_the_card_slides_from_the_rail_normally_and_does_not_travel_under_reduce_motion() -> void:
 	var panel := _panel()
 	panel.reveal()
 	await get_tree().create_timer(UiMotion.PANEL_IN_S + 0.1).timeout
+	assert_false(panel._slot.visible, "a closed card is not there")
 	panel.open()
-	assert_lt(panel._sled.position.x, 0.0, "it is still on its way in")
+	assert_true(panel._slot.visible)
+	assert_lt(panel._slot.position.x, panel._card_x(), "it is still on its way out from the rail")
+	assert_almost_eq(panel._sled.position.x, 0.0, 0.01, "the rail stands still")
 	UiMotion.user_reduce = true
 	var calm := _panel()
 	calm.reveal()
 	await get_tree().create_timer(UiMotion.FADE_ONLY_S + 0.1).timeout
 	calm.open()
-	assert_almost_eq(calm._sled.position.x, 0.0, 0.01, "it is where it stays: only a fade")
-	assert_almost_eq(calm._sled.modulate.a, 0.0, 0.01, "and fades in from clear")
+	assert_almost_eq(calm._slot.position.x, calm._card_x(), 0.01, "it is where it stays: only a fade")
+	assert_almost_eq(calm._slot.modulate.a, 0.0, 0.01, "and fades in from clear")
+	assert_almost_eq(calm._panel.modulate.a, 1.0, 0.01, "the card's own alpha stays the dimmer's")

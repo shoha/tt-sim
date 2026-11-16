@@ -1,15 +1,17 @@
 class_name WaterToolPane
 extends VBoxContainer
 
-## The Water tool's pane in AuthoringPanel (phase 4, P4-4): River and Pond tiles (ShapeField,
-## which Tab switches too: select_shape() follows it), Ankle /
-## Waist / Deep tiles with a hint line saying what the depth means for tokens, and an Advanced
-## foldout with the exact width and flow speed (values hidden, like the other panes). No
-## numbers in the main flow: the width is Shift+wheel, and the depth a tile. On a dressed
-## Blender map (set_carves(false)) the tiles are disabled and the hint says why: the tool only
-## erases the water painted over it. Built in code; every interactive Control is named.
+## The Water tool's pane in AuthoringPanel (phase 4, P4-4): Ankle / Waist / Deep tiles with a hint
+## line saying what the depth means for tokens, the Width row under the header, and an Advanced
+## foldout with the flow speed (values hidden, like the other panes). The shape (River or Pond) is
+## the hub's top tabs in AuthoringPanel since ui-authoring3 (WaterTool.tabs; Tab on the board
+## switches it too), so the authoring pane has no shape field; the Events pane (play) has no tabs
+## and builds the pane with_shapes, adding the River and Pond tiles (ShapeField; select_shape()).
+## No numbers in the main flow: the width is Shift+wheel, and the depth a tile. On a dressed Blender
+## map (set_carves(false)) the tiles are disabled and the hint says why: the tool only erases the
+## water painted over it. Built in code; every interactive Control is named.
 
-## A tile was picked: the shape (WaterBrush.Shape) or the depth (WaterBody.Depth).
+## A tile was picked: the shape (WaterBrush.Shape, with_shapes only) or the depth (WaterBody.Depth).
 signal shape_selected(shape: int)
 signal depth_selected(depth: int)
 ## An Advanced row moved: the full width (metres) or the flow speed (WaterBody speed).
@@ -81,7 +83,7 @@ var _width_row: PropertyRow
 var _speed_row: PropertyRow
 
 
-func _init() -> void:
+func _init(with_shapes: bool = false) -> void:
 	name = "WaterPane"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_theme_constant_override("separation", 8)
@@ -89,19 +91,21 @@ func _init() -> void:
 	header.name = "WaterHeader"
 	header.setup("Water", "Rivers, streams and ponds.")
 	add_child(header)
+	add_child(_width())
 	_hint = _caption("WaterHint", HINT)
 	add_child(_hint)
 	_more = AuthoringChrome.more_foldout("WaterHintMore", HINT_MORE)
 	add_child(_more)
-	shape_field = ShapeField.build("WaterShapeField", SHAPE_TILES[0], SHAPE_TILES[1])
-	shape_field.tiles.select(&"water_river")
-	shape_field.tiles.selection_changed.connect(
-		func(id: StringName) -> void:
-			for tile in SHAPE_TILES:
-				if tile.id == id:
-					shape_selected.emit(int(tile.shape))
-	)
-	add_child(shape_field)
+	if with_shapes:
+		shape_field = ShapeField.build("WaterShapeField", SHAPE_TILES[0], SHAPE_TILES[1])
+		shape_field.tiles.select(&"water_river")
+		shape_field.tiles.selection_changed.connect(
+			func(id: StringName) -> void:
+				for tile in SHAPE_TILES:
+					if tile.id == id:
+						shape_selected.emit(int(tile.shape))
+		)
+		add_child(shape_field)
 	depth_field = _tiles("WaterDepthField", "Depth", DEPTH_TILES, "hint")
 	depth_field.tiles.selection_changed.connect(
 		func(id: StringName) -> void:
@@ -117,8 +121,10 @@ func _init() -> void:
 	add_child(_advanced())
 
 
-## Selects a shape tile without emitting shape_selected.
+## Selects a shape tile without emitting shape_selected (a pane built with_shapes).
 func select_shape(shape: int) -> void:
+	if shape_field == null:
+		return
 	for tile in SHAPE_TILES:
 		if int(tile.shape) == shape:
 			shape_field.tiles.select(tile.id)
@@ -141,6 +147,8 @@ func set_values(width: float, speed: float) -> void:
 ## Whether water can be carved here: the tiles and the hint follow (see the header).
 func set_carves(carves: bool) -> void:
 	for field in [shape_field, depth_field]:
+		if field == null:
+			continue
 		for child in (field as TileField).tiles.get_children():
 			if child is Button:
 				(child as Button).disabled = not carves
@@ -170,11 +178,9 @@ func _caption(node_name: String, text: String) -> Label:
 	return label
 
 
-## The Advanced foldout: exact width (the full channel, twice the brush radius) and flow.
-func _advanced() -> Foldout:
-	var foldout := Foldout.new()
-	foldout.name = "WaterAdvanced"
-	foldout.title = "Advanced"
+## The Width row, in the main flow under the header with the depth tiles (the basics: what the
+## water is and how wide): the full channel, twice the brush radius.
+func _width() -> PropertyRow:
 	_width_row = PropertyRow.new()
 	_width_row.name = "WaterWidth"
 	_width_row.label = "Width"
@@ -188,7 +194,14 @@ func _advanced() -> Foldout:
 	_width_row.hint_high = "River"
 	_width_row.formatter = func(value: float) -> String: return "%.1f m" % value
 	_width_row.value_changed.connect(func(value: float) -> void: width_changed.emit(value))
-	foldout.add_child(_width_row)
+	return _width_row
+
+
+## The Advanced foldout: the flow speed.
+func _advanced() -> Foldout:
+	var foldout := Foldout.new()
+	foldout.name = "WaterAdvanced"
+	foldout.title = "Advanced"
 	_speed_row = PropertyRow.new()
 	_speed_row.name = "WaterFlow"
 	_speed_row.label = "Flow"

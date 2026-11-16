@@ -1855,6 +1855,23 @@ full screen. Save keeps the drawer open and shows a success toast.
 
 ### Map building chrome (card ui-authoring, 2026-11-15)
 
+**Round 3 (card ui-authoring3, 2026-11-16; supersedes the rail, footer and card-on-rail sentences
+below).** The rail is one column of seven tools (`ToolRegistry.rail_tools`: Biome, Place, Sculpt,
+Paint, Water, Build, Fire). `DrawerContainer.rail_detached` stands the rail still as a rounded
+capsule with the card a separate rounded card `FLOAT_GAP` (12) beside it (`_slot` holds it for
+`CardDimmer`'s modulate); the generic footer (`rail_footer_beside`) remains only for
+`LevelEditPanel`. A tool is on the rail (`ToolDescriptor.on_rail`) or a tab of a hub (`hub`, the hub
+declares `tabs`): Place (Place, Thin / Clear), Water (River, Pond, Crossing = Bridge), Build (Walls,
+Buildings, Villages). `AuthoringPanel` keeps one `SegmentedTabs` per hub above the card's panes;
+a tab runs the old rail item's path (`pane_requested`, `tool_selected`), `request_tool`,
+`show_tool_pane`, `pick_rail_tool` and `select_water_shape` route by tool id, and a hub's key opens
+its last tab and steps the next on a repeat. `AuthoringActions` is the Undo / Redo / Save / Leave
+pill (`AuthoringChrome.ACTION_ITEMS`, `glide_to`). `AuthoringPanes` builds the Biome, Place, Sculpt
+and Paint panes (split out for the file cap); `build_size_row` puts Size in the main flow and
+`build_advanced` keeps Strength. `WaterToolPane.new(true)` (the GM's Events pane) keeps River and
+Pond tiles because play has no tabs. The play context (`PlayEvents`, Events pane) is unchanged
+except that Fire is last in the Events pane's order.
+
 The frame around the panes, as the card left it; the rules are UI_TASTE.md "2026-11-15 map
 building". `AuthoringChrome` (`scenes/states/authoring/authoring_chrome.gd`) holds what is
 neither a pane nor the controller: the material, the footer actions and their words, the keys.

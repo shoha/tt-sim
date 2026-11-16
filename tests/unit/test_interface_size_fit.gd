@@ -585,9 +585,15 @@ func test_authoring_drawer_fits() -> void:
 		AuthoringPanel.TOOL_PAINT,
 		AuthoringPanel.TOOL_WATER,
 		AuthoringPanel.TOOL_BRIDGE,
+		WallTool.ID,
+		StructureTool.ID,
+		VillageTool.ID,
+		FireTool.ID,
 	]:
-		if pane != panel._rail.selected or not panel.is_open:
-			panel._on_rail_item_pressed(pane)
+		var hub := ToolRegistry.hub_of(pane)
+		if hub != panel._rail.selected or not panel.is_open:
+			panel._on_rail_item_pressed(hub)
+		panel.show_tool_pane(pane)
 		await _assert_fits("authoring drawer on %s" % pane, panel.tool_pane(pane))
 		_assert_uncovered("hint bar beside the authoring drawer on %s" % pane, hints)
 

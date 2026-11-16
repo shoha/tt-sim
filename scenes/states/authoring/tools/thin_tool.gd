@@ -14,6 +14,8 @@ func _init() -> void:
 	summary = "Open up what grows."
 	icon = "eraser"
 	brush_mode = ThinBrush
+	on_rail = false
+	hub = PlaceTool.ID
 	contexts = AUTHORING | PLAY
 
 
@@ -27,6 +29,7 @@ func build_pane(panel: AuthoringPanel) -> Control:
 	header.name = "ThinHeader"
 	header.setup(label, summary)
 	pane.add_child(header)
+	pane.add_child(panel.build_size_row("Thin"))
 	pane.add_child(
 		AuthoringChrome.help_label(
 			"ThinHint",

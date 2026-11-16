@@ -20,6 +20,8 @@ func _init() -> void:
 	summary = "Open plazas and lay fields in a village."
 	icon = "village"
 	brush_mode = VillageBrush
+	on_rail = false
+	hub = BuildTool.ID
 	contexts = AUTHORING
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [

@@ -8,29 +8,33 @@ extends RefCounted
 ## _make() below, its BrushMode class, its pane and a test (AGENTS.md "Adding Features",
 ## docs/systems/authoring.md "Tools").
 ##
+## The rail lists seven tools (rail_tools: Biome, Place, Sculpt, Paint, Water, Build, Fire); the
+## rest are tabs of one of them and keep their descriptors, brush modes and panes. A rail tool with
+## `tabs` is a hub: Place (Place, Thin / Clear), Water (River, Pond, Crossing) and Build (Walls,
+## Buildings, Villages). A tab's tool says `hub` (hub_of maps a tool id to its rail id), so the
+## controller, saves, tests and the F1 help keep every id.
+##
 ## Contexts: a descriptor says whether it exists in authoring, in play, or in both
 ## (ToolDescriptor.AUTHORING, PLAY), and every list query takes the context it is for. Play
 ## lists Biome, Thin / Clear, Sculpt, Paint, Water and Bridge, the GM's live brushes in the
-## Events pane (PlayEvents); Place and Fire (until card F2) are authoring's alone.
+## Events pane (PlayEvents), each as its own brush as before (play has no rail, so the merged
+## hubs change nothing there); the Build hub and Place are authoring's alone.
 ##
 ## The descriptors are stateless, so one set is made on first use and shared.
 
-## The runs the rail breaks the tools into (a gap between runs, DrawerContainer.rail_items'
-## "group" key): what the tool works on. Land is what grows on the ground and where the
-## biomes meet, Shape is the ground itself, Features are water, fire and what crosses water,
-## Build is walls, buildings and villages. A tool not listed stands in a run of its own.
+## The runs the rail breaks its seven tools into (a gap between runs, DrawerContainer.rail_items'
+## "group" key): what the tool works on. Land is what grows on the ground (Biome, and Place with
+## its Thin / Clear mode), Shape is the ground itself (Sculpt, Paint), Make is what is added to it
+## (Water with its crossings, Build with its walls, buildings and villages, Fire). A tool that is
+## a tab of a hub (Thin / Clear, Bridge, Wall, Structure, Village) has no rail item and so no run.
 const GROUPS := {
 	&"biome": &"land",
-	&"thin_clear": &"land",
 	&"place": &"land",
 	&"sculpt": &"shape",
 	&"paint": &"shape",
-	&"fire": &"features",
-	&"water": &"features",
-	&"bridge": &"features",
-	&"wall": &"build",
-	&"structure": &"build",
-	&"village": &"build",
+	&"water": &"make",
+	&"build": &"make",
+	&"fire": &"make",
 }
 
 static var _tools: Array[ToolDescriptor] = []
@@ -68,14 +72,41 @@ static func for_shortcut(event: InputEvent, context: int) -> ToolDescriptor:
 	return null
 
 
+## The tools the rail lists in `context`, in rail order: seven in authoring (the others are tabs of
+## one of them).
+static func rail_tools(context: int) -> Array[ToolDescriptor]:
+	var listed: Array[ToolDescriptor] = []
+	for tool in tools(context):
+		if tool.on_rail:
+			listed.append(tool)
+	return listed
+
+
 ## The rail items of the tools in `context` (DrawerContainer.rail_items entries).
 static func rail_items(context: int) -> Array[Dictionary]:
 	var items: Array[Dictionary] = []
-	for tool in tools(context):
+	for tool in rail_tools(context):
 		var item := tool.rail_item()
 		item["group"] = GROUPS.get(tool.id, &"")
 		items.append(item)
 	return items
+
+
+## The rail item that tool `id` lives under: its hub, or itself ("bridge" is under "water").
+static func hub_of(id: StringName) -> StringName:
+	var tool := find(id)
+	return tool.hub if tool != null and tool.hub != &"" else id
+
+
+## The tab of rail tool `rail_id` that runs tool `tool_id` (for Water's two shapes, the first of
+## them): {} when the rail tool has no such tab.
+static func tab_for(rail_id: StringName, tool_id: StringName) -> Dictionary:
+	var rail_tool := find(rail_id)
+	if rail_tool != null:
+		for tab in rail_tool.tabs:
+			if StringName(tab["tool"]) == tool_id:
+				return tab
+	return {}
 
 
 ## The F1 help rows of the tools in `context`, tool by tool in rail order.
@@ -89,14 +120,15 @@ static func help_rows(context: int) -> Array:
 static func _make() -> Array[ToolDescriptor]:
 	return [
 		BiomeTool.new(),
-		ThinTool.new(),
 		PlaceTool.new(),
+		ThinTool.new(),
 		SculptTool.new(),
 		PaintTool.new(),
-		FireTool.new(),
 		WaterTool.new(),
 		BridgeTool.new(),
+		BuildTool.new(),
 		WallTool.new(),
 		StructureTool.new(),
 		VillageTool.new(),
+		FireTool.new(),
 	]

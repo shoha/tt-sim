@@ -60,8 +60,12 @@ func test_every_authoring_pane_ends_on_the_name_field_edge() -> void:
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layer.add_child(panel)
 	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
-		if tool.id != panel._rail.selected or not panel.is_open:
-			panel._on_rail_item_pressed(tool.id)
+		if tool.brush_mode == null:
+			continue  # The Build hub: its three tabs' tools have the panes.
+		var hub := ToolRegistry.hub_of(tool.id)
+		if hub != panel._rail.selected or not panel.is_open:
+			panel._on_rail_item_pressed(hub)
+		panel.show_tool_pane(tool.id)
 		var pane := panel.tool_pane(tool.id)
 		_open_foldouts(pane)
 		await _settle()
