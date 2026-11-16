@@ -62,6 +62,8 @@ func test_the_copied_constants_are_the_owners() -> void:
 	assert_eq(PainterWarmup.TREE_BLOCKIN, PainterTrees.BLOCKIN_SHADER)
 	assert_eq(PainterWarmup.TREE_STROKE_BARE, PainterTrees.STROKE_BARE_SHADER)
 	assert_eq(PainterWarmup.TREE_BLOCKIN_BARE, PainterTrees.BLOCKIN_BARE_SHADER)
+	assert_eq(PainterWarmup.WATER, PainterWater.SHADER)
+	assert_eq(PainterWarmup.WATERFALL, PainterWater.FALL_SHADER)
 	assert_eq(PainterWarmup.SKY, PainterScene.SKY_SHADER)
 	assert_eq(PainterWarmup.MANNER_FLAGS, PainterMannerMesh.FORMAT)
 	assert_eq(PainterWarmup.DEFAULT_SHEET, RenderStyle.DEFAULT_SHEET)
