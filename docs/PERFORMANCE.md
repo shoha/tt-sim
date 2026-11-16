@@ -6224,14 +6224,23 @@ self-occlusion bounds and the budget are unchanged. Cost: TWO draw calls per mes
 token instead of one (about 36 for an avatar; at the cap of 16 dressed avatars about 576 extra
 draw calls against about 288 before); the vertex work doubles with them, the fragment work is smaller than
 before (a thin ring instead of a filled silhouette). No millisecond figure was measured on this
-card (the lane was contended): measure with the pinned procedure before shipping. The mask leaves
-the nearest depth under a token's pixels for the transparent passes drawn after it.
+card (the lane was busy for two 9-minute waits at the end): the pinned interleaved A/B is ready
+as `tools/render_jobs/local/painter-look-ghost2/cost.json` (new, old and no ghost, pins Always and
+Top-down, three rounds, framed and home view at pitch 25; the local job and its `ghost.gd` probe
+are gitignored: rebuild from the card notes) and must run before shipping. The mask leaves the
+nearest depth under a token's pixels for the transparent passes drawn after it: checked with
+alpacas wading a river (the water draws over their submerged bodies as before); a rapid is the
+tallest step the test map had, no waterfall was checked.
+
+The line: the whole ring the push-out leaves is the line (an earlier version cut it with a
+distance estimate and came out dashed and half as wide). The default style, DOUBLE, is 1.5 px
+dark of the token's hue outside and 2.7 px light inside (of a 1080-line view, scaled by the
+viewport's height; 1.35 times wider while selected, gold); OUTLINE is one 3.2 px line.
 
 Pins at every pitch: the pin was already one MultiMesh draw call; showing it at low pitch changes
 no draw count. The portrait atlas is now made on the first frame instead of at the first steep
 view, and each pin is read and sorted every frame as before (a CPU cost per token, unmeasured).
-Frames: `compare/painter_final24_ghost2/` (`notes.md`).
-Frames: the same folder (`notes.md`).
+Frames: `compare/painter_final24_ghost2/` (`notes.md`; `r6` the final constants).
 
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 

@@ -61,9 +61,9 @@ const SELECTED_RIM := Color.GOLD
 ## DRAWN the single line with a hand-drawn wander of its width. `style` is the one in force;
 ## docs/PERFORMANCE.md "Token ghost outline" has the captures and the reasons.
 const STYLE_PARAMS := {
-	Style.OUTLINE: {"line_px": 2.6, "inner_px": 0.0, "wobble_px": 0.0},
-	Style.DOUBLE: {"line_px": 2.2, "inner_px": 1.8, "wobble_px": 0.0},
-	Style.DRAWN: {"line_px": 2.6, "inner_px": 0.0, "wobble_px": 0.7},
+	Style.OUTLINE: {"line_px": 3.2, "inner_px": 0.0, "wobble_px": 0.0},
+	Style.DOUBLE: {"line_px": 1.5, "inner_px": 2.7, "wobble_px": 0.0},
+	Style.DRAWN: {"line_px": 3.2, "inner_px": 0.0, "wobble_px": 0.8},
 }
 ## A selected or hovered token's line is this much wider.
 const SELECTED_WIDTH := 1.35
@@ -334,7 +334,7 @@ static func stroke_colours(vivid: Color, highlighted: bool, double: bool) -> Dic
 	if not double:
 		return {"line": base, "inner": base}
 	var dark := Color.from_hsv(base.h, minf(base.s + 0.15, 1.0), 0.22)
-	return {"line": dark, "inner": base.lerp(Color.WHITE, 0.45)}
+	return {"line": dark, "inner": base.lerp(Color.WHITE, 0.6)}
 
 
 ## Sets the overlay's stroke: colours and widths from the style and the token's highlight.

@@ -19,10 +19,10 @@ render_mode unshaded, depth_draw_never, cull_back, blend_mix, shadows_disabled;
  *      viewport's height), and writes a depth just short of the nearest. The depth test fails on
  *      every marked pixel, so only the ring outside the union of all the meshes is left, a line
  *      of constant pixel width round the whole token, with no line where one part lies over
- *      another. The shader then keeps the outer `line_px` band of the pushed-out surface (the
- *      distance to its contour from f / (df/dpixel) of f = |N . V|, which is 2 d near a smooth
- *      surface's contour whatever its curvature), dark outside and light inside it when
- *      `inner_px` is above 0, and discards the rest.
+ *      another. The whole ring is the line. When `inner_px` is above 0 its outer `line_px` is
+ *      the dark stroke and the rest the light one (the distance to the pushed surface's contour
+ *      from f / (df/dpixel) of f = |N . V|, which is 2 d near a smooth surface's contour
+ *      whatever its curvature, only splits the colours).
  * No stencil buffer is needed (spatial shaders here take none) and the line is where the depth
  * buffer says something else is in front, below.
  *
@@ -169,16 +169,17 @@ void fragment() {
 	float scale = max(VIEWPORT_SIZE.y / 1080.0, 0.25);
 	float d = gradient < 1e-4 ? 0.0 : 0.5 * facing / gradient / scale;
 	d += (vnoise(anchor * wobble_freq) - 0.5) * 2.0 * wobble_px;
+	// The ring's width is the push-out itself (the mask pass removes everything inside the
+	// token's silhouette), so it is kept whole: the distance estimate only splits its colours,
+	// since where it is off (a flat-shaded or folded surface) a cut band came out dashed.
 	float aa = 0.6;
-	float total = line_px + inner_px;
-	float in_line = 1.0 - smoothstep(total - aa, total + aa, d);
-	if (in_line <= 0.01) {
-		discard;
+	if (wobble_px > 0.0 && d > line_px + inner_px) {
+		discard; // only the hand-drawn variant trims its band by the estimate
 	}
 	float in_outer = 1.0 - smoothstep(line_px - aa, line_px + aa, d);
 	vec3 stroke = inner_px > 0.0 ? mix(line_inner.rgb, line_colour.rgb, in_outer) : line_colour.rgb;
 	ALBEDO = stroke;
-	ALPHA = line_alpha * in_line * hidden;
+	ALPHA = line_alpha * hidden;
 	// Just short of the nearest depth: fails where the mask pass wrote the nearest.
 	DEPTH = 0.9999;
 }
