@@ -107,7 +107,7 @@ func _build_badge() -> void:
 
 func _on_mouse_entered() -> void:
 	_hovered = true
-	_scale_to(Constants.UI_HOVER_SCALE, Constants.ANIM_HOVER_IN, Tween.TRANS_BACK)
+	_scale_to(Constants.UI_HOVER_SCALE, Constants.ANIM_HOVER_IN, UiMotion.ARRIVE_TRANS)
 
 
 func _on_mouse_exited() -> void:
@@ -121,7 +121,7 @@ func _on_button_down() -> void:
 
 func _on_button_up() -> void:
 	var target := Constants.UI_HOVER_SCALE if _hovered else Vector2.ONE
-	_scale_to(target, Constants.ANIM_HOVER_IN, Tween.TRANS_BACK)
+	_scale_to(target, Constants.ANIM_HOVER_IN, UiMotion.ARRIVE_TRANS)
 
 
 func _scale_to(target: Vector2, duration: float, trans: Tween.TransitionType) -> void:

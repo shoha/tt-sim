@@ -10,9 +10,14 @@ const SECTION := "ui"
 const KEY_SHOW_VALUES := "show_values"
 ## The Interface size choice: InterfaceSize.AUTO (0) or a percent from InterfaceSize.CHOICES.
 const KEY_INTERFACE_SIZE := "interface_size"
+## Reduce motion: fades only, no scale, lift, slide or stagger (UiMotion.reduced()).
+const KEY_REDUCE_MOTION := "reduce_motion"
 ## The Building tool's hint-bar keys already done once, and the palette's small-tiles choice.
 const KEY_STRUCTURE_HINTS_DONE := "structure_hints_done"
 const KEY_STRUCTURE_TILES_SMALL := "structure_tiles_small"
+
+## The card that explains a first stroke (AuthoringWelcome) was put away.
+const KEY_AUTHORING_WELCOME_DONE := "authoring_welcome_done"
 
 static var settings_path: String = Paths.SETTINGS_PATH
 
@@ -34,6 +39,17 @@ static func load_interface_size() -> int:
 
 static func save_interface_size(choice: int) -> void:
 	_save(KEY_INTERFACE_SIZE, InterfaceSize.sanitize(choice))
+
+
+## Whether the user turned Reduce motion on (off when none is saved).
+static func load_reduce_motion() -> bool:
+	return bool(_load().get_value(SECTION, KEY_REDUCE_MOTION, false))
+
+
+## Saves Reduce motion and applies it at once (UiMotion.user_reduce).
+static func save_reduce_motion(on: bool) -> void:
+	UiMotion.user_reduce = on
+	_save(KEY_REDUCE_MOTION, on)
 
 
 ## The Building tool's gestures this user has done once (StructureHints); empty when none are
@@ -59,6 +75,15 @@ static func load_structure_tiles_small() -> bool:
 
 static func save_structure_tiles_small(small: bool) -> void:
 	_save(KEY_STRUCTURE_TILES_SMALL, small)
+
+
+## Whether this user has put the first-strokes card away (AuthoringWelcome); false when unsaved.
+static func load_authoring_welcome_done() -> bool:
+	return bool(_load().get_value(SECTION, KEY_AUTHORING_WELCOME_DONE, false))
+
+
+static func save_authoring_welcome_done(done: bool) -> void:
+	_save(KEY_AUTHORING_WELCOME_DONE, done)
 
 
 static func _load() -> ConfigFile:

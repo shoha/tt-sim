@@ -4,11 +4,11 @@ extends RefCounted
 ## thread (card painter-perf-warmup, docs/systems/painter.md "Warm-up").
 ##
 ## The cost. The first Painted level of a session (and the first switch Classic -> Painted in a
-## running level) draws nine painter shaders in their vertex layouts for the first time: about 94
-## surface pipelines in a first level (41 in a toggle, 12 more for the bare winter trees), each
-## compiled on the main thread at the first draw. Windowed debug build, a warm Godot cache: a 1.1 s
-## frame under the loading overlay; with the Godot shader and pipeline caches off (a first launch,
-## a new GPU driver) the toggle froze 1.5 s and the winter switch 1.5 s again.
+## running level) draws the painter shaders (covered_shaders()) in their vertex layouts for the
+## first time: about 94 surface pipelines in a first level (41 in a toggle, 12 more for the bare
+## winter trees), each compiled on the main thread at the first draw. Windowed debug build, a warm
+## Godot cache: a 1.1 s frame under the loading overlay; with the Godot shader and pipeline caches
+## off (a first launch, a new GPU driver) the toggle froze 1.5 s and the winter switch 1.5 s again.
 ##
 ## The model. One coordinator thread (start()) loads the painter scripts (so the first Painted
 ## `take` compiles no GDScript), then builds one tiny mesh for every (shader, vertex layout) the
@@ -50,6 +50,7 @@ const SCRIPTS: PackedStringArray = [
 	"res://painter/trees/painter_trees.gd",
 	"res://painter/painter_buildings.gd",
 	"res://painter/buildings/manner_host.gd",
+	"res://painter/painter_water.gd",
 ]
 const GROUND := "res://painter/shaders/painter_ground.gdshader"
 const PLANT := "res://painter/shaders/painter_plant.gdshader"
@@ -62,6 +63,9 @@ const TREE_STROKE := "res://painter/shaders/painter_tree_stroke.gdshader"
 const TREE_BLOCKIN := "res://painter/shaders/painter_tree_blockin.gdshader"
 const TREE_STROKE_BARE := "res://painter/shaders/painter_tree_stroke_bare.gdshader"
 const TREE_BLOCKIN_BARE := "res://painter/shaders/painter_tree_blockin_bare.gdshader"
+## The water's two shaders (PainterWater.SHADER, FALL_SHADER).
+const WATER := "res://painter/shaders/painter_water.gdshader"
+const WATERFALL := "res://painter/shaders/painter_waterfall.gdshader"
 ## The sky (PainterScene.SKY_SHADER) draws through a Sky, not a mesh: it is only compiled here.
 const SKY := "res://painter/shaders/painter_sky.gdshader"
 ## The vertex layouts the painter draws, as the slots each fills (the engine adds the tangent flag
@@ -91,6 +95,16 @@ const LAYOUT_MANNER: Array[int] = [
 	Mesh.ARRAY_COLOR,
 	Mesh.ARRAY_TEX_UV2,
 	Mesh.ARRAY_CUSTOM0,
+	Mesh.ARRAY_INDEX
+]
+## The falls' mesh (WaterFallMesh: curtain, ring and mist in one surface); the water's own surface
+## (WaterMeshBuilder, a Blender plane) is LAYOUT_PLAIN.
+const LAYOUT_FALL: Array[int] = [
+	Mesh.ARRAY_VERTEX,
+	Mesh.ARRAY_NORMAL,
+	Mesh.ARRAY_COLOR,
+	Mesh.ARRAY_TEX_UV,
+	Mesh.ARRAY_TEX_UV2,
 	Mesh.ARRAY_INDEX
 ]
 ## What the manner meshes carry in CUSTOM0 (PainterMannerMesh.FORMAT).
@@ -141,7 +155,19 @@ static func covered_shaders() -> PackedStringArray:
 ## The shaders of the summer look.
 static func base_shaders() -> PackedStringArray:
 	return PackedStringArray(
-		[GROUND, PLANT, SOLID, STRUCTURE, MANNER, YARD, YARD_GROUND, TREE_STROKE, TREE_BLOCKIN]
+		[
+			GROUND,
+			PLANT,
+			SOLID,
+			STRUCTURE,
+			MANNER,
+			YARD,
+			YARD_GROUND,
+			TREE_STROKE,
+			TREE_BLOCKIN,
+			WATER,
+			WATERFALL
+		]
 	)
 
 
@@ -269,6 +295,8 @@ static func collect(bare: bool) -> Array[Dictionary]:
 	_add(samples, "yard", YARD, LAYOUT_YARD, 0)
 	_add(samples, "yard_ground", YARD_GROUND, LAYOUT_YARD, 0)
 	_add(samples, "manner", MANNER, LAYOUT_MANNER, MANNER_FLAGS)
+	_add(samples, "water", WATER, LAYOUT_PLAIN, 0)
+	_add(samples, "waterfall", WATERFALL, LAYOUT_FALL, 0)
 	return samples
 
 

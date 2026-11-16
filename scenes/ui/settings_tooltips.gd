@@ -16,6 +16,10 @@ static func apply(menu: SettingsMenu) -> void:
 		+ "screen. A percent is a fixed size, the same on every screen; one below the size "
 		+ "marked as Auto's makes text small here. The board is not scaled. Applies at once."
 	)
+	menu.reduce_motion_check.tooltip_text = (
+		"Menus fade instead of sliding, scaling or staggering in, and the wind and loading "
+		+ "bar settle. Also follows your system's reduce-animation setting. Applies at once."
+	)
 	menu.vsync_check.tooltip_text = "Sync frame rate to monitor refresh rate"
 	menu.lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
 	SettingsTokenShading.apply_tooltip(menu)

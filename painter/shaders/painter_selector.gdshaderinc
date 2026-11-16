@@ -41,6 +41,8 @@ uniform float group_freq = 0.1;
 uniform bool casts_shadow = true;
 // The height of the selector's mesh in its own units (a leaf mass turns about its middle).
 uniform float selector_height = 1.0;
+// How much darker a stone's or a log's foot is (PainterOcclusion: 0 off, the sheet's base-dark).
+uniform float base_dark = 0.0;
 // The mesh's half size in its own units (PainterSurfaces sets it from its AABB): a tuft's rim
 // reads it.
 uniform vec3 selector_extent = vec3(0.5);
@@ -278,6 +280,8 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 	} else {
 		variant = mix(variant, p_noise(wp * 0.9 + 17.0), 0.5);
 		snow = frost > 0.0 && frost_up(n.y - 0.3, wp) ? 1.0 : 0.0;
+		// A stone or a log grows out of the ground: a step darker over its foot (PainterOcclusion).
+		mul = mix(1.0 - base_dark, 1.0, smoothstep(0.0, 0.45, h));
 	}
 	wob = p_noise(wp * 1.7 + 5.0);
 }

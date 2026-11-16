@@ -15,6 +15,24 @@ extends RefCounted
 ##
 ## The descriptors are stateless, so one set is made on first use and shared.
 
+## The runs the rail breaks the tools into (a gap between runs, DrawerContainer.rail_items'
+## "group" key): what the tool works on. Land is what grows on the ground and where the
+## biomes meet, Shape is the ground itself, Features are water, fire and what crosses water,
+## Build is walls, buildings and villages. A tool not listed stands in a run of its own.
+const GROUPS := {
+	&"biome": &"land",
+	&"thin_clear": &"land",
+	&"place": &"land",
+	&"sculpt": &"shape",
+	&"paint": &"shape",
+	&"fire": &"features",
+	&"water": &"features",
+	&"bridge": &"features",
+	&"wall": &"build",
+	&"structure": &"build",
+	&"village": &"build",
+}
+
 static var _tools: Array[ToolDescriptor] = []
 
 
@@ -54,7 +72,9 @@ static func for_shortcut(event: InputEvent, context: int) -> ToolDescriptor:
 static func rail_items(context: int) -> Array[Dictionary]:
 	var items: Array[Dictionary] = []
 	for tool in tools(context):
-		items.append(tool.rail_item())
+		var item := tool.rail_item()
+		item["group"] = GROUPS.get(tool.id, &"")
+		items.append(item)
 	return items
 
 

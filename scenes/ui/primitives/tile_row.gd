@@ -219,7 +219,7 @@ func _on_tile_hover(id: StringName, entered: bool) -> void:
 		tile_unhovered.emit(id)
 	var target := Constants.UI_HOVER_SCALE if entered else Vector2.ONE
 	var duration := Constants.ANIM_HOVER_IN if entered else Constants.ANIM_HOVER_OUT
-	var trans := Tween.TRANS_BACK if entered else Tween.TRANS_CUBIC
+	var trans := UiMotion.ARRIVE_TRANS if entered else UiMotion.EXIT_TRANS
 	_tweens[id] = UiMotion.scale_to(tile, _tweens.get(id), target, duration, trans)
 
 

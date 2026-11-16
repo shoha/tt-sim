@@ -6175,6 +6175,31 @@ for live ribbon vertices under 0.05 m wide and the tile lookup rejects a vertex 
 with one fetch, so it is free at these views. Raw logs: `compare/painter_final19_fade/cost_main_*` and
 `cost_new_*`. (The taiga row's Painted samples drift up 3.15 to 3.24 within each run, in both runs.)
 
+## Painted water (card painter-water, 2026-11-15, look-pending)
+
+The painted look's water (`painter_water.gdshader`, `painter_waterfall.gdshader`) against Classic's
+on the same painted ground. Pinned procedure: lane held, no other Godot, vsync off, `gpu` windows of
+3 s (about 850 to 1130 samples each) of `viewport_get_measured_render_time_gpu`, the two water
+shaders swapped in-run on the shared materials, interleaved Classic, Painted, Classic, Painted per
+view, debug build, RTX 3080 (P0, 55 C at the start and 77 C at the end, which is a little warm: the
+pairs are in-run so the drift cancels, and the two Classic windows of every view agree within 0.05
+ms). One 150 m forest map with a fall, a river, a pond of 3.5 m radius, a long river along the
+south edge, Eevee and Venusaur in the river (the card asked for a river map, a lake map and the
+forest with a pond: one map holding all three shapes was measured, not three maps).
+
+| View | Classic (median ms, two windows) | Painted | Difference |
+|---|---|---|---|
+| summer zoom 8 | 2.208, 2.254 | 2.151, 2.176 | -0.07 |
+| summer zoom 20 | 2.788, 2.808 | 2.678, 2.697 | -0.11 |
+| summer eye | 2.961, 2.987 | 2.857, 2.873 | -0.11 |
+| winter zoom 8 | 2.181, 2.184 | 2.118, 2.110 | -0.07 |
+| winter zoom 20 | 2.701, 2.694 | 2.595, 2.596 | -0.10 |
+
+Painted water is 0.07 to 0.11 ms cheaper than Classic in every view, under the card's +0.3 ms
+bound and in line with the research report's estimate (no normal-map reads, no screen texture; the
+wash is alpha-blended over the ground). The Low water quality (second layer, glints and cracks
+off) was not measured separately.
+
 ## Occlusion fade removed (card painter-look-ghost, 2026-11-15, look-pending)
 
 The per-token occlusion fade (`OcclusionFadeManager`, `shaders/occlusion_fade.gdshader`,

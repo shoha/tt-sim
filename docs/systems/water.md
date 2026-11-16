@@ -636,6 +636,16 @@ tokens past the edge. The probe that chose the rendering is P6-0
   transparent one, the exits' draw, the load and the refresh). The numbers quoted above from
   render jobs are indicative; the pinned passes are the reference.
 
+## Painted look
+
+Under the Painted look the shared water material draws with `painter/shaders/painter_water.gdshader`
+(a depth-banded wash, a stroke lattice, a shore lap ribbon, token arcs, winter ice on still
+water) instead of `shaders/water.gdshader`; `PainterWater` swaps the shader and puts Classic's back.
+Everything above (the surface, the flow map, the disturbance points, the skirt, the Motion keys)
+keeps its names and its meaning: the painted shader declares the same uniforms, and the shared
+material keeps its parameters across the swap. Classic's shader is unchanged. Details and cost:
+[painter.md](painter.md) "Water".
+
 ## Open work
 
 The list is [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work"; this doc does not repeat it.

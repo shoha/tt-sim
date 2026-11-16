@@ -592,6 +592,7 @@ void fragment() {
 	float swell = 0.0;
 	// How much of its roof's ramp a blanket's snow lets through where it lies (code 10 only).
 	float thin = 0.0;
+	float snow_mark = 0.0;
 	if (snow > 0.0) {
 		if (code == 10 || (snow_body && code > 0 && roofy && code != 7)) {
 			// The blanket (code 10, PainterMannerBlanket), or a roof piece under it (its own
@@ -629,14 +630,21 @@ void fragment() {
 				// whole run (the lip's edge stays snow).
 				float eave_g = smoothstep(0.42, 0.6, p_n2(vec2(f.x * 0.4, 21.0), 120.0));
 				float eave_b = eave_g * (1.0 - smoothstep(0.08, 0.3 + 0.4 * p_n2(vec2(f.x * 1.1, 22.0), 121.0), f.y)) * 0.62;
-				float edge = (p_n2(f * 2.6, 115.0) - 0.5) * 0.3 + (p_n2(f * 9.0, 116.0) - 0.5) * 0.22;
+				// (Card painter-look-roofs-winter2: the snow edge was a smooth fade, an airbrushed band.
+				// The tongue's edge is now a dry brush's: a few broad dabs (stretched along the eave) and
+				// a fine ragged drag push the ramp across a narrow threshold, and flecks of snow stay
+				// inside the bare stroke.)
+				float edge = (p_n2(f * vec2(5.5, 2.4), 128.0) - 0.5) * 0.5
+					+ (p_n2(f * 2.2, 115.0) - 0.5) * 0.4
+					+ (p_n2(f * vec2(13.0, 7.0), 116.0) - 0.5) * 0.2;
 				float bare = max(max(ridge_b, verge_b * 0.9), eave_b) + edge;
-				cover = 1.0 - smoothstep(0.3, 0.7, bare);
-				// Where the snow lies thin as long soft streaks down the fall line (not round patches),
-				// and the bare roof's own brush: a few dry dabs.
-				float patch_n = smoothstep(0.42, 0.72, p_n2(vec2(f.x * 0.55, f.y * 0.12) + acc * 5.0, 122.0))
-					* (0.6 + 0.4 * smoothstep(0.35, 0.65, p_n2(vec2(f.x * 0.2, f.y * 0.35) + acc * 3.0, 125.0)));
-				thin = min(0.08 + 0.34 * patch_n + 0.3 * (1.0 - smoothstep(0.0, 1.3, f.y)) + 0.18 * (1.0 - smoothstep(0.0, 0.9, dx)), 0.58);
+				cover = 1.0 - smoothstep(0.42, 0.52, bare);
+				cover = max(cover, smoothstep(0.7, 0.76, p_n2(f * vec2(4.5, 2.4) + acc * 3.0, 129.0)) * 0.9);
+				// A veil of the roof's colour: not a fog over the whole blanket (that read as milky,
+				// translucent snow, measured by drawing it away), but a few dry streaks down the fall
+				// line with ragged edges, strongest at the eave and the verges where the snow is thin.
+				float vein = smoothstep(0.52, 0.6, p_n2(vec2(f.x * 0.8, f.y * 0.2) + acc * 5.0, 122.0));
+				thin = vein * min(0.18 + 0.32 * (1.0 - smoothstep(0.0, 1.5, f.y)) + 0.2 * (1.0 - smoothstep(0.0, 0.9, dx)), 0.6);
 			}
 			vec2 sw = p_wash(f, 1.3, 4.2, 0.5, 0.34, 0.45, 41.0 + acc * 7.0);
 			// The mass's patches lie wider along the eave than down the slope (card
@@ -649,17 +657,34 @@ void fragment() {
 			snow_light = sw.y * 0.5 * broad * (1.0 - under);
 			snow_dark *= cover;
 			if (code == 10 && cover < 0.95) {
-				// (The bare roof's own brush: a few dry dark dabs, so a tongue is not one flat tone.)
-				snow_dark += (1.0 - cover) * smoothstep(0.55, 0.78, p_n2(f * vec2(5.0, 2.2), 123.0)) * (v_tone == 1 ? 0.08 : 0.2);
+				// The bare roof's own marks, short dark and light strokes along the eave (the rows of
+				// tile, shingle or straw), so a tongue is a painted stretch of roof, not a flat tone.
+				vec2 mk = p_strokes(f, 0.2, 0.85, 0.8, 0.6, 0.55, 130.0);
+				snow_dark += (1.0 - cover) * mk.x * (v_tone == 1 ? 0.3 : 0.5) * broad;
+				snow_mark = (1.0 - cover) * mk.y * 0.4 * broad;
 			}
 			// (Where the snow is off, the bare roof takes a lift of light: a patch in the blue shade
 			// read as a dark olive hole.)
-			snow_light = snow_light * cover + (1.0 - cover) * 0.5;
+			snow_light = snow_light * cover + (1.0 - cover) * 0.5 + snow_mark;
 			swell *= cover;
-			wob = mix(wob, 0.5 + (sw.y - sw.x) * 0.45, cover);
-			// A blanket's light turns over a wide step, so its own shape (the crown, the sags, the
-			// lip's round) reads as soft light and shade instead of one flat tone.
-			soft = code == 10 ? 0.15 : 0.06;
+			if (code == 10) {
+				// The blanket's rounded shape would read as soft airbrushed gradients, so its light
+				// and shade are cut into broad brush dabs (the wobble, which shifts where the light
+				// turns, is a two-scale dab noise pushed through a steep step) and a dry-brush grain
+				// of long fine streaks along the eave breaks the white at close zoom.
+				float dab_c = p_n2(f * vec2(1.5, 0.8) + acc * 9.0, 61.0);
+				float dab_f = p_n2(f * vec2(5.5, 2.4) + acc * 4.0, 62.0);
+				float dabs_s = smoothstep(0.3, 0.7, dab_c + (dab_f - 0.5) * 0.55);
+				wob = mix(wob, clamp(dabs_s + (sw.y - sw.x) * 0.4, 0.0, 1.0), cover);
+				float grain = p_n2(f * vec2(3.0, 22.0) + acc * 7.0, 63.0);
+				snow_dark += cover * broad * smoothstep(0.64, 0.8, grain) * 0.14 * (1.0 - under);
+			} else {
+				wob = mix(wob, 0.5 + (sw.y - sw.x) * 0.45, cover);
+			}
+			// A blanket's light turns over a narrow step (card painter-look-roofs-winter2: a wide one,
+			// 0.15, read as a glossy airbrushed sheen, measured); its shape's light and shade break
+			// along the dabs above instead.
+			soft = 0.06;
 		} else if (strip || (snow_body && code == 6)) {
 			// A strip (or the ridge beam under a cap): all snow, a slightly darker foot where it
 			// sits and a blue underside under a lip's nose.
@@ -772,7 +797,7 @@ void fragment() {
 			// blue-violet, so the wall reads as lit stone and not a grey-blue board.
 			f_lit *= vec3(1.14, 1.04, 0.84);
 			f_mid *= vec3(1.1, 1.01, 0.88);
-			f_shd *= vec3(1.0, 0.92, 1.2);
+			f_shd *= vec3(0.9, 0.93, 1.3);
 		}
 	} else if (slate) {
 		// Slate is luminous, not grey: its sun side warm, its body and shade a bluer violet.
@@ -837,8 +862,8 @@ void fragment() {
 	f_cast = vec2(paint_slope ? 0.2 : (on_course ? 0.09 : 0.05), paint_slope ? 0.55 : 1.0);
 	f_tune = vec4(
 		paint_slope ? 0.025 : soft,
-		on_course ? 0.7 : (on_slope ? 0.45 : 0.2),
-		paint_slope ? 0.06 : 0.12,
+		on_course ? 0.7 : (on_slope ? 0.45 : (code == 10 ? 0.5 : 0.2)),
+		paint_slope ? 0.06 : (code == 10 ? 0.32 : 0.12),
 		on_slope || code == 10 ? 0.3 : 0.5);
 }
 
@@ -849,12 +874,6 @@ void light() {
 		float x = dot(normalize(f_n), lw) + (f_wob - 0.5) * f_tune.z;
 		vec3 col = mix(f_shd, f_mid, smoothstep(tone_lo - f_tune.x, tone_lo + f_tune.x, x));
 		col = mix(col, f_lit, smoothstep(tone_hi - f_tune.x, tone_hi + f_tune.x, x));
-		if (f_tune.x > 0.1) {
-			// A blanket in the sun models softly with its own shape: what turns from the light
-			// greys a little toward the mid tone, what faces it is whitest (card
-			// painter-buildings-fix4: a sunlit blanket was one flat white).
-			col = mix(f_mid, col, 0.7 + 0.3 * smoothstep(0.35, 0.95, x));
-		}
 		// (A roof's cast tint is also patchy inside: the brush wobble thins it in places.)
 		float dapple = f_cast.y < 0.9 ? mix(0.6, 1.0, smoothstep(0.2, 0.8, f_wob)) : 1.0;
 		DIFFUSE_LIGHT += mix(col, f_shd, cast * cast_amount * f_cast.y * dapple);
