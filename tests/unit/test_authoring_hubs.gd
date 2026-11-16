@@ -451,10 +451,6 @@ func _basics_bottom(pane: Control) -> float:
 	for row: Node in pane.find_children("*", "PropertyRow", true, false):
 		if row.name.ends_with("BrushSize") or row.name == "WaterWidth":
 			bottom = maxf(bottom, (row as Control).get_global_rect().end.y)
-	# The buildings are a searchable catalogue under filter chips: the way in is the search row.
-	var search := pane.find_child("StructureTools", true, false) as Control
-	if search != null:
-		return maxf(bottom, search.get_global_rect().end.y)
 	for node: Node in pane.find_children("*", "Control", true, false):
 		var control := node as Control
 		if not control.is_visible_in_tree():

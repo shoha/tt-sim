@@ -271,7 +271,7 @@ func test_the_hint_bar_reads_alike() -> void:
 	assert_eq(river[2], fire[2], "the same size key")
 	assert_eq(fire[2].action, "Width")
 	var ignite: String = EventsPane.TOOL_HINTS[EventPresets.IGNITE]
-	for hint: String in [WaterToolPane.HINT_MORE, FireToolPane.HINT, ignite]:
+	for hint: String in [WaterToolPane.HINT_MORE, FireToolPane.HINT_MORE, ignite]:
 		assert_true(hint.ends_with(" Tab switches the shape."), "each pane names Tab alike")
 	# Start a fire's help names its shapes in its tiles' order, Path then Circle (card F6b).
 	assert_true(ignite.begins_with("Path: "), "the first tile first")

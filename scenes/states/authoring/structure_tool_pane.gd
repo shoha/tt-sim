@@ -121,6 +121,7 @@ var _picked: String = ""
 var _served: int = 0
 var _found_none: bool = false
 var _tools_row: HBoxContainer
+var _filters: Foldout
 var _chip_flow: VBoxContainer
 var _filter_row: HBoxContainer
 ## The chips switched on (ids, in StructurePalette.CHIPS order), whether the tiles are the small
@@ -407,11 +408,17 @@ func _fit_tiles() -> void:
 ## The chip row, then the row with Clear and the small-tiles switch. Chips are toggles: one group's
 ## chips widen the choice, another group's narrow it (StructurePalette.CHIPS).
 func _build_filters() -> void:
+	# Behind one closed "Filter" foldout (its title tallies the chips on): the way in is the search
+	# row and the first tile row, which must sit above the fold of a 720p card.
+	_filters = Foldout.new()
+	_filters.name = "StructureFilters"
+	_filters.title = "Filter"
+	add_child(_filters)
 	_chip_flow = VBoxContainer.new()
 	_chip_flow.name = "StructureChips"
 	_chip_flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_chip_flow.theme_type_variation = &"BoxContainerSnug"
-	add_child(_chip_flow)
+	_filters.add_child(_chip_flow)
 	# One captioned wrapping row per axis (Kind, Material), so the two axes never read as one list.
 	for group: Dictionary in StructurePalette.GROUPS:
 		var group_id := String(group["id"])
@@ -439,7 +446,7 @@ func _build_filters() -> void:
 	_filter_row = HBoxContainer.new()
 	_filter_row.name = "StructureFilterRow"
 	_filter_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_filter_row)
+	_filters.add_child(_filter_row)
 	clear_button = Button.new()
 	clear_button.name = "StructureClear"
 	clear_button.text = "Clear"
@@ -496,6 +503,7 @@ func _update_filters(rows: Array, shown: int) -> void:
 		chip.text = "%s %d" % [item["label"], count]
 		chip.set_pressed_no_signal(id in _active_chips)
 		chip.disabled = count == 0 and not id in _active_chips
+	_filters.title = "Filter (%d)" % _active_chips.size() if not _active_chips.is_empty() else "Filter"
 	var filtering := not _active_chips.is_empty() or search_edit.text.strip_edges() != ""
 	clear_button.disabled = not filtering
 	var tally := StructurePalette.tally(shown, rows.size(), filtering)
@@ -586,6 +594,7 @@ func _show_palette(shown: bool) -> void:
 			field.visible = shown
 	_tools_row.visible = shown and _served > 0
 	reroll_button.visible = _tools_row.visible
+	_filters.visible = _tools_row.visible
 	_chip_flow.visible = _tools_row.visible
 	_filter_row.visible = _tools_row.visible
 	if not shown:

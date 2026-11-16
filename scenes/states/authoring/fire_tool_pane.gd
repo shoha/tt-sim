@@ -52,10 +52,11 @@ const INTENSITY_TILES: Array[Dictionary] = [
 		"hint": "Blaze: tall flames at the heart of a fire.",
 	},
 ]
-const HINT := (
-	"Line: draw a line of fire. Area: paint it; linger to build it up. Shift + scroll or"
-	+ " [ and ] set the width. Hold Ctrl as you press to put fire out; the ash stays. Tab"
-	+ " switches the shape."
+## The lead says enough to start; HINT_MORE (behind "More") is the rest.
+const HINT := "Line: draw a line of fire. Area: paint it; linger to build it up."
+const HINT_MORE := (
+	"Shift + scroll or [ and ] set the width. Hold Ctrl as you press to put fire out; the ash"
+	+ " stays. Tab switches the shape."
 )
 
 var shape_field: TileField
@@ -77,6 +78,7 @@ func _init(panel: AuthoringPanel = null) -> void:
 	if panel != null:
 		add_child(panel.build_size_row("Fire"))
 	add_child(_caption("FireHint", HINT))
+	add_child(AuthoringChrome.more_foldout("FireHintMore", HINT_MORE))
 	shape_field = ShapeField.build("FireShapeField", SHAPE_TILES[0], SHAPE_TILES[1])
 	select_shape(FireBrush.Shape.AREA)
 	shape_field.tiles.selection_changed.connect(

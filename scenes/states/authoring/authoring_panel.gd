@@ -78,8 +78,8 @@ signal tool_pane_built(tool_id: StringName, pane: Control)
 ## 364 virtual px is about 340 real px in a 1280x720 window; the Wall pane's tiles are the widest
 ## content (a narrower drawer pushed them a pixel past the name field).
 const DRAWER_WIDTH := 364.0
-const BIOME_TILE_SIZE := Vector2(64, 72)
-const BIOME_THUMB_PX := 44
+const BIOME_TILE_SIZE := Vector2(64, 64)
+const BIOME_THUMB_PX := 36
 const BIOME_COLUMNS := 2
 ## The extra step over a section label after a hint paragraph (AuthoringPanes.section_gap).
 const SECTION_ABOVE := 8

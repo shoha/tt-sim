@@ -48,8 +48,8 @@ static func _column(pane_name: String, header_name: String, tool: ToolDescriptor
 ## Biome: the size row, the gesture behind More, the nine biome tiles and the Advanced foldout.
 static func biome(panel: AuthoringPanel, tool: ToolDescriptor) -> Control:
 	var pane := _column("BiomePane", "BiomeHeader", tool)
-	# The picker and the size come first; the gesture sits behind More (the nine biomes are five
-	# rows, and the basics must fit a 720p card without scrolling).
+	# The size and the picker come first (the nine biomes are five rows, which must fit a 720p
+	# card without scrolling); the gesture sits behind More, under the picker.
 	pane.add_child(panel.build_size_row("Biome"))
 	var more := AuthoringChrome.more_foldout(
 		"BiomeHintMore", "Shift + scroll or [ and ] size the brush; right-click puts the brush down."
@@ -60,7 +60,6 @@ static func biome(panel: AuthoringPanel, tool: ToolDescriptor) -> Control:
 		)
 	)
 	more.move_child(more.get_child(more.get_child_count() - 1), 0)
-	pane.add_child(more)
 	var field := TileField.new()
 	field.name = "BiomeField"
 	field.caption = "Biomes"
@@ -81,6 +80,7 @@ static func biome(panel: AuthoringPanel, tool: ToolDescriptor) -> Control:
 		func(id: StringName) -> void: panel.biome_selected.emit(String(id))
 	)
 	pane.add_child(field)
+	pane.add_child(more)
 	pane.add_child(panel.build_advanced("Biome"))
 	panel.biome_field = field
 	return pane
