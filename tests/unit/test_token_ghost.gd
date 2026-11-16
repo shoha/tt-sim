@@ -493,49 +493,43 @@ func test_the_budget_skips_a_pass_when_nothing_moved() -> void:
 # --- the saved setting -------------------------------------------------------------------
 
 
-func test_the_setting_defaults_on_and_the_canopy_fade_defaults_off() -> void:
+func test_the_setting_defaults_on() -> void:
 	assert_true(TokenGhost.DEFAULT_ENABLED)
-	assert_false(CanopyFade.DEFAULT_ENABLED)
 
 
-func test_the_menu_saves_and_shows_the_two_options() -> void:
+func test_the_menu_saves_and_shows_the_option() -> void:
 	var menu: SettingsMenu = SETTINGS_SCENE.instantiate()
 	add_child_autofree(menu)
 	menu.token_ghost_check.set_pressed_no_signal(false)
-	menu.canopy_fade_check.set_pressed_no_signal(true)
 	menu._save_settings(TEMP_PATH)
 	var config := ConfigFile.new()
 	assert_eq(config.load(TEMP_PATH), OK)
 	assert_eq(config.get_value("graphics", "token_ghost_enabled"), false)
 	assert_false(config.has_section_key("graphics", "occlusion_fade_enabled"), "key retired")
-	assert_eq(config.get_value("graphics", "canopy_fade_enabled"), true)
+	assert_false(config.has_section_key("graphics", "canopy_fade_enabled"), "key retired")
 	SettingsSeeThrough.show_defaults(menu)
 	assert_true(menu.token_ghost_check.button_pressed)
-	assert_false(menu.canopy_fade_check.button_pressed)
 	SettingsSeeThrough.show_saved(menu, config)
 	assert_false(menu.token_ghost_check.button_pressed)
-	assert_true(menu.canopy_fade_check.button_pressed)
 
 
-func test_a_settings_file_with_the_retired_fade_key_still_loads() -> void:
+func test_a_settings_file_with_the_retired_fade_keys_still_loads() -> void:
 	var menu: SettingsMenu = SETTINGS_SCENE.instantiate()
 	add_child_autofree(menu)
 	var config := ConfigFile.new()
 	config.set_value("graphics", "occlusion_fade_enabled", false)
+	config.set_value("graphics", "canopy_fade_enabled", true)
 	config.set_value("graphics", "token_ghost_enabled", false)
 	SettingsSeeThrough.show_saved(menu, config)
 	assert_false(menu.token_ghost_check.button_pressed)
 	assert_false(menu.has_node("%OcclusionFadeCheck"), "no row for the retired fade")
+	assert_false(menu.has_node("%CanopyFadeCheck"), "no row for the canopy window")
 
 
-func test_the_options_have_tooltips_and_the_menu_row_labels() -> void:
+func test_the_option_has_a_tooltip_and_the_menu_row_label() -> void:
 	var menu: SettingsMenu = SETTINGS_SCENE.instantiate()
 	add_child_autofree(menu)
-	for check in [menu.token_ghost_check, menu.canopy_fade_check]:
-		assert_ne(check.tooltip_text, "")
+	assert_ne(menu.token_ghost_check.tooltip_text, "")
 	assert_eq(
 		(menu.token_ghost_check.get_parent().get_node("Label") as Label).text, "Token ghost"
-	)
-	assert_eq(
-		(menu.canopy_fade_check.get_parent().get_node("Label") as Label).text, "Canopy fade"
 	)

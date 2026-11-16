@@ -389,7 +389,20 @@ func _dress(node: Node) -> void:
 	elif named == AuthoredTerrain.SKIRT_NAME:
 		_ground_material()
 		material = _skirt
+		# The channel patch where a river leaves the map is a child of the skirt with the skirt's
+		# own Classic material: it showed as a dark, unbrushed rectangle against the painted ground
+		# (card painter-edges). UV is the map-frame XZ, as the skirt's.
+		var patch := node.get_node_or_null(SkirtExits.CHANNEL_NAME)
+		if patch != null:
+			_dress_as(patch as GeometryInstance3D, material)
 	if material == null:
+		return
+	_dress_as(geometry, material)
+
+
+## Draws `geometry` with `material`, remembering what it had (released with the rest).
+func _dress_as(geometry: GeometryInstance3D, material: ShaderMaterial) -> void:
+	if geometry == null or _overrides.has(geometry.get_instance_id()):
 		return
 	_overrides[geometry.get_instance_id()] = [geometry, geometry.material_override]
 	geometry.material_override = material
@@ -453,14 +466,17 @@ func _rebuild_zone() -> void:
 
 
 ## Gives the ground the terrain's wet dressing (its wet line darkens the bank in a brush-edged
-## band); the skirt has none. The texture is updated in place by the terrain, so one bind serves
+## band). The skirt gets it too (card painter-edges2): the texture clamps at the map's edge, so the
+## bank's band carries straight on along a river's channel patch, where it ended in a hard line
+## at the map edge. The texture is updated in place by the terrain, so one bind serves
 ## every edit; a terrain that had no water yet binds it when its first one is made.
 func _bind_wet() -> void:
 	if _ground == null or not is_instance_valid(_terrain):
 		return
 	var wet := _terrain.get_water_texture()
-	_ground.set_shader_parameter(&"water_weights", wet)
-	_ground.set_shader_parameter(&"water_present", wet != null)
+	for material: ShaderMaterial in [_ground, _skirt]:
+		material.set_shader_parameter(&"water_weights", wet)
+		material.set_shader_parameter(&"water_present", wet != null)
 
 
 ## The scorched ground's share per height sample as an R8 image (the `char` role has no channel in

@@ -1218,11 +1218,11 @@ live one ends the silence; see `docs/SOUND_EFFECTS.md`.
 - "See tokens through scenery" rows (`SettingsSeeThrough`, `graphics/*` keys, applied at once by
   Apply and read again at every map load): **Token ghost** (default on; a see-through silhouette
   with an ink rim, gold while selected or hovered, of a token that foliage, rocks or walls cover:
-  `TokenGhost`, `shaders/token_ghost.gdshader`; the Painted look gives it its own wash) and
-  **Canopy fade** (default off; the close-zoom window of thinned crowns round the screen centre:
-  `CanopyFade`). The two are independent. Tooltips are in `SettingsSeeThrough.apply_tooltips`.
-  (The third row, **Occlusion fade**, the per-token reveal of map geometry, was removed 2026-11-15;
-  an old settings file's `graphics/occlusion_fade_enabled` is ignored.)
+  `TokenGhost`, `shaders/token_ghost.gdshader`; the Painted look gives it its own wash). Its
+  tooltip is in `SettingsSeeThrough.apply_tooltips`. (**Occlusion fade**, the per-token reveal of
+  map geometry, was removed 2026-11-15, and **Canopy fade**, the view-centre window of thinned
+  crowns, on 2026-11-16; an old settings file's `graphics/occlusion_fade_enabled` and
+  `graphics/canopy_fade_enabled` are ignored.)
 - **Wind motion** slider (`SettingsWindMotion`, `graphics/wind_motion`, 0 to 100 percent, default
   100): scales how far plants, cloth and weather lean and sway on this player's screen. It moves the
   `Wind` autoload as the slider moves (Apply saves it); 0 holds everything still, and Reduce
@@ -1861,7 +1861,7 @@ Paint, Water, Build, Fire). `DrawerContainer.rail_detached` stands the rail stil
 capsule with the card a separate rounded card `FLOAT_GAP` (12) beside it (`_slot` holds it for
 `CardDimmer`'s modulate); the generic footer (`rail_footer_beside`) remains only for
 `LevelEditPanel`. A tool is on the rail (`ToolDescriptor.on_rail`) or a tab of a hub (`hub`, the hub
-declares `tabs`): Place (Place, Thin / Clear), Water (River, Pond, Crossing = Bridge), Build (Walls,
+declares `tabs`): Place (Add, Thin / Clear), Water (River, Pond, Crossing = Bridge), Build (Walls,
 Buildings, Villages). `AuthoringPanel` keeps one `SegmentedTabs` per hub above the card's panes;
 a tab runs the old rail item's path (`pane_requested`, `tool_selected`), `request_tool`,
 `show_tool_pane`, `pick_rail_tool` and `select_water_shape` route by tool id, and a hub's key opens
@@ -1871,6 +1871,14 @@ and Paint panes (split out for the file cap); `build_size_row` puts Size in the 
 `build_advanced` keeps Strength. `WaterToolPane.new(true)` (the GM's Events pane) keeps River and
 Pond tiles because play has no tabs. The play context (`PlayEvents`, Events pane) is unchanged
 except that Fire is last in the Events pane's order.
+
+**Round 5 (card ui-authoring5, 2026-11-16).** The letters are the only keys: the digit 1 to 7
+binding (`ToolDescriptor.slot`, `ToolRegistry.for_digit`), the top-right digit corner on rail items
+(`IconRail.set_item_key` takes the letter alone), "or 5" in tooltips and F1 rows, the F1 "1 to 7"
+row and the welcome card's "or 1 to 7" are gone; in play the digits remain the F3 debug toggles
+(`game_map.gd`, unchanged). Place's first tab is labelled "Add" (`PlaceTool.ADD_LABEL`, tab id
+`place` unchanged), so the card titled Place no longer has a tab also named Place; Water and Build
+never had the clash.
 
 The frame around the panes, as the card left it; the rules are UI_TASTE.md "2026-11-15 map
 building". `AuthoringChrome` (`scenes/states/authoring/authoring_chrome.gd`) holds what is

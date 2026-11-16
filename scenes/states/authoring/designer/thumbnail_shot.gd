@@ -5,8 +5,8 @@ extends RefCounted
 ## the open authoring map into the state its picture is taken in and takes the frame, for the
 ## render-job harness (`tools/render_library_thumbnails.gd`) and the biome designer's "Update
 ## thumbnail". The map is the standard scene `LibraryThumbnailer` describes; this class holds
-## the plants still (the wind speeds at 0, the close-zoom canopy fade off, the play-zoom fade
-## off) and the camera on the map's centre at the standard zoom, so two takes of one document
+## the plants still (the wind speeds at 0, the canopy fades off through `canopy_part` 0) and
+## the camera on the map's centre at the standard zoom, so two takes of one document
 ## on one machine draw the same pixels. `restore` puts everything back.
 
 ## The gust field no longer reads a material's speed: it follows the global wind clock, which
@@ -21,8 +21,7 @@ static func prepare(
 	zoom: float = LibraryThumbnailer.CAMERA_ZOOM,
 	at: Vector2 = LibraryThumbnailer.LOOK_AT
 ) -> Dictionary:
-	var held := {"fade": CanopyFade.enabled, "parts": {}, "winds": {}}
-	CanopyFade.enabled = false
+	var held := {"parts": {}, "winds": {}}
 	freeze(game_map, held)
 	game_map.get_camera_controller().frame_ground(at, zoom)
 	return held
@@ -54,7 +53,6 @@ static func freeze(game_map: GameMap, held: Dictionary) -> int:
 
 ## Puts back what `prepare` and `freeze` changed (not the camera).
 static func restore(held: Dictionary) -> void:
-	CanopyFade.enabled = bool(held.get("fade", CanopyFade.enabled))
 	Wind.clear_clock_override()
 	var parts: Dictionary = held.get("parts", {})
 	for material: Variant in parts:

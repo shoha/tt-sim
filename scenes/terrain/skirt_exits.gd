@@ -165,6 +165,8 @@ static func ribbon_material(doc: MapDocument, fade_m: float, wobble: float) -> S
 	water.set_shader_parameter("skirt_fade_m", fade_m)
 	water.set_shader_parameter("skirt_wobble", wobble)
 	water.set_shader_parameter("skirt_seed", doc.map_seed & 0x7FFFFFFF)
+	# The painted water's edge-foam band reads it (painter_water.gdshader; ignored by Classic's).
+	water.set_shader_parameter("p_exit", true)
 	return water
 
 

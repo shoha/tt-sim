@@ -66,6 +66,8 @@ uniform sampler2D water_flow_map : hint_default_black, filter_linear, repeat_dis
 instance uniform bool water_flow_present = false;
 instance uniform bool water_skirt_fade = false;
 uniform int skirt_seed = 0;
+// True once a river leaves the map (SkirtExits.ribbon_material): skirt_half_extent is then the map's.
+uniform bool p_exit = false;
 global uniform bool water_quality_skip_fine_detail;
 global uniform vec4 foliage_sun;
 
@@ -284,6 +286,16 @@ void fragment() {
 	float column_raw = max(world_pos.y - bed_world.y, 0.0);
 	// Anything that is not ground under the water (a reed blade, a token's leg) reads as deep.
 	float column = mix(1.0, column_raw, ground_like);
+	// Where a river leaves the map the terrain's bed and the channel patch's meet in a crease: the low
+	// column there drew a row of white dabs (the depth-slope wrap), a vertical strip of ice rim and a
+	// dip in the wash's alpha across the river (painter-edges2). The shore effects keyed to a shallow
+	// column fade out within a metre of the map's edge, on either side (p_exit: set with the river's
+	// ribbon, SkirtExits.ribbon_material).
+	float edge_band = 1.0;
+	if (p_exit) {
+		float edge_sd = max(abs(p.x) - skirt_half_extent.x, abs(p.y) - skirt_half_extent.y);
+		edge_band = smoothstep(0.4, 1.1, abs(edge_sd));
+	}
 
 	// ---- The wash -----------------------------------------------------------------------------
 	float wob = 0.7 + 0.6 * p_noise(vec3(p.x * 0.16, TIME * 0.03, p.y * 0.16));
@@ -298,7 +310,7 @@ void fragment() {
 	wash = mix(wash, p_sky, graze * 0.55);
 	// The wash fades in over the first centimetres: a wet edge, not a plane ending on the shore.
 	float shoreline = shore_fade_depth > 0.0 ? smoothstep(0.0, shore_fade_depth * 0.8, column) : 1.0;
-	wash_a *= mix(1.0, shoreline, ground_like);
+	wash_a *= mix(1.0, shoreline, ground_like * edge_band);
 
 	// ---- Tokens: arcs, the wake and the open water they punch in ice -------------------------------
 	float ring_cov = 0.0;
@@ -349,7 +361,7 @@ void fragment() {
 	float crack = 0.0;
 	if (p_ice_amt > 0.001) {
 		float still = 1.0 - smoothstep(0.03, 0.12, flow_speed);
-		float rim = 1.0 - smoothstep(0.12, 0.5, column);
+		float rim = (1.0 - smoothstep(0.12, 0.5, column)) * edge_band;
 		float want = p_ice_amt * max(still, rim * 0.9);
 		float edge_noise = (p_noise(vec3(p.x * 0.7, 1.0, p.y * 0.7)) - 0.5) * 0.3;
 		ice_k = smoothstep(0.35, 0.55, want + edge_noise) * open_water;
@@ -415,7 +427,11 @@ void fragment() {
 	float lap = (1.0 - smoothstep(thr - 0.03, thr + 0.02, d_h)) * smoothstep(0.0, 0.03, d_h + 0.02);
 	float dash_n = p_noise(vec3(p.x * 3.1, 4.0 + floor(TIME * 0.4), p.y * 3.1));
 	float outer = lap_w * 1.5;
-	float dashes = (1.0 - smoothstep(0.03, 0.06, abs(d_h - outer))) * smoothstep(0.64, 0.72, dash_n);
+	// The outer dashes sit on a gently sloped shore only: on a steep bank the gradient (and so d_h)
+	// jumps from one mesh triangle to the next and the dashes broke into small glitter triangles
+	// (card painter-edges), so they thin out as the bank steepens.
+	float dash_gate = 1.0 - smoothstep(0.6, 1.4, slope);
+	float dashes = (1.0 - smoothstep(0.03, 0.06, abs(d_h - outer))) * smoothstep(0.64, 0.72, dash_n) * dash_gate;
 	float shore_foam = max(lap, dashes) * ground_like * smoothstep(0.0, 0.01, column_raw + 0.004);
 	// Riffles: dense short dashes along the flow on fast, shallow water.
 	float rapid = smoothstep(0.18, 0.4, flow_speed) * (1.0 - smoothstep(0.25, 0.7, column));
@@ -438,6 +454,8 @@ void fragment() {
 	edge_foam *= 1.0 - smoothstep(EDGE_FOAM_REACH * 0.5, EDGE_FOAM_REACH, max(near_side, 0.0));
 	float wrap_n = p_noise(vec3(p.x * 5.0, 8.0 + floor(TIME * 0.6), p.y * 5.0));
 	edge_foam = smoothstep(0.3, 0.5, edge_foam * (0.45 + wrap_n));
+	edge_foam *= edge_band;
+	shore_foam *= edge_band;
 	float foam = clamp(max(max(shore_foam, edge_foam), max(ring_cov, wake_cov)) * foam_k, 0.0, 1.0);
 	foam *= 1.0 - ice_k * 0.85 * (1.0 - open_water);
 	a = max(a, foam * 0.96);

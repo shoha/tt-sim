@@ -113,9 +113,7 @@ func process(delta: float) -> void:
 	handle_zoom(delta)
 	handle_edge_pan(delta)
 	# Last, once the pose is final: the shaders' camera-pass test reads this axis (camera-3).
-	CanopyFade.publish(
-		game_map.camera_node, base_camera_size, WorldView.canvas_size(game_map.world_viewport), delta
-	)
+	CanopyFade.publish(game_map.camera_node, delta)
 
 
 ## WASD: the holder's local move direction, accumulated from key presses and releases.

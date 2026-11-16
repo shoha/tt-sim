@@ -28,10 +28,6 @@ func _shader_const(path: String, name: String) -> float:
 	return float(found.get_string(1)) if found else NAN
 
 
-func after_each() -> void:
-	CanopyFade.enabled = CanopyFade.DEFAULT_ENABLED
-
-
 # --- the near fade ---------------------------------------------------------------------------
 
 
@@ -262,41 +258,6 @@ func test_scale_zero_is_the_home_view_with_no_range_fade() -> void:
 	assert_eq(EyeCanopy.ghost_weight(500.0, 0.0), 1.0)
 
 
-# --- the focus ---------------------------------------------------------------------------------
-
-
-func test_the_focus_is_the_ground_hit_or_a_fixed_distance_ahead() -> void:
-	var eye := Vector3(1.0, 1.6, 2.0)
-	var forward := Vector3(0.0, 0.0, -1.0)
-	var hit := Vector3(4.0, 0.0, -9.0)
-	assert_eq(EyeCanopy.focus_point(eye, forward, true, hit), hit)
-	var miss := EyeCanopy.focus_point(eye, forward, false, Vector3.ZERO)
-	assert_almost_eq(miss.distance_to(eye), EyeCanopy.FOCUS_AHEAD_M, 0.0001)
-	assert_almost_eq(miss.z, 2.0 - EyeCanopy.FOCUS_AHEAD_M, 0.0001)
-	var scaled := EyeCanopy.focus_point(eye, forward, false, Vector3.ZERO, 2.0)
-	assert_almost_eq(scaled.distance_to(eye), EyeCanopy.FOCUS_AHEAD_M * 2.0, 0.0001)
-
-
-func test_the_window_size_is_the_span_of_the_view_at_the_focus() -> void:
-	assert_almost_eq(EyeCanopy.window_size(12.0, 60.0), 13.8564, 0.001, "about the home size")
-	var home := EyeCanopy.window_size(EyeCanopy.FOCUS_HOME_M, 60.0)
-	assert_almost_eq(EyeCanopy.home_size(60.0), home, 0.0001)
-	var wide := EyeCanopy.window_size(12.0, 90.0)
-	assert_gt(wide, EyeCanopy.window_size(12.0, 40.0), "a wider lens spans more")
-	assert_almost_eq(EyeCanopy.window_size(24.0, 60.0, 2.0), EyeCanopy.window_size(12.0, 60.0), 0.0001)
-
-
-func test_the_window_closes_in_as_the_focus_comes_near() -> void:
-	var home := EyeCanopy.home_size(60.0)
-	var far := CanopyFade.strength(EyeCanopy.window_size(12.0, 60.0), home)
-	var near := CanopyFade.strength(EyeCanopy.window_size(4.0, 60.0), home)
-	assert_gt(near, far, "stronger when the focus is close")
-	assert_eq(
-		CanopyFade.strength(EyeCanopy.window_size(40.0, 60.0), home), 0.0,
-		"a focus 40 m away asks for no window"
-	)
-
-
 # --- the camera's own pass --------------------------------------------------------------------
 
 
@@ -383,72 +344,41 @@ func test_the_eye_fade_is_tested_against_the_camera_origin_not_the_shadow_pass()
 func test_the_orthographic_publish_writes_the_same_values_as_before() -> void:
 	var camera := _camera(Vector3(10.0, 20.0, 10.0), false)
 	camera.look_at(Vector3.ZERO)
-	CanopyFade.enabled = false
-	CanopyFade.publish(camera, HOME, Vector2(1920.0, 1080.0), 0.0)
+	CanopyFade.publish(camera, 0.0)
 	var back := camera.global_basis.z.normalized()
 	assert_eq(CanopyFade._last_view, Vector4(back.x, back.y, back.z, 0.0))
-	var size := camera.size
-	assert_eq(CanopyFade._last_shape, CanopyFade.shape(size, HOME), "from Camera3D.size, as ever")
-	assert_eq(CanopyFade._last_centre, Vector4.ZERO, "off while the setting is off")
 	assert_eq(CanopyFade._last_eye, Vector4.ZERO, "no eye in the orbit view")
 
 
-func test_the_orthographic_window_still_follows_the_size() -> void:
-	var camera := _camera(Vector3(10.0, 20.0, 10.0), false)
-	camera.look_at(Vector3.ZERO)
-	camera.size = 9.0
-	CanopyFade.enabled = true
-	CanopyFade.publish(camera, HOME, Vector2(1920.0, 1080.0), 0.0)
-	assert_eq(CanopyFade._last_shape, CanopyFade.shape(9.0, HOME))
-	assert_almost_eq(CanopyFade._last_centre.w, CanopyFade.strength(9.0, HOME), 0.00001)
-	assert_eq(CanopyFade._last_eye, Vector4.ZERO)
-
-
-func test_the_perspective_publish_carries_the_eye_and_ignores_the_stale_size() -> void:
+func test_the_perspective_publish_carries_the_eye() -> void:
 	var camera := _camera(Vector3(2.0, 1.6, 3.0), true)
-	camera.size = 99.0
-	CanopyFade.enabled = false
-	CanopyFade.publish(camera, camera.size, Vector2(1920.0, 1080.0), 0.0)
+	CanopyFade.publish(camera, 0.0)
 	assert_eq(CanopyFade._last_eye, Vector4(2.0, 1.6, 3.0, 1.0))
-	assert_eq(CanopyFade._last_centre, Vector4.ZERO)
 	var back := camera.global_basis.z.normalized()
 	assert_eq(CanopyFade._last_view, Vector4(back.x, back.y, back.z, 0.0), "the axis the shaders test")
-	assert_ne(CanopyFade._last_shape, CanopyFade.shape(99.0, 99.0))
 
 
 func test_the_near_grass_global_is_the_map_scale_at_the_eye_and_off_in_orbit() -> void:
 	var eye_camera := _camera(Vector3(2.0, 1.6, 3.0), true)
-	CanopyFade.publish(eye_camera, eye_camera.size, Vector2(1920.0, 1080.0), 0.0)
+	CanopyFade.publish(eye_camera, 0.0)
 	assert_eq(CanopyFade._last_eye_grass, 1.0, "on at the eye, at the map scale")
 	CanopyFade.eye_grass_enabled = false
-	CanopyFade.publish(eye_camera, eye_camera.size, Vector2(1920.0, 1080.0), 0.0)
+	CanopyFade.publish(eye_camera, 0.0)
 	CanopyFade.eye_grass_enabled = true
 	assert_eq(CanopyFade._last_eye_grass, 0.0, "the probe switch holds it off")
 	assert_eq(CanopyFade._last_eye.w, 1.0, "the canopy near fade is a separate switch")
 	var orbit := _camera(Vector3(10.0, 20.0, 10.0), false)
 	orbit.look_at(Vector3.ZERO)
-	CanopyFade.publish(orbit, HOME, Vector2(1920.0, 1080.0), 0.0)
+	CanopyFade.publish(orbit, 0.0)
 	assert_eq(CanopyFade._last_eye_grass, 0.0, "the orbit view's grass is untouched")
 
 
 func test_the_probe_switch_holds_the_eye_fade_off() -> void:
 	var camera := _camera(Vector3(2.0, 1.6, 3.0), true)
 	CanopyFade.eye_fade_enabled = false
-	CanopyFade.publish(camera, camera.size, Vector2(1920.0, 1080.0), 0.0)
+	CanopyFade.publish(camera, 0.0)
 	CanopyFade.eye_fade_enabled = true
 	assert_eq(CanopyFade._last_eye, Vector4(2.0, 1.6, 3.0, 0.0), "scale 0: no near fade, no range")
-
-
-func test_the_perspective_window_focuses_a_fixed_distance_ahead_when_the_ray_misses() -> void:
-	var camera := _camera(Vector3(0.0, 1.6, 0.0), true)
-	CanopyFade.enabled = true
-	CanopyFade.publish(camera, camera.size, Vector2(1920.0, 1080.0), 0.0)
-	var focus := CanopyFade._last_centre
-	assert_gt(focus.w, 0.0, "the window is on")
-	var at := Vector3(focus.x, focus.y, focus.z)
-	assert_almost_eq(at.distance_to(camera.global_position), EyeCanopy.FOCUS_AHEAD_M, 0.0001)
-	var size := EyeCanopy.window_size(EyeCanopy.FOCUS_AHEAD_M, 60.0)
-	assert_eq(CanopyFade._last_shape, CanopyFade.shape(size, EyeCanopy.home_size(60.0)))
 
 
 func test_the_map_scale_is_read_from_the_level_map_beside_the_camera() -> void:

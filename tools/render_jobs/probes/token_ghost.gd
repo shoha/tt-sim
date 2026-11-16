@@ -299,13 +299,9 @@ static func _look(gm: GameMap, step: Dictionary) -> String:
 static func _mode(gm: GameMap, step: Dictionary) -> String:
 	var out := PackedStringArray()
 	if bool(step.get("reset", false)):
-		CanopyFade.enabled = CanopyFade.DEFAULT_ENABLED
 		TokenGhost.set_enabled(TokenGhost.DEFAULT_ENABLED, gm.get_tree())
 		TokenGhost.budget = TokenGhost.BUDGET_TOKENS
 		out.append("reset")
-	if step.has("canopy"):
-		CanopyFade.enabled = bool(step.canopy)
-		out.append("canopy %s" % str(step.canopy))
 	if step.has("budget"):
 		TokenGhost.budget = int(step.budget)
 		out.append("budget %d" % TokenGhost.budget)

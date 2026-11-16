@@ -617,6 +617,8 @@ not a steady-state cost.
 
 ### Close-zoom canopy fade (Polish, 2026-10-05)
 
+(History: the view-centre window described here was removed on 2026-11-16, "Canopy window removed".)
+
 The cause of "the camera cuts into tree canopies at close zoom" was both candidates. The
 camera's offset scaled with the zoom (`_update_camera_offset`), so its near plane (0.001 in
 front of a camera 3.5 m above the ground at zoom 6, 1.4 m at zoom 2) sliced every canopy
@@ -6209,8 +6211,21 @@ hole it opens in the canopy is disorienting; a covered token is found and select
 Token ghost ("Token ghost", above). The sections about it in this file ("Occlusion fade: token data
 as a shared texture", "Occlusion fade tiles", "Painted token fade") are history: they describe code
 that no longer exists. The foliage shaders' dither helpers (`bayer16`, `world_px_cell`) moved to
-`shaders/screen_dither_include.gdshaderinc`; `CanopyFade` (the close-zoom window, default off) is a
-separate mechanism and stays.
+`shaders/screen_dither_include.gdshaderinc`; `CanopyFade` (the close-zoom window, default off) was
+a separate mechanism and stayed until it too was removed (next section).
+
+## Canopy window removed (card painter-canopy-remove, 2026-11-16, look-pending)
+
+Owner decision 2026-11-16 (review board `d_canopy`, "Remove it"): the view-centre canopy window
+(Settings > Canopy fade, default off, `CanopyFade.enabled`, `strength`, `shape`, the globals
+`canopy_fade_centre` and `canopy_fade_shape`, the per-frame ground ray, the eye view's focus window,
+the `apply_canopy_fade` and `tree_fades` window branches in both looks) is gone. The brush window,
+the Village tool's cut and the eye view's near fade (all separate, authoring or eye-view only) stay,
+so `CanopyFade.live()` stays for them: a play view never raises one, so the painted trees' crown
+masses always draw with the discard-free fast shader in play. Cost: the window was off in every
+measured view, so removing it costs 0 by construction; the ground ray it cast each frame only while
+on is gone. See "Canopy window cost" in `docs/research/2026-11-09-prototypes/compare/painter_final31_canopy_remove/notes.md`
+for the measured numbers.
 
 Gate: removing it had to cost nothing. Same pinned procedure (1920x1080, vsync off, in-run
 interleaved A/B, GPU 2.5 s median, 3 samples per cell, a warm-up drop first; 11 to 16 avatar tokens

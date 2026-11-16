@@ -96,10 +96,36 @@ func test_wall_part_keys() -> void:
 	assert_eq(PainterBuildings.wall_part_key("Roof_thatch"), "roof_thatch")
 	assert_eq(PainterBuildings.wall_part_key("Door_wood"), "door_wood")
 	for part in ["Stones", "Arch", "Ford"]:
-		assert_eq(PainterBuildings.wall_part_key(part), "wall_stone", "a crossing's %s" % part)
+		assert_eq(PainterBuildings.wall_part_key(part), "crossing_stone", "a crossing's %s" % part)
 	assert_eq(PainterBuildings.wall_part_key("Glass"), "")
 	assert_eq(PainterBuildings.wall_part_key("Collision"), "")
 	assert_eq(PainterBuildings.wall_part_key("Wall_unheard_of"), "")
+
+
+func test_a_crossings_stone_is_a_darker_quieter_wall_stone_in_every_mood() -> void:
+	# Card painter-edges: the arch, the ford slabs and the stepping stones were the wall stone,
+	# pale cream against sand banks; the crossing stone is derived from it by crossing-* numbers.
+	var sheet := PainterSheet.load_sheet("core")
+	assert_false(PainterBuildings.kind_of("crossing_stone").is_empty(), "a kind row")
+	for mood in ["summer", "dusk", "winter", "autumn", "grimdark"]:
+		for elevation in [60.0, 30.0, -10.0]:
+			var wall := PainterSheet.tone_lch(sheet, mood, PainterBuildings.CROSSING_FROM, elevation)
+			var tone := PainterBuildings.crossing_tone(sheet, mood, elevation)
+			assert_lt(tone.x, wall.x, "%s %.0f: deeper than the wall stone" % [mood, elevation])
+			assert_lt(tone.y, wall.y + 0.0001, "%s %.0f: no more chroma" % [mood, elevation])
+			assert_gt(tone.x, 0.1, "%s %.0f: not black" % [mood, elevation])
+	var summer := PainterBuildings.crossing_tone(sheet, "summer", 60.0)
+	assert_lt(summer.x, 0.68, "summer's crossing stone is a mid grey, not a cream")
+
+
+func test_the_crossing_stone_ramp_differs_from_the_wall_stone_ramp() -> void:
+	var sheet := PainterSheet.load_sheet("core")
+	var crossing := PainterBuildings.ramp(
+		sheet, "summer", PainterBuildings.CROSSING_ROLE, 60.0, "stone"
+	)
+	var wall := PainterBuildings.ramp(sheet, "summer", "wall-stone", 60.0, "stone")
+	assert_eq(crossing.size(), 6)
+	assert_lt(crossing[1].x, wall[1].x, "the crossing's mid tone is darker")
 
 
 func test_the_toon_styles_trim_has_a_stand_in_kind() -> void:

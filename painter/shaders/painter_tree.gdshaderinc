@@ -53,9 +53,7 @@ uniform vec3 cast_tint = vec3(0.6, 0.64, 0.86);
 uniform float cut_amp = 0.1;
 // The canopy fade (CanopyFade, wind_foliage_include.gdshaderinc's apply_canopy_fade): the same
 // globals and law, keyed by a whole stroke or a whole mass so crowns open in bold pieces.
-global uniform vec4 canopy_fade_centre;
 global uniform vec4 canopy_fade_view;
-global uniform vec4 canopy_fade_shape;
 global uniform vec4 canopy_brush;
 global uniform vec4 canopy_cut;
 #include "res://shaders/screen_dither_include.gdshaderinc"
@@ -931,7 +929,6 @@ float limb_r19(float r, float base_r, float along, float px, float twig, bool ba
 const float e_far = 1.0;
 
 // The canopy fade's numbers (wind_foliage_include.gdshaderinc's CANOPY_*, the same law).
-const float TREE_FADE_START = 0.5;
 const float TREE_BRUSH_INNER = 0.55;
 const float TREE_BRUSH_START = 0.3;
 const float TREE_BRUSH_BAND = 1.2;
@@ -942,7 +939,7 @@ const float TREE_CUT_BEHIND = 0.5;
 // removed on 2026-11-15: a covered token is found through the token ghost, not a hole in the crown.
 // docs/PERFORMANCE.md "Occlusion fade removed".)
 
-// The canopy fades (the view-centre window, a map brush's window, the Village tool's cut) of one
+// The canopy fades (a map brush's window, the Village tool's cut) of one
 // tree fragment; fragment() passes its built-ins in (a plain function does not see them). `key`
 // (0..1) is constant over a whole stroke or a whole mass, so a crown opens in bold pieces rather
 // than a stipple; a `trunk` stays through every fade but the cut. Only the camera's pass fades:
@@ -965,14 +962,6 @@ void tree_fades(vec3 vertex_view, mat4 inv_view_matrix, float key, bool trunk) {
 		float outer = canopy_cut.w * (trunk ? TREE_CUT_BARK : 1.0);
 		fade = max(smoothstep(-TREE_CUT_BEHIND, 0.0, ahead) * (1.0 - smoothstep(inner, outer, across)),
 			1.0 - smoothstep(inner, outer, length(offset.xz)));
-	}
-	if (!trunk && canopy_fade_centre.w > 0.0) {
-		vec3 offset = world - canopy_fade_centre.xyz;
-		float ahead = dot(offset, back);
-		float across = length(offset - back * ahead);
-		fade = max(fade, canopy_fade_centre.w
-			* smoothstep(TREE_FADE_START, TREE_FADE_START + canopy_fade_shape.z, ahead)
-			* (1.0 - smoothstep(canopy_fade_shape.x, canopy_fade_shape.y, across)));
 	}
 	if (!trunk && canopy_brush.w > 0.0) {
 		vec3 offset = world - canopy_brush.xyz;

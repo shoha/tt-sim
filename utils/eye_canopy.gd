@@ -10,12 +10,10 @@ extends RefCounted
 ## matters there is the distance from the eye:
 ##
 ## - the NEAR FADE: a leaf card or a limb inside NEAR_FULL_M of the eye is gone and one inside
-##   NEAR_NONE_M is thinned, card by card (the same per-card key as the canopy window), so a
+##   NEAR_NONE_M is thinned, card by card (the same per-card key as the brush window), so a
 ##   crown a step away never becomes a solid green wall; a trunk is kept, and a crown further
-##   away stays whole. It does not depend on the Settings "Canopy fade" switch.
-## - the FOCUS WINDOW: the existing canopy window (CanopyFade.strength and shape, off unless the
-##   Settings switch is on) centred on a focus point, with the eye-to-focus distance standing in
-##   for the orthographic size (window_size).
+##   away stays whole. (The eye view's focus window, a Settings switch, was removed 2026-11-16
+##   with the view-centre canopy window.)
 ## - the GHOST RANGE: a token ghost further than GHOST_START_M fades out, gone by GHOST_END_M.
 ## - the EYE LIGHT: at street level the camera sees a crown's underside and its far side against
 ##   the sun, which the orbit view looking down never shows, and the painted ramp's shade end
@@ -43,11 +41,6 @@ const NEAR_NONE_M := 4.0
 ## The ghost's range fade starts and ends here.
 const GHOST_START_M := 30.0
 const GHOST_END_M := 50.0
-## The focus point when the centre ray meets no ground: this far ahead of the eye.
-const FOCUS_AHEAD_M := 8.0
-## The eye-to-focus distance at which the focus window is at its home (play) strength, the
-## distance an orthographic size of 13.85 m stands for at a 60 degree lens.
-const FOCUS_HOME_M := 12.0
 ## A shader only fades a fragment from the camera's own pass: the fragment's inverse view matrix
 ## puts the camera within this distance (metres) of the published eye.
 const PASS_TOLERANCE_M := 0.25
@@ -143,30 +136,6 @@ static func ghost_weight(distance: float, scale: float) -> float:
 	if scale <= 0.0:
 		return 1.0
 	return 1.0 - smoothstep(GHOST_START_M * scale, GHOST_END_M * scale, distance)
-
-
-## The focus point of an eye looking along unit `forward` from `origin`: the ground hit of the
-## centre ray when there is one (`has_hit`), else a point FOCUS_AHEAD_M ahead.
-static func focus_point(
-	origin: Vector3, forward: Vector3, has_hit: bool, hit: Vector3, scale: float = 1.0
-) -> Vector3:
-	if has_hit:
-		return hit
-	var s := scale if scale > 0.0 else 1.0
-	return origin + forward * FOCUS_AHEAD_M * s
-
-
-## The orthographic size the focus window should read for an eye `distance` from its focus under
-## a lens of `fov_deg` (vertical), in map metres: the height the view spans at that distance.
-## Equal to Camera3D.size of an orthographic view framing the same stretch.
-static func window_size(distance: float, fov_deg: float, scale: float = 1.0) -> float:
-	var s := scale if scale > 0.0 else 1.0
-	return 2.0 * (distance / s) * tan(deg_to_rad(clampf(fov_deg, 1.0, 170.0)) * 0.5)
-
-
-## The window size at which the focus window is at home strength, for the same lens.
-static func home_size(fov_deg: float) -> float:
-	return window_size(FOCUS_HOME_M, fov_deg)
 
 
 ## The shade end of a painted card's sun ramp at the eye, from its own `shade` and `lit` tones

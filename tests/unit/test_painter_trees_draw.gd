@@ -98,9 +98,11 @@ func test_both_shaders_compile_against_the_wind_sun_and_fade_globals() -> void:
 			assert_does_not_have(names, gone, "%s has no %s" % [path, gone])
 	var code := FileAccess.get_file_as_string(INCLUDE)
 	for global_name: String in [
-		"wind_dir", "wind_phase", "wind_gust", "foliage_sun", "canopy_fade_centre", "canopy_cut"
+		"wind_dir", "wind_phase", "wind_gust", "foliage_sun", "canopy_fade_view", "canopy_cut"
 	]:
 		assert_true(code.contains("global uniform vec4 %s;" % global_name), global_name)
+	for gone: String in ["canopy_fade_centre", "canopy_fade_shape", "TREE_FADE_START"]:
+		assert_false(code.contains(gone), "the view-centre canopy window's %s is gone" % gone)
 	assert_true(code.contains("screen_dither_include.gdshaderinc"), "the shared dither helpers")
 	assert_false(code.contains("occlusion_fade_include"), "the token occlusion fade is gone")
 	assert_false(code.contains("LIGHT_VERTEX"), "the shadow lookup never moves")

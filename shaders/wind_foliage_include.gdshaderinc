@@ -135,23 +135,16 @@ varying vec3 rest_view;
 // The Bayer dither and the dither cell size (the stipple key below).
 #include "res://shaders/screen_dither_include.gdshaderinc"
 
-// Canopy fade (CanopyFade, scenes/states/playing/canopy_fade.gd). The crowns standing in
-// front of the ground at the view centre dissolve over a soft round window around the
-// centre of the screen, so the ground and the tokens under a forest read while the trees at
-// the frame's edges stay whole and frame it: gently at play zooms, fully when zoomed in. In
-// the window a tree keeps its trunk: leaf cards drop out card by card and limbs limb by
-// limb.
+// Canopy fades (CanopyFade, scenes/states/playing/canopy_fade.gd): the authoring brush window,
+// the Village tool's cut and the eye view's near fade. (The view-centre window that dissolved the
+// crowns over the middle of the screen, Settings > Canopy fade, was removed 2026-11-16.) A tree
+// keeps its trunk through every fade but the cut: leaf cards drop out card by card and limbs
+// limb by limb.
 // canopy_part: 0 takes no part (grass, any non-tree), 1 bark (its limbs fade, the trunk,
 // whose authored flutter weight is 0, never does), 2 leaf cards. Set by WindFoliage.
 uniform int canopy_part = 0;
-// xyz: the ground point at the view centre (world); w: strength, 0 (off) to 1.
-global uniform vec4 canopy_fade_centre;
-// xyz: the camera's back axis (world, unit); w: unused.
+// xyz: the camera's back axis (world, unit); w: unused. Marks the camera's own pass.
 global uniform vec4 canopy_fade_view;
-// The window in metres: x its inner radius on screen (full strength inside), y its outer
-// one (untouched past it), z the depth band over which the fade grows in front of the
-// view-centre ground. CanopyFade.shape() sets them by zoom.
-global uniform vec4 canopy_fade_shape;
 // The brush window (CanopyFade.set_brush): xyz the ground point under a map brush's ring
 // (world), w the window's radius in metres (0: off). It grows from nothing as the brush asks
 // for it and shrinks back when it lets go, so the canopy closes in from the window's edge.
@@ -193,8 +186,6 @@ const float CANOPY_EYE_GLOW_FULL = 0.85;
 const vec3 CANOPY_EYE_GLOW = vec3(0.9, 1.0, 0.35);
 const float CANOPY_EYE_BARK_LIFT = 0.35;
 uniform float foliage_eye_light : hint_range(0.0, 1.0) = 1.0;
-// Metres in front of the view-centre ground (along the view axis) where the fade starts.
-const float CANOPY_FADE_START = 0.5;
 // The brush window's fade: full inside CANOPY_BRUSH_INNER of its radius, none past it; it
 // grows over CANOPY_BRUSH_BAND metres from CANOPY_BRUSH_START in front of the ring's ground,
 // so the crowns standing over and before the ring go and the ones behind it stay.
@@ -365,20 +356,17 @@ vec3 two_sided_foliage_normal(vec3 normal, bool front_facing) {
 
 
 // The canopy fades (see canopy_part above): discards this fragment when its
-// dissolve key falls under the fade there. The fade is the strength times two soft
-// ramps: depth, growing across a band in front of the view-centre ground (measured along
-// the camera's view axis in world space), and the clearing, falling off with the
-// fragment's distance from the centre ray on screen. A pass whose view axis is not the
+// dissolve key falls under the fade there. A pass whose view axis is not the
 // camera's (the shadow pass, whose VIEW_MATRIX is the light's) is left alone, so a
-// dissolving crown keeps its dappled shadow on the ground and the light does not change
-// as one zooms (a sun exactly behind the camera would match and lose those shadows; the
-// game's suns never sit there).
+// dissolving crown keeps its dappled shadow on the ground (a sun exactly behind the camera
+// would match and lose those shadows; the game's suns never sit there).
 // The key is the authored phase (COLOR.b: constant across a leaf card, shared along a
 // limb), so whole cards and whole limbs drop out one by one, bold shapes rather than a
 // stipple; an asset without authored weights falls back to the screen dither's Bayer
 // dither on its cards and keeps its bark. `wind` is the fragment's COLOR.gb.
-// The brush window (canopy_brush) opens the canopy over a map brush's ring by the same law
-// and key, the larger of the two fades winning.
+// The brush window (canopy_brush) opens the canopy over a map brush's ring: a depth ramp in
+// front of the ring's ground (along the camera's view axis) times a clearing that falls off with
+// the distance from the ring's axis; the larger of the fades wins.
 // The cut (canopy_cut) is the one fade that takes trunks too, by the same key, so a picked
 // authoring piece stands clear of a bush's bare stems.
 // The eye view adds the near fade (canopy_eye) by the same key, tested against the eye
@@ -390,8 +378,7 @@ void apply_canopy_fade(
 	vec3 vertex_view, mat4 inv_view_matrix, vec2 wind, vec2 frag_coord
 ) {
 	if (canopy_part == 0
-		|| (canopy_fade_centre.w <= 0.0 && canopy_brush.w <= 0.0 && canopy_eye.w <= 0.0
-			&& canopy_cut.w <= 0.0)) {
+		|| (canopy_brush.w <= 0.0 && canopy_eye.w <= 0.0 && canopy_cut.w <= 0.0)) {
 		return;
 	}
 	// The trunk (authored flutter 0) stays, on either surface, for every fade but the cut: a
@@ -430,14 +417,6 @@ void apply_canopy_fade(
 		fade = max(fade, 1.0 - smoothstep(
 			CANOPY_EYE_FULL * canopy_eye.w, CANOPY_EYE_NONE * canopy_eye.w,
 			distance(world, canopy_eye.xyz)));
-	}
-	if (!trunk && camera_pass && canopy_fade_centre.w > 0.0) {
-		vec3 offset = world - canopy_fade_centre.xyz;
-		float ahead = dot(offset, back);
-		float across = length(offset - back * ahead);
-		fade = max(fade, canopy_fade_centre.w
-			* smoothstep(CANOPY_FADE_START, CANOPY_FADE_START + canopy_fade_shape.z, ahead)
-			* (1.0 - smoothstep(canopy_fade_shape.x, canopy_fade_shape.y, across)));
 	}
 	if (!trunk && camera_pass && canopy_brush.w > 0.0) {
 		vec3 offset = world - canopy_brush.xyz;

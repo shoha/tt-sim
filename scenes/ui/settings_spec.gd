@@ -98,10 +98,6 @@ const TABS := {
 					"desc": "Always keeps a pin over every token; Top-down only shows it from a high view.",
 				},
 				{
-					"row": "CanopyFade",
-					"desc": "Zoomed in, thin the treetops around the middle of the screen so the table shows.",
-				},
-				{
 					"row": "EyeSmoothing",
 					"desc": "Smooth edges when walking the table at eye level. Turn off if that runs slowly.",
 				},
