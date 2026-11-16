@@ -311,6 +311,27 @@ is 0.65. Forest: 65 bushes, 260 pads, 1317 roots (was 1488). Cost, interleaved, 
 off, GPU medians, painted minus classic: forest tokens summer +0.06, +0.08, +0.09 (round 2:
 +0.12), tokens winter -0.53, forest home summer -0.59, home winter -1.11.
 
+painter-look-eyebush (look-pending): at the eye view a bush shaded by another form (a crown, a rock
+pile, a building: `form_occ`'s analytic shade) filled the frame as one flat deepest-teal mass, since
+every shaded fragment and stroke took `crown_cast18` (0.1), the ramp's lowest step, and a bush under
+the forest's crowns is shaded more often than not (measured with a debug tint on the block-in: the
+near bush at eye45 was cast-flagged over its whole visible face while its light was about 0.7, and
+its strokes, with the block-in hidden, were 300 px dabs of one tone). A bush's shade is now a value
+structure: `bush_cast_tone(q, n_y)` (painter_tree.gdshaderinc) gives the deepest step on the
+underside, deep and mid teal in broad lobes on the sides and a mid sky-lit teal on the tops, with
+q the block-in's dab wobble (`wob`, 1.8 per metre) and, for a stroke, the same noise at its anchor
+(`BUSH_CAST_F`) mixed with its own draw, so the dabs and the block-in agree. Strokes know a bush
+through the pad's pack flag 1024 (`"bush"` param of `PainterTreeBush._pad`; `PainterTreePack`
+header), no new texel. Crowns and rocks are untouched, and a sunlit bush is unchanged (the table
+frames match). Nothing is tuned by distance: the dab size is world-metric, so a distance sweep
+(0.5 to 8 m from the bush's edge) shows the same lobes with no pop between stroke levels. Tried
+and dropped: breaking the shade edge by nudging `form_occ`'s origin with the lobe noise (straight
+analytic shadow edges stay a slab on a near bush): any dependence of that origin on the noise cost
++0.07 to +0.10 ms in the forest views, measured, although an in-run toggle showed the nudge itself
+free (a compile-level cost), so it is not in. Cost, interleaved painted minus classic, 1920x1080,
+vsync off, GPU medians: forest tokens summer +0.45 against +0.45 on main in the same sitting, home
+summer +0.07 to +0.12 against +0.06.
+
 - The host, `PainterTrees` (`painter/trees/painter_trees.gd`), is made by PainterSurfaces (by
   path) and driven by its events: paint() on a Painted state, sync() on the scatter's
   `cells_applied` and `species_added`, release() on leaving. It hides the mapped species' GLB chunk
