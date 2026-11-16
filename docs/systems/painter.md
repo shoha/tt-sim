@@ -447,8 +447,27 @@ off, GPU medians, painted minus classic: forest tokens summer +0.06, +0.08, +0.0
   straight one `FORK_LEAD` 0.72, the rest by the pipe law, tapering to `FORK_TIP`); the stem
   narrows by at most 1 - `NARROW_STEM` (0.8) per node; buttress roots are four points that bend
   down and end under the ground. Lime and poplar bark are warm (chroma 0.044) and lime has furrow
-  marks. Open: the horizontal seam where a trunk meets its forks (a bark-pattern break at the stem
-  strand's end cap, not a width step). Digests re-pinned.
+  marks. Digests re-pinned. (The seam where a trunk meets its forks was left open; painter-look-wood3
+  below.)
+- The trunk-to-crown ring (painter-look-wood3, 2026-11-15; evidence
+  `docs/research/2026-11-09-prototypes/compare/painter_final22_wood/notes.md`). A debug tint
+  (stem red, a strand's first eighth green) showed the cause: the stem strand ended in a flat,
+  low dome exactly at its last node; every fork began there too, as a flared "cuff" (green) of its
+  own bark pattern, with a clean straight line between them; and the old oak's stem stood at 0.54
+  against forks of 0.39 and 0.23 to 0.31 (the pipe law's slender forks). Fixes: (1) a strand that
+  limbs leave from its last node (flag 16, not a twig) runs on past it by half its width (vertex
+  `cap_ext19`) and ends in a torn brush-end in the fragment stage (`w_cap`, in `v_form` above 3.5:
+  tongues of different lengths over about 1.4 widths, a noise on the across axis) instead of the
+  dome; a thick limb (radius over 0.1) starts the same distance inside its parent, hidden behind it,
+  so the trunk and forks overlap in a broken edge where they met in a line. (2) `_shoulder`
+  (skeleton): where two or more forks leave the last node the stem's top comes down to its widest
+  fork over `FORK_JOIN` (0.9) over the last nodes (at most 1 - `NARROW_STEM` per node; the limbs
+  there and what they carry are re-capped). (3) The forks after the lead share `FORK_REST` (0.9) of
+  the stem's area, not what the lead leaves. (4) Variety: the fork count is the species' plus
+  -1..+1 by seed and each fork's spread and length are drawn, so the flat-topped trees are not one
+  umbrella; a sapling bends by seed (`young` x 3 to 7 percent of its height, a third of that on a
+  whorled conifer). Per-fragment cost: one noise pair on a capped strand's tail only; the winter
+  forest A/B (3 pairs) painted minus classic -0.016 ms. Digests and the spike fixture re-pinned.
 - The eye view's rim (painter-look-winter): PainterSurfaces follows a scatter added to the map after
   the paint (`child_entered_tree` on the map root, `_bind_scatter`), so EyeRim's scatter gets the same
   painted plants and, through PainterTrees, painted trees and bushes (`PainterTrees.wanted` skips a

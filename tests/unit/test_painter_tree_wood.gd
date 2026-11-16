@@ -258,6 +258,82 @@ func test_the_forks_share_the_stems_width_at_its_top() -> void:
 	assert_gt(checked, 6, "several species and ages divide their stem")
 
 
+## (painter-look-wood3, the ring under the crown) The trunk comes down to its widest fork over its
+## last nodes: no stem that divides stands more than a ninth wider than its widest fork where they
+## meet, and the old oak (whose top was a flat shoulder at 0.54 against forks of 0.39) is narrowed.
+func test_the_trunk_narrows_into_its_widest_fork() -> void:
+	var checked := 0
+	for species: String in PainterTreeSpecies.names():
+		for age: float in AGES:
+			for seed_v: int in SEEDS:
+				var sk := _skeleton(species, age, seed_v)
+				var top: int = sk.pts[0].size() - 1
+				var widest := 0.0
+				var forks := 0
+				for i: int in range(1, sk.pts.size()):
+					if sk.parent[i] == 0 and sk.order[i] == 0 and sk.at[i] == top:
+						forks += 1
+						widest = maxf(widest, sk.rad[i][0])
+				if forks < 2 or sk.rad[0][top] < PainterTreeSkeleton.FLARE_MIN_R:
+					continue
+				checked += 1
+				assert_gt(
+					widest / sk.rad[0][top],
+					0.89,
+					"%s age %.2f seed %d: widest fork against the stem's top" % [species, age, seed_v]
+				)
+	assert_gt(checked, 10, "several trees divide their stem")
+
+
+## The other forks take FORK_REST of the stem's area between them, so a crown of three or four forks
+## is not one thick limb and thin ones.
+func test_the_forks_after_the_lead_are_not_slender() -> void:
+	var sk := _skeleton("oak", 0.95, 11)
+	var top: int = sk.pts[0].size() - 1
+	for i: int in range(1, sk.pts.size()):
+		if sk.parent[i] == 0 and sk.order[i] == 0 and sk.at[i] == top:
+			assert_gt(sk.rad[i][0] / sk.rad[0][top], 0.5, "fork %d of the old oak" % i)
+
+
+## The fork count and spread are drawn per seed (the flat-topped trees all stood as one umbrella).
+func test_the_fork_count_varies_with_the_seed() -> void:
+	var counts := {}
+	for seed_v: int in range(1, 25):
+		var sk := _skeleton("oak", 0.95, seed_v)
+		var top: int = sk.pts[0].size() - 1
+		var n := 0
+		for i: int in range(1, sk.pts.size()):
+			if sk.parent[i] == 0 and sk.order[i] == 0 and sk.at[i] == top:
+				n += 1
+		counts[n] = true
+	assert_gte(counts.size(), 2, "an oak's stem divides in a different number of forks by seed")
+
+
+## A sapling bends a little by seed: not one ruled pole.
+func test_a_sapling_bends_by_seed() -> void:
+	var tops := {}
+	var worst := 0.0
+	for seed_v: int in range(1, 9):
+		var sk := _skeleton("rowan", 0.12, seed_v)
+		var p: PackedVector3Array = sk.pts[0]
+		var off := Vector2(p[p.size() - 1].x, p[p.size() - 1].z)
+		worst = maxf(worst, off.length())
+		tops[snappedf(off.x, 0.01)] = true
+	assert_gt(worst, 0.03, "some sapling stands off its foot by over 3 cm at the top")
+	assert_gt(tops.size(), 3, "and each seed bends its own way")
+
+
+## The shader's torn trunk end (w_cap) and the run-on past the last node are what the checks above
+## assume: they stand in the source.
+func test_the_forked_strand_ends_in_a_torn_edge_over_its_forks() -> void:
+	var src := FileAccess.get_file_as_string(
+		"res://painter/shaders/painter_tree_blockin_body.gdshaderinc"
+	)
+	assert_true(src.contains("bool w_cap = v_form > 3.5;"), "the fragment reads the forked flag")
+	assert_true(src.contains("wood_form = 2.0 + twig + (capd ? 2.0 : 0.0);"), "from the vertex stage")
+	assert_true(src.contains("const float cap_ext19 = 0.5;"), "the strand runs on by half its width")
+
+
 ## (cause 5) The buttress roots were three points ending 4 cm above the ground at a fifth of the
 ## stem's girth: log stubs with cut faces. They are four points that bend down and end in a fine
 ## point under the ground.
