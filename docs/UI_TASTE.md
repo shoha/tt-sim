@@ -257,8 +257,8 @@ verdict (the solid colours and subtle gradients of 2026-10-10 stand; no paper gr
 - **M8 A toast is read, not chased.** It arrives with a short slide (10 px) and fade, leaves faster,
   stays while the pointer rests on it, and the same words again count on the toast already up ("x3")
   instead of stacking. Kinds differ by icon and colour (C7). At most five stand. A toast with no
-  time on it has a visible 40 px close control (a click on it works too), and an error among them
-  leaves after 12 s.
+  time on it, and every error, has a visible 40 px close control (a click on it works too), and a
+  kept error leaves after 12 s. The toast column stands 16 px clear of the hint bar.
 - **I8 Help that has taught steps back.** The hint bar fades after 20 s unchanged and returns
   when the hints change or the pointer goes to the bottom edge; a tool's own hints never fade, and F1
   always lists every key.

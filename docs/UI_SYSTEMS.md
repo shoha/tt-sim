@@ -273,10 +273,10 @@ UIManager.show_undo_toast('Removed "Marigold"', undo_callable)
 - The same words and kind again (without an action) join the toast already up: it counts
   ("x3", a `Count` caption at its end) and restarts its timer, instead of a second chip stacking
 - The kind icon is 24 px (`ICON_SIZE`), tinted with the kind's role; the words stay Body 16
-- A kept toast (duration 0) carries a 40 px `Close` button (the `x` icon, tooltip and accessible
-  name "Dismiss") and a click on its words dismisses it too; an error among them leaves by
-  itself after `ERROR_KEPT_S` (12 s, held while the pointer rests on it), so none piles up
-  unseen. A kept info toast (a "Connecting" notice a caller takes down itself) has no clock.
+- A kept toast (duration 0) and every error, timed or kept, carries a 40 px `Close` button (the
+  `x` icon, tooltip and accessible name "Dismiss") and a click on its words dismisses it too; a
+  kept error leaves by itself after `ERROR_KEPT_S` (12 s, held while the pointer rests on it),
+  so none piles up unseen. The column stands `BAR_GAP_PX` (16) clear of the hint bar. A kept info toast (a "Connecting" notice a caller takes down itself) has no clock.
   The kinds stay told apart by icon, tint and words (C7); a tinted side stripe was weighed and
   left out (UI_TASTE anti-patterns: a stripe at rest is decoration)
 - Does not block input
@@ -400,13 +400,19 @@ make room, and opening one of the two closes the other.
   token's portrait (40 px, the picture its map pin wears, `TokenPictures`: the HUD's own
   `TokenPortraits` atlas made by the same rules, the `chess` icon until it is ready), its name,
   its health in words ("HP 12/40", "Down") and a 4 px bar. The bar's variants
-  (`ProgressSuccess`, `ProgressDanger`) now carry a `background` (the track role at half
-  strength) so the bar reads as a bar; it turns to the danger role at 40% of the maximum or
-  under, and the words say it (C7).
+  (`ProgressSuccess`, `ProgressDanger`) carry a `background`: a solid inset pill rimmed 1 px in
+  the soft text role (3.7:1 on the picked row's lake, 9:1 on the plum glass; the first
+  translucent track measured 1.2:1 on the lake), content margins 0 so the fill covers the rim.
+  A test holds both contrasts. The bar turns to the danger role at 40% of the maximum or
+  under, and the words say it (C7). The HUD's portrait is the middle `TokenPictures.CROP` (78%)
+  of the pin's picture, and the board marker's pin fills its inner disc with it (a textured
+  circle).
 - A press selects the row, centres the camera on the token (`GameMap.focus_camera_on`, the double
   click's path), pulses its glow for `PULSE_S` and scrolls the list to the row. The foot card
   holds only Find on map (centre and pulse again) and Actions (opens the token's own menu beside
-  the drawer): the name and health are in the row, not repeated under it. A list longer than the
+  the drawer): the name and health are in the row, not repeated under it. With nothing picked
+  both stand disabled under "Pick a token"; with no tokens the card and its divider are hidden.
+  The list's scroll bar is a `ScrollBarFade` (the handle alone, on hover; UI_TASTE 2026-10-10). A list longer than the
   drawer shows "More below" (an arrow and a caption) until it is scrolled to its end.
 - **The board marker** (`TokenFocusMarker`, a full-rect `Control` under the drawer, drawn in
   canvas units from the world camera's projection): the picked token, and a token whose row is

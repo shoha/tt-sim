@@ -734,9 +734,13 @@ func _define_status() -> void:
 	)
 	var toast := box(c(ThemeColors.SURFACE), RADIUS_CONTROL, SPACE_3, SPACE_2, lift())
 	define_variant_style("Toast", "PanelContainer", {panel = toast})
-	# A health bar reads as a bar only with its track showing: the track role (3:1 on its leaf,
-	# chalk on glass) at half strength, under the outcome's fill.
-	var track := box(Color(c(ThemeColors.TRACK), 0.5), RADIUS_PILL)
+	# A health bar reads as a bar only with its track showing, on the plum glass and on the lake
+	# of a picked row alike: the track is a solid inset pill rimmed in the soft text role (3.7:1
+	# on the lake, 9:1 on the plum; a translucent fill measured 1.2:1 on the lake). Its content
+	# margins are 0 so the fill covers the rim and the bar keeps its whole height.
+	var track := box(
+		Color(c(ThemeColors.SURFACE_INSET), 1.0), RADIUS_PILL, 0, 0, edge(1, c(ThemeColors.TEXT_SOFT))
+	)
 	for outcome: String in ["Success", "Danger"]:
 		var role := ThemeColors.SUCCESS if outcome == "Success" else ThemeColors.DANGER
 		define_variant_style(

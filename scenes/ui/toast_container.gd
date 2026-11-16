@@ -26,6 +26,9 @@ const CLOSE_PX := 40.0
 const ERROR_KEPT_S := 12.0
 ## The column's resting distance from the bottom edge (the scene's margin_bottom).
 const REST_MARGIN_PX := 80.0
+## The clear space between the toast column and the hint bar (16: at 1080 the 8 px it was read
+## as touching).
+const BAR_GAP_PX := 16.0
 ## The meta a toast carries its tag in (dismiss_tag).
 const TAG_META := &"tt_toast_tag"
 ## Its words, kind and repeat count, for _repeat_of.
@@ -80,11 +83,11 @@ func _process(_delta: float) -> void:
 	margin.offset_left = span.x - rect.position.x
 	margin.offset_right = span.y - rect.end.x
 	# Above the hint bar when it is on show (two lines at 720p stand taller than the column's
-	# resting margin), by the bar's height beyond that margin and a 8 px gap.
+	# resting margin), by the bar's height beyond that margin and BAR_GAP_PX.
 	var bar := get_tree().get_first_node_in_group(InputHints.GROUP) as InputHints
 	var lift := 0.0
 	if bar != null and bar.top_edge() < INF:
-		lift = maxf(0.0, rect.end.y - bar.top_edge() + 8.0 - REST_MARGIN_PX)
+		lift = maxf(0.0, rect.end.y - bar.top_edge() + BAR_GAP_PX - REST_MARGIN_PX)
 	margin.offset_bottom = -lift
 
 
@@ -115,13 +118,14 @@ func show_toast(
 		var button := _action_button(action_label, action_icon)
 		button.pressed.connect(_on_action_pressed.bind(toast, action))
 		toast.get_child(0).add_child(button)
-	# A toast with no time on it (duration 0) stays until sent away: it carries a close control,
-	# and an error among them goes by itself after ERROR_KEPT_S, so none piles up unseen.
+	# A toast with no time on it (duration 0) stays until sent away, and an error is read, not
+	# raced: both carry a close control. A kept error goes by itself after ERROR_KEPT_S, so none
+	# piles up unseen; a timed error keeps its reading time.
 	var lifetime := duration
-	if duration <= 0.0:
+	if duration <= 0.0 or type == ToastType.ERROR:
 		toast.get_child(0).add_child(_close_button(toast))
 		toast.gui_input.connect(_on_kept_input.bind(toast))
-		if type == ToastType.ERROR:
+		if duration <= 0.0 and type == ToastType.ERROR:
 			lifetime = ERROR_KEPT_S
 	toast_vbox.add_child(toast)
 	_fit_one_line(toast, max_width(type, has_action))
