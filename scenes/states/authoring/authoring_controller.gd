@@ -210,10 +210,12 @@ func _open_request(request: Dictionary) -> void:
 
 
 ## The level a new map made from the title starts as: named NewMap.DEFAULT_NAME, with the
-## default look for authored maps.
+## default look for authored maps: Painted (card painter-default-flip), which a player on Map's
+## choice sees and Classic or Painted in Settings override.
 static func new_level() -> LevelData:
 	var created := LevelData.new()
 	created.level_name = NewMap.DEFAULT_NAME
+	created.look = RenderStyle.sanitize_look({"style": RenderStyle.PAINTED})
 	return created
 
 

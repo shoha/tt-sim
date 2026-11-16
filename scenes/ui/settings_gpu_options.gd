@@ -36,13 +36,15 @@ const EYE_SMOOTHING_TOOLTIP := (
 	+ "show small steps."
 )
 ## The Look row (graphics/look, RenderStyle, beside Shadow quality): which look the board is drawn
-## in on this computer. Classic is the default and the weak-GPU choice; Painted lets the painter's
-## sheet own the sun's colour, the sky, the ambient light and the tonemap; Map's choice follows the
-## map. Applies at once. The quality presets leave it alone (docs/systems/painter.md).
+## in on this computer. Painted is the default (since card painter-default-flip): the painter's
+## sheet owns the sun's colour, the sky, the ambient light and the tonemap. Classic is the game's
+## earlier look and stays selectable; Map's choice follows the map. Applies at once. The quality
+## presets leave it alone (docs/systems/painter.md).
 const LOOK_TOOLTIP := (
-	"How the board is lit and coloured on your screen. Classic is the game's usual look. Painted "
-	+ "lights it in the painted style of the map's mood; the time of day and the sun still work. "
-	+ "Map's choice uses whichever the map was made with. Only your own screen changes."
+	"How the board is lit and coloured on your screen. Painted (the default) lights it in the "
+	+ "painted style of the map's mood; the time of day and the sun still work. Classic is the "
+	+ "game's earlier look. Map's choice uses whichever the map was made with. Only your own "
+	+ "screen changes."
 )
 const IDLE_THROTTLE_TOOLTIP := (
 	"Slows the game down while its window is in the background (15 frames a second when another "
@@ -73,9 +75,7 @@ static func show_saved(menu: SettingsMenu, config: ConfigFile) -> void:
 
 
 static func save(menu: SettingsMenu, config: ConfigFile) -> void:
-	config.set_value(
-		"graphics", RenderStyle.KEY, RenderStyle.sanitize(_look_option(menu).get_selected_id())
-	)
+	RenderStyle.store(config, _look_option(menu).get_selected_id())
 	config.set_value("graphics", IdleThrottle.KEY, menu.idle_throttle_check.button_pressed)
 	config.set_value("graphics", FoliageEdges.EYE_KEY, _eye_check(menu).button_pressed)
 	config.set_value(

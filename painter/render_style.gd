@@ -14,10 +14,21 @@ extends RefCounted
 ## maps each preset to a mood, or to "" for the indoor and effect presets no mood paints yet, and
 ## those fall back to Classic. A look's own mood wins over the preset's.
 ##
-## The Settings default is Classic, so a player who never opens the row sees no change. The
-## quality presets (QualityPreset) do not set this row; a weak-GPU tier that forces Classic is the
-## cost card's (A5). This script is named by start-up code (the Settings graphics helper), so it
-## names no other painter script: PainterScene and PainterSheet load by path on first use.
+## The Settings default is Painted (card painter-default-flip, owner decision 2026-11-16, for
+## everyone); Classic stays selectable and is what a level on a preset no mood paints still draws.
+## The quality presets (QualityPreset) do not set this row, so a weak-GPU pick (QualityAuto)
+## leaves the look at its default: measured Painted is at or below Classic in 10 of 12 views
+## (docs/PERFORMANCE.md "Painted vs Classic"), so no tier forces Classic. This script is named by
+## start-up code (the Settings graphics helper), so it names no other painter script:
+## PainterScene and PainterSheet load by path on first use.
+##
+## A stored choice. Every Settings save writes the Look row with the rest, so before the flip a
+## settings file held look=0 (Classic) for anyone who ever pressed Apply, whether or not they chose
+## it, and that cannot be told from a chosen Classic. KEY_VERSION is the marker that tells them
+## apart: a save writes KEY_VERSION = VERSION beside the choice, and stored() reads an unversioned
+## Classic as the old default (Painted now), while a versioned Classic, and an unversioned Painted
+## or Map's choice (never a default), are honoured. Nothing is rewritten at start-up; the next save
+## adds the marker.
 
 const CLASSIC := "classic"
 const PAINTED := "painted"
@@ -30,9 +41,12 @@ const CHOICE_CLASSIC := 0
 const CHOICE_PAINTED := 1
 const CHOICE_MAP := 2
 const CHOICES: Array[int] = [CHOICE_CLASSIC, CHOICE_PAINTED, CHOICE_MAP]
-const DEFAULT_CHOICE := CHOICE_CLASSIC
+const DEFAULT_CHOICE := CHOICE_PAINTED
 ## The settings file key, in the [graphics] section.
 const KEY := "look"
+## The key that marks a stored choice as made after the default flip, and its current value.
+const KEY_VERSION := "look_v"
+const VERSION := 2
 
 ## Every environment preset (EnvironmentPresets.PRESETS) to the mood that paints it, or "" for
 ## Classic only. "" (the map's own lighting) is painted as summer.
@@ -84,10 +98,23 @@ static func sanitize(value: int) -> int:
 	return value if CHOICES.has(value) else DEFAULT_CHOICE
 
 
-## The saved choice in a loaded settings file (DEFAULT_CHOICE when absent or unknown).
+## The saved choice in a loaded settings file (DEFAULT_CHOICE when absent or unknown). An
+## unversioned Classic (look=0 with no KEY_VERSION) is the pre-flip default saved along with the
+## other rows, so it reads as DEFAULT_CHOICE; see the class doc.
 static func stored(config: ConfigFile) -> int:
 	var value: Variant = config.get_value("graphics", KEY, DEFAULT_CHOICE)
-	return sanitize(int(value)) if value is int or value is float else DEFAULT_CHOICE
+	if not (value is int or value is float):
+		return DEFAULT_CHOICE
+	var saved := sanitize(int(value))
+	if saved == CHOICE_CLASSIC and int(config.get_value("graphics", KEY_VERSION, 0)) < VERSION:
+		return DEFAULT_CHOICE
+	return saved
+
+
+## Writes [param value] (sanitized) and the version marker into [param config] (Settings save).
+static func store(config: ConfigFile, value: int) -> void:
+	config.set_value("graphics", KEY, sanitize(value))
+	config.set_value("graphics", KEY_VERSION, VERSION)
 
 
 ## A level's `look` field cleaned for storage: {} (Classic, the preset's mood) or a dictionary

@@ -60,7 +60,8 @@ const TABS := {
 				{"row": "QualityNoteRow", "attach": true},
 				{
 					"row": "Look",
-					"desc": "How the board is lit and coloured on your screen. Other players keep their own.",
+					"desc":
+					"How the board is lit and coloured on your screen: Painted (default) or Classic.",
 				},
 				{
 					"row": "TokenShading",

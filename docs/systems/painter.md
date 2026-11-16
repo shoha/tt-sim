@@ -1,9 +1,10 @@
 # The painted look
 
 The painted look draws a level in the painter's style: one sheet of tones, chosen together, owns
-the light, and later the ground, plants, trees and buildings. It ships beside Classic, the game's
-usual look, which stays the default and the fallback for weak GPUs and for presets no mood paints
-yet (owner, 2026-11-12). Phase 1 card A1 (painter-a1) landed the light; card A1b paints the
+the light, and later the ground, plants, trees and buildings. It is the default look (owner,
+2026-11-16, card painter-default-flip, for everyone); Classic, the game's earlier look, stays
+selectable and is still what a level on a preset no mood paints draws (first built beside Classic,
+owner 2026-11-12). Phase 1 card A1 (painter-a1) landed the light; card A1b paints the
 ground and the GLB scatter (plants, rocks, logs); cards A2 and A3 grow the painted trees; card A3b
 paints the buildings' walls, roofs and timber from the sheet (owner decision D5, 2026-11-12).
 The plan is `D:/dev/tabletop/docs/research/2026-11-12-painter-integration-plan.md`; the spike it
@@ -48,7 +49,7 @@ level is drawn Painted, so neither the start-up nor a Classic level compiles the
 The effective style, `RenderStyle.resolve(look, preset, choice)`:
 
 1. The local Settings choice, Settings > Graphics > Look (`graphics/look`, `RenderStyle.choice`):
-   Classic (the default) or Painted overrides every map; Map's choice follows the level.
+   Painted (the default) or Classic overrides every map; Map's choice follows the level.
 2. The level's `look` field, `LevelData.look`: `{}` (Classic) or `{"style": "classic"|"painted",
    "sheet": "" (core), "mood": "" (the preset's)}`. It travels in the level dict like
    `environment_preset`, so a late joiner gets it in the level snapshot. There is no authoring
@@ -61,7 +62,25 @@ The effective style, `RenderStyle.resolve(look, preset, choice)`:
 Painted is visual only: it changes no state that play, collision or the network read, and a peer
 on Classic sees the same map in the other look. The Settings row is per player and never
 networked. The quality presets (`QualityPreset`, [graphics_quality.md](graphics_quality.md)) do not
-set the Look row; a tier that forces Classic on weak GPUs is card A5's.
+set the Look row, and so neither does the first-run weak-GPU pick (`QualityAuto.record` writes the
+four preset rows and no `look`): a weak GPU keeps the default Painted look, which measured at or
+below Classic in 10 of 12 views (`PERFORMANCE.md` "Painted vs Classic"); no tier forces Classic, and
+Classic is one Look row away.
+
+**The default and a stored choice (card painter-default-flip).** `RenderStyle.DEFAULT_CHOICE` is
+Painted: a fresh install, a settings file with no `look` key, and a file that only holds other rows
+(a weak-GPU pick's) all resolve to Painted. Every Settings save writes `graphics/look` with the other
+rows, so before the flip `look=0` sat in the file of anyone who ever pressed Apply, whether or not
+they chose it, and could not be told from a chosen Classic. `RenderStyle.store` therefore writes
+`graphics/look_v=2` beside the choice, and `RenderStyle.stored` reads an unversioned Classic as
+the old default (Painted), a versioned Classic as a choice, and an unversioned Painted or Map's
+choice as a choice (they were never defaults). Nothing is rewritten at start-up. Cost: a tester who
+chose Classic before the flip and saved is switched once and picks Classic again. A map's own
+`LevelData.look` loads unchanged; a new map (`AuthoringController.new_level`) carries
+`{"style": "painted"}`, which only Map's choice reads. Headless runs and CI: `PainterWarmup` is a
+no-op there (`available()` false), and the static `RenderStyle.choice` starts Painted, so a test
+that needs Classic pins `RenderStyle.choice` itself. Render jobs have no Look knob: they read the
+settings file of the user folder they run in, so a folder with no stored look renders Painted now.
 
 ## Who owns the light
 
@@ -753,7 +772,7 @@ same palette: do not reintroduce shared state). The script names no painter scri
 compiles none.
 
 - Who starts it: Root behind the title when the Look choice can paint (`_start_painter_warmup`,
-  after the precompile and the first-launch warm-up); Settings Apply (`RenderStyle.start_warmup`).
+  after the precompile and the first-launch warm-up; with Painted the default, every launch); Settings Apply (`RenderStyle.start_warmup`).
   The title's run is LITE (`PainterWarmup.lite_title`, phase `LITE_DONE`, not ready): it loads the
   scripts and the default sheet and compiles every covered shader (`GraphicsWarmup.compile_shaders`),
   and makes no sample meshes. The one FULL run (one tiny mesh per shader and vertex layout, 6 threads)
