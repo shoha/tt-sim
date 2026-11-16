@@ -114,6 +114,7 @@ func rail_item(authoring: bool = false) -> Dictionary:
 	var item := {"id": id, "icon": icon, "tooltip": rail_tip(authoring and slot > 0)}
 	if authoring and slot > 0:
 		item["key"] = shortcut_label()
+		item["digit"] = str(slot)
 	return item
 
 
@@ -121,7 +122,7 @@ func rail_item(authoring: bool = false) -> Dictionary:
 ## the hub and the tab ("Water: Crossing"), since the tab has no key of its own.
 func help_name() -> String:
 	if hub == &"":
-		return rail_tooltip()
+		return rail_tooltip(true)
 	var hub_tool := ToolRegistry.find(hub)
 	if hub_tool == null:
 		return rail_tooltip()

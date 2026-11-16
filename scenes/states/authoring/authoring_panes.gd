@@ -49,12 +49,35 @@ static func _lead_first(pane: Control) -> void:
 		return
 	for child in pane.get_children():
 		if child is Label and String(child.name).ends_with("Hint") and child.visible:
+			var more := pane.get_node_or_null(NodePath(String(child.name) + "More"))
 			if _control_between(pane, at, child.get_index()):
-				var more := pane.get_node_or_null(NodePath(String(child.name) + "More"))
 				pane.move_child(child, at)
-				if more != null:
-					pane.move_child(more, at + 1)
+			if more != null:
+				pane.move_child(more, child.get_index() + 1)
+			# The header's rule (and its empty band) goes: the lead block carries its own rule
+			# below it, as a header's caption does, so every card reads title, lead, rule, picker.
+			(pane.get_child(at - 1) as Control).visible = false
+			var rule := HSeparator.new()
+			rule.name = "LeadRule"
+			pane.add_child(rule)
+			pane.move_child(rule, (more.get_index() if more != null else child.get_index()) + 1)
 			return
+
+
+## The palette's biome entries sorted by the name the tiles show (the picker reads alphabetically,
+## not by the id the catalogue lists them in).
+static func by_display_name(entries: Array) -> Array:
+	var sorted := entries.duplicate()
+	sorted.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			return (
+				AuthoringPanel.short_name(String(a["name"])).naturalnocasecmp_to(
+					AuthoringPanel.short_name(String(b["name"]))
+				)
+				< 0
+			)
+	)
+	return sorted
 
 
 ## A wrapped caption line saying a pane's gestures.
@@ -138,7 +161,7 @@ static func biome(panel: AuthoringPanel, tool: ToolDescriptor) -> Control:
 	field.tiles.photo_icons = true
 	field.tiles.tile_min_size = AuthoringPanel.BIOME_TILE_SIZE
 	field.tiles.columns = AuthoringPanel.BIOME_COLUMNS
-	for entry in PaletteLibrary.biomes(panel.palette_root):
+	for entry in by_display_name(PaletteLibrary.biomes(panel.palette_root)):
 		field.tiles.add_tile(
 			StringName(String(entry["id"])),
 			AuthoringPanel.short_name(String(entry["name"])),
@@ -169,7 +192,7 @@ static func place(panel: AuthoringPanel, tool: ToolDescriptor) -> Control:
 		"Over a placed one, Shift + scroll resizes it and right-click or Delete removes it."
 	)
 	var foldouts: Array[Foldout] = []
-	for entry in PaletteLibrary.biomes(panel.palette_root):
+	for entry in by_display_name(PaletteLibrary.biomes(panel.palette_root)):
 		var biome_id := String(entry["id"])
 		var groups := AuthoringPanel.place_species(biome_id, panel.palette_root)
 		if groups.is_empty():

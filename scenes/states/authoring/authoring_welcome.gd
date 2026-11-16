@@ -14,7 +14,7 @@ signal dismissed
 
 const TITLE := "Your first strokes"
 const BODY := "Pick Biome or Place on the left, then drag across the map to paint it."
-const KEYS := "Keys 1 to 7 pick a tool; F1 lists them all."
+const KEYS := "Keys %s, or 1 to 7, pick a tool; F1 lists them all."
 const BUTTON := "Got it"
 ## The card's widest, so its wrapped lines stay short.
 const MAX_WIDTH := 340.0
@@ -47,7 +47,7 @@ func _init() -> void:
 	title.theme_type_variation = &"Heading"
 	column.add_child(title)
 	column.add_child(_line("WelcomeBody", BODY, &"Body"))
-	column.add_child(_line("WelcomeKeys", KEYS, &"Caption"))
+	column.add_child(_line("WelcomeKeys", keys_line(), &"Caption"))
 	var button := Button.new()
 	button.name = "WelcomeDismiss"
 	button.text = BUTTON
@@ -55,6 +55,17 @@ func _init() -> void:
 	button.size_flags_horizontal = Control.SIZE_SHRINK_END
 	button.pressed.connect(dismiss)
 	column.add_child(button)
+
+
+## The keys line: each rail tool's letter in rail order and the digits that also pick them
+## ("Keys B P T K H U F, or 1 to 7, pick a tool; F1 lists them all."), the same keys the rail's
+## corners, its tooltips and F1 show.
+static func keys_line() -> String:
+	var letters: PackedStringArray = []
+	for tool in ToolRegistry.rail_tools(ToolDescriptor.AUTHORING):
+		if tool.shortcut_label() != "":
+			letters.append(tool.shortcut_label())
+	return KEYS % " ".join(letters)
 
 
 ## Shows the card with a fade unless this user has put it away before. True when it is showing.

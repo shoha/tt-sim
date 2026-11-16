@@ -386,8 +386,13 @@ chrome" (round 3).
   (colour), H Water (H2O), U Build, F Fire, chosen by mnemonic against the keys already taken
   (camera W A S D Q E, C and Home, O, V, M; the roster's T is play-only), plus the digits 1 to 7
   in rail order as a second binding (authoring only; in play they stay the F3 debug toggles).
-  Each rail item carries its key as a small corner label, the tooltip says "Water (H or 5)", F1
-  lists them, and the key pressed again steps a hub's tabs. Round 4 (ui-authoring3): rail glyphs
+  Each rail item carries its letter in the top-left corner and its digit in the top-right one
+  (both at the 14 px caption floor), the tooltip says "Water (H or 5)", F1 rows say the same and
+  the welcome card names "Keys B P T K H U F, or 1 to 7" (one source: `ToolDescriptor`), and the
+  key pressed again steps a hub's tabs. Paint K and Water H are free-letter picks (C and W are the
+  camera's); the digits are the guessable binding. Round 6 (ui-authoring4): every pane reads title
+  (or tabs), lead with its More, rule, then size and picker; Crossing's tiles are disabled while
+  the map has no water; the Biome tiles read alphabetically; "Vary this one" is a framed button. Round 4 (ui-authoring3): rail glyphs
   26 px in a 52 px tile, a landscape glyph for Biome, a pin for Place, a house for Build; every
   pane card has a title row (tool icon and name) over its hub tabs; one lead per pane with the
   rest behind a closed More; the pill has a divider and the word Leave before the exit.

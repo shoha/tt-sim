@@ -127,22 +127,33 @@ func add_divider(step: float = GROUP_GAP) -> Control:
 	return rule
 
 
-## The key of an item in its top-left corner ("B"): empty text takes it away. The tooltip says
-## the same with the tool's name; the corner makes a key learnable without hovering.
-func set_item_key(id: StringName, text: String) -> void:
+## The key of an item in its top-left corner ("B") and, when it has a second binding, `digit` in
+## the top-right one ("1"): empty text takes either away. The tooltip says the same with the
+## tool's name; the corners make both keys learnable without hovering.
+func set_item_key(id: StringName, text: String, digit: String = "") -> void:
 	var button: Button = _buttons.get(id)
 	if button == null:
 		return
-	var label := button.get_node_or_null("ItemKey") as Label
+	_corner_label(button, "ItemKey", text, true)
+	_corner_label(button, "ItemDigit", digit, false)
+
+
+## One of an item's corner labels (`left`: top-left, else top-right), made on first use.
+func _corner_label(button: Button, label_name: String, text: String, left: bool) -> void:
+	var label := button.get_node_or_null(label_name) as Label
 	if label == null:
 		if text.is_empty():
 			return
 		label = Label.new()
-		label.name = "ItemKey"
+		label.name = label_name
 		label.theme_type_variation = &"RailNote"
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		label.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		label.offset_left = 5.0
+		label.set_anchors_preset(Control.PRESET_TOP_LEFT if left else Control.PRESET_TOP_RIGHT)
+		if left:
+			label.offset_left = 5.0
+		else:
+			label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+			label.offset_right = -5.0
 		label.offset_top = 1.0
 		button.add_child(label)
 	label.text = text

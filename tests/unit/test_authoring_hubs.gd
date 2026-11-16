@@ -164,12 +164,30 @@ func test_the_help_names_each_tab_under_its_hub_and_each_rail_tool_with_its_key(
 	var names: Array = []
 	for row in ToolRegistry.help_rows(ToolDescriptor.AUTHORING):
 		names.append(row[0])
-	for expect in ["Place (P)", "Place: Thin / Clear", "Water (H)", "Water: Crossing", "Build (U)"]:
+	# The row says the letter and the digit, as the rail's tooltip does.
+	for expect in [
+		"Place (P or 2)", "Place: Thin / Clear", "Water (H or 5)", "Water: Crossing", "Build (U or 6)"
+	]:
 		assert_true(names.has(expect), expect)
 	assert_true(names.has("Build: Walls"), "Wall's help row is named under its hub")
 	assert_true(names.has("Build: Villages"))
-	assert_true(names.has("Biome (B)") and names.has("Sculpt (T)") and names.has("Fire (F)"))
-	assert_true(names.has("Paint (K)"))
+	assert_true(names.has("Biome (B or 1)") and names.has("Sculpt (T or 3)"))
+	assert_true(names.has("Fire (F or 7)") and names.has("Paint (K or 4)"))
+
+
+func test_the_rail_corner_shows_the_letter_and_the_digit_and_the_welcome_card_names_them() -> void:
+	var panel := _panel()
+	var item := ToolRegistry.find(WaterTool.ID).rail_item(true)
+	assert_eq(item["key"], "H")
+	assert_eq(item["digit"], "5", "the digit shows beside the letter, not only in the tooltip")
+	assert_eq(
+		AuthoringWelcome.keys_line(), "Keys B P T K H U F, or 1 to 7, pick a tool; F1 lists them all."
+	)
+	var key := panel._rail._buttons[WaterTool.ID].get_node_or_null("ItemKey") as Label
+	var digit := panel._rail._buttons[WaterTool.ID].get_node_or_null("ItemDigit") as Label
+	assert_not_null(key)
+	assert_not_null(digit)
+	assert_eq(digit.text, "5")
 
 
 # -- Tabs route to the tool they were -----------------------------------------------------
@@ -284,6 +302,13 @@ func test_every_hub_tab_shows_exactly_one_lead() -> void:
 			first = child
 			break
 	assert_eq(String(first.name), "BridgeWaterHint", "the no-water line leads the Crossing tab")
+	for tile in panel.bridge_pane.kind_field.tiles.get_children():
+		if tile is Button:
+			assert_true((tile as Button).disabled, "a crossing tile waits while there is no water")
+	panel.bridge_pane.set_has_water(true)
+	for tile in panel.bridge_pane.kind_field.tiles.get_children():
+		if tile is Button:
+			assert_false((tile as Button).disabled, "and is live once there is")
 
 
 func test_a_hub_reopens_on_the_tab_it_last_showed() -> void:

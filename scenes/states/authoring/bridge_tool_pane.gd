@@ -57,6 +57,7 @@ var kind_field: TileField
 
 var _hint: Label
 var _water_hint: Label
+var _gap: Control
 
 
 func _init() -> void:
@@ -74,6 +75,9 @@ func _init() -> void:
 	_hint = _caption("BridgeHint", HINT)
 	add_child(_hint)
 	add_child(AuthoringChrome.more_foldout("BridgeHintMore", HINT_MORE))
+	_gap = AuthoringPanes.section_gap("BridgeGap")
+	_gap.visible = false
+	add_child(_gap)
 	kind_field = TileField.new()
 	kind_field.name = "BridgeKindField"
 	kind_field.caption = "Crossing"
@@ -100,10 +104,15 @@ func select_kind(kind: int) -> void:
 			kind_field.tiles.select(tile.id)
 
 
-## Shows the line saying to make water first while the map has none.
+## Shows the line saying to make water first while the map has none, and draws the crossing tiles
+## disabled until there is something to cross (with a step between the line and the picker).
 func set_has_water(has_water: bool) -> void:
 	_water_hint.visible = not has_water
 	_hint.visible = has_water  # with no water the line saying so is the lead
+	_gap.visible = not has_water
+	for child in kind_field.tiles.get_children():
+		if child is Button:
+			(child as Button).disabled = not has_water
 
 
 func _caption(node_name: String, text: String) -> Label:

@@ -189,8 +189,9 @@ func _init() -> void:
 	reroll_button.name = "StructureReroll"
 	reroll_button.text = "Vary this one"
 	reroll_button.tooltip_text = REROLL_TOOLTIP
-	# A quiet link, not a raised button with a shadow beside the search.
-	reroll_button.theme_type_variation = &"Ghost"
+	# Quiet but a button: the theme's framed one (a 3:1 outline, no fill), so it reads as a thing to
+	# press beside the search.
+	reroll_button.theme_type_variation = &"Framed"
 	reroll_button.focus_mode = Control.FOCUS_NONE
 	reroll_button.pressed.connect(reroll_requested.emit)
 	_tools_row.add_child(reroll_button)
