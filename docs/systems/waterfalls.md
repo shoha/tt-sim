@@ -320,6 +320,16 @@ sculpt stroke by a fall re-evaluates `is_fall` on the new ground, and sculpting 
   `jobs/p4c_perf_play.json`: the falls mesh costs at most 0.05 ms GPU at zoom 8, Low saves
   0.01-0.04 ms, six falls plus six extra reaches add about 170 ms to a warm load).
 
+## Painted look
+
+Under the Painted look `AuthoredWater.fall_material()` (the one shared fall material) draws with
+`painter/shaders/painter_waterfall.gdshader`: the same vertex contract as `waterfall.gdshader`
+(the sheet, the skirt, the plunge band), chunky white streaks and sheet-coloured shallow and mid
+tones instead of Classic's blurred cards. `PainterWater` swaps the shader and restores Classic's;
+the mesh and its instance uniforms are untouched. The fall's silhouette (the rounded cap on the
+channel above, the tube-shaped plunge pool) is the mesh's, the same under both shaders. Details:
+[painter.md](painter.md) "Water".
+
 ## Open work
 
 The list is [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work"; this doc does not repeat it
