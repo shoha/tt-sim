@@ -3,6 +3,19 @@ extends GutTest
 ## Unit tests for LevelEnvironmentManager.apply_rendering_toggles() -- the
 ## global SSAO/SSR/SDFGI settings' write path onto the live WorldEnvironment.
 ## See docs/superpowers/specs/2026-08-11-global-rendering-toggles-design.md.
+## The Look is pinned to Classic: the painted pipeline owns the ambient and tonemap rows these
+## read back (painter-default-flip made Painted the default).
+
+var _saved_choice: int = RenderStyle.DEFAULT_CHOICE
+
+
+func before_each() -> void:
+	_saved_choice = RenderStyle.choice
+	RenderStyle.choice = RenderStyle.CHOICE_CLASSIC
+
+
+func after_each() -> void:
+	RenderStyle.choice = _saved_choice
 
 
 func test_writes_all_three_properties_when_enabled() -> void:

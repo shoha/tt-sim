@@ -559,8 +559,9 @@ func test_the_water_tool_warm_makes_the_fall_material_once() -> void:
 	assert_not_null(warmed)
 	assert_eq(warmed, AuthoredWater.fall_material(), "the shared material")
 	assert_eq(warmed, AuthoredWater.warm_fall_material(), "and the same one again")
-	assert_eq(warmed.shader, AuthoredWater.FALLS_SHADER)
-	assert_eq(warmed.shader.resource_path, "res://shaders/waterfall.gdshader")
+	# A Painted level applied earlier in the run (the default look) leaves the painter's shader on it.
+	var painted_shader := load("res://painter/shaders/painter_waterfall.gdshader") as Shader
+	assert_true([AuthoredWater.FALLS_SHADER, painted_shader].has(warmed.shader), "the falls shader")
 	assert_eq(warmed.render_priority, AuthoredWater.FALLS_RENDER_PRIORITY)
 	assert_true(warmed.get_rid().is_valid())
 

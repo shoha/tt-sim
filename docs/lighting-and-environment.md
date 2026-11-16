@@ -831,7 +831,8 @@ independent layers.
 - Quality (the first Graphics row, `QualityPreset`) sets four of the rows above at once: High is the
   defaults, Low turns Blended cascades and ambient occlusion off (Soft High shadows kept), Lowest
   adds render scale 75 %; any other mix reads Custom. A first-run pick behind the title can choose
-  it by measuring the GPU (off by default, project setting `tt_sim/graphics/auto_quality`). Eye view
+  it by measuring the GPU (on in the shipped project, project setting `tt_sim/graphics/auto_quality`;
+  it writes the four preset rows and never the Look row). Eye view
   smoothing (`FoliageEdges.eye_smoothing`, default on) is the eye view's MSAA 4x raise; off keeps
   the Antialiasing setting there. Model and switches: `docs/systems/graphics_quality.md`.
 

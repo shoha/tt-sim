@@ -4,6 +4,19 @@ extends GutTest
 ## (apply_level_environment's sun-light setup, apply_sun_settings, clear()) --
 ## see docs/superpowers/specs/2026-08-08-lighting-rendering-defaults-design.md
 ## for the auto/on/off mode semantics.
+## The Look is pinned to Classic: the painted sheet owns the sun's energy these read back
+## (painter-default-flip made Painted the default).
+
+var _saved_choice: int = RenderStyle.DEFAULT_CHOICE
+
+
+func before_each() -> void:
+	_saved_choice = RenderStyle.choice
+	RenderStyle.choice = RenderStyle.CHOICE_CLASSIC
+
+
+func after_each() -> void:
+	RenderStyle.choice = _saved_choice
 
 
 func _make_manager_with_loaded_level() -> LevelEnvironmentManager:

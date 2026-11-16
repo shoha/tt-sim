@@ -21,10 +21,16 @@ extends RefCounted
 ## launch to launch; Settings' Re-detect runs it again on request, and decide() then leans
 ## HYSTERESIS toward the preset already in use. Every row stays editable after it.
 ##
-## Shipped off: the project setting FLAG_SETTING (default false) gates the automatic first-run
-## pick until the board's look question on LOW is answered; with it off a first run is exactly
-## the game before this (no measurement, no file written). Re-detect works either way, since a
-## player asks for it.
+## Shipped on: the project setting FLAG_SETTING is false in code but true in the shipped
+## project.godot ([tt_sim] graphics/auto_quality=true, since 2026-11-10), so a first run measures.
+## With it off a first run is exactly the game before the pick (no measurement, no file written).
+## Re-detect works either way, since a player asks for it.
+##
+## What a pick writes: [quality] auto_done and the measurement keys, and for a preset other than
+## HIGH the four preset rows (QualityPreset.write: shadow quality, cascades, ambient occlusion,
+## render scale). It never writes or reads the Look row (graphics/look, RenderStyle): a weak GPU
+## keeps the default Painted look, which measured at or below Classic in most views, and Classic
+## stays one Settings choice away.
 
 ## The project setting that turns the first-run pick on (project.godot [tt_sim]
 ## graphics/auto_quality=true; an override.cfg beside the game can set it too).
