@@ -37,7 +37,9 @@ const TONE_ROLE: Dictionary = {
 }
 ## The tint the floor's luminance takes for the burnt ground (char_of): a warm charcoal, never the
 ## floor's green.
-const CHAR_TINT := Vector3(0.86, 0.56, 0.38)
+const CHAR_TINT := Vector3(0.84, 0.58, 0.42)
+## The most luminance the burnt ground keeps from the floor's ramp (linear).
+const CHAR_MAX := 0.1
 const DEFAULT_ROLE := "meadow"
 ## [role, words], first match wins (see the header). The char role is the burnt ground: the
 ## event fire's ash surface and its burnt biome (FireSweep.ASH, BURNT_BIOME).
@@ -89,7 +91,9 @@ static func biome_role(biome_id: String) -> String:
 ## The burnt ground's linear colour for the floor's `color` (linear): its luminance in CHAR_TINT, so
 ## the mood and the sun still light it and the green is gone.
 static func char_of(color: Vector3) -> Vector3:
-	var l := color.dot(Vector3(0.3, 0.59, 0.11))
+	# Capped: a winter floor is near white, and its char must still be dark (the capture's patch on
+	# snow read terracotta without the cap).
+	var l := minf(color.dot(Vector3(0.3, 0.59, 0.11)), CHAR_MAX)
 	return Vector3(l, l, l) * CHAR_TINT
 
 

@@ -169,6 +169,8 @@ func test_the_ground_roles_know_burnt_ground() -> void:
 	assert_gt(burnt.x, burnt.z, "warm, not the floor's green")
 	assert_gt(burnt.x, burnt.y * 0.99, "red leads green")
 	assert_lt(burnt.y, 0.3, "darker than the green it came from")
+	var snow := PainterGroundRoles.char_of(Vector3(0.8, 0.85, 0.9))
+	assert_lt(snow.x, 0.1, "the burnt patch on a snow floor stays dark")
 
 
 func test_the_char_map_exists_only_for_a_document_with_burnt_ground() -> void:
