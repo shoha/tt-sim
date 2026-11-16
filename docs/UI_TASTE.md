@@ -225,7 +225,7 @@ what was measurably wrong and centralises the rest. It changes no owner verdict.
   menu at 0.94 s), trimmed by `UiMotion.stagger_step()` so the whole entrance ends within
   `STAGGER_CAP_S` 0.36 s. The lift rides `offset_transform_position`, so rows no longer move by
   `position` (M3) and no container re-sorts at the end.
-- **M5 implemented: Reduce motion.** Settings > Graphics > Reduce motion (saved `ui/reduce_motion`,
+- **M5 implemented: Reduce motion.** Settings > Accessibility > Reduce motion (saved `ui/reduce_motion`,
   applied at once, `UiPreferences.load_reduce_motion` / `save_reduce_motion`) joins the OS
   reduce-animation flag in `UiMotion.reduced()`. Under it, sheets, popups, the asset browser,
   the download panel and pane swaps fade over at most `FADE_ONLY_S` 0.12 with no scale, lift or
@@ -236,6 +236,35 @@ what was measurably wrong and centralises the rest. It changes no owner verdict.
   plum at 0.90 opacity, which is the least painterly surface left; whether authoring, which
   does not run a table, should be paper rather than glass is the map-building card's call, with
   the owner. See `docs/THEME_GUIDE.md` "Foundation pass" for the per-screen list.
+
+## 2026-11-15 settings pass (card ui-settings)
+
+The Settings menu was a wall of controls under eight bare labels. New rules for any sheet of
+settings (the Settings menu is the first user; `docs/UI_SYSTEMS.md` "Settings Menu" has the
+mechanics). Reduce motion now lives under Settings > Accessibility, not Graphics.
+
+- **S5 A setting says what it does under its name.** Every row that is not self-evident carries
+  one plain sentence of `Caption` text directly under it (flush, so the pair reads as one item;
+  the gap between rows is wider than the gap inside one). The tooltip is the long form and may
+  repeat it; it is never the only place the effect is said. Write for a player, not an engine:
+  "Smooths jagged edges on foliage", not "MSAA".
+- **S6 Group by what the player is trying to do, most used first.** A tab with more than about
+  five rows is split under headings (Look and quality before Display before Effects, then
+  Performance, then an Advanced foldout for what almost nobody changes). Motion and size options
+  that help a player read live in Accessibility, together.
+- **S7 Reset is per group and global, and says when there is nothing to reset.** A group's Reset
+  is quiet (Ghost) and off while the group is at its defaults. Defaults are read from one place so
+  a reset can never disagree with a fresh install.
+- **S8 Say what is saved.** A sheet that stages changes shows `All changes applied` or `Unsaved
+  changes: ...` in words (the tone is secondary, never the only cue, C7), Apply is off while
+  there is nothing to apply, and closing with unsaved changes puts everything back and says so.
+  A row that is cheap to show previews on the board as it moves; a row that is not (a window
+  mode, a renderer, a resize) waits for Apply.
+- **S9 A long sheet can be searched, and every control is reachable without a mouse.** Search
+  matches names and sentences; the first Escape clears it. Section tabs take focus, Tab walks
+  rows in reading order, the scroll follows focus, shoulder buttons or Ctrl+Page Up/Down change
+  section. A sheet sizes to the canvas (Interface size, window) and keeps its height across
+  sections.
 
 ## Verdicts
 

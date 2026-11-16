@@ -43,6 +43,11 @@ const SHOW_MUSIC_VOLUME := false
 ## The Graphics tab's Quality row (SettingsQuality), loaded by path when the menu opens so the
 ## quality scripts stay off the start-up graph that this file is on.
 const QUALITY_ROW := "res://scenes/ui/settings_quality.gd"
+## The helpers the menu opens with, loaded by path (see `layout` below).
+const LAYOUT_SCRIPT := "res://scenes/ui/settings_layout.gd"
+const SESSION_SCRIPT := "res://scenes/ui/settings_session.gd"
+const APPLY_SCRIPT := "res://scenes/ui/settings_apply.gd"
+const PAGES_SCRIPT := "res://scenes/ui/settings_pages.gd"
 
 ## The Shadow quality for a player with no saved choice; project.godot's
 ## directional soft_shadow_filter_quality matches it, since a fresh install keeps that one.
@@ -80,8 +85,11 @@ var close_button: Button
 var search_box: LineEdit
 ## The groups the menu builds around its rows (SettingsSpec) and what it knows about them
 ## (SettingsSession: defaults, unsaved changes, preview).
-var layout: SettingsLayout
-var session: SettingsSession
+##
+## These are loaded by path when the menu opens, like the Quality row, so none of the helpers is
+## on the start-up graph (tests/unit/test_boot_graph.gd); the vars are untyped for that reason.
+var layout
+var session
 
 ## True while Reset tweens the sliders to their defaults; the sliders do not tick then.
 var _resetting := false
@@ -409,14 +417,14 @@ func _on_panel_ready() -> void:
 
 	# Updates
 	prereleases_check.toggled.connect(_on_prereleases_toggled)
-	check_updates_button.pressed.connect(SettingsPages.check_for_updates.bind(self))
+	check_updates_button.pressed.connect(Callable(_pages(), "check_for_updates").bind(self))
 
 	# About
 	licences_button.pressed.connect(_on_licences_pressed)
 
 	# Rows share one label column, then move under their group headings (SettingsSpec).
 	_fit_tab_rows()
-	layout = SettingsLayout.new(self)
+	layout = (load(LAYOUT_SCRIPT) as GDScript).new(self)
 	layout.build()
 	_decorate_tabs()
 
@@ -443,10 +451,10 @@ func _on_panel_ready() -> void:
 
 	# Load current settings
 	_load_settings()
-	SettingsPages.populate_shortcuts(controls_list)
+	_pages().populate_shortcuts(controls_list)
 	_update_cache_info()
 	_update_version_info()
-	session = SettingsSession.new(self, layout)
+	session = (load(SESSION_SCRIPT) as GDScript).new(self, layout)
 	session.start()
 
 	# Register as overlay (cast to Control for type compatibility)
@@ -691,11 +699,11 @@ func _write_values(config: ConfigFile) -> void:
 
 ## Everything Apply applies, and the preview a moved row gets before it (SettingsApply).
 func _apply_settings() -> void:
-	SettingsApply.all(self)
+	(load(APPLY_SCRIPT) as GDScript).call("all", self)
 
 
 func _apply_preview() -> void:
-	SettingsApply.preview(self)
+	(load(APPLY_SCRIPT) as GDScript).call("preview", self)
 
 
 func _update_volume_label(label: Label, value: float) -> void:
@@ -877,7 +885,12 @@ func _on_input_device_selected(index: int) -> void:
 
 
 func _on_input_profile_changed(_new_profile: InputProfile.Profile) -> void:
-	SettingsPages.populate_shortcuts(controls_list)
+	_pages().populate_shortcuts(controls_list)
+
+
+## The Controls and Updates pages' helpers (SettingsPages), loaded on first use.
+func _pages() -> GDScript:
+	return load(PAGES_SCRIPT) as GDScript
 
 
 func _on_clear_cache_pressed() -> void:

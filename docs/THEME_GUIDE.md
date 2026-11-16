@@ -556,12 +556,14 @@ which may only fall): `drawer_container.gd` 12 overrides, `download_queue.gd` / 
 `avatar_swatch_row.gd` 7, `title_screen.tscn` 7 overrides and 4 colour literals,
 `help_overlay.gd` 6, `volume_overlay.gd` 4 and `sky_pane.gd` 3 colour literals.
 
-- **Settings:** the dialog is 600 wide and about 560 tall at 1080p, so Graphics clips its last
-  rows (Lo-fi filter half cut at the bottom edge) behind a scroll; give the sheet its height
-  budget or split Graphics (Display, Performance, Accessibility). Reduce motion sits under
-  Interface size for now and should live in an Accessibility group with Interface size.
-  Toggle rows (`CheckButton`) are small 120 px label columns; rows have no description
-  line, so what a switch does is only in its tooltip.
+- **Settings (done 2026-11-15, card ui-settings):** the sheet sizes to the canvas (up to 720 x
+  760 logical px) and keeps that height across sections; Graphics is split into Look and quality,
+  Display, View and camera, Effects, Water, Performance and Advanced; Reduce motion, Interface
+  size and Wind motion are in a new Accessibility tab; every row carries a one-sentence
+  `Caption` under it, each group a quiet Reset, the footer an unsaved/applied line, the header a
+  search box. The row table is `SettingsSpec` (docs/UI_SYSTEMS.md "Settings Menu" says how to add a
+  row); UI_TASTE S5 to S9 are the rules. Group headings use `Heading`, descriptions `Caption`,
+  Reset `Ghost`, the unsaved line `CaptionState`: no colour is set by hand.
 - **Map building (authoring):** the tool drawer and rail are dark plum glass at 0.90 and read
   heavy over the luminous painted board, and the drawer takes about a fifth of the width at 1080p.
   Decide with the owner whether authoring (play stopped, no

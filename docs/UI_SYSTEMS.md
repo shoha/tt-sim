@@ -1027,22 +1027,75 @@ separators, apart from Return to title); it emits `room_requested`, which
 
 ## Settings Menu
 
-Tabbed settings interface (`scenes/ui/settings_menu.gd`) with six sections: Audio, Graphics, Grid,
-Controls, Network, and Updates. Sections are chosen from a labelled `IconRail` (`SECTIONS` in
-`settings_menu.gd`) rather than the `TabContainer`'s own tab bar, which is hidden
-(`tabs_visible = false`); the rail drives `tab_container.current_tab` instead. The menu selects
+Tabbed settings interface (`scenes/ui/settings_menu.gd`) with eight sections: Audio, Graphics,
+Accessibility, Grid, Controls, Network, Updates and About. Sections are chosen from a labelled
+`IconRail` (`SECTIONS` in `settings_menu.gd`) rather than the `TabContainer`'s own tab bar, which
+is hidden (`tabs_visible = false`); the rail drives `tab_container.current_tab` instead. The rail
+drops its labels when the canvas is under `COMPACT_HEIGHT` (560 logical px, a 150% interface on a
+720p window). The menu selects
 its first section in `_ready`, before the rail has laid out its items; the rail's accent
 underline is placed from the items' laid-out rects after every sort of the rail
 (`sort_children`), so it sits under the selected section from the first frame (it read every
-item at x = 0 and sat at x = 18 under no section until 2026-10-09). Graphics keeps
-foliage budget and renderer options under an Advanced `Foldout`, whose 16 px chevron sits
-inline left of its title. The header is a closable
-`MenuHeader`; `close_button` is `header.close_button`. Keyboard section switching (the native tab
-bar's Ctrl+Tab) is not available while the tab bar is hidden and the rail items are not focusable; a
-keyboard-navigation pass is a known follow-up.
+item at x = 0 and sat at x = 18 under no section until 2026-10-09). The header is a closable
+`MenuHeader` with the search box (`%SearchBox`) between title and close button;
+`close_button` is `header.close_button`.
 
-The footer is end-aligned: `Reset to Defaults` is a quiet `Secondary` action, `Apply` carries the
-accent.
+### Structure: groups, sentences, search (2026-11-15, card ui-settings)
+
+`settings_menu.tscn` still declares every row (an `HBoxContainer`, a `Label`, then the control with
+its unique name), so no code that reads a control changed. When the menu opens,
+`SettingsLayout` (`scenes/ui/settings_layout.gd`) moves the rows under group headings as
+`SettingsSpec` (`settings_spec.gd`) says: each tab is a list of groups (a `Heading` title and a
+quiet `Reset` button), each group a list of rows, each row a `RowBlock_<Row>` holding the row and
+its one-sentence `Caption` description (players do not hover, so the tooltip is the long form and
+the sentence the short one). Graphics reads Look and quality, Display, View and camera, Effects,
+Water, Performance, then the Advanced `Foldout` (ambient occlusion, reflections, global
+illumination, renderer). Accessibility holds Interface size (and text), Reduce motion and Wind
+motion. No colour-vision setting exists: the status colours are already told apart for every
+colour-vision type and each carries an icon or words (UI_TASTE C9, C7).
+
+**Adding a setting row** (the card that brings one):
+
+1. Declare the row in `settings_menu.tscn` like its neighbours, anywhere under its tab's `Content`.
+2. Add `{"row": "<node name>", "desc": "<one plain sentence>"}` to a group of that tab in
+   `SettingsSpec.TABS`. A row the table misses is not lost: `SettingsLayout` puts it in a `More`
+   group at the end of its tab (and `test_no_row_is_left_outside_a_group` names it).
+3. Write and read it in `SettingsMenu._write_values` / `_show_saved_values`, give it its default in
+   `_show_defaults`, and add it to `SettingsSpec.APPLY_ONLY` if it should not preview.
+
+**Search.** The box filters on the row's label, sentence, group and tab; every word typed must
+match. Groups and rail sections with no match hide, the sheet jumps to the first section that has
+one, and an empty result says so. The first Escape clears the box, the next closes the menu.
+
+**Unsaved changes and preview** (`SettingsSession`, `settings_session.gd`). The menu compares the
+controls' values (`_write_values` into a throwaway `ConfigFile`) with the values at load or the
+last Apply. The footer says `All changes applied` or `Unsaved changes: Apply keeps them` (text,
+not colour alone; the dirty line also takes the state tone), and Apply is off while nothing is
+unsaved. Rows not in `SettingsSpec.APPLY_ONLY` preview on the board as they move (lo-fi, token
+shading and see-through, shadow quality, water, the rendering toggles, the grid); the others
+(fullscreen, VSync, render scale, antialiasing, foliage edges, shadow cascades, ground detail,
+idle throttle, eye smoothing, look, renderer, P2P) wait for Apply. Closing with unsaved changes
+puts the saved values back on the controls and the board and shows a toast.
+
+**Reset.** A group's `Reset` puts its controls on their defaults (sliders glide there over
+`UiMotion.STATE_S`, or snap under Reduce motion); it is off while the group is at defaults. The
+defaults are not listed twice: `SettingsSession` reads them from `_show_defaults(true)`, which
+sets the controls silently, plus `SettingsSpec.LIVE_DEFAULTS` for the four preferences that save
+the moment they change (Interface size, Reduce motion, the prerelease channel, the input device).
+`Reset all` in the footer is the whole-menu version.
+
+**Keyboard and gamepad.** The section rail takes focus (`IconRail.focusable`); the menu opens with
+focus on the selected section. Tab walks the search box, the rail, each group's Reset and rows,
+then Reset all and Apply, and wraps (the panel's focus trap). The tabs' scroll follows focus
+(`follow_focus`), so a row reached by Tab is never left under the edge. Ctrl+Page Up and Page Down,
+or the gamepad shoulder buttons, step through the sections. Escape closes.
+
+**Size.** The sheet takes the canvas less 32 px on each side, up to 720 by 760 logical px
+(`_fit_panel`, on every canvas change), and keeps that height for every section so it does not
+jump; rows scroll inside it.
+
+The footer is end-aligned: `Reset all` is a quiet `Secondary` action, `Apply` carries the accent,
+and the status line stands at the start.
 
 ### Opening
 
@@ -1089,7 +1142,7 @@ live one ends the silence; see `docs/SOUND_EFFECTS.md`.
   `Wind` autoload as the slider moves (Apply saves it); 0 holds everything still, and Reduce
   motion (the OS flag or the Settings row below) also holds it still and wins. Not a level field and
   never networked.
-- **Reduce motion** check (below Interface size, `ui/reduce_motion`, default off; saves and applies
+- **Reduce motion** check (Accessibility tab, with Interface size and Wind motion; `ui/reduce_motion`, default off; saves and applies
   the moment it is toggled like Interface size, `UiPreferences`): `UiMotion.reduced()` is true when
   it is on or the OS reduce-animation flag is. Every UI animation reads it (UI_TASTE.md "2026-11-15
   foundation pass": fades of at most 0.12 s, no scale, lift, slide or stagger; hover and press keep
@@ -1098,6 +1151,8 @@ live one ends the silence; see `docs/SOUND_EFFECTS.md`.
 - **Eye view smoothing** (`graphics/eye_smoothing`, below Foliage edges, default on): the eye view's
   MSAA 4x raise; off keeps the Antialiasing setting there (`SettingsGpuOptions`)
 - Advanced (`Foldout`): foliage density slider, SSAO/SSR/SDFGI toggles, renderer method option button
+
+**Accessibility Tab:** Interface size, Reduce motion, Wind motion (these three were Graphics rows).
 
 **Grid Tab:**
 
@@ -1121,7 +1176,9 @@ live one ends the silence; see `docs/SOUND_EFFECTS.md`.
 
 ### Persistence
 
-Settings are saved to `Paths.SETTINGS_PATH` (`user://settings.cfg`) and loaded on startup.
+Settings are saved to `Paths.SETTINGS_PATH` (`user://settings.cfg`) and loaded on startup. Every
+saved key keeps its name; `test_every_setting_round_trips_through_save_and_load` sets each control
+to a non-default value, saves, resets and loads.
 
 ---
 
