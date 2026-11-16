@@ -61,6 +61,13 @@
   marks: 0.4;  mark-thin: 0.25;  drift-marks: 0.3;  litter-marks: 0.3;  patches: 1;
   mark-px-lo: 0.07;  mark-px-hi: 0.14;  cut: 0.1;
 
+  /* Grounding (PainterOcclusion, card painter-grounding): the share the ground goes to a deeper
+     shade of itself under a crown or a house (occ-pool) and at a trunk's, rock's or wall's foot
+     (occ-core), that shade's value (occ-dark), the share of the foot's seam that turns to the
+     litter's soil tone (occ-soil), how far the deeper shade leans cool and green (occ-cool), and a
+     trunk's or rock's own step darker at its foot (base-dark). */
+  occ-pool: 0.42;  occ-core: 0.8;  occ-dark: 0.9;  occ-soil: 0.5;  occ-cool: 0.05;  occ-shade: 0.2;  base-dark: 0.28;
+
   /* The painted trees (PainterTreeTones): a crown's shade leans teal and keeps most of its own
      green (the prototype's S18; the spike's pull toward violet cancelled a green to grey), a
      stem's shade is its own brown, nearly unpulled and bark-shade-lift less deep than a role's
@@ -339,6 +346,8 @@
      read as lavender trees). Grass and flowers stand as dry stalks over the snow. */
   :world {
     floor: oklch(0.82 0.030 255);  shore: oklch(0.72 0.025 250);
+    /* Snow bases: the seam is the snow's own blue shade, no soil, no green lean. */
+    occ-soil: 0;  occ-cool: 0;  occ-dark: 0.84;  occ-shade: 0.85;
     /* Grass and flowers as dry straw over the snow (painter-trees-fix2: a pale straw under the full
        lit lift read beige slabs, its shade pulled to the snow's violet grey-lilac ghosts). A
        warmer straw, a small lit lift, and a shade that keeps its own hue over the pull (a keep

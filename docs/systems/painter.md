@@ -227,6 +227,48 @@ The foliage AA swap (`WindFoliage`, the eye view's alpha-to-coverage) collects s
 `WindFoliage.META_STAND_IN`: it swaps the original wind material in their place, so a painted
 material survives entering and leaving the eye view (`test_painter_surfaces.gd`).
 
+## Grounding
+
+Card painter-grounding (2026-11-15; owner: foliage and tokens felt "on top of the landscape"). The
+sun's shadow darkens the ground only along the sun's direction, and every painted shader turns the
+engine's ambient off, so nothing darkened the ground right under a crown, round a trunk, a rock or a
+wall, or under a token's feet, and no trunk or stone was darker where it met the ground. Two parts
+(`PainterOcclusion`, `painter/painter_occlusion.gd`, owned by `PainterSurfaces`):
+
+- **The ground's contact field.** A CPU raster at 0.5 m a texel over the map's extent, RG8: r a POOL
+  (a crown's projected disc, centred halfway from the trunk to the crown's middle, radius 0.5 of the
+  crown's half width plus 0.5 m; a bush's own disc grown a third; a rock's, log's or stump's oriented
+  box, from the scatter's instance transforms; a structure's footprint box grown 0.9 m), g a CORE (the
+  seam at a trunk's foot, 0.55 m + 5 % of its height; a rock's or a wall's base 0.35 m). Each footprint
+  is a coverage whose 0.5 contour is its nominal edge (`cover`), the texels keep the maximum. The
+  painted ground shader reads it with one fetch (a no-op branch when off) and thresholds it through
+  its own brush noise, so a pool is a flat stroke-edged shape, not a blur. The pool is the ground's
+  lit tone darkened (`occ-dark`) and leaned a little toward its shade (`occ-shade`) and cool
+  (`occ-cool`): shading toward the shade ramp alone read as a grey-violet smudge on the summer path
+  (the first try); the core leans toward the litter tone (`occ-soil`, 0 in winter: the snow's own
+  blue). Tokens are the only moving footprints: their feet discs go in a 32-entry uniform array
+  (centre, radius from `TokenGhost.body_bounds`, foot height, so a token on a roof stamps nothing on
+  the ground below), refreshed by one pass over the token group when one moved, and are drawn as a
+  wider pool plus a deeper disc under the feet. Rebuilt 0.3 s after the painted trees install or
+  erase (`PainterTrees.changed`), the scatter applies cells, a structure comes or goes or the
+  ground is edited: 17-24 ms for 215-317 footprints (forest, village, taiga maps of 200 ft).
+- **Base gradients.** A stem (the block-in's bark, `base_dark`, over its lowest 0.9 m) and a scatter
+  stone or log (`painter_selector`'s solid branch, over its lowest 45 %) are a step darker at their
+  foot, so they grow out of the ground; the heaped snow at a winter trunk's foot still wins.
+
+Sheet numbers (DEFAULT_NUMBERS, `core.sheet`'s :world; winter's :world overrides soil, cool, dark and
+shade): `occ-pool` 0.42, `occ-core` 0.8, `occ-dark` 0.9, `occ-soil` 0.5, `occ-cool` 0.05,
+`occ-shade` 0.2, `base-dark` 0.28. Classic never loads any of it.
+
+Cost (pinned in-run A/B, 1080p, RTX 3080, GPU ms median, `compare/painter_final25_grounding/cost`):
+the look on against off is +0.012 ms on average over 12 pairs (forest tokens, taiga home, village
+winter at 12 degrees, 16 tokens; range -0.03 to +0.047, noise about 0.03); main's ground shader
+against this branch's with the look off is +0.04 (forest +0.09, taiga -0.01, village +0.035:
+one pair each, before any drift). The total over main is about +0.05 ms. Rejected: engine SSAO
+(+1.2 to +1.45 ms in all four views, and no visible change: the painted shaders have ambient off, so
+the AO term has nothing to darken, even with `ssao_light_affect` 1); ground cover and litter dabs
+at object bases belong to the coverage card.
+
 ## Trees
 
 Card A2a (painter-a2a, painter-a2a2) draws the painted trees: under Painted the scatter's mapped

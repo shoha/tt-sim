@@ -48,6 +48,8 @@ const SOLID_SHADER := "res://painter/shaders/painter_solid.gdshader"
 const TREES := "res://painter/trees/painter_trees.gd"
 ## The painted buildings' host (PainterBuildings), loaded by path on the first painted map.
 const BUILDINGS := "res://painter/painter_buildings.gd"
+## The ground's contact occlusion host (PainterOcclusion), loaded by path on the first painted map.
+const OCCLUSION := "res://painter/painter_occlusion.gd"
 ## Metadata on every material this paints with.
 const META := &"painter_surface"
 ## The map root's name under the map container (MapSourceLoader.install).
@@ -77,6 +79,8 @@ var _zone_queued := false
 var _trees: RefCounted = null
 ## The painted buildings (a PainterBuildings), made on the first paint().
 var _buildings: RefCounted = null
+## The contact occlusion host (a PainterOcclusion), made on the first paint().
+var _occlusion: RefCounted = null
 
 
 ## Follows `manager`'s painted_look_changed for the map under `map_container`; called again with
@@ -113,11 +117,14 @@ func paint(map: Node3D, state: Dictionary) -> bool:
 	if _buildings == null:
 		_buildings = (load(BUILDINGS) as GDScript).new()
 	_buildings.call("paint", _map, applied)
+	_ground_occlusion()
 	return true
 
 
 ## Puts every material back as it was before the first paint() and stops following the map.
 func release() -> void:
+	if _occlusion != null:
+		_occlusion.call("release")
 	if _trees != null:
 		_trees.call("release")
 	if _buildings != null:
@@ -236,18 +243,97 @@ func _on_terrain_child(node: Node) -> void:
 
 func _on_ground_edited(_rect: Rect2i) -> void:
 	_queue_zone()
+	_queue_occlusion()
 
 
 func _on_cells_applied(_cells: Array[Vector2i]) -> void:
 	_tone_new(_paint_species())
 	if _trees != null:
 		_trees.call("sync")
+	_queue_occlusion()
 
 
 func _on_species_added(_materials: Array[ShaderMaterial]) -> void:
 	_tone_new(_paint_species())
 	if _trees != null:
 		_trees.call("sync")
+	_queue_occlusion()
+
+
+# ---------------------------------------------------------------- contact occlusion
+
+
+## Starts (or re-tones) the contact occlusion host (PainterOcclusion) and follows what changes its
+## footprints: the painted trees' installs, the structures coming and going.
+func _ground_occlusion() -> void:
+	if _occlusion == null:
+		_occlusion = (load(OCCLUSION) as GDScript).new()
+	_occlusion.call("bind", self, _map)
+	var sheet := PainterSheet.load_sheet(applied["sheet"])
+	_occlusion.call("retone", sheet, applied["mood"], applied["elevation"])
+	if _trees != null and not _trees.is_connected(&"changed", _queue_occlusion):
+		_trees.connect(&"changed", _queue_occlusion)
+	var structures: Node = _buildings.get("_structures") if _buildings != null else null
+	if structures != null and not structures.child_entered_tree.is_connected(_on_structures_changed):
+		structures.child_entered_tree.connect(_on_structures_changed)
+		structures.child_exiting_tree.connect(_on_structures_changed)
+
+
+func _on_structures_changed(_node: Node) -> void:
+	_queue_occlusion()
+
+
+func _queue_occlusion() -> void:
+	if _occlusion != null and not applied.is_empty():
+		_occlusion.call("queue")
+
+
+## The contact occlusion host (a PainterOcclusion), null before the first paint().
+func occlusion() -> RefCounted:
+	return _occlusion
+
+
+## The ground's materials: the chunks' and the skirt's.
+func ground_materials() -> Array[ShaderMaterial]:
+	var out: Array[ShaderMaterial] = [_ground_material()]
+	if _skirt != null:
+		out.append(_skirt)
+	return out
+
+
+## The materials that darken at their base: the rocks' and logs' stand-ins and the trees' own.
+func base_materials() -> Array[ShaderMaterial]:
+	var out: Array[ShaderMaterial] = []
+	for entry: Array in _swapped:
+		if int(entry[4]["kind"]) == PainterPlantRoles.KIND_SOLID:
+			out.append(entry[3])
+	if _trees != null:
+		out.append_array(_trees.call("materials"))
+	return out
+
+
+## The instance ids of the scatter meshes drawn as stones and wood (rocks, logs, stumps): the solids
+## whose footprint the ground's field holds.
+func solid_meshes() -> Dictionary:
+	var out := {}
+	for entry: Array in _swapped:
+		if (
+			int(entry[4]["kind"]) == PainterPlantRoles.KIND_SOLID
+			and str(entry[4]["role"]) in ["stone", "bark"]
+		):
+			out[(entry[0] as Mesh).get_instance_id()] = true
+	return out
+
+
+func scatters() -> Array[AuthoredScatter]:
+	return _scatters
+
+
+## The map's extent in metres (zero before a terrain is bound).
+func map_extent() -> Vector2:
+	if is_instance_valid(_terrain) and _terrain.document != null:
+		return _terrain.document.extent_m()
+	return Vector2.ZERO
 
 
 ## Draws the scatter's mapped trees painted (PainterTrees), or re-tones and re-syncs them.
@@ -313,6 +399,7 @@ func _queue_zone() -> void:
 ## b rock, a shore, one texel per height sample, blurred ZONE_BLUR samples.
 func _rebuild_zone() -> void:
 	_zone_queued = false
+	_queue_occlusion()
 	if not is_instance_valid(_terrain) or _terrain.document == null:
 		return
 	var doc := _terrain.document
