@@ -38,7 +38,6 @@ const STOPS_PLAY_SCENES := [
 ## ghost is one icon, GameMap's perf overlay layer only stacks MapOverlayUtils panels, and the
 ## camera compass draws itself from ThemeColors' glass roles (no Control theme to wear).
 const IN_PLAY_SCRIPTS := {
-	"res://scenes/states/authoring/authoring_controller.gd": "ThemeColors.glass_theme()",
 	"res://scenes/states/playing/camera_compass.gd": "",
 	"res://scenes/states/playing/drag_place_controller.gd": "",
 	"res://scenes/states/playing/game_map.gd": "",
@@ -46,7 +45,12 @@ const IN_PLAY_SCRIPTS := {
 	"res://utils/map_overlay_utils.gd": "ThemeColors.glass_theme()",
 }
 
-const STOPS_PLAY_SCRIPTS := ["res://scenes/ui/app_menu_controller.gd"]
+## Map building stops play: the authoring layer wears AuthoringPanel.surface_theme() (paper, with
+## the one-constant glass alternative; tests/unit/test_authoring_ui.gd checks it).
+const STOPS_PLAY_SCRIPTS := [
+	"res://scenes/ui/app_menu_controller.gd",
+	"res://scenes/states/authoring/authoring_controller.gd",
+]
 
 
 func test_paper_is_the_project_default() -> void:

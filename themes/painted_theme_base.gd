@@ -33,6 +33,7 @@ func define_theme() -> void:
 	_define_buttons()
 	_define_flat_buttons()
 	_define_panels()
+	_define_drawer()
 	define_fields()
 	define_toggles()
 	define_ranges()
@@ -466,6 +467,76 @@ func _define_panels() -> void:
 	define_variant_style(
 		"StateChip", "PanelContainer", {panel = box(c(ThemeColors.STATE), RADIUS_PILL, SPACE_2, 2)}
 	)
+
+
+## The edge drawer (DrawerContainer), by the screen edge it sits on ("Left" or "Right"): its
+## panel, its tab handle and its icon rail's backdrop, and the margin its content stands in.
+## All square on the panel's side so the board never peeks through; the handle and rail are
+## rounded on the side facing away from the panel and carry the top rim. No shadow, because a
+## closed panel rests just off-screen, where one would smudge the screen's edge. Paper adds a
+## pencil edge on the side facing the board; glass has none. Hover and press only deepen (C6).
+## Because the styles live here, a drawer follows its theme leaf (paper or glass) at any time.
+func _define_drawer() -> void:
+	for side: String in ["Left", "Right"]:
+		var left := side == "Left"
+		var panel_extra := {}
+		if not on_glass:
+			panel_extra = {
+				border_color = c(ThemeColors.EDGE),
+				border_width_right = 1 if left else 0,
+				border_width_left = 0 if left else 1,
+			}
+		define_variant_style(
+			"DrawerPanel" + side,
+			"PanelContainer",
+			{panel = box(c(ThemeColors.SURFACE), 0, 0, 0, panel_extra)}
+		)
+		var corners := {
+			corner_radius_top_right = RADIUS_CHIP if left else 0,
+			corner_radius_bottom_right = RADIUS_CHIP if left else 0,
+			corner_radius_top_left = 0 if left else RADIUS_CHIP,
+			corner_radius_bottom_left = 0 if left else RADIUS_CHIP,
+		}
+		var handle: Dictionary = box(
+			c(ThemeColors.SURFACE),
+			0,
+			SPACE_2,
+			SPACE_3,
+			inherit(corners, {border_color = c(ThemeColors.EDGE), border_width_top = 1})
+		)
+		var handle_hover: Dictionary = inherit(handle, {bg_color = c(ThemeColors.SURFACE_HOVER)})
+		var handle_press: Dictionary = inherit(handle, {bg_color = c(ThemeColors.SURFACE_PRESS)})
+		define_variant_style(
+			"DrawerTab" + side,
+			"Button",
+			_button(handle, handle_hover, handle_press, ThemeColors.TEXT)
+		)
+		# The rail's backdrop: the handle's surface with 4 px at its sides round the rail's items
+		# and 8 above and below.
+		define_variant_style(
+			"DrawerRail" + side,
+			"PanelContainer",
+			{
+				panel =
+				inherit(
+					handle,
+					{
+						content_margin_left = SPACE_1,
+						content_margin_right = SPACE_1,
+						content_margin_top = SPACE_2,
+						content_margin_bottom = SPACE_2,
+					}
+				)
+			}
+		)
+	# What a drawer's content stands in: 12 px round it (a play drawer), or 16 (the map tools').
+	for margin_name: String in ["DrawerMargin", "DrawerMarginRoomy"]:
+		var step := SPACE_4 if margin_name.ends_with("Roomy") else SPACE_3
+		define_variant_style(
+			margin_name,
+			"MarginContainer",
+			{margin_left = step, margin_top = step, margin_right = step, margin_bottom = step}
+		)
 
 
 func _define_containers() -> void:

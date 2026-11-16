@@ -56,7 +56,7 @@ func test_every_authoring_pane_ends_on_the_name_field_edge() -> void:
 	var layer := CanvasLayer.new()
 	_host.add_child(layer)
 	var panel := AuthoringPanel.new()
-	panel.theme = ThemeColors.glass_theme()
+	panel.theme = AuthoringChrome.surface_theme()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layer.add_child(panel)
 	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
