@@ -19,6 +19,10 @@
 //   radius; tree_in_view) 7 (shadow table, shadow entries).
 
 #include "res://painter/shaders/painter_tree.gdshaderinc"
+#ifdef TREE_BURN
+#include "res://painter/shaders/painter_tree_burn.gdshaderinc"
+varying flat float v_heat;
+#endif
 
 uniform sampler2DArray brushes : filter_linear_mipmap, repeat_disable;
 uniform float stroke_scale = 1.0;
@@ -266,6 +270,9 @@ void vertex() {
 	v_col = vec3(0.0);
 	v_brush = 0.0;
 	v_uv = vec2(0.0);
+#ifdef TREE_BURN
+	v_heat = 0.0;
+#endif
 
 	// One pass: `break` leaves the stage early (a vertex stage cannot `return`), the outputs above
 	// stay as they are (a collapsed vertex).
@@ -1165,6 +1172,23 @@ void vertex() {
 				vec3 grey12 = mix(vec3(l12), v_col, 0.3) * vec3(0.84, 0.82, 0.84);
 				v_col = mix(grey12, v_col * vec3(1.07, 0.98, 0.93), up12);
 			}
+#ifdef TREE_BURN
+			{
+				// painter-fire: this mark's place in the tree's burn (a shadow mark is the crown's, mid
+				// height). A leaf mark that has burnt through collapses (the fragment discards it).
+				float up_b = is_shadow ? 0.5 : clamp((anchor.y - MODEL_MATRIX[3].y - (box_c.y - box_h.y)) / max(2.0 * box_h.y, 0.5), 0.0, 1.0);
+				float rb = fract(rnd * 3.71 + 0.31);
+				float s_b = burn_since(up_b, rb);
+				if (burn_gone(s_b, rb, foliage || is_shadow)) {
+					v_uv = vec2(-1.0);
+				}
+				if (!is_shadow) {
+					float heat_b = 0.0;
+					v_col = burn_paint(v_col, s_b, rb, !foliage, heat_b);
+					v_heat = heat_b;
+				}
+			}
+#endif
 			// Round 17: the air between the eye and the mark, once a mark.
 			v_col = haze17(v_col, -(VIEW_MATRIX * vec4(anchor, 1.0)).z);
 			if (silhouette > 1.5) {
@@ -1186,6 +1210,9 @@ void fragment() {
 		discard;
 	}
 	ALBEDO = v_col;
+#ifdef TREE_BURN
+	EMISSION = v_col * v_heat;
+#endif
 	if (abs(v_brush - 14.0) < 0.5) {
 		// Round 19: a spray of twigs is drawn as lines of a fixed width on screen (twig-px), from one
 		// point: five twigs that bow apart, three side shoots, dry breaks. (First version: a brush

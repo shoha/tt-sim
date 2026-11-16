@@ -35,6 +35,7 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
 
 #include "res://painter/shaders/painter_noise.gdshaderinc"
 #include "res://painter/shaders/painter_structure_common.gdshaderinc"
+#include "res://painter/shaders/painter_building_burn.gdshaderinc"
 
 // 0 plaster, 1 stone, 2 log, 3 boards, 4 timber, 5 tile, 6 slate, 7 shingle, 8 thatch, 9 turf.
 uniform int pattern = 0;
@@ -197,6 +198,14 @@ void fragment() {
 	f_shd = mix(mix(shd, deep, dark), mid, light * 0.5);
 	f_mid = mix(mix(mid, shd, dark), lit, light * 0.6);
 	f_lit = mix(mix(lit, mid, dark), lit * 1.06, light);
+	// A varying cannot be an inout argument: the burn works on copies.
+	vec3 burn_shd = f_shd;
+	vec3 burn_mid = f_mid;
+	vec3 burn_lit = f_lit;
+	EMISSION = building_burn(wp, h, burn_shd, burn_mid, burn_lit);
+	f_shd = burn_shd;
+	f_mid = burn_mid;
+	f_lit = burn_lit;
 	f_n = n;
 	f_wob = p_noise(wp * 1.7 + 5.0);
 }

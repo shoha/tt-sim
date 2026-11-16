@@ -10,18 +10,23 @@ const TEMP_PATH := "user://test_token_ghost_settings.cfg"
 
 var _was_enabled := true
 var _was_painted := false
+var _was_style := TokenGhost.Style.DOUBLE
 
 
 func before_each() -> void:
 	_was_enabled = TokenGhost.enabled
 	_was_painted = TokenGhost.painted
+	_was_style = TokenGhost.style
 	TokenGhost.enabled = true
 	TokenGhost.painted = false
+	# The plain single line, whose colour is `line_colour` itself (a double stroke's is dark).
+	TokenGhost.style = TokenGhost.Style.OUTLINE
 
 
 func after_each() -> void:
 	TokenGhost.enabled = _was_enabled
 	TokenGhost.painted = _was_painted
+	TokenGhost.style = _was_style
 	if FileAccess.file_exists(TEMP_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(TEMP_PATH))
 
@@ -63,10 +68,16 @@ func _palette() -> ImageTexture:
 # --- opacity constants -------------------------------------------------------------------
 
 
-func test_the_opacity_constants_are_the_shaders_defaults() -> void:
-	# Read from the source: the headless renderer reports no uniform defaults.
-	assert_almost_eq(_shader_default("ghost_alpha"), TokenGhost.FILL_ALPHA, 0.0001)
-	assert_almost_eq(_shader_default("rim_alpha"), TokenGhost.RIM_ALPHA, 0.0001)
+func test_the_style_constants_describe_an_outline() -> void:
+	# The ghost is one line since painter-look-ghost2: about 2 px, and no fill at all.
+	for style: int in TokenGhost.STYLE_PARAMS:
+		var params: Dictionary = TokenGhost.STYLE_PARAMS[style]
+		assert_between(
+			(params.line_px as float) + (params.inner_px as float), 1.5, 4.5, "line width %d" % style
+		)
+		assert_false(params.has("fill_alpha"), "no fill, style %d" % style)
+	assert_gt(TokenGhost.STYLE_PARAMS[TokenGhost.Style.DOUBLE].inner_px as float, 0.0)
+	assert_false(TokenGhost.SHADER.code.contains("fill_alpha"), "the shader has no fill")
 
 
 func _shader_default(uniform_name: String) -> float:
@@ -76,10 +87,14 @@ func _shader_default(uniform_name: String) -> float:
 	return float(found.get_string(1)) if found != null else -1.0
 
 
-func test_the_fill_is_a_quarter_to_a_third_less_opaque_than_the_prototype() -> void:
-	# The prototype filled at 0.78; the covered part of the ghost was asked to be less opaque.
-	assert_between(TokenGhost.FILL_ALPHA / 0.78, 0.66, 0.76)
-	assert_gte(TokenGhost.FILL_ALPHA + TokenGhost.RIM_ALPHA, 0.95, "the rim stays solid")
+func test_the_shader_declares_the_uniforms_the_ghost_sets() -> void:
+	# Read from the source: the headless renderer reports no uniform defaults.
+	for uniform_name in [
+		"line_colour", "line_inner", "line_px", "inner_px", "wobble_px", "line_alpha"
+	]:
+		assert_true(
+			TokenGhost.SHADER.code.contains(" %s" % uniform_name), "uniform %s" % uniform_name
+		)
 
 
 # --- dressing ----------------------------------------------------------------------------
@@ -94,19 +109,18 @@ func test_an_avatar_part_is_dressed_with_its_palette() -> void:
 	assert_not_null(ghost)
 	assert_eq(ghost.shader, TokenGhost.SHADER)
 	assert_eq(ghost.render_priority, TokenGhost.RENDER_PRIORITY)
-	assert_true(ghost.get_shader_parameter("use_palette"))
-	assert_eq(ghost.get_shader_parameter("palette"), palette)
-	assert_eq(ghost.get_shader_parameter("ghost_alpha"), TokenGhost.FILL_ALPHA)
+	assert_eq(ghost.get_meta(TokenGhost.SOURCE_META), palette, "dressed from its palette")
+	var params: Dictionary = TokenGhost.STYLE_PARAMS[TokenGhost.style]
+	assert_eq(ghost.get_shader_parameter("line_px"), params.line_px)
 
 
-func test_a_pack_part_is_dressed_with_its_albedo() -> void:
+func test_a_pack_part_is_dressed_from_its_material() -> void:
 	var part := _pack_part(Color(0.75, 0.2, 0.15))
 	var token := _token([part])
 	TokenGhost.dress(token)
 	var ghost := TokenGhost.overlay_of(part)
 	assert_not_null(ghost)
-	assert_true(ghost.get_shader_parameter("use_albedo"))
-	assert_eq(ghost.get_shader_parameter("albedo_col"), Color(0.75, 0.2, 0.15))
+	assert_eq(ghost.get_meta(TokenGhost.SOURCE_META), part.material_override)
 
 
 func test_dressing_twice_keeps_the_same_overlay() -> void:
@@ -208,7 +222,7 @@ func test_new_colours_rebuild_the_overlay() -> void:
 	(part.material_override as ShaderMaterial).set_shader_parameter("palette", fresh)
 	TokenGhost.dress(token)
 	assert_not_same(TokenGhost.overlay_of(part), first)
-	assert_eq(TokenGhost.overlay_of(part).get_shader_parameter("palette"), fresh)
+	assert_eq(TokenGhost.overlay_of(part).get_meta(TokenGhost.SOURCE_META), fresh)
 
 
 func test_a_part_of_someone_elses_overlay_is_left_alone() -> void:
@@ -280,17 +294,19 @@ func test_a_trimmed_token_has_no_ghost() -> void:
 	assert_null(TokenGhost.overlay_of(part))
 
 
-func test_the_rim_is_gold_while_highlighted() -> void:
+func test_the_line_is_gold_while_highlighted() -> void:
 	var part := _pack_part(Color.RED)
 	var token := _token([part])
 	TokenGhost.dress(token)
 	var ghost := TokenGhost.overlay_of(part)
-	assert_ne(ghost.get_shader_parameter("rim_color"), TokenGhost.SELECTED_RIM)
+	assert_ne(ghost.get_shader_parameter("line_colour"), TokenGhost.SELECTED_RIM)
+	var plain_width: float = ghost.get_shader_parameter("line_px")
 	token.add_highlight()
-	assert_eq(ghost.get_shader_parameter("rim_color"), TokenGhost.SELECTED_RIM)
-	assert_eq(ghost.get_shader_parameter("rim_strength"), 1.0)
+	assert_eq(ghost.get_shader_parameter("line_colour"), TokenGhost.SELECTED_RIM)
+	assert_gt(ghost.get_shader_parameter("line_px") as float, plain_width, "a selected line is wider")
 	token.remove_highlight()
-	assert_ne(ghost.get_shader_parameter("rim_color"), TokenGhost.SELECTED_RIM)
+	assert_ne(ghost.get_shader_parameter("line_colour"), TokenGhost.SELECTED_RIM)
+	assert_eq(ghost.get_shader_parameter("line_px"), plain_width)
 
 
 func test_a_token_dressed_while_highlighted_starts_gold() -> void:
@@ -298,37 +314,98 @@ func test_a_token_dressed_while_highlighted_starts_gold() -> void:
 	var token := _token([part])
 	token.is_highlighted = true
 	TokenGhost.dress(token)
-	assert_eq(TokenGhost.overlay_of(part).get_shader_parameter("rim_color"), TokenGhost.SELECTED_RIM)
+	assert_eq(
+		TokenGhost.overlay_of(part).get_shader_parameter("line_colour"), TokenGhost.SELECTED_RIM
+	)
 
 
-# --- the Painted look's own wash ----------------------------------------------------------
+# --- the line's colour (the token's own most vivid colour) ----------------------------------
 
 
-func test_the_painted_look_gives_the_ghost_its_own_wash_and_classic_keeps_the_default() -> void:
+func test_the_line_takes_the_hue_of_the_tokens_most_vivid_colour() -> void:
+	var part := _pack_part(Color(0.1, 0.2, 0.8))
+	var token := _token([part])
+	TokenGhost.dress(token)
+	var line: Color = TokenGhost.overlay_of(part).get_shader_parameter("line_colour")
+	assert_almost_eq(line.h, Color(0.1, 0.2, 0.8).h, 0.02, "the token's blue")
+	assert_gte(line.v, 0.92, "bright enough to read")
+	assert_gte(line.s, 0.6, "and saturated")
+
+
+func test_every_part_of_a_token_shares_one_line_colour() -> void:
+	var red := _pack_part(Color(0.9, 0.1, 0.1))
+	var grey := _pack_part(Color(0.5, 0.5, 0.5))
+	var token := _token([red, grey])
+	TokenGhost.dress(token)
+	assert_eq(
+		TokenGhost.overlay_of(red).get_shader_parameter("line_colour"),
+		TokenGhost.overlay_of(grey).get_shader_parameter("line_colour"),
+		"the vivid red stands for the whole token"
+	)
+
+
+func test_a_double_stroke_is_a_dark_outer_line_over_a_light_inner_one() -> void:
+	var colours := TokenGhost.stroke_colours(Color(0.2, 0.7, 0.3), false, true)
+	assert_lt((colours.line as Color).v, 0.4, "the outer line is dark")
+	assert_gt((colours.inner as Color).v, 0.9, "the inner line is light")
+	assert_gt((colours.inner as Color).s, 0.0)
+	var gold := TokenGhost.stroke_colours(Color(0.2, 0.7, 0.3), true, true)
+	assert_almost_eq((gold.inner as Color).h, TokenGhost.SELECTED_RIM.h, 0.02, "gold stays gold")
+
+
+func test_the_line_avoids_the_leaf_green_when_the_token_has_another_vivid_colour() -> void:
+	var green := Color(0.1, 0.95, 0.1)
+	var colours := PackedColorArray([green, Color(0.9, 0.25, 0.5)])
+	var plain := TokenColours.vivid(colours)
+	var line := TokenColours.vivid(colours, true)
+	assert_almost_eq(plain.h, green.h, 0.02, "the pin keeps the green")
+	assert_almost_eq(line.h, Color(0.9, 0.25, 0.5).h, 0.02, "the line takes the pink")
+	var only_green := TokenColours.vivid(PackedColorArray([green]), true)
+	assert_almost_eq(only_green.h, green.h, 0.02, "a green token stays green")
+
+
+func test_a_grey_token_keeps_a_grey_line() -> void:
+	var line := TokenGhost.readable(Color(0.5, 0.5, 0.5))
+	assert_lt(line.s, 0.15)
+	assert_gte(line.v, 0.92)
+
+
+# --- the outline variants ---------------------------------------------------------------------
+
+
+func test_each_variant_sets_its_own_line() -> void:
 	var part := _pack_part(Color.RED)
 	var token := _token([part])
-	TokenGhost.painted = false
+	TokenGhost.set_style(TokenGhost.Style.DOUBLE, get_tree())
 	TokenGhost.dress(token)
-	var ghost := TokenGhost.overlay_of(part)
-	assert_null(ghost.get_shader_parameter("ghost_tint"), "Classic sets no tint")
-	assert_null(ghost.get_shader_parameter("rim_color"), "Classic's rim keeps the shader default")
-	TokenGhost.set_painted(true, get_tree())
-	var painted_ghost := TokenGhost.overlay_of(part)
-	assert_not_null(painted_ghost)
-	for key: String in ["ghost_tint", "own_colour", "ghost_alpha", "rim_alpha", "rim_power"]:
-		assert_eq(painted_ghost.get_shader_parameter(key), TokenGhost.PAINTED_PARAMS[key], key)
-	assert_eq(
-		painted_ghost.get_shader_parameter("rim_color"),
-		TokenGhost.PAINTED_PARAMS.rim_color_default,
-		"the unselected rim is the painted dark teal"
+	assert_gt(TokenGhost.overlay_of(part).get_shader_parameter("inner_px") as float, 0.0)
+	TokenGhost.set_style(TokenGhost.Style.OUTLINE, get_tree())
+	var plain := TokenGhost.overlay_of(part)
+	assert_eq(plain.get_shader_parameter("inner_px"), 0.0, "one plain line")
+	assert_eq(plain.get_shader_parameter("wobble_px"), 0.0)
+	TokenGhost.set_style(TokenGhost.Style.DRAWN, get_tree())
+	assert_gt(TokenGhost.overlay_of(part).get_shader_parameter("wobble_px") as float, 0.0)
+
+
+# --- the mask pass (one line round the union of the meshes) -------------------------------------
+
+
+func test_every_overlay_carries_the_shared_mask_pass_drawn_before_it() -> void:
+	var a := _pack_part(Color.RED)
+	var b := _pack_part(Color.BLUE)
+	var token := _token([a, b])
+	TokenGhost.dress(token)
+	var first := TokenGhost.overlay_of(a)
+	var second := TokenGhost.overlay_of(b)
+	assert_not_null(first.next_pass, "the mask pass")
+	assert_same(first.next_pass, second.next_pass, "one material for every mesh")
+	assert_same(first.next_pass, TokenGhost.mask_material())
+	assert_lt(
+		(first.next_pass as Material).render_priority, first.render_priority, "the mask comes first"
 	)
-	token.add_highlight()
-	assert_eq(
-		painted_ghost.get_shader_parameter("rim_color"), TokenGhost.SELECTED_RIM, "gold when selected"
-	)
-	TokenGhost.set_painted(false, get_tree())
-	var back := TokenGhost.overlay_of(part)
-	assert_null(back.get_shader_parameter("ghost_tint"), "leaving Painted restores the default")
+	assert_eq((first.next_pass as ShaderMaterial).shader, TokenGhost.MASK_SHADER)
+	assert_true(TokenGhost.MASK_SHADER.code.contains("DEPTH"), "it writes depth")
+	assert_true(TokenGhost.SHADER.code.contains("DEPTH"), "and the line stays just short of it")
 
 
 # --- the draw-call budget ----------------------------------------------------------------

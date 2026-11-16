@@ -98,6 +98,9 @@ const FLICKER_RATES := Vector2(1.7, 4.3)
 ## how high it stands) falls from LIGHT_GATE.y to .x: off by day, full at dusk and night.
 const LIGHT_GATE := Vector2(0.1, 0.35)
 
+## The painted ground's materials that mirror the terrain's fire bake (mirror_glow); empty under
+## Classic, so bind_glow does what it always did.
+static var glow_mirrors: Array[ShaderMaterial] = []
 static var _mesh: QuadMesh = null
 static var _material: ShaderMaterial = null
 ## The book's state, its texture once bound, the FireFields in the tree, and the load's timings
@@ -477,3 +480,27 @@ static func bind_glow(ground: ShaderMaterial, sim_map: Texture2D, sim_rect: Vect
 	ground.set_shader_parameter("fire_sim_map", sim_map)
 	ground.set_shader_parameter("fire_sim_rect", sim_rect)
 	ground.set_shader_parameter("fire_present", 0 if sim_map == null else 1)
+	for mirror in glow_mirrors:
+		mirror.set_shader_parameter("fire_sim_map", sim_map)
+		mirror.set_shader_parameter("fire_sim_rect", sim_rect)
+		mirror.set_shader_parameter("fire_present", 0 if sim_map == null else 1)
+
+
+## Starts mirroring the ground's fire bake onto `material` (the painted ground, which replaces
+## the terrain's material under the Painted look and draws the fire its own way), and copies the
+## bake `ground` holds now. Classic never registers one.
+static func mirror_glow(material: ShaderMaterial, ground: ShaderMaterial) -> void:
+	if not glow_mirrors.has(material):
+		glow_mirrors.append(material)
+	if ground == null:
+		return
+	material.set_shader_parameter("fire_sim_map", ground.get_shader_parameter("fire_sim_map"))
+	material.set_shader_parameter("fire_sim_rect", ground.get_shader_parameter("fire_sim_rect"))
+	material.set_shader_parameter("fire_present", ground.get_shader_parameter("fire_present"))
+
+
+## Stops mirroring onto `material`, and turns its fire off.
+static func unmirror_glow(material: ShaderMaterial) -> void:
+	glow_mirrors.erase(material)
+	material.set_shader_parameter("fire_sim_map", null)
+	material.set_shader_parameter("fire_present", 0)

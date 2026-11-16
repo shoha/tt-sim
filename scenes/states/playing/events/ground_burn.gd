@@ -133,7 +133,7 @@ func _shade(size: Vector3, scale_m: float, event_seed: int) -> void:
 	box.size = size
 	mesh = box
 	_material = ShaderMaterial.new()
-	_material.shader = SHADER
+	_material.shader = FireVariants.shader_for(FireVariants.BURN)
 	# Below the water's transparent pass: the ground is reworked before anything is drawn over it.
 	_material.render_priority = -1
 	_material.set_shader_parameter(&"lobe_texture", lobe_texture())

@@ -23,9 +23,14 @@ extends RefCounted
 ## library (a `paint_role` field beside a surface's PBR set, and a biome's taken from its ground
 ## surface), so an imported library's surfaces keep their meaning; then these tables go.
 
-const ROLES: Array[String] = ["meadow", "floor", "path", "rock", "shore", "dry", "ash", "earth"]
+const ROLES: Array[String] = [
+	"meadow", "floor", "path", "rock", "shore", "dry", "ash", "earth", "char"
+]
 ## The sheet role each ground role paints with (index for index with ROLES). A role in DERIVED
-## paints with its base role's tone moved by the sheet's numbers.
+## paints with its base role's tone moved by the sheet's numbers. `ash` is a biome's ground (a burnt
+## forest's, from the stone tone); `char` is the scorch a fire event leaves (painter-fire): the
+## floor's luminance in a warm charcoal tint (char_of), never a keyed colour, laid over whatever
+## ground was there. They are different things and both stay.
 const TONE_ROLE: Dictionary = {
 	"meadow": "ground",
 	"floor": "floor",
@@ -35,7 +40,13 @@ const TONE_ROLE: Dictionary = {
 	"dry": "ground",
 	"ash": "stone",
 	"earth": "path",
+	"char": "floor",
 }
+## The tint the floor's luminance takes for the scorched ground (char_of): a warm charcoal, never
+## the floor's green.
+const CHAR_TINT := Vector3(0.84, 0.58, 0.42)
+## The most luminance the scorched ground keeps from the floor's ramp (linear).
+const CHAR_MAX := 0.1
 ## The tones the painted look derives from a keyframed role instead of keying them (card
 ## painter-coverage): name -> [the sheet role it is derived from, the prefix of its three sheet
 ## numbers `<prefix>-hue` (degrees), `<prefix>-chroma` (a factor) and `<prefix>-lift`]. dry, ash
@@ -52,11 +63,13 @@ const DERIVED: Dictionary = {
 ## The zone map's second texture holds these (r dry, g ash, b earth): index in ROLES from here.
 const BIOME_ROLES_FROM := 5
 const DEFAULT_ROLE := "meadow"
-## [role, words], first match wins (see the header).
+## [role, words], first match wins (see the header). The char role is the event fire's scar: the
+## ash surface it stamps (FireSweep.ASH); a burnt biome is the `ash` role (BIOME_RULES).
 const SURFACE_RULES: Array = [
+	["char", ["ash", "char", "charred", "cinder", "scorched"]],
 	["rock", ["cliff", "scree", "rock", "boulder"]],
 	["shore", ["sand", "mud", "riverbed", "shore", "beach"]],
-	["floor", ["floor", "litter", "duff", "moss", "ash", "peat", "opening", "leaves"]],
+	["floor", ["floor", "litter", "duff", "moss", "peat", "opening", "leaves"]],
 	[
 		"path",
 		[
@@ -97,6 +110,15 @@ static func surface_role(surface_id: String) -> String:
 ## rule knows it).
 static func biome_role(biome_id: String) -> String:
 	return _role(BIOME_RULES, biome_id)
+
+
+## The burnt ground's linear colour for the floor's `color` (linear): its luminance in CHAR_TINT, so
+## the mood and the sun still light it and the green is gone.
+static func char_of(color: Vector3) -> Vector3:
+	# Capped: a winter floor is near white, and its char must still be dark (the capture's patch on
+	# snow read terracotta without the cap).
+	var l := minf(color.dot(Vector3(0.3, 0.59, 0.11)), CHAR_MAX)
+	return Vector3(l, l, l) * CHAR_TINT
 
 
 ## The index in SURFACE_RULES that resolves `surface_id`, or -1 when it falls to DEFAULT_ROLE.
