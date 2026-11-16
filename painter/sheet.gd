@@ -57,7 +57,8 @@ const NUMBER_PROPS: Array[String] = ["sun-energy", "ambient-energy"]
 ## accents (PainterSurfaces paints with them), the conifers' needles and a bare season's clinging
 ## dry leaves (PainterTreeTones), and the
 ## buildings' walls and timber (PainterBuildings: plaster, a stone wall, log and board walls, the
-## beams, frames and doors).
+## beams, frames and doors) and the water's (PainterWater: the three depth bands of the wash, the
+## lighter and the darker stroke, the white water, the sun's glint and the ice).
 const DEFAULT_ROLES: Array[String] = [
 	"needle",
 	"plaster",
@@ -75,6 +76,14 @@ const DEFAULT_ROLES: Array[String] = [
 	"flower-violet",
 	"flower-white",
 	"dry-leaf",
+	"water-shallow",
+	"water-mid",
+	"water-deep",
+	"water-lit",
+	"water-shade",
+	"water-foam",
+	"water-glint",
+	"water-ice",
 ]
 ## Numbers a keyframe may leave to a `:world` default. The tone ramp (PainterTones.ramp: how a
 ## role's shade and lit colours are drawn from it, the ground's own ramp under `ground-`), the
@@ -111,6 +120,11 @@ const DEFAULT_ROLES: Array[String] = [
 ## a dry biome's straw, an ash ground and a baked earth follow the mood and the sun the role they
 ## come from follows: dry- from `ground`, drygrass- from `grass`, ash- from `stone`, earth- from
 ## `path`.
+## The water's (PainterWater, painter_water.gdshader): the share of the stroke lattice's cells that
+## hold a stroke (water-strokes), a stroke's length in metres (water-stroke-len), its boil's period
+## in seconds (water-boil), how much of the sun's side glints (water-glints), the wash's deepest
+## alpha (water-opacity), the shore ribbon's width in metres (water-foam-width) and how far still
+## water freezes (ice-over, 0 to 1: winter's).
 const DEFAULT_NUMBERS: Array[String] = [
 	"shade-hue",
 	"shade-pull",
@@ -141,6 +155,13 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"keep-freq-flower",
 	"flower-mix",
 	"marks",
+	"occ-pool",
+	"occ-core",
+	"occ-dark",
+	"occ-soil",
+	"occ-cool",
+	"occ-shade",
+	"base-dark",
 	"mark-thin",
 	"drift-marks",
 	"litter-marks",
@@ -193,6 +214,13 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"cactus-hue",
 	"cactus-chroma",
 	"cactus-lift",
+	"water-strokes",
+	"water-stroke-len",
+	"water-boil",
+	"water-glints",
+	"water-opacity",
+	"water-foam-width",
+	"ice-over",
 ]
 ## Below this OKLCH chroma a colour's hue is meaningless: a blend takes the other end's hue.
 const GREY_CHROMA := 0.02

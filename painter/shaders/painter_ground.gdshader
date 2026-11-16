@@ -50,6 +50,10 @@ uniform float cut_amp = 0.0;
 // The sun height (sine of its elevation, 20 degrees) under which the turned-from-the-sun step
 // shrinks with it (light()).
 const float TURN_SUN_FULL = 0.34;
+// The wet band: the wet line's value that the band's edge sits at, and what it does to a colour
+// (darker and a little cooler, linear).
+const float WET_EDGE = 0.45;
+const vec3 WET_TINT = vec3(0.64, 0.70, 0.80);
 uniform vec2 stroke_dir = vec2(1.0, 0.0);
 uniform sampler2DArray brushes : filter_linear_mipmap, repeat_disable;
 uniform bool brushes_present = false;
@@ -70,7 +74,25 @@ uniform bool water_present = false;
 uniform vec2 layer_grid_origin = vec2(0.0);
 uniform vec2 layer_grid_step = vec2(0.25);
 
+// Contact occlusion (PainterOcclusion): the footprint field (r a pool under crowns, bushes, rocks and
+// houses, g a seam at their feet), its origin and texel size, the pool's and seam's strength, the
+// deeper shade's value (z) and soil share (w), its tint, and the tokens' feet discs (x, z, radius,
+// foot y) with their strengths (x the seam's, y the pool's).
+uniform sampler2D occ_map : hint_default_black, filter_linear, repeat_disable;
+uniform bool occ_present = false;
+uniform vec2 occ_origin = vec2(0.0);
+uniform float occ_step = 0.5;
+uniform vec4 occ_k = vec4(0.0, 0.0, 0.8, 0.3);
+uniform vec4 occ_tint = vec4(0.9, 1.0, 0.96, 0.35);
+uniform vec4 tok[32];
+uniform int tok_n = 0;
+uniform vec2 tok_k = vec2(0.0);
+
 varying vec3 v_n;
+varying float v_wy;
+varying float f_pool;
+varying float f_core;
+varying float f_tok;
 varying vec3 f_lit;
 varying vec3 f_shd;
 varying float f_edge;
@@ -128,13 +150,6 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, out vec3 lit, o
 	if (zb.a + (p_noise(p * 0.8 + 61.0) - 0.5) * 0.3 > 0.5) {
 		role = 4;
 	}
-	if (water_present) {
-		vec2 size = vec2(textureSize(water_weights, 0));
-		vec2 muv = ((q + w * 0.3 - layer_grid_origin) / layer_grid_step + 0.5) / size;
-		if (textureLod(water_weights, muv, 0.0).a > 0.3) {
-			role = 4;
-		}
-	}
 	if (pv > 0.46) {
 		role = 2;
 	}
@@ -156,6 +171,18 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, out vec3 lit, o
 	}
 	lit = role_col(true, role, variant);
 	shd = role_col(false, role, variant);
+	// The wet band beside the water (card painter-water): the dressing's wet line (water_weights.a,
+	// 1 under the water and falling to 0 over 0.8 m above it) darkens and cools the ground in a band
+	// with a brush edge: its threshold wanders with a noise, and a mark takes it whole at its middle,
+	// so the edge is made of strokes. Not a gradient: one darker step, as the shade colour is.
+	if (water_present) {
+		vec2 size = vec2(textureSize(water_weights, 0));
+		vec2 muv = ((q - layer_grid_origin) / layer_grid_step + 0.5) / size;
+		float wet = textureLod(water_weights, muv, 0.0).a;
+		float band = smoothstep(WET_EDGE - 0.07, WET_EDGE + 0.07, wet + (p_noise(p * 1.7 + 83.0) - 0.5) * 0.4 + (h - 0.5) * 0.12 * min(mk, 1.0));
+		lit = mix(lit, lit * WET_TINT, band);
+		shd = mix(shd, shd * WET_TINT, band);
+	}
 	// A mark's own small step in value.
 	float vk = 1.0 + (fract(h * 41.7 + 0.3) - 0.5) * 0.1 * min(mk, 1.0);
 	lit *= vk;
@@ -178,6 +205,31 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, out vec3 lit, o
 
 void vertex() {
 	v_n = NORMAL;
+	v_wy = (MODEL_MATRIX * vec4(VERTEX, 1.0)).y;
+}
+
+// The contact occlusion at `xz`: x the pool, y the seam, each a flat brush-edged shape (the field's
+// 0.5 contour, moved by the ground's own noise), then the tokens' feet: a wider pool joins x, and z
+// is the disc right under the feet (a deeper step on top of the seam).
+vec3 contact_at(vec3 p, vec2 xz) {
+	vec3 occ = vec3(0.0);
+	if (occ_present && (occ_k.x > 0.0 || occ_k.y > 0.0)) {
+		vec2 size = vec2(textureSize(occ_map, 0));
+		vec2 s = textureLod(occ_map, (xz - occ_origin) / (size * occ_step), 0.0).rg;
+		vec2 w = vec2(p_noise(p * 1.3 + 80.0), p_noise(p * 2.7 + 95.0)) - 0.5;
+		occ.xy = vec2(
+			smoothstep(0.4, 0.5, s.r + w.x * 0.3) * occ_k.x,
+			smoothstep(0.4, 0.5, s.g + w.y * 0.3) * occ_k.y);
+	}
+	for (int i = 0; i < tok_n; i++) {
+		vec4 t = tok[i];
+		float on_foot = 1.0 - smoothstep(0.35, 0.9, abs(v_wy - t.w));
+		float d = length(xz - t.xy) / max(t.z, 0.05);
+		float wob = (p_noise(p * 3.1 + 40.0) - 0.5) * 0.25;
+		occ.z = max(occ.z, (1.0 - smoothstep(0.7, 0.95, d + wob)) * on_foot * tok_k.x);
+		occ.x = max(occ.x, (1.0 - smoothstep(1.0, 1.35, d + wob)) * on_foot * tok_k.y);
+	}
+	return occ;
 }
 
 void fragment() {
@@ -301,6 +353,10 @@ void fragment() {
 	f_shd = shd;
 	f_cut = cut_amp > 0.0 ? be_cut(st) * cut_amp : 0.0;
 	f_edge = p_noise(p * 0.55 + 71.0);
+	vec3 contact = contact_at(p, xz);
+	f_pool = contact.x;
+	f_core = contact.y;
+	f_tok = contact.z;
 }
 
 void light() {
@@ -314,6 +370,18 @@ void light() {
 		// meadow lit and shade; now only a bank turned past the grazing sun goes into shade.
 		float turn_k = clamp(lw.y / TURN_SUN_FULL, 0.05, 1.0);
 		float turned = 1.0 - smoothstep(0.02 * turn_k, 0.1 * turn_k, dot(normalize(f_n), lw) + (f_edge - 0.5) * 0.1 * turn_k);
-		DIFFUSE_LIGHT += mix(f_lit, f_shd, max(cast, turned));
+		vec3 col = mix(f_lit, f_shd, max(cast, turned));
+		// Contact occlusion: a deeper shade of the ground's own tone (a little cooler) under what
+		// stands on it, and at its foot a seam that leans toward the soil; a token's feet stand on a
+		// deeper disc still (f_tok).
+		if (f_pool > 0.0 || f_core > 0.0 || f_tok > 0.0) {
+			float lr = lum(f_shd) / max(lum(f_lit), 0.001);
+			vec3 deep = mix(f_lit, f_shd, occ_tint.a) * occ_k.z * occ_tint.rgb;
+			vec3 soil = mix(deep, litter_col * lr * occ_k.z, occ_k.w);
+			col = mix(col, deep, f_pool);
+			col = mix(col, soil, f_core);
+			col *= mix(vec3(1.0), vec3(0.74, 0.84, 0.8), f_tok);
+		}
+		DIFFUSE_LIGHT += col;
 	}
 }

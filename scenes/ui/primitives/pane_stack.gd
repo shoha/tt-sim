@@ -149,18 +149,20 @@ func show_pane(id: StringName, animate: bool = true) -> void:
 		_reset_wrapper(incoming)
 		pane_changed.emit(id)
 		return
-	var offset := Constants.ANIM_PANE_SWAP_OFFSET_PX * (1.0 if slide_from_right else -1.0)
+	# Under Reduce motion the incoming pane only fades (no slide).
+	var offset: float = UiMotion.travel(
+		Constants.ANIM_PANE_SWAP_OFFSET_PX * (1.0 if slide_from_right else -1.0), 0.0
+	)
+	var swap_s := UiMotion.fade_s(Constants.ANIM_PANE_SWAP)
 	incoming.modulate.a = 0.0
 	incoming.offset_transform_position = Vector2(offset, 0.0)
-	_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_tween = create_tween().set_trans(UiMotion.ARRIVE_TRANS).set_ease(Tween.EASE_OUT)
 	_tween.set_parallel(true)
 	if outgoing:
 		outgoing.offset_transform_position = Vector2.ZERO
-		_tween.tween_property(outgoing, "modulate:a", 0.0, FADE_OUT_DURATION)
-	_tween.tween_property(incoming, "modulate:a", 1.0, Constants.ANIM_PANE_SWAP)
-	_tween.tween_property(
-		incoming, "offset_transform_position", Vector2.ZERO, Constants.ANIM_PANE_SWAP
-	)
+		_tween.tween_property(outgoing, "modulate:a", 0.0, minf(FADE_OUT_DURATION, swap_s))
+	_tween.tween_property(incoming, "modulate:a", 1.0, swap_s)
+	_tween.tween_property(incoming, "offset_transform_position", Vector2.ZERO, swap_s)
 	_tween.chain().tween_callback(_on_swap_finished.bind(outgoing))
 	pane_changed.emit(id)
 

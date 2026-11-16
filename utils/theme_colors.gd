@@ -59,8 +59,20 @@ const LAKE_PRESS := Color("#22566B")
 const LAKE_TINT := Color("#C4E2EE")
 ## Fills only the confirming button of a danger dialog.
 const MADDER := Color("#A12F3A")
+## Madder's hover and press, each a step deeper at the same hue (the 2026-11-15 pass: the
+## danger button had one colour for rest, hover and press, so it gave no feedback to the pointer).
+const MADDER_HOVER := Color("#962B35")
+const MADDER_PRESS := Color("#84252E")
 ## Success text and icons; never a fill.
 const MOSS := Color("#46723A")
+## The success role on paper (2026-11-15): moss and madder collapsed to the same olive-brown for
+## a deuteranope (CIE76 dE 2.3), so success leans toward a blue-green that stays apart from
+## madder under protanopia and deuteranopia (dE 17 and 19) while keeping 4.5:1 on paper. MOSS
+## stays for the 3D tints that already read it; success text reads this.
+const SEA_GREEN := Color("#1B7653")
+## The success role on glass: a mint (moss_light read the same as madder_light to a deuteranope,
+## dE 6.6; mint is 15.7), above 10:1 on glass.
+const MINT := Color("#86E3B4")
 ## The warning chip.
 const OCHRE := Color("#E0A23A")
 ## Ochre at the depth of the line tools' tints (lake, persimmon): ochre at 1/1.36 of its value,
@@ -156,6 +168,10 @@ const WARNING := &"warning"
 ## Destructive text and icons; DANGER_FILL is the danger-confirm button only.
 const DANGER := &"danger"
 const DANGER_FILL := &"danger_fill"
+## The danger button's hover and press: a step deeper each, so it answers the pointer like
+## every other button (C6).
+const DANGER_FILL_HOVER := &"danger_fill_hover"
+const DANGER_FILL_PRESS := &"danger_fill_press"
 const ON_DANGER := &"on_danger"
 ## The keyboard focus ring. Focus is a state, so it is lake (about 6:1 on paper) or
 ## lake_light on glass, never a control's fill hue: a persimmon ring read as a validation
@@ -187,10 +203,12 @@ const PAPER_ROLES := {
 	SELECTED_HOVER: LAKE_HOVER,
 	ON_SELECTED: PAPER,
 	SELECTION: LAKE_TINT,
-	SUCCESS: MOSS,
+	SUCCESS: SEA_GREEN,
 	WARNING: OCHRE,
 	DANGER: MADDER,
 	DANGER_FILL: MADDER,
+	DANGER_FILL_HOVER: MADDER_HOVER,
+	DANGER_FILL_PRESS: MADDER_PRESS,
 	ON_DANGER: PAPER,
 	FOCUS: LAKE,
 	SHADOW: SHADOW_REST,
@@ -219,10 +237,12 @@ const GLASS_ROLES := {
 	SELECTED_HOVER: LAKE_HOVER,
 	ON_SELECTED: CHALK,
 	SELECTION: LAKE,
-	SUCCESS: MOSS_LIGHT,
+	SUCCESS: MINT,
 	WARNING: OCHRE_LIGHT,
 	DANGER: MADDER_LIGHT,
 	DANGER_FILL: MADDER,
+	DANGER_FILL_HOVER: MADDER_HOVER,
+	DANGER_FILL_PRESS: MADDER_PRESS,
 	ON_DANGER: CHALK,
 	FOCUS: LAKE_LIGHT,
 	SHADOW: SHADOW_GLASS,

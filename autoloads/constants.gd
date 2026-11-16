@@ -91,25 +91,27 @@ const RENDERING_TOGGLES_DEFAULTS := {
 # "In" is slightly slower than "out" so openings feel deliberate and
 # closings feel snappy.
 
-const ANIM_FADE_IN_DURATION: float = 0.2
-const ANIM_FADE_OUT_DURATION: float = 0.15
+# The numbers live in UiMotion (the one place UI motion is decided); these names stay as
+# aliases for the call sites that already read them.
+const ANIM_FADE_IN_DURATION: float = UiMotion.PANEL_IN_S
+const ANIM_FADE_OUT_DURATION: float = UiMotion.PANEL_OUT_S
 
 # Motion tokens for the UI primitives (scenes/ui/primitives/). Hover and press
 # are tweened on Control.offset_transform_scale so containers never relayout.
-const ANIM_HOVER_IN: float = 0.12
-const ANIM_HOVER_OUT: float = 0.10
+const ANIM_HOVER_IN: float = UiMotion.FEEDBACK_IN_S
+const ANIM_HOVER_OUT: float = UiMotion.FEEDBACK_OUT_S
 # Soft glide for large surfaces such as level card thumbnails, where the tile snap reads as abrupt.
-const ANIM_HOVER_SOFT_IN: float = 0.24
-const ANIM_HOVER_SOFT_OUT: float = 0.20
-const ANIM_PRESS: float = 0.06
-const ANIM_PANE_SWAP: float = 0.16
+const ANIM_HOVER_SOFT_IN: float = UiMotion.SOFT_IN_S
+const ANIM_HOVER_SOFT_OUT: float = UiMotion.SOFT_OUT_S
+const ANIM_PRESS: float = UiMotion.PRESS_S
+const ANIM_PANE_SWAP: float = UiMotion.STATE_S
 const ANIM_PANE_SWAP_OFFSET_PX: float = 8.0
-const ANIM_FOLDOUT: float = 0.16
+const ANIM_FOLDOUT: float = UiMotion.STATE_S
 # Screen entrance: menu bodies fade and lift in, one item after another
 # (UiMotion.stagger_in). Used by the title, pause menu, host lobby and join
 # screen; dialogs use the panel base's scale-and-fade instead.
-const ANIM_ENTRANCE: float = 0.3
-const ANIM_ENTRANCE_STAGGER: float = 0.08
+const ANIM_ENTRANCE: float = UiMotion.ENTRANCE_S
+const ANIM_ENTRANCE_STAGGER: float = UiMotion.STAGGER_S
 const UI_HOVER_SCALE := Vector2(1.06, 1.06)
 const UI_PRESS_SCALE := Vector2(0.96, 0.96)
 
