@@ -1133,8 +1133,18 @@ empty paper under its rows by design: the dialog does not jump when the section 
 3. Write and read it in `SettingsMenu._write_values` / `_show_saved_values`, give it its default in
    `_show_defaults`, and add it to `SettingsSpec.APPLY_ONLY` if it should not preview.
 
+**Chrome beside the rows** (`SettingsChrome`, `settings_chrome.gd`, loaded by `SettingsSession`):
+a "More below" line above the footer rule while the visible tab has rows past its bottom edge (it
+keeps its height and fades, so nothing jumps), and a small-text warning under Interface size when
+a fixed size would draw the caption under 13 physical px (100% on a 720p window; Auto, the first-run
+default, is 1.40 there). A group of one setting has no Reset; the others read "Defaults" while
+idle. Apply is a `Primary` only while something is unsaved, else bare; Reset all is a `Secondary`
+only while something differs from the defaults, else bare, and acts with an Undo toast
+(`SettingsSession.offer_undo` / `restore`).
+
 **Search.** The box filters on the row's label, sentence, group and tab; every word typed must
-match. Groups and rail sections with no match hide, the sheet jumps to the first section that has
+match. Groups holding a row whose name matches are listed before those that only mention the words
+in a sentence (`SettingsLayout._rank`); the field has no clear button of its own, Escape empties it. Groups and rail sections with no match hide, the sheet jumps to the first section that has
 one, and an empty result says so. The first Escape clears the box, the next closes the menu.
 
 **Unsaved changes and preview** (`SettingsSession`, `settings_session.gd`). The menu compares the

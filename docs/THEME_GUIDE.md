@@ -562,7 +562,7 @@ which may only fall): `drawer_container.gd` 12 overrides, `download_queue.gd` / 
   size and Wind motion are in a new Accessibility tab; every row carries a one-sentence
   `Caption` under it, each group a quiet Reset, the footer an unsaved/applied line, the header a
   search box. The row table is `SettingsSpec` (docs/UI_SYSTEMS.md "Settings Menu" says how to add a
-  row); UI_TASTE S5, S6, S8, S9 and S10 (the settings pass) are the rules. Group headings use `Heading`, descriptions `Caption`,
+  row); UI_TASTE T-S1 to T-S5 (the settings pass) are the rules. Group headings use `Heading`, descriptions `Caption`,
   Reset `Ghost`, the unsaved line `CaptionState`: no colour is set by hand.
 - **Map building (authoring):** done by card ui-authoring (2026-11-15; UI_TASTE "2026-11-15 map
   building", UI_SYSTEMS "Map building chrome"): the tool drawer and rail are paper (a one-constant

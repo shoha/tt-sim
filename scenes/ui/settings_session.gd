@@ -18,6 +18,12 @@ extends RefCounted
 const CLEAN_TEXT := "All changes applied"
 const DIRTY_TEXT := "Unsaved changes: Apply keeps them"
 const DISCARDED_TOAST := "Unsaved changes discarded"
+const UNDO_TEXT := "Every setting is back to its default"
+## A group's Reset reads this, off, while the group is already at its defaults.
+const RESET_WORD := "Reset"
+const DEFAULTS_WORD := "Defaults"
+## Loaded by path, not named, so the start-up script graph does not grow (test_boot_graph).
+const CHROME_SCRIPT := "res://scenes/ui/settings_chrome.gd"
 
 ## Set once the menu has finished opening: before that and after it closes nothing previews.
 var live := false
@@ -25,6 +31,7 @@ var live := false
 var _menu: SettingsMenu
 var _layout: SettingsLayout
 var _status: Label
+var _chrome  # SettingsChrome: the "More below" hint and the small-text warning
 var _baseline := ""
 var _defaults := {}
 var _dirty := false
@@ -42,6 +49,8 @@ func _init(menu: SettingsMenu, layout: SettingsLayout) -> void:
 ## values are on the controls.
 func start() -> void:
 	_build_status()
+	_chrome = (load(CHROME_SCRIPT) as GDScript).new(_menu)
+	_chrome.start()
 	for control in value_controls():
 		_connect_changed(control)
 	for group in _layout.groups:
@@ -118,17 +127,57 @@ func mark_clean() -> void:
 	refresh()
 
 
-## Re-reads the controls: the status line, the Apply button and each group's Reset.
+## Re-reads the controls: the status line, the Apply button (the lead only while there is something
+## to apply, bare words otherwise so its waiting state still reads), each group's Reset (the word
+## says "Defaults" when there is nothing to reset) and Reset all (quiet while nothing differs).
 func refresh() -> void:
 	_dirty = _snapshot() != _baseline
 	if _status:
 		_status.text = DIRTY_TEXT if _dirty else CLEAN_TEXT
 		_status.theme_type_variation = &"CaptionState" if _dirty else &"Caption"
 	_menu.apply_button.disabled = not _dirty
+	_menu.apply_button.theme_type_variation = &"Primary" if _dirty else &"Ghost"
+	var everything_default := true
 	for group in _layout.groups:
+		var at_defaults := group_at_defaults(group)
+		everything_default = everything_default and at_defaults
 		var button := group.reset as Button
 		if button:
-			button.disabled = group_at_defaults(group)
+			button.disabled = at_defaults
+			button.text = DEFAULTS_WORD if at_defaults else RESET_WORD
+	_menu.reset_button.theme_type_variation = &"Ghost" if everything_default else &"Secondary"
+	if _chrome:
+		_chrome.refresh()
+
+
+## Whether every group's rows already hold their defaults.
+func all_at_defaults() -> bool:
+	for group in _layout.groups:
+		if not group_at_defaults(group):
+			return false
+	return true
+
+
+## After Reset all: says what happened and offers the way back (`before` is read_all from just
+## before the reset), since the reset is undone safely instead of confirmed first.
+func offer_undo(before: Dictionary) -> void:
+	UIManager.show_undo_toast(UNDO_TEXT, restore.bind(before))
+
+
+## Puts `values` (a read_all result) back, the four preferences that save at once through their
+## own handlers, and previews them.
+func restore(values: Dictionary) -> void:
+	for control in value_controls():
+		var key := String(control.name)
+		if not values.has(key):
+			continue
+		if SettingsSpec.LIVE_DEFAULTS.has(key):
+			_set_live(control, values[key])
+		else:
+			show_value(control, values[key])
+	if _menu.has_method(&"_refresh_quality"):
+		_menu.call(&"_refresh_quality")
+	_changed(null, true)
 
 
 func group_at_defaults(group: Dictionary) -> bool:

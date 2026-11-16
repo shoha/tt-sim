@@ -65,6 +65,7 @@ func group_of(control: Node) -> Dictionary:
 func set_filter(text: String) -> void:
 	var words := text.strip_edges().to_lower().split(" ", false)
 	var group_hits := {}
+	var name_hits := {}
 	var tab_hits := {}
 	var previous_match := true
 	for entry in entries:
@@ -76,6 +77,9 @@ func set_filter(text: String) -> void:
 		if entry_match and (entry.row as Control).visible:
 			group_hits[entry.group] = true
 			tab_hits[entry.tab] = true
+			if _names(entry, words):
+				name_hits[entry.group] = true
+	_rank(name_hits)
 	for i in groups.size():
 		(groups[i].box as Control).visible = group_hits.has(i)
 	var current := String(_menu.section_rail.selected)
@@ -91,6 +95,44 @@ func set_filter(text: String) -> void:
 		_menu.section_rail.select(StringName(first))
 	_menu.tab_container.visible = words.is_empty() or not tab_hits.is_empty()
 	_empty.visible = not _menu.tab_container.visible
+
+
+## Whether every word is in the row's own name (not only in its sentence). An empty search
+## names nothing, so the groups keep their order.
+func _names(entry: Dictionary, words: PackedStringArray) -> bool:
+	if words.is_empty() or (entry.label as String).is_empty():
+		return false
+	for word in words:
+		if not (entry.label as String).contains(word):
+			return false
+	return true
+
+
+## Orders each tab's groups: those holding a row whose name matches come before those that only
+## mention the words in a sentence ("Shadow quality" before "Quality"), each side in its own
+## order; with no search every group is back in its place.
+func _rank(name_hits: Dictionary) -> void:
+	var by_tab := {}
+	for i in groups.size():
+		var ids: Array = by_tab.get(groups[i].tab, [])
+		ids.append(i)
+		by_tab[groups[i].tab] = ids
+	for tab_name in by_tab:
+		var ids: Array = by_tab[tab_name]
+		# The places the tab's groups hold now (a retired caption freed after the build leaves
+		# gaps in any index noted earlier), in order.
+		var slots: Array = ids.map(func(i: int) -> int: return (groups[i].box as Control).get_index())
+		slots.sort()
+		var order := ids.duplicate()
+		order.sort_custom(
+			func(a: int, b: int) -> bool:
+				var rank_a := 0 if name_hits.has(a) else 1
+				var rank_b := 0 if name_hits.has(b) else 1
+				return a < b if rank_a == rank_b else rank_a < rank_b
+		)
+		for k in order.size():
+			var box := groups[order[k]].box as Control
+			box.get_parent().move_child(box, slots[k])
 
 
 func _matches(entry: Dictionary, words: PackedStringArray, previous_match: bool) -> bool:
@@ -193,7 +235,12 @@ func _build_group(tab_name: String, content: VBoxContainer, spec: Dictionary) ->
 			rows_parent.add_child(_describe(String(spec.blurb)))
 	for row_spec in spec.rows:
 		_build_row(content, rows_parent, row_spec, group, group_index, tab_name, title)
-	if foldout and bool(spec.get("reset", true)):
+	# A group of one setting needs no Reset of its own: the row is the reset (T-S3).
+	var alone := (group.controls as Array).size() <= 1
+	if not foldout and alone and group.reset:
+		(group.reset as Button).queue_free()
+		group.reset = null
+	if foldout and bool(spec.get("reset", true)) and not alone:
 		var line := HBoxContainer.new()
 		line.name = "ResetLine"
 		line.alignment = BoxContainer.ALIGNMENT_END
@@ -254,7 +301,7 @@ func _build_row(
 		text = ("%s %s %s %s" % [label_text, sentence, title, tab_name]).to_lower()
 	var entry := {
 		"block": block, "row": row, "tab": tab_name, "group": group_index, "text": text,
-		"match": true,
+		"label": label_text.to_lower(), "match": true,
 	}
 	entries.append(entry)
 	row.visibility_changed.connect(_sync_block.bind(entry))

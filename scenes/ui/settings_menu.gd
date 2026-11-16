@@ -489,7 +489,9 @@ func _build_search() -> void:
 	search_box = LineEdit.new()
 	search_box.name = "SearchBox"
 	search_box.placeholder_text = "Search settings"
-	search_box.clear_button_enabled = true
+	# No in-field X: it stood beside the sheet's close X and read as a second way out. Escape
+	# empties the box (_on_search_input), and the tooltip says so.
+	search_box.clear_button_enabled = false
 	search_box.custom_minimum_size.x = 200.0
 	search_box.tooltip_text = "Find a setting by name or by what it does (Esc clears it)"
 	search_box.text_changed.connect(layout.set_filter)
@@ -806,6 +808,8 @@ func _on_close_pressed() -> void:
 ## preferences that save the moment they change, the prerelease channel, the input
 ## profile and the Interface size, at once as before.
 func _on_reset_pressed() -> void:
+	var before: Dictionary = session.read_all()
+	var acted: bool = not session.all_at_defaults()
 	_show_defaults()
 	prereleases_check.button_pressed = false
 	input_device_option.selected = InputProfile.Profile.AUTO
@@ -814,6 +818,8 @@ func _on_reset_pressed() -> void:
 	UIManager.set_interface_size(InterfaceSize.AUTO)
 	reduce_motion_check.button_pressed = false
 	session.touch()
+	if acted:
+		session.offer_undo(before)
 
 
 func _on_interface_size_selected(index: int) -> void:

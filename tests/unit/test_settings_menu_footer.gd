@@ -14,8 +14,12 @@ func before_each() -> void:
 
 
 func test_apply_is_the_only_accent_action() -> void:
+	# Apply leads only while something is unsaved; Reset all stays a quiet secondary, and goes
+	# bare while nothing differs from the defaults (SettingsSession.refresh).
+	_menu.vsync_check.button_pressed = not _menu.vsync_check.button_pressed
+	await wait_process_frames(2)
 	assert_eq(_menu.apply_button.theme_type_variation, &"Primary")
-	assert_eq(_menu.reset_button.theme_type_variation, &"Secondary")
+	assert_ne(_menu.reset_button.theme_type_variation, &"Primary")
 	assert_eq(_menu.reset_button.text, "Reset all")
 	assert_eq(_menu.apply_button.text, "Apply")
 

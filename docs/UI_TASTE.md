@@ -75,7 +75,8 @@ sizes per file against `tests/ui_bypass_baseline.json`, and a count may only fal
 - **S5** Width tokens (sheets 420 / 600 / 960, drawer 396) and a max content width; nothing
   stretched to the window, no full-width form fields. One declared wide token, 1280, for the
   avatar builder's three columns (rail, panes, preview). Pause and confirms are 420, Settings
-  and the new-map dialog 600 (the new-map dialog takes 960 on a canvas under 880 px, so its
+  720 (its sentences and two-column rows need it; canvas width less a 32 px margin on a narrow
+  one) and the new-map dialog 600 (the new-map dialog takes 960 on a canvas under 880 px, so its
   fields stay in view at 720p); a card grid adds columns rather than stretch a card past 400.
 - **S6** Targets about 44: rows 44, controls and footer buttons 40.
 
@@ -243,25 +244,29 @@ The Settings menu was a wall of controls under eight bare labels. New rules for 
 settings (the Settings menu is the first user; `docs/UI_SYSTEMS.md` "Settings Menu" has the
 mechanics). Reduce motion now lives under Settings > Accessibility, not Graphics.
 
-- **S5 A setting says what it does under its name.** Every row that is not self-evident carries
+- **T-S1 A setting says what it does under its name.** Every row that is not self-evident carries
   one plain sentence of `Caption` text directly under it (flush, so the pair reads as one item;
   the gap between rows is wider than the gap inside one). The tooltip is the long form and may
   repeat it; it is never the only place the effect is said. Write for a player, not an engine:
   "Smooths jagged edges on foliage", not "MSAA".
-- **S6 Group by what the player is trying to do, most used first.** A tab with more than about
+- **T-S2 Group by what the player is trying to do, most used first.** A tab with more than about
   five rows is split under headings (Look and quality before Display before Effects, then
   Performance, then an Advanced foldout for what almost nobody changes). Motion and size options
   that help a player read live in Accessibility, together.
-- **S10 Reset is per group and global, and says when there is nothing to reset.** A group's Reset
-  is quiet (Ghost) and off while the group is at its defaults. Defaults are read from one place so
-  a reset can never disagree with a fresh install.
-- **S8 Say what is saved.** A sheet that stages changes shows `All changes applied` or `Unsaved
+- **T-S3 Reset is per group and global, and says when there is nothing to reset.** A group's Reset
+  is quiet (Ghost) and reads "Defaults", off, while the group is at its defaults; a group of one
+  row has none (its row is the reset). Reset all is quiet while nothing differs from the defaults,
+  and when it acts it says so with an Undo toast. Defaults are read from one place so a reset can
+  never disagree with a fresh install.
+- **T-S4 Say what is saved.** A sheet that stages changes shows `All changes applied` or `Unsaved
   changes: ...` in words (the tone is secondary, never the only cue, C7), Apply is off while
   there is nothing to apply, and closing with unsaved changes puts everything back and says so.
   A row that is cheap to show previews on the board as it moves; a row that is not (a window
   mode, a renderer, a resize) waits for Apply.
-- **S9 A long sheet can be searched, and every control is reachable without a mouse.** Search
-  matches names and sentences; the first Escape clears it. Section tabs take focus, Tab walks
+- **T-S5 A long sheet can be searched, and every control is reachable without a mouse.** Search
+  matches names and sentences, lists groups with a name match before groups that only mention it
+  in a sentence, and the first Escape clears it (the field has no second X beside the sheet's
+  close). A sheet that scrolls says "More below" while more waits there. Section tabs take focus, Tab walks
   rows in reading order, the scroll follows focus, shoulder buttons or Ctrl+Page Up/Down change
   section. A sheet sizes to the canvas (Interface size, window) and keeps its height across
   sections.

@@ -254,3 +254,80 @@ func test_the_sheet_fits_a_small_window_and_the_last_row_scrolls_into_view() -> 
 			last.get_global_rect().end.y <= bottom + 1.0,
 			"%s: the last row ends inside the scroll area" % spec[0]
 		)
+
+
+func test_graphics_says_more_below_until_the_scroll_reaches_the_end() -> void:
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(1280, 720)
+	add_child_autofree(viewport)
+	var menu := MENU_SCENE.instantiate() as SettingsMenu
+	viewport.add_child(menu)
+	await wait_process_frames(4)
+	menu.section_rail.select(&"Graphics")
+	await wait_process_frames(3)
+	var hint := menu.find_child("MoreBelow", true, false) as Label
+	assert_not_null(hint)
+	await wait_seconds(UiMotion.STATE_S + 0.1)
+	assert_almost_eq(hint.modulate.a, 1.0, 0.01, "rows wait below the first screen")
+	var scroll := menu.tab_container.get_current_tab_control() as ScrollContainer
+	scroll.scroll_vertical = int(scroll.get_v_scroll_bar().max_value)
+	await wait_seconds(UiMotion.STATE_S + 0.2)
+	assert_almost_eq(hint.modulate.a, 0.0, 0.01, "gone at the end")
+	scroll.scroll_vertical = 0
+	await wait_seconds(UiMotion.STATE_S + 0.2)
+	assert_almost_eq(hint.modulate.a, 1.0, 0.01, "back when the scroll returns")
+	menu.section_rail.select(&"Accessibility")
+	await wait_seconds(UiMotion.STATE_S + 0.4)
+	assert_almost_eq(hint.modulate.a, 0.0, 0.01, "a short tab has nothing below")
+
+
+func test_groups_of_one_setting_have_no_reset_and_the_rest_say_defaults_when_idle() -> void:
+	assert_null(_group("Graphics", "Water").reset, "Water holds one row")
+	_menu._show_defaults(true)
+	_menu.session.refresh()
+	var effects := _group("Graphics", "Effects").reset as Button
+	assert_true(effects.disabled)
+	assert_eq(effects.text, SettingsSession.DEFAULTS_WORD)
+	_menu.shadow_quality_option.select(_menu.shadow_quality_option.get_item_index(1))
+	_menu.session.refresh()
+	assert_false(effects.disabled)
+	assert_eq(effects.text, SettingsSession.RESET_WORD)
+
+
+func test_apply_and_reset_all_are_loud_only_when_they_have_something_to_do() -> void:
+	_menu._show_defaults(true)
+	_menu.session.refresh()
+	assert_eq(_menu.reset_button.theme_type_variation, &"Ghost", "nothing differs from defaults")
+	assert_eq(_menu.apply_button.theme_type_variation, &"Ghost", "nothing to apply")
+	_menu.shadow_quality_option.select(_menu.shadow_quality_option.get_item_index(1))
+	_menu.session.refresh()
+	assert_eq(_menu.reset_button.theme_type_variation, &"Secondary")
+	assert_eq(_menu.apply_button.theme_type_variation, &"Primary")
+
+
+func test_reset_all_can_be_undone() -> void:
+	_menu._show_defaults(true)
+	_menu.sfx_slider.set_value_no_signal(40.0)
+	var before: Dictionary = _menu.session.read_all()
+	_menu.session.reset_group(_group("Audio", "Volume"))
+	await wait_seconds(UiMotion.STATE_S + 0.2)
+	assert_almost_eq(_menu.sfx_slider.value, 100.0, 0.01)
+	_menu.session.restore(before)
+	assert_almost_eq(_menu.sfx_slider.value, 40.0, 0.01, "Undo puts it back")
+
+
+func test_search_lists_a_name_match_before_a_sentence_match() -> void:
+	var effects := _menu.find_child("Group_Effects", true, false) as Control
+	var look := _menu.find_child("Group_Lookandquality", true, false) as Control
+	assert_lt(look.get_index(), effects.get_index(), "the table's order")
+	_menu.layout.set_filter("shadow")
+	assert_lt(effects.get_index(), look.get_index(), "Shadow quality before Quality")
+	_menu.layout.set_filter("")
+	assert_lt(look.get_index(), effects.get_index(), "back in place when the search is cleared")
+
+
+func test_a_first_run_720p_window_gets_auto_at_one_point_four() -> void:
+	var window := Vector2(1280.0, 720.0)
+	assert_almost_eq(InterfaceSize.auto_factor(window), 1.4, 0.001)
+	var at_hundred := InterfaceSize.CAPTION_PX * InterfaceSize.window_scale(window)
+	assert_lt(at_hundred, InterfaceSize.CAPTION_FLOOR_PX, "100% would draw the caption too small")
