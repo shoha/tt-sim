@@ -88,6 +88,11 @@ const BEAM_WANDER_M := 0.04
 const BEAM_BOW_M := 0.09
 const FRAME_BRUSH := 0.6
 const FRAME_KINDS: Array[String] = ["frame", "door_case"]
+## A chimney's plan grows by CHIMNEY_SCALE plus up to CHIMNEY_VARY by building (card
+## painter-look-houses3: small pale boxes on every house, too small to be an accent at tabletop
+## zoom): its stack, cap and pots about one axis, the height unchanged.
+const CHIMNEY_SCALE := 1.35
+const CHIMNEY_VARY := 0.4
 ## A door leaf's lean: metres along the wall per metre above the wall foot.
 const DOOR_LEAN := 0.045
 ## A collision triangle is cut like a roof when its lowest point is above this share of the way
@@ -634,6 +639,8 @@ static func _hand(m: Grow, opts: Dictionary) -> void:
 	var phase: Vector3 = opts.get("phase", Vector3.ZERO)
 	var foot := float(opts.get("foot", 0.0))
 	var dir: Vector3 = opts.get("door_dir", Vector3.ZERO)
+	var centres := _chimney_centres(m)
+	var chimney_scale := CHIMNEY_SCALE + CHIMNEY_VARY * phase.y / TAU
 	for k in m.pos.size():
 		var rec: Variant = m.rec[k]
 		if rec == null:
@@ -653,10 +660,34 @@ static func _hand(m: Grow, opts: Dictionary) -> void:
 				var bow := sin(PI * clampf(s / length, 0.0, 1.0)) * sin(s * 1.3 + phase.y + length)
 				shift += v * bow * BEAM_BOW_M
 			m.pos[k] += shift
+		elif str(rec["kind"]) == "chimney" and centres.has(str(rec["id"])):
+			var c: Vector3 = centres[str(rec["id"])]
+			var p := m.pos[k]
+			m.pos[k] = Vector3(
+				c.x + (p.x - c.x) * chimney_scale, p.y, c.z + (p.z - c.z) * chimney_scale
+			)
 		elif code == CODE_LEAF and dir != Vector3.ZERO:
 			m.pos[k] += dir * maxf(m.pos[k].y - foot, 0.0) * DOOR_LEAN
 		elif code == CODE_LEAF:
 			m.pos[k] += door_lean(m.pos[k], rec["n"], foot, phase)
+
+
+## Record id -> the middle (the mean of the corner points' XZ, Y 0) of every chimney piece in `m`:
+## what _hand scales a chimney's plan about, so its stack, cap and pots stay on one axis.
+static func _chimney_centres(m: Grow) -> Dictionary:
+	var sums: Dictionary = {}
+	for k in m.pos.size():
+		var rec: Variant = m.rec[k]
+		if rec == null or str(rec["kind"]) != "chimney":
+			continue
+		var id := str(rec["id"])
+		var entry: Vector3 = sums.get(id, Vector3.ZERO)
+		sums[id] = entry + Vector3(m.pos[k].x, 1.0, m.pos[k].z)
+	var out: Dictionary = {}
+	for id: String in sums:
+		var s: Vector3 = sums[id]
+		out[id] = Vector3(s.x / s.y, 0.0, s.z / s.y)
+	return out
 
 
 ## A thatch roof's teeth: along every eave edge of a thatch roof slope with vertices in this mesh,

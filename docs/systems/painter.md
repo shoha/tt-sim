@@ -1006,6 +1006,44 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   ragged edge (`f_cast`), not a crisp dark shape; a wall's cast edge is a little wider. Not done:
   the winter tufts at eye level (scatter plants, another card's) and the stone wall's pale
   cast-light streak (smaller, still there).
+- **Houses' look 3 (card painter-look-houses3, 2026-11-15; look-pending).** Shader, the manner
+  host and one mesh step; no sheet or procgen change. (0) **Per-building numbers.**
+  `PainterMannerHost.building_seed(structure id)` gives two hashes (0 to 1) set on every part mesh
+  and snow child of a structure as the instance uniform `bld` (the materials stay shared; a
+  position hash is not stable across a building, and the parts' transforms are identity, so the
+  node origin does not tell buildings apart). The shader uses `bld.x` for a door's and shutters'
+  paint (a paint of timber or clay takes timber 30 %, clay 28 %, slate blue 22 %, turf green 20 %
+  by building), a chimney's brick or stone (brick below 0.42), the plaster's and stone's warm or
+  cool lean; `bld.y` for a wooden roof's tone (slate 40 %, shingle 42 %, turf 18 %), the stone's
+  and straw's value shift (0.5 of the variant) and a tile roof's (0.2). A part with none set takes
+  0.5. (1) **Slate is one painted mass, not tiles.** A broad sweep (a 5 by 3 m value noise, plus a
+  smaller one) carries the colour: a lit end, a deep blue end, the clay's rose laid over its upper
+  part (`mauve` 0.32), few soft row suggestions (a row's foot in shade where a row noise is high),
+  a slab joint on one slate in five, lichen in streaks along the rows (0.24) and a warm patch of
+  the shingle's brown as one wash; the per-slate recolour and the dash on every slate are gone (the
+  shingle's dash pass skips slate). The ridge cap is 0.4 m down each slope, soft edged, one
+  variant of the clay along the whole ridge, laid over the slate at 0.75 (a warm roll, not a red
+  stripe); the slate's verge and ridge lines are no longer bolder than other roofs'. A slate
+  roof's sun side is warm, its body and shade a bluer violet. (2) **Stone has colour.** Each
+  stone leans warm sandstone to cool blue-violet by its own p_stones shift (`stone_z`), a broad
+  wash (a 3 by 2.2 m noise) leans a stretch and `bld.x` the building; in the shade the joints are
+  deeper and the pale stones lift further (`stony`), and the shade is a bluer violet. (3) **Winter
+  roofs show their colour.** Where the snow is thin the blanket is cut away (`discard`, a ragged
+  edge from two noises) and the roof piece beneath takes its own colour back (its `cover` from
+  the same mask, which reads only world position and the roof frame without the accent, so the two
+  agree): tongues of 0.2 to 1.1 m down from the ridge, in 15 % of the run, and ragged stretches
+  along a gable's edge. Round bare patches and eave teeth were tried and dropped (holes with a
+  rim, small stickers). The bare roof takes a lift of light (0.5) so a shaded patch is not a dark
+  olive hole. The snow's brush washes are broad (1.3 m rows, 4.2 m cells), not 0.5 m dashes.
+  (4) **Chimneys** grow in plan by `PainterMannerMesh.CHIMNEY_SCALE` 1.35 plus up to
+  `CHIMNEY_VARY` 0.4 by building (stack, cap and pots about each piece's own middle, the height
+  unchanged; the shadow mesh and the snow strips keep the recipe size). A brick stack keeps its red
+  in the sun (the clay's lit step is a pale cream) and takes a warm or cool lean by building.
+  (5) Brown roofs' own dark dabs are halved (damp stains; the tree-shadow tint is untouched);
+  plaster's washes are taller (0.85 m rows) and its shade leans peach, not grey-pink. Not done:
+  the slate roof's curled right edge (mesh: the verge's wander), chimney height and the snow
+  plate over a grown cap (procgen's chimney size, `snow` strips), the stone wall's pale
+  cast-light streak and the semi-transparent stone corner base (mesh).
 
 ## The painted state signal
 

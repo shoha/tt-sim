@@ -69,6 +69,12 @@ varying vec3 v_wp;
 varying vec3 v_wn;
 varying float v_h;
 varying flat int v_tone;
+// Two numbers (0..1) of the building, set per mesh instance by PainterMannerHost.building_seed, so
+// a building's walls, roof, door and chimney agree and two houses of one kind do not (card
+// painter-look-houses3: three stone houses with one grey wall, one door and one roof). A part
+// that is not set takes the middle.
+instance uniform vec2 bld = vec2(0.5);
+varying flat vec2 v_bld;
 varying vec2 v_fuv;
 varying vec4 v_rec;
 
@@ -92,7 +98,17 @@ void vertex() {
 	v_wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	v_wn = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	v_h = COLOR.a;
+	v_bld = bld;
 	v_tone = tone_of(pick, COLOR.rgb);
+	if (pick == 3 && v_tone <= 1) {
+		// A door or shutter's paint, by building: timber, the clay's red, the slate's blue or the
+		// turf's green (the palette's own roles), so a street of one house kind has doors of several
+		// colours. A wall's shutters and its door share the building's pick.
+		v_tone = v_bld.x < 0.3 ? 0 : (v_bld.x < 0.58 ? 1 : (v_bld.x < 0.8 ? 3 : 2));
+	} else if (pick == 2 && v_tone != 0) {
+		// A wooden roof (a stone house's): slate, shingle or, now and then, a turfed one.
+		v_tone = v_bld.y < 0.4 ? 1 : (v_bld.y < 0.82 ? 2 : 3);
+	}
 	v_fuv = UV2;
 	v_rec = CUSTOM0;
 }
@@ -272,16 +288,21 @@ void fragment() {
 	bool slate = code == 2 && (pattern == 6 || ((pattern == 5 || pattern == 7) && v_tone == 1));
 	float cap = 0.0;
 	float warm = 0.0;
+	float mauve = 0.0;
 	float pale = 0.0;
+	// A stone's own shift (the p_stones value, -0.5 to 0.5, where the stones are drawn): it also
+	// turns the stone's colour, warm or cool (card painter-look-houses3: a flat khaki-grey wall).
+	float stone_z = 0.0;
 	int chim_base = 0;
 	if (code == 4 && pick >= 6) {
-		chim_base = (pick == 7 && ul < 0.5) || (pick == 6 && p_hash(vec3(floor(wp.xz / 3.0), 29.0)) < 0.42) ? 12 : 0;
+		chim_base = (pick == 7 && ul < 0.5) || (pick == 6 && v_bld.x < 0.42) ? 12 : 0;
 	}
 	float dab = (pattern >= 5 ? 1.0 : dab_wall) * dabs;
 	// A roof's dabs are a few subtle brushed patches (blotches read as stains); a slate's fewer.
 	float dab_hi = on_slope ? 0.68 : 0.62;
 	float dab_lit = on_slope ? 0.5 : 1.0;
-	dark += smoothstep(dab_hi, dab_hi + 0.1, bn) * dab * (pattern == 6 ? 0.35 : 1.0) * dab_lit;
+	// (A roof's dark dabs are halved, card painter-look-houses3: soft dark blotches read as damp stains.)
+	dark += smoothstep(dab_hi, dab_hi + 0.1, bn) * dab * (pattern == 6 ? 0.35 : (on_slope ? 0.5 : 1.0)) * dab_lit;
 	light += (1.0 - smoothstep(0.28, 0.38, bn)) * dab * 0.8 * dab_lit;
 	vec2 flat_n = n.xz;
 	float flat_len = length(flat_n);
@@ -305,30 +326,42 @@ void fragment() {
 			dark += eave * (1.0 - smoothstep(0.0, 0.16, h));
 			light += 0.35 * smoothstep(0.82, 1.0, h);
 			if (slate) {
-				// A slate roof (a tile roof whose paint picks slate too) weathers in broad patches of
-				// lichen, most along its lower half, so the blue slab carries a second colour.
-				moss = smoothstep(0.6, 0.76, p_n2(f * vec2(0.7, 1.1) + acc * 9.0, 64.0)) * 0.3 * (1.0 - 0.6 * h);
-				// Laid slate by slate (card painter-look-houses2: one flat blue slab): rows 26 cm
-				// high, every row's slates 36 cm wide and offset, each its own value, a few
-				// weathered to brown or lichened green, the lower edge of every row lit and the
-				// foot of the one above it in shade.
+				// A slate roof is one painted mass (card painter-look-houses3: a grid of tiles each
+				// recoloured, with a dash on every one, read as a quilt). A broad sweep across the
+				// plane carries the colour, light to dark and blue to mauve like the clay roofs'
+				// orange to crimson; the slates are only suggested: every row a touch of its own
+				// value (a stretch of rows, not confetti), each slate barely, a row's foot in
+				// soft shade along some of its length, a few slab joints, no mark repeated.
+				float sweep = p_n2(f * vec2(0.2, 0.3) + acc * 9.0, 90.0);
+				float sweep2 = p_n2(f * vec2(0.5, 0.7) + acc * 5.0, 96.0);
 				float blk = 1.0 - smoothstep(0.1, 0.3, fw / 0.26);
 				float sr = (f.y + 0.1) / 0.26;
 				float rowi = floor(sr);
-				float sc = f.x / 0.36 + 0.5 * mod(rowi, 2.0) + p_hash(vec3(rowi, 5.0, 3.0)) * 0.5;
+				float rown = p_hash(vec3(rowi, 5.0, 3.0));
+				float sc = f.x / 0.36 + 0.5 * mod(rowi, 2.0) + rown * 0.5;
 				float sid = p_hash(vec3(rowi, floor(sc), 17.0 + acc * 9.0));
-				variant = clamp(variant + (sid - 0.5) * 1.1 * blk, 0.0, 1.0);
-				moss = max(moss, step(0.93, sid) * 0.4 * blk);
-				warm = step(sid, 0.07) * 0.3 * blk * (pick > 0 ? 1.0 : 0.0);
-				dark += smoothstep(0.72, 1.0, fract(sr)) * 0.2 * blk + p_line(sc, 0.07) * 0.2 * blk;
-				light += (1.0 - smoothstep(0.0, 0.1, fract(sr))) * 0.22 * blk;
-				// The ridge cap: a terracotta roll along the ridge (0.17 m down each slope, its
-				// lower edge wandering), cut in 0.6 m lengths with a dark line under it.
+				variant = clamp(mix(variant, smoothstep(0.22, 0.78, sweep), 0.65) + (rown - 0.5) * 0.16 * blk + (sid - 0.5) * 0.1 * blk, 0.0, 1.0);
+				// The sweep: a lit, slightly green-teal end to a deep mauve-blue one (the slate's own
+				// ramp has little spread, so value and the clay's rose carry it).
+				float sv = smoothstep(0.2, 0.8, sweep);
+				light += (1.0 - sv) * 0.5 + smoothstep(0.62, 0.8, sweep2) * 0.1;
+				dark += sv * 0.42;
+				mauve = smoothstep(0.45, 0.85, sweep) * 0.32;
+				// Lichen in a broad patch or two, most along the lower half, and a warm weathered
+				// patch of the shingle's brown (a picked roof only) as one wash, not slate by slate.
+				moss = smoothstep(0.6, 0.76, p_n2(f * vec2(0.35, 1.1) + acc * 9.0, 64.0)) * 0.24 * (1.0 - 0.6 * h);
+				warm = smoothstep(0.7, 0.84, p_n2(f * vec2(0.4, 0.6) + acc * 7.0, 97.0)) * 0.3 * (pick > 0 ? 1.0 : 0.0);
+				float rowvis = smoothstep(0.35, 0.62, p_n2(vec2(f.x * 0.45, rowi), 95.0));
+				dark += smoothstep(0.76, 1.0, fract(sr)) * 0.17 * blk * rowvis
+					+ p_line(sc, 0.06) * step(0.8, sid) * 0.14 * blk;
+				light += (1.0 - smoothstep(0.0, 0.12, fract(sr))) * 0.16 * blk * rowvis;
+				// The ridge cap: a roll along the ridge (0.27 m down each slope, its lower edge
+				// wandering and soft), cut in 0.6 m lengths, a soft shade under it.
 				float dr = vl - f.y;
-				float edge = 0.21 + (p_n2(vec2(f.x * 2.4, acc * 5.0), 73.0) - 0.5) * 0.06;
-				cap = (1.0 - smoothstep(edge - 0.015, edge + 0.015, dr)) * step(0.02, dr);
-				dark += p_band(dr, edge + 0.025, 0.045) * 0.5 * step(0.02, dr) + cap * p_line(f.x / 0.6, 0.06) * 0.35;
-				light += cap * (1.0 - smoothstep(0.0, 0.07, abs(dr - 0.06))) * 0.35;
+				float edge = 0.4 + (p_n2(vec2(f.x * 2.4, acc * 5.0), 73.0) - 0.5) * 0.14;
+				cap = (1.0 - smoothstep(edge - 0.06, edge + 0.05, dr)) * step(0.02, dr);
+				dark += p_band(dr, edge + 0.06, 0.12) * 0.3 * step(0.02, dr) + cap * p_line(f.x / 0.6, 0.05) * 0.22;
+				light += cap * (1.0 - smoothstep(0.0, 0.09, abs(dr - 0.07))) * 0.3;
 			}
 		}
 		if (code == 1 || code == 3) {
@@ -370,6 +403,7 @@ void fragment() {
 			dark += (st.x - smoothstep(dab_hi, dab_hi + 0.1, bn) * dab) * block;
 			light += (st.y - (1.0 - smoothstep(0.28, 0.38, bn)) * dab * 0.8) * block;
 			variant = clamp(variant + st.z * 0.9 * block, 0.0, 1.0);
+			stone_z = st.z * block;
 			// A tree's dappled light breaks along the stones: each stone moves the cast edge its
 			// own way (pale ovals of light on the wall read as glare, card painter-buildings-fix2).
 			wob = mix(wob, 0.5 + st.z * 1.4, block);
@@ -380,7 +414,7 @@ void fragment() {
 				// wobbling and broken, never under about three pixels wide or inset less than
 				// three.
 				// A slate roof's trim is bolder: its verge and ridge lines wider.
-				float lw = max(0.03, fw * 1.4) * (slate ? 1.8 : 1.0);
+				float lw = max(0.03, fw * 1.4);
 				float inset = max(0.07, fw * 3.0);
 				// Up close a finer wander too, so an edge read at eye level is drawn, not ruled.
 				float wob = (p_n2(f * 1.4, acc * 9.0) - 0.5) * 0.06
@@ -397,7 +431,7 @@ void fragment() {
 				float at_side = 1.0 - at_low - at_high;
 				if (code == 2) {
 					dark += line * 0.9 * at_low;
-					light += line * (0.75 * at_high + 0.6 * at_side) * (slate ? 1.25 : 1.0);
+					light += line * (0.75 * at_high + 0.6 * at_side) * (slate ? 0.7 : 1.0);
 				} else if (code == 3) {
 					light += line * 0.55 * (1.0 - at_low);
 					dark += line * 0.5 * at_low;
@@ -419,7 +453,7 @@ void fragment() {
 				} else {
 					// Plaster: broad dry-brush washes, lighter or darker, each its own size, over
 					// a slow drift of value across the wall (a stretch lighter, the next darker).
-					vec2 m = p_wash(f, 0.55, 1.5, 0.5, 0.26, 0.45, 3.0 + acc * 9.0);
+					vec2 m = p_wash(f, 0.85, 2.0, 0.5, 0.26, 0.45, 3.0 + acc * 9.0);
 					dark += m.x * 0.4 * broad;
 					light += m.y * 0.36 * broad;
 					float drift = p_n2(f * vec2(0.45, 0.6) + acc * 7.0, 37.0);
@@ -446,7 +480,7 @@ void fragment() {
 					vec2 m = p_strokes(f + vec2(0.0, 0.2), 0.48, 1.7, 0.28, 0.16, 0.85, 7.0);
 					dark += m.x * 0.6 * broad;
 					light += m.y * 0.4 * broad;
-				} else {
+				} else if (!slate) {
 					float course = pattern == 5 ? 0.42 : 0.26;
 					vec2 m = p_strokes(f + vec2(0.0, course * 0.35), course, 0.45, 0.55, 0.22, 0.82, 7.0);
 					dark += m.x * 0.6 * detail;
@@ -558,7 +592,31 @@ void fragment() {
 			float under = code == 10 ? clamp(course_m / 0.9, 0.0, 1.0) : 0.0;
 			cover = 1.0;
 			hide = 1.0;
-			vec2 sw = p_wash(f, 0.5, 1.6, 0.55, 0.32, 0.45, 41.0 + acc * 7.0);
+			// Roof colour through the snow (card painter-look-houses3: every roof one white slab):
+			// the snow has slid or melted off a patch or two of the slope and in gaps along the
+			// ridge, so the tile, the shingle, the slate or the straw shows by roof type. Both the
+			// blanket and the roof piece under it read the same world-space mask: the blanket is
+			// cut away (a ragged edge) and the roof piece beneath takes its own colour back.
+			if ((code == 10 || code == 2 || code == 8) && under < 0.05 && up > 0.3) {
+				// (Round bare patches read as holes with a rim; the ridge's tongues read as melt.)
+				float line_x = wp.x * 0.7 + wp.z * 0.55;
+				float gap_b = smoothstep(0.5, 0.64, p_n2(vec2(line_x, 3.0), 114.0));
+				float reach = 0.16 + 0.9 * p_n2(vec2(line_x * 1.9, 7.0), 117.0);
+				float to_ridge = vl - f.y;
+				float ridge_b = gap_b * (1.0 - smoothstep(reach * 0.55, reach, to_ridge)) * step(0.0, to_ridge);
+				// The snow is thin at the verges: the roof's colour shows there in ragged stretches
+				// (a gable's edge), not the whole run. (An eave's bare teeth were tried: small
+				// rimmed stickers, dropped.)
+				float dx = min(f.x, ul - f.x);
+				float verge_b = (1.0 - smoothstep(0.05, 0.16 + 0.5 * p_n2(vec2(f.y * 1.3, 9.0), 118.0), dx))
+					* step(0.0, dx) * smoothstep(0.38, 0.56, p_n2(vec2(f.y * 0.5, 4.0), 119.0));
+				float bare = max(ridge_b, verge_b) + (p_n2(f * 2.6, 115.0) - 0.5) * 0.3 + (p_n2(f * 9.0, 116.0) - 0.5) * 0.25;
+				cover = 1.0 - smoothstep(0.35, 0.65, bare);
+				if (code == 10 && bare > 0.5) {
+					discard;
+				}
+			}
+			vec2 sw = p_wash(f, 1.3, 4.2, 0.5, 0.34, 0.45, 41.0 + acc * 7.0);
 			// The mass's patches lie wider along the eave than down the slope (card
 			// painter-buildings-fix4: taller ones read as vertical blotches), its hollows lower.
 			float mass = p_n2(vec2(f.x * 0.42, f.y * 0.62) + acc * 13.0, 47.0)
@@ -567,7 +625,12 @@ void fragment() {
 			swell = (1.0 - smoothstep(0.34, 0.48, mass)) * (1.0 - under);
 			snow_dark = sw.x * 0.3 * broad * (1.0 - under) + under * 0.6 + hollow * 0.17;
 			snow_light = sw.y * 0.5 * broad * (1.0 - under);
-			wob = 0.5 + (sw.y - sw.x) * 0.45;
+			snow_dark *= cover;
+			// (Where the snow is off, the bare roof takes a lift of light: a patch in the blue shade
+			// read as a dark olive hole.)
+			snow_light = snow_light * cover + (1.0 - cover) * 0.5;
+			swell *= cover;
+			wob = mix(wob, 0.5 + (sw.y - sw.x) * 0.45, cover);
 			// A blanket's light turns over a wide step, so its own shape (the crown, the sags, the
 			// lip's round) reads as soft light and shade instead of one flat tone.
 			soft = code == 10 ? 0.15 : 0.06;
@@ -599,6 +662,9 @@ void fragment() {
 	}
 	dark = clamp(dark * marks * (1.0 - cover * hide) + snow_dark, 0.0, 0.85);
 	light = clamp(light * marks * (1.0 - cover * hide) + snow_light, 0.0, 0.8);
+	// Each building's own value: its stone lighter or darker, its straw bleached or russet, its
+	// tiles a shade apart.
+	variant = clamp(variant + (v_bld.y - 0.5) * (pattern == 1 || pattern == 8 ? 0.5 : (pattern == 5 ? 0.2 : 0.0)), 0.0, 1.0);
 	int base = pick >= 6 ? chim_base : v_tone * 6;
 	vec3 shd = mix(ramps[base], ramps[base + 3], variant);
 	vec3 mid = mix(ramps[base + 1], ramps[base + 4], variant);
@@ -612,14 +678,16 @@ void fragment() {
 		lit = mix(lit, mix(ramps[pb + 2], ramps[pb + 5], variant), pm);
 		light = min(light + pale * (chim_base == 12 ? 0.0 : 0.5), 0.8);
 	}
-	if (cap > 0.0 || warm > 0.0) {
+	if (cap > 0.0 || warm > 0.0 || mauve > 0.0) {
 		// The ridge cap in the clay's ramp (slot 0 of a picked roof, 12 of a plain slate roof's),
 		// the weathered slates in the shingle's (slot 12 of a picked roof).
-		float cv = cap * (1.0 - cover);
+		// (One variant along the whole ridge, and only 0.7 of the clay laid over the slate, so the
+		// roll is a warm soft accent of the roof's own colour, not a hard red stripe.)
+		float cv = max(cap * 0.75, mauve) * (1.0 - cover);
 		int cb = pick > 0 ? 0 : 12;
-		shd = mix(shd, mix(ramps[cb], ramps[cb + 3], variant), cv);
-		mid = mix(mid, mix(ramps[cb + 1], ramps[cb + 4], variant), cv);
-		lit = mix(lit, mix(ramps[cb + 2], ramps[cb + 5], variant), cv);
+		shd = mix(shd, mix(ramps[cb], ramps[cb + 3], 0.5), cv);
+		mid = mix(mid, mix(ramps[cb + 1], ramps[cb + 4], 0.5), cv);
+		lit = mix(lit, mix(ramps[cb + 2], ramps[cb + 5], 0.5), cv);
 		float wv = warm * (1.0 - cover) * (1.0 - cap);
 		shd = mix(shd, mix(ramps[12], ramps[15], variant), wv);
 		mid = mix(mid, mix(ramps[13], ramps[16], variant), wv);
@@ -637,13 +705,41 @@ void fragment() {
 	shd = mix(shd, snow_ramp[0], cover);
 	mid = mix(mid, snow_ramp[1], cover);
 	lit = mix(lit, snow_ramp[2], cover);
-	vec3 deep = shd * 0.82;
-	f_shd = mix(mix(shd, deep, dark), mid, light * 0.5);
+	// A stone wall in the shade keeps its stones apart (card painter-look-houses3: winter's shaded
+	// stone was one flat khaki-grey): deeper joints, and the paler stones lift further.
+	float stony = pattern == 1 && on_course ? 1.0 : 0.0;
+	vec3 deep = shd * (0.82 - 0.1 * stony);
+	f_shd = mix(mix(shd, deep, dark), mid, light * (0.5 + 0.3 * stony));
 	f_mid = mix(mix(mid, shd, dark), lit, light * 0.6);
 	f_lit = mix(mix(lit, mid, dark), lit * 1.06, light);
 	// Swells of snow and the sunlit stone are warm: a stone wall's light side leans to straw.
 	f_lit = mix(f_lit, f_lit * vec3(1.0, 0.975, 0.9), swell * 0.6);
 	f_lit = mix(f_lit, f_lit * vec3(1.06, 1.0, 0.86), pattern == 1 && on_course ? 0.7 : 0.0);
+	float bk = v_bld.x * 2.0 - 1.0;
+	if (pattern == 1 && on_course) {
+		// Stone has colour (card painter-look-houses3: grey khaki blocks): each stone leans warm
+		// sandstone or cool blue-violet, broad washes lean whole stretches, and each building its
+		// own way; the sun side warm, the shade cool.
+		float sk = p_n2(f * vec2(0.3, 0.45) + acc * 7.0, 83.0);
+		float z = clamp(stone_z * 2.0 + (smoothstep(0.45, 0.7, sk) - (1.0 - smoothstep(0.25, 0.5, sk))) * 0.8 + bk * 0.5, -1.2, 1.2);
+		f_lit *= vec3(1.0 + 0.08 * z, 1.0 + 0.01 * z, 1.0 - 0.12 * z);
+		f_mid *= vec3(1.0 + 0.07 * z, 1.0, 1.0 - 0.1 * z);
+		f_shd *= vec3(0.94 + 0.07 * z, 1.0, 1.2 - 0.08 * z);
+	} else if (slate) {
+		// Slate is luminous, not grey: its sun side warm, its body and shade a bluer violet.
+		float sc2 = 1.0 - cover;
+		f_lit *= mix(vec3(1.0), vec3(1.08, 1.04, 0.96), sc2);
+		f_mid *= mix(vec3(1.0), vec3(0.97, 0.98, 1.1), sc2);
+		f_shd *= mix(vec3(1.0), vec3(0.95, 0.95, 1.14), sc2);
+	} else if (pattern == 8) {
+		// Straw: golden to silvery grey by building, the snow's cover left alone.
+		float tc = 1.0 - cover;
+		float tk = v_bld.y * 2.0 - 1.0;
+		vec3 straw = vec3(1.0 + 0.08 * tk, 1.0 + 0.01 * tk, 1.0 - 0.2 * tk);
+		f_lit *= mix(vec3(1.0), straw, tc);
+		f_mid *= mix(vec3(1.0), straw, tc);
+		f_shd *= mix(vec3(1.0), straw, tc);
+	}
 	if (pattern == 0 && on_course) {
 		// Plaster (card painter-look-houses2: a flat lilac-grey): its sun side leans warm and its
 		// shade cool, and a few broad washes push each further, a stretch warm as if the light lay
@@ -652,8 +748,14 @@ void fragment() {
 		float wm = smoothstep(0.46, 0.72, tw);
 		float cl = 1.0 - smoothstep(0.26, 0.52, tw);
 		f_lit *= mix(vec3(1.03, 0.995, 0.93), vec3(1.08, 0.985, 0.78), wm);
-		f_mid *= mix(mix(vec3(1.0), vec3(1.1, 0.985, 0.82), wm), vec3(0.9, 0.975, 1.1), cl);
-		f_shd *= mix(mix(vec3(1.0), vec3(1.16, 0.95, 0.78), wm), vec3(0.8, 0.93, 1.2), cl);
+		f_mid *= mix(mix(vec3(1.0), vec3(1.1, 0.985, 0.82), wm), vec3(0.95, 0.985, 1.06), cl);
+		f_shd *= mix(mix(vec3(1.0), vec3(1.16, 0.95, 0.78), wm), vec3(0.88, 0.95, 1.12), cl);
+		// Each building's plaster leans its own way, pale and cool to straw and peach.
+		vec3 plaster = vec3(1.04 + 0.04 * bk, 1.0, 0.95 - 0.1 * bk);
+		f_lit *= plaster;
+		f_mid *= plaster * vec3(1.03, 1.0, 0.96);
+		// (A wall in shade was a cool grey-pink next to the sunlit cream: its shade leans peach.)
+		f_shd *= plaster * vec3(1.08, 1.0, 0.9);
 		// The ground's warm bounce lights the foot of the wall (a peach glow in the shade), the sky
 		// the upper wall's cool.
 		float bounce = 1.0 - smoothstep(0.0, 0.18, h);
@@ -661,7 +763,13 @@ void fragment() {
 		f_mid *= mix(vec3(1.0), vec3(1.06, 0.99, 0.9), bounce);
 	} else if (pick >= 6) {
 		// A chimney's sun side is warm and its shade cool, the split the stone wall has.
-		f_lit *= vec3(1.05, 1.0, 0.89);
+		if (chim_base == 12 && pale < 0.5) {
+			// A brick stack keeps its red in the sun: the clay's lit step is a pale cream, so the
+			// sunlit face takes the body tone, brightened (card painter-look-houses3: every chimney
+			// a pale box).
+			f_lit = mix(f_lit, f_mid * vec3(1.14, 1.06, 1.0), 0.7);
+		}
+		f_lit *= vec3(1.05 + 0.05 * bk, 1.0, 0.89 - 0.06 * bk);
 		f_shd *= vec3(0.93, 0.97, 1.07);
 	}
 	if (code == 10) {
