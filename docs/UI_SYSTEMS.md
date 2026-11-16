@@ -1052,7 +1052,12 @@ the sentence the short one). Graphics reads Look and quality, Display, View and 
 Water, Performance, then the Advanced `Foldout` (ambient occlusion, reflections, global
 illumination, renderer). Accessibility holds Interface size (and text), Reduce motion and Wind
 motion. No colour-vision setting exists: the status colours are already told apart for every
-colour-vision type and each carries an icon or words (UI_TASTE C9, C7).
+colour-vision type and each carries an icon or words (UI_TASTE C9, C7). Spacing is the theme's:
+`BoxContainerGroups` (24 px) between groups, `BoxContainerSpaced` (12 px) between rows, the
+caption flush under its row; a disabled `Ghost` (a Reset with nothing to reset) is bare words, not a
+chip, and a slider's keyboard focus is a ring round its knob (`_knob_lit`; Godot has no focus
+style for sliders). The sheet keeps one height across tabs, so a short tab (Audio, About) leaves
+empty paper under its rows by design: the dialog does not jump when the section changes.
 
 **Adding a setting row** (the card that brings one):
 

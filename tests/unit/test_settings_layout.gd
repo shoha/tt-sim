@@ -40,6 +40,10 @@ func test_every_listed_row_stands_in_its_group_with_its_sentence() -> void:
 			var group := _group(tab_name, spec.title)
 			assert_false(group.is_empty(), "%s / %s" % [tab_name, spec.title])
 			for row_spec in spec.rows:
+				if row_spec.get("attach", false):
+					var note := _menu.find_child(String(row_spec.row), true, false)
+					assert_true(note.get_parent().name.begins_with("RowBlock_"), "attached")
+					continue
 				var block := _menu.find_child("RowBlock_" + String(row_spec.row), true, false)
 				assert_not_null(block, "row %s has its block" % row_spec.row)
 				if block and row_spec.has("desc"):

@@ -13,6 +13,8 @@ extends RefCounted
 ##    fits, below. A row can name `"desc_node"` instead of `"desc"` to adopt an existing Label as
 ##    its sentence (text the code updates), and `"derived": true` when its control only shows
 ##    other rows' values (the Quality preset), so a group reset leaves it to refresh itself.
+##    `"attach": true` puts a row the code shows and hides (the Quality note) flush under the row
+##    above it, in that row's block.
 ## 3. Read and write the control in SettingsMenu._write_values / _show_saved_values, and give it a
 ##    default in _show_defaults: the per-group Reset and the unsaved-changes mark read those.
 ## A row the table does not list is still shown: SettingsLayout.adopt_strays puts it in a "More"
