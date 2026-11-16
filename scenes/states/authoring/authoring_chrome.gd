@@ -18,6 +18,19 @@ const SURFACE_PAPER := true
 ## Set false for the full-height panel.
 const FIT_HEIGHT := true
 
+## The rail's items are 46 px squares (43 real px in a 1280x720 window, the target size the critic
+## asked for), the tools in one column and the actions in a second beside it, so the rail's 11
+## tools and its runs still fit 720p. RAIL_GROUP_GAP is the extra step between runs: with the
+## rail's own 4 px either side it reads as 20 px.
+const RAIL_ITEM_SIZE := 46.0
+const RAIL_GROUP_GAP := 12.0
+
+## The card's opacity while a brush is down on the board (it steps back, the stroke shows).
+const STROKE_DIM := 0.3
+
+## The word under Save while there is anything to save (with the dot): the cue says it in text.
+const UNSAVED_WORD := "Unsaved"
+
 const ACTION_UNDO := &"undo"
 const ACTION_REDO := &"redo"
 const ACTION_SAVE := &"save_map"
@@ -30,6 +43,49 @@ const FOOTER_ITEMS: Array[Dictionary] = [
 	{"id": ACTION_SAVE, "icon": "device-floppy", "tooltip": "Save map (Ctrl+S)"},
 	{"id": ACTION_LEAVE, "icon": "door-exit", "tooltip": "Leave map building (Esc)"},
 ]
+
+
+## Place tiles' icons by words in the species key (the first match wins), so an oak, a birch and a
+## pine are three pictures; a kind's icon (AuthoringPanel.PLACE_ICONS) is the fallback.
+const PLACE_KEY_ICONS: Array[Dictionary] = [
+	{"words": ["pine", "spruce", "fir", "larch", "cedar", "hemlock"], "icon": "christmas-tree"},
+	{"words": ["bush", "shrub", "sapling", "thicket", "fern", "bramble"], "icon": "plant"},
+	{"words": ["boulder", "rock", "stone", "outcrop", "slab", "scree"], "icon": "stone"},
+	{"words": ["birch", "aspen", "willow", "poplar", "maple", "alder"], "icon": "leaf"},
+	{"words": ["cactus", "agave"], "icon": "cactus"},
+]
+
+
+## The icon of a Place tile for species `key` (e.g. "dwarf_pine"); `fallback` when no word fits.
+static func place_icon(key: String, fallback: String) -> String:
+	var lowered := key.to_lower()
+	for entry in PLACE_KEY_ICONS:
+		for word: String in entry["words"]:
+			if lowered.contains(word):
+				return String(entry["icon"])
+	return fallback
+
+
+## A wrapped caption line saying a pane's gestures (the pane's lead: two lines at most).
+static func help_label(label_name: String, text: String) -> Label:
+	var label := Label.new()
+	label.name = label_name
+	label.text = text
+	label.theme_type_variation = &"Caption"
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.custom_minimum_size = Vector2(1, 0)
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return label
+
+
+## The rest of a pane's help behind a "More" foldout, closed: the lead above it says enough to
+## start.
+static func more_foldout(foldout_name: String, text: String) -> Foldout:
+	var foldout := Foldout.new()
+	foldout.name = foldout_name
+	foldout.title = "More"
+	foldout.add_child(help_label(foldout_name + "Text", text))
+	return foldout
 
 
 ## The theme leaf the map tools wear (SURFACE_PAPER).

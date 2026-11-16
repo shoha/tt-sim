@@ -226,7 +226,9 @@ func test_the_drawer_is_drawn_by_the_theme_and_follows_its_leaf() -> void:
 		var box := panel._panel.get_theme_stylebox("panel") as StyleBoxFlat
 		assert_eq(box.bg_color, ThemeColors.of(panel, ThemeColors.SURFACE), "the leaf's surface")
 		assert_eq(box.corner_radius_top_left, 0, "square against the screen's edge")
-		assert_gt(box.corner_radius_top_right, 0, "rounded toward the board")
+		assert_eq(box.corner_radius_top_right, 0, "square where it meets the rail: no notch")
+		assert_eq(box.corner_radius_bottom_right, 0, "square where it meets the rail: no notch")
+		assert_gt(box.corner_radius_bottom_left, 0, "its free corner is rounded")
 
 
 func test_both_leaves_define_every_drawer_variation() -> void:
@@ -239,6 +241,139 @@ func test_both_leaves_define_every_drawer_variation() -> void:
 				assert_true(leaf.has_stylebox(state, "DrawerTab" + side), "%s %s" % [side, state])
 		for margin in ["DrawerMargin", "DrawerMarginRoomy"]:
 			assert_true(leaf.has_constant("margin_left", margin))
+
+
+# -- Round 2 (the critic's ranked fixes, 2026-11-16) ----------------------------------------
+
+
+func test_rail_targets_are_46_wide_with_20_px_between_runs_and_still_fit_720p() -> void:
+	var panel := _panel()
+	await get_tree().process_frame
+	for id: StringName in panel._rail._buttons:
+		var button: Control = panel._rail._buttons[id]
+		assert_gte(button.custom_minimum_size.x, 46.0, "%s is a large target" % id)
+	for gap in _gaps(panel._rail):
+		var step: float = (gap as Control).custom_minimum_size.y + 2.0 * IconRail.ITEM_GAP
+		assert_gte(step, 20.0, "a run ends with a 20 px break")
+	var actions := panel._footer_rail.get_parent()
+	assert_eq(actions.name, "ActionColumn", "the actions stand in a column beside the tools")
+	assert_true(panel._rail.chip, "the active tool wears a chip")
+	assert_false(panel._footer_rail.chip, "actions are not tools: no chip")
+
+
+func test_the_active_tool_has_a_chip_not_only_a_stripe() -> void:
+	var panel := _panel()
+	panel.reveal()
+	panel.open()
+	await get_tree().create_timer(UiMotion.PANEL_IN_S + 0.2).timeout
+	panel._rail.select(AuthoringPanel.TOOL_SCULPT)
+	await get_tree().process_frame
+	var chip := panel._rail.chip_rect()
+	assert_gt(chip.size.x, 40.0, "the chip spans the item")
+	assert_almost_eq(chip.size.y, 46.0, 0.01)
+	var item: Control = panel._rail._buttons[AuthoringPanel.TOOL_SCULPT]
+	assert_true(chip.has_point(item.get_rect().get_center()), "it sits behind the icon")
+
+
+func test_the_longest_help_has_a_two_line_lead_and_the_rest_behind_more() -> void:
+	var panel := _panel()
+	var panes := {
+		&"BiomeHint": panel._stack.get_pane(AuthoringPanel.TOOL_BIOME),
+		&"PlaceHint": panel._stack.get_pane(AuthoringPanel.TOOL_PLACE),
+		&"WaterHint": panel._stack.get_pane(AuthoringPanel.TOOL_WATER),
+	}
+	for hint_name: StringName in panes:
+		var pane: Control = panes[hint_name]
+		var lead := pane.get_node(String(hint_name)) as Label
+		assert_lt(lead.text.length(), 95, "%s: a lead of two short lines" % hint_name)
+		var more := pane.get_node(String(hint_name) + "More") as Foldout
+		assert_false(more.expanded, "%s: the rest is behind More" % hint_name)
+		assert_eq(more.title, "More")
+
+
+func test_place_tiles_name_species_by_picture_and_the_biome_rows_read_in_ink() -> void:
+	var oak := AuthoringChrome.place_icon("oak", "tree")
+	var birch := AuthoringChrome.place_icon("birch", "tree")
+	var pine := AuthoringChrome.place_icon("dwarf_pine", "tree")
+	assert_ne(oak, birch)
+	assert_ne(oak, pine)
+	assert_ne(birch, pine)
+	for icon in [oak, birch, pine, "plant", "stone", "cactus"]:
+		assert_not_null(IconButton.load_icon(icon), "%s exists" % icon)
+	assert_eq(AuthoringChrome.place_icon("boulder", "grain"), "stone")
+	assert_eq(AuthoringChrome.place_icon("moss", "grain"), "grain", "no word: the kind's icon")
+	var panel := _panel()
+	var place := panel._stack.get_pane(AuthoringPanel.TOOL_PLACE)
+	var foldouts := place.get_children().filter(
+		func(c: Node) -> bool: return c is Foldout and c.name.begins_with("Place_")
+	)
+	assert_gt(foldouts.size(), 0)
+	for foldout: Foldout in foldouts:
+		assert_eq(foldout.title_variation, &"FoldoutTitle", "ink, not the soft grey")
+		assert_lte(foldout.title.split(" ").size(), 2, "the same short name as the Biome tile")
+
+
+func test_the_unsaved_cue_is_a_word_as_well_as_a_dot() -> void:
+	var panel := _panel()
+	var save: Button = panel._footer_rail._buttons[AuthoringPanel.ACTION_SAVE]
+	panel.set_dirty(true)
+	var word := save.get_node("ItemCaption") as Label
+	assert_eq(word.text, AuthoringChrome.UNSAVED_WORD)
+	assert_true(word.visible)
+	assert_true(save.badge)
+	panel.set_dirty(false)
+	assert_false(word.visible, "saved: the word goes")
+
+
+func test_the_empty_village_pane_has_one_action_that_goes_to_the_street_tool() -> void:
+	var pane := VillageToolPane.new()
+	add_child_autofree(pane)
+	assert_true(pane.empty_card.visible)
+	assert_false(pane.hint.visible, "no plaza gesture before there is a village")
+	assert_false(pane.empty_note.text.contains("Dress"), "plain words")
+	watch_signals(pane)
+	pane.street_button.pressed.emit()
+	assert_signal_emitted(pane, "street_requested")
+
+
+func test_the_card_steps_back_under_a_stroke_and_returns() -> void:
+	UiMotion.user_reduce = true
+	var card := PanelContainer.new()
+	var rail := PanelContainer.new()
+	_host.add_child(card)
+	_host.add_child(rail)
+	card.size = Vector2(200, 200)
+	rail.position = Vector2(200, 0)
+	rail.size = Vector2(50, 200)
+	var dimmer := CardDimmer.new()
+	dimmer.card = card
+	dimmer.rail = rail
+	dimmer.is_open = func() -> bool: return true
+	add_child_autofree(dimmer)
+	dimmer.dim(true)
+	assert_almost_eq(card.modulate.a, AuthoringChrome.STROKE_DIM, 0.001)
+	dimmer.dim(false)
+	assert_almost_eq(card.modulate.a, 1.0, 0.001)
+	assert_true(dimmer._over_chrome(Vector2(10, 10)), "a press on the card is the drawer's")
+	assert_true(dimmer._over_chrome(Vector2(220, 10)), "and so is the rail's")
+	assert_false(dimmer._over_chrome(Vector2(600, 400)), "the board is not")
+
+
+func test_the_card_height_eases_when_the_pane_changes_and_cuts_under_reduce_motion() -> void:
+	_host.size = Vector2(1920.0, 1080.0)
+	var panel := _panel()
+	panel.reveal()
+	await get_tree().create_timer(UiMotion.PANEL_IN_S + 0.1).timeout
+	panel.open()
+	panel.show_tool_pane(AuthoringPanel.TOOL_SCULPT)
+	await get_tree().create_timer(UiMotion.PANEL_IN_S + 0.2).timeout
+	panel.fit_panel_height(600.0)
+	assert_lt(panel._panel.size.y, 600.0, "on its way, not there")
+	await get_tree().create_timer(UiMotion.STATE_S + 0.1).timeout
+	assert_almost_eq(panel._panel.size.y, 600.0, 0.5)
+	UiMotion.user_reduce = true
+	panel.fit_panel_height(300.0)
+	assert_almost_eq(panel._panel.size.y, 300.0, 0.5, "a cut")
 
 
 # -- The first-strokes card -----------------------------------------------------------------
@@ -286,7 +421,7 @@ func test_the_card_stays_clear_of_the_drawer_at_720p() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var rect := card.get_global_rect()
-	var drawer_edge := AuthoringPanel.DRAWER_WIDTH + 44.0
+	var drawer_edge := AuthoringPanel.DRAWER_WIDTH + 104.0
 	assert_gt(rect.position.x, drawer_edge, "right of the open drawer and its rail")
 	assert_lt(rect.end.x, CANVAS_720P.x, "inside the window")
 

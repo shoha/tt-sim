@@ -77,6 +77,14 @@ const _TAB_BADGE_MARGIN := 4.0
 ## Rail mode: extra items drawn under the pane items after a gap, outside the
 ## single-select group. Same entry shape as rail_items.
 @export var rail_footer_items: Array[Dictionary] = []
+## Rail mode: each item's side (IconRail.item_size) and the step between two groups of items.
+@export var rail_item_size: float = IconRail.ITEM_SIZE
+@export var rail_group_gap: float = IconRail.GROUP_GAP
+## Rail mode: a state-colour chip behind the active item (IconRail.chip).
+@export var rail_chip: bool = false
+## Rail mode: the footer items stand in a second column beside the rail, bottom-aligned, so the
+## tools can have large targets and all of it fits a 720p window.
+@export var rail_footer_beside: bool = false
 ## The theme variation of the margin the content stands in: DrawerMargin (12 px) or
 ## DrawerMarginRoomy (16 px). Set in _on_ready().
 @export var margin_variation: StringName = &"DrawerMargin"
@@ -136,6 +144,7 @@ var _last_rail_id: StringName = &""  ## Pane to reopen on when nothing is select
 var _pending_tab_tooltip: String = ""  ## Set via set_tab_tooltip() before the tab button exists
 var _pending_tab_badge: bool = false  ## Set via set_tab_badge() before the tab badge exists
 var _slide_tween: Tween
+var _height_tween: Tween  ## Fit mode: the card's height easing to a new pane's
 var _is_animating: bool = false
 var _closing_from_open: bool = false  ## True when closing/concealing from an open state
 
@@ -341,10 +350,12 @@ func set_footer_item_enabled(id: StringName, on: bool) -> void:
 		_footer_rail.set_enabled(id, on)
 
 
-## Rail mode: badge a footer item (e.g. Save while there are unsaved changes).
-func set_footer_badge(id: StringName, on: bool) -> void:
+## Rail mode: badge a footer item (e.g. Save while there are unsaved changes), and with `word` say
+## it in a word under the icon while it is on, so the cue is not colour or a dot alone.
+func set_footer_badge(id: StringName, on: bool, word: String = "") -> void:
 	if _footer_rail:
 		_footer_rail.set_badge(id, on)
+		_footer_rail.set_item_caption(id, word if on else "")
 
 
 ## Rail mode: enable or disable a pane item (a tool that is not available yet).
@@ -474,7 +485,9 @@ func _build_tab_button() -> void:
 func _build_rail() -> void:
 	# The rail is its items and the panel's side padding, never narrower: the sled places the
 	# panel by tab_width, so a rail wider than it would hang past its own frame.
-	tab_width = maxf(tab_width, IconRail.ITEM_SIZE + _RAIL_PAD_H * 2.0)
+	var columns := 2.0 if rail_footer_beside and not rail_footer_items.is_empty() else 1.0
+	var items_w := rail_item_size * columns + IconRail.ITEM_GAP * (columns - 1.0)
+	tab_width = maxf(tab_width, items_w + _RAIL_PAD_H * 2.0)
 	_rail_panel = PanelContainer.new()
 	_rail_panel.name = "RailPanel"
 	_rail_panel.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -489,34 +502,50 @@ func _build_rail() -> void:
 	# as the avatar builder's rail does. On the outer edge it ran to the rail's rim and read as
 	# cut there (2026-10-10 once-over).
 	_rail.indicator_at_end = edge == DrawerEdge.RIGHT
+	_rail.item_size = rail_item_size
+	_rail.chip = rail_chip
 	# An item's optional "group" breaks the rail into runs of related tools: a gap where it changes.
 	var group: StringName = &""
 	for item in rail_items:
 		var item_group := StringName(item.get("group", &""))
 		if _rail.get_child_count() > 0 and item_group != group:
-			_rail.add_gap()
+			_rail.add_gap(rail_group_gap)
 		group = item_group
 		_rail.add_item(item["id"], item["icon"], item.get("tooltip", ""))
 	_rail.item_pressed.connect(_on_rail_item_pressed)
-	var column := VBoxContainer.new()
+	var beside := rail_footer_beside and not rail_footer_items.is_empty()
+	var column: BoxContainer = HBoxContainer.new() if beside else VBoxContainer.new()
 	column.name = "RailColumn"
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_rail_panel.add_child(column)
 	column.add_child(_rail)
 	if rail_footer_items.is_empty():
 		return
+	_footer_rail = IconRail.new()
+	_footer_rail.name = "FooterRail"
+	_footer_rail.vertical = true
+	_footer_rail.auto_select = false
+	_footer_rail.item_size = rail_item_size
+	for item in rail_footer_items:
+		_footer_rail.add_item(item["id"], item["icon"], item.get("tooltip", ""))
+	_footer_rail.item_pressed.connect(_on_rail_footer_pressed)
+	if beside:
+		var actions := VBoxContainer.new()
+		actions.name = "ActionColumn"
+		actions.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var spacer := Control.new()
+		spacer.name = "ActionSpacer"
+		spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		actions.add_child(spacer)
+		actions.add_child(_footer_rail)
+		column.add_child(actions)
+		return
 	var gap := Control.new()
 	gap.name = "FooterGap"
 	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	gap.custom_minimum_size = Vector2(0, IconRail.GROUP_GAP + IconRail.ITEM_GAP)
 	column.add_child(gap)
-	_footer_rail = IconRail.new()
-	_footer_rail.name = "FooterRail"
-	_footer_rail.vertical = true
-	_footer_rail.auto_select = false
-	for item in rail_footer_items:
-		_footer_rail.add_item(item["id"], item["icon"], item.get("tooltip", ""))
-	_footer_rail.item_pressed.connect(_on_rail_footer_pressed)
 	column.add_child(_footer_rail)
 
 
@@ -552,20 +581,29 @@ func _edge_variation(base: String) -> StringName:
 ## less.
 func fit_panel_height(content_px: float) -> void:
 	_fit_px = content_px
-	_apply_panel_height()
+	_apply_panel_height(true)
 
 
 ## The panel's height and top: the whole edge, or in fit mode its content's, below the rail's top.
-func _apply_panel_height() -> void:
+## With `animate` and the drawer open, a change of height eases over UiMotion.STATE_S; under
+## Reduce motion (and at once for a resize or the first fit) it is a cut.
+func _apply_panel_height(animate: bool = false) -> void:
 	if _panel == null:
 		return
+	if _height_tween and _height_tween.is_valid():
+		_height_tween.kill()
 	if not fit_height:
 		_panel.size.y = size.y
 		_panel.position.y = 0.0
 		return
 	var room := maxf(size.y - tab_top_margin * 2.0, 0.0)
-	_panel.size.y = minf(_fit_px, room) if _fit_px > 0.0 else room
+	var target := minf(_fit_px, room) if _fit_px > 0.0 else room
 	_panel.position.y = tab_top_margin
+	if animate and is_open and not UiMotion.reduced() and not is_equal_approx(_panel.size.y, target):
+		_height_tween = create_tween().set_trans(UiMotion.ARRIVE_TRANS).set_ease(Tween.EASE_OUT)
+		_height_tween.tween_property(_panel, "size:y", target, UiMotion.STATE_S)
+		return
+	_panel.size.y = target
 
 
 func _on_parent_resized() -> void:

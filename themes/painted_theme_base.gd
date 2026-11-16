@@ -92,6 +92,9 @@ func _define_labels() -> void:
 		"BodyOff", "Label", {font = font_body, font_size = SIZE_BODY, font_color = soft}
 	)
 	define_variant_style("Caption", "Label", caption)
+	# A foldout title that heads a group of choices (the Place pane's biomes): the caption's size
+	# in ink, since the soft role on paper is grey for a row the eye must find (C6).
+	define_variant_style("FoldoutTitle", "Label", inherit(caption, {font_color = text}))
 	# A caption standing on the sky (the title's version): the caption's size in ink, since the
 	# soft role reads on paper but not on every mood's sky.
 	define_variant_style("SkyCaption", "Label", inherit(caption, {font_color = text}))
@@ -119,6 +122,8 @@ func _define_labels() -> void:
 	define_variant_style("SectionHeader", "Label", heading)
 	define_variant_style("PanelHeader", "Label", heading)
 	define_variant_style("RailLabel", "Label", caption)
+	# One word under a rail icon (Unsaved under Save), narrow enough for a 46 px item.
+	define_variant_style("RailNote", "Label", inherit(caption, {font_size = SIZE_NOTE}))
 
 
 ## The default Button (the quiet secondary) and its filled and quiet variations. Every fill
@@ -494,12 +499,21 @@ func _define_drawer() -> void:
 		# A card that is only as tall as its content (DrawerContainer.fit_height): the panel's
 		# surface, rounded on the side facing the board, a pencil edge and the lifted shadow, so
 		# the board shows below a short pane. Stands level with the rail's top.
+		# Square where it meets the rail (a rounded corner there left a notch of board between
+		# the two), rounded at its free bottom corner against the screen's edge.
 		var card_corners := {
-			corner_radius_top_right = RADIUS_CARD if left else 0,
-			corner_radius_bottom_right = RADIUS_CARD if left else 0,
-			corner_radius_top_left = 0 if left else RADIUS_CARD,
-			corner_radius_bottom_left = 0 if left else RADIUS_CARD,
+			corner_radius_top_right = 0,
+			corner_radius_bottom_right = 0,
+			corner_radius_top_left = 0,
+			corner_radius_bottom_left = RADIUS_CARD if left else 0,
 		}
+		if not left:
+			card_corners = {
+				corner_radius_top_right = 0,
+				corner_radius_bottom_right = RADIUS_CARD,
+				corner_radius_top_left = 0,
+				corner_radius_bottom_left = 0,
+			}
 		var card_trim: Dictionary = inherit(edge(1, c(ThemeColors.EDGE)), lift(), card_corners)
 		if on_glass:
 			card_trim = inherit(rim(), lift(), card_corners)

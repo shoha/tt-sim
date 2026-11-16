@@ -56,9 +56,12 @@ const DEPTH_TILES: Array[Dictionary] = [
 		"hint": "Deep: tokens swim, floating at the surface.",
 	},
 ]
+## The lead says enough to start; HINT_MORE (behind "More") is the rest.
 const HINT := (
-	"River: draw its line from where the water comes to where it goes; over a steep drop it"
-	+ " falls by itself. Pond: paint an area; start inside a pond to grow it. Shift + scroll or"
+	"River: draw it from where the water comes to where it goes. Pond: paint an area."
+)
+const HINT_MORE := (
+	"A river falls by itself over a steep drop. Start inside a pond to grow it. Shift + scroll or"
 	+ " [ and ] set the width. Hold Ctrl as you press to erase water; the ground stays carved"
 	+ " (Sculpt's Smooth fills a dry channel). Sculpting never makes or moves a waterfall:"
 	+ " erase the river and draw it again. Tab switches the shape."
@@ -72,6 +75,7 @@ var shape_field: TileField
 var depth_field: TileField
 
 var _hint: Label
+var _more: Foldout
 var _depth_hint: Label
 var _width_row: PropertyRow
 var _speed_row: PropertyRow
@@ -87,6 +91,8 @@ func _init() -> void:
 	add_child(header)
 	_hint = _caption("WaterHint", HINT)
 	add_child(_hint)
+	_more = AuthoringChrome.more_foldout("WaterHintMore", HINT_MORE)
+	add_child(_more)
 	shape_field = ShapeField.build("WaterShapeField", SHAPE_TILES[0], SHAPE_TILES[1])
 	shape_field.tiles.select(&"water_river")
 	shape_field.tiles.selection_changed.connect(
@@ -139,6 +145,7 @@ func set_carves(carves: bool) -> void:
 			if child is Button:
 				(child as Button).disabled = not carves
 	_hint.text = HINT if carves else ERASE_ONLY_HINT
+	_more.visible = carves
 
 
 func _tiles(node_name: String, caption: String, tiles: Array[Dictionary], tip: String) -> TileField:

@@ -75,7 +75,9 @@ signal tool_pane_built(tool_id: StringName, pane: Control)
 
 ## The drawer width token (UI_TASTE S5), as the room drawer: at 320 the two-column biome
 ## tiles' longest labels (Riverside Wetland) ran within a few px of the tile edges at 720p.
-const DRAWER_WIDTH := 396.0
+## 364 virtual px is about 340 real px in a 1280x720 window; the Wall pane's tiles are the widest
+## content (a narrower drawer pushed them a pixel past the name field).
+const DRAWER_WIDTH := 364.0
 const BIOME_TILE_SIZE := Vector2(64, 84)
 const BIOME_THUMB_PX := 52
 const BIOME_COLUMNS := 2
@@ -184,6 +186,10 @@ func _on_ready() -> void:
 	start_revealed = false
 	rail_items = ToolRegistry.rail_items(ToolDescriptor.AUTHORING)
 	rail_footer_items = AuthoringChrome.FOOTER_ITEMS.duplicate()
+	rail_item_size = AuthoringChrome.RAIL_ITEM_SIZE
+	rail_group_gap = AuthoringChrome.RAIL_GROUP_GAP
+	rail_chip = true
+	rail_footer_beside = true
 
 	margin_variation = &"DrawerMarginRoomy"
 
@@ -230,6 +236,12 @@ func _ready() -> void:
 		set_rail_item_enabled(tool_id, false)
 	set_history_state(false, false)
 	_queue_fit()
+	var dimmer := CardDimmer.new()
+	dimmer.name = "CardDimmer"
+	dimmer.card = _panel
+	dimmer.rail = _rail_panel
+	dimmer.is_open = func() -> bool: return is_open
+	add_child(dimmer)
 
 
 ## Asks for the card to be fitted once this frame's changes are in (one fit per frame).
@@ -276,8 +288,6 @@ func _build_pane(tool: ToolDescriptor) -> Control:
 	match tool.id:
 		TOOL_BIOME:
 			return _build_biome_pane(tool)
-		TOOL_THIN:
-			return _build_thin_pane(tool)
 		TOOL_PLACE:
 			return _build_place_pane(tool)
 		TOOL_SCULPT:
@@ -300,14 +310,11 @@ func _build_biome_pane(tool: ToolDescriptor) -> Control:
 	header.name = "BiomeHeader"
 	header.setup(tool.label, tool.summary)
 	pane.add_child(header)
-	pane.add_child(
-		_hint(
-			"BiomeHint",
-			(
-				"Pick a biome, then drag on the map. Linger to thicken it; Shift + scroll or"
-				+ " [ and ] size the brush; right-click puts the brush down."
-			)
-		)
+	_add_help(
+		pane,
+		"BiomeHint",
+		"Pick a biome, then drag on the map. Linger to thicken it.",
+		"Shift + scroll or [ and ] size the brush; right-click puts the brush down."
 	)
 	pane.add_child(_section_gap("BiomeGap"))
 	biome_field = TileField.new()
@@ -335,28 +342,6 @@ func _build_biome_pane(tool: ToolDescriptor) -> Control:
 	return pane
 
 
-func _build_thin_pane(tool: ToolDescriptor) -> Control:
-	var pane := VBoxContainer.new()
-	pane.name = "ThinPane"
-	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pane.add_theme_constant_override("separation", 8)
-	var header := MenuHeader.new()
-	header.name = "ThinHeader"
-	header.setup(tool.label, tool.summary)
-	pane.add_child(header)
-	pane.add_child(
-		_hint(
-			"ThinHint",
-			(
-				"Drag to thin trees and plants out. Hold Ctrl as you press to clear the ground"
-				+ " completely. Works on a Blender map's own scatter too."
-			)
-		)
-	)
-	pane.add_child(build_advanced("Thin"))
-	return pane
-
-
 ## Place: one foldout per palette biome (headed by its thumbnail), holding a tile per
 ## species big enough to place by hand. The selected biome's group starts open.
 func _build_place_pane(tool: ToolDescriptor) -> Control:
@@ -368,14 +353,11 @@ func _build_place_pane(tool: ToolDescriptor) -> Control:
 	header.name = "PlaceHeader"
 	header.setup(tool.label, tool.summary)
 	pane.add_child(header)
-	pane.add_child(
-		_hint(
-			"PlaceHint",
-			(
-				"Pick one, then click the map. Drag while pressed to turn it. Over a placed one,"
-				+ " Shift + scroll resizes it and right-click or Delete removes it."
-			)
-		)
+	_add_help(
+		pane,
+		"PlaceHint",
+		"Pick one, then click the map. Drag while pressed to turn it.",
+		"Over a placed one, Shift + scroll resizes it and right-click or Delete removes it."
 	)
 	for biome in PaletteLibrary.biomes(palette_root):
 		var biome_id := String(biome["id"])
@@ -384,7 +366,9 @@ func _build_place_pane(tool: ToolDescriptor) -> Control:
 			continue
 		var foldout := Foldout.new()
 		foldout.name = "Place_" + biome_id.validate_node_name()
-		foldout.title = String(biome["name"])
+		# The same short name as the Biome pane's tile, in ink: "Deciduous Forest" in both places.
+		foldout.title = short_name(String(biome["name"]))
+		foldout.title_variation = &"FoldoutTitle"
 		foldout.icon = BiomeThumbnail.of(biome, 28, palette_root, true)
 		var row := TileRow.new()
 		row.name = "PlaceTiles"
@@ -396,7 +380,9 @@ func _build_place_pane(tool: ToolDescriptor) -> Control:
 			row.add_tile(
 				StringName(biome_id + "|" + key),
 				species_label(key),
-				PLACE_ICONS.get(String(rule.get("kind", "")), PLACE_DEFAULT_ICON),
+				AuthoringChrome.place_icon(
+					key, PLACE_ICONS.get(String(rule.get("kind", "")), PLACE_DEFAULT_ICON)
+				),
 				"%s (%s)" % [species_label(key), String(biome["name"])]
 			)
 		row.selection_changed.connect(_on_place_tile.bind(row))
@@ -418,14 +404,13 @@ func _build_sculpt_pane(tool: ToolDescriptor) -> Control:
 	header.name = "SculptHeader"
 	header.setup(tool.label, tool.summary)
 	pane.add_child(header)
-	pane.add_child(
-		_hint(
-			"SculptHint",
-			(
-				"Pick a brush, then drag on the map; linger to build. Hold Ctrl as you press"
-				+ " to lower or cut down, Shift to smooth. Tier steps up a level from where you"
-				+ " press, or extends the level whose edge you start on."
-			)
+	_add_help(
+		pane,
+		"SculptHint",
+		"Pick a brush, then drag on the map; linger to build.",
+		(
+			"Hold Ctrl as you press to lower or cut down, Shift to smooth. Tier steps up a level"
+			+ " from where you press, or extends the level whose edge you start on."
 		)
 	)
 	pane.add_child(_section_gap("SculptGap"))
@@ -770,14 +755,14 @@ func _on_place_tile(id: StringName, source: TileRow) -> void:
 
 ## A wrapped caption line saying a pane's gestures.
 func _hint(hint_name: String, text: String) -> Label:
-	var label := Label.new()
-	label.name = hint_name
-	label.text = text
-	label.theme_type_variation = &"Caption"
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.custom_minimum_size = Vector2(1, 0)
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	return label
+	return AuthoringChrome.help_label(hint_name, text)
+
+
+## A pane's help: a lead of two lines that says enough to start, and the rest behind "More".
+func _add_help(pane: Control, hint_name: String, lead: String, more: String) -> void:
+	pane.add_child(_hint(hint_name, lead))
+	if more != "":
+		pane.add_child(AuthoringChrome.more_foldout(hint_name + "More", more))
 
 
 ## The step a section label (Biomes, Brush) keeps over and above the pane's gap, so it reads
@@ -840,6 +825,13 @@ static func short_name(full_name: String) -> String:
 	return " ".join(words.slice(words.size() - 2))
 
 
+## Goes to a tool as its rail item does when pressed (a pane's own button, such as the Village
+## pane's "Draw a street"): the rail selects it and its pane shows.
+func request_tool(id: StringName) -> void:
+	if is_open:
+		_on_rail_item_pressed(id)
+
+
 func _on_pane_requested(id: StringName) -> void:
 	if id == TOOL_PAINT:
 		ensure_paint_tiles()
@@ -883,7 +875,7 @@ func get_map_name() -> String:
 
 ## Badges Save while there are unsaved changes.
 func set_dirty(dirty: bool) -> void:
-	set_footer_badge(ACTION_SAVE, dirty)
+	set_footer_badge(ACTION_SAVE, dirty, AuthoringChrome.UNSAVED_WORD)
 	set_footer_item_tooltip(ACTION_SAVE, AuthoringChrome.save_tip(dirty))
 
 

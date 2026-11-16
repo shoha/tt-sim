@@ -78,7 +78,9 @@ func prepare(controller: AuthoringController) -> void:
 
 
 func build_pane(panel: AuthoringPanel) -> Control:
-	return VillageToolPane.new(panel.palette_root)
+	var pane := VillageToolPane.new(panel.palette_root)
+	pane.street_requested.connect(panel.request_tool.bind(WallTool.ID))
+	return pane
 
 
 ## The pane's picks are single editor calls (one history entry each), and the pane shows the

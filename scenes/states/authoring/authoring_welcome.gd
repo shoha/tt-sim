@@ -19,6 +19,9 @@ const BUTTON := "Got it"
 const MAX_WIDTH := 420.0
 ## Its distance from the top edge of the screen.
 const TOP_MARGIN := 16.0
+## How far right of the window's centre it stands: the rail is two columns of large items now, so
+## the board's centre has moved by about half the rail's growth.
+const BOARD_SHIFT := 30.0
 
 var _fade: Tween
 
@@ -32,6 +35,9 @@ func _init() -> void:
 	set_anchors_preset(Control.PRESET_CENTER_TOP)
 	grow_horizontal = Control.GROW_DIRECTION_BOTH
 	offset_top = TOP_MARGIN
+	# Centred on the board beside the rail (two columns wide), not on the window.
+	offset_left = BOARD_SHIFT
+	offset_right = BOARD_SHIFT
 	var column := VBoxContainer.new()
 	column.theme_type_variation = &"BoxContainerSnug"
 	add_child(column)

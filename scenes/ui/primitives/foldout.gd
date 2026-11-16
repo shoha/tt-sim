@@ -17,6 +17,10 @@ const ICON_SIZE := 28.0
 		if _title_label:
 			_title_label.text = value
 
+## The title's label variation: Caption (the soft role), or FoldoutTitle (ink, the same size)
+## for a foldout that heads a group of choices. Set before the foldout is ready.
+@export var title_variation: StringName = &"Caption"
+
 ## Optional picture beside the title (a biome thumbnail heading a group of tiles).
 @export var icon: Texture2D = null
 
@@ -127,7 +131,7 @@ func _build_header() -> void:
 	_title_label = Label.new()
 	_title_label.name = "Title"
 	_title_label.text = title
-	_title_label.theme_type_variation = &"Caption"
+	_title_label.theme_type_variation = title_variation
 	_title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_header.add_child(_title_label)

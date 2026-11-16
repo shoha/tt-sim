@@ -44,6 +44,8 @@ signal remove_requested
 signal swap_requested
 signal unpin_requested
 signal restore_requested
+## The empty state's button: the author wants to draw a street (the host switches to Wall).
+signal street_requested
 ## The pointer is over (true) or left (false) the Put back button.
 signal restore_hover_changed(over: bool)
 
@@ -55,10 +57,13 @@ const FIELD_NOUNS := {
 	"crops": "a crop field", "orchard": "an orchard", "garden": "a garden"
 }
 const NO_KIND_NOTE := "%s keeps no %s"
+const EMPTY_TITLE := "No village yet"
 const EMPTY := (
-	"No village yet. Draw a street with the Wall tool and press Dress this street, then come back"
-	+ " here to open a plaza on it."
+	"A village grows along a street. Draw one, turn it into a village, then come back here to"
+	+ " shape its plazas and fields."
 )
+const EMPTY_BUTTON := "Draw a street"
+const EMPTY_BUTTON_TIP := "Switch to the Wall tool, which draws streets"
 const PICK_NOTE := (
 	"Drag a plaza to move it, its edge to size it. Click a barrel or stall to move or swap it."
 )
@@ -102,7 +107,10 @@ const BOUNDARY_TILE_SIZE := Vector2(60, 40)
 const KIT_TILE_SIZE := Vector2(60, 86)
 const VILLAGE_TILE_SIZE := Vector2(96, 40)
 
+## The empty state: a picture, a title, a line and one button that goes to the Wall tool.
+var empty_card: VBoxContainer
 var empty_note: Label
+var street_button: Button
 var village_field: TileField
 var kit_field: TileField
 ## The Lay out row: Plaza and the three field kinds.
@@ -145,8 +153,7 @@ func _init(palette_root: String = PaletteLibrary.DEFAULT_ROOT) -> void:
 	add_child(header)
 	hint = _caption("VillageHint", HINT)
 	add_child(hint)
-	empty_note = _caption("VillageEmpty", EMPTY)
-	add_child(empty_note)
+	_build_empty_card()
 	village_field = TileField.new()
 	village_field.name = "VillageField"
 	village_field.caption = "Village"
@@ -171,6 +178,8 @@ func show_state(state: Dictionary, unit_k: float = 1.0, unit_label: String = "m"
 	var villages: Array = state["villages"]
 	var village := int(state["village"])
 	empty_note.visible = villages.is_empty()
+	empty_card.visible = villages.is_empty()
+	hint.visible = not villages.is_empty()
 	_show_villages(villages, village)
 	var picked := village >= 0
 	for item in SettlementSection.CHIPS:
@@ -570,6 +579,42 @@ static func _kit_id(kit: String) -> StringName:
 
 static func _village_id(village: int) -> StringName:
 	return StringName("village_%d" % village)
+
+
+## The empty state (no village in the map): what a village is, and the one thing to do now.
+func _build_empty_card() -> void:
+	empty_card = VBoxContainer.new()
+	empty_card.name = "VillageEmptyCard"
+	empty_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	empty_card.theme_type_variation = &"BoxContainerSnug"
+	var picture := TextureRect.new()
+	picture.name = "VillageEmptyIcon"
+	picture.texture = IconButton.load_icon("village")
+	picture.custom_minimum_size = Vector2(48, 48)
+	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	picture.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	picture.self_modulate = ThemeColors.of(self, ThemeColors.TEXT_SOFT)
+	empty_card.add_child(picture)
+	var title := Label.new()
+	title.name = "VillageEmptyTitle"
+	title.text = EMPTY_TITLE
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	empty_card.add_child(title)
+	empty_note = _caption("VillageEmpty", EMPTY)
+	empty_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	empty_card.add_child(empty_note)
+	street_button = Button.new()
+	street_button.name = "VillageStreetButton"
+	street_button.text = EMPTY_BUTTON
+	street_button.icon = IconButton.load_icon("street")
+	street_button.theme_type_variation = &"Primary"
+	street_button.tooltip_text = EMPTY_BUTTON_TIP
+	street_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	street_button.pressed.connect(func() -> void: street_requested.emit())
+	empty_card.add_child(street_button)
+	add_child(empty_card)
 
 
 func _caption(node_name: String, text: String) -> Label:

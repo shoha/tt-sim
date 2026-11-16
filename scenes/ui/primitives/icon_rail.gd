@@ -23,6 +23,9 @@ const INDICATOR_THICKNESS := 3.0
 ## The extra step between two groups of items (add_gap): with ITEM_GAP either side it reads as a
 ## break, where one ITEM_GAP reads as a neighbour.
 const GROUP_GAP := 8.0
+## The chip's fill and rim, as alphas of the state colour (lake on paper).
+const CHIP_WASH := 0.36
+const CHIP_EDGE := 0.85
 
 ## Show each item's tooltip text as a caption under its icon.
 @export var show_labels: bool = false
@@ -30,6 +33,12 @@ const GROUP_GAP := 8.0
 @export var auto_select: bool = true
 ## Draw the indicator on the end edge (right or bottom) instead of the start.
 @export var indicator_at_end: bool = true
+## Each item's side, a square: ITEM_SIZE, or larger for a rail whose host has the room (the
+## authoring rail's 46 px items give a 43 px target at 720p).
+@export var item_size: float = ITEM_SIZE
+## Fill a wash of the state colour behind the selected item and any held-active one, so the active
+## item is obvious at a glance and not only by the stripe (the 2026-11-16 critic's first fix).
+@export var chip: bool = false
 
 var selected: StringName = &""
 
@@ -58,7 +67,7 @@ func add_item(id: StringName, icon_name: String, tooltip: String = "") -> IconBu
 	button.name = String(id)
 	button.icon_name = icon_name
 	button.tooltip_text = tooltip
-	button.custom_minimum_size = Vector2(ITEM_SIZE, ITEM_SIZE)
+	button.custom_minimum_size = Vector2(item_size, item_size)
 	button.focus_mode = Control.FOCUS_NONE
 	button.set_meta("ui_silent", true)
 	button.pressed.connect(_on_item_pressed.bind(id))
@@ -142,8 +151,32 @@ func set_item_active(id: StringName, on: bool) -> void:
 		_held_active[id] = true
 	else:
 		_held_active.erase(id)
+	queue_redraw()
 	if _buttons.has(id):
 		_buttons[id].active = on or id == selected
+
+
+## A word under an item's icon ("Unsaved" on Save): empty text takes it away. The word is
+## the cue, so it does not rest on colour alone (UI_TASTE C7).
+func set_item_caption(id: StringName, text: String) -> void:
+	var button: Button = _buttons.get(id)
+	if button == null:
+		return
+	var label := button.get_node_or_null("ItemCaption") as Label
+	if label == null:
+		if text.is_empty():
+			return
+		label = Label.new()
+		label.name = "ItemCaption"
+		label.theme_type_variation = &"RailNote"
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		label.offset_top = -14.0
+		label.offset_bottom = 0.0
+		button.add_child(label)
+	label.text = text
+	label.visible = not text.is_empty()
 
 
 ## Update an item's tooltip in place (e.g. a footer toggle whose meaning
@@ -212,15 +245,45 @@ func _slide_indicator_to(target: float) -> void:
 func indicator_rect() -> Rect2:
 	if _indicator_pos < 0.0:
 		return Rect2()
-	var half := ITEM_SIZE / 2.0
+	var half := item_size / 2.0
 	if vertical:
 		var x := size.x - INDICATOR_THICKNESS if indicator_at_end else 0.0
-		return Rect2(x, _indicator_pos - half, INDICATOR_THICKNESS, ITEM_SIZE)
+		return Rect2(x, _indicator_pos - half, INDICATOR_THICKNESS, item_size)
 	var y := size.y - INDICATOR_THICKNESS if indicator_at_end else 0.0
-	return Rect2(_indicator_pos - half, y, ITEM_SIZE, INDICATOR_THICKNESS)
+	return Rect2(_indicator_pos - half, y, item_size, INDICATOR_THICKNESS)
+
+
+## The chip behind the selected item, where it is drawn now (the indicator's place, so it slides
+## with it); empty with nothing selected.
+func chip_rect() -> Rect2:
+	if _indicator_pos < 0.0:
+		return Rect2()
+	var half := item_size / 2.0
+	if vertical:
+		return Rect2(0.0, _indicator_pos - half, size.x, item_size)
+	return Rect2(_indicator_pos - half, 0.0, item_size, size.y)
 
 
 func _draw() -> void:
+	var state := ThemeColors.of(self, ThemeColors.STATE)
+	if chip:
+		for id: StringName in _held_active:
+			if id != selected and _items.has(id):
+				_draw_chip((_items[id] as Control).get_rect(), state)
+		var behind := chip_rect()
+		if behind.has_area():
+			_draw_chip(behind, state)
 	var rect := indicator_rect()
 	if rect.has_area():
-		draw_rect(rect, ThemeColors.of(self, ThemeColors.STATE))
+		draw_rect(rect, state)
+
+
+func _draw_chip(rect: Rect2, state: Color) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = state
+	style.bg_color.a = CHIP_WASH
+	style.border_color = state
+	style.border_color.a = CHIP_EDGE
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(10)
+	draw_style_box(style, rect)

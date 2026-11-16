@@ -15,3 +15,26 @@ func _init() -> void:
 	icon = "eraser"
 	brush_mode = ThinBrush
 	contexts = AUTHORING | PLAY
+
+
+## The pane: the header, the gestures and the Advanced foldout (size and strength).
+func build_pane(panel: AuthoringPanel) -> Control:
+	var pane := VBoxContainer.new()
+	pane.name = "ThinPane"
+	pane.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pane.theme_type_variation = &"BoxContainerSnug"
+	var header := MenuHeader.new()
+	header.name = "ThinHeader"
+	header.setup(label, summary)
+	pane.add_child(header)
+	pane.add_child(
+		AuthoringChrome.help_label(
+			"ThinHint",
+			(
+				"Drag to thin trees and plants out. Hold Ctrl as you press to clear the ground"
+				+ " completely. Works on a Blender map's own scatter too."
+			)
+		)
+	)
+	pane.add_child(panel.build_advanced("Thin"))
+	return pane
