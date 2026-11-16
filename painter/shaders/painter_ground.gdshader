@@ -50,6 +50,10 @@ uniform float cut_amp = 0.0;
 // The sun height (sine of its elevation, 20 degrees) under which the turned-from-the-sun step
 // shrinks with it (light()).
 const float TURN_SUN_FULL = 0.34;
+// The wet band: the wet line's value that the band's edge sits at, and what it does to a colour
+// (darker and a little cooler, linear).
+const float WET_EDGE = 0.45;
+const vec3 WET_TINT = vec3(0.64, 0.70, 0.80);
 uniform vec2 stroke_dir = vec2(1.0, 0.0);
 uniform sampler2DArray brushes : filter_linear_mipmap, repeat_disable;
 uniform bool brushes_present = false;
@@ -115,13 +119,6 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, out vec3 lit, o
 	if (zb.a + (p_noise(p * 0.8 + 61.0) - 0.5) * 0.3 > 0.5) {
 		role = 4;
 	}
-	if (water_present) {
-		vec2 size = vec2(textureSize(water_weights, 0));
-		vec2 muv = ((q + w * 0.3 - layer_grid_origin) / layer_grid_step + 0.5) / size;
-		if (textureLod(water_weights, muv, 0.0).a > 0.3) {
-			role = 4;
-		}
-	}
 	if (pv > 0.46) {
 		role = 2;
 	}
@@ -143,6 +140,18 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, out vec3 lit, o
 	}
 	lit = role_col(true, role, variant);
 	shd = role_col(false, role, variant);
+	// The wet band beside the water (card painter-water): the dressing's wet line (water_weights.a,
+	// 1 under the water and falling to 0 over 0.8 m above it) darkens and cools the ground in a band
+	// with a brush edge: its threshold wanders with a noise, and a mark takes it whole at its middle,
+	// so the edge is made of strokes. Not a gradient: one darker step, as the shade colour is.
+	if (water_present) {
+		vec2 size = vec2(textureSize(water_weights, 0));
+		vec2 muv = ((q - layer_grid_origin) / layer_grid_step + 0.5) / size;
+		float wet = textureLod(water_weights, muv, 0.0).a;
+		float band = smoothstep(WET_EDGE - 0.07, WET_EDGE + 0.07, wet + (p_noise(p * 1.7 + 83.0) - 0.5) * 0.4 + (h - 0.5) * 0.12 * min(mk, 1.0));
+		lit = mix(lit, lit * WET_TINT, band);
+		shd = mix(shd, shd * WET_TINT, band);
+	}
 	// A mark's own small step in value.
 	float vk = 1.0 + (fract(h * 41.7 + 0.3) - 0.5) * 0.1 * min(mk, 1.0);
 	lit *= vk;

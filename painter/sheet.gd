@@ -57,7 +57,8 @@ const NUMBER_PROPS: Array[String] = ["sun-energy", "ambient-energy"]
 ## accents (PainterSurfaces paints with them), the conifers' needles and a bare season's clinging
 ## dry leaves (PainterTreeTones), and the
 ## buildings' walls and timber (PainterBuildings: plaster, a stone wall, log and board walls, the
-## beams, frames and doors).
+## beams, frames and doors) and the water's (PainterWater: the three depth bands of the wash, the
+## lighter and the darker stroke, the white water, the sun's glint and the ice).
 const DEFAULT_ROLES: Array[String] = [
 	"needle",
 	"plaster",
@@ -75,6 +76,14 @@ const DEFAULT_ROLES: Array[String] = [
 	"flower-violet",
 	"flower-white",
 	"dry-leaf",
+	"water-shallow",
+	"water-mid",
+	"water-deep",
+	"water-lit",
+	"water-shade",
+	"water-foam",
+	"water-glint",
+	"water-ice",
 ]
 ## Numbers a keyframe may leave to a `:world` default. The tone ramp (PainterTones.ramp: how a
 ## role's shade and lit colours are drawn from it, the ground's own ramp under `ground-`), the
@@ -106,6 +115,11 @@ const DEFAULT_ROLES: Array[String] = [
 ## shade goes the short way through red to maroon); and the share of the mood's lit-lift and
 ## lit-pull every building role takes (building-lit: a pale wall under the full lift is white);
 ## and how much of a roof lies under snow (roof-snow, 0 to 1, in the drift role's colour).
+## The water's (PainterWater, painter_water.gdshader): the share of the stroke lattice's cells that
+## hold a stroke (water-strokes), a stroke's length in metres (water-stroke-len), its boil's period
+## in seconds (water-boil), how much of the sun's side glints (water-glints), the wash's deepest
+## alpha (water-opacity), the shore ribbon's width in metres (water-foam-width) and how far still
+## water freezes (ice-over, 0 to 1: winter's).
 const DEFAULT_NUMBERS: Array[String] = [
 	"shade-hue",
 	"shade-pull",
@@ -173,6 +187,13 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"timber-pull",
 	"building-lit",
 	"roof-snow",
+	"water-strokes",
+	"water-stroke-len",
+	"water-boil",
+	"water-glints",
+	"water-opacity",
+	"water-foam-width",
+	"ice-over",
 ]
 ## Below this OKLCH chroma a colour's hue is meaningless: a blend takes the other end's hue.
 const GREY_CHROMA := 0.02
