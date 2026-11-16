@@ -222,6 +222,9 @@ func _define_buttons() -> void:
 	# (3:1 on every surface): otherwise it read as live.
 	ghost.font_disabled_color = c(ThemeColors.TRACK)
 	ghost.icon_disabled_color = c(ThemeColors.TRACK)
+	# And it stays bare: the inset fill every other disabled button takes made a row of waiting
+	# Resets read as chips (the Settings group headings), where words alone say "nothing to do".
+	ghost.disabled = bare
 	define_variant_style("Ghost", "Button", ghost)
 	# A quiet action set in a column of words (the map panel's Add details): no pad at its sides,
 	# so its icon stands on the words' left edge, the caption size, soft ink at rest and ink under
@@ -574,6 +577,9 @@ func _define_containers() -> void:
 	define_style("BoxContainer", {separation = SPACE_1})
 	define_variant_style("BoxContainerTight", "BoxContainer", {separation = SPACE_1})
 	define_variant_style("BoxContainerSpaced", "BoxContainer", {separation = SPACE_3})
+	# Groups under their own headings (a Settings tab): a clear step wider than the rows inside
+	# a group, so a heading belongs to what follows it.
+	define_variant_style("BoxContainerGroups", "BoxContainer", {separation = SPACE_5})
 	# A step between Tight and Spaced: the map panel's picture to its words to its facts, close
 	# enough that the longest map fits a 1280x720 canvas with no scroll.
 	define_variant_style("BoxContainerSnug", "BoxContainer", {separation = SPACE_2})
@@ -748,9 +754,13 @@ func _define_status() -> void:
 	)
 	var toast := box(c(ThemeColors.SURFACE), RADIUS_CONTROL, SPACE_3, SPACE_2, lift())
 	define_variant_style("Toast", "PanelContainer", {panel = toast})
-	# A health bar reads as a bar only with its track showing: the track role (3:1 on its leaf,
-	# chalk on glass) at half strength, under the outcome's fill.
-	var track := box(Color(c(ThemeColors.TRACK), 0.5), RADIUS_PILL)
+	# A health bar reads as a bar only with its track showing, on the plum glass and on the lake
+	# of a picked row alike: the track is a solid inset pill rimmed in the soft text role (3.7:1
+	# on the lake, 9:1 on the plum; a translucent fill measured 1.2:1 on the lake). Its content
+	# margins are 0 so the fill covers the rim and the bar keeps its whole height.
+	var track := box(
+		Color(c(ThemeColors.SURFACE_INSET), 1.0), RADIUS_PILL, 0, 0, edge(1, c(ThemeColors.TEXT_SOFT))
+	)
 	for outcome: String in ["Success", "Danger"]:
 		var role := ThemeColors.SUCCESS if outcome == "Success" else ThemeColors.DANGER
 		define_variant_style(

@@ -28,6 +28,9 @@ var slide_from_right: bool = true
 ## Put the scroll bar in the host's margin, past the stack's right edge (see the header).
 ## Set before the first add_pane().
 var bar_in_margin: bool = false
+## Lay a MoreBelowFade over the foot (a band and a chevron while the pane can scroll further).
+## Set before the first add_pane().
+var more_below_fade: bool = false
 var current: StringName = &""
 
 var _wrappers: Dictionary = {}
@@ -103,6 +106,17 @@ func add_pane(id: StringName, pane: Control) -> void:
 	add_child(wrapper)
 	_wrappers[id] = wrapper
 	_panes[id] = pane
+	if more_below_fade:
+		var band := get_node_or_null("MoreBelowFade")
+		if band == null:
+			band = MoreBelowFade.new()
+			add_child(band)
+		move_child(band, -1)
+
+
+## The scroll wrapper of pane `id`, or null.
+func wrapper_of(id: StringName) -> ScrollContainer:
+	return _wrappers.get(id)
 
 
 ## Extend `wrapper` past the stack's right edge by its bar's width (bar_in_margin).

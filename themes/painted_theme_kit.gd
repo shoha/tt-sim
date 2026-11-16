@@ -47,7 +47,7 @@ const SIZE_BODY := 16
 const SIZE_LABEL := 15
 const SIZE_CAPTION := 14
 ## A one-word note under an icon (Unsaved under Save): the narrowest column of the type scale.
-const SIZE_NOTE := 12
+const SIZE_NOTE := 11
 
 ## Button and field padding: a 15 px label line plus these is CONTROL_HEIGHT tall.
 const CONTROL_PAD_H := 16

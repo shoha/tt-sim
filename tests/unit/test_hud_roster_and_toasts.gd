@@ -173,7 +173,47 @@ func test_a_row_has_a_portrait_and_a_health_bar_with_a_track() -> void:
 	assert_eq(bar.value, 10.0)
 	var track := bar.get_theme_stylebox("background") as StyleBoxFlat
 	assert_not_null(track)
-	assert_gte(track.bg_color.a, 0.4, "the track is drawn, not a transparent stub")
+	assert_eq(track.bg_color.a, 1.0, "the track is solid, not a translucent wash")
+
+
+## The bar's track keeps 3:1 against both fills it lies on: the plum glass of an unpicked row
+## and the lake of the picked one (a translucent track measured 1.2:1 on the lake), in both
+## outcome variants.
+func test_the_bar_track_reads_on_the_plum_and_on_the_picked_row() -> void:
+	var host := Control.new()
+	host.theme = ThemeColors.glass_theme()
+	add_child_autofree(host)
+	var plum := ThemeColors.of(host, ThemeColors.SURFACE)
+	plum.a = 1.0
+	var lake := ThemeColors.of(host, ThemeColors.SELECTED)
+	for variation in [&"ProgressSuccess", &"ProgressDanger"]:
+		var bar := ProgressBar.new()
+		bar.theme_type_variation = variation
+		host.add_child(bar)
+		var track := bar.get_theme_stylebox("background") as StyleBoxFlat
+		assert_eq(track.border_color.a, 1.0, "the rim is solid")
+		assert_gte(_contrast(track.border_color, plum), 3.0, "%s rim on the plum" % variation)
+		assert_gte(_contrast(track.border_color, lake), 3.0, "%s rim on the lake" % variation)
+		assert_eq(track.content_margin_top, 0.0, "the fill keeps the bar's whole height")
+
+
+## With no row picked the foot shows both actions, disabled, under "Pick a token"; with an empty
+## table it shows neither them nor the divider; a pick enables them and hides the caption.
+func test_the_foot_is_never_an_empty_strip() -> void:
+	var tokens: Array = []
+	var roster := _roster(tokens)
+	await wait_frames(1)
+	var card := roster.find_child("SelectedCard", true, false) as Control
+	assert_false(card.visible, "no tokens, no card")
+	tokens.append(_token("Wren", "a"))
+	roster.refresh()
+	assert_true(card.visible)
+	assert_true((card.find_child("FindButton", true, false) as Button).disabled)
+	assert_true((card.find_child("ActionsButton", true, false) as Button).disabled)
+	assert_true((card.find_child("PickHint", true, false) as Label).visible)
+	roster.pick_row(0)
+	assert_false((card.find_child("FindButton", true, false) as Button).disabled)
+	assert_false((card.find_child("PickHint", true, false) as Label).visible)
 
 
 ## The card repeats nothing the row says, and the header has no second Add token.
@@ -184,8 +224,32 @@ func test_the_card_holds_actions_only_and_the_header_has_no_add_button() -> void
 	var card := roster.find_child("SelectedCard", true, false) as Control
 	assert_not_null(card.find_child("FindButton", true, false))
 	assert_not_null(card.find_child("ActionsButton", true, false))
-	assert_eq(card.find_children("*", "Label", true, false).size(), 0, "no name or health words")
+	for label in card.find_children("*", "Label", true, false):
+		assert_false((label as Label).visible, "no name or health words once a token is picked")
 	assert_null(roster.find_child("AddTokenButton", true, false))
+
+
+## The roster's scroll bar is the handle alone, shown on hover (UI_TASTE 2026-10-10).
+func test_the_roster_scroll_bar_is_the_fading_handle() -> void:
+	var roster := _roster([_token("Wren", "a")])
+	await wait_frames(1)
+	var found := roster.find_children("ScrollBarFade", "", true, false)
+	assert_eq(found.size(), 1, "one ScrollBarFade on the list")
+
+
+## The HUD's portrait crop is inside the pin's picture, tighter than it, and the same square for
+## every cell.
+func test_the_portrait_crop_is_tight_and_inside_the_picture() -> void:
+	var cell := 5
+	var whole := Rect2(
+		Vector2(TokenPortraits.cell_origin(cell))
+		+ Vector2.ONE * float((TokenPortraits.CELL_PX - TokenPortraits.PICTURE_PX) / 2),
+		Vector2.ONE * float(TokenPortraits.PICTURE_PX)
+	)
+	var crop := TokenPictures.crop_of(cell)
+	assert_true(whole.encloses(crop), "the crop lies inside the picture")
+	assert_almost_eq(crop.size.x / whole.size.x, TokenPictures.CROP, 0.001)
+	assert_eq(crop.size.x, crop.size.y)
 
 
 ## Picking a row marks the token on the board whatever the pin setting says (the marker holds it).
@@ -378,6 +442,20 @@ func test_a_kept_toast_has_a_close_control_and_an_error_times_out() -> void:
 	assert_null(toasts._active_toasts[2].find_child("Close", true, false), "a timed toast has none")
 	close.pressed.emit()
 	assert_false(toasts._active_toasts.has(error), "the close control dismisses it")
+
+
+## Every error carries the close control, timed or kept (a second error had none), and a
+## timed one keeps its own reading time.
+func test_every_error_toast_has_a_close_control() -> void:
+	var toasts: ToastContainer = TOAST_SCENE.instantiate()
+	add_child_autofree(toasts)
+	toasts.show_toast("First failure. Try again.", ToastContainer.ToastType.ERROR, 0.0)
+	toasts.show_toast("Second failure. Try again.", ToastContainer.ToastType.ERROR, 3.0)
+	for toast: Control in toasts._active_toasts:
+		assert_not_null(toast.find_child("Close", true, false), "an error has a close control")
+	var timed: Control = toasts._active_toasts[1]
+	var timer := timed.get_node("DismissTimer") as Timer
+	assert_lt(timer.wait_time, ToastContainer.ERROR_KEPT_S, "a timed error keeps its own time")
 
 
 # -- The hint bar --------------------------------------------------------------------------------

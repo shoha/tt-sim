@@ -376,6 +376,37 @@ func test_the_card_height_eases_when_the_pane_changes_and_cuts_under_reduce_moti
 	assert_almost_eq(panel._panel.size.y, 300.0, 0.5, "a cut")
 
 
+func test_a_tall_pane_shows_a_band_while_more_waits_below_and_loses_it_at_the_end() -> void:
+	UiMotion.user_reduce = true
+	var stack := PaneStack.new()
+	stack.more_below_fade = true
+	stack.size = Vector2(300.0, 200.0)
+	_host.add_child(stack)
+	var tall := Control.new()
+	tall.custom_minimum_size = Vector2(100.0, 900.0)
+	stack.add_pane(&"tall", tall)
+	var short := Control.new()
+	short.custom_minimum_size = Vector2(100.0, 50.0)
+	stack.add_pane(&"short", short)
+	stack.show_pane(&"tall", false)
+	for i in 3:
+		await get_tree().process_frame
+	var band := stack.get_node("MoreBelowFade") as MoreBelowFade
+	assert_eq(stack.get_child(stack.get_child_count() - 1), band, "over every pane")
+	assert_true(band.more_below(), "900 px in a 200 px view: more below")
+	assert_almost_eq(band.amount(), 1.0, 0.001)
+	var wrapper := stack.wrapper_of(&"tall")
+	wrapper.scroll_vertical = 100000
+	for i in 3:
+		await get_tree().process_frame
+	assert_false(band.more_below(), "scrolled to the end: the band goes")
+	assert_almost_eq(band.amount(), 0.0, 0.001)
+	stack.show_pane(&"short", false)
+	for i in 3:
+		await get_tree().process_frame
+	assert_false(band.more_below(), "a short pane has nothing below")
+
+
 # -- The first-strokes card -----------------------------------------------------------------
 
 

@@ -43,6 +43,11 @@ const SHOW_MUSIC_VOLUME := false
 ## The Graphics tab's Quality row (SettingsQuality), loaded by path when the menu opens so the
 ## quality scripts stay off the start-up graph that this file is on.
 const QUALITY_ROW := "res://scenes/ui/settings_quality.gd"
+## The helpers the menu opens with, loaded by path (see `layout` below).
+const LAYOUT_SCRIPT := "res://scenes/ui/settings_layout.gd"
+const SESSION_SCRIPT := "res://scenes/ui/settings_session.gd"
+const APPLY_SCRIPT := "res://scenes/ui/settings_apply.gd"
+const PAGES_SCRIPT := "res://scenes/ui/settings_pages.gd"
 
 ## The Shadow quality for a player with no saved choice; project.godot's
 ## directional soft_shadow_filter_quality matches it, since a fresh install keeps that one.
@@ -59,6 +64,7 @@ const DEFAULT_SHADOW_QUALITY := RenderingServer.SHADOW_QUALITY_SOFT_HIGH
 const SECTIONS := [
 	["Audio", "volume"],
 	["Graphics", "photo"],
+	["Accessibility", "adjustments"],
 	["Grid", "grid-dots"],
 	["Controls", "mouse"],
 	["Network", "network"],
@@ -66,8 +72,24 @@ const SECTIONS := [
 	["About", "info-circle"],
 ]
 
+## Canvas heights (logical px) under which the rail drops its labels, so a 150% interface on a
+## 720p window keeps its room for the rows.
+const COMPACT_HEIGHT := 560.0
+## The sheet's gap to the canvas edge and its largest size (logical px).
+const PANEL_MARGIN := 32.0
+const PANEL_MAX := Vector2(720.0, 760.0)
+
 var header: MenuHeader
 var close_button: Button
+## The search box in the header; typing hides every row, group and section without a match.
+var search_box: LineEdit
+## The groups the menu builds around its rows (SettingsSpec) and what it knows about them
+## (SettingsSession: defaults, unsaved changes, preview).
+##
+## These are loaded by path when the menu opens, like the Quality row, so none of the helpers is
+## on the start-up graph (tests/unit/test_boot_graph.gd); the vars are untyped for that reason.
+var layout
+var session
 
 ## True while Reset tweens the sliders to their defaults; the sliders do not tick then.
 var _resetting := false
@@ -150,8 +172,44 @@ var _quality: RefCounted = null
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		animate_out()
+		# The first Escape empties a search, the next closes the menu.
+		if search_box and not search_box.text.is_empty():
+			_clear_search()
+		else:
+			animate_out()
 		get_viewport().set_input_as_handled()
+	elif _section_step(event) != 0:
+		_step_section(_section_step(event))
+		get_viewport().set_input_as_handled()
+
+
+## -1 or 1 for the keys that move to the previous or next section (Ctrl+Page Up and Page Down,
+## a gamepad's shoulder buttons), 0 for any other event.
+func _section_step(event: InputEvent) -> int:
+	if event is InputEventKey and event.pressed and event.ctrl_pressed:
+		if event.keycode == KEY_PAGEUP:
+			return -1
+		if event.keycode == KEY_PAGEDOWN:
+			return 1
+	if event is InputEventJoypadButton and event.pressed:
+		if event.button_index == JOY_BUTTON_LEFT_SHOULDER:
+			return -1
+		if event.button_index == JOY_BUTTON_RIGHT_SHOULDER:
+			return 1
+	return 0
+
+
+## Selects the section `step` places away among the visible ones, wrapping.
+func _step_section(step: int) -> void:
+	var ids: Array[StringName] = []
+	for spec in SECTIONS:
+		var id := StringName(spec[0])
+		if section_rail.is_item_visible(id):
+			ids.append(id)
+	if ids.is_empty():
+		return
+	var at := maxi(ids.find(section_rail.selected), 0)
+	section_rail.select(ids[posmod(at + step, ids.size())])
 
 
 ## Apply saved graphics settings (fullscreen, vsync, shadow quality, render scale, water quality)
@@ -360,10 +418,16 @@ func _on_panel_ready() -> void:
 
 	# Updates
 	prereleases_check.toggled.connect(_on_prereleases_toggled)
-	check_updates_button.pressed.connect(_on_check_updates_pressed)
+	check_updates_button.pressed.connect(Callable(_pages(), "check_for_updates").bind(self))
 
 	# About
 	licences_button.pressed.connect(_on_licences_pressed)
+
+	# Rows share one label column, then move under their group headings (SettingsSpec).
+	_fit_tab_rows()
+	layout = (load(LAYOUT_SCRIPT) as GDScript).new(self)
+	layout.build()
+	_decorate_tabs()
 
 	# Hide Updates tab for Steam users — Steam handles updates
 	if not OS.get_environment("SteamAppId").is_empty():
@@ -372,25 +436,87 @@ func _on_panel_ready() -> void:
 	# Tab transition animation
 	tab_container.tab_changed.connect(_on_tab_changed)
 
-	# Sections are chosen from the labelled rail; the native tab bar is hidden.
+	# Sections are chosen from the labelled rail; the native tab bar is hidden. Under a short
+	# canvas the rail drops its labels.
 	tab_container.tabs_visible = false
+	section_rail.show_labels = _canvas().y >= COMPACT_HEIGHT
+	section_rail.focusable = true
 	_populate_section_rail()
-	_fit_tab_rows()
+	_build_search()
+	_fit_panel()
+	get_viewport().size_changed.connect(_fit_panel)
 
 	# Apply tooltips to settings controls
 	SettingsTooltips.apply(self)
+	reset_button.tooltip_text = "Put every setting back to its default (Apply keeps it)"
 
 	# Load current settings
 	_load_settings()
-	_populate_controls_list()
+	_pages().populate_shortcuts(controls_list)
 	_update_cache_info()
 	_update_version_info()
+	session = (load(SESSION_SCRIPT) as GDScript).new(self, layout)
+	session.start()
 
 	# Register as overlay (cast to Control for type compatibility)
 	UIManager.register_overlay($ColorRect as Control)
 
 
+## The sheet's keyboard entry: focus on the selected section, once the menu has opened. From here
+## Tab walks the search box, the sections, each group's Reset and rows, then Reset all and Apply.
+func _on_after_animate_in() -> void:
+	session.live = true
+	section_rail.grab_item_focus(section_rail.selected)
+
+
+## The canvas the sheet lays out in, in logical pixels (the window under the Interface size).
+func _canvas() -> Vector2:
+	return get_viewport().get_visible_rect().size
+
+
+## The sheet takes the canvas less a margin on each side, up to a comfortable reading size; the
+## rows scroll inside it. A fixed height keeps the sheet from jumping as the section changes.
+func _fit_panel() -> void:
+	var canvas := _canvas()
+	var panel := $CenterContainer/PanelContainer as Control
+	panel.custom_minimum_size = Vector2(
+		clampf(canvas.x - 2.0 * PANEL_MARGIN, 440.0, PANEL_MAX.x),
+		clampf(canvas.y - 2.0 * PANEL_MARGIN, 280.0, PANEL_MAX.y)
+	)
+
+
+func _build_search() -> void:
+	search_box = LineEdit.new()
+	search_box.name = "SearchBox"
+	search_box.placeholder_text = "Search settings"
+	# No in-field X: it stood beside the sheet's close X and read as a second way out. Escape
+	# empties the box (_on_search_input), and the tooltip says so.
+	search_box.clear_button_enabled = false
+	search_box.custom_minimum_size.x = 200.0
+	search_box.tooltip_text = "Find a setting by name or by what it does (Esc clears it)"
+	search_box.text_changed.connect(layout.set_filter)
+	search_box.gui_input.connect(_on_search_input)
+	var row := header.get_node("Row")
+	row.add_child(search_box)
+	row.move_child(search_box, 1)
+	search_box.owner = self
+	search_box.unique_name_in_owner = true
+
+
+## Escape in the box empties it first (the LineEdit would only leave it).
+func _on_search_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel") and not search_box.text.is_empty():
+		_clear_search()
+		search_box.accept_event()
+
+
+func _clear_search() -> void:
+	search_box.clear()
+	layout.set_filter("")
+
+
 func _on_before_animate_out() -> void:
+	session.revert_if_dirty()
 	SettingsWindMotion.revert()
 	if InputProfile.profile_changed.is_connected(_on_input_profile_changed):
 		InputProfile.profile_changed.disconnect(_on_input_profile_changed)
@@ -402,62 +528,29 @@ func _on_after_animate_out() -> void:
 	queue_free()
 
 
-## Every tab's label-and-control rows share one label column and gap (PropertyRow), and a
-## tab whose rows run past its bottom fades there instead of cutting a row (ScrollFade). Its
-## scroll bar is the handle alone, shown only while wanted (ScrollBarFade).
+## Every tab's label-and-control rows share one label column and gap (PropertyRow).
 func _fit_tab_rows() -> void:
-	for tab in tab_container.get_children():
-		if tab is ScrollContainer:
-			tab.add_child(ScrollFade.new())
-			ScrollBarFade.attach(tab)
 	for node in tab_container.find_children("*", "HBoxContainer", true, false):
 		PropertyRow.fit_sheet_row(node as HBoxContainer)
 
 
-func _populate_controls_list() -> void:
-	# Clear existing
-	for child in controls_list.get_children():
-		child.queue_free()
-
-	# Add control hints (profile-aware labels)
-	var controls: Array[Array] = [
-		["Left-drag", "Move a token"],
-		["Right-click", "Open a token's menu"],
-		[InputProfile.label(&"zoom"), "Zoom the camera"],
-		[InputProfile.label(&"pan"), "Pan the camera"],
-		[InputProfile.label(&"rotate"), "Rotate a token"],
-		[InputProfile.label(&"scale"), "Scale a token"],
-		[InputProfile.label(&"reset_transform"), "Reset a token's rotation and scale"],
-		[InputProfile.label(&"reset_camera"), "Reset the camera"],
-		[InputProfile.label(&"wasd"), "Move the camera"],
-		[InputProfile.label(&"measure"), "Measure distances"],
-		[InputProfile.label(&"grid"), "Show or hide the grid"],
-		[InputProfile.label(&"pause"), "Pause, or close a menu"],
-	]
-
-	for control in controls:
-		var hbox := HBoxContainer.new()
-
-		var key_label := Label.new()
-		key_label.text = control[0]
-		key_label.theme_type_variation = "Body"
-		hbox.add_child(key_label)
-
-		var action_label := Label.new()
-		action_label.text = control[1]
-		action_label.theme_type_variation = "Caption"
-		hbox.add_child(action_label)
-
-		PropertyRow.fit_sheet_row(hbox)
-		controls_list.add_child(hbox)
+## A tab whose rows run past its bottom fades there instead of cutting a row (ScrollFade); its
+## scroll bar is the handle alone, shown only while wanted (ScrollBarFade); and the scroll follows
+## the keyboard focus, so a row reached with Tab is never left under the edge.
+func _decorate_tabs() -> void:
+	for tab in tab_container.get_children():
+		if tab is ScrollContainer:
+			(tab as ScrollContainer).follow_focus = true
+			tab.add_child(ScrollFade.new())
+			ScrollBarFade.attach(tab)
 
 
-func _load_settings() -> void:
+func _load_settings(path: String = Paths.SETTINGS_PATH) -> void:
 	var config = ConfigFile.new()
-	var err = config.load(Paths.SETTINGS_PATH)
-
-	if err == OK:
-		_show_saved_values(config)
+	config.load(path)
+	# A missing file shows the defaults (every value is read with its default), so a menu that
+	# reloads after a discard lands on them too.
+	_show_saved_values(config)
 
 	# Antialiasing selection must be set unconditionally (not just when a config
 	# file exists) so a fresh install without user://settings.cfg still lands on
@@ -495,12 +588,23 @@ func _load_settings() -> void:
 	# Input device profile (reads from InputProfile autoload, not config)
 	input_device_option.selected = InputProfile.get_selected_profile() as int
 
-	# Update labels
+	_update_value_labels()
+
+
+## The text beside every slider (volumes, wind, grid) follows the sliders' values.
+func _update_value_labels() -> void:
 	_update_volume_label(master_label, master_slider.value)
 	_update_volume_label(music_label, music_slider.value)
 	_update_volume_label(sfx_label, sfx_slider.value)
 	_update_volume_label(ui_label, ui_slider.value)
+	wind_motion_label.text = SettingsWindMotion.label_for(wind_motion_slider.value)
 	_update_grid_labels()
+
+
+## The Quality row shows the preset the four rows it covers make (after a reset or revert).
+func _refresh_quality() -> void:
+	if _quality:
+		_quality.call("refresh")
 
 
 ## Puts the saved slider and toggle values in `config` on the controls. Showing a saved
@@ -553,7 +657,13 @@ func _save_settings(path: String = Paths.SETTINGS_PATH) -> void:
 	var err = config.load(path)
 	if err != OK and err != ERR_FILE_NOT_FOUND:
 		push_warning("SettingsMenu: failed to load settings for save: %d" % err)
+	_write_values(config)
+	config.save(path)
 
+
+## Puts every control's value in `config` (the file's own sections and keys). SettingsSession
+## compares two of these to tell whether anything is unsaved, so it never touches the disk.
+func _write_values(config: ConfigFile) -> void:
 	config.set_value("audio", "master", master_slider.value)
 	config.set_value("audio", "music", music_slider.value)
 	config.set_value("audio", "sfx", sfx_slider.value)
@@ -591,56 +701,14 @@ func _save_settings(path: String = Paths.SETTINGS_PATH) -> void:
 	config.set_value("grid_visuals", "line_thickness", line_thickness_slider.value)
 	config.set_value("grid_visuals", "fade_radius", fade_distance_slider.value)
 
-	config.save(path)
 
-
+## Everything Apply applies, and the preview a moved row gets before it (SettingsApply).
 func _apply_settings() -> void:
-	# Apply audio settings (sliders are percent, buses take 0..1)
-	AudioManager.set_bus_volume(AudioManager.BUS_MASTER, master_slider.value / 100.0)
-	AudioManager.set_bus_volume(AudioManager.BUS_MUSIC, music_slider.value / 100.0)
-	AudioManager.set_bus_volume(AudioManager.BUS_SFX, sfx_slider.value / 100.0)
-	AudioManager.set_bus_volume(AudioManager.BUS_UI, ui_slider.value / 100.0)
-
-	# Defer fullscreen mode change — macOS native fullscreen (`toggleFullScreen:`)
-	# requires the window to be fully presented and the run-loop to be idle.
-	_apply_fullscreen_mode.call_deferred(fullscreen_check.button_pressed)
-
-	DisplayServer.window_set_vsync_mode(
-		DisplayServer.VSYNC_ENABLED if vsync_check.button_pressed else DisplayServer.VSYNC_DISABLED
-	)
-
-	# Apply lo-fi filter setting
-	_apply_lofi_setting()
-
-	# Apply token shading, token ghost and canopy fade settings
-	SettingsTokenShading.apply(self)
-	SettingsTokenPins.apply(self)
-	SettingsSeeThrough.apply(self, _find_game_map())
-
-	# Apply foliage edges, the foliage antialiasing level and shadow cascades
-	SettingsGpuOptions.apply(self, _find_game_map())
-
-	# Apply shadow quality setting
-	_apply_shadow_quality_setting()
-
-	# Apply render scale setting (the world viewport's 3D resolution)
-	SettingsRenderScale.apply(self, _find_game_map())
-
-	# Apply water quality setting
-	_apply_water_quality_setting()
-
-	# Apply global rendering toggles (SSAO/SSR/SDFGI)
-	_apply_rendering_toggles_setting()
-
-	# Apply grid visual settings
-	_apply_grid_visual_settings()
-
-	# Apply network settings
-	_apply_network_settings()
+	(load(APPLY_SCRIPT) as GDScript).call("all", self)
 
 
-func _apply_network_settings() -> void:
-	AssetManager.streamer.set_enabled(p2p_enabled_check.button_pressed)
+func _apply_preview() -> void:
+	(load(APPLY_SCRIPT) as GDScript).call("preview", self)
 
 
 func _update_volume_label(label: Label, value: float) -> void:
@@ -680,76 +748,17 @@ func _on_section_selected(id: StringName) -> void:
 	var tab := tab_container.get_node_or_null(String(id))
 	if tab:
 		tab_container.current_tab = tab.get_index()
-
-
-func _apply_fullscreen_mode(enable: bool) -> void:
-	_set_window_fullscreen(enable)
-
-
-func _apply_lofi_setting() -> void:
-	# Find active GameMap and apply lo-fi setting
-	var game_map = _find_game_map()
-	if game_map:
-		game_map.set_lofi_enabled(lofi_check.button_pressed)
-
-
-## Unlike the other _apply_*_setting() functions, this needs no GameMap lookup --
-## RenderingServer.directional_soft_shadow_filter_set_quality() is a global renderer
-## setting, not tied to a specific light or map, so it applies (and is safe to call)
-## even from the title screen before any level is loaded. Scoped to directional
-## shadows only, matching what the debug-panel investigation this setting grew out of
-## actually tested (see DebugRenderToggles' "Hard sun shadows" toggle) -- positional
-## shadow quality is a separate, untouched project setting.
-func _apply_shadow_quality_setting() -> void:
-	RenderingServer.directional_soft_shadow_filter_set_quality(
-		shadow_quality_option.get_selected_id()
-	)
+	# The keyboard ring stays on the chosen section when it was on the rail (Ctrl+Page Down, the
+	# shoulder buttons), instead of marking the one that was left.
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused and section_rail.is_ancestor_of(focused):
+		section_rail.grab_item_focus(id)
 
 
 ## The player's saved Shadow quality from a loaded settings file, exactly as saved (Hard and
 ## every soft tier down to Very Low are honoured), or DEFAULT_SHADOW_QUALITY when none is saved.
 static func saved_shadow_quality(config: ConfigFile) -> int:
 	return config.get_value("graphics", "shadow_quality", DEFAULT_SHADOW_QUALITY)
-
-
-## Unlike most other _apply_*_setting() functions, this needs no
-## GameMap/LevelPlayController lookup -- global shader uniforms apply
-## engine-wide regardless of whether a level (or any water material) is
-## currently loaded, exactly like _apply_shadow_quality_setting(). Water
-## Quality no longer has any SSR-related behavior -- see
-## _apply_rendering_toggles_setting() for the (now purely global, independent
-## of Water Quality) Screen-Space Reflections toggle.
-func _apply_water_quality_setting() -> void:
-	var quality := water_quality_option.get_selected_id()
-	var skip_low_detail := quality == WaterQuality.LOW
-	RenderingServer.global_shader_parameter_set("water_quality_skip_fine_detail", skip_low_detail)
-	RenderingServer.global_shader_parameter_set("water_quality_skip_refraction", skip_low_detail)
-
-
-## Unlike the other _apply_*_setting() functions in this file, this needs the
-## current level's LevelEnvironmentManager (via _find_level_play_controller()),
-## and is a safe no-op if no level is loaded (title screen) -- it takes effect
-## on next level load instead, via LevelEnvironmentManager
-## .apply_level_environment()'s own inline config read.
-func _apply_rendering_toggles_setting() -> void:
-	var controller := _find_level_play_controller()
-	if controller:
-		controller.get_environment_manager().apply_rendering_toggles(
-			ssao_check.button_pressed, ssr_check.button_pressed, sdfgi_check.button_pressed
-		)
-
-
-func _apply_grid_visual_settings() -> void:
-	var game_map = _find_game_map()
-	if game_map:
-		(
-			game_map
-			. apply_grid_visual_settings(
-				cell_tint_opacity_slider.value / 100.0,
-				line_thickness_slider.value,
-				fade_distance_slider.value,
-			)
-		)
 
 
 func _on_cell_tint_opacity_changed(value: float) -> void:
@@ -799,6 +808,8 @@ func _on_close_pressed() -> void:
 ## preferences that save the moment they change, the prerelease channel, the input
 ## profile and the Interface size, at once as before.
 func _on_reset_pressed() -> void:
+	var before: Dictionary = session.read_all()
+	var acted: bool = not session.all_at_defaults()
 	_show_defaults()
 	prereleases_check.button_pressed = false
 	input_device_option.selected = InputProfile.Profile.AUTO
@@ -806,10 +817,14 @@ func _on_reset_pressed() -> void:
 	interface_size_option.select(0)
 	UIManager.set_interface_size(InterfaceSize.AUTO)
 	reduce_motion_check.button_pressed = false
+	session.touch()
+	if acted:
+		session.offer_undo(before)
 
 
 func _on_interface_size_selected(index: int) -> void:
 	UIManager.set_interface_size(interface_size_option.get_item_id(index))
+	_fit_panel.call_deferred()
 
 
 ## Relabels the options named against this window (Interface size and Render scale), keeping
@@ -824,25 +839,33 @@ func _refill_window_labels() -> void:
 ## Puts every Settings control except those three on its default without a sound: the
 ## sliders tween home and hold their ticks (_slider_tick) until they land, and the
 ## toggles and options snap without signals (Apply applies them).
-func _show_defaults() -> void:
+func _show_defaults(instant: bool = false) -> void:
 	if _reset_tween and _reset_tween.is_valid():
 		_reset_tween.kill()
-	_resetting = true
-	var tw := create_tween()
-	_reset_tween = tw
-	tw.finished.connect(_on_reset_tween_finished.bind(tw))
-	tw.set_parallel(true)
-	tw.set_ease(Tween.EASE_OUT)
-	tw.set_trans(Tween.TRANS_CUBIC)
-	tw.tween_property(master_slider, "value", 100.0, 0.3)
-	tw.tween_property(music_slider, "value", 100.0, 0.3)
-	tw.tween_property(sfx_slider, "value", 100.0, 0.3)
-	tw.tween_property(ui_slider, "value", 100.0, 0.3)
-
-	tw.tween_property(cell_tint_opacity_slider, "value", 65.0, 0.3)
-	tw.tween_property(line_thickness_slider, "value", 2.0, 0.3)
-	tw.tween_property(fade_distance_slider, "value", 30.0, 0.3)
-	tw.tween_property(wind_motion_slider, "value", 100.0, 0.3)
+	var sliders := [
+		[master_slider, 100.0],
+		[music_slider, 100.0],
+		[sfx_slider, 100.0],
+		[ui_slider, 100.0],
+		[cell_tint_opacity_slider, 65.0],
+		[line_thickness_slider, 2.0],
+		[fade_distance_slider, 30.0],
+		[wind_motion_slider, 100.0],
+	]
+	if instant:
+		# Silently, for SettingsSession reading the defaults: no tween, no handler, no sound.
+		for pair in sliders:
+			pair[0].set_value_no_signal(pair[1])
+	else:
+		_resetting = true
+		var tw := create_tween()
+		_reset_tween = tw
+		tw.finished.connect(_on_reset_tween_finished.bind(tw))
+		tw.set_parallel(true)
+		tw.set_ease(Tween.EASE_OUT)
+		tw.set_trans(UiMotion.ARRIVE_TRANS)
+		for pair in sliders:
+			tw.tween_property(pair[0], "value", pair[1], 0.0 if UiMotion.reduced() else UiMotion.STATE_S)
 
 	# Snap toggles immediately (no meaningful tween for booleans)
 	fullscreen_check.set_pressed_no_signal(false)
@@ -877,7 +900,12 @@ func _on_input_device_selected(index: int) -> void:
 
 
 func _on_input_profile_changed(_new_profile: InputProfile.Profile) -> void:
-	_populate_controls_list()
+	_pages().populate_shortcuts(controls_list)
+
+
+## The Controls and Updates pages' helpers (SettingsPages), loaded on first use.
+func _pages() -> GDScript:
+	return load(PAGES_SCRIPT) as GDScript
 
 
 func _on_clear_cache_pressed() -> void:
@@ -899,6 +927,7 @@ func _on_apply_pressed() -> void:
 
 	_apply_settings()
 	_save_settings()
+	session.mark_clean()
 
 	UIManager.show_toast("Settings saved", 0)  # INFO type
 
@@ -954,32 +983,3 @@ func _on_licences_pressed() -> void:
 
 func _on_prereleases_toggled(pressed: bool) -> void:
 	UpdateManager.set_prerelease_enabled(pressed)
-
-
-func _on_check_updates_pressed() -> void:
-	check_updates_button.disabled = true
-	update_status_label.text = "Checking for updates..."
-
-	# Connect signals for this check only
-	var on_complete = func(has_update: bool) -> void:
-		check_updates_button.disabled = false
-		if has_update:
-			var version = UpdateManager.latest_release.get("version", "?")
-			update_status_label.text = "Update available: v" + version
-			# Show the update dialog
-			var DialogScene = preload("res://scenes/ui/update_dialog.tscn")
-			var dialog = DialogScene.instantiate()
-			get_tree().root.add_child(dialog)
-			dialog.setup(UpdateManager.latest_release)
-		else:
-			update_status_label.text = "You're up to date!"
-
-	var on_failed = func(error: String) -> void:
-		check_updates_button.disabled = false
-		update_status_label.text = "Check failed: " + error
-
-	# Connect one-shot signals
-	UpdateManager.update_check_complete.connect(on_complete, CONNECT_ONE_SHOT)
-	UpdateManager.update_check_failed.connect(on_failed, CONNECT_ONE_SHOT)
-
-	UpdateManager.check_for_updates()

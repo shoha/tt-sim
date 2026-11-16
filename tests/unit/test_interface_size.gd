@@ -127,7 +127,7 @@ func test_setting_defaults_to_auto_and_round_trips() -> void:
 	assert_eq(UiPreferences.load_interface_size(), InterfaceSize.AUTO, "a stale value is Auto")
 
 
-## Graphics holds the row, in the shared label column, with every choice and the saved one.
+## Accessibility holds the row, in the shared label column, with every choice and the saved one.
 func test_settings_row_lists_every_choice() -> void:
 	var menu := MENU_SCENE.instantiate() as SettingsMenu
 	add_child_autofree(menu)
@@ -140,7 +140,7 @@ func test_settings_row_lists_every_choice() -> void:
 	var row := option.get_parent() as HBoxContainer
 	assert_eq(row.theme_type_variation, &"PropertyRow")
 	assert_eq((row.get_child(0) as Label).custom_minimum_size.x, PropertyRow.SHEET_LABEL_WIDTH)
-	assert_true(row.get_parent().get_path().get_concatenated_names().contains("Graphics"))
+	assert_true(row.get_parent().get_path().get_concatenated_names().contains("Accessibility"))
 	UIManager.unregister_overlay(menu.get_node("ColorRect") as Control)
 
 

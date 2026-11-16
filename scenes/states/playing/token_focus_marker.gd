@@ -21,7 +21,9 @@ const CHALK_PX := 3.5
 const INK_PX := 8.0
 const HEAD_RADIUS := 22.0
 const HEAD_GAP := 14.0
-const PICTURE_PX := 32.0
+## The portrait fills the pin's inner disc (the chalk rim is 3 px of the head's 22 px radius).
+const PICTURE_RADIUS := 19.0
+const PICTURE_POINTS := 40
 const EDGE_MARGIN := 34.0
 const PING_S := 0.7
 
@@ -171,11 +173,21 @@ func _draw_pin(token: BoardToken, head: Vector2, tip: Vector2, ink: Color, chalk
 	var fill := ink
 	fill.a = 1.0
 	draw_circle(head, HEAD_RADIUS - 3.0, fill)
-	var picture: Texture2D = pictures.texture_for(token) if pictures != null else null
-	if picture != null:
-		draw_texture_rect(
-			picture, Rect2(head - Vector2.ONE * PICTURE_PX * 0.5, Vector2.ONE * PICTURE_PX), false
-		)
+	if pictures == null:
+		return
+	# texture_for asks for the picture the first time; the pin then fills the whole inner disc
+	# with the tight crop (a textured circle, so a square picture needs no mask).
+	var ready := pictures.texture_for(token) != null
+	var uv := pictures.uv_rect_of(token)
+	if not ready or uv.size == Vector2.ZERO:
+		return
+	var points := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	for i in PICTURE_POINTS:
+		var unit := Vector2.from_angle(TAU * float(i) / float(PICTURE_POINTS))
+		points.append(head + unit * PICTURE_RADIUS)
+		uvs.append(uv.get_center() + unit * uv.size * 0.5)
+	draw_colored_polygon(points, Color.WHITE, uvs, pictures.atlas())
 
 
 ## The token's footprint relative to its body: the ground (`base`) and top heights in metres and

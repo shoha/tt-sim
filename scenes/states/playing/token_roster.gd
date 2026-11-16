@@ -62,6 +62,8 @@ var _count_label: Label
 var _list: VBoxContainer
 var _scroll: ScrollContainer
 var _more_cue: Control
+var _divider: HSeparator
+var _pick_hint: Label
 var _card: VBoxContainer
 var _empty_label: Label
 var _find_button: Button
@@ -116,6 +118,9 @@ func _build_content() -> void:
 	_list = VBoxContainer.new()
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(_list)
+	# The scroll bar is the handle alone, visible while the pointer is over the list (UI_TASTE
+	# 2026-10-10), as in every other content list.
+	ScrollBarFade.attach(_scroll)
 	_scroll.get_v_scroll_bar().value_changed.connect(func(_value: float) -> void: _update_cue())
 	_scroll.get_v_scroll_bar().changed.connect(_update_cue)
 	_more_cue = _make_cue()
@@ -132,7 +137,9 @@ func _build_content() -> void:
 	_empty_label.text = tr("Tokens you add to the table are listed here. Press one to find it.")
 	content_container.add_child(_empty_label)
 
-	content_container.add_child(HSeparator.new())
+	_divider = HSeparator.new()
+	_divider.visible = false
+	content_container.add_child(_divider)
 	_build_card()
 
 
@@ -143,6 +150,13 @@ func _build_card() -> void:
 	_card.name = "SelectedCard"
 	_card.theme_type_variation = &"BoxContainerSpaced"
 	content_container.add_child(_card)
+	# Both actions stand, disabled, with this caption until a row is picked, so the foot is
+	# never an empty strip with a stray divider.
+	_pick_hint = Label.new()
+	_pick_hint.name = "PickHint"
+	_pick_hint.theme_type_variation = &"Caption"
+	_pick_hint.text = tr("Pick a token")
+	_card.add_child(_pick_hint)
 	var buttons := HBoxContainer.new()
 	buttons.theme_type_variation = &"BoxContainerSpaced"
 	_card.add_child(buttons)
@@ -391,15 +405,20 @@ func _on_actions_pressed() -> void:
 	menu_requested.emit(token, Vector2(rect.end.x + 8.0, rect.position.y))
 
 
-## The card for the selected token; hidden when none is selected or it left the table.
+## The foot card: hidden with its divider while the table has no tokens; otherwise the two
+## actions, disabled under "Pick a token" until a row is picked (or after its token left).
 func _update_card() -> void:
+	var has_rows := not _rows.is_empty()
+	_divider.visible = has_rows
+	_card.visible = has_rows
 	var token := _token_of(selected_id)
+	_pick_hint.visible = token == null
+	_find_button.disabled = token == null
+	_actions_button.disabled = token == null
 	if token == null:
 		selected_id = ""
-		_card.visible = false
 		focus_marker.set_selected(null)
 		return
-	_card.visible = true
 	if is_open and not focus_marker.is_marking(token):
 		focus_marker.set_selected(token)
 	_find_button.tooltip_text = tr("Centre the camera on the picked token")

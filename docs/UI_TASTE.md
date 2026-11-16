@@ -75,7 +75,8 @@ sizes per file against `tests/ui_bypass_baseline.json`, and a count may only fal
 - **S5** Width tokens (sheets 420 / 600 / 960, drawer 396) and a max content width; nothing
   stretched to the window, no full-width form fields. One declared wide token, 1280, for the
   avatar builder's three columns (rail, panes, preview). Pause and confirms are 420, Settings
-  and the new-map dialog 600 (the new-map dialog takes 960 on a canvas under 880 px, so its
+  720 (its sentences and two-column rows need it; canvas width less a 32 px margin on a narrow
+  one) and the new-map dialog 600 (the new-map dialog takes 960 on a canvas under 880 px, so its
   fields stay in view at 720p); a card grid adds columns rather than stretch a card past 400.
 - **S6** Targets about 44: rows 44, controls and footer buttons 40.
 
@@ -225,7 +226,7 @@ what was measurably wrong and centralises the rest. It changes no owner verdict.
   menu at 0.94 s), trimmed by `UiMotion.stagger_step()` so the whole entrance ends within
   `STAGGER_CAP_S` 0.36 s. The lift rides `offset_transform_position`, so rows no longer move by
   `position` (M3) and no container re-sorts at the end.
-- **M5 implemented: Reduce motion.** Settings > Graphics > Reduce motion (saved `ui/reduce_motion`,
+- **M5 implemented: Reduce motion.** Settings > Accessibility > Reduce motion (saved `ui/reduce_motion`,
   applied at once, `UiPreferences.load_reduce_motion` / `save_reduce_motion`) joins the OS
   reduce-animation flag in `UiMotion.reduced()`. Under it, sheets, popups, the asset browser,
   the download panel and pane swaps fade over at most `FADE_ONLY_S` 0.12 with no scale, lift or
@@ -236,6 +237,39 @@ what was measurably wrong and centralises the rest. It changes no owner verdict.
   plum at 0.90 opacity, which is the least painterly surface left; whether authoring, which
   does not run a table, should be paper rather than glass is the map-building card's call, with
   the owner. See `docs/THEME_GUIDE.md` "Foundation pass" for the per-screen list.
+
+## 2026-11-15 settings pass (card ui-settings)
+
+The Settings menu was a wall of controls under eight bare labels. New rules for any sheet of
+settings (the Settings menu is the first user; `docs/UI_SYSTEMS.md` "Settings Menu" has the
+mechanics). Reduce motion now lives under Settings > Accessibility, not Graphics.
+
+- **T-S1 A setting says what it does under its name.** Every row that is not self-evident carries
+  one plain sentence of `Caption` text directly under it (flush, so the pair reads as one item;
+  the gap between rows is wider than the gap inside one). The tooltip is the long form and may
+  repeat it; it is never the only place the effect is said. Write for a player, not an engine:
+  "Smooths jagged edges on foliage", not "MSAA".
+- **T-S2 Group by what the player is trying to do, most used first.** A tab with more than about
+  five rows is split under headings (Look and quality before Display before Effects, then
+  Performance, then an Advanced foldout for what almost nobody changes). Motion and size options
+  that help a player read live in Accessibility, together.
+- **T-S3 Reset is per group and global, and says when there is nothing to reset.** A group's Reset
+  is quiet (Ghost) and reads "Defaults", off, while the group is at its defaults; a group of one
+  row has none (its row is the reset). Reset all is quiet while nothing differs from the defaults,
+  and when it acts it says so with an Undo toast. Defaults are read from one place so a reset can
+  never disagree with a fresh install.
+- **T-S4 Say what is saved.** A sheet that stages changes shows `All changes applied` or `Unsaved
+  changes: ...` in words (the tone is secondary, never the only cue, C7), Apply is off while
+  there is nothing to apply, and closing with unsaved changes puts everything back and says so.
+  A row that is cheap to show previews on the board as it moves; a row that is not (a window
+  mode, a renderer, a resize) waits for Apply.
+- **T-S5 A long sheet can be searched, and every control is reachable without a mouse.** Search
+  matches names and sentences, lists groups with a name match before groups that only mention it
+  in a sentence, and the first Escape clears it (the field has no second X beside the sheet's
+  close). A sheet that scrolls says "More below" while more waits there. Section tabs take focus, Tab walks
+  rows in reading order, the scroll follows focus, shoulder buttons or Ctrl+Page Up/Down change
+  section. A sheet sizes to the canvas (Interface size, window) and keeps its height across
+  sections.
 
 ## 2026-11-15 gameplay HUD pass (card ui-hud)
 
@@ -257,8 +291,8 @@ verdict (the solid colours and subtle gradients of 2026-10-10 stand; no paper gr
 - **M8 A toast is read, not chased.** It arrives with a short slide (10 px) and fade, leaves faster,
   stays while the pointer rests on it, and the same words again count on the toast already up ("x3")
   instead of stacking. Kinds differ by icon and colour (C7). At most five stand. A toast with no
-  time on it has a visible 40 px close control (a click on it works too), and an error among them
-  leaves after 12 s.
+  time on it, and every error, has a visible 40 px close control (a click on it works too), and a
+  kept error leaves after 12 s. The toast column stands 16 px clear of the hint bar.
 - **I8 Help that has taught steps back.** The hint bar fades after 20 s unchanged and returns
   when the hints change or the pointer goes to the bottom edge; a tool's own hints never fade, and F1
   always lists every key.
@@ -297,8 +331,39 @@ reverse the first with one constant.
 - **Once-only onboarding.** A small paper card says the first strokes in two lines, the first
   time only, and goes at "Got it" or at the first edit; it fades, never slides.
 - **Motion.** The drawer keeps UiMotion's panel in and out (0.22 and 0.16 s, quart out);
-  under Reduce motion it fades in and cuts out. The card's height follows a pane swap without
-  animation (a tween on a size that content also drives would fight the layout).
+  under Reduce motion it fades in and cuts out. The card's height followed a pane swap with a
+  jump in round 1; round 2 eases it (below).
+
+### 2026-11-16 map building round 2 (card ui-authoring, the critic's ranked fixes)
+
+- **The active tool is a chip, not a stripe (C7, G1).** The selected rail item, and any held-active
+  one, has a wash of the state colour (lake, alpha 0.36, rim 0.85) behind its icon
+  (`IconRail.chip`, on for the map tools only), so the active tool reads at a glance at 720p.
+- **Targets and runs.** Rail items are 46 px squares (43 real px in a 1280x720 window), the
+  Undo, Redo, Save and Leave actions stand in a second column beside the tools so all of it
+  still fits 720p, and the break between runs is 20 px.
+- **A lead and a More (S4, G5).** A pane's help is one or two lines that say enough to start;
+  the rest sits behind a closed "More" foldout (Biome, Place, Sculpt, Water). The water lead is
+  two lines where it was eight.
+- **An empty state is one action (I5).** The Village pane with no village shows a picture, "No
+  village yet", a plain sentence and one button, "Draw a street", that goes to the Wall tool. The
+  plaza gesture line waits until there is a village.
+- **Choices are told apart and read in ink (C6).** The Place pane's biome rows are ink, not the
+  soft grey, and use the Biome tile's short names. Oak, birch, pine, bush, boulder and cactus have
+  different icons, chosen by words in the species key (four new icons: christmas-tree, plant,
+  stone, cactus).
+- **Unsaved is a word (C7).** Save shows the word "Unsaved" under its icon as well as the dot, in
+  the narrow `RailNote` size (11), until the map is saved.
+- **Footprint.** The drawer is 364 virtual px (about 340 real at 720p) and its card is square
+  where it meets the rail (a rounded corner there left a notch of board between them). While a
+  brush is down on the board the card steps back to 30% (`CardDimmer`), then returns on release.
+  The card's height eases over `UiMotion.STATE_S` (0.16 s) on a pane swap and cuts under Reduce
+  motion.
+- **More below, said plainly.** A tall pane (Place, Biome) that can scroll further shows a band
+  over its foot, the surface colour rising to nearly solid, with a small down chevron
+  (`MoreBelowFade`, through `PaneStack.more_below_fade`); it eases in, and goes when the scroll
+  reaches the end. It is a band and a chevron, not the Settings card's words, because a drawer
+  has no free line to keep (SettingsChrome's line is that card's).
 
 ## Verdicts
 

@@ -556,18 +556,23 @@ which may only fall): `drawer_container.gd` 12 overrides, `download_queue.gd` / 
 `avatar_swatch_row.gd` 7, `title_screen.tscn` 7 overrides and 4 colour literals,
 `help_overlay.gd` 6, `volume_overlay.gd` 4 and `sky_pane.gd` 3 colour literals.
 
-- **Settings:** the dialog is 600 wide and about 560 tall at 1080p, so Graphics clips its last
-  rows (Lo-fi filter half cut at the bottom edge) behind a scroll; give the sheet its height
-  budget or split Graphics (Display, Performance, Accessibility). Reduce motion sits under
-  Interface size for now and should live in an Accessibility group with Interface size.
-  Toggle rows (`CheckButton`) are small 120 px label columns; rows have no description
-  line, so what a switch does is only in its tooltip.
+- **Settings (done 2026-11-15, card ui-settings):** the sheet sizes to the canvas (up to 720 x
+  760 logical px) and keeps that height across sections; Graphics is split into Look and quality,
+  Display, View and camera, Effects, Water, Performance and Advanced; Reduce motion, Interface
+  size and Wind motion are in a new Accessibility tab; every row carries a one-sentence
+  `Caption` under it, each group a quiet Reset, the footer an unsaved/applied line, the header a
+  search box. The row table is `SettingsSpec` (docs/UI_SYSTEMS.md "Settings Menu" says how to add a
+  row); UI_TASTE T-S1 to T-S5 (the settings pass) are the rules. Group headings use `Heading`, descriptions `Caption`,
+  Reset `Ghost`, the unsaved line `CaptionState`: no colour is set by hand.
 - **Map building (authoring):** done by card ui-authoring (2026-11-15; UI_TASTE "2026-11-15 map
   building", UI_SYSTEMS "Map building chrome"): the tool drawer and rail are paper (a one-constant
   glass alternative), a card as tall as its pane, drawn by the `Drawer*` theme variations
   (`_define_drawer`: `DrawerPanel`, `DrawerCard`, `DrawerTab`, `DrawerRail` by `Left` or `Right`,
   and `DrawerMargin`, `DrawerMarginRoomy`), so `drawer_container.gd` has no theme overrides left.
   `avatar_swatch_row.gd` (7 overrides) is the avatar builder's, not map building's, and is open.
+  Round 2 (2026-11-16) added three variations: `DrawerCard*` is now square at the rail side,
+  `FoldoutTitle` (a Label: the caption's size in ink, for a foldout heading choices) and
+  `RailNote` (a Label at `SIZE_NOTE` 11, one word under a rail icon).
 - **Gameplay HUD** (card ui-hud, 2026-11-15; the audit is in `docs/research/2026-11-09-prototypes/compare/painter_ui4_hud/notes.md`):
   glass is right here (play continues). Done: a token roster drawer (T) to find and select a
   token, toasts that slide, count repeats and pause under the pointer (24 px kind icons), a hint

@@ -273,10 +273,10 @@ UIManager.show_undo_toast('Removed "Marigold"', undo_callable)
 - The same words and kind again (without an action) join the toast already up: it counts
   ("x3", a `Count` caption at its end) and restarts its timer, instead of a second chip stacking
 - The kind icon is 24 px (`ICON_SIZE`), tinted with the kind's role; the words stay Body 16
-- A kept toast (duration 0) carries a 40 px `Close` button (the `x` icon, tooltip and accessible
-  name "Dismiss") and a click on its words dismisses it too; an error among them leaves by
-  itself after `ERROR_KEPT_S` (12 s, held while the pointer rests on it), so none piles up
-  unseen. A kept info toast (a "Connecting" notice a caller takes down itself) has no clock.
+- A kept toast (duration 0) and every error, timed or kept, carries a 40 px `Close` button (the
+  `x` icon, tooltip and accessible name "Dismiss") and a click on its words dismisses it too; a
+  kept error leaves by itself after `ERROR_KEPT_S` (12 s, held while the pointer rests on it),
+  so none piles up unseen. The column stands `BAR_GAP_PX` (16) clear of the hint bar. A kept info toast (a "Connecting" notice a caller takes down itself) has no clock.
   The kinds stay told apart by icon, tint and words (C7); a tinted side stripe was weighed and
   left out (UI_TASTE anti-patterns: a stripe at rest is decoration)
 - Does not block input
@@ -400,13 +400,19 @@ make room, and opening one of the two closes the other.
   token's portrait (40 px, the picture its map pin wears, `TokenPictures`: the HUD's own
   `TokenPortraits` atlas made by the same rules, the `chess` icon until it is ready), its name,
   its health in words ("HP 12/40", "Down") and a 4 px bar. The bar's variants
-  (`ProgressSuccess`, `ProgressDanger`) now carry a `background` (the track role at half
-  strength) so the bar reads as a bar; it turns to the danger role at 40% of the maximum or
-  under, and the words say it (C7).
+  (`ProgressSuccess`, `ProgressDanger`) carry a `background`: a solid inset pill rimmed 1 px in
+  the soft text role (3.7:1 on the picked row's lake, 9:1 on the plum glass; the first
+  translucent track measured 1.2:1 on the lake), content margins 0 so the fill covers the rim.
+  A test holds both contrasts. The bar turns to the danger role at 40% of the maximum or
+  under, and the words say it (C7). The HUD's portrait is the middle `TokenPictures.CROP` (78%)
+  of the pin's picture, and the board marker's pin fills its inner disc with it (a textured
+  circle).
 - A press selects the row, centres the camera on the token (`GameMap.focus_camera_on`, the double
   click's path), pulses its glow for `PULSE_S` and scrolls the list to the row. The foot card
   holds only Find on map (centre and pulse again) and Actions (opens the token's own menu beside
-  the drawer): the name and health are in the row, not repeated under it. A list longer than the
+  the drawer): the name and health are in the row, not repeated under it. With nothing picked
+  both stand disabled under "Pick a token"; with no tokens the card and its divider are hidden.
+  The list's scroll bar is a `ScrollBarFade` (the handle alone, on hover; UI_TASTE 2026-10-10). A list longer than the
   drawer shows "More below" (an arrow and a caption) until it is scrolled to its end.
 - **The board marker** (`TokenFocusMarker`, a full-rect `Control` under the drawer, drawn in
   canvas units from the world camera's projection): the picked token, and a token whose row is
@@ -1092,22 +1098,90 @@ separators, apart from Return to title); it emits `room_requested`, which
 
 ## Settings Menu
 
-Tabbed settings interface (`scenes/ui/settings_menu.gd`) with six sections: Audio, Graphics, Grid,
-Controls, Network, and Updates. Sections are chosen from a labelled `IconRail` (`SECTIONS` in
-`settings_menu.gd`) rather than the `TabContainer`'s own tab bar, which is hidden
-(`tabs_visible = false`); the rail drives `tab_container.current_tab` instead. The menu selects
+Tabbed settings interface (`scenes/ui/settings_menu.gd`) with eight sections: Audio, Graphics,
+Accessibility, Grid, Controls, Network, Updates and About. Sections are chosen from a labelled
+`IconRail` (`SECTIONS` in `settings_menu.gd`) rather than the `TabContainer`'s own tab bar, which
+is hidden (`tabs_visible = false`); the rail drives `tab_container.current_tab` instead. The rail
+drops its labels when the canvas is under `COMPACT_HEIGHT` (560 logical px, a 150% interface on a
+720p window). The menu selects
 its first section in `_ready`, before the rail has laid out its items; the rail's accent
 underline is placed from the items' laid-out rects after every sort of the rail
 (`sort_children`), so it sits under the selected section from the first frame (it read every
-item at x = 0 and sat at x = 18 under no section until 2026-10-09). Graphics keeps
-foliage budget and renderer options under an Advanced `Foldout`, whose 16 px chevron sits
-inline left of its title. The header is a closable
-`MenuHeader`; `close_button` is `header.close_button`. Keyboard section switching (the native tab
-bar's Ctrl+Tab) is not available while the tab bar is hidden and the rail items are not focusable; a
-keyboard-navigation pass is a known follow-up.
+item at x = 0 and sat at x = 18 under no section until 2026-10-09). The header is a closable
+`MenuHeader` with the search box (`%SearchBox`) between title and close button;
+`close_button` is `header.close_button`.
 
-The footer is end-aligned: `Reset to Defaults` is a quiet `Secondary` action, `Apply` carries the
-accent.
+### Structure: groups, sentences, search (2026-11-15, card ui-settings)
+
+`settings_menu.tscn` still declares every row (an `HBoxContainer`, a `Label`, then the control with
+its unique name), so no code that reads a control changed. When the menu opens,
+`SettingsLayout` (`scenes/ui/settings_layout.gd`) moves the rows under group headings as
+`SettingsSpec` (`settings_spec.gd`) says: each tab is a list of groups (a `Heading` title and a
+quiet `Reset` button), each group a list of rows, each row a `RowBlock_<Row>` holding the row and
+its one-sentence `Caption` description (players do not hover, so the tooltip is the long form and
+the sentence the short one). Graphics reads Look and quality, Display, View and camera, Effects,
+Water, Performance, then the Advanced `Foldout` (ambient occlusion, reflections, global
+illumination, renderer). Accessibility holds Interface size (and text), Reduce motion and Wind
+motion. No colour-vision setting exists: the status colours are already told apart for every
+colour-vision type and each carries an icon or words (UI_TASTE C9, C7). Spacing is the theme's:
+`BoxContainerGroups` (24 px) between groups, `BoxContainerSpaced` (12 px) between rows, the
+caption flush under its row; a disabled `Ghost` (a Reset with nothing to reset) is bare words, not a
+chip, and a slider's keyboard focus is a ring round its knob (`_knob_lit`; Godot has no focus
+style for sliders). The sheet keeps one height across tabs, so a short tab (Audio, About) leaves
+empty paper under its rows by design: the dialog does not jump when the section changes.
+
+**Adding a setting row** (the card that brings one):
+
+1. Declare the row in `settings_menu.tscn` like its neighbours, anywhere under its tab's `Content`.
+2. Add `{"row": "<node name>", "desc": "<one plain sentence>"}` to a group of that tab in
+   `SettingsSpec.TABS`. A row the table misses is not lost: `SettingsLayout` puts it in a `More`
+   group at the end of its tab (and `test_no_row_is_left_outside_a_group` names it).
+3. Write and read it in `SettingsMenu._write_values` / `_show_saved_values`, give it its default in
+   `_show_defaults`, and add it to `SettingsSpec.APPLY_ONLY` if it should not preview.
+
+**Chrome beside the rows** (`SettingsChrome`, `settings_chrome.gd`, loaded by `SettingsSession`):
+a "More below" line above the footer rule while the visible tab has rows past its bottom edge (it
+keeps its height and fades, so nothing jumps), and a small-text warning under Interface size when
+a fixed size would draw the caption under 13 physical px (100% on a 720p window; Auto, the first-run
+default, is 1.40 there). A group of one setting has no Reset; the others read "Defaults" while
+idle. Apply is a `Primary` only while something is unsaved, else bare; Reset all is a `Secondary`
+only while something differs from the defaults, else bare, and acts with an Undo toast
+(`SettingsSession.offer_undo` / `restore`).
+
+**Search.** The box filters on the row's label, sentence, group and tab; every word typed must
+match. Groups holding a row whose name matches are listed before those that only mention the words
+in a sentence (`SettingsLayout._rank`); the field has no clear button of its own, Escape empties it. Groups and rail sections with no match hide, the sheet jumps to the first section that has
+one, and an empty result says so. The first Escape clears the box, the next closes the menu.
+
+**Unsaved changes and preview** (`SettingsSession`, `settings_session.gd`). The menu compares the
+controls' values (`_write_values` into a throwaway `ConfigFile`) with the values at load or the
+last Apply. The footer says `All changes applied` or `Unsaved changes: Apply keeps them` (text,
+not colour alone; the dirty line also takes the state tone), and Apply is off while nothing is
+unsaved. Rows not in `SettingsSpec.APPLY_ONLY` preview on the board as they move (lo-fi, token
+shading and see-through, shadow quality, water, the rendering toggles, the grid); the others
+(fullscreen, VSync, render scale, antialiasing, foliage edges, shadow cascades, ground detail,
+idle throttle, eye smoothing, look, renderer, P2P) wait for Apply. Closing with unsaved changes
+puts the saved values back on the controls and the board and shows a toast.
+
+**Reset.** A group's `Reset` puts its controls on their defaults (sliders glide there over
+`UiMotion.STATE_S`, or snap under Reduce motion); it is off while the group is at defaults. The
+defaults are not listed twice: `SettingsSession` reads them from `_show_defaults(true)`, which
+sets the controls silently, plus `SettingsSpec.LIVE_DEFAULTS` for the four preferences that save
+the moment they change (Interface size, Reduce motion, the prerelease channel, the input device).
+`Reset all` in the footer is the whole-menu version.
+
+**Keyboard and gamepad.** The section rail takes focus (`IconRail.focusable`); the menu opens with
+focus on the selected section. Tab walks the search box, the rail, each group's Reset and rows,
+then Reset all and Apply, and wraps (the panel's focus trap). The tabs' scroll follows focus
+(`follow_focus`), so a row reached by Tab is never left under the edge. Ctrl+Page Up and Page Down,
+or the gamepad shoulder buttons, step through the sections. Escape closes.
+
+**Size.** The sheet takes the canvas less 32 px on each side, up to 720 by 760 logical px
+(`_fit_panel`, on every canvas change), and keeps that height for every section so it does not
+jump; rows scroll inside it.
+
+The footer is end-aligned: `Reset all` is a quiet `Secondary` action, `Apply` carries the accent,
+and the status line stands at the start.
 
 ### Opening
 
@@ -1154,7 +1228,7 @@ live one ends the silence; see `docs/SOUND_EFFECTS.md`.
   `Wind` autoload as the slider moves (Apply saves it); 0 holds everything still, and Reduce
   motion (the OS flag or the Settings row below) also holds it still and wins. Not a level field and
   never networked.
-- **Reduce motion** check (below Interface size, `ui/reduce_motion`, default off; saves and applies
+- **Reduce motion** check (Accessibility tab, with Interface size and Wind motion; `ui/reduce_motion`, default off; saves and applies
   the moment it is toggled like Interface size, `UiPreferences`): `UiMotion.reduced()` is true when
   it is on or the OS reduce-animation flag is. Every UI animation reads it (UI_TASTE.md "2026-11-15
   foundation pass": fades of at most 0.12 s, no scale, lift, slide or stagger; hover and press keep
@@ -1163,6 +1237,8 @@ live one ends the silence; see `docs/SOUND_EFFECTS.md`.
 - **Eye view smoothing** (`graphics/eye_smoothing`, below Foliage edges, default on): the eye view's
   MSAA 4x raise; off keeps the Antialiasing setting there (`SettingsGpuOptions`)
 - Advanced (`Foldout`): foliage density slider, SSAO/SSR/SDFGI toggles, renderer method option button
+
+**Accessibility Tab:** Interface size, Reduce motion, Wind motion (these three were Graphics rows).
 
 **Grid Tab:**
 
@@ -1186,7 +1262,9 @@ live one ends the silence; see `docs/SOUND_EFFECTS.md`.
 
 ### Persistence
 
-Settings are saved to `Paths.SETTINGS_PATH` (`user://settings.cfg`) and loaded on startup.
+Settings are saved to `Paths.SETTINGS_PATH` (`user://settings.cfg`) and loaded on startup. Every
+saved key keeps its name; `test_every_setting_round_trips_through_save_and_load` sets each control
+to a non-default value, saves, resets and loads.
 
 ---
 
@@ -1809,6 +1887,22 @@ neither a pane nor the controller: the material, the footer actions and their wo
   and "Got it", shown the first time a user opens map building, put away by the button or by the
   first edit and then never again (`UiPreferences` `authoring_welcome_done`). It fades in
   (`UiMotion.fade_s`), never moves.
+- **Round 2 (2026-11-16, the critic's fixes).** `IconRail` gained `item_size` (46 px here),
+  `chip` (a state-colour wash behind the selected and held-active item, `chip_rect()`) and
+  `set_item_caption(id, word)`; `DrawerContainer` gained `rail_item_size`, `rail_group_gap`,
+  `rail_chip` and `rail_footer_beside` (the footer items stand in an `ActionColumn` beside the
+  tools, bottom-aligned; tab width follows), and `set_footer_badge(id, on, word)` (the "Unsaved"
+  word under Save, `AuthoringChrome.UNSAVED_WORD`, `RailNote`). The drawer is 364 px
+  (`AuthoringPanel.DRAWER_WIDTH`); the card eases its height over `UiMotion.STATE_S`
+  (`fit_panel_height`, a cut under Reduce motion) and is square at the rail. `CardDimmer` (a node
+  the panel adds) steps the card back to `AuthoringChrome.STROKE_DIM` while the left button is
+  down off the drawer and rail. Help is a lead plus a "More" `Foldout`
+  (`AuthoringChrome.help_label`, `more_foldout`; `AuthoringPanel._add_help`; the Water pane's
+  `HINT` and `HINT_MORE`). `Foldout.title_variation` (`FoldoutTitle`, ink) heads the Place
+  pane's biomes, whose tiles take `AuthoringChrome.place_icon(key, kind_icon)`. The Village
+  pane's empty state (`empty_card`, `street_button`, `street_requested`) goes to the Wall tool
+  through `AuthoringPanel.request_tool`. `PaneStack.more_below_fade` lays a `MoreBelowFade` (a
+  band and a chevron, shown only while the pane can scroll further) over the stack's foot.
 - **Brush feedback** is unchanged: the ring at the brush's size, the readout chip beside it
   and the hint bar's keys. Chips over the board stay glass (legibility over any biome).
 

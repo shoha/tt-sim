@@ -201,6 +201,7 @@ func _on_ready() -> void:
 	_stack.name = "PaneStack"
 	_stack.slide_from_right = false
 	_stack.bar_in_margin = true
+	_stack.more_below_fade = true
 	_stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content_container.add_child(_stack)
 	fit_height = AuthoringChrome.FIT_HEIGHT

@@ -39,6 +39,10 @@ const CHIP_EDGE := 0.85
 ## Fill a wash of the state colour behind the selected item and any held-active one, so the active
 ## item is obvious at a glance and not only by the stripe (the 2026-11-16 critic's first fix).
 @export var chip: bool = false
+## Let the items take keyboard and gamepad focus (set before the items are added). Off for the
+## drawers' rails, whose panes a key already steps; on for a sheet's section rail (Settings), so
+## Tab and the arrows reach it.
+@export var focusable: bool = false
 
 var selected: StringName = &""
 
@@ -68,7 +72,7 @@ func add_item(id: StringName, icon_name: String, tooltip: String = "") -> IconBu
 	button.icon_name = icon_name
 	button.tooltip_text = tooltip
 	button.custom_minimum_size = Vector2(item_size, item_size)
-	button.focus_mode = Control.FOCUS_NONE
+	button.focus_mode = Control.FOCUS_ALL if focusable else Control.FOCUS_NONE
 	button.set_meta("ui_silent", true)
 	button.pressed.connect(_on_item_pressed.bind(id))
 	var item: Control = button
@@ -173,6 +177,9 @@ func set_item_caption(id: StringName, text: String) -> void:
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 		label.offset_top = -14.0
+		# A pixel of room each side, so the word does not touch the rail's edge.
+		label.offset_left = 1.0
+		label.offset_right = -1.0
 		label.offset_bottom = 0.0
 		button.add_child(label)
 	label.text = text
@@ -189,6 +196,16 @@ func set_item_tooltip(id: StringName, text: String) -> void:
 func set_item_visible(id: StringName, item_visible: bool) -> void:
 	if _items.has(id):
 		_items[id].visible = item_visible
+
+
+func is_item_visible(id: StringName) -> bool:
+	return _items.has(id) and _items[id].visible
+
+
+## Gives the item's button keyboard focus (when the rail is focusable and the item shows).
+func grab_item_focus(id: StringName) -> void:
+	if focusable and _buttons.has(id) and is_item_visible(id):
+		(_buttons[id] as Control).grab_focus()
 
 
 func _on_item_pressed(id: StringName) -> void:

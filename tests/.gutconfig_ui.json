@@ -73,6 +73,7 @@
 		"res://tests/unit/test_room_panel.gd",
 		"res://tests/unit/test_scroll_bar_fade.gd",
 		"res://tests/unit/test_scroll_fade.gd",
+		"res://tests/unit/test_settings_layout.gd",
 		"res://tests/unit/test_settings_menu.gd",
 		"res://tests/unit/test_settings_menu_footer.gd",
 		"res://tests/unit/test_settings_menu_rail.gd",
