@@ -9,6 +9,33 @@ extends ToolDescriptor
 const ID := &"sculpt"
 const LABEL := "Sculpt"
 const UNAVAILABLE_TOOLTIP := "Sculpt: not on a Blender map, whose ground is the map file's"
+## The pane's tiles: id (the HeightBrush operation), label, icon, tooltip.
+const TILES: Array[Dictionary] = [
+	{
+		"op": HeightBrush.RAISE,
+		"label": "Raise",
+		"icon": "arrow-bar-up",
+		"tooltip": "Raise a mound; hold Ctrl as you press to lower",
+	},
+	{
+		"op": HeightBrush.SMOOTH,
+		"label": "Smooth",
+		"icon": "wave-sine",
+		"tooltip": "Soften slopes, edges and faces (Shift with any tile)",
+	},
+	{
+		"op": HeightBrush.FLATTEN,
+		"label": "Flatten",
+		"icon": "fold",
+		"tooltip": "Level the ground to the height where you press",
+	},
+	{
+		"op": HeightBrush.TIER,
+		"label": "Tier",
+		"icon": "stairs-up",
+		"tooltip": "Build a rock-faced level one tier up; hold Ctrl as you press to cut one down",
+	},
+]
 
 
 func _init() -> void:

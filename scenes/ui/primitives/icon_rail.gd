@@ -20,6 +20,9 @@ const ITEM_GAP := 4
 ## wider than their icons, so ITEM_GAP left about 4 px between two words.
 const LABEL_GAP := 24
 const INDICATOR_THICKNESS := 3.0
+## The extra step between two groups of items (add_gap): with ITEM_GAP either side it reads as a
+## break, where one ITEM_GAP reads as a neighbour.
+const GROUP_GAP := 8.0
 
 ## Show each item's tooltip text as a caption under its icon.
 @export var show_labels: bool = false
@@ -89,6 +92,17 @@ func add_item(id: StringName, icon_name: String, tooltip: String = "") -> IconBu
 	_buttons[id] = button
 	_items[id] = item
 	return button
+
+
+## A blank step between two groups of items, `height` px (a vertical rail) or wide (a horizontal
+## one), on top of the usual gap. Proximity says which items belong together (S2).
+func add_gap(step: float = GROUP_GAP) -> Control:
+	var gap := Control.new()
+	gap.name = "Gap%d" % get_child_count()
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gap.custom_minimum_size = Vector2(0, step) if vertical else Vector2(step, 0)
+	add_child(gap)
+	return gap
 
 
 func has_item(id: StringName) -> bool:

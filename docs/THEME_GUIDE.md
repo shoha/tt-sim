@@ -564,11 +564,12 @@ which may only fall): `drawer_container.gd` 12 overrides, `download_queue.gd` / 
   search box. The row table is `SettingsSpec` (docs/UI_SYSTEMS.md "Settings Menu" says how to add a
   row); UI_TASTE S5 to S9 are the rules. Group headings use `Heading`, descriptions `Caption`,
   Reset `Ghost`, the unsaved line `CaptionState`: no colour is set by hand.
-- **Map building (authoring):** the tool drawer and rail are dark plum glass at 0.90 and read
-  heavy over the luminous painted board, and the drawer takes about a fifth of the width at 1080p.
-  Decide with the owner whether authoring (play stopped, no
-  table) is paper rather than glass (UI_TASTE "Paper or glass is chosen by use"). Many drawer
-  panes still set theme overrides in code (`drawer_container.gd`).
+- **Map building (authoring):** done by card ui-authoring (2026-11-15; UI_TASTE "2026-11-15 map
+  building", UI_SYSTEMS "Map building chrome"): the tool drawer and rail are paper (a one-constant
+  glass alternative), a card as tall as its pane, drawn by the `Drawer*` theme variations
+  (`_define_drawer`: `DrawerPanel`, `DrawerCard`, `DrawerTab`, `DrawerRail` by `Left` or `Right`,
+  and `DrawerMargin`, `DrawerMarginRoomy`), so `drawer_container.gd` has no theme overrides left.
+  `avatar_swatch_row.gd` (7 overrides) is the avatar builder's, not map building's, and is open.
 - **Gameplay HUD:** glass is right here (play continues), but the toasts and hint bar are
   low-contrast small chips over a bright board, the top-right camera disc cluster and the
   right rail carry no labels, and `Add token` is the lone bottom-right button with no

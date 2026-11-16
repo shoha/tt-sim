@@ -266,6 +266,34 @@ mechanics). Reduce motion now lives under Settings > Accessibility, not Graphics
   section. A sheet sizes to the canvas (Interface size, window) and keeps its height across
   sections.
 
+## 2026-11-15 map building (card ui-authoring)
+
+Written after the owner asked for the menus to match the look; this is map building's part.
+Code: `docs/UI_SYSTEMS.md` "Map building chrome". Decisions are the card's and the owner may
+reverse the first with one constant.
+
+- **Decision: the map tools are paper, glass one constant away.** Building a map stops play, so
+  by C8 ("if it stops play it is paper") its drawer and rail are paper (`AuthoringChrome.
+  SURFACE_PAPER`). Why: the dark plum slab sat over the brightest painted board as the heaviest
+  thing on screen, and the owner's own menus are paper. The risk is the opposite: a cream
+  panel is the brightest thing beside a dense dark forest (G12), so the panel is a card as tall
+  as its pane (`FIT_HEIGHT`) and leaves the board visible under a short pane. The glass
+  variant is complete (drawer, rail, panes, first-strokes card, all theme-driven) and was
+  captured at runtime. Chips over the board (brush readout, hint bar, toasts) stay glass,
+  because they sit over any biome and need the dark plate for legibility.
+- **Grouped rail.** Twelve tools in one column read as noise; four runs with a gap between
+  them (land, shape, features, build) let the eye find a tool by what it does, and the actions
+  sit apart under them (G-grouping, nothing is hidden or removed).
+- **Words say the state.** Undo and Redo name the edit they act on and say "Nothing to undo"
+  when off; each does so in a toast ("Undid Raise") so the effect is seen without looking at the
+  drawer. Save says whether anything is unsaved and answers Ctrl+S. The map name field lost its
+  caption: the pane's title is what the drawer is about.
+- **Once-only onboarding.** A small paper card says the first strokes in two lines, the first
+  time only, and goes at "Got it" or at the first edit; it fades, never slides.
+- **Motion.** The drawer keeps UiMotion's panel in and out (0.22 and 0.16 s, quart out);
+  under Reduce motion it fades in and cuts out. The card's height follows a pane swap without
+  animation (a tween on a size that content also drives would fight the layout).
+
 ## Verdicts
 
 The user's decisions about the interface, newest last. They outrank every rule above; a card

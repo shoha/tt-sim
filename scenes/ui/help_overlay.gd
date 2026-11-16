@@ -119,6 +119,7 @@ func _get_shortcut_data() -> Array:
 			["Right-click", "Remove a prop, or put the brush down"],
 			["Delete", "Remove the prop under the cursor"],
 			["Ctrl+Z / Ctrl+Y", "Undo / redo a stroke"],
+			["Ctrl+S", "Save the map"],
 		]
 	)
 	return [

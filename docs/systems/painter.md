@@ -35,6 +35,8 @@ came from is the local branch `painterspike` (handoff `docs/plans/handoffs/paint
 | painted tree shaders | `painter/shaders/painter_tree_stroke.gdshader`, `painter_tree_blockin.gdshader` (and their `_bare` variants, one body each: `painter_tree_{stroke,blockin}_body.gdshaderinc`), `painter_tree.gdshaderinc` (+ `painter/trees/tree_uniforms.json`) | The spike's stroke and block-in passes on tt-sim's wind, sun and fades |
 | `PainterBuildings` | `painter/painter_buildings.gd` | The buildings' host: stand-ins on the structures' wall, roof, timber and stone parts, toned from the sheet, and back |
 | painted structure shader | `painter/shaders/painter_structure.gdshader` | The selector light on a structure part: three sheet tones, a pattern per material, dabs, fold ink |
+| `PainterWater` | `painter/painter_water.gd` | The water's host: swaps the shader of the shared water and fall materials and back (see "Water") |
+| painted water, fall | `painter/shaders/painter_water.gdshader`, `painter_waterfall.gdshader` | A depth-banded wash with a stroke lattice, a shore lap ribbon and token arcs; the fall's chunky streaks |
 
 `LevelEnvironmentManager` owns one `PainterScene`, loaded by path (`PAINTER_SCENE`) the first time a
 level is drawn Painted, so neither the start-up nor a Classic level compiles the painter
@@ -226,6 +228,48 @@ plain spreads), so a tuft's dabs range from russet to pale straw.
 The foliage AA swap (`WindFoliage`, the eye view's alpha-to-coverage) collects stand-ins through
 `WindFoliage.META_STAND_IN`: it swaps the original wind material in their place, so a painted
 material survives entering and leaving the eye view (`test_painter_surfaces.gd`).
+
+## Grounding
+
+Card painter-grounding (2026-11-15; owner: foliage and tokens felt "on top of the landscape"). The
+sun's shadow darkens the ground only along the sun's direction, and every painted shader turns the
+engine's ambient off, so nothing darkened the ground right under a crown, round a trunk, a rock or a
+wall, or under a token's feet, and no trunk or stone was darker where it met the ground. Two parts
+(`PainterOcclusion`, `painter/painter_occlusion.gd`, owned by `PainterSurfaces`):
+
+- **The ground's contact field.** A CPU raster at 0.5 m a texel over the map's extent, RG8: r a POOL
+  (a crown's projected disc, centred halfway from the trunk to the crown's middle, radius 0.5 of the
+  crown's half width plus 0.5 m; a bush's own disc grown a third; a rock's, log's or stump's oriented
+  box, from the scatter's instance transforms; a structure's footprint box grown 0.9 m), g a CORE (the
+  seam at a trunk's foot, 0.55 m + 5 % of its height; a rock's or a wall's base 0.35 m). Each footprint
+  is a coverage whose 0.5 contour is its nominal edge (`cover`), the texels keep the maximum. The
+  painted ground shader reads it with one fetch (a no-op branch when off) and thresholds it through
+  its own brush noise, so a pool is a flat stroke-edged shape, not a blur. The pool is the ground's
+  lit tone darkened (`occ-dark`) and leaned a little toward its shade (`occ-shade`) and cool
+  (`occ-cool`): shading toward the shade ramp alone read as a grey-violet smudge on the summer path
+  (the first try); the core leans toward the litter tone (`occ-soil`, 0 in winter: the snow's own
+  blue). Tokens are the only moving footprints: their feet discs go in a 32-entry uniform array
+  (centre, radius from `TokenGhost.body_bounds`, foot height, so a token on a roof stamps nothing on
+  the ground below), refreshed by one pass over the token group when one moved, and are drawn as a
+  wider pool plus a deeper disc under the feet. Rebuilt 0.3 s after the painted trees install or
+  erase (`PainterTrees.changed`), the scatter applies cells, a structure comes or goes or the
+  ground is edited: 17-24 ms for 215-317 footprints (forest, village, taiga maps of 200 ft).
+- **Base gradients.** A stem (the block-in's bark, `base_dark`, over its lowest 0.9 m) and a scatter
+  stone or log (`painter_selector`'s solid branch, over its lowest 45 %) are a step darker at their
+  foot, so they grow out of the ground; the heaped snow at a winter trunk's foot still wins.
+
+Sheet numbers (DEFAULT_NUMBERS, `core.sheet`'s :world; winter's :world overrides soil, cool, dark and
+shade): `occ-pool` 0.42, `occ-core` 0.8, `occ-dark` 0.9, `occ-soil` 0.5, `occ-cool` 0.05,
+`occ-shade` 0.2, `base-dark` 0.28. Classic never loads any of it.
+
+Cost (pinned in-run A/B, 1080p, RTX 3080, GPU ms median, `compare/painter_final25_grounding/cost`):
+the look on against off is +0.012 ms on average over 12 pairs (forest tokens, taiga home, village
+winter at 12 degrees, 16 tokens; range -0.03 to +0.047, noise about 0.03); main's ground shader
+against this branch's with the look off is +0.04 (forest +0.09, taiga -0.01, village +0.035:
+one pair each, before any drift). The total over main is about +0.05 ms. Rejected: engine SSAO
+(+1.2 to +1.45 ms in all four views, and no visible change: the painted shaders have ambient off, so
+the AO term has nothing to darken, even with `ssao_light_affect` 1); ground cover and litter dabs
+at object bases belong to the coverage card.
 
 ## Trees
 
@@ -1170,6 +1214,68 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   tick); slate tongues are dark navy dabs; a bare tongue still keeps the blanket's rounded
   shading; half-timber roofs show little colour; winter walls are bluer but still grey-violet.
 
+## Water
+
+Under Painted the water and the falls draw with the painter's shaders (card painter-water,
+2026-11-15; the research is `docs/research/2026-11-15-painted-water/report.md`, candidate C1).
+`PainterWater` (`painter/painter_water.gd`, loaded by path from `PainterSurfaces` like
+`PainterBuildings`) swaps the `shader` of the two SHARED materials, `WaterGlbUtils.water_material()`
+and `AuthoredWater.fall_material()`, not a per-mesh override: the shared material reaches every
+water mesh, every later rebuild and the river ribbon past the edge, and `process_water_meshes()`
+would undo an override. A `ShaderMaterial` keeps its parameters and a mesh its instance uniforms
+across a shader swap (probe, 2026-11-15), so the flow map, disturbance points, skirt uniforms and
+the level's Motion keys keep working: `painter_water.gdshader` declares Classic's names for them.
+The sheet's colours go under `p_` names Classic does not read (so `apply_water_settings()` cannot
+fight them); `release()` puts both shaders back, removes the META and sets every `p_` uniform to
+null, so the materials are as they were. Classic's `water.gdshader` and `waterfall.gdshader` are not
+touched (a copy of the helpers, no shared include).
+
+The look (`painter_water.gdshader`, no screen texture):
+- **A wash in three depth bands.** The depth buffer's water column picks shallow, mid and deep
+  (`water-shallow`, `water-mid`, `water-deep`) with soft-edged, posterised steps (`BAND_1` 0.2,
+  `BAND_2` 0.85, `POSTERISE` 0.6). It is drawn alpha-blended (`water-opacity`) over the opaque
+  painted ground, so the ground's brushwork shows through the shallows.
+- **A stroke lattice.** World-space, jittered cells (2.4 m) with one stroke per cell at a
+  `water-strokes` share, `water-stroke-len` long, along the flow (the flow map) or the wind; each
+  cell boils on its own phase (`water-boil` s) and the seed changes only at envelope 0, so it
+  never swims with the camera. Strokes fade out by pixel footprint. `stroke_layer(...)` is a clean
+  function (coverage, id) another source can replace (card painter-water-c2 prototypes a baked
+  atlas). A second, longer layer and the sun-side glint ticks (`water-glints`, kept where a
+  stroke's own small tilt reflects the sun) are skipped under the Low water quality.
+- **The shore lap.** An iso-depth ribbon of `water-foam-width` m from the depth buffer's column
+  gradient (the slope is floored at 0.06; a steep bed, a fall lip, can still thin it, and the
+  speckle the C2 prototype saw there did not show in the fall frames).
+- **Tokens.** Disturbance points (rings, wakes) are drawn as broken arc strokes, and a token or rock
+  standing in the water gets a foam wrap.
+- **Light.** `light()` is a lit/shade selector like the ground's: cast shadows (a tree's, a cliff's)
+  take the wash toward `p_shade_mul`, which is `SHADE_SHARE` (0.55) of the ground's own shade-to-lit
+  ratio, so the water cools with the ground beside it.
+- **Winter ice.** `ice-over` (winter: 1) freezes SLOW water (a pond, a lake, not a river or a fall)
+  to the `water-ice` wash with a few long cracks, open round every disturbance point, so a token
+  never stands on ice. It is visual only: the float and drown rules are unchanged (the report's open
+  question; see the card's report).
+- **The wet band.** The painted ground darkens and cools in a brushed band along the water's
+  edge (`painter_ground.gdshader`, `ground_at`, `WET_EDGE`), from the water weights texture the
+  ground already binds.
+
+`painter_waterfall.gdshader` is the fall: unshaded, the same vertex contract as Classic's, chunky
+white streaks over the shallow and mid tones, with the sheet's foam.
+
+Sheet: roles `water-shallow`, `water-mid`, `water-deep`, `water-lit`, `water-shade`, `water-foam`,
+`water-glint`, `water-ice`; numbers `water-strokes`, `water-stroke-len`, `water-boil`,
+`water-glints`, `water-opacity`, `water-foam-width`, `ice-over`; per-mood overrides in
+`core.sheet` (dusk's wash is blue-violet, night's deep and dim, winter's pale).
+
+Cost (pinned, interleaved in-run A/B, vsync off, `viewport_get_measured_render_time_gpu`, RTX 3080,
+a 150 m forest with a river, a pond, a fall and a long river along the south edge; Painted vs Classic
+water on the same painted ground, medians of two interleaved pairs): summer zoom 8 2.16 vs 2.23 ms,
+zoom 20 2.69 vs 2.80, eye 2.87 vs 2.97; winter zoom 8 2.11 vs 2.18, zoom 20 2.60 vs 2.70. Painted is
+0.05 to 0.11 ms CHEAPER than Classic in every view (no normal-map reads, no screen texture).
+
+Warm-up: both shaders are in `PainterWarmup` (plain layout and the fall layout).
+`test_painter_water.gd` covers the swap, the exact restore, the kept parameters, re-toning, the
+fall following and the shade factor.
+
 ## The painted state signal
 
 `LevelEnvironmentManager.painted_look_changed(state: Dictionary)` is emitted when the painted state
@@ -1187,6 +1293,39 @@ calls.
    side by side, the village, the level's own sun controls).
 3. Point the presets it paints at it in `RenderStyle.MOOD_FOR_PRESET`.
 4. Run `test_painter_sheet.gd` and `test_render_style.gd`.
+
+## Coverage (card painter-coverage, 2026-11-15)
+
+The audit of Classic against Painted is `docs/research/2026-11-09-prototypes/compare/
+painter_final25_coverage/matrix.md`. What the card filled:
+
+- **Biome ground and tufts.** Three more ground roles, `dry` (savanna), `ash` (burnt forest) and
+  `earth` (rocky badlands), and the plant roles `dry-grass` and `cactus`, are DERIVED
+  (`PainterGroundRoles.DERIVED`): at tone time from a keyframed role (`ground`, `stone`, `path`,
+  `grass`, `leaf`) moved by sheet numbers `<name>-hue`, `-chroma` and `-lift` in `:world`, so
+  they follow every mood and sun with no per-keyframe lines. The ground shader reads them from
+  a second zone texture (`zone2_map`: r dry, g ash, b earth, built by
+  `PainterSurfaces.biome_zone_image`, null on a map with no dry biome, so such a map pays nothing).
+- **Trees the painter does not grow** (acacia, palm, dead tree) are painted by surface
+  (`PainterPlantRoles.for_surface`: material name `*_Bark` is a solid in the bark role, the rest a
+  leaf mass); cactus and barrel cactus are solids in the cactus role, agave a mass, a dead shrub
+  a bark mass. `WindFoliage` now copies the GLB material's name onto its shader material
+  (Classic reads nothing from it).
+- **A dry map's whole ground.** When one dry biome holds at least a quarter of the map and more
+  cells than any other biome (`PainterSurfaces._dominant_channel`), the second zone texture is 1
+  everywhere its biome is not displaced by another biome, density ignored, and the base surface's
+  shore (a savanna's or badlands' base is sand) is dropped from the zone map: a savanna reads
+  golden straw, the badlands baked terracotta, a burnt forest dark brown-grey char. A map with a
+  small patch of a dry biome keeps the density pull; a map with no dry biome has no second texture
+  and draws exactly as before.
+- **Wall layers.** `AuthoredWalls` (drawn walls, wall rows, street lots), `AuthoredBoundaries` and
+  `AuthoredCrossings` wear the structures' stand-ins by part name (`PainterBuildings.wall_part_key`:
+  a crossing's `Wood` is timber, `Stones`, `Arch` and `Ford` the stone ramp); the toon styles' trim
+  kinds (`wall_trim`, `frame_trim`, `door_trim`, `trim_plaster`, `frame_plaster`, `frame_stone`)
+  and the `ornament_wood`, `ornament_bark`, `ornament_cloth` and `canopy_leaf` parts have KINDS rows.
+  Metal (`door_metal`, `ornament_metal`) and glass stay Classic by earlier decision.
+- **Known gaps** are listed in the matrix with their effort: baked settlement furnishings, field
+  plants, round and profile roofs (procgen records).
 
 ## Verification
 

@@ -14,6 +14,7 @@ const PANEL_FILES := [
 	"res://scenes/states/playing/token_context_menu.gd",
 	"res://scenes/states/playing/asset_browser_container.gd",
 	"res://scenes/level_editor/level_editor.gd",
+	"res://scenes/states/authoring/authoring_welcome.gd",
 ]
 
 

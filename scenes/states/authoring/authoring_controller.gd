@@ -61,6 +61,8 @@ var map_root: Node3D = null
 var scatter: AuthoredScatter = null
 var props: AuthoredScatter = null
 var panel: AuthoringPanel = null
+## The first-strokes card (AuthoringWelcome): shown once per user, until their first edit.
+var welcome: AuthoringWelcome = null
 ## The biome the author last picked (the Biome tool's paint), or "".
 var selected_biome: String = ""
 var brush: BrushTool = null
@@ -133,6 +135,8 @@ func setup(game_map: GameMap) -> void:
 	saving = AuthoringSaving.new(self)
 	add_child(saving)
 	history.changed.connect(_on_history_changed)
+	# The first edit of any kind answers what the first-strokes card was for.
+	history.recorded.connect(func(_entry: Dictionary) -> void: welcome.dismiss())
 
 
 func _build_ui() -> void:
@@ -141,10 +145,14 @@ func _build_ui() -> void:
 	_ui_layer.layer = Constants.LAYER_AUTHORING
 	add_child(_ui_layer)
 	panel = AuthoringPanel.new()
-	# Authoring happens over the live table, so its UI is glass (UI_TASTE.md C8).
-	panel.theme = ThemeColors.glass_theme()
+	# Building a map stops play, so the tools are paper (UI_TASTE.md C8); AuthoringChrome.SURFACE_PAPER
+	# switches them back to glass.
+	panel.theme = AuthoringChrome.surface_theme()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_ui_layer.add_child(panel)
+	welcome = AuthoringWelcome.new()
+	welcome.theme = AuthoringChrome.surface_theme()
+	_ui_layer.add_child(welcome)
 	panel.save_pressed.connect(save_async)
 	panel.leave_pressed.connect(request_leave)
 	panel.undo_pressed.connect(undo)
@@ -355,6 +363,7 @@ func _open_async(
 	BootTrace.mark("open: sheet dropped")
 	if _designer_config.is_empty():
 		saving.start_autosave()
+		welcome.show_once()
 	set_process(true)
 	if not _designer_config.is_empty() and designer == null:
 		designer = OnDemand.attach_biome_designer(self, _game_map, _designer_config)
@@ -537,6 +546,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_redo"):
 		redo()
 		get_viewport().set_input_as_handled()
+	elif AuthoringChrome.is_save_key(event):
+		save_async()
+		get_viewport().set_input_as_handled()
 	elif event is InputEventKey:
 		# A tool's shortcut picks it as its rail item would (no tool of 2026-10 has one).
 		var tool := ToolRegistry.for_shortcut(event, ToolDescriptor.AUTHORING)
@@ -559,8 +571,10 @@ func mark_edited() -> void:
 ## Undoes the newest edit, with undo's tick (StrokeSound) when there was one.
 func undo() -> void:
 	_finish_brush_gesture()
-	if history.undo() != "":
+	var undone := history.undo()
+	if undone != "":
 		StrokeSound.play_history(false)
+		UIManager.show_toast("Undid %s" % undone, UIManager.TOAST_INFO, 1.6)
 		mark_edited()
 		_bounds_stale = true
 		_refresh_tools()
@@ -569,8 +583,10 @@ func undo() -> void:
 ## Redoes the newest undone edit, with redo's tick when there was one.
 func redo() -> void:
 	_finish_brush_gesture()
-	if history.redo() != "":
+	var redone := history.redo()
+	if redone != "":
 		StrokeSound.play_history(true)
+		UIManager.show_toast("Redid %s" % redone, UIManager.TOAST_INFO, 1.6)
 		mark_edited()
 		_bounds_stale = true
 		_refresh_tools()
@@ -590,7 +606,12 @@ func _finish_brush_gesture() -> void:
 
 func _on_history_changed() -> void:
 	if panel:
-		panel.set_history_state(history.can_undo(), history.can_redo())
+		panel.set_history_state(
+			history.can_undo(),
+			history.can_redo(),
+			history.next_undo_label(),
+			history.next_redo_label()
+		)
 
 
 func _on_dirty_changed(dirty: bool) -> void:
@@ -618,7 +639,7 @@ func _use_biome(biome_id: String) -> void:
 		scatter.prepare_biome(biome_id)
 	if brush:
 		BiomeTool.of(brush).biome_id = biome_id
-		BiomeTool.of(brush).tint = biome_tint(biome_id)
+		BiomeTool.of(brush).tint = CursorTints.biome_tint(biome_id)
 	# Silent; also opens the biome's group in the Place picker.
 	panel.select_biome(biome_id)
 
@@ -664,7 +685,7 @@ func use_surface(surface: String) -> void:
 	if brush == null:
 		return
 	PaintTool.of(brush).surface = surface
-	PaintTool.of(brush).tint = surface_tint(surface)
+	PaintTool.of(brush).tint = CursorTints.surface_tint(surface)
 	var terrain := _terrain()
 	if terrain:
 		terrain.warm_surface(surface)
@@ -814,39 +835,6 @@ func refresh_tool_hints() -> void:
 	UIManager.set_tool_hints(brush.tool.key_hints(brush) if active else [])
 
 
-## The cursor tint of a biome: its thumbnail's mean colour, lifted toward white so the ring
-## reads on dark ground too.
-static func biome_tint(biome_id: String, root: String = PaletteLibrary.DEFAULT_ROOT) -> Color:
-	var thumbnail: Variant = PaletteLibrary.biome(biome_id, root).get("thumbnail", "")
-	var texture := SwatchTextures.palette_thumbnail(thumbnail, 8, root)
-	if texture == null:
-		return Color(0.7, 0.9, 0.6)
-	var image := texture.get_image()
-	if image == null or image.is_empty():
-		return Color(0.7, 0.9, 0.6)
-	image.resize(1, 1, Image.INTERPOLATE_BILINEAR)
-	var mean := image.get_pixel(0, 0)
-	mean.a = 1.0
-	return mean.lerp(Color.WHITE, 0.4)
-
-
-## The cursor tint of a palette surface: its swatch's mean colour, lifted toward white like
-## biome_tint so the ring reads on dark ground.
-static func surface_tint(surface: String, root: String = PaletteLibrary.DEFAULT_ROOT) -> Color:
-	var albedo: Variant = PaletteLibrary.surfaces(root).get(surface, {}).get("albedo", "")
-	var texture := SwatchTextures.palette_thumbnail(
-		String(albedo), AuthoringPanel.PAINT_THUMB_PX, root
-	)
-	var image := texture.get_image() if texture else null
-	if image == null or image.is_empty():
-		return Color(0.9, 0.82, 0.66)
-	image = image.duplicate() as Image
-	image.resize(1, 1, Image.INTERPOLATE_BILINEAR)
-	var mean := image.get_pixel(0, 0)
-	mean.a = 1.0
-	return mean.lerp(Color.WHITE, 0.4)
-
-
 ## Copies what the scene holds back into the document and the level: the scatter and props
 ## rows (their AuthoredScatter nodes hold the current rows) with the grass-mass anchors, the
 ## tokens' placements, and the map name.
@@ -990,6 +978,8 @@ func teardown() -> void:
 		saving.teardown()
 	if panel:
 		panel.end_session()
+	if welcome:
+		welcome.visible = false  # Leaving is not putting it away: the next map shows it again.
 	for prompt in [_leave_prompt, _recovery_prompt]:
 		if is_instance_valid(prompt) and prompt.is_inside_tree():
 			prompt.queue_free()
