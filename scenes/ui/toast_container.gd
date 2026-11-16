@@ -20,6 +20,8 @@ const DEFAULT_DURATION := 3.0
 ## A toast with an action stays long enough to read it and reach for the button.
 const ACTION_DURATION := 6.0
 const ICON_SIZE := 24
+## The column's resting distance from the bottom edge (the scene's margin_bottom).
+const REST_MARGIN_PX := 80.0
 ## The meta a toast carries its tag in (dismiss_tag).
 const TAG_META := &"tt_toast_tag"
 ## Its words, kind and repeat count, for _repeat_of.
@@ -73,6 +75,13 @@ func _process(_delta: float) -> void:
 	var margin := toast_vbox.get_parent() as Control
 	margin.offset_left = span.x - rect.position.x
 	margin.offset_right = span.y - rect.end.x
+	# Above the hint bar when it is on show (two lines at 720p stand taller than the column's
+	# resting margin), by the bar's height beyond that margin and a 8 px gap.
+	var bar := get_tree().get_first_node_in_group(InputHints.GROUP) as InputHints
+	var lift := 0.0
+	if bar != null and bar.top_edge() < INF:
+		lift = maxf(0.0, rect.end.y - bar.top_edge() + 8.0 - REST_MARGIN_PX)
+	margin.offset_bottom = -lift
 
 
 ## Show a toast for `duration` seconds, or as long as its words take to read when that is
@@ -108,9 +117,11 @@ func show_toast(
 
 	# Limit visible toasts
 	while _active_toasts.size() > MAX_VISIBLE_TOASTS:
-		var oldest = _active_toasts.pop_front()
+		var oldest: Control = _active_toasts[_eviction_index()]
 		if oldest and is_instance_valid(oldest):
 			_dismiss_toast(oldest, true)
+		else:
+			_active_toasts.erase(oldest)
 
 	# Animate in
 	_animate_toast_in(toast, type)
@@ -128,6 +139,17 @@ func show_toast(
 		timer.start()
 		toast.mouse_entered.connect(timer.set_paused.bind(true))
 		toast.mouse_exited.connect(_resume_after_hover.bind(timer))
+
+
+## The index of the toast that makes room for a new one: the oldest that is not an error (an
+## error says what failed and how to recover, and a run of good news must not push it off
+## screen unread), else the oldest of all.
+func _eviction_index() -> int:
+	for i in _active_toasts.size():
+		var toast: Control = _active_toasts[i]
+		if not is_instance_valid(toast) or toast.get_meta(TYPE_META, -1) != ToastType.ERROR:
+			return i
+	return 0
 
 
 ## Whether a toast with this `message` and `type` is already up (an action toast never joins):

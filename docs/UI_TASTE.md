@@ -237,6 +237,31 @@ what was measurably wrong and centralises the rest. It changes no owner verdict.
   does not run a table, should be paper rather than glass is the map-building card's call, with
   the owner. See `docs/THEME_GUIDE.md` "Foundation pass" for the per-screen list.
 
+## 2026-11-15 gameplay HUD pass (card ui-hud)
+
+Written after the owner asked for the gameplay screens' menus to be refined; the goal behind it
+is that players can find and select their tokens. It adds rules for the play HUD and changes no
+verdict (the solid colours and subtle gradients of 2026-10-10 stand; no paper grain).
+
+- **I7 The HUD helps find a token.** Every token on the table is reachable from a list, not
+  only by hunting the board: the roster drawer (T) lists them by name, a press selects, centres
+  the camera and pulses the token, a hovered row lights its token. A player's own tokens come first;
+  a token the GM hid is never listed to players (G14). Health is in words and a bar, never colour alone (C7).
+- **M8 A toast is read, not chased.** It arrives with a short slide (10 px) and fade, leaves faster,
+  stays while the pointer rests on it, and the same words again count on the toast already up ("x3")
+  instead of stacking. Kinds differ by icon and colour (C7). At most five stand.
+- **I8 Help that has taught steps back.** The hint bar fades after 20 s unchanged and returns
+  when the hints change or the pointer goes to the bottom edge; a tool's own hints never fade, and F1
+  always lists every key.
+- **S7 HUD targets.** Buttons the player presses in play are at least 40 px at Interface size
+  1.0 (Add token and Save map were 31); icon-only controls carry a tooltip with their key. Known
+  gap: the right rail's 36 px items and the camera cluster (shared primitives; the settings and
+  authoring cards decide the size).
+- **Decision: the roster is a drawer, not a floating panel.** A drawer is the HUD's one pattern for
+  a list beside the board (the room, the Visuals rail), joins the free-span logic that keeps the
+  hint bar and toasts clear, and costs nothing while closed. It is 304 px, narrower than the 396
+  token, because it is a list; at 1280x720 Auto it ends left of the board centre.
+
 ## Verdicts
 
 The user's decisions about the interface, newest last. They outrank every rule above; a card

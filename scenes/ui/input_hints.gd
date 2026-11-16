@@ -33,6 +33,8 @@ extends CanvasLayer
 ## open or close (DrawerContainer.WATCHERS), an obstacle when it shows or hides; a window
 ## resize and a change of chips refit it too.
 
+## The group the bar is in, for the toast column to find it.
+const GROUP := &"input_hints_bar"
 ## The hints stay this long with no change, then the bar fades (it comes back when the hints
 ## change, or when the pointer goes to the bottom edge).
 const IDLE_S := 20.0
@@ -84,6 +86,7 @@ func _ready() -> void:
 	_bar.offset_transform_position = Vector2(0.0, SLIDE_DISTANCE)
 	_backdrop.offset_transform_enabled = true
 	add_to_group(DrawerContainer.WATCHERS)
+	add_to_group(GROUP)
 	get_viewport().size_changed.connect(on_drawers_moved, CONNECT_DEFERRED)
 	_idle_timer = Timer.new()
 	_idle_timer.name = "IdleTimer"
@@ -91,6 +94,14 @@ func _ready() -> void:
 	_idle_timer.wait_time = IDLE_S
 	_idle_timer.timeout.connect(_fade_idle)
 	add_child(_idle_timer)
+
+
+## The y of the bar's top edge while it is on show, INF while it is hidden or faded: the toast
+## column lifts itself above it (ToastContainer._process), so the two never overlap.
+func top_edge() -> float:
+	if not _bar_shown or _idle_faded:
+		return INF
+	return _backdrop.get_global_rect().position.y
 
 
 ## The pointer going to the bottom edge, where the bar stands, brings a faded bar back.

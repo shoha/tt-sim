@@ -144,6 +144,29 @@ func test_the_roster_stays_left_of_the_board_centre_at_720p() -> void:
 	assert_lt(TokenRoster.WIDTH + 44.0, 914.0 / 2.0)
 
 
+## Thirty tokens scroll inside the drawer and its card stays on screen: the panel never grows
+## past the height it was given (a wrapping label's transient minimum once pushed the card off
+## the bottom edge, found in the first capture).
+func test_thirty_tokens_scroll_and_the_card_stays_in_the_drawer() -> void:
+	var tokens: Array = []
+	for i in 30:
+		tokens.append(_token("Token %d" % i, "id%d" % i))
+	var host := Control.new()
+	host.theme = ThemeColors.glass_theme()
+	add_child_autofree(host)
+	var roster := TokenRoster.new()
+	host.add_child(roster)
+	roster.size = Vector2(1920, 1080)
+	roster.setup(func() -> Array: return tokens, Callable(), func() -> bool: return true)
+	roster.reveal()
+	roster.open()
+	roster.pick_row(2)
+	await wait_frames(30)
+	var card := roster.find_child("SelectedCard", true, false) as Control
+	assert_true(card.visible)
+	assert_lte(card.get_global_rect().end.y, 1080.0, "the card ends inside the drawer's height")
+
+
 # -- Toasts --------------------------------------------------------------------------------------
 
 
@@ -168,6 +191,20 @@ func test_a_long_sequence_keeps_the_stack_short() -> void:
 	for i in 11:
 		toasts.show_toast("Toast number %d" % i, ToastContainer.ToastType.INFO, 30.0)
 	assert_eq(toasts._active_toasts.size(), ToastContainer.MAX_VISIBLE_TOASTS)
+
+
+## Good news never pushes an error off the stack unread: the oldest non-error makes room.
+func test_an_error_outlasts_a_run_of_other_toasts() -> void:
+	var toasts: ToastContainer = TOAST_SCENE.instantiate()
+	add_child_autofree(toasts)
+	toasts.show_toast("It failed. Try again.", ToastContainer.ToastType.ERROR, 30.0)
+	for i in 8:
+		toasts.show_toast("Saved %d" % i, ToastContainer.ToastType.SUCCESS, 30.0)
+	assert_eq(toasts._active_toasts.size(), ToastContainer.MAX_VISIBLE_TOASTS)
+	var kept := false
+	for toast: Control in toasts._active_toasts:
+		kept = kept or toast.get_meta(ToastContainer.TYPE_META) == ToastContainer.ToastType.ERROR
+	assert_true(kept, "the error is still up")
 
 
 ## A toast arrives sliding SLIDE_PX on its offset transform (M3) and dismisses by timer.
@@ -224,6 +261,18 @@ func test_the_hint_bar_fades_when_idle_and_returns_on_a_change() -> void:
 	assert_true(hints._idle_faded)
 	hints.set_hints([{"key": "Esc", "action": "Pause"}, {"key": "F1", "action": "Help"}])
 	assert_false(hints._idle_faded, "a changed hint wakes the bar")
+
+
+## A tool's own hints are how the tool is used: they never fade.
+func test_the_bar_reports_its_top_edge_only_while_shown() -> void:
+	var hints: InputHints = HINTS_SCENE.instantiate()
+	add_child_autofree(hints)
+	assert_eq(hints.top_edge(), INF, "no hints, no bar")
+	hints.set_hints([{"key": "Esc", "action": "Pause"}])
+	await wait_frames(2)
+	assert_lt(hints.top_edge(), INF)
+	hints._fade_idle()
+	assert_eq(hints.top_edge(), INF, "a faded bar blocks nothing")
 
 
 ## A tool's own hints are how the tool is used: they never fade.

@@ -567,10 +567,14 @@ which may only fall): `drawer_container.gd` 12 overrides, `download_queue.gd` / 
   Decide with the owner whether authoring (play stopped, no
   table) is paper rather than glass (UI_TASTE "Paper or glass is chosen by use"). Many drawer
   panes still set theme overrides in code (`drawer_container.gd`).
-- **Gameplay HUD:** glass is right here (play continues), but the toasts and hint bar are
-  low-contrast small chips over a bright board, the top-right camera disc cluster and the
-  right rail carry no labels, and `Add token` is the lone bottom-right button with no
-  relation to the rail. Toast text and icon sizes are at the 14 px floor.
+- **Gameplay HUD** (card ui-hud, 2026-11-15; the audit is in `docs/research/2026-11-09-prototypes/compare/painter_ui4_hud/notes.md`):
+  glass is right here (play continues). Done: a token roster drawer (T) to find and select a
+  token, toasts that slide, count repeats and pause under the pointer (24 px kind icons), a hint
+  bar that fades once taught, and 40 px bottom actions with an icon and a tooltip each.
+  Roles only: the roster takes `CardStrip` / `CardStripSelected`, `Caption`, `H3`, `Ghost` and
+  `ProgressSuccess` / `ProgressDanger`; it adds no theme entry and no override (the bypass
+  baseline is unchanged). Still open: the right rail's 36 px items (a `DrawerContainer`
+  primitive shared with authoring) and labels on the rail and camera cluster.
 - **Shared:** title, room, pause and confirms are already paper on the sky and need only the
   per-card polish above; the avatar builder and asset browser (glass over play) were not
   audited in this pass beyond their capture.

@@ -263,7 +263,16 @@ UIManager.show_undo_toast('Removed "Marigold"', undo_callable)
   is longer (`ToastContainer.reading_seconds()`: 1.5 s, then three words a second; a 31-word
   save error stays about 12 s)
 - Maximum 5 visible at once (oldest dismissed)
-- Animated slide-in/out
+- Arrival is a fade with a 10 px slide up on `offset_transform_position`
+  (`ToastContainer.SLIDE_PX`, `UiMotion.PANEL_IN_S` 0.22 s, `ARRIVE_TRANS`; M3: the column never
+  re-sorts); departure fades with a 5 px slide, `PANEL_OUT_S` 0.16 s, no overshoot. Reduce motion
+  keeps the fade (at most 0.12 s) and drops the slide
+- Each toast owns its `DismissTimer`. The pointer on a toast pauses it (`mouse_entered`), and
+  leaving gives it at least `HOVER_GRACE_S` (1 s) more, so a toast being read or aimed at (Undo)
+  never leaves under the pointer. A toast being dismissed stops taking the pointer
+- The same words and kind again (without an action) join the toast already up: it counts
+  ("x3", a `Count` caption at its end) and restarts its timer, instead of a second chip stacking
+- The kind icon is 24 px (`ICON_SIZE`), tinted with the kind's role; the words stay Body 16
 - Does not block input
 
 ---
@@ -363,6 +372,31 @@ toward its token. Owner verdict 2026-11-04: both on. The orbit view is unchanged
 
 ---
 
+## Token Roster
+
+`TokenRoster` (`scenes/states/playing/token_roster.gd`, a `DrawerContainer` in rail mode on the
+left edge, 304 px wide: a list, not a pane, so with its 44 px rail it ends left of the board
+centre of a 914 px canvas) is the HUD's way to find a token. The rail item (a chess piece,
+tooltip "Tokens (T)") shows while a map is on the table, for the GM and for players; T opens and
+closes it when nothing else takes the key (the room drawer's rules). The room drawer's handle
+moved down to 64 px to make room, and opening one of the two closes the other.
+
+- Rows come from `TokenRosterModel.rows()` (pure, tested): a player sees only tokens the GM has
+  not hidden (G14) and finds the ones they control first under a "Yours" label; the GM sees every
+  token, hidden ones marked by the `circle-off` icon and ", hidden" in the words. Names sort
+  case-insensitive and natural ("Goblin 2" before "Goblin 10").
+- A row is 52 px: a selection strip (`CardStrip`, `CardStripSelected` with the on-selected text
+  roles), a transparent Ghost button over it for hover, focus and the press, and the name and the
+  health in words ("HP 12/40", "Down") over both. The bar of the foot card turns to the danger
+  role at 40% of the maximum or under, and the words say it (C7).
+- A press selects the row, centres the camera on the token (`GameMap.focus_camera_on`, the double
+  click's path) and pulses its glow for `PULSE_S`. A row under the pointer or focus lights its token
+  on the board while it is held. The foot card (name, health, bar) offers Find on map (centre and
+  pulse again) and Actions (opens the token's own menu beside the drawer).
+- The GM's drawer header carries Add token (the same browser as the bottom-right button). The
+  list is read again every `REFRESH_S` while the drawer is open and not while closed.
+- Probe handles: `pick_row(index)`, `row_count()`, `row_node(id)`.
+
 ## Input Hints
 
 Contextual keybinding hints in a bar at the bottom centre of the screen (`InputHints`,
@@ -419,6 +453,11 @@ Contextual keybinding hints in a bar at the bottom centre of the screen (`InputH
   `_exit_tree` clears the hints and the street flag so the next map starts in the orbit view.
   Tests: `test_input_hints.gd` (the bar), `test_eye_view.gd` (the HUD's reset and exit);
   `jobs/eyehints_look.json` takes the look.
+- **Idle fade (2026-11-15, card ui-hud).** The bar teaches, so it steps back once taught: the
+  backdrop fades out (`UiMotion.PANEL_OUT_S` x 2) after `IDLE_S` (20 s) with the hints unchanged,
+  and returns (`PANEL_IN_S`) when the hints change (a tool, a view, a drawer) or when the pointer
+  enters the bottom `WAKE_BAND_PX` (96 px) of the canvas. A tool's own hints never fade. The bar's
+  slide in and out is unchanged. F1 Help always lists every key.
 
 ### Usage
 

@@ -116,6 +116,11 @@ func _build_content() -> void:
 	_empty_label = Label.new()
 	_empty_label.theme_type_variation = &"Caption"
 	_empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# A wrapping label asks for a tall minimum while its width is unknown, and a drawer panel
+	# that has grown to it never shrinks back: give it the column's width and keep it hidden
+	# until the list is read.
+	_empty_label.custom_minimum_size.x = WIDTH - 40.0
+	_empty_label.visible = false
 	_empty_label.text = tr("Tokens you add to the table are listed here. Press one to find it.")
 	content_container.add_child(_empty_label)
 
