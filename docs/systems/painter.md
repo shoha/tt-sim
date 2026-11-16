@@ -1170,6 +1170,44 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   tick); slate tongues are dark navy dabs; a bare tongue still keeps the blanket's rounded
   shading; half-timber roofs show little colour; winter walls are bluer but still grey-violet.
 
+## Fire and events (painter-fire, 2026-11-15)
+
+Fire and the terrain events were built against Classic's assets; under Painted they were checked event
+by event (findings: `docs/research/2026-11-09-prototypes/compare/painter_final25_fire/findings.md`).
+
+- **Trees an event takes.** A painted tree is a few instances in a 5 m cell's five nodes, so an event
+  cannot move or burn it in place. `PainterTrees.take(position, parent, burning)` (the work is in
+  `painter/trees/tree_actors.gd`, `PainterTreeActors`) lifts one tree out: its cell is rebuilt without
+  it and the tree is drawn by its own five nodes under a pivot Node3D in the event's parent. ForestFall
+  and FireSweep find the host through the scatter's meta (`PainterTrees.of`, `HOST_META`, never by
+  naming a painter class: the boot graph allows only `render_style.gd`), take the tree where they
+  would hide a GLB tree and draw a stand-in, and move the pivot with their own transform maths. A
+  burning actor draws with the burn shader variants (`painter_tree_{stroke,blockin}{,_bare}_burn`,
+  the `TREE_BURN` define and `painter_tree_burn.gdshaderinc`: `instance uniform float burn`, leaves
+  catch from the foot up and turn ember orange then ash, wood chars, the same 0..1.7 scale as
+  `FireSweep.burn_progress`). The cell's own materials carry no burn code, so Painted trees cost what
+  they did. The host's `sync()` skips held keys; `drop_all(actors)` (the event's `release` and
+  `_exit_tree`) frees the pivots and either restores the tree to its cell or, when its row left the
+  scatter meanwhile (the change landed), erases it. The four burn shaders are warmed with their group
+  (`PainterWarmup`).
+- **The persistent fire on the ground.** `FireLook.bind_glow` binds the fire bake to the terrain's own
+  material only; `FireLook.mirror_glow(target, source)` registers the painted ground material as a
+  mirror (`PainterSurfaces` does so on paint, `unmirror_glow` on release), so the painted ground reads
+  the same `fire_present`, `fire_sim_map`, `fire_sim_rect`. `painter_ground.gdshader` includes
+  `shaders/fire_glow.gdshaderinc` and `burn_ground()` lays the dried band and scorch on the role colours,
+  the char in flat steps of its tone with a noise-broken edge, and a stepped, breathing glow into
+  EMISSION: no soft gradients. Classic is unchanged (`glow_mirrors` is empty there).
+- **Burnt ground as a role.** `PainterGroundRoles` has a sixth role `char` (words `ash`, `char`,
+  `charred`, `cinder`, `scorched`; biome words `burnt`, `burned`, `scorched`), toned from the sheet's
+  `floor` ramp reduced to its luminance in a warm tint (`char_of`), so it follows the mood and the sun
+  but never reads as moss. It has no channel in the RGBA zone map: `PainterSurfaces.char_image(doc)`
+  makes an R8 map only when the document names a burnt biome or an ash surface (else null and
+  `char_present` is false), and the shader takes role 5 over the meadow, floor and shore (not a path).
+- **Not done (gaps).** Structures: no runtime event damages a structure (ForestFall and FireSweep skip
+  them, BridgeCollapse cuts only crossings), so there is no ruin state; a house in a fire front is not
+  burnt (proposal in the findings). Event flames, smoke and the ground burn are Classic effects drawn
+  as they are; they read acceptably in the captures but were not repainted.
+
 ## The painted state signal
 
 `LevelEnvironmentManager.painted_look_changed(state: Dictionary)` is emitted when the painted state

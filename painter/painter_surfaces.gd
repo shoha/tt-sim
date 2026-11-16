@@ -657,19 +657,12 @@ func _tone_ground(sheet: Dictionary, mood: String, elevation: float) -> void:
 		var ramp := PainterTones.ramp(
 			sheet, mood, PainterGroundRoles.TONE_ROLE[role], elevation, "ground-"
 		)
-		var scale := PainterGroundRoles.CHAR_SCALE if role == "char" else Vector3.ONE
-		lit.append_array(
-			[
-				PainterTones.linear(ramp[2]) * scale,
-				PainterTones.linear(ramp[5]) * scale,
-			]
-		)
-		shade.append_array(
-			[
-				PainterTones.linear(ramp[0]) * scale,
-				PainterTones.linear(ramp[3]) * scale,
-			]
-		)
+		var colors: Array[Vector3] = []
+		for at: int in [2, 5, 0, 3]:
+			var c := PainterTones.linear(ramp[at])
+			colors.append(PainterGroundRoles.char_of(c) if role == "char" else c)
+		lit.append_array([colors[0], colors[1]])
+		shade.append_array([colors[2], colors[3]])
 	var num := func(prop: String) -> float: return PainterSheet.number(sheet, mood, prop, elevation)
 	var tone := func(role: String) -> Vector3:
 		return PainterTones.linear(PainterSheet.tone(sheet, mood, role, elevation))

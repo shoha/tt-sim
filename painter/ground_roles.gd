@@ -35,8 +35,9 @@ const TONE_ROLE: Dictionary = {
 	"shore": "shore",
 	"char": "floor",
 }
-## What the floor's linear colours are multiplied by for the burnt ground: a warm charcoal.
-const CHAR_SCALE := Vector3(0.38, 0.3, 0.26)
+## The tint the floor's luminance takes for the burnt ground (char_of): a warm charcoal, never the
+## floor's green.
+const CHAR_TINT := Vector3(0.62, 0.5, 0.44)
 const DEFAULT_ROLE := "meadow"
 ## [role, words], first match wins (see the header). The char role is the burnt ground: the
 ## event fire's ash surface and its burnt biome (FireSweep.ASH, BURNT_BIOME).
@@ -83,6 +84,13 @@ static func surface_role(surface_id: String) -> String:
 ## rule knows it).
 static func biome_role(biome_id: String) -> String:
 	return _role(BIOME_RULES, biome_id)
+
+
+## The burnt ground's linear colour for the floor's `color` (linear): its luminance in CHAR_TINT, so
+## the mood and the sun still light it and the green is gone.
+static func char_of(color: Vector3) -> Vector3:
+	var l := color.dot(Vector3(0.3, 0.59, 0.11))
+	return Vector3(l, l, l) * CHAR_TINT
 
 
 ## The index in SURFACE_RULES that resolves `surface_id`, or -1 when it falls to DEFAULT_ROLE.

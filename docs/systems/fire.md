@@ -419,6 +419,14 @@ saved). Performance:
 run and missed in the two before; CPU 0.002 ms; a stroke 1.8-3.6 ms on the main thread); "Fire
 (F4): pinned performance pass" and its subsections measured the look before the port.
 
+## Under the Painted look
+
+The persistent fire's ground bake and the event fire's trees work under Painted (card painter-fire,
+2026-11-15): the painted ground mirrors the terrain's bake (`FireLook.mirror_glow`) and paints the
+char and glow in its own stepped manner, and a tree FireSweep burns is a painted tree lifted out of
+its cell (`PainterTrees.take`) and drawn with the burn shader variants. Details and gaps:
+[painter.md](painter.md) "Fire and events".
+
 ## Open work
 
 See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".
