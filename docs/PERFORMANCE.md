@@ -6223,14 +6223,34 @@ mask marked: only the ring outside the union of the meshes survives. The covered
 self-occlusion bounds and the budget are unchanged. Cost: TWO draw calls per mesh of a dressed
 token instead of one (about 36 for an avatar; at the cap of 16 dressed avatars about 576 extra
 draw calls against about 288 before); the vertex work doubles with them, the fragment work is smaller than
-before (a thin ring instead of a filled silhouette). No millisecond figure was measured on this
-card (the lane was busy for two 9-minute waits at the end): the pinned interleaved A/B is ready
-as `tools/render_jobs/local/painter-look-ghost2/cost.json` (new, old and no ghost, pins Always and
-Top-down, three rounds, framed and home view at pitch 25; the local job and its `ghost.gd` probe
-are gitignored: rebuild from the card notes) and must run before shipping. The mask leaves the
-nearest depth under a token's pixels for the transparent passes drawn after it: checked with
-alpacas wading a river (the water draws over their submerged bodies as before); a rapid is the
-tallest step the test map had, no waterfall was checked.
+before (a thin ring instead of a filled silhouette).
+
+Measured (2026-11-15, lane, in-run interleaved A/B, vsync off, 1920x1080 window, painted look,
+forest level, 18 tokens so the 16-token cap is hit, pitch 25, 3 rounds, each state 1.5 s settle
+plus 2.5 s measured, order new/old/off/new-top-down/off-top-down; median of the 3 round medians,
+rounds agree within 0.03 ms; raw: `compare/painter_final24_ghost2/cost/log.txt`, job copy in
+`.../jobs/cost.json`). Old = the pre-card ghost shader, one draw per mesh; off = no ghost.
+
+| State | Framed (zoom 8) GPU ms | draw calls | Home GPU ms | draw calls |
+|---|---|---|---|---|
+| Ghost off, pins Always | 2.875 | 394 | 3.033 | 626 |
+| Ghost off, pins Top-down only | 2.873 | 393 | 3.031 | 625 |
+| Old ghost, pins Always | 2.945 | 465 | 3.066 | 695 |
+| New ghost, pins Always | 2.942 | 535 | 3.079 | 764 |
+| New ghost, pins Top-down only | 2.934 | 534 | 3.079 | 763 |
+
+The new ghost costs -0.003 ms (framed) and +0.013 ms (home) over the old one, and +0.07 / +0.05
+ms over no ghost, for +70 draw calls over the old ghost (141 over none; 54 token meshes on screen,
+the dressed ones at most 16 tokens). The two-pass doubling of draws is real but small in
+GPU time here because the ring is thin and the meshes are few triangles. Pins Always against
+Top-down only: no GPU difference (0.002 ms off, 0.008 ms with the ghost, both inside the noise)
+and one draw call. The pins' per-frame CPU (all tokens read and sorted) was not timed
+separately: the frame is GPU bound at these numbers and 18 tokens is a small loop, but no
+CPU millisecond figure exists for it, nor for a 100-token map.
+
+The mask leaves the nearest depth under a token's pixels for the transparent passes drawn after
+it: checked with alpacas wading a river (the water draws over their submerged bodies as before);
+a rapid is the tallest step the test map had, no waterfall was checked.
 
 The line: the whole ring the push-out leaves is the line (an earlier version cut it with a
 distance estimate and came out dashed and half as wide). The default style, DOUBLE, is 1.5 px

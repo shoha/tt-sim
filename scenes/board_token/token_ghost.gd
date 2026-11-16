@@ -334,7 +334,14 @@ static func stroke_colours(vivid: Color, highlighted: bool, double: bool) -> Dic
 	if not double:
 		return {"line": base, "inner": base}
 	var dark := Color.from_hsv(base.h, minf(base.s + 0.15, 1.0), 0.22)
-	return {"line": dark, "inner": base.lerp(Color.WHITE, 0.6)}
+	# A leaf-green token seen through leaves: its light core goes near white, the one tone the
+	# foliage does not have.
+	var leafy := (
+		base.s > 0.25
+		and base.h > TokenColours.FOLIAGE_HUE_MIN
+		and base.h < TokenColours.FOLIAGE_HUE_MAX
+	)
+	return {"line": dark, "inner": base.lerp(Color.WHITE, 0.85 if leafy else 0.6)}
 
 
 ## Sets the overlay's stroke: colours and widths from the style and the token's highlight.
