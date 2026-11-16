@@ -71,7 +71,8 @@ func test_the_rail_lists_the_registry_s_rail_tools_in_order() -> void:
 			ResourceLoader.exists("res://assets/icons/ui/%s.svg" % tool.icon),
 			"%s's icon exists" % tool.id
 		)
-		assert_eq(button.tooltip_text, tool.rail_tip())
+		assert_eq(button.tooltip_text, tool.rail_tip(true))
+		assert_eq(button.get_node("ItemKey").text, tool.shortcut_label(), "the key in its corner")
 
 
 func test_every_authoring_rail_button_has_a_tooltip() -> void:
@@ -219,4 +220,4 @@ func test_a_tool_with_an_unavailable_tooltip_says_why_on_the_rail() -> void:
 		assert_eq(button.tooltip_text, tool.unavailable_tooltip)
 		panel.set_tool_available(tool.id, true)
 		assert_false(button.disabled)
-		assert_eq(button.tooltip_text, tool.rail_tip())
+		assert_eq(button.tooltip_text, tool.rail_tip(true))

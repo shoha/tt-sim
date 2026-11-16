@@ -18,7 +18,8 @@ func _init() -> void:
 	summary = "Rivers, streams and ponds."
 	icon = "droplet"
 	brush_mode = WaterBrush
-	shortcut = KEY_L
+	shortcut = KEY_H  # H for H2O (W is the camera's)
+	slot = 5
 	contexts = AUTHORING | PLAY
 	# River and Pond are the one tool's two shapes; Crossing is the Bridge tool.
 	tabs = [

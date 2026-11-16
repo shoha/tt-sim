@@ -555,6 +555,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		# its last tab, and the letter pressed again steps to the hub's next tab. The panel's pick
 		# signals the controller back (_on_tool_selected).
 		var tool := ToolRegistry.for_shortcut(event, ToolDescriptor.AUTHORING)
+		if tool == null:
+			tool = ToolRegistry.for_digit(event, ToolDescriptor.AUTHORING)
 		if tool != null and tool.on_rail:
 			panel.pick_rail_tool(tool.id)
 			get_viewport().set_input_as_handled()

@@ -44,7 +44,8 @@ func _init() -> void:
 	summary = "Shape the ground."
 	icon = "mountain"
 	brush_mode = SculptBrush
-	shortcut = KEY_H
+	shortcut = KEY_T  # T for terrain (the token roster's T is the play state's)
+	slot = 3
 	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [["Shift + Left Drag", "Smooth the ground (Sculpt, any tile)"]]

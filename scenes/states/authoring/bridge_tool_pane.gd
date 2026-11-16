@@ -43,14 +43,15 @@ const KIND_TILES: Array[Dictionary] = [
 		"A ford: a gravel bar just under the surface with marker stones, for wading across",
 	},
 ]
-const HINT := (
-	"Drag a line across a river or pond, from one bank to the other: the crossing finds the"
-	+ " banks and sizes itself. Bridges cross calm water, not a waterfall. Arches cross like"
-	+ " planks; a ford needs wadeable water (its width runs along the river). Shift + scroll or"
-	+ " [ and ] set its width. Hold Ctrl and click a crossing to remove it. A crossing follows"
-	+ " later edits to its banks and goes when its water does."
+## The lead says enough to start; HINT_MORE (behind "More") is the rest.
+const HINT := "Pick a crossing, then drag across a river or pond, from one bank to the other."
+const HINT_MORE := (
+	"The crossing finds the banks and sizes itself. Bridges cross calm water, not a waterfall."
+	+ " Arches cross like planks; a ford needs wadeable water (its width runs along the river)."
+	+ " Shift + scroll or [ and ] set its width. Hold Ctrl and click a crossing to remove it. A"
+	+ " crossing follows later edits to its banks and goes when its water does."
 )
-const NO_WATER_HINT := "Make a river or a pond with the Water tool first, then drag across it here."
+const NO_WATER_HINT := "No water to cross yet: make a river or a pond on the Water tab first."
 
 var kind_field: TileField
 
@@ -66,8 +67,13 @@ func _init() -> void:
 	header.name = "BridgeHeader"
 	header.setup("Bridge", "Cross water on planks, stones, an arch or a ford.")
 	add_child(header)
+	# With no water to cross, the line that says so leads; the usual lead takes its place after.
+	_water_hint = _caption("BridgeWaterHint", NO_WATER_HINT)
+	_water_hint.visible = false
+	add_child(_water_hint)
 	_hint = _caption("BridgeHint", HINT)
 	add_child(_hint)
+	add_child(AuthoringChrome.more_foldout("BridgeHintMore", HINT_MORE))
 	kind_field = TileField.new()
 	kind_field.name = "BridgeKindField"
 	kind_field.caption = "Crossing"
@@ -85,9 +91,6 @@ func _init() -> void:
 					kind_selected.emit(int(tile.kind))
 	)
 	add_child(kind_field)
-	_water_hint = _caption("BridgeWaterHint", NO_WATER_HINT)
-	_water_hint.visible = false
-	add_child(_water_hint)
 
 
 ## Selects a kind tile without emitting kind_selected.
@@ -100,6 +103,7 @@ func select_kind(kind: int) -> void:
 ## Shows the line saying to make water first while the map has none.
 func set_has_water(has_water: bool) -> void:
 	_water_hint.visible = not has_water
+	_hint.visible = has_water  # with no water the line saying so is the lead
 
 
 func _caption(node_name: String, text: String) -> Label:

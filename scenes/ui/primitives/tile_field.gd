@@ -18,6 +18,7 @@ const OVERRIDE_TOOLTIP := "Overridden. Right-click to reset to the preset value.
 		caption = value
 		if _caption:
 			_caption.text = value
+			_caption.visible = value != ""
 
 @export var overridden: bool = false:
 	set(value):
@@ -61,6 +62,7 @@ func _ready() -> void:
 	_caption.theme_type_variation = &"Caption"
 	_caption.mouse_filter = Control.MOUSE_FILTER_STOP
 	_caption.gui_input.connect(_on_caption_gui_input)
+	_caption.visible = caption != ""  # a field with no caption leaves no empty line
 	add_child(_caption)
 	add_child(tiles)
 	_place_note()

@@ -14,19 +14,15 @@ signal dismissed
 
 const TITLE := "Your first strokes"
 const BODY := "Pick Biome or Place on the left, then drag across the map to paint it."
-const KEYS := (
-	"Each of the seven tools has a key, shown on hover; Water and Build have tabs inside."
-	+ " Right-click puts the brush down. F1 lists every key."
-)
+const KEYS := "Keys 1 to 7 pick a tool; F1 lists them all."
 const BUTTON := "Got it"
-## The card's widest, so its wrapped lines stay short beside the drawer.
-const MAX_WIDTH := 420.0
-## Its distance from the top edge of the screen: below the actions pill, which stands at the top
-## beside the rail and the card.
-const TOP_MARGIN := 84.0
-## How far right of the window's centre it stands: the rail and the card take the board's left, so
-## its centre has moved right by about half of that (the rail is one column since ui-authoring3).
-const BOARD_SHIFT := 190.0
+## The card's widest, so its wrapped lines stay short.
+const MAX_WIDTH := 340.0
+## Its distance from the top edge of the screen: below the camera compass, in the board's top right
+## corner, where it covers neither the middle of the board nor the drawer.
+const TOP_MARGIN := 150.0
+## Its distance from the right edge of the window.
+const RIGHT_MARGIN := 24.0
 
 var _fade: Tween
 
@@ -37,12 +33,11 @@ func _init() -> void:
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	custom_minimum_size = Vector2(MAX_WIDTH, 0)
-	set_anchors_preset(Control.PRESET_CENTER_TOP)
-	grow_horizontal = Control.GROW_DIRECTION_BOTH
+	set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	offset_top = TOP_MARGIN
-	# Centred on the board beside the rail (two columns wide), not on the window.
-	offset_left = BOARD_SHIFT
-	offset_right = BOARD_SHIFT
+	offset_right = -RIGHT_MARGIN
+	offset_left = -RIGHT_MARGIN - MAX_WIDTH
 	var column := VBoxContainer.new()
 	column.theme_type_variation = &"BoxContainerSnug"
 	add_child(column)

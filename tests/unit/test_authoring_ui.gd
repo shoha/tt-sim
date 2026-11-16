@@ -123,7 +123,7 @@ func test_tooltips_carry_the_keys() -> void:
 	for tool in ToolRegistry.rail_tools(ToolDescriptor.AUTHORING):
 		var tip: String = panel._rail._buttons[tool.id].tooltip_text
 		assert_true(tip.begins_with(tool.label), "%s names itself first: %s" % [tool.id, tip])
-		assert_string_contains(tip, "(%s)" % tool.shortcut_label())
+		assert_string_contains(tip, "(%s or %d)" % [tool.shortcut_label(), tool.slot])
 
 
 # -- The tool's state and its option pane ----------------------------------------------------

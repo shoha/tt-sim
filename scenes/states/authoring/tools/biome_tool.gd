@@ -13,9 +13,10 @@ func _init() -> void:
 	id = ID
 	label = "Biome"
 	summary = "Paint a place onto the map."
-	icon = "trees"
+	icon = "landscape"
 	brush_mode = BiomeBrush
 	shortcut = KEY_B
+	slot = 1
 	contexts = AUTHORING | PLAY
 
 

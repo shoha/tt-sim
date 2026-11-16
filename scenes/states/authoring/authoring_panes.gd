@@ -9,6 +9,21 @@ extends RefCounted
 ## keeps the gestures behind More and the strength behind Advanced.
 
 
+## Hides a pane's own title: the card's title row (AuthoringTitleRow) names the tool, and the pane
+## keeps its one-line summary.
+static func hide_titles(pane: Control) -> void:
+	# A pane with its own lead line (a direct "...Hint" caption) gets one lead only: the header's
+	# summary would be a second, saying the same in other words.
+	var has_lead := false
+	for child in pane.get_children():
+		if child is Label and String(child.name).ends_with("Hint") and (child as Label).visible:
+			has_lead = true
+	for header: Node in pane.find_children("*", "MenuHeader", true, false):
+		(header as MenuHeader).title_label.visible = false
+		if has_lead:
+			(header as MenuHeader).caption_label.visible = false
+
+
 ## A wrapped caption line saying a pane's gestures.
 static func hint(hint_name: String, text: String) -> Label:
 	return AuthoringChrome.help_label(hint_name, text)
@@ -45,6 +60,28 @@ static func _column(pane_name: String, header_name: String, tool: ToolDescriptor
 	return pane
 
 
+## Water: WaterToolPane, its signals relayed (a river's Width row sets the brush radius; a pond has
+## the Size row).
+static func water(panel: AuthoringPanel) -> Control:
+	var pane := WaterToolPane.new()
+	panel.water_pane = pane
+	pane.set_pond_row(panel.build_size_row("Pond"))
+	pane.depth_selected.connect(func(depth: int) -> void: panel.water_depth_selected.emit(depth))
+	pane.speed_changed.connect(func(speed: float) -> void: panel.water_speed_changed.emit(speed))
+	pane.width_changed.connect(
+		func(width: float) -> void: panel.brush_size_changed.emit(width * 0.5)
+	)
+	return pane
+
+
+## Bridge: BridgeToolPane, its kind tiles relayed.
+static func bridge(panel: AuthoringPanel) -> Control:
+	var pane := BridgeToolPane.new()
+	panel.bridge_pane = pane
+	pane.kind_selected.connect(func(kind: int) -> void: panel.bridge_kind_selected.emit(kind))
+	return pane
+
+
 ## Biome: the size row, the gesture behind More, the nine biome tiles and the Advanced foldout.
 static func biome(panel: AuthoringPanel, tool: ToolDescriptor) -> Control:
 	var pane := _column("BiomePane", "BiomeHeader", tool)
@@ -62,7 +99,9 @@ static func biome(panel: AuthoringPanel, tool: ToolDescriptor) -> Control:
 	more.move_child(more.get_child(more.get_child_count() - 1), 0)
 	var field := TileField.new()
 	field.name = "BiomeField"
-	field.caption = "Biomes"
+	# No caption (the card's title says Biome) and labels that wrap between words: three columns
+	# of nine tiles are three rows, so the picker, More and Advanced fit a 720p card.
+	field.tiles.wrap_labels = true
 	field.tiles.photo_icons = true
 	field.tiles.tile_min_size = AuthoringPanel.BIOME_TILE_SIZE
 	field.tiles.columns = AuthoringPanel.BIOME_COLUMNS
@@ -96,6 +135,7 @@ static func place(panel: AuthoringPanel, tool: ToolDescriptor) -> Control:
 		"Pick one, then click the map. Drag while pressed to turn it.",
 		"Over a placed one, Shift + scroll resizes it and right-click or Delete removes it."
 	)
+	var foldouts: Array[Foldout] = []
 	for entry in PaletteLibrary.biomes(panel.palette_root):
 		var biome_id := String(entry["id"])
 		var groups := AuthoringPanel.place_species(biome_id, panel.palette_root)
@@ -125,10 +165,32 @@ static func place(panel: AuthoringPanel, tool: ToolDescriptor) -> Control:
 			)
 		row.selection_changed.connect(panel._on_place_tile.bind(row))
 		foldout.add_child(row)
-		pane.add_child(foldout)
+		foldouts.append(foldout)
 		panel.place_rows[biome_id] = row
 		panel._place_foldouts[biome_id] = foldout
+	# The map's current biome (the Biome tool's pick: AuthoringPanel.select_biome moves its group
+	# here) leads, open; the other biomes are a closed switcher under a caption.
+	var others := AuthoringChrome.help_label("PlaceOthers", "Other biomes")
+	panel._place_others = others
+	for i in foldouts.size():
+		if i == 1:
+			pane.add_child(others)
+		pane.add_child(foldouts[i])
 	return pane
+
+
+## Moves the Place group `chosen` to the lead, just above the "Other biomes" caption `others`; the
+## group that led drops under the caption, closed.
+static func lead_place(others: Control, chosen: Foldout) -> void:
+	if others == null or others.get_parent() != chosen.get_parent():
+		return
+	var pane := chosen.get_parent()
+	var at := others.get_index()
+	var lead := pane.get_child(at - 1) as Foldout
+	if lead != chosen:
+		lead.expanded = false
+		pane.move_child(lead, at)
+		pane.move_child(chosen, at - 1)
 
 
 ## Sculpt: four tiles (Raise, Smooth, Flatten, Tier), Raise preselected; the gestures and

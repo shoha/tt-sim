@@ -24,15 +24,17 @@ const FIT_HEIGHT := true
 ## with the rail's own 4 px either side it reads as 18 px, and the rail is about 420 px tall.
 const RAIL_ITEM_SIZE := 52.0
 const RAIL_GROUP_GAP := 10.0
-## The pill's buttons: 46 px squares (43 real px at 720p); the word "Unsaved" under Save fits one.
-const ACTION_ITEM_SIZE := 46.0
+## The pill's buttons: 56 px squares (52 real px at 720p); the word under Save and Leave is 14 px
+## (the T2 floor), and "Unsaved" fits one.
+const ACTION_ITEM_SIZE := 56.0
 
 ## Keys that other things already own, which a rail tool's letter must never be (a test checks the
-## seven descriptors' shortcuts against it): WASD, C, M, G, R, Q, E, V, O and T are the camera, the
-## measure tool, the brush's own keys and the roster (docs/UI_SYSTEMS.md "Map building chrome" has
-## the final list: B, P, H, I, L, U, F).
+## seven descriptors' shortcuts against it): WASD, C (camera reset), M, G, R, Q, E, V and O are the
+## camera, the measure tool and the brush's own keys (docs/UI_SYSTEMS.md "Map building chrome" has
+## the final list: B Biome, P Place, T Terrain, K Paint, H Water, U Build, F Fire). T is the token
+## roster's too, but the roster is the play state's drawer and is not up while building.
 const TAKEN_LETTERS: Array[Key] = [
-	KEY_W, KEY_A, KEY_S, KEY_D, KEY_C, KEY_M, KEY_G, KEY_R, KEY_Q, KEY_E, KEY_V, KEY_O, KEY_T
+	KEY_W, KEY_A, KEY_S, KEY_D, KEY_C, KEY_M, KEY_G, KEY_R, KEY_Q, KEY_E, KEY_V, KEY_O
 ]
 
 ## The card's opacity while a brush is down on the board (it steps back, the stroke shows).
@@ -40,6 +42,8 @@ const STROKE_DIM := 0.3
 
 ## The word under Save while there is anything to save (with the dot): the cue says it in text.
 const UNSAVED_WORD := "Unsaved"
+## The word under Leave, so the door is not read as a share arrow.
+const LEAVE_WORD := "Leave"
 
 const ACTION_UNDO := &"undo"
 const ACTION_REDO := &"redo"
@@ -59,9 +63,17 @@ const ACTION_ITEMS: Array[Dictionary] = [
 ## Place tiles' icons by words in the species key (the first match wins), so an oak, a birch and a
 ## pine are three pictures; a kind's icon (AuthoringPanel.PLACE_ICONS) is the fallback.
 const PLACE_KEY_ICONS: Array[Dictionary] = [
+	{"words": ["fern"], "icon": "fern"},
+	{"words": ["stump"], "icon": "stump"},
+	{"words": ["log", "deadfall"], "icon": "log"},
+	{"words": ["sapling", "seedling", "sprout"], "icon": "plant"},
+	{"words": ["bush", "shrub", "thicket", "bramble"], "icon": "bush"},
 	{"words": ["pine", "spruce", "fir", "larch", "cedar", "hemlock"], "icon": "christmas-tree"},
-	{"words": ["bush", "shrub", "sapling", "thicket", "fern", "bramble"], "icon": "plant"},
-	{"words": ["boulder", "rock", "stone", "outcrop", "slab", "scree"], "icon": "stone"},
+	{"words": ["boulder"], "icon": "stone"},
+	{"words": ["outcrop", "crag"], "icon": "mountain"},
+	{"words": ["scree", "stones", "cobble"], "icon": "stepping-stones"},
+	{"words": ["stone", "pebble"], "icon": "pebbles"},
+	{"words": ["rock", "slab"], "icon": "rock"},
 	{"words": ["birch", "aspen", "willow", "poplar", "maple", "alder"], "icon": "leaf"},
 	{"words": ["cactus", "agave"], "icon": "cactus"},
 ]

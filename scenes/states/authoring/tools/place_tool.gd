@@ -14,9 +14,10 @@ func _init() -> void:
 	id = ID
 	label = "Place"
 	summary = "Set a hero tree, rock or log."
-	icon = "tree"
+	icon = "map-pin"
 	brush_mode = PlaceBrush
 	shortcut = KEY_P
+	slot = 2
 	# Thin / Clear is Place's erase mode: its own tool and brush, a tab of this one on the rail.
 	tabs = [
 		{

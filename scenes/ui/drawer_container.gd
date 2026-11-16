@@ -79,6 +79,9 @@ const _TAB_BADGE_MARGIN := 4.0
 ## (pane_requested); clicking the active item closes the drawer, subject to
 ## _can_close_from_tab(). Rail width is tab_width (44 fits 36 px items).
 @export var rail_items: Array[Dictionary] = []
+## In fit mode, the most of the board's height the panel may take (1.0: all but the margins); a
+## taller pane scrolls inside it.
+@export_range(0.3, 1.0) var max_height_fraction: float = 1.0
 ## Rail mode: extra items drawn under the pane items after a gap, outside the
 ## single-select group. Same entry shape as rail_items.
 @export var rail_footer_items: Array[Dictionary] = []
@@ -524,6 +527,8 @@ func _build_rail() -> void:
 			_rail.add_gap(rail_group_gap)
 		group = item_group
 		_rail.add_item(item["id"], item["icon"], item.get("tooltip", ""))
+		if item.has("key"):
+			_rail.set_item_key(item["id"], String(item["key"]))
 	_rail.item_pressed.connect(_on_rail_item_pressed)
 	var column := VBoxContainer.new()
 	column.name = "RailColumn"
@@ -600,7 +605,7 @@ func _apply_panel_height(animate: bool = false) -> void:
 		_panel.size.y = size.y
 		_panel.position.y = 0.0
 		return
-	var room := maxf(size.y - tab_top_margin * 2.0, 0.0)
+	var room := minf(maxf(size.y - tab_top_margin * 2.0, 0.0), size.y * max_height_fraction)
 	var target := minf(_fit_px, room) if _fit_px > 0.0 else room
 	_panel.position.y = tab_top_margin
 	if animate and is_open and not UiMotion.reduced() and not is_equal_approx(_panel.size.y, target):

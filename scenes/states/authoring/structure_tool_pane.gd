@@ -13,6 +13,8 @@ signal structure_selected(ref: String)
 signal reroll_requested
 ## "Show hints" was pressed: the key hints the player has outgrown come back.
 signal hints_requested
+## The "Show hints" switch was turned off: every hint goes away.
+signal hints_hidden
 ## The selected building's bar (card S5): a variant tile (the reference), a stepper pressed (the
 ## parameter and -1 or 1), the door, redraw, copy, remove and done buttons.
 signal variant_picked(ref: String)
@@ -66,6 +68,8 @@ const SMALL_TILES_TIP := "Smaller pictures, so more of the list shows at once"
 ## How long the hover card waits before it shows (seconds), so a sweep across tiles stays calm.
 const CARD_DELAY_S := 0.12
 const CARD_PICTURE_PX := 128
+## The foldout that holds the filters and the hints switch: closed, so the first tile row shows.
+const FILTERS_TITLE := "More"
 const HINTS_TEXT := "Show hints"
 const HINTS_TOOLTIP := "Bring back the key hints on the bar, including the ones you have done"
 const REROLL_TOOLTIP := "Draw the next building's look afresh (R); over a building, redraw that one"
@@ -143,6 +147,8 @@ func _init() -> void:
 	theme_type_variation = &"BoxContainerSnug"
 	var header := MenuHeader.new()
 	header.name = "StructureHeader"
+	# The header's summary is the pane's one lead (the gesture line below it said the same and cost
+	# a row of tiles at 720p, so it is built but never shown).
 	header.setup(StructureTool.LABEL, SUMMARY)
 	# The subtitle wraps to the pane's width: a long line must not widen the pane under the rail.
 	header.caption_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -151,19 +157,19 @@ func _init() -> void:
 	_build_place_strip()
 	_build_selection()
 	_hint = _caption("StructureHint", HINT)
+	_hint.visible = false
 	add_child(_hint)
-	# A Ghost button, the theme's link look (the engine's LinkButton colour reads as nothing); it
-	# keeps keyboard focus, and stays when the palette steps aside for a selection.
-	hints_button = Button.new()
+	# A switch: on while the key hints show; on brings every hint back, off puts every one away.
+	# It sits behind More (built with the filters below), keeps keyboard focus.
+	hints_button = CheckButton.new()
 	hints_button.name = "StructureShowHints"
 	hints_button.text = HINTS_TEXT
 	hints_button.tooltip_text = HINTS_TOOLTIP
-	hints_button.theme_type_variation = &"Ghost"
-	hints_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	hints_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	hints_button.button_pressed = true
 	hints_button.focus_mode = Control.FOCUS_ALL
-	hints_button.pressed.connect(hints_requested.emit)
-	add_child(hints_button)
+	hints_button.toggled.connect(
+		func(on: bool) -> void: (hints_requested if on else hints_hidden).emit()
+	)
 	_empty = _caption("StructureEmpty", EMPTY)
 	add_child(_empty)
 	# Search and Mix afresh share one row above the tiles, so neither is lost below 60 of them.
@@ -181,8 +187,10 @@ func _init() -> void:
 	_tools_row.add_child(search_edit)
 	reroll_button = Button.new()
 	reroll_button.name = "StructureReroll"
-	reroll_button.text = "Mix afresh"
+	reroll_button.text = "Vary this one"
 	reroll_button.tooltip_text = REROLL_TOOLTIP
+	# A quiet link, not a raised button with a shadow beside the search.
+	reroll_button.theme_type_variation = &"Ghost"
 	reroll_button.focus_mode = Control.FOCUS_NONE
 	reroll_button.pressed.connect(reroll_requested.emit)
 	_tools_row.add_child(reroll_button)
@@ -412,8 +420,9 @@ func _build_filters() -> void:
 	# row and the first tile row, which must sit above the fold of a 720p card.
 	_filters = Foldout.new()
 	_filters.name = "StructureFilters"
-	_filters.title = "Filter"
+	_filters.title = FILTERS_TITLE
 	add_child(_filters)
+	_filters.add_child(hints_button)
 	_chip_flow = VBoxContainer.new()
 	_chip_flow.name = "StructureChips"
 	_chip_flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -503,7 +512,11 @@ func _update_filters(rows: Array, shown: int) -> void:
 		chip.text = "%s %d" % [item["label"], count]
 		chip.set_pressed_no_signal(id in _active_chips)
 		chip.disabled = count == 0 and not id in _active_chips
-	_filters.title = "Filter (%d)" % _active_chips.size() if not _active_chips.is_empty() else "Filter"
+	_filters.title = (
+		"%s (%d)" % [FILTERS_TITLE, _active_chips.size()]
+		if not _active_chips.is_empty()
+		else FILTERS_TITLE
+	)
 	var filtering := not _active_chips.is_empty() or search_edit.text.strip_edges() != ""
 	clear_button.disabled = not filtering
 	var tally := StructurePalette.tally(shown, rows.size(), filtering)
@@ -588,7 +601,6 @@ func _hide_card() -> void:
 
 ## Shows or hides the palette parts (the hint, the chips, the family tiles, Mix afresh).
 func _show_palette(shown: bool) -> void:
-	_hint.visible = shown
 	for field in family_fields:
 		if is_instance_valid(field):
 			field.visible = shown

@@ -328,11 +328,13 @@ func test_show_hints_brings_the_forgotten_hints_back_and_tells_the_bar() -> void
 	assert_eq(pane.hints_button.text, "Show hints")
 	assert_ne(pane.hints_button.tooltip_text, "")
 	assert_ne(pane.hints_button.focus_mode, Control.FOCUS_NONE, "reachable by keyboard")
-	assert_eq(pane.hints_button.theme_type_variation, &"Ghost", "the theme's link look")
+	assert_true(pane.hints_button is CheckButton, "a real switch, on while the hints show")
+	assert_true(pane.hints_button.button_pressed)
 	for gesture in StructureHints.PLACING:
 		StructureHints.mark(StringName(gesture["id"]))
 	assert_true(tool.key_hints(brush).is_empty(), "every gesture done: the bar steps aside")
-	pane.hints_button.pressed.emit()
+	pane.hints_button.set_pressed_no_signal(false)
+	pane.hints_button.button_pressed = true
 	assert_eq(told[0], 1, "the hint bar is shown again")
 	assert_eq(tool.key_hints(brush).size(), StructureHints.PLACING.size(), "every row is back")
 	StructureHints.reset()
@@ -340,8 +342,12 @@ func test_show_hints_brings_the_forgotten_hints_back_and_tells_the_bar() -> void
 	# A rebuilt pane's connection replaces the first.
 	var again := _pane()
 	tool.connect_selection(brush, again, func() -> void: told[0] += 10)
-	again.hints_button.pressed.emit()
+	again.hints_button.set_pressed_no_signal(false)
+	again.hints_button.button_pressed = true
 	assert_eq(told[0], 11)
+	# Turning the switch off puts every gesture's hint away.
+	again.hints_button.button_pressed = false
+	assert_true(tool.key_hints(brush).is_empty(), "the switch off: the bar steps aside")
 
 
 func _pane() -> StructureToolPane:

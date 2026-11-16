@@ -78,9 +78,9 @@ signal tool_pane_built(tool_id: StringName, pane: Control)
 ## 364 virtual px is about 340 real px in a 1280x720 window; the Wall pane's tiles are the widest
 ## content (a narrower drawer pushed them a pixel past the name field).
 const DRAWER_WIDTH := 364.0
-const BIOME_TILE_SIZE := Vector2(64, 64)
+const BIOME_TILE_SIZE := Vector2(64, 74)
 const BIOME_THUMB_PX := 36
-const BIOME_COLUMNS := 2
+const BIOME_COLUMNS := 3
 ## The extra step over a section label after a hint paragraph (AuthoringPanes.section_gap).
 const SECTION_ABOVE := 8
 const PLACE_TILE_SIZE := Vector2(64, 56)
@@ -159,11 +159,14 @@ var _actions: AuthoringActions
 ## tabs stand for (WaterBrush.Shape).
 var _hub_tabs: Dictionary = {}
 var _hub_last: Dictionary = {}
+var _title_row: AuthoringTitleRow
 var _water_shape: int = WaterBrush.Shape.RIVER
 ## Every Advanced size / strength row, kept in step with the brush.
 var _size_rows: Array[PropertyRow] = []
 var _strength_rows: Array[PropertyRow] = []
 var _place_foldouts: Dictionary = {}
+## The "Other biomes" caption in the Place pane: the current biome's group stands above it.
+var _place_others: Control
 ## Paint tile buttons by surface, and the tooltip each has when it can be picked.
 var _paint_tiles: Dictionary = {}
 var _paint_tooltips: Dictionary = {}
@@ -194,6 +197,9 @@ func _on_ready() -> void:
 	rail_group_gap = AuthoringChrome.RAIL_GROUP_GAP
 	rail_chip = true
 	rail_detached = true
+	# A tall pane (Paint, Buildings) scrolls inside about four fifths of the board, not all of it
+	# (0.85: at 720p, 0.8 left Buildings only one row and a half).
+	max_height_fraction = 0.85
 
 	margin_variation = &"DrawerMarginRoomy"
 
@@ -220,6 +226,7 @@ func _on_ready() -> void:
 	_stack.pane_built.connect(
 		func(id: StringName, pane: Control) -> void:
 			pane.minimum_size_changed.connect(_queue_fit)
+			AuthoringPanes.hide_titles(pane)
 			tool_pane_built.emit(id, pane)
 	)
 	_margin.minimum_size_changed.connect(_queue_fit)
@@ -231,12 +238,14 @@ func _on_ready() -> void:
 			if pane == null:
 				pane = _build_pane(tool)
 			pane.minimum_size_changed.connect(_queue_fit)
+			AuthoringPanes.hide_titles(pane)
 			_stack.add_pane(tool.id, pane)
 		else:
 			# A tool's own pane (fire's EventsPane, the structure and village tiles and their
 			# thumbnails) is built when it is first shown, not in the open's first frame.
 			_stack.add_pane_builder(tool.id, _tool_pane_builder.bind(tool))
 	_stack.show_pane(TOOL_BIOME, false)
+	_title_row.show_tool(ToolRegistry.find(TOOL_BIOME))
 
 	pane_requested.connect(_on_pane_requested)
 
@@ -305,28 +314,10 @@ func _build_pane(tool: ToolDescriptor) -> Control:
 		TOOL_PAINT:
 			return AuthoringPanes.paint(self, tool)
 		TOOL_WATER:
-			return _build_water_pane()
+			return AuthoringPanes.water(self)
 		TOOL_BRIDGE:
-			return _build_bridge_pane()
+			return AuthoringPanes.bridge(self)
 	return null
-
-
-## Water (P4-4): WaterToolPane, its signals relayed (the width row sets the brush radius).
-func _build_water_pane() -> Control:
-	water_pane = WaterToolPane.new()
-	water_pane.depth_selected.connect(func(depth: int) -> void: water_depth_selected.emit(depth))
-	water_pane.speed_changed.connect(func(speed: float) -> void: water_speed_changed.emit(speed))
-	water_pane.width_changed.connect(
-		func(width: float) -> void: brush_size_changed.emit(width * 0.5)
-	)
-	return water_pane
-
-
-## Bridge (P4b-2): BridgeToolPane, its kind tiles relayed.
-func _build_bridge_pane() -> Control:
-	bridge_pane = BridgeToolPane.new()
-	bridge_pane.kind_selected.connect(func(kind: int) -> void: bridge_kind_selected.emit(kind))
-	return bridge_pane
 
 
 ## A tool's pane (ToolRegistry id), built now if it was not yet, or null.
@@ -711,6 +702,8 @@ func hub_tabs(rail_id: StringName) -> SegmentedTabs:
 
 
 func _build_hub_tabs() -> void:
+	_title_row = AuthoringTitleRow.new()
+	content_container.add_child(_title_row)
 	for tool in ToolRegistry.rail_tools(ToolDescriptor.AUTHORING):
 		if tool.tabs.is_empty():
 			continue
@@ -725,10 +718,12 @@ func _build_hub_tabs() -> void:
 		_hub_last[tool.id] = StringName(tool.tabs[0]["id"])
 
 
-## Shows only hub `rail_id`'s tabs (&"" or a tool without tabs: none).
+## Shows only hub `rail_id`'s tabs (&"" or a tool without tabs: none), and names the tool in the
+## card's title row (AuthoringTitleRow).
 func _show_hub_tabs(rail_id: StringName) -> void:
 	for id: StringName in _hub_tabs:
 		(_hub_tabs[id] as Control).visible = id == rail_id
+	_title_row.show_tool(ToolRegistry.find(rail_id) if rail_id != &"" else null)
 
 
 ## Opens rail tool `rail_id`: a plain tool shows its pane and is picked; a hub opens its last tab,
@@ -736,7 +731,7 @@ func _show_hub_tabs(rail_id: StringName) -> void:
 func _enter_rail(rail_id: StringName, step: bool) -> void:
 	var strip: SegmentedTabs = _hub_tabs.get(rail_id)
 	if strip == null:
-		_show_hub_tabs(&"")
+		_show_hub_tabs(rail_id)
 		if rail_id == TOOL_PAINT:
 			ensure_paint_tiles()
 		_stack.show_pane(rail_id)
@@ -764,6 +759,8 @@ func _open_tab(tab_id: StringName, rail_id: StringName) -> void:
 	_quiet_header(tool_id)
 	if tab.has("shape"):
 		_water_shape = int(tab["shape"])
+		if water_pane != null:
+			water_pane.show_shape(_water_shape)
 		water_shape_selected.emit(_water_shape)
 	else:
 		tool_selected.emit(tool_id)
@@ -819,6 +816,8 @@ func _mark_tab(rail_id: StringName, tool_id: StringName) -> void:
 ## Water's tabs follow a shape picked another way (Tab on the board), without a signal.
 func select_water_shape(shape: int) -> void:
 	_water_shape = shape
+	if water_pane != null:
+		water_pane.show_shape(shape)
 	var strip: SegmentedTabs = _hub_tabs.get(TOOL_WATER)
 	if strip == null or strip.selected == BridgeTool.ID:
 		return
@@ -900,12 +899,15 @@ func set_history_state(
 	)
 
 
-## Selects a biome tile without emitting biome_selected, and opens that biome's Place group.
+## Selects a biome tile without emitting biome_selected, and opens that biome's Place group, which
+## leads the Place pane (just above the "Other biomes" caption).
 func select_biome(biome_id: String) -> void:
 	biome_field.tiles.select(StringName(biome_id))
-	for group_id in _place_foldouts:
-		if group_id == biome_id:
-			(_place_foldouts[group_id] as Foldout).expanded = true
+	var chosen: Foldout = _place_foldouts.get(biome_id)
+	if chosen == null:
+		return
+	chosen.expanded = true
+	AuthoringPanes.lead_place(_place_others, chosen)
 
 
 ## Selects a Sculpt tile without emitting sculpt_selected.

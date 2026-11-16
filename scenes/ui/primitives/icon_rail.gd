@@ -72,6 +72,7 @@ func add_item(id: StringName, icon_name: String, tooltip: String = "") -> IconBu
 	button.icon_name = icon_name
 	button.tooltip_text = tooltip
 	button.custom_minimum_size = Vector2(item_size, item_size)
+	button.rail_glyph = chip
 	button.focus_mode = Control.FOCUS_ALL if focusable else Control.FOCUS_NONE
 	button.set_meta("ui_silent", true)
 	button.pressed.connect(_on_item_pressed.bind(id))
@@ -112,6 +113,40 @@ func add_gap(step: float = GROUP_GAP) -> Control:
 	gap.custom_minimum_size = Vector2(0, step) if vertical else Vector2(step, 0)
 	add_child(gap)
 	return gap
+
+
+## A gap that also draws the theme's rule across it (a VSeparator in a horizontal rail, an
+## HSeparator in a vertical one), `step` px wide or tall: it sets one group of items apart as a
+## line, where a blank gap is only proximity.
+func add_divider(step: float = GROUP_GAP) -> Control:
+	var rule: Control = HSeparator.new() if vertical else VSeparator.new()
+	rule.name = "Divider%d" % get_child_count()
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rule.custom_minimum_size = Vector2(0, step) if vertical else Vector2(step, 0)
+	add_child(rule)
+	return rule
+
+
+## The key of an item in its top-left corner ("B"): empty text takes it away. The tooltip says
+## the same with the tool's name; the corner makes a key learnable without hovering.
+func set_item_key(id: StringName, text: String) -> void:
+	var button: Button = _buttons.get(id)
+	if button == null:
+		return
+	var label := button.get_node_or_null("ItemKey") as Label
+	if label == null:
+		if text.is_empty():
+			return
+		label = Label.new()
+		label.name = "ItemKey"
+		label.theme_type_variation = &"RailNote"
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		label.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		label.offset_left = 5.0
+		label.offset_top = 1.0
+		button.add_child(label)
+	label.text = text
+	label.visible = not text.is_empty()
 
 
 func has_item(id: StringName) -> bool:
@@ -176,7 +211,7 @@ func set_item_caption(id: StringName, text: String) -> void:
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-		label.offset_top = -14.0
+		label.offset_top = -18.0
 		# A pixel of room each side, so the word does not touch the rail's edge.
 		label.offset_left = 1.0
 		label.offset_right = -1.0
@@ -290,8 +325,9 @@ func _draw() -> void:
 		var behind := chip_rect()
 		if behind.has_area():
 			_draw_chip(behind, state)
+	# A chip carries the state; a stripe beside it ran straight past the capsule's rounded end.
 	var rect := indicator_rect()
-	if rect.has_area():
+	if rect.has_area() and not chip:
 		draw_rect(rect, state)
 
 

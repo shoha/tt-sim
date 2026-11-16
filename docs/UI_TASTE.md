@@ -382,9 +382,15 @@ chrome" (round 3).
 - **Actions leave the rail.** Undo, Redo, Save and Leave are a small paper pill at the top, right
   of whichever of rail or card is outermost, with a wider gap before Leave and the word "Unsaved"
   beside Save's dot. They are not tools, so they do not share the tools' column.
-- **A key per tool, shown where it is read.** B Biome, P Place, H Sculpt, I Paint, L Water, U
-  Build, F Fire (bare keys only; the camera's W A S D Q E and the Ctrl chords are untouched); the
-  tooltip and F1 say the key, and the key pressed again steps a hub's tabs.
+- **A key per tool, shown where it is read.** B Biome, P Place, T Sculpt (terrain), K Paint
+  (colour), H Water (H2O), U Build, F Fire, chosen by mnemonic against the keys already taken
+  (camera W A S D Q E, C and Home, O, V, M; the roster's T is play-only), plus the digits 1 to 7
+  in rail order as a second binding (authoring only; in play they stay the F3 debug toggles).
+  Each rail item carries its key as a small corner label, the tooltip says "Water (H or 5)", F1
+  lists them, and the key pressed again steps a hub's tabs. Round 4 (ui-authoring3): rail glyphs
+  26 px in a 52 px tile, a landscape glyph for Biome, a pin for Place, a house for Build; every
+  pane card has a title row (tool icon and name) over its hub tabs; one lead per pane with the
+  rest behind a closed More; the pill has a divider and the word Leave before the exit.
 - **The basics sit above the fold (S4).** Each pane opens with its picker and a Size row; the
   gesture lead sits behind More and strength behind Advanced. The card needs no scroll for the
   basics at 1280x720 (a long catalogue such as Paint's surfaces or the buildings scrolls past its

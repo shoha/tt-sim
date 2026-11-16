@@ -33,6 +33,12 @@ static var _warned_icons: Dictionary = {}
 		disc = value
 		_refresh_icon()
 
+## A map tool's rail icon: the glyph larger (the RailIcon variations; a 26 px cap, not 20).
+@export var rail_glyph: bool = false:
+	set(value):
+		rail_glyph = value
+		_refresh_icon()
+
 ## Small accent dot at the top-right corner (unsaved changes etc).
 @export var badge: bool = false:
 	set(value):
@@ -78,7 +84,9 @@ func _refresh_icon() -> void:
 	if not is_node_ready():
 		return
 	if active:
-		theme_type_variation = &"IconButtonActive"
+		theme_type_variation = &"RailIconActive" if rail_glyph else &"IconButtonActive"
+	elif rail_glyph:
+		theme_type_variation = &"RailIcon"
 	else:
 		theme_type_variation = &"IconButtonDisc" if disc else &"IconButton"
 	# A flat button draws no stylebox at all, so the disc never showed: a disc button is not

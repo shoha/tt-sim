@@ -150,7 +150,8 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 
 - Rail and hubs (2026-11-16, card ui-authoring3): the registry still holds twelve descriptors, but
   only seven are on the rail (`on_rail`; `ToolRegistry.rail_tools`): Biome (B), Place (P), Sculpt
-  (H), Paint (I), Water (L), Build (U), Fire (F). Thin / Clear is a tab of Place, Bridge a tab of
+  (T), Paint (K), Water (H), Build (U), Fire (F); each also answers to its digit 1 to 7 (`slot`,
+  `ToolRegistry.for_digit`, authoring only). Thin / Clear is a tab of Place, Bridge a tab of
   Water (Crossing), Wall, Structure and Village are tabs of Build (a hub with no brush of its
   own, `BuildTool`). A tab is a `hub` / `tabs` entry on the descriptor; `AuthoringPanel` shows the
   hub's `SegmentedTabs` over the tab tool's pane, and a tab selects its brush exactly as its rail

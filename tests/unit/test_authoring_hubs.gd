@@ -129,7 +129,7 @@ func test_every_rail_tool_has_its_own_bare_key_that_nothing_else_owns() -> void:
 	var letters := ""
 	for tool in ToolRegistry.rail_tools(ToolDescriptor.AUTHORING):
 		letters += tool.shortcut_label()
-	assert_eq(letters, "BPHILUF")
+	assert_eq(letters, "BPTKHUF", "Biome, Place, Terrain, Kolour, H2O, bUild, Fire")
 	# Ctrl, Alt, Shift and Meta never trigger a tool.
 	var biome := ToolRegistry.find(BiomeTool.ID)
 	assert_true(biome.matches_shortcut(_key(KEY_B)))
@@ -164,12 +164,12 @@ func test_the_help_names_each_tab_under_its_hub_and_each_rail_tool_with_its_key(
 	var names: Array = []
 	for row in ToolRegistry.help_rows(ToolDescriptor.AUTHORING):
 		names.append(row[0])
-	for expect in ["Place (P)", "Place: Thin / Clear", "Water (L)", "Water: Crossing", "Build (U)"]:
+	for expect in ["Place (P)", "Place: Thin / Clear", "Water (H)", "Water: Crossing", "Build (U)"]:
 		assert_true(names.has(expect), expect)
 	assert_true(names.has("Build: Walls"), "Wall's help row is named under its hub")
 	assert_true(names.has("Build: Villages"))
-	assert_true(names.has("Biome (B)") and names.has("Sculpt (H)") and names.has("Fire (F)"))
-	assert_true(names.has("Paint (I)"))
+	assert_true(names.has("Biome (B)") and names.has("Sculpt (T)") and names.has("Fire (F)"))
+	assert_true(names.has("Paint (K)"))
 
 
 # -- Tabs route to the tool they were -----------------------------------------------------
@@ -354,13 +354,49 @@ func test_the_pill_buttons_emit_the_same_signals_and_hold_the_same_states() -> v
 		assert_ne(pill.button(id).focus_mode, Control.FOCUS_NONE, "%s takes focus" % id)
 
 
+func test_a_digit_picks_the_tool_in_that_place_of_the_rail() -> void:
+	var rail := ToolRegistry.rail_tools(ToolDescriptor.AUTHORING)
+	assert_eq(rail.size(), 7)
+	for i in rail.size():
+		assert_eq(rail[i].slot, i + 1, "%s: its digit is its place" % rail[i].id)
+		assert_eq(ToolRegistry.for_digit(_key(KEY_1 + i), ToolDescriptor.AUTHORING), rail[i])
+	assert_null(ToolRegistry.for_digit(_key(KEY_8), ToolDescriptor.AUTHORING), "only seven")
+	assert_null(ToolRegistry.for_digit(_key(KEY_1, true), ToolDescriptor.AUTHORING), "Ctrl+1")
+	assert_null(ToolRegistry.for_digit(_key(KEY_1), ToolDescriptor.PLAY), "not in play")
+
+
 func test_leave_is_set_apart_from_save_by_a_gap() -> void:
 	var panel := await _open_panel()
 	var pill := panel.actions()
 	var save := pill.button(AuthoringChrome.ACTION_SAVE)
 	var leave := pill.button(AuthoringChrome.ACTION_LEAVE)
 	var step := leave.get_global_rect().position.x - save.get_global_rect().end.x
-	assert_gte(step, AuthoringActions.GROUP_GAP, "a gap, not a neighbour, between Save and Leave")
+	assert_gte(step, AuthoringActions.LEAVE_GAP, "a wide step, not a neighbour, before Leave")
+	assert_not_null(pill.find_child("Divider*", true, false), "a rule across the step")
+	assert_eq(
+		(leave.get_node("ItemCaption") as Label).text, AuthoringChrome.LEAVE_WORD, "the word Leave"
+	)
+
+
+## Leave on an Unsaved map asks first (save and leave, discard, or cancel) and stays in the map
+## until the author answers; a saved map leaves at once.
+func test_leave_on_an_unsaved_map_asks_first() -> void:
+	var panel := await _open_panel()
+	var ctrl := AuthoringController.new()
+	add_child_autofree(ctrl)
+	ctrl.panel = panel
+	ctrl.saving = autofree(AuthoringSaving.new())
+	ctrl._is_open = true
+	ctrl.session.mark_edited()
+	watch_signals(ctrl)
+	ctrl.request_leave()
+	assert_not_null(ctrl._leave_prompt, "an unsaved map asks before it leaves")
+	assert_signal_not_emitted(ctrl, "exit_requested")
+	assert_true(panel._leave_pending, "the panel shows the leave is pending")
+	(ctrl._leave_prompt as ConfirmationDialogUI)._on_cancel_pressed()
+	await wait_seconds(0.4)
+	assert_false(panel._leave_pending, "Cancel keeps the author in the map")
+	assert_signal_not_emitted(ctrl, "exit_requested")
 
 
 # -- Layout -------------------------------------------------------------------------------

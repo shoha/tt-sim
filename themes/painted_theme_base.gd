@@ -123,7 +123,8 @@ func _define_labels() -> void:
 	define_variant_style("PanelHeader", "Label", heading)
 	define_variant_style("RailLabel", "Label", caption)
 	# One word under a rail icon (Unsaved under Save), narrow enough for a 46 px item.
-	define_variant_style("RailNote", "Label", inherit(caption, {font_size = SIZE_NOTE}))
+	# (and the key in a rail item's corner: the caption size, the 14 px floor, T2).
+	define_variant_style("RailNote", "Label", inherit(caption, {font_size = SIZE_CAPTION}))
 
 
 ## The default Button (the quiet secondary) and its filled and quiet variations. Every fill
@@ -278,6 +279,9 @@ func _define_flat_buttons() -> void:
 			}
 		)
 	)
+	# A map tool's rail icon: the same buttons with a larger glyph (26 px, over Button's 20 px cap).
+	define_variant_style("RailIcon", "IconButton", {icon_max_width = 26})
+	define_variant_style("RailIconActive", "IconButtonActive", {icon_max_width = 26})
 	# On a picture (a level card's overflow menu): the same button on a small raised disc with a
 	# pencil edge, so its glyph reads over a dark thumbnail as over a light one.
 	var disc := box(c(ThemeColors.SURFACE_RAISED), RADIUS_PILL, 4, 4, edge(1, c(ThemeColors.EDGE)))
@@ -582,9 +586,8 @@ func _define_floating_chrome() -> void:
 	var trim: Dictionary = inherit(edge(1, c(ThemeColors.EDGE)), lift())
 	if on_glass:
 		trim = inherit(rim(), lift())
-	define_variant_style(
-		"DrawerCardFloat", "PanelContainer", {panel = box(c(ThemeColors.SURFACE), RADIUS_CARD, 0, 0, trim)}
-	)
+	var float_box := box(c(ThemeColors.SURFACE), RADIUS_CARD, 0, 0, trim)
+	define_variant_style("DrawerCardFloat", "PanelContainer", {panel = float_box})
 	var rail_box := box(
 		c(ThemeColors.SURFACE), RADIUS_CARD, SPACE_1, SPACE_2, trim
 	)

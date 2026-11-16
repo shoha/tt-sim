@@ -43,13 +43,14 @@ const KIND_TILES: Array[Dictionary] = [
 		"A street of varied buildings, doors to the street: drag along where the street runs",
 	},
 ]
-const HINT := (
-	"Drag along the ground to lay a wall or fence; start the next drag at its end to carry on, and"
-	+ " end one at its first end to close the loop. Shift + scroll or [ and ] set the height. A"
-	+ " street is dragged along its line: Q and E pick the side, R mixes the buildings afresh, and"
-	+ " the height keys set how far back they stand. Click a street to pick it and split it into"
-	+ " buildings you can move one by one. Ctrl and click removes one. Single buildings are the"
-	+ " Building tool's."
+## The lead says enough to start; HINT_MORE (behind "More") is the rest.
+const HINT := "Pick a kind, then drag along the ground to lay it."
+const HINT_MORE := (
+	"Start the next drag at a wall's end to carry on, and end one at its first end to close the"
+	+ " loop. Shift + scroll or [ and ] set the height. A street is dragged along its line: Q and"
+	+ " E pick the side, R draws the buildings afresh, and the height keys set how far back they"
+	+ " stand. Click a street to pick it and split it into buildings you can move one by one. Hold"
+	+ " Ctrl and click to remove one. Single buildings are on the Buildings tab."
 )
 const SELECTION_HINT := (
 	"This street can be split into separate buildings, each of which you can then move, restyle or"
@@ -79,6 +80,7 @@ func _init() -> void:
 	add_child(header)
 	add_child(_caption("WallHint", HINT))
 	kind_field = TileField.new()
+	var more := AuthoringChrome.more_foldout("WallHintMore", HINT_MORE)
 	kind_field.name = "WallKindField"
 	kind_field.caption = "Kind"
 	kind_field.tiles.tile_min_size = TILE_SIZE
@@ -96,6 +98,7 @@ func _init() -> void:
 					kind_selected.emit(int(tile.kind))
 	)
 	add_child(kind_field)
+	add_child(more)
 	preset_field = TileField.new()
 	preset_field.name = "WallPresetField"
 	preset_field.caption = "Street"

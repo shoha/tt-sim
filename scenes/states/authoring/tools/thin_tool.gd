@@ -32,11 +32,7 @@ func build_pane(panel: AuthoringPanel) -> Control:
 	pane.add_child(panel.build_size_row("Thin"))
 	pane.add_child(
 		AuthoringChrome.help_label(
-			"ThinHint",
-			(
-				"Drag to thin trees and plants out. Hold Ctrl as you press to clear the ground"
-				+ " completely. Works on a Blender map's own scatter too."
-			)
+			"ThinHint", "Drag to thin trees and plants out; hold Ctrl to clear the ground completely."
 		)
 	)
 	pane.add_child(panel.build_advanced("Thin"))

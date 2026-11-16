@@ -195,6 +195,15 @@ func connect_selection(brush: BrushTool, pane: StructureToolPane, hints_changed:
 			StructureHints.reset(true)
 			hints_changed.call()
 	)
+	# The switch turned off puts every gesture's hint away, as having done each would.
+	for link: Dictionary in pane.hints_hidden.get_connections():
+		pane.hints_hidden.disconnect(link["callable"])
+	pane.hints_hidden.connect(
+		func() -> void:
+			for gesture: Dictionary in StructureHints.PLACING + StructureHints.SELECTED:
+				StructureHints.mark(StringName(gesture["id"]))
+			hints_changed.call()
+	)
 	# A gesture done once is remembered per user, and its key fades from the bar.
 	mode.gesture_done.connect(
 		func(id: StringName) -> void:

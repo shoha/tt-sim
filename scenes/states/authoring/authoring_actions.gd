@@ -14,6 +14,8 @@ signal action_pressed(id: StringName)
 
 ## The step between Undo / Redo, Save and Leave, over the rail's own 4 px either side.
 const GROUP_GAP := 12.0
+## The step before Leave, with the rule across it: 24 px more than the other.
+const LEAVE_GAP := 36.0
 
 var _rail: IconRail
 var _tween: Tween
@@ -32,9 +34,14 @@ func _init() -> void:
 	add_child(_rail)
 	for item in AuthoringChrome.ACTION_ITEMS:
 		var id := StringName(item["id"])
-		if id == AuthoringChrome.ACTION_SAVE or id == AuthoringChrome.ACTION_LEAVE:
+		if id == AuthoringChrome.ACTION_SAVE:
 			_rail.add_gap(GROUP_GAP)
+		elif id == AuthoringChrome.ACTION_LEAVE:
+			# A rule and a wide step: a click that aims at Save must not land on Leave.
+			_rail.add_divider(LEAVE_GAP)
 		_rail.add_item(id, String(item["icon"]), String(item["tooltip"]))
+		if id == AuthoringChrome.ACTION_LEAVE:
+			_rail.set_item_caption(id, AuthoringChrome.LEAVE_WORD)
 	_rail.item_pressed.connect(func(id: StringName) -> void: action_pressed.emit(id))
 
 

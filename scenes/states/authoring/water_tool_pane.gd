@@ -59,9 +59,8 @@ const DEPTH_TILES: Array[Dictionary] = [
 	},
 ]
 ## The lead says enough to start; HINT_MORE (behind "More") is the rest.
-const HINT := (
-	"River: draw it from where the water comes to where it goes. Pond: paint an area."
-)
+const HINT_RIVER := "Draw a river from where the water comes to where it goes."
+const HINT_POND := "Paint an area to make a pond; start inside one to grow it."
 const HINT_MORE := (
 	"A river falls by itself over a steep drop. Start inside a pond to grow it. Shift + scroll or"
 	+ " [ and ] set the width. Hold Ctrl as you press to erase water; the ground stays carved"
@@ -77,6 +76,10 @@ var shape_field: TileField
 var depth_field: TileField
 
 var _hint: Label
+var _carves: bool = true
+var _shape: int = WaterBrush.Shape.RIVER
+## The pond's Size row (the panel hands it in; a river has its Width row instead).
+var _pond_row: Control
 var _more: Foldout
 var _depth_hint: Label
 var _width_row: PropertyRow
@@ -91,9 +94,10 @@ func _init(with_shapes: bool = false) -> void:
 	header.name = "WaterHeader"
 	header.setup("Water", "Rivers, streams and ponds.")
 	add_child(header)
-	add_child(_width())
-	_hint = _caption("WaterHint", HINT)
+	# One lead, then the width (or the pond's size) and the rest behind More.
+	_hint = _caption("WaterHint", HINT_RIVER)
 	add_child(_hint)
+	add_child(_width())
 	_more = AuthoringChrome.more_foldout("WaterHintMore", HINT_MORE)
 	add_child(_more)
 	if with_shapes:
@@ -103,6 +107,7 @@ func _init(with_shapes: bool = false) -> void:
 			func(id: StringName) -> void:
 				for tile in SHAPE_TILES:
 					if tile.id == id:
+						show_shape(int(tile.shape))
 						shape_selected.emit(int(tile.shape))
 		)
 		add_child(shape_field)
@@ -121,8 +126,29 @@ func _init(with_shapes: bool = false) -> void:
 	add_child(_advanced())
 
 
+## Takes the pond's Size row (built by the panel, which keeps it following the brush) and puts it
+## where the river's Width row is, shown only on the Pond tab.
+func set_pond_row(row: Control) -> void:
+	_pond_row = row
+	add_child(row)
+	move_child(row, _width_row.get_index() + 1)  # in the river's place, before More
+	show_shape(_shape)
+
+
+## What the pane shows for `shape` (RIVER or POND): its own lead, and the river's Width slider only
+## on River (a pond has the Size slider: a brush radius, not a channel).
+func show_shape(shape: int) -> void:
+	_shape = shape
+	var river := shape == WaterBrush.Shape.RIVER
+	_width_row.visible = river or _pond_row == null
+	if _pond_row != null:
+		_pond_row.visible = not river
+	_hint.text = (HINT_RIVER if river else HINT_POND) if _carves else ERASE_ONLY_HINT
+
+
 ## Selects a shape tile without emitting shape_selected (a pane built with_shapes).
 func select_shape(shape: int) -> void:
+	show_shape(shape)
 	if shape_field == null:
 		return
 	for tile in SHAPE_TILES:
@@ -146,13 +172,14 @@ func set_values(width: float, speed: float) -> void:
 
 ## Whether water can be carved here: the tiles and the hint follow (see the header).
 func set_carves(carves: bool) -> void:
+	_carves = carves
 	for field in [shape_field, depth_field]:
 		if field == null:
 			continue
 		for child in (field as TileField).tiles.get_children():
 			if child is Button:
 				(child as Button).disabled = not carves
-	_hint.text = HINT if carves else ERASE_ONLY_HINT
+	show_shape(_shape)
 	_more.visible = carves
 
 

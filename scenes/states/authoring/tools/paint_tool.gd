@@ -18,7 +18,8 @@ func _init() -> void:
 	summary = "Lay paths, yards and rock."
 	icon = "brush"
 	brush_mode = PaintBrush
-	shortcut = KEY_I
+	shortcut = KEY_K  # K for colour (C is the camera's reset)
+	slot = 4
 	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 

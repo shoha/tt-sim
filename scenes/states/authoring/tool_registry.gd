@@ -72,6 +72,20 @@ static func for_shortcut(event: InputEvent, context: int) -> ToolDescriptor:
 	return null
 
 
+## The rail tool a bare digit key picks in `context` (1 is the first tool of the rail, in rail
+## order), or null. Authoring only: the digits are the play state's own while a perf overlay is up.
+static func for_digit(event: InputEvent, context: int) -> ToolDescriptor:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo or context != ToolDescriptor.AUTHORING:
+		return null
+	if key.ctrl_pressed or key.shift_pressed or key.alt_pressed or key.meta_pressed:
+		return null
+	for tool in rail_tools(context):
+		if tool.slot > 0 and int(key.keycode) == int(KEY_0) + tool.slot:
+			return tool
+	return null
+
+
 ## The tools the rail lists in `context`, in rail order: seven in authoring (the others are tabs of
 ## one of them).
 static func rail_tools(context: int) -> Array[ToolDescriptor]:
@@ -86,7 +100,7 @@ static func rail_tools(context: int) -> Array[ToolDescriptor]:
 static func rail_items(context: int) -> Array[Dictionary]:
 	var items: Array[Dictionary] = []
 	for tool in rail_tools(context):
-		var item := tool.rail_item()
+		var item := tool.rail_item(context == ToolDescriptor.AUTHORING)
 		item["group"] = GROUPS.get(tool.id, &"")
 		items.append(item)
 	return items

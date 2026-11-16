@@ -22,6 +22,7 @@ func _init() -> void:
 	icon = "campfire"
 	brush_mode = FireBrush
 	shortcut = KEY_F
+	slot = 7
 	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [

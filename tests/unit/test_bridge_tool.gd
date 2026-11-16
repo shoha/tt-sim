@@ -136,7 +136,7 @@ func test_pane_has_a_tile_per_kind_and_emits_the_picked_one() -> void:
 	pane.select_kind(Crossing.Kind.ARCH)
 	assert_eq(pane.kind_field.tiles.selected, &"bridge_arch")
 	assert_signal_emit_count(pane, "kind_selected", 2, "select_kind is silent")
-	assert_string_contains(BridgeToolPane.HINT, "a ford needs wadeable water")
+	assert_string_contains(BridgeToolPane.HINT_MORE, "a ford needs wadeable water")
 
 
 func test_bridge_mode_input() -> void:
