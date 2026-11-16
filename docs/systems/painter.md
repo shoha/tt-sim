@@ -31,6 +31,7 @@ came from is the local branch `painterspike` (handoff `docs/plans/handoffs/paint
 | `PainterTreePack` | `painter/trees/tree_pack.gd` | A tree's masses packed as data texels for the painted tree shaders (the spike's PPainter13) |
 | `PainterTrees` | `painter/trees/painter_trees.gd` | The painted trees' host: grows, installs and draws the mapped tree rows, hides and restores the GLB trees |
 | tree tones, meshes, brushes | `painter/trees/tree_tones.gd` (+ `tree_roles.json`), `tree_meshes.gd`, `tree_brushes.gd` | The palette and role_params textures, the shared instanced blocks, the 14 brush layers |
+| `PainterConiferVariants` | `painter/trees/conifer_variants.gd` | A conifer's needle variants (extra evergreen style rows) and the neighbour-aware pick of one per tree |
 | painted tree shaders | `painter/shaders/painter_tree_stroke.gdshader`, `painter_tree_blockin.gdshader` (and their `_bare` variants, one body each: `painter_tree_{stroke,blockin}_body.gdshaderinc`), `painter_tree.gdshaderinc` (+ `painter/trees/tree_uniforms.json`) | The spike's stroke and block-in passes on tt-sim's wind, sun and fades |
 | `PainterBuildings` | `painter/painter_buildings.gd` | The buildings' host: stand-ins on the structures' wall, roof, timber and stone parts, toned from the sheet, and back |
 | painted structure shader | `painter/shaders/painter_structure.gdshader` | The selector light on a structure part: three sheet tones, a pattern per material, dabs, fold ink |
@@ -362,6 +363,25 @@ off, GPU medians, painted minus classic: forest tokens summer +0.06, +0.08, +0.0
   (`PainterTrees.BARK_CAST_TINT`), since a stem stands in its own crown's shadow and the crowns'
   cool tint made it maroon. Print the ramps with a tone printer before a render (painter-a2a3's
   `tree_tones.gd` pattern).
+- Needle variants (card painter-look-taiga, 2026-11-15; critic: the taiga's spruces were one teal
+  family). A conifer species has one evergreen row, so every spruce of a level drew in one colour.
+  `PainterTreeTones.row_table` now gives a conifer `PainterConiferVariants.count()` (5) evergreen
+  rows (`evergreen`, `evergreen_1` .. `evergreen_4`: 8 more rows in all, of the 64), each the species' row
+  moved by `SHIFTS` (hue, lightness, chroma, extra lit pull): the deep teal, a blue-green, a fresh
+  yellow-green, a warm deep green and a teal whose tips turn gold (a lit pull toward the mood's
+  `lit-hue`, with extra lit chroma, since a pull at the needles' low chroma read khaki). A shift
+  takes the share the mood's `needle` chroma has of the summer midday's, so winter, dusk and night
+  narrow the family. `PainterTrees._tables` writes one of them into each conifer's row-map column 8
+  (`PainterConiferVariants.assign`: trees in key order, each takes the variant least held by the
+  placed trees within 9 m, a nearer one weighing more, the seed's own on a tie), so no two near
+  spruces wear the same needles. No shader changed: the row map already names the row. Painted
+  summer taiga frames: `docs/research` painter_final22_taiga.
+- The forest floor (`floor`, the ground role the taiga and jungle paint, and a forest's under its
+  crowns) was `oklch(0.60 0.085 112)` in every mood that did not set its own: an olive-khaki that
+  read dull and muddy at the taiga's home view. The summer keys set it (high `0.67 0.130 130`, low
+  `0.63 0.115 112`): a luminous moss green between the meadow's green and a gold. Other moods keep
+  the world's (winter and dusk set their own already). The temperate forest test map's ground frames
+  (home and zoom 5) are unchanged but for its spruce.
 - A bare season (card painter-winter-trees, 2026-11-13; owner: "for winter: broadleaf trees should
   move towards the prototype"). The sheet's `leaf-keep` (1 in leaf, winter 0.15) is the share of
   its leaf clumps a broadleaf keeps; each species falls by its leaf role's `fall`

@@ -136,6 +136,7 @@ const TEST_PREFIXES: Array[String] = [
 	"_painter-perf-taiga_",
 	"_painter-perf-buried_",
 	"_painter-look-crowns_",
+	"_painter-look-taiga_",
 	"_painter-look-bushes_",
 	"_painter-look-winter_",
 	"_painter-look-houses_",

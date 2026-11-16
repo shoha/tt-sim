@@ -115,7 +115,8 @@ static func roles_of(species: String) -> Array[String]:
 
 
 ## species -> {role -> style row} for every species, the bushes (PainterTreeSpecies.BUSHES) last
-## (pure in the data).
+## (pure in the data). A conifer's needle variants (PainterConiferVariants) follow its own roles
+## as `evergreen_1` .. `evergreen_<count - 1>`.
 static func row_table() -> Dictionary:
 	var table := {}
 	var row := GROUND_ROW + 1
@@ -124,12 +125,17 @@ static func row_table() -> Dictionary:
 		for role in roles_of(species):
 			rows[role] = row
 			row += 1
+		if rows.has("evergreen"):
+			for v in range(1, PainterConiferVariants.count()):
+				rows["evergreen_%d" % v] = row
+				row += 1
 		table[species] = rows
 	return table
 
 
-## The nine role rows (ROLE_NAMES order) of a tree of `species`; unused roles take row 0.
-static func role_rows(species: String) -> PackedInt32Array:
+## The nine role rows (ROLE_NAMES order) of a tree of `species`; unused roles take row 0. A
+## conifer's `variant` (PainterConiferVariants.assign) picks which needle row column 8 names.
+static func role_rows(species: String, variant := 0) -> PackedInt32Array:
 	var rows: Dictionary = row_table().get(species, {})
 	var out := PackedInt32Array()
 	out.resize(ROLE_NAMES.size())
@@ -137,7 +143,14 @@ static func role_rows(species: String) -> PackedInt32Array:
 		out[i] = int(rows.get(ROLE_NAMES[i], 0))
 	out[6] = GROUND_ROW
 	out[7] = DEPOSIT_ROW
+	if variant > 0 and rows.has("evergreen_%d" % variant):
+		out[8] = int(rows["evergreen_%d" % variant])
 	return out
+
+
+## Whether `species` paints needle variants (a conifer with an evergreen role).
+static func has_variants(species: String) -> bool:
+	return ((row_table().get(species, {}) as Dictionary).has("evergreen_1"))
 
 
 ## {"palette": Image, "params": Image} for `mood` at sun `elevation` (pure).
@@ -149,10 +162,16 @@ static func bake(sheet: Dictionary, mood: String, elevation: float) -> Dictionar
 	var table := row_table()
 	for species: String in table:
 		for role: String in table[species]:
-			styles.append([(data()["species"][species] as Dictionary)[role], role, species])
+			# A needle variant row (`evergreen_<v>`) is the species' evergreen style, shifted below.
+			var variant := int(role.substr(10)) if role.begins_with("evergreen_") else 0
+			var style_role := "evergreen" if variant > 0 else role
+			styles.append(
+				[(data()["species"][species] as Dictionary)[style_role], style_role, species, variant]
+			)
 	for ri in mini(styles.size(), MAX_ROWS):
 		var props: Dictionary = styles[ri][0]
 		var tag: Variant = styles[ri][1]
+		var variant: int = styles[ri][3] if styles[ri].size() > 3 else 0
 		var lch: Vector3 = PainterSheet.parse_color(str(props.get("color", "")))
 		var shape := _shape(props, world)
 		var bush := PainterTreeSpecies.is_bush(str(styles[ri][2]))
@@ -174,6 +193,15 @@ static func bake(sheet: Dictionary, mood: String, elevation: float) -> Dictionar
 			shape = _sheet_shade(_moved_shape(shape, sheet, mood, elevation), sheet, mood, elevation, tag)
 			if tag is String and tag == "leaf" and (not bush or _num(props, "dry-share", 0.0) > 0.0):
 				shape = _dry_shape(shape, sheet, mood, elevation)
+			if variant > 0:
+				# A needle variant: the species' needles moved, by as much as the mood's needle
+				# chroma stands from the summer midday's (a quiet mood narrows the family).
+				var strength := _variant_strength(sheet, mood, elevation, spike)
+				lch = PainterConiferVariants.shifted(lch, variant, strength)
+				var warm := PainterConiferVariants.lit_pull(variant, strength)
+				shape["lit-pull"] = minf(float(shape["lit-pull"]) + warm, 1.0)
+				# (A tip pulled toward gold at the needles' low chroma reads khaki: richer as it warms.)
+				shape["lit-chroma"] = float(shape["lit-chroma"]) * (1.0 + 0.8 * warm)
 		elif int(tag) == GROUND_ROW:
 			lch = PainterSheet.tone_lch(sheet, mood, "ground", elevation)
 		_paint_row(palette, ri, lch, shape, props)
@@ -189,6 +217,15 @@ static func bake(sheet: Dictionary, mood: String, elevation: float) -> Dictionar
 			g2.b *= maxf(PainterSheet.number(sheet, mood, "needle-snow", elevation), 0.0)
 			params.set_pixel(ri, 2, g2)
 	return {"palette": palette, "params": params}
+
+
+## How much of its shift a needle variant takes in `mood` at `elevation`: the sheet's needle chroma
+## over the spike world's, 0..1 (a winter or night needle is quieter, so the family is narrower).
+static func _variant_strength(
+	sheet: Dictionary, mood: String, elevation: float, spike: Vector3
+) -> float:
+	var now := PainterSheet.tone_lch(sheet, mood, "needle", elevation)
+	return clampf(now.y / spike.y, 0.0, 1.0) if spike.y > 0.001 else 1.0
 
 
 ## A broadleaf's leaf ramp `shape` in a bare season: a dry leaf is thin and lit through, so its

@@ -129,6 +129,10 @@
        a crown standing in another's shadow took the shade step, the cast tint and the painted
        cast tone at once and read as one flat dark mass). */
     crown-shade-lift: 0.07;  tree-cast: 0.58;
+    /* The forest floor (the taiga's ground, the jungle's, a forest's under its crowns) a luminous
+       moss green, not the olive-khaki the :world floor is (painter-look-taiga: it read dull and
+       muddy; its own hue between the meadow's and a gold). */
+    floor: oklch(0.67 0.130 130);
   }
   /* Golden hour. The sun goes gold, not red, and the shade stays a light blue-violet so walls
      facing away from it keep their own colour (the spike's cold front walls) and clay roofs do
@@ -142,7 +146,7 @@
     stone: oklch(0.69 0.040 68);  path: oklch(0.80 0.070 70);
     roof-clay: oklch(0.56 0.130 38);  roof-slate: oklch(0.51 0.040 262);  roof-shingle: oklch(0.52 0.065 48);
     roof-turf: oklch(0.57 0.100 125);  roof-thatch: oklch(0.72 0.090 78);
-    floor: oklch(0.58 0.085 100);  grass: oklch(0.64 0.125 126);  drift: oklch(0.84 0.100 95);
+    floor: oklch(0.63 0.115 112);  grass: oklch(0.64 0.125 126);  drift: oklch(0.84 0.100 95);
     lit-hue: 70;  lit-pull: 0.55;
     /* The lawn and its grass stay gold-green in the low light (grass is lit like the ground since
        painter-a1c, so its lit step shows at every sun): a small lift and pull, not cream. */
