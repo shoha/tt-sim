@@ -6404,6 +6404,78 @@ Still over: river zoom 8 and taiga home summer, and the forest sits on the line.
 1.0 ms) plus level 1 strokes (about 0.4). No look-neutral lever remained for it. The 0.3 ms criterion is a
 guardrail; the remaining gap is the painted trees' crown masses, which are the look.
 
+## Exported build and Linux check, 2026-11-16 (card painter-default-gate)
+
+Three facts that block making the Painted look the default. Evidence and logs:
+`D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final30_default_gate/` (`notes.md`, one folder per
+run). Main `64e84f3f`, RTX 3080, pinned procedure (1920x1080, in-run interleaved P C x3, GPU 2.5 s median, the
+lane held), levels built fresh on main (`_painter-default-gate_*`, same recipes as the recheck's) and the recheck's
+river level.
+
+### Editor build, main 64e84f3f (Painted minus Classic, GPU ms)
+
+| Cell | Painted | Classic | P - C | pairs |
+|------|---------|---------|-------|-------|
+| forest tokens summer, zoom 8 | 2.593 | 2.512 | +0.08 | +0.06 .. +0.10 |
+| river zoom 8 summer | 3.065 | 2.867 | +0.20 | +0.19 .. +0.22 |
+| taiga home summer | 2.612 | 2.219 | +0.39 | +0.37 .. +0.43 |
+| village home winter, sun 12 | 2.199 | 3.412 | -1.21 | -1.21 .. -1.20 |
+| village home summer, sun 20 | 2.472 | 3.436 | -0.96 | -0.97 .. -0.96 |
+| fire (live) home | 2.644 | 2.749 | -0.11 | -0.15 .. -0.10 |
+| fire (live) zoom 8 | 2.287 | 2.484 | -0.20 | -0.20 .. -0.19 |
+| fire event mid-burn (forest, fire at 2.0 of 4.0 s, zoom 8, one pair) | 3.326 | 5.358 | -2.03 | - |
+
+Fire zoom 8 was +0.31 before the block-in discard-free change and is now -0.20: both the Painted frame (2.660 ->
+2.287) and the Classic one (2.350 -> 2.484, a different run) moved. Only taiga home is over the 0.3 ms bar (+0.39;
+the blockin card's +0.35).
+
+### Exported release build
+
+Built the CI way (`--export-release "Windows Desktop"`, 4.7.2 templates in `%APPDATA%/Godot/export_templates`),
+with `tools/*` dropped from the preset's exclude filter (uncommitted) so `tools/render_jobs` is in the pack, plus
+the gitignored probe scripts and a release `libttscatter` built in the worktree (`scons target=template_release`).
+An exported exe ignores `--script`, so the harness runs through an `override.cfg` autoload (`export_runner.gd`,
+from the exportbake card: `RJExport` autoload, `-- --rj-job=<json> --rj-out=<dir>`), with its own user folder
+named in the same `override.cfg`. Cold folder: fresh (no pipeline cache, `settings.cfg` look=1 so the Painted
+warm-up runs behind the title). The NVIDIA driver's own shader cache is global and was not cleared. The
+exported exe ran at the display's refresh rate (frame pairs 13.9 / 20.8 ms: vsync stayed on, `settings.cfg`'s
+`vsync=false` is not applied in the exe; the in-job `vsync_off` op handles the GPU cells).
+
+First Painted level in a fresh export (`g_cold.json`, `record` op, CPU frame times with vsync on, so medians are
+the refresh interval; the worst frame is the figure):
+
+| Window | Frames | Worst frame | Pipelines compiled in the window |
+|--------|--------|-------------|----------------------------------|
+| first play of the forest (title to settled, 6 s) | 553 | 284.1 ms (two such frames: 206 and 374, 200-284 ms) | surface 0 -> 116, spec 0 -> 160 |
+| 8 s settled, Painted | 480 | 24.3 ms | 0 |
+| Classic to Painted switch (5 s) | 301 | 87.4 ms (frame 2) | 0 new (all warm) |
+| Painted to Classic switch (4 s) | 243 | 22.2 ms | 0 |
+| second level play (taiga, title to settled) | 330 | 708.6 ms (frame 30; surface 211 -> 295) | surface +84, spec +39 |
+
+The editor figures from `docs/systems/painter.md` "Warm-up" (debug, 2026-11-14, a different machine state): first
+Painted level worst covered frame 237-251 ms cold and 207-213 ms warm, toggle 243 ms. The export's first level
+is 284 ms (same order; it does not beat the editor), its switch 87 ms (much smaller than the editor's 243 ms), but a
+second level loaded in the same session hitches once at 708 ms with 84 more surface pipelines compiled in that
+window. The window starts at the title, so it includes the load; the per-frame files
+(`export_cold/*_frames.txt`) carry the counters.
+
+Exported per-cell GPU table (Painted minus Classic): NOT YET MEASURED. The lane was held by other cards
+after the machine crash; the exe and the jobs are ready (handoff `docs/plans/handoffs/painter-default-gate.md`).
+
+### Linux (WSL2 Ubuntu 24.04, Godot 4.7.2 Linux editor binary, Mesa llvmpipe Vulkan 1.4, Forward+)
+
+No GPU path in WSL (`/dev/dxg` exists but there is no dzn or NVIDIA Vulkan ICD; only lavapipe), so this is software
+Vulkan: correctness, not speed (the first Painted level took 126 s of warm-up and a worst frame of 85 s).
+Project copied to the WSL disk, `--headless --import` (2 min; the expected font/theme errors on the first pass),
+a clean second pass, then the render-job harness windowed on WSLg with the Painted taiga level, the first-launch
+graphics warm-up forced (`--warm-graphics`) and the Look setting Painted (so `PainterWarmup` ran behind the title).
+Result: the Painted taiga frame draws (pines, birches, boulders, a log, soft cast shadows; the look reads as it
+does on Windows), `GraphicsWarmup` finished (46 samples built, 0 skipped), and the log has no `SHADER ERROR`, no
+script error and no pipeline error: the only `ERROR` lines are ALSA's "no sound card". Not proved: speed or
+hitching on a real Linux GPU, the water, fire-burn and building shaders at draw time (the taiga level has none of
+them; `PainterWarmup` compiles them in its groups and printed no error), Linux native scatter (no `.so` built, the
+GDScript generator ran). macOS cannot be checked here.
+
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
 What each Shadow quality tier (`directional_soft_shadow_filter_set_quality`) costs, and a "blur"
