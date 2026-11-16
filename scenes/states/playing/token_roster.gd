@@ -5,21 +5,22 @@ extends DrawerContainer
 ## It exists so a player can find their token (under foliage, among thirty) without hunting
 ## the board: a row's press selects the token, centres the camera on it and pulses its glow;
 ## hovering a row lights the token on the board. T opens and closes it (the rail's tooltip
-## says so), and the rail item shows the count.
+## and the hint bar say so), and the tab is labelled "Tokens".
 ##
 ## The list comes from TokenRosterModel (a player sees only tokens the GM has not hidden and
-## their own first). The selected token has a card at the foot of the drawer with its name,
-## its health in words and a bar, a Find button (centre and pulse again) and an Actions button
-## that opens the token's own menu beside the drawer, so the roster is also the selection UI
-## the board lacks: the glow on the board and the card agree on which token is picked.
+## their own first). A row is the token's portrait (the picture its map pin wears, TokenPictures),
+## its name (identical names are numbered, "Bramble 2"), its health in words and a 4 px bar with
+## its track. The picked token is marked on the board by the TokenFocusMarker (a chalk ring and
+## its pin, held on show whatever the Token pins setting says), and has a card at the foot with a
+## Find button (centre and pulse again) and an Actions button that opens the token's own menu
+## beside the drawer, so the roster is also the selection UI the board lacks. The name and health
+## are in the row above, not repeated in the card; the list scrolls to the picked row.
 ## The drawer reads the table again while it is open (REFRESH_S), not while it is closed.
 
 ## A row was pressed: the host centres the camera on `token` and pulses it.
 signal token_chosen(token: BoardToken)
 ## The card's Actions button: the host opens the token's menu at `at` (screen pixels).
 signal menu_requested(token: BoardToken, at: Vector2)
-## The header's Add token button (the GM): the host opens the asset browser.
-signal add_requested
 
 ## A list, not a pane: narrower than the 396 drawer token (UI_TASTE S5), so at a 914 px canvas
 ## (1280x720 at Auto) the drawer and its rail stay left of the board centre.
@@ -29,10 +30,19 @@ const RAIL_ID := &"tokens"
 const REFRESH_S := 0.5
 ## A token pulses this long after a row picks it.
 const PULSE_S := 1.6
-const ROW_HEIGHT := 52.0
+const ROW_HEIGHT := 64.0
+const PORTRAIT_PX := 40.0
+## A row's health bar: thin, with its track showing (the theme's Progress variants).
+const BAR_HEIGHT := 4.0
+## The tab's width: the word "Tokens" under the icon needs more than a bare rail's 44.
+const TAB_WIDTH := 60.0
+## The rail's press target (a 36 px item is below the 40 px floor, UI_TASTE S7).
+const RAIL_TARGET := 44.0
 
 ## The network id of the picked token, "" when none is.
 var selected_id: String = ""
+## Marks the picked and hovered token on the board (see TokenFocusMarker).
+var focus_marker: TokenFocusMarker = null
 
 ## Where the roster reads its tokens, the host sets them in setup(): `source` returns the
 ## BoardToken nodes, `controls` answers whether this peer controls one, `is_gm` whether this
@@ -47,14 +57,12 @@ var _hovered: BoardToken = null
 var _signature: String = ""
 var _timer: Timer
 
+var _pictures: TokenPictures
 var _count_label: Label
-var _add_button: Button
 var _list: VBoxContainer
 var _scroll: ScrollContainer
+var _more_cue: Control
 var _card: VBoxContainer
-var _card_name: Label
-var _card_status: Label
-var _card_bar: ProgressBar
 var _empty_label: Label
 var _find_button: Button
 var _actions_button: Button
@@ -62,10 +70,18 @@ var _actions_button: Button
 
 func _on_ready() -> void:
 	drawer_width = WIDTH
-	tab_width = 44.0
+	tab_width = TAB_WIDTH
 	tab_top_margin = 12.0
 	rail_items = [{"id": RAIL_ID, "icon": "chess", "tooltip": tr("Tokens (T)")}]
+	# The marker is the first child, so the drawer and its tab lie over it.
+	focus_marker = TokenFocusMarker.new()
+	add_child(focus_marker)
+	_pictures = TokenPictures.new()
+	add_child(_pictures)
+	focus_marker.pictures = _pictures
 	_build_content()
+	# The rail is built after this (it reads rail_items), so its word is added when it exists.
+	_dress_rail.call_deferred()
 	_timer = Timer.new()
 	_timer.name = "RefreshTimer"
 	_timer.wait_time = REFRESH_S
@@ -84,22 +100,10 @@ func setup(source: Callable, controls: Callable, is_gm: Callable) -> void:
 
 
 func _build_content() -> void:
-	var header := HBoxContainer.new()
-	header.theme_type_variation = &"BoxContainerSpaced"
-	content_container.add_child(header)
 	var title := Label.new()
 	title.text = tr("Tokens")
 	title.theme_type_variation = &"PanelHeader"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(title)
-	_add_button = AnimatedButton.new()
-	_add_button.name = "AddTokenButton"
-	_add_button.text = tr("Add token")
-	_add_button.icon = IconButton.load_icon("plus")
-	_add_button.theme_type_variation = &"Secondary"
-	_add_button.custom_minimum_size = Vector2(0, 40)
-	_add_button.pressed.connect(func() -> void: add_requested.emit())
-	header.add_child(_add_button)
+	content_container.add_child(title)
 
 	_count_label = Label.new()
 	_count_label.theme_type_variation = &"Caption"
@@ -112,6 +116,10 @@ func _build_content() -> void:
 	_list = VBoxContainer.new()
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(_list)
+	_scroll.get_v_scroll_bar().value_changed.connect(func(_value: float) -> void: _update_cue())
+	_scroll.get_v_scroll_bar().changed.connect(_update_cue)
+	_more_cue = _make_cue()
+	content_container.add_child(_more_cue)
 
 	_empty_label = Label.new()
 	_empty_label.theme_type_variation = &"Caption"
@@ -128,23 +136,13 @@ func _build_content() -> void:
 	_build_card()
 
 
-## The selected token's card at the drawer's foot.
+## The picked token's card at the drawer's foot: its two actions (its name and health are in its
+## row, which the list keeps in view).
 func _build_card() -> void:
 	_card = VBoxContainer.new()
 	_card.name = "SelectedCard"
 	_card.theme_type_variation = &"BoxContainerSpaced"
 	content_container.add_child(_card)
-	_card_name = Label.new()
-	_card_name.theme_type_variation = &"H3"
-	_card_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_card.add_child(_card_name)
-	_card_status = Label.new()
-	_card_status.theme_type_variation = &"Caption"
-	_card.add_child(_card_status)
-	_card_bar = ProgressBar.new()
-	_card_bar.show_percentage = false
-	_card_bar.custom_minimum_size = Vector2(0, 8)
-	_card.add_child(_card_bar)
 	var buttons := HBoxContainer.new()
 	buttons.theme_type_variation = &"BoxContainerSpaced"
 	_card.add_child(buttons)
@@ -179,7 +177,6 @@ func refresh() -> void:
 		return
 	var is_gm: bool = _is_gm.is_valid() and bool(_is_gm.call())
 	_rows = TokenRosterModel.rows(_source.call(), is_gm, _controls)
-	_add_button.visible = is_gm
 	_count_label.text = TokenRosterModel.count_text(_rows.size())
 	_empty_label.visible = _rows.is_empty()
 	var signature := _signature_of(_rows)
@@ -196,7 +193,9 @@ func refresh() -> void:
 static func _signature_of(rows: Array[Dictionary]) -> String:
 	var parts := PackedStringArray()
 	for row in rows:
-		parts.append("%s|%s|%s|%s" % [row["id"], row["name"], row["yours"], row["hidden"]])
+		parts.append(
+			"%s|%s|%s|%s" % [row["id"], row["display_name"], row["yours"], row["hidden"]]
+		)
 	return "\n".join(parts)
 
 
@@ -246,8 +245,8 @@ func _make_row(row: Dictionary) -> Control:
 	button.name = "Press"
 	button.theme_type_variation = &"Ghost"
 	button.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	button.tooltip_text = String(row["name"])
-	button.accessibility_name = tr("Find %s on the map") % row["name"]
+	button.tooltip_text = String(row["display_name"])
+	button.accessibility_name = tr("Find %s on the map") % row["display_name"]
 	button.pressed.connect(_on_row_pressed.bind(String(row["id"])))
 	button.mouse_entered.connect(_on_row_hovered.bind(String(row["id"])))
 	button.mouse_exited.connect(_clear_hover)
@@ -260,6 +259,14 @@ func _make_row(row: Dictionary) -> Control:
 	hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 8)
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(hbox)
+	var portrait := TextureRect.new()
+	portrait.name = "Portrait"
+	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	portrait.custom_minimum_size = Vector2(PORTRAIT_PX, PORTRAIT_PX)
+	portrait.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hbox.add_child(portrait)
 	var vbox := VBoxContainer.new()
 	vbox.name = "Words"
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -276,6 +283,13 @@ func _make_row(row: Dictionary) -> Control:
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	vbox.add_child(status)
+	var bar := ProgressBar.new()
+	bar.name = "Bar"
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.show_percentage = false
+	bar.custom_minimum_size = Vector2(0, BAR_HEIGHT)
+	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	vbox.add_child(bar)
 	var hidden := TextureRect.new()
 	hidden.name = "HiddenIcon"
 	hidden.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -298,10 +312,18 @@ func _update_row(row: Dictionary) -> void:
 	var vbox := content.get_node("Words") as VBoxContainer
 	var name_label := vbox.get_node("Name") as Label
 	var status := vbox.get_node("Status") as Label
-	name_label.text = String(row["name"])
+	name_label.text = String(row["display_name"])
 	name_label.theme_type_variation = &"BodyOnSelected" if selected else &"Body"
 	status.text = TokenRosterModel.status_text(row)
 	status.theme_type_variation = &"CaptionOnSelected" if selected else &"Caption"
+	var bar := vbox.get_node("Bar") as ProgressBar
+	bar.visible = row["max_hp"] > 0
+	bar.max_value = maxf(1.0, float(row["max_hp"]))
+	bar.value = clampf(float(row["hp"]), 0.0, bar.max_value)
+	bar.theme_type_variation = (
+		&"ProgressSuccess" if row["health"] == TokenRosterModel.Health.HEALTHY else &"ProgressDanger"
+	)
+	_dress_portrait(content.get_node("Portrait") as TextureRect, row["token"])
 	(content.get_node("HiddenIcon") as Control).visible = row["hidden"]
 	(node.get_node("Strip") as PanelContainer).theme_type_variation = (
 		&"CardStripSelected" if selected else &"CardStrip"
@@ -336,7 +358,16 @@ func _on_row_pressed(id: String) -> void:
 	_update_card()
 	var token := _token_of(id)
 	if token != null:
+		focus_marker.set_selected(token)
+		_show_row.call_deferred(id)
 		token_chosen.emit(token)
+
+
+## Scrolls the list so the picked row is in view (after the layout of this frame).
+func _show_row(id: String) -> void:
+	var node: Control = _row_nodes.get(id)
+	if node != null and is_instance_valid(node):
+		_scroll.ensure_control_visible(node)
 
 
 func _token_of(id: String) -> BoardToken:
@@ -366,20 +397,85 @@ func _update_card() -> void:
 	if token == null:
 		selected_id = ""
 		_card.visible = false
+		focus_marker.set_selected(null)
 		return
-	var row: Dictionary = {}
-	for candidate in _rows:
-		if candidate["id"] == selected_id:
-			row = candidate
 	_card.visible = true
-	_card_name.text = String(row["name"])
-	_card_status.text = TokenRosterModel.status_text(row)
-	_card_bar.max_value = maxf(1.0, float(row["max_hp"]))
-	_card_bar.value = clampf(float(row["hp"]), 0.0, _card_bar.max_value)
-	_card_bar.theme_type_variation = (
-		&"ProgressSuccess" if row["health"] == TokenRosterModel.Health.HEALTHY else &"ProgressDanger"
-	)
-	_card_bar.visible = row["max_hp"] > 0
+	if is_open and not focus_marker.is_marking(token):
+		focus_marker.set_selected(token)
+	_find_button.tooltip_text = tr("Centre the camera on the picked token")
+	_actions_button.tooltip_text = tr("Open the picked token's menu")
+
+
+## Sets `portrait` to `token`'s picture, or the chess icon while it is being made.
+func _dress_portrait(portrait: TextureRect, token: BoardToken) -> void:
+	var picture := _pictures.texture_for(token) if is_instance_valid(token) else null
+	if picture != null:
+		portrait.texture = picture
+		portrait.self_modulate = Color.WHITE
+		portrait.set_meta(&"placeholder", false)
+		return
+	if not portrait.get_meta(&"placeholder", false):
+		portrait.texture = IconButton.load_icon("chess")
+		portrait.set_meta(&"placeholder", true)
+	portrait.self_modulate = ThemeColors.of(self, ThemeColors.TEXT_SOFT)
+
+
+# -- The list's cues ------------------------------------------------------------------------
+
+
+## A line under the list that says more rows are below the fold: a down chevron and "More below",
+## shown only while the list can scroll further (a fade would need the panel's colour).
+func _make_cue() -> Control:
+	var cue := HBoxContainer.new()
+	cue.name = "MoreCue"
+	cue.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cue.alignment = BoxContainer.ALIGNMENT_CENTER
+	cue.visible = false
+	var icon := TextureRect.new()
+	# The right chevron turned a quarter: there is no down chevron in the icon set.
+	icon.texture = IconButton.load_icon("chevron-right")
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.custom_minimum_size = Vector2(16, 16)
+	icon.pivot_offset = Vector2(8, 8)
+	icon.rotation = PI / 2.0
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cue.add_child(icon)
+	var label := Label.new()
+	label.theme_type_variation = &"Caption"
+	label.text = tr("More below")
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cue.add_child(label)
+	return cue
+
+
+## Shows the cue while rows lie below the visible part of the list.
+func _update_cue() -> void:
+	if _more_cue == null or _scroll == null:
+		return
+	var bar := _scroll.get_v_scroll_bar()
+	_more_cue.visible = bar.max_value - bar.page - bar.value > 4.0 and bar.max_value > bar.page
+
+
+## Adds the word "Tokens" under the rail's icon and widens its press target (the rail is built
+## after _on_ready, so this runs deferred).
+func _dress_rail() -> void:
+	if _rail_panel == null:
+		return
+	var column := _rail_panel.get_node_or_null("RailColumn") as Control
+	if column == null:
+		return
+	_rail.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	for node in _rail.find_children("*", "Button", true, false):
+		if node is IconButton:
+			(node as Control).custom_minimum_size = Vector2(RAIL_TARGET, RAIL_TARGET)
+	var word := Label.new()
+	word.name = "RailWord"
+	word.text = tr("Tokens")
+	word.theme_type_variation = &"Caption"
+	word.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	word.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(word)
 
 
 # -- Board feedback ----------------------------------------------------------------------
@@ -392,12 +488,15 @@ func _on_row_hovered(id: String) -> void:
 	if token != null:
 		_hovered = token
 		token.add_highlight()
+		focus_marker.set_hovered(token)
 
 
 func _clear_hover() -> void:
 	if _hovered != null and is_instance_valid(_hovered):
 		_hovered.remove_highlight()
 	_hovered = null
+	if focus_marker != null:
+		focus_marker.set_hovered(null)
 
 
 # -- Opening and closing -----------------------------------------------------------------
@@ -411,6 +510,8 @@ func _on_pane_requested(_id: StringName) -> void:
 func _on_closed() -> void:
 	_timer.stop()
 	_clear_hover()
+	# The marker belongs to the open list: a closed drawer leaves the board clear.
+	focus_marker.set_selected(null)
 
 
 ## T opens and closes the roster, at a table, with its tab shown and nothing else taking the

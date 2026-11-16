@@ -95,8 +95,9 @@ func _dress_bottom_buttons() -> void:
 
 
 ## The roster is the HUD's way to find a token: a row centres the camera on it and pulses it,
-## Actions opens the token's own menu beside the drawer, Add token opens the browser. The
-## roster and the room drawer share the left edge, so opening one closes the other.
+## Actions opens the token's own menu beside the drawer (Add token stays the one button at the
+## bottom right). The roster and the room drawer share the left edge, so opening one closes
+## the other.
 func _wire_token_roster() -> void:
 	token_roster.setup(
 		_all_tokens,
@@ -105,11 +106,6 @@ func _wire_token_roster() -> void:
 	)
 	token_roster.token_chosen.connect(_on_roster_token_chosen)
 	token_roster.menu_requested.connect(_on_roster_menu_requested)
-	token_roster.add_requested.connect(
-		func() -> void:
-			if toggle_asset_browser_button.visible:
-				toggle_asset_browser_button.button_pressed = true
-	)
 	token_roster.pane_requested.connect(func(_id: StringName) -> void: room_drawer.close())
 	room_drawer.pane_requested.connect(func(_id: StringName) -> void: token_roster.close())
 

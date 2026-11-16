@@ -27,7 +27,7 @@ var panel: RoomPanel
 func _on_ready() -> void:
 	drawer_width = WIDTH
 	# Under the token roster's tab, which holds the top of the left edge.
-	tab_top_margin = 64.0
+	tab_top_margin = 112.0
 	rail_items = [{"id": RAIL_ID, "icon": "users", "tooltip": "The room (Tab)"}]
 	panel = RoomPanel.new()
 	panel.name = "RoomPanel"

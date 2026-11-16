@@ -19,7 +19,7 @@ const HURT_SHARE := 0.4
 ## The rows for `tokens` (BoardToken nodes) as one peer sees them. `is_gm` lists every token;
 ## otherwise a hidden one is left out. `controls` is called with a token and answers whether
 ## this peer controls it (a Callable(BoardToken) -> bool); controlled tokens sort first. Each
-## row is {"token", "id", "name", "hp", "max_hp", "hidden", "yours", "health"}.
+## row is {"token", "id", "name", "display_name", "hp", "max_hp", "hidden", "yours", "health"}.
 static func rows(tokens: Array, is_gm: bool, controls: Callable) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for node in tokens:
@@ -45,7 +45,33 @@ static func rows(tokens: Array, is_gm: bool, controls: Callable) -> Array[Dictio
 			)
 		)
 	out.sort_custom(_before)
+	_number_duplicates(out)
 	return out
+
+
+## Gives each row a "display_name": its token's name, and for the second and later rows of one
+## name that name and a number ("Bramble", "Bramble 2"), so a GM with three of the same monster
+## can tell the rows apart. Rows are already in a stable order (name, then id), so a token keeps
+## its number while the list does not change. A number a token already wears in its name is
+## skipped ("Goblin 2" named by hand stays, the duplicate after it becomes "Goblin 3").
+static func _number_duplicates(sorted_rows: Array[Dictionary]) -> void:
+	var taken := {}
+	for row in sorted_rows:
+		taken[String(row["name"]).strip_edges().to_lower()] = true
+	var seen := {}
+	for row in sorted_rows:
+		var base := String(row["name"]).strip_edges()
+		var key := base.to_lower()
+		row["display_name"] = base
+		if not seen.has(key):
+			seen[key] = 1
+			continue
+		var number: int = seen[key] + 1
+		while taken.has("%s %d" % [key, number]):
+			number += 1
+		seen[key] = number
+		taken["%s %d" % [key, number]] = true
+		row["display_name"] = "%s %d" % [base, number]
 
 
 ## Whether row `a` sorts before row `b`: yours first, then name (natural, case-insensitive),

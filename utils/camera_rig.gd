@@ -276,6 +276,8 @@ static func play_hints(street: bool, brush_owns_keys: bool = false) -> Array[Dic
 	var pause := {"key": InputProfile.label(&"pause"), "action": "Pause"}
 	var help := {"key": "F1", "action": "Help"}
 	var measure := {"key": InputProfile.label(&"measure"), "action": "Measure"}
+	# The token roster drawer (TokenRoster), the list that finds a token.
+	var tokens := {"key": "T", "action": "Tokens"}
 	if street:
 		return [
 			pause,
@@ -284,6 +286,7 @@ static func play_hints(street: bool, brush_owns_keys: bool = false) -> Array[Dic
 			{"key": InputProfile.label(&"zoom"), "action": "Lens"},
 			turn_hint(brush_owns_keys),
 			{"key": "F9 or V", "action": "Leave"},
+			tokens,
 			measure,
 			help,
 		]
@@ -294,6 +297,7 @@ static func play_hints(street: bool, brush_owns_keys: bool = false) -> Array[Dic
 		turn_hint(brush_owns_keys),
 		tilt_hint(),
 		{"key": InputProfile.label(&"reset_camera"), "action": "Reset camera"},
+		tokens,
 		measure,
 		{"key": InputProfile.label(&"grid"), "action": "Grid"},
 		help,

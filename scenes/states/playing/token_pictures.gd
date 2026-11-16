@@ -1,0 +1,73 @@
+class_name TokenPictures
+extends Node
+
+## The HUD's own copy of the token portraits: the same pictures the map pins wear (TokenPortraits,
+## made by the same rules from the same sources), so a roster row and the selection marker show
+## the face a player sees on the board. A second atlas rather than a reach into TokenMarkers'
+## private one: the markers stay as they are, and a picture costs one small job (icons and
+## avatars are cheap, a model is drawn once on a private stage).
+##
+## texture_for() answers null while a picture is not ready (or failed: no renderer in a headless
+## run); the caller shows a plain disc in that case and asks again on its next refresh.
+
+var _portraits: TokenPortraits = null
+var _textures: Dictionary = {}  ## picture key -> AtlasTexture
+
+
+func _ready() -> void:
+	name = "TokenPictures"
+	_portraits = TokenPortraits.new()
+	add_child(_portraits)
+
+
+## The cache key of `token`'s picture, "" while it has no mesh (as TokenMarkers reads it).
+static func key_of(token: BoardToken) -> String:
+	if token == null or token.rigid_body == null:
+		return ""
+	for mesh_instance in TokenGhost.meshes_of(token.rigid_body):
+		if mesh_instance.mesh == null:
+			continue
+		return TokenPortraits.identity_key(
+			token.pack_id,
+			token.asset_id,
+			token.variant_id,
+			token.avatar_recipe,
+			mesh_instance.mesh.get_instance_id()
+		)
+	return ""
+
+
+## What a token's picture is made from (TokenPortraits.request): the avatar's recipe, the pack's
+## icon when it has one, else the token's own meshes.
+static func source_for(token: BoardToken) -> Dictionary:
+	if token.is_avatar():
+		return {"kind": TokenPortraits.Kind.AVATAR, "recipe": token.avatar_recipe}
+	if token.pack_id != "" and token.asset_id != "" and AssetManager.resolver != null:
+		var path: String = AssetManager.resolver.resolve_icon_sync(
+			token.pack_id, token.asset_id, token.variant_id
+		)
+		if path != "":
+			return {"kind": TokenPortraits.Kind.ICON, "path": path}
+	return {"kind": TokenPortraits.Kind.MODEL, "token": token.get_instance_id()}
+
+
+## The picture of `token` as a texture (one cell of the atlas, PICTURE_PX square), or null while
+## it is being made. Asks for it the first time.
+func texture_for(token: BoardToken) -> Texture2D:
+	var key := key_of(token)
+	if key == "" or _portraits == null:
+		return null
+	var cell := _portraits.cell_of(key)
+	if cell < 0:
+		if not _portraits.knows(key):
+			_portraits.request(key, source_for(token))
+		return null
+	if not _textures.has(key):
+		var atlas_texture := AtlasTexture.new()
+		atlas_texture.atlas = _portraits.atlas
+		var corner := TokenPortraits.cell_origin(cell) + Vector2i.ONE * (
+			(TokenPortraits.CELL_PX - TokenPortraits.PICTURE_PX) / 2
+		)
+		atlas_texture.region = Rect2(corner, Vector2.ONE * TokenPortraits.PICTURE_PX)
+		_textures[key] = atlas_texture
+	return _textures[key]

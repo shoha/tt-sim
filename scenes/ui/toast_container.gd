@@ -20,6 +20,10 @@ const DEFAULT_DURATION := 3.0
 ## A toast with an action stays long enough to read it and reach for the button.
 const ACTION_DURATION := 6.0
 const ICON_SIZE := 24
+## A kept toast (duration 0) has a close control this big, and an error among them leaves by
+## itself after this many seconds (the pointer on it holds it).
+const CLOSE_PX := 40.0
+const ERROR_KEPT_S := 12.0
 ## The column's resting distance from the bottom edge (the scene's margin_bottom).
 const REST_MARGIN_PX := 80.0
 ## The meta a toast carries its tag in (dismiss_tag).
@@ -111,6 +115,14 @@ func show_toast(
 		var button := _action_button(action_label, action_icon)
 		button.pressed.connect(_on_action_pressed.bind(toast, action))
 		toast.get_child(0).add_child(button)
+	# A toast with no time on it (duration 0) stays until sent away: it carries a close control,
+	# and an error among them goes by itself after ERROR_KEPT_S, so none piles up unseen.
+	var lifetime := duration
+	if duration <= 0.0:
+		toast.get_child(0).add_child(_close_button(toast))
+		toast.gui_input.connect(_on_kept_input.bind(toast))
+		if type == ToastType.ERROR:
+			lifetime = ERROR_KEPT_S
 	toast_vbox.add_child(toast)
 	_fit_one_line(toast, max_width(type, has_action))
 	_active_toasts.append(toast)
@@ -129,11 +141,11 @@ func show_toast(
 	# Schedule dismissal on a timer the toast owns, so it goes with the toast when that is
 	# freed early (the oldest past MAX_VISIBLE_TOASTS) and holds while the pointer rests on
 	# it: a toast being read or aimed at (its Undo) never leaves under the pointer.
-	if duration > 0:
+	if lifetime > 0:
 		var timer := Timer.new()
 		timer.name = "DismissTimer"
 		timer.one_shot = true
-		timer.wait_time = maxf(duration, reading_seconds(message))
+		timer.wait_time = maxf(lifetime, reading_seconds(message))
 		toast.add_child(timer)
 		timer.timeout.connect(_dismiss_toast.bind(toast, false))
 		timer.start()
@@ -263,6 +275,28 @@ func _fit_one_line(toast: Control, limit_px: float) -> void:
 	var font_size := label.get_theme_font_size(&"font_size")
 	var words := font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 	toast.custom_minimum_size.x = minf(ceilf(rest + words) + 2.0, limit_px)
+
+
+## The close control of a kept toast: a 40 px ghost button with the cross icon, so the way out
+## is visible and not only a click on the words (W7: a tooltip and an accessible name).
+func _close_button(toast: Control) -> Button:
+	var button := AnimatedButton.new()
+	button.name = "Close"
+	button.icon = IconButton.load_icon("x")
+	button.theme_type_variation = &"Ghost"
+	button.custom_minimum_size = Vector2(CLOSE_PX, CLOSE_PX)
+	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	button.tooltip_text = tr("Dismiss")
+	button.accessibility_name = tr("Dismiss this message")
+	button.pressed.connect(_dismiss_toast.bind(toast, false))
+	return button
+
+
+## A click on a kept toast's words sends it away too.
+func _on_kept_input(event: InputEvent, toast: Control) -> void:
+	var click := event as InputEventMouseButton
+	if click != null and click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
+		_dismiss_toast(toast, false)
 
 
 ## The action at a toast's end: a quiet Secondary button with its icon and a verb.
