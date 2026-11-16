@@ -466,14 +466,17 @@ func _rebuild_zone() -> void:
 
 
 ## Gives the ground the terrain's wet dressing (its wet line darkens the bank in a brush-edged
-## band); the skirt has none. The texture is updated in place by the terrain, so one bind serves
+## band). The skirt gets it too (card painter-edges2): the texture clamps at the map's edge, so the
+## bank's band carries straight on along a river's channel patch, where it ended in a hard line
+## at the map edge. The texture is updated in place by the terrain, so one bind serves
 ## every edit; a terrain that had no water yet binds it when its first one is made.
 func _bind_wet() -> void:
 	if _ground == null or not is_instance_valid(_terrain):
 		return
 	var wet := _terrain.get_water_texture()
-	_ground.set_shader_parameter(&"water_weights", wet)
-	_ground.set_shader_parameter(&"water_present", wet != null)
+	for material: ShaderMaterial in [_ground, _skirt]:
+		material.set_shader_parameter(&"water_weights", wet)
+		material.set_shader_parameter(&"water_present", wet != null)
 
 
 ## The scorched ground's share per height sample as an R8 image (the `char` role has no channel in
