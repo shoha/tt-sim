@@ -30,6 +30,10 @@ const GROUP_GAP := 8.0
 @export var auto_select: bool = true
 ## Draw the indicator on the end edge (right or bottom) instead of the start.
 @export var indicator_at_end: bool = true
+## Let the items take keyboard and gamepad focus (set before the items are added). Off for the
+## drawers' rails, whose panes a key already steps; on for a sheet's section rail (Settings), so
+## Tab and the arrows reach it.
+@export var focusable: bool = false
 
 var selected: StringName = &""
 
@@ -59,7 +63,7 @@ func add_item(id: StringName, icon_name: String, tooltip: String = "") -> IconBu
 	button.icon_name = icon_name
 	button.tooltip_text = tooltip
 	button.custom_minimum_size = Vector2(ITEM_SIZE, ITEM_SIZE)
-	button.focus_mode = Control.FOCUS_NONE
+	button.focus_mode = Control.FOCUS_ALL if focusable else Control.FOCUS_NONE
 	button.set_meta("ui_silent", true)
 	button.pressed.connect(_on_item_pressed.bind(id))
 	var item: Control = button
@@ -156,6 +160,16 @@ func set_item_tooltip(id: StringName, text: String) -> void:
 func set_item_visible(id: StringName, item_visible: bool) -> void:
 	if _items.has(id):
 		_items[id].visible = item_visible
+
+
+func is_item_visible(id: StringName) -> bool:
+	return _items.has(id) and _items[id].visible
+
+
+## Gives the item's button keyboard focus (when the rail is focusable and the item shows).
+func grab_item_focus(id: StringName) -> void:
+	if focusable and _buttons.has(id) and is_item_visible(id):
+		(_buttons[id] as Control).grab_focus()
 
 
 func _on_item_pressed(id: StringName) -> void:

@@ -39,4 +39,7 @@ func test_rail_underline_sits_under_the_selected_section() -> void:
 func test_advanced_graphics_rows_keep_unique_names() -> void:
 	assert_not_null(_menu.ssao_check)
 	assert_not_null(_menu.renderer_method_option)
-	assert_true(_menu.ssao_check.get_parent().get_parent().get_parent().get_parent() is Foldout)
+	var node: Node = _menu.ssao_check
+	while node and not node is Foldout:
+		node = node.get_parent()
+	assert_true(node is Foldout, "the advanced rows stay inside their Foldout")

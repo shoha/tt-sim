@@ -475,9 +475,20 @@ func _slider(vertical: bool) -> Dictionary:
 		grabber_area = fill,
 		grabber_area_highlight = inherit(fill, {bg_color = c(ThemeColors.STATE_HOVER)}),
 		grabber = _knob(ThemeColors.STATE, 1.0),
-		grabber_highlight = _knob(ThemeColors.STATE_HOVER, 1.0),
+		grabber_highlight = _knob_lit(ThemeColors.STATE_HOVER),
 		grabber_disabled = _knob(ThemeColors.TEXT_SOFT, 0.5),
 	}
+
+
+## The knob under the pointer or keyboard focus (a Slider has no focus style: Godot draws its
+## highlight items for both): the disc inside a 2 px ring in the focus role (I1), so a slider
+## reached by Tab is seen as a ring, not a shade.
+func _knob_lit(role: StringName) -> ImageTexture:
+	var halo := '<circle cx="14" cy="14" r="12.5" fill="none" %s stroke-width="2"/>'
+	var disc := '<circle cx="14" cy="14" r="7.5" %s %s stroke-width="3"/>'
+	var body := disc % [paint("fill", ThemeColors.SURFACE_RAISED, 1.0), paint("stroke", role, 1.0)]
+	var ring_paint := paint("stroke", ThemeColors.FOCUS, 1.0)
+	return svg_icon(28, 28, (halo % ring_paint) + body)
 
 
 ## The 20 px slider knob: a raised disc with a ring in `role`.

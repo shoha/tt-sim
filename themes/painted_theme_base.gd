@@ -217,6 +217,9 @@ func _define_buttons() -> void:
 	# (3:1 on every surface): otherwise it read as live.
 	ghost.font_disabled_color = c(ThemeColors.TRACK)
 	ghost.icon_disabled_color = c(ThemeColors.TRACK)
+	# And it stays bare: the inset fill every other disabled button takes made a row of waiting
+	# Resets read as chips (the Settings group headings), where words alone say "nothing to do".
+	ghost.disabled = bare
 	define_variant_style("Ghost", "Button", ghost)
 	# A quiet action set in a column of words (the map panel's Add details): no pad at its sides,
 	# so its icon stands on the words' left edge, the caption size, soft ink at rest and ink under
@@ -560,6 +563,9 @@ func _define_containers() -> void:
 	define_style("BoxContainer", {separation = SPACE_1})
 	define_variant_style("BoxContainerTight", "BoxContainer", {separation = SPACE_1})
 	define_variant_style("BoxContainerSpaced", "BoxContainer", {separation = SPACE_3})
+	# Groups under their own headings (a Settings tab): a clear step wider than the rows inside
+	# a group, so a heading belongs to what follows it.
+	define_variant_style("BoxContainerGroups", "BoxContainer", {separation = SPACE_5})
 	# A step between Tight and Spaced: the map panel's picture to its words to its facts, close
 	# enough that the longest map fits a 1280x720 canvas with no scroll.
 	define_variant_style("BoxContainerSnug", "BoxContainer", {separation = SPACE_2})
