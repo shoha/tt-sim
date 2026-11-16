@@ -212,9 +212,9 @@ func test_the_ghost_reads_the_original_material_of_a_painted_mesh() -> void:
 	TokenGhost.dress(token)
 	var ghost := TokenGhost.overlay_of(_part(token))
 	assert_not_null(ghost, "dressed")
-	assert_true(ghost.get_shader_parameter("use_albedo"), "a source colour, not the grey default")
-	assert_eq(ghost.get_shader_parameter("albedo_col"), source.albedo_color)
-	assert_same(ghost.get_meta(TokenGhost.SOURCE_META), source)
+	assert_same(ghost.get_meta(TokenGhost.SOURCE_META), source, "the original, not the painted one")
+	var line: Color = ghost.get_shader_parameter("line_colour")
+	assert_almost_eq(line.h, source.albedo_color.h, 0.08, "the line takes the source's blue")
 
 
 func test_warmup_samples_cover_all_six_variants_on_both_layouts() -> void:

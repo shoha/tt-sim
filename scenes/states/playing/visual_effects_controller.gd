@@ -125,6 +125,7 @@ func _load_see_through_settings() -> void:
 		config.get_value("graphics", "token_ghost_enabled", TokenGhost.DEFAULT_ENABLED)
 	)
 	TokenToon.painted = SettingsTokenShading.saved_id(config) == TokenToon.SHADING_PAINTED
+	SettingsTokenPins.apply_id(SettingsTokenPins.saved_id(config))
 
 
 ## Turns the close-zoom canopy window on or off.

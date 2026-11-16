@@ -575,16 +575,21 @@ summer +0.07 to +0.12 against +0.06.
   `shaders/token_ghost.gdshader`): its silhouette reads through the strokes and block-ins because
   they are in the depth buffer like any opaque surface. Painted gives the ghost its own wash
   (`TokenGhost.PAINTED_PARAMS`, set by `LevelEnvironmentManager._publish_painted` through
-  `TokenGhost.set_painted`; shader parameters only): a warm cream `ghost_tint`, `own_colour` 0.6,
-  `ghost_alpha` 0.58, `rim_alpha` 0.8, `rim_power` 2.0 and a dark teal unselected rim, because the
-  default (a dark green silhouette) turned muddy over the painted crowns. Gold when selected or
-  hovered, as in Classic. Frames: `compare/painter_final20_ghost/` (`notes.md`). Both tree shaders
+  `TokenGhost.set_painted`) a warm cream wash with a dark teal rim; painter-look-ghost2
+  (2026-11-15, look-pending) replaced that, in both looks, with ONE line round the outer silhouette
+  of the covered part (owner: "just the outermost edges would be lined": no fill, no part edges, no
+  translucent model): a dark outer line with a thin light one inside it in the token's most vivid
+  non-green colour (`TokenGhost.Style.DOUBLE`; gold when selected or hovered), drawn by a mask pass
+  plus a pushed-out line pass (`shaders/token_ghost_mark.gdshader`, `shaders/token_ghost.gdshader`;
+  `docs/PERFORMANCE.md` "Token ghost outline"). Frames: `compare/painter_final24_ghost2/`
+  (`notes.md`); the older ones `compare/painter_final20_ghost/`. Both tree shaders
   still hand their own view-space point to `tree_fades` (the canopy fades; `skip_vertex_transform`,
   VERTEX and NORMAL in view space; the block-in wrote POSITION alone before painter-a2a5, so Godot's
   VERTEX was the mesh's unit block at the tree's FOOT). `test_painter_trees_draw` checks that no
   token-thinning code or uniform is left in the include or the two bodies, and `test_token_ghost`
-  checks the Painted wash and its restore. Open: an unselected ghost under a thick crown is a pale
-  blob, easy to miss for a small token until it is selected or hovered; its rim is thin.
+  checks the line variants and the mask pass. Open: a thin line over a bright crown is easy to miss
+  for a small token until it is selected or hovered (the map pin, now shown at every pitch, is the
+  other way to find it).
 - One hand (painter-trees-polish): every broadleaf crown and the spruce paint with the oak's
   scalloped `lobed` brush (`tree_roles.json`; the lime's heart-shaped `scale`, the poplar's and
   rowan's `flick`, the spruce's `spray` and the birch's small `round` read as a second, cruder hand
