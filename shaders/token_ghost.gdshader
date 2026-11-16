@@ -1,18 +1,35 @@
 shader_type spatial;
-render_mode unshaded, depth_test_disabled, depth_draw_never, cull_back, blend_mix, shadows_disabled;
+render_mode unshaded, depth_draw_never, cull_back, blend_mix, shadows_disabled;
 
 /*
  * Token ghost (TokenGhost, Settings > Graphics > Token ghost)
  * ===========================================================
  *
- * A material_overlay on every mesh of a token: the token's own geometry drawn a second time
- * with the depth test off, kept only where something stands between the camera and the
- * fragment, so a token behind foliage, a trunk, a rock or a wall shows as a tinted
- * silhouette through it and a token in the open shows nothing extra.
+ * A material_overlay on every mesh of a token that draws ONE line around the outer silhouette
+ * of the token's covered part: where a token stands behind foliage, a trunk, a rock or a wall
+ * its outline shows through, and a token in the open shows nothing extra. Nothing inside the
+ * body is drawn (no fill, no part edges, no fold contours).
  *
- * The occlusion test reads the depth buffer (hint_depth_texture) and compares it with the
- * fragment's own view depth. Opaque foliage writes depth, a cutout card's discarded
- * fragments do not, so the ghost appears only behind the pixels a card really covers.
+ * How the union silhouette comes out of per-mesh draws (painter-look-ghost2, 2026-11-15):
+ * two passes, drawn in this order by render priority.
+ *   1. the mask pass (token_ghost_mark.gdshader, the overlay's next_pass, priority below this
+ *      one) writes the nearest depth on every pixel the token's meshes cover;
+ *   2. this pass draws every mesh again, its vertices pushed out along their normals by the
+ *      line's width in screen pixels (`line_px` + `inner_px`, of a 1080-line view, scaled by the
+ *      viewport's height), and writes a depth just short of the nearest. The depth test fails on
+ *      every marked pixel, so only the ring outside the union of all the meshes is left, a line
+ *      of constant pixel width round the whole token, with no line where one part lies over
+ *      another. The shader then keeps the outer `line_px` band of the pushed-out surface (the
+ *      distance to its contour from f / (df/dpixel) of f = |N . V|, which is 2 d near a smooth
+ *      surface's contour whatever its curvature), dark outside and light inside it when
+ *      `inner_px` is above 0, and discards the rest.
+ * No stencil buffer is needed (spatial shaders here take none) and the line is where the depth
+ * buffer says something else is in front, below.
+ *
+ * The occlusion test reads the depth buffer (hint_depth_texture, copied before the transparent
+ * passes, so the mask pass's writes do not reach it) and compares it with the fragment's own
+ * view depth. Opaque foliage writes depth, a cutout card's discarded fragments do not, so the
+ * line appears only behind the pixels a card really covers.
  *
  * The token's own parts write depth too (an arm over the torso, a large creature's body over
  * its far legs), and the depth buffer cannot say whose they are. So the token carries a
@@ -24,39 +41,27 @@ render_mode unshaded, depth_test_disabled, depth_draw_never, cull_back, blend_mi
  * somebody else's and counts as an occluder. Without a bound (`bound_extent` 0) the stretch
  * is 0 and the margin is `min_gap`, as before.
  *
- * Colour: a figure part reads its palette column at the base of the gradient (use_palette,
- * the avatar figure shader's own palette texture), a pack token its albedo; both are
- * lifted toward `ghost_tint` and rimmed in `rim_color` so the shape reads on dark leaves.
- * No lighting: the figure's painted colours stay their own, the lo-fi pass grades them
- * with the rest of the frame.
- *
- * Opacity: `ghost_alpha` is the fill where the token is covered, `rim_alpha` how much the
- * silhouette's edge adds on top of it, so the ink line stays solid while the body is a
- * little see-through. TokenGhost.FILL_ALPHA and RIM_ALPHA are these defaults.
+ * The line's colour comes from the token (`line_colour`, `line_inner`: TokenGhost derives them
+ * from the token's most vivid palette colour, gold while it is selected or hovered).
+ * `wobble_px` moves the band's width with low-frequency noise on the token's world-space
+ * offset from its origin, a hand-drawn line instead of a ruled one.
  */
 
 uniform sampler2D depth_tex : hint_depth_texture, repeat_disable, filter_nearest;
-uniform sampler2D palette : source_color, hint_default_white, filter_linear, repeat_disable;
-uniform sampler2D albedo_tex : source_color, hint_default_white, filter_linear, repeat_enable;
-uniform vec4 albedo_col : source_color = vec4(1.0);
-uniform bool use_palette = false;
-uniform bool use_albedo = false;
-uniform vec4 ghost_tint : source_color = vec4(0.9, 0.88, 0.8, 1.0);
-// The rim is an ink line (a dark navy), not a glow: it reads on pale crowns and dark ones
-// alike, and keeps the part's own colours from washing out toward white.
-uniform vec4 rim_color : source_color = vec4(0.04, 0.06, 0.14, 1.0);
-// How much of the part's own colour survives (1) against the flat tint (0).
-uniform float own_colour : hint_range(0.0, 1.0) = 1.0;
-uniform float ghost_alpha : hint_range(0.0, 1.0) = 0.54;
-uniform float rim_alpha : hint_range(0.0, 1.0) = 0.5;
-uniform float rim_strength : hint_range(0.0, 1.0) = 0.9;
-// How far down the palette gradient (toward its shadow end) the ghost reads, 0 the highlight.
-uniform float palette_depth : hint_range(0.0, 0.8) = 0.45;
-uniform float rim_power : hint_range(0.5, 6.0) = 1.3;
+// The stroke: its colour (the outer stroke of a double one), the light colour of the inner stroke,
+// and their widths in pixels of a 1080-line view.
+uniform vec4 line_colour : source_color = vec4(1.0, 0.8, 0.2, 1.0);
+uniform vec4 line_inner : source_color = vec4(1.0, 0.95, 0.8, 1.0);
+uniform float line_px : hint_range(0.0, 8.0) = 2.0;
+uniform float inner_px : hint_range(0.0, 8.0) = 0.0;
+uniform float line_alpha : hint_range(0.0, 1.0) = 0.95;
+// How far the stroke's width wanders, in pixels, and how fast (cycles per metre).
+uniform float wobble_px : hint_range(0.0, 2.0) = 0.0;
+uniform float wobble_freq : hint_range(0.5, 20.0) = 6.0;
 // Metres of depth between the fragment and what is in front of it before it counts as hidden.
 uniform float min_gap : hint_range(0.0, 2.0) = 0.5;
 // Fade from nothing at min_gap to full over this many more metres, so a twig brushing the
-// figure gives a faint ghost and a crown a clear one.
+// figure gives a faint line and a crown a clear one.
 // With the token's bounds known the stretch above already covers its own parts, so only this
 // small margin (depth precision, a part grazing the fragment) is added to it instead of
 // `min_gap`; a token without bounds keeps `min_gap`.
@@ -78,6 +83,41 @@ const float GHOST_END = 50.0;
 uniform vec3 bound_center = vec3(0.0);
 uniform vec2 bound_extent = vec2(0.0);
 uniform vec3 bound_up = vec3(0.0, 1.0, 0.0);
+
+// The fragment's offset from the token's origin in world axes, the wobble's anchor.
+varying vec3 anchor;
+
+void vertex() {
+	anchor = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz - MODEL_MATRIX[3].xyz;
+	// Push the vertex out along its normal by the whole line's width, in screen pixels.
+	float scale = max(VIEWPORT_SIZE.y / 1080.0, 0.25);
+	float width = (line_px + inner_px + wobble_px) * scale;
+	vec4 clip = PROJECTION_MATRIX * (MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
+	vec3 view_normal = normalize((MODELVIEW_NORMAL_MATRIX * NORMAL));
+	vec2 dir = (PROJECTION_MATRIX * vec4(view_normal, 0.0)).xy;
+	if (dot(dir, dir) > 1e-8) {
+		clip.xy += normalize(dir) * (2.0 * width / VIEWPORT_SIZE) * clip.w;
+	}
+	POSITION = clip;
+}
+
+float hash13(vec3 p) {
+	p = fract(p * 0.1031);
+	p += dot(p, p.zyx + 31.32);
+	return fract((p.x + p.y) * p.z);
+}
+
+// Value noise in 0..1, smooth, one cycle about every 1/freq metres.
+float vnoise(vec3 p) {
+	vec3 i = floor(p);
+	vec3 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	float a = mix(mix(hash13(i), hash13(i + vec3(1, 0, 0)), f.x),
+			mix(hash13(i + vec3(0, 1, 0)), hash13(i + vec3(1, 1, 0)), f.x), f.y);
+	float b = mix(mix(hash13(i + vec3(0, 0, 1)), hash13(i + vec3(1, 0, 1)), f.x),
+			mix(hash13(i + vec3(0, 1, 1)), hash13(i + vec3(1, 1, 1)), f.x), f.y);
+	return mix(a, b, f.z);
+}
 
 // How far a ray from `p` (relative to the cylinder's centre) along unit `d` runs inside a
 // vertical cylinder of radius `r` and half height `h` before it leaves it (0 when `p` is
@@ -121,15 +161,24 @@ void fragment() {
 	if (hidden <= 0.01) {
 		discard;
 	}
-	vec3 base = ghost_tint.rgb;
-	if (use_palette) {
-		vec2 puv = vec2((floor(UV.x * 8.0) + 0.5) / 8.0, clamp(UV.y + palette_depth, 0.0, 0.98));
-		base = mix(base, texture(palette, puv).rgb, own_colour);
-	} else if (use_albedo) {
-		base = mix(base, texture(albedo_tex, UV).rgb * albedo_col.rgb, own_colour);
-	}
+
+	// The distance to the pushed-out surface's contour, in pixels of a 1080-line view (see the
+	// header); a flat-shaded facet has no gradient and counts as on the contour.
 	float facing = abs(dot(normalize(NORMAL), normalize(VIEW)));
-	float rim = pow(1.0 - clamp(facing, 0.0, 1.0), rim_power) * rim_strength;
-	ALBEDO = mix(base, rim_color.rgb, rim);
-	ALPHA = clamp(ghost_alpha + rim * rim_alpha, 0.0, 1.0) * hidden;
+	float gradient = length(vec2(dFdx(facing), dFdy(facing)));
+	float scale = max(VIEWPORT_SIZE.y / 1080.0, 0.25);
+	float d = gradient < 1e-4 ? 0.0 : 0.5 * facing / gradient / scale;
+	d += (vnoise(anchor * wobble_freq) - 0.5) * 2.0 * wobble_px;
+	float aa = 0.6;
+	float total = line_px + inner_px;
+	float in_line = 1.0 - smoothstep(total - aa, total + aa, d);
+	if (in_line <= 0.01) {
+		discard;
+	}
+	float in_outer = 1.0 - smoothstep(line_px - aa, line_px + aa, d);
+	vec3 stroke = inner_px > 0.0 ? mix(line_inner.rgb, line_colour.rgb, in_outer) : line_colour.rgb;
+	ALBEDO = stroke;
+	ALPHA = line_alpha * in_line * hidden;
+	// Just short of the nearest depth: fails where the mask pass wrote the nearest.
+	DEPTH = 0.9999;
 }

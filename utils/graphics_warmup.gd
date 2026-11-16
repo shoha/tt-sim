@@ -61,6 +61,7 @@ const COVERED_SHADERS := [
 	"res://shaders/submerged_marker.gdshader",
 	"res://shaders/texel_copy_blit.gdshader",
 	"res://shaders/token_ghost.gdshader",
+	"res://shaders/token_ghost_mark.gdshader",
 	"res://shaders/token_marker.gdshader",
 	"res://shaders/token_toon.gdshader",
 	"res://shaders/ui_backdrop.gdshader",

@@ -49,6 +49,76 @@ func test_the_pin_head_keeps_its_pixel_size_at_every_zoom() -> void:
 	assert_between(px, 40.0, 48.0, "the owner: much bigger than the 24 px that was unreadable")
 
 
+# --- pins at every pitch (painter-look-ghost2) ---
+
+
+func test_the_pins_show_at_every_pitch_by_default() -> void:
+	assert_eq(TokenMarkers.DEFAULT_MODE, TokenMarkers.PinMode.ALWAYS)
+	var always := TokenMarkers.PinMode.ALWAYS
+	var top_down := TokenMarkers.PinMode.TOP_DOWN
+	assert_eq(TokenMarkers.strength_for(0.0, false, true, always), 1.0, "low orbit camera: shown")
+	assert_eq(TokenMarkers.strength_for(0.3, false, true, always), 1.0, "mid fade: whole")
+	assert_eq(TokenMarkers.strength_for(0.0, false, true, top_down), 0.0, "top-down only: none")
+	assert_eq(TokenMarkers.strength_for(0.3, false, true, top_down), 0.3, "top-down only: the fade")
+	assert_eq(TokenMarkers.strength_for(0.0, true, true, top_down), 1.0, "the eye keeps its rule")
+
+
+func test_a_low_camera_gets_a_quieter_pin_and_a_steep_one_the_full_pin() -> void:
+	var always := TokenMarkers.PinMode.ALWAYS
+	assert_eq(TokenMarkers.head_px_for(0.0, false, always), TokenMarkers.QUIET_HEAD_PX)
+	assert_eq(TokenMarkers.head_px_for(1.0, false, always), TokenMarkers.HEAD_PX)
+	assert_between(TokenMarkers.head_px_for(0.5, false, always), 30.0, 44.0)
+	assert_between(TokenMarkers.QUIET_HEAD_PX, 28.0, 32.0, "the owner's quiet size")
+	assert_eq(TokenMarkers.alpha_scale_for(0.0, false, always), TokenMarkers.QUIET_ALPHA)
+	assert_eq(TokenMarkers.alpha_scale_for(1.0, false, always), 1.0)
+	assert_lt(TokenMarkers.QUIET_ALPHA, 1.0, "slightly translucent")
+	assert_gt(TokenMarkers.QUIET_ALPHA, 0.6, "but still a pin")
+
+
+func test_the_old_rule_and_the_eye_keep_the_full_pin() -> void:
+	var top_down := TokenMarkers.PinMode.TOP_DOWN
+	assert_eq(TokenMarkers.head_px_for(0.0, false, top_down), TokenMarkers.HEAD_PX)
+	assert_eq(TokenMarkers.alpha_scale_for(0.0, false, top_down), 1.0)
+	assert_eq(TokenMarkers.head_px_for(0.0, true, TokenMarkers.PinMode.ALWAYS), TokenMarkers.HEAD_PX)
+	assert_eq(TokenMarkers.alpha_scale_for(0.0, true, TokenMarkers.PinMode.ALWAYS), 1.0)
+
+
+func test_a_quiet_pin_is_still_a_target_and_a_hidden_token_still_has_none() -> void:
+	var alpha := TokenMarkers.pin_alpha(1.0, true, true, false)
+	assert_true(TokenMarkers.is_hittable(1.0, alpha * TokenMarkers.QUIET_ALPHA), "quiet but hittable")
+	assert_eq(TokenMarkers.pin_alpha(1.0, false, true, false), 0.0, "hidden for a player: no pin")
+	var hidden := TokenMarkers.pin_alpha(1.0, false, true, false) * TokenMarkers.QUIET_ALPHA
+	assert_false(TokenMarkers.is_hittable(1.0, hidden), "and no target")
+
+
+func test_the_token_pins_setting_defaults_to_always_and_round_trips() -> void:
+	var menu: SettingsMenu = load("res://scenes/ui/settings_menu.tscn").instantiate()
+	add_child_autofree(menu)
+	assert_eq(menu.token_pins_option.get_selected_id(), TokenMarkers.PinMode.ALWAYS, "default")
+	assert_eq((menu.token_pins_option.get_parent().get_node("Label") as Label).text, "Token pins")
+	assert_ne(menu.token_pins_option.tooltip_text, "")
+	var top := menu.token_pins_option.get_item_index(TokenMarkers.PinMode.TOP_DOWN)
+	menu.token_pins_option.select(top)
+	var config := ConfigFile.new()
+	SettingsTokenPins.save(menu, config)
+	assert_eq(config.get_value("graphics", "token_pins"), TokenMarkers.PinMode.TOP_DOWN)
+	SettingsTokenPins.show_defaults(menu)
+	assert_eq(menu.token_pins_option.get_selected_id(), TokenMarkers.PinMode.ALWAYS)
+	SettingsTokenPins.show_saved(menu, config)
+	assert_eq(menu.token_pins_option.get_selected_id(), TokenMarkers.PinMode.TOP_DOWN)
+	var was := TokenMarkers.mode
+	SettingsTokenPins.apply(menu)
+	assert_eq(TokenMarkers.mode, TokenMarkers.PinMode.TOP_DOWN)
+	TokenMarkers.mode = was
+
+
+func test_a_missing_or_unknown_saved_pin_mode_is_always() -> void:
+	assert_eq(SettingsTokenPins.saved_id(ConfigFile.new()), TokenMarkers.PinMode.ALWAYS)
+	var config := ConfigFile.new()
+	config.set_value("graphics", "token_pins", 7)
+	assert_eq(SettingsTokenPins.saved_id(config), TokenMarkers.PinMode.ALWAYS)
+
+
 # --- hover and click ---
 
 

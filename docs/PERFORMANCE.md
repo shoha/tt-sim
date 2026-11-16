@@ -6205,6 +6205,32 @@ the fade on every foliage and map fragment). Beside the GPU: the per-frame token
 texture upload on the CPU (the `fade_token_cap` row of the perf budget counters and the
 `perf/occlusion_fade_ms` monitor went with it; the log column `perf_occlusion_fade_ms` is gone, so
 older CSVs have one more column). Raw logs: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final20_ghost/cost_all/log.txt`.
+
+## Token ghost outline and pins at every pitch (card painter-look-ghost2, 2026-11-15, look-pending)
+
+The ghost is one line round the outer silhouette of the covered part (owner: no fill, no part
+edges, no translucent model). Candidates for the union of a token's many meshes: a per-mesh normal
+rim or inverted hull draws a line wherever one part lies over another (tried: a scribble of fold
+and petal contours on Venusaur); stencil is not available (spatial shaders here reject
+`stencil_write` and `stencil_read`: only BaseMaterial3D has stencil properties, and it cannot read
+the depth buffer for the covered test); a mask SubViewport with a screen-space edge pass would
+work but needs a second camera, duplicate instances and a full-screen draw (not built). Built: a
+depth mask. Every mesh keeps its overlay (the line pass) and gains the shared mask material as its
+`next_pass` (`shaders/token_ghost_mark.gdshader`, priority 7, writes the nearest depth, alpha 0);
+the line pass (priority 8) pushes its vertices out along their normals by the line width in screen
+pixels, writes a depth just short of the nearest, and so fails the depth test on every pixel the
+mask marked: only the ring outside the union of the meshes survives. The covered test, the
+self-occlusion bounds and the budget are unchanged. Cost: TWO draw calls per mesh of a dressed
+token instead of one (about 36 for an avatar; at the cap of 16 dressed avatars about 576 extra
+draw calls against about 288 before); the vertex work doubles with them, the fragment work is smaller than
+before (a thin ring instead of a filled silhouette). No millisecond figure was measured on this
+card (the lane was contended): measure with the pinned procedure before shipping. The mask leaves
+the nearest depth under a token's pixels for the transparent passes drawn after it.
+
+Pins at every pitch: the pin was already one MultiMesh draw call; showing it at low pitch changes
+no draw count. The portrait atlas is now made on the first frame instead of at the first steep
+view, and each pin is read and sorted every frame as before (a CPU cost per token, unmeasured).
+Frames: `compare/painter_final24_ghost2/` (`notes.md`).
 Frames: the same folder (`notes.md`).
 
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
