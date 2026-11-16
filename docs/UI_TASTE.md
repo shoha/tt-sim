@@ -246,17 +246,27 @@ verdict (the solid colours and subtle gradients of 2026-10-10 stand; no paper gr
 - **I7 The HUD helps find a token.** Every token on the table is reachable from a list, not
   only by hunting the board: the roster drawer (T) lists them by name, a press selects, centres
   the camera and pulses the token, a hovered row lights its token. A player's own tokens come first;
-  a token the GM hid is never listed to players (G14). Health is in words and a bar, never colour alone (C7).
+  a token the GM hid is never listed to players (G14). Health is in words and a bar with its track
+  showing, never colour alone (C7). A row shows the token's face (the picture of its map pin) and
+  identical names are numbered ("Goblin 2"), because a name alone cannot tell three goblins apart.
+- **I9 A token that was asked for is marked where nothing can cover it.** The thin glow on the
+  token itself is hidden by a tree or a bright meadow (about 1.2:1 against grass), so what the
+  roster picks or points at is also drawn in screen space in front of the world: an ink-outlined
+  chalk ring on the ground (3:1 against any board by its two bands) and a portrait pin, whatever
+  the Token pins setting says (the player just asked where it is). Pulse and recentre stay.
 - **M8 A toast is read, not chased.** It arrives with a short slide (10 px) and fade, leaves faster,
   stays while the pointer rests on it, and the same words again count on the toast already up ("x3")
-  instead of stacking. Kinds differ by icon and colour (C7). At most five stand.
+  instead of stacking. Kinds differ by icon and colour (C7). At most five stand. A toast with no
+  time on it has a visible 40 px close control (a click on it works too), and an error among them
+  leaves after 12 s.
 - **I8 Help that has taught steps back.** The hint bar fades after 20 s unchanged and returns
   when the hints change or the pointer goes to the bottom edge; a tool's own hints never fade, and F1
   always lists every key.
 - **S7 HUD targets.** Buttons the player presses in play are at least 40 px at Interface size
-  1.0 (Add token and Save map were 31); icon-only controls carry a tooltip with their key. Known
-  gap: the right rail's 36 px items and the camera cluster (shared primitives; the settings and
-  authoring cards decide the size).
+  1.0 (Add token and Save map were 31; the camera cluster's buttons were 34 and 26); icon-only
+  controls carry a tooltip with their key, and the roster's tab also says "Tokens" (a bare icon
+  was not found by the critic). Known gap: the Visuals rail's 36 px items (`IconRail.ITEM_SIZE` is
+  shared with the authoring rail, whose twelve tools need the height).
 - **Decision: the roster is a drawer, not a floating panel.** A drawer is the HUD's one pattern for
   a list beside the board (the room, the Visuals rail), joins the free-span logic that keeps the
   hint bar and toasts clear, and costs nothing while closed. It is 304 px, narrower than the 396

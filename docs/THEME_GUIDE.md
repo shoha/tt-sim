@@ -572,10 +572,16 @@ which may only fall): `drawer_container.gd` 12 overrides, `download_queue.gd` / 
   glass is right here (play continues). Done: a token roster drawer (T) to find and select a
   token, toasts that slide, count repeats and pause under the pointer (24 px kind icons), a hint
   bar that fades once taught, and 40 px bottom actions with an icon and a tooltip each.
+  Round 2 (the UI critic's 12/20): the picked token is marked on the board by a screen-space
+  chalk ring and portrait pin (`TokenFocusMarker`), rows carry the token's portrait and numbered
+  duplicate names, health bars are 4 px with a visible track (the `ProgressSuccess` /
+  `ProgressDanger` variants gained `background`: the `track` role at 0.5), kept toasts have a
+  40 px close control, the camera cluster's buttons are 40 px, and the rail tab says "Tokens".
   Roles only: the roster takes `CardStrip` / `CardStripSelected`, `Caption`, `H3`, `Ghost` and
-  `ProgressSuccess` / `ProgressDanger`; it adds no theme entry and no override (the bypass
-  baseline is unchanged). Still open: the right rail's 36 px items (a `DrawerContainer`
-  primitive shared with authoring) and labels on the rail and camera cluster.
+  `ProgressSuccess` / `ProgressDanger`; the one theme change is that track; no override is
+  added (the bypass baseline is unchanged). Still open: the Visuals rail's 36 px items
+  (`IconRail.ITEM_SIZE`, shared with authoring, whose twelve tools would need the height) and
+  the token context menu (left for a later card).
 - **Shared:** title, room, pause and confirms are already paper on the sky and need only the
   per-card polish above; the avatar builder and asset browser (glass over play) were not
   audited in this pass beyond their capture.

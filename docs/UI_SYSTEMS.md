@@ -273,6 +273,12 @@ UIManager.show_undo_toast('Removed "Marigold"', undo_callable)
 - The same words and kind again (without an action) join the toast already up: it counts
   ("x3", a `Count` caption at its end) and restarts its timer, instead of a second chip stacking
 - The kind icon is 24 px (`ICON_SIZE`), tinted with the kind's role; the words stay Body 16
+- A kept toast (duration 0) carries a 40 px `Close` button (the `x` icon, tooltip and accessible
+  name "Dismiss") and a click on its words dismisses it too; an error among them leaves by
+  itself after `ERROR_KEPT_S` (12 s, held while the pointer rests on it), so none piles up
+  unseen. A kept info toast (a "Connecting" notice a caller takes down itself) has no clock.
+  The kinds stay told apart by icon, tint and words (C7); a tinted side stripe was weighed and
+  left out (UI_TASTE anti-patterns: a stripe at rest is decoration)
 - Does not block input
 
 ---
@@ -375,27 +381,47 @@ toward its token. Owner verdict 2026-11-04: both on. The orbit view is unchanged
 ## Token Roster
 
 `TokenRoster` (`scenes/states/playing/token_roster.gd`, a `DrawerContainer` in rail mode on the
-left edge, 304 px wide: a list, not a pane, so with its 44 px rail it ends left of the board
-centre of a 914 px canvas) is the HUD's way to find a token. The rail item (a chess piece,
-tooltip "Tokens (T)") shows while a map is on the table, for the GM and for players; T opens and
-closes it when nothing else takes the key (the room drawer's rules). The room drawer's handle
-moved down to 64 px to make room, and opening one of the two closes the other.
+left edge, 304 px wide: a list, not a pane, so with its 60 px rail it ends left of the board
+centre of a 914 px canvas) is the HUD's way to find a token. The rail item (a chess piece, a 44 px
+target, the word "Tokens" under it, tooltip "Tokens (T)") shows while a map is on the table, for
+the GM and for players; T opens and closes it when nothing else takes the key (the room drawer's
+rules; the hint bar's `T Tokens` chip says so). The room drawer's handle moved down to 112 px to
+make room, and opening one of the two closes the other.
 
 - Rows come from `TokenRosterModel.rows()` (pure, tested): a player sees only tokens the GM has
   not hidden (G14) and finds the ones they control first under a "Yours" label; the GM sees every
   token, hidden ones marked by the `circle-off` icon and ", hidden" in the words. Names sort
-  case-insensitive and natural ("Goblin 2" before "Goblin 10").
-- A row is 52 px: a selection strip (`CardStrip`, `CardStripSelected` with the on-selected text
-  roles), a transparent Ghost button over it for hover, focus and the press, and the name and the
-  health in words ("HP 12/40", "Down") over both. The bar of the foot card turns to the danger
-  role at 40% of the maximum or under, and the words say it (C7).
+  case-insensitive and natural ("Goblin 2" before "Goblin 10"). Identical names are numbered from
+  the second ("Goblin", "Goblin 2": the row's `display_name`; a number a token already wears is
+  skipped) so a GM with three of one monster can tell the rows apart; the number is by the stable
+  name-then-id order, and a player's numbering counts only the tokens they may see.
+- A row is 64 px: a selection strip (`CardStrip`, `CardStripSelected` with the on-selected text
+  roles), a transparent Ghost button over it for hover, focus and the press, and over both the
+  token's portrait (40 px, the picture its map pin wears, `TokenPictures`: the HUD's own
+  `TokenPortraits` atlas made by the same rules, the `chess` icon until it is ready), its name,
+  its health in words ("HP 12/40", "Down") and a 4 px bar. The bar's variants
+  (`ProgressSuccess`, `ProgressDanger`) now carry a `background` (the track role at half
+  strength) so the bar reads as a bar; it turns to the danger role at 40% of the maximum or
+  under, and the words say it (C7).
 - A press selects the row, centres the camera on the token (`GameMap.focus_camera_on`, the double
-  click's path) and pulses its glow for `PULSE_S`. A row under the pointer or focus lights its token
-  on the board while it is held. The foot card (name, health, bar) offers Find on map (centre and
-  pulse again) and Actions (opens the token's own menu beside the drawer).
-- The GM's drawer header carries Add token (the same browser as the bottom-right button). The
-  list is read again every `REFRESH_S` while the drawer is open and not while closed.
-- Probe handles: `pick_row(index)`, `row_count()`, `row_node(id)`.
+  click's path), pulses its glow for `PULSE_S` and scrolls the list to the row. The foot card
+  holds only Find on map (centre and pulse again) and Actions (opens the token's own menu beside
+  the drawer): the name and health are in the row, not repeated under it. A list longer than the
+  drawer shows "More below" (an arrow and a caption) until it is scrolled to its end.
+- **The board marker** (`TokenFocusMarker`, a full-rect `Control` under the drawer, drawn in
+  canvas units from the world camera's projection): the picked token, and a token whose row is
+  hovered or focused, get a chalk ring on the ground (an ink band 8 px under a 3.5 px chalk line,
+  3:1 against any board) and a pin (a 44 px ink-outlined chalk disc holding the portrait, a tail
+  to the token's top). It is drawn in front of the world, so a tree or a wall cannot hide it, and
+  whatever the Token pins setting says, because the player just asked where the token is; a token
+  off screen keeps its pin held at the nearest edge. A new pick adds a 0.7 s ping (a widening
+  ring; Reduce motion drops it); closing the drawer clears the pick. It lies beside the amber
+  glow of `add_highlight`, which stays. `TokenMarkers` and `scenes/board_token/` are untouched:
+  the pin is the HUD's own drawing, not the map pin held on (the marker host has no pinned-id
+  API; that would be a smaller change there if the owner prefers one pin).
+- The list is read again every `REFRESH_S` while the drawer is open and not while closed. The
+  GM's Add token is the one button at the bottom right (the drawer header's copy was dropped).
+- Probe handles: `pick_row(index)`, `row_count()`, `row_node(id)`, `focus_marker`.
 
 ## Input Hints
 

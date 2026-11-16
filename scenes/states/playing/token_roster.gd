@@ -423,7 +423,7 @@ func _dress_portrait(portrait: TextureRect, token: BoardToken) -> void:
 # -- The list's cues ------------------------------------------------------------------------
 
 
-## A line under the list that says more rows are below the fold: a down chevron and "More below",
+## A line under the list that says more rows are below the fold: a down arrow and "More below",
 ## shown only while the list can scroll further (a fade would need the panel's colour).
 func _make_cue() -> Control:
 	var cue := HBoxContainer.new()
@@ -432,13 +432,12 @@ func _make_cue() -> Control:
 	cue.alignment = BoxContainer.ALIGNMENT_CENTER
 	cue.visible = false
 	var icon := TextureRect.new()
-	# The right chevron turned a quarter: there is no down chevron in the icon set.
-	icon.texture = IconButton.load_icon("chevron-right")
+	# The icon set has no down arrow: the up arrow flipped (a container resets a child's rotation).
+	icon.texture = IconButton.load_icon("arrow-bar-up")
+	icon.flip_v = true
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.custom_minimum_size = Vector2(16, 16)
-	icon.pivot_offset = Vector2(8, 8)
-	icon.rotation = PI / 2.0
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cue.add_child(icon)
 	var label := Label.new()
