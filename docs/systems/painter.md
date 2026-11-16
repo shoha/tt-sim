@@ -1241,12 +1241,17 @@ by event (findings: `docs/research/2026-11-09-prototypes/compare/painter_final25
   `shaders/fire_glow.gdshaderinc` and `burn_ground()` lays the dried band and scorch on the role colours,
   the char in flat steps of its tone with a noise-broken edge, and a stepped, breathing glow into
   EMISSION: no soft gradients. Classic is unchanged (`glow_mirrors` is empty there).
-- **Burnt ground as a role.** `PainterGroundRoles` has a sixth role `char` (words `ash`, `char`,
-  `charred`, `cinder`, `scorched`; biome words `burnt`, `burned`, `scorched`), toned from the sheet's
-  `floor` ramp reduced to its luminance in a warm tint (`char_of`), so it follows the mood and the sun
-  but never reads as moss. It has no channel in the RGBA zone map: `PainterSurfaces.char_image(doc)`
-  makes an R8 map only when the document names a burnt biome or an ash surface (else null and
-  `char_present` is false), and the shader takes role 5 over the meadow, floor and shore (not a path).
+- **Scorched ground as a role, beside the biome ash.** `PainterGroundRoles` has a ninth role `char`
+  (index 8, after coverage's dry, ash and earth; words `ash`, `char`, `charred`, `cinder`,
+  `scorched`), toned from the sheet's `floor` ramp reduced to its luminance in a warm tint
+  (`char_of`), so it follows the mood and the sun but never reads as moss. It is the scar a fire
+  event leaves (the `ash` SURFACE FireSweep stamps), a different thing from the biome role `ash`
+  (a burnt-forest biome's own ground, from the stone tone, zone2 map): the scar lies over it.
+  `PainterSurfaces.char_image(doc)` makes an R8 map only when the document names an ash surface
+  (else null and `char_present` is false), and the shader takes role 8 over everything but a path;
+  uniforms `char_map`, `char_present`, `g_lit[18]`, `g_shd[18]`. Burning wood (trunks, limbs) fades
+  orange, ember red, charcoal in one smooth fall, not bands (`burn_paint(..., wood, ...)`). Open:
+  the burnt biome's snag trees (assets flagged `charred`) still take the sheet's brown bark.
 - **The event fire's own shaders.** `FireVariants` (`scenes/effects/fire_variants.gd`) builds Painted
   variants of `event_puff`, `fire_smoke` and `ground_burn` from the originals' source with a list of
   edits (Classic files untouched; `test_painter_fire` checks every edit still matches its text). A
@@ -1269,8 +1274,7 @@ by event (findings: `docs/research/2026-11-09-prototypes/compare/painter_final25
   ground's fire branch costs nothing where no fire exists.
 - **Not done (gaps).** No runtime event damages a structure (ForestFall and FireSweep skip them,
   BridgeCollapse cuts only crossings), so there is no ruin state and no FireSweep branch that burns a
-  house; rubble would be a second structure document (a procgen task). Burning wood marks (trunks) step
-  through gold, orange and red bands that read as stripes up a trunk in a bare season.
+  house; rubble would be a second structure document (a procgen task).
 
 ## Water
 
