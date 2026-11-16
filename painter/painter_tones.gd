@@ -32,11 +32,17 @@ const LIT_MAX_L := 0.985
 
 ## [shade0, mid0, lit0, shade1, mid1, lit1] (sRGB Colors) of `role` in `mood` at `elevation`:
 ## the dark-cool variant first. `prefix` ("ground-", "grass-", "bark-" or "") picks a surface's
-## own ramp numbers where the sheet defines them.
+## own ramp numbers where the sheet defines them. `derived` (lightness 0 or more) is the middle
+## tone to use in place of the role's own, as PainterGroundRoles.derived() gives for a dry biome.
 static func ramp(
-	sheet: Dictionary, mood: String, role: String, elevation: float, prefix: String = ""
+	sheet: Dictionary,
+	mood: String,
+	role: String,
+	elevation: float,
+	prefix: String = "",
+	derived: Vector3 = Vector3(-1.0, 0.0, 0.0)
 ) -> Array[Color]:
-	var base := PainterSheet.tone_lch(sheet, mood, role, elevation)
+	var base := derived if derived.x >= 0.0 else PainterSheet.tone_lch(sheet, mood, role, elevation)
 	var num := func(name: String) -> float:
 		var own := prefix + name
 		var key := own if own in PainterSheet.DEFAULT_NUMBERS else name

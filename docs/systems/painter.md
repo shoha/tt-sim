@@ -1188,6 +1188,30 @@ calls.
 3. Point the presets it paints at it in `RenderStyle.MOOD_FOR_PRESET`.
 4. Run `test_painter_sheet.gd` and `test_render_style.gd`.
 
+## Coverage (card painter-coverage, 2026-11-15)
+
+The audit of Classic against Painted is `docs/research/2026-11-09-prototypes/compare/
+painter_final25_coverage/matrix.md`. What the card filled:
+
+- **Biome ground and tufts.** Three more ground roles, `dry` (savanna), `ash` (burnt forest) and
+  `earth` (rocky badlands), and the plant roles `dry-grass` and `cactus`, are DERIVED
+  (`PainterGroundRoles.DERIVED`): at tone time from a keyframed role (`ground`, `stone`, `path`,
+  `grass`, `leaf`) moved by sheet numbers `<name>-hue`, `-chroma` and `-lift` in `:world`, so
+  they follow every mood and sun with no per-keyframe lines. The ground shader reads them from
+  a second zone texture (`zone2_map`: r dry, g ash, b earth, built by
+  `PainterSurfaces.biome_zone_image`, null on a map with no dry biome, so such a map pays nothing).
+- **Trees the painter does not grow** (acacia, palm, dead tree) are painted by surface
+  (`PainterPlantRoles.for_surface`: material name `*_Bark` is a solid in the bark role, the rest a
+  leaf mass); cactus and barrel cactus are solids in the cactus role, agave a mass, a dead shrub
+  a bark mass. `WindFoliage` now copies the GLB material's name onto its shader material
+  (Classic reads nothing from it).
+- **Wall layers.** `AuthoredWalls` (drawn walls, wall rows, street lots) and `AuthoredBoundaries`
+  wear the structures' stand-ins by part name (`PainterBuildings.wall_part_key`); the toon styles'
+  trim kinds (`wall_trim`, `frame_trim`, `door_trim`, `trim_plaster`, `frame_plaster`,
+  `frame_stone`) have KINDS rows.
+- **Known gaps** are listed in the matrix with their effort: baked settlement furnishings,
+  crossings, field plants, ornament and canopy parts, round and profile roofs (procgen records).
+
 ## Verification
 
 - Unit: `test_painter_sheet.gd` (lint, resolver, continuity), `test_render_style.gd` (table,

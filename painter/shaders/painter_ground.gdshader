@@ -33,8 +33,8 @@ render_mode specular_disabled, ambient_light_disabled;
 #include "res://painter/shaders/painter_noise.gdshaderinc"
 
 // Per role two variants (cool dark, warm light) of the lit and the shade colour, LINEAR.
-uniform vec3 g_lit[10];
-uniform vec3 g_shd[10];
+uniform vec3 g_lit[16];
+uniform vec3 g_shd[16];
 uniform vec3 litter_col = vec3(0.5, 0.4, 0.15);
 uniform vec3 drift_col = vec3(0.8, 0.8, 0.4);
 uniform float drift = 0.3;
@@ -61,6 +61,10 @@ uniform vec2 half_extent = vec2(30.0);
 uniform sampler2D zone_map : hint_default_black, filter_linear, repeat_disable;
 uniform bool zone_present = false;
 uniform float base_meadow = 1.0;
+// The biome zone map (card painter-coverage): r dry (savanna straw), g ash (burnt forest), b earth
+// (badlands), roles 5, 6 and 7; absent for a map with none of those biomes.
+uniform sampler2D zone2_map : hint_default_black, filter_linear, repeat_disable;
+uniform bool zone2_present = false;
 uniform sampler2D water_weights : hint_default_black, filter_linear, repeat_disable;
 uniform bool water_present = false;
 uniform vec2 layer_grid_origin = vec2(0.0);
@@ -112,6 +116,15 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, out vec3 lit, o
 	float meadow = step(0.5, zb.r + (p_noise(p * 0.9 + 5.0) - 0.5) * 0.3 + j * 0.25);
 	float pv = zp.g + (p_noise(p * 1.4 + 33.0) - 0.5) * 0.35 + j * 0.3;
 	int role = meadow > 0.5 ? 0 : 1;
+	if (zone2_present) {
+		vec2 size2 = vec2(textureSize(zone2_map, 0));
+		vec3 z2 = textureLod(zone2_map, ((q + w - layer_grid_origin) / layer_grid_step + 0.5) / size2, 0.0).rgb;
+		z2 += (p_noise(p * 0.7 + 71.0) - 0.5) * 0.3 + j * 0.25;
+		float top = max(z2.r, max(z2.g, z2.b));
+		if (top > 0.5) {
+			role = z2.r >= z2.g && z2.r >= z2.b ? 5 : (z2.g >= z2.b ? 6 : 7);
+		}
+	}
 	if (zb.a + (p_noise(p * 0.8 + 61.0) - 0.5) * 0.3 > 0.5) {
 		role = 4;
 	}

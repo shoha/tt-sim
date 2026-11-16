@@ -317,10 +317,16 @@ func _rebuild_zone() -> void:
 		return
 	var doc := _terrain.document
 	var image := zone_image(doc)
+	var biome_image := biome_zone_image(doc)
+	var biome_texture: ImageTexture = (
+		null if biome_image == null else ImageTexture.create_from_image(biome_image)
+	)
 	var extent := doc.extent_m()
 	for material: ShaderMaterial in [_ground_material(), _skirt]:
 		material.set_shader_parameter(&"zone_map", ImageTexture.create_from_image(image))
 		material.set_shader_parameter(&"zone_present", true)
+		material.set_shader_parameter(&"zone2_map", biome_texture)
+		material.set_shader_parameter(&"zone2_present", biome_texture != null)
 		material.set_shader_parameter(&"layer_grid_origin", -extent * 0.5)
 		material.set_shader_parameter(&"layer_grid_step", doc.sample_step())
 		material.set_shader_parameter(&"half_extent", extent * 0.5)
@@ -402,6 +408,43 @@ static func zone_image(doc: MapDocument) -> Image:
 			for i in n:
 				bytes[i * 4 + c] = flat
 			continue
+		var plane := _box(planes[c], sx, sz, ZONE_BLUR)
+		for i in n:
+			bytes[i * 4 + c] = clampi(roundi(plane[i] * 255.0), 0, 255)
+	return Image.create_from_data(sx, sz, false, Image.FORMAT_RGBA8, bytes)
+
+
+## The biome zone map of `doc` (card painter-coverage): an RGBA8 image, one texel per height
+## sample, r the share of the dry biome's role (savanna straw), g ash (a burnt forest), b earth
+## (the badlands), blurred like the zone map; null when no biome of the map paints in one of those
+## roles (the shader then never reads it). Pure.
+static func biome_zone_image(doc: MapDocument) -> Image:
+	var targets := PackedInt32Array()
+	var any := false
+	for id in doc.biome_ids:
+		var at := PainterGroundRoles.index(PainterGroundRoles.biome_role(id))
+		var channel := at - PainterGroundRoles.BIOME_ROLES_FROM
+		targets.append(channel if channel >= 0 and channel < 3 else -1)
+		any = any or channel >= 0
+	var sx := doc.samples_x()
+	var sz := doc.samples_z()
+	var n := sx * sz
+	var slots := doc.biome_slots
+	var density := doc.biome_density
+	if not any or slots.size() != n or density.size() != n:
+		return null
+	var planes: Array[PackedFloat32Array] = []
+	for c in 3:
+		var plane := PackedFloat32Array()
+		plane.resize(n)
+		planes.append(plane)
+	for i in n:
+		var slot := slots[i]
+		if slot > 0 and slot <= targets.size() and targets[slot - 1] >= 0:
+			planes[targets[slot - 1]][i] = clampf(density[i] / 255.0 * BIOME_PULL, 0.0, 1.0)
+	var bytes := PackedByteArray()
+	bytes.resize(n * 4)
+	for c in 3:
 		var plane := _box(planes[c], sx, sz, ZONE_BLUR)
 		for i in n:
 			bytes[i * 4 + c] = clampi(roundi(plane[i] * 255.0), 0, 255)
@@ -524,19 +567,20 @@ func _paint_species() -> Array:
 				continue
 			for i in mesh.get_surface_count():
 				var original := mesh.surface_get_material(i)
-				var stand_in := _stand_in(original, entry, float(record["height"]))
+				var surface_entry := PainterPlantRoles.for_surface(entry, original)
+				var stand_in := _stand_in(original, surface_entry, float(record["height"]))
 				if stand_in == null:
 					continue
 				var extent := mesh.get_aabb().size * 0.5
 				stand_in.set_shader_parameter(&"selector_extent", extent)
-				if int(entry["kind"]) == PainterPlantRoles.KIND_GRASS:
+				if int(surface_entry["kind"]) == PainterPlantRoles.KIND_GRASS:
 					# A wide tuft is cut by painted dabs from the layouts' array (PainterTuftAtlas).
 					stand_in.set_shader_parameter(
 						&"tuft_atlas",
 						PainterTuftAtlas.for_tuft(extent, maxf(float(record["height"]), 0.05))
 					)
 				mesh.surface_set_material(i, stand_in)
-				var swap := [mesh, i, original, stand_in, entry]
+				var swap := [mesh, i, original, stand_in, surface_entry]
 				_swapped.append(swap)
 				added.append(swap)
 	return added
@@ -594,8 +638,11 @@ func _tone_ground(sheet: Dictionary, mood: String, elevation: float) -> void:
 	var lit := PackedVector3Array()
 	var shade := PackedVector3Array()
 	for role: String in PainterGroundRoles.ROLES:
+		var base := Vector3(-1.0, 0.0, 0.0)
+		if PainterGroundRoles.DERIVED.has(role):
+			base = PainterGroundRoles.derived(sheet, mood, role, elevation)
 		var ramp := PainterTones.ramp(
-			sheet, mood, PainterGroundRoles.TONE_ROLE[role], elevation, "ground-"
+			sheet, mood, PainterGroundRoles.TONE_ROLE[role], elevation, "ground-", base
 		)
 		lit.append_array([PainterTones.linear(ramp[2]), PainterTones.linear(ramp[5])])
 		shade.append_array([PainterTones.linear(ramp[0]), PainterTones.linear(ramp[3])])
@@ -630,7 +677,12 @@ static func _tone_plant(
 	# Logs and stumps shade like the painted stems, to their own brown (painter-trees-polish: the
 	# mood's full violet pull read maroon on a log's shaded side at a lower sun).
 	var prefix := "grass-" if low else ("bark-" if str(entry["role"]) == "bark" else "")
-	var colors := PainterTones.ramp(sheet, mood, str(entry["role"]), elevation, prefix)
+	var tone_role := str(entry["role"])
+	var derived := Vector3(-1.0, 0.0, 0.0)
+	if PainterGroundRoles.DERIVED.has(tone_role):
+		derived = PainterGroundRoles.derived(sheet, mood, tone_role, elevation)
+		tone_role = str(PainterGroundRoles.DERIVED[tone_role][0])
+	var colors := PainterTones.ramp(sheet, mood, tone_role, elevation, prefix, derived)
 	if int(entry["kind"]) == PainterPlantRoles.KIND_CROWN:
 		# A bush takes the crowns' ramp (painter-trees-polish2).
 		var tones := load(PainterPlantRoles.CROWN_TONES) as GDScript

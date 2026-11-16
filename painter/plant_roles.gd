@@ -24,6 +24,10 @@ const KIND_CROWN := 4
 ## The script whose bush_ramp() tones a KIND_CROWN plant (loaded by path, as PainterSurfaces loads
 ## the painted trees, so a Classic start-up never compiles the trees' code).
 const CROWN_TONES := "res://painter/trees/tree_tones.gd"
+## The tone role of a dry biome's grass (PainterGroundRoles.DERIVED).
+const DRY_GRASS_ROLE := "dry-grass"
+## The tone role of a cactus and an agave (PainterGroundRoles.DERIVED).
+const CACTUS_ROLE := "cactus"
 ## [kind, sheet role, words], first match wins (substrings of the asset id, lower case).
 const RULES: Array = [
 	[
@@ -69,21 +73,61 @@ const TREE_MASS_WORDS: Array[String] = ["bush", "shrub", "hedge"]
 ## grass tufts).
 static func of(asset_id: String, wind_category: String, flower: bool = false) -> Dictionary:
 	var id := asset_id.get_file().to_lower()
+	# The desert plants (painter-coverage): a cactus is a solid in a blue green, an agave a rosette
+	# of the same, a dead shrub a mass of sticks; none is a green leaf crown.
+	if id.contains("cactus"):
+		return _entry(KIND_SOLID, CACTUS_ROLE)
+	if id.contains("agave"):
+		return _entry(KIND_MASS, CACTUS_ROLE)
+	if id.contains("deadshrub"):
+		return _entry(KIND_MASS, "bark")
 	if wind_category == "tree":
 		for word in TREE_MASS_WORDS:
 			if id.contains(word):
 				return _entry(KIND_CROWN, "leaf")
+		# A tree the painter does not grow (acacia, palm, dead tree: species.json's table has no
+		# row): its own surfaces painted by material, leaf or bark (for_surface).
+		if PainterTreeSpecies.species_for(asset_id).is_empty():
+			var entry := _entry(KIND_MASS, "leaf")
+			entry["by_surface"] = true
+			return entry
 		return {}
 	if flower:
 		return _entry(KIND_FLOWER, "grass")
 	for rule: Array in RULES:
 		for word: String in rule[2]:
 			if id.contains(word):
-				return _entry(int(rule[0]), str(rule[1]))
+				var role := str(rule[1])
+				if int(rule[0]) == KIND_GRASS and _dry_biome(asset_id):
+					role = DRY_GRASS_ROLE
+				return _entry(int(rule[0]), role)
 	# Anything else that sways is a leaf mass; anything still is a stone.
 	if wind_category != "":
 		return _entry(KIND_MASS, "leaf")
 	return _entry(KIND_SOLID, "stone")
+
+
+## The entry for one surface of an asset `entry` (of()) names: a tree the painter does not grow
+## carries `by_surface`, and its material says what the surface is, bark (a solid in the bark role)
+## or leaf (a leaf mass); any other entry is returned as it is. `material` may be null.
+static func for_surface(entry: Dictionary, material: Material) -> Dictionary:
+	if not bool(entry.get("by_surface", false)):
+		return entry
+	var name := "" if material == null else material.resource_name.to_lower()
+	if name.contains("bark"):
+		return _entry(KIND_SOLID, "bark")
+	return _entry(KIND_MASS, "leaf")
+
+
+## True when the asset's biome folder (the part of `asset_id` before its file name) is a dry biome
+## (the ground roles dry, earth or ash: savanna, rocky badlands, burnt forest), whose tufts are
+## straw, not green.
+static func _dry_biome(asset_id: String) -> bool:
+	var folder := asset_id.get_base_dir()
+	if folder.is_empty():
+		return false
+	var role := PainterGroundRoles.biome_role(folder.get_file())
+	return role == "dry" or role == "earth" or role == "ash"
 
 
 static func _entry(kind: int, role: String) -> Dictionary:

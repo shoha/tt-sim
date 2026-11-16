@@ -23,15 +23,34 @@ extends RefCounted
 ## library (a `paint_role` field beside a surface's PBR set, and a biome's taken from its ground
 ## surface), so an imported library's surfaces keep their meaning; then these tables go.
 
-const ROLES: Array[String] = ["meadow", "floor", "path", "rock", "shore"]
-## The sheet role each ground role paints with (index for index with ROLES).
+const ROLES: Array[String] = ["meadow", "floor", "path", "rock", "shore", "dry", "ash", "earth"]
+## The sheet role each ground role paints with (index for index with ROLES). A role in DERIVED
+## paints with its base role's tone moved by the sheet's numbers.
 const TONE_ROLE: Dictionary = {
 	"meadow": "ground",
 	"floor": "floor",
 	"path": "path",
 	"rock": "stone",
 	"shore": "shore",
+	"dry": "ground",
+	"ash": "stone",
+	"earth": "path",
 }
+## The tones the painted look derives from a keyframed role instead of keying them (card
+## painter-coverage): name -> [the sheet role it is derived from, the prefix of its three sheet
+## numbers `<prefix>-hue` (degrees), `<prefix>-chroma` (a factor) and `<prefix>-lift`]. dry, ash
+## and earth are ground roles (the savanna's straw, a burnt forest's ash, the badlands' baked
+## earth, the third texel group of the zone map); dry-grass is the tufts of a dry biome
+## (PainterPlantRoles).
+const DERIVED: Dictionary = {
+	"dry": ["ground", "dry"],
+	"ash": ["stone", "ash"],
+	"earth": ["path", "earth"],
+	"dry-grass": ["grass", "drygrass"],
+	"cactus": ["leaf", "cactus"],
+}
+## The zone map's second texture holds these (r dry, g ash, b earth): index in ROLES from here.
+const BIOME_ROLES_FROM := 5
 const DEFAULT_ROLE := "meadow"
 ## [role, words], first match wins (see the header).
 const SURFACE_RULES: Array = [
@@ -60,8 +79,11 @@ const SURFACE_RULES: Array = [
 	["meadow", ["grass", "meadow", "glade", "lawn", "snow"]],
 ]
 const BIOME_RULES: Array = [
-	["shore", ["badlands", "desert", "beach", "dunes"]],
-	["meadow", ["meadow", "grassland", "savanna", "alpine", "wetland", "birch", "woodland"]],
+	["ash", ["burnt"]],
+	["earth", ["badlands", "desert"]],
+	["dry", ["savanna"]],
+	["shore", ["beach", "dunes"]],
+	["meadow", ["meadow", "grassland", "alpine", "wetland", "birch", "woodland"]],
 	["floor", ["forest", "taiga", "jungle"]],
 ]
 
@@ -85,6 +107,22 @@ static func surface_rule(surface_id: String) -> int:
 ## The index in BIOME_RULES that resolves `biome_id`, or -1 when it falls to DEFAULT_ROLE.
 static func biome_rule(biome_id: String) -> int:
 	return _rule(BIOME_RULES, biome_id)
+
+
+## The middle tone (OKLCH) of derived role `role` (a key of DERIVED) in `mood` at `elevation`: its
+## base role's tone with the hue turned to `<prefix>-hue`, the chroma times `<prefix>-chroma` and
+## the lightness moved by `<prefix>-lift`. Pure.
+static func derived(sheet: Dictionary, mood: String, role: String, elevation: float) -> Vector3:
+	var spec: Array = DERIVED[role]
+	var base := PainterSheet.tone_lch(sheet, mood, str(spec[0]), elevation)
+	var p := str(spec[1])
+	var num := func(suffix: String) -> float:
+		return PainterSheet.number(sheet, mood, "%s-%s" % [p, suffix], elevation)
+	return Vector3(
+		clampf(base.x + float(num.call("lift")), 0.05, 0.98),
+		base.y * float(num.call("chroma")),
+		float(num.call("hue"))
+	)
 
 
 ## The index of `role` in ROLES (the ground shader's role number), DEFAULT_ROLE's for an unknown.

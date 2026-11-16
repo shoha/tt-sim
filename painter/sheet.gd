@@ -106,6 +106,11 @@ const DEFAULT_ROLES: Array[String] = [
 ## shade goes the short way through red to maroon); and the share of the mood's lit-lift and
 ## lit-pull every building role takes (building-lit: a pale wall under the full lift is white);
 ## and how much of a roof lies under snow (roof-snow, 0 to 1, in the drift role's colour).
+## The biome tones derived from a keyframed role (PainterGroundRoles.DERIVED, card
+## painter-coverage): per name a target hue (degrees), a chroma factor and a lightness shift, so
+## a dry biome's straw, an ash ground and a baked earth follow the mood and the sun the role they
+## come from follows: dry- from `ground`, drygrass- from `grass`, ash- from `stone`, earth- from
+## `path`.
 const DEFAULT_NUMBERS: Array[String] = [
 	"shade-hue",
 	"shade-pull",
@@ -173,6 +178,21 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"timber-pull",
 	"building-lit",
 	"roof-snow",
+	"dry-hue",
+	"dry-chroma",
+	"dry-lift",
+	"drygrass-hue",
+	"drygrass-chroma",
+	"drygrass-lift",
+	"ash-hue",
+	"ash-chroma",
+	"ash-lift",
+	"earth-hue",
+	"earth-chroma",
+	"earth-lift",
+	"cactus-hue",
+	"cactus-chroma",
+	"cactus-lift",
 ]
 ## Below this OKLCH chroma a colour's hue is meaningless: a blend takes the other end's hue.
 const GREY_CHROMA := 0.02
