@@ -63,6 +63,9 @@ const TREE_STROKE := "res://painter/shaders/painter_tree_stroke.gdshader"
 const TREE_BLOCKIN := "res://painter/shaders/painter_tree_blockin.gdshader"
 const TREE_STROKE_BARE := "res://painter/shaders/painter_tree_stroke_bare.gdshader"
 const TREE_BLOCKIN_BARE := "res://painter/shaders/painter_tree_blockin_bare.gdshader"
+# The discard-free camera masses (PainterTreeFast), in leaf and in a bare season.
+const TREE_BLOCKIN_FAST := "res://painter/shaders/painter_tree_blockin_fast.gdshader"
+const TREE_BLOCKIN_FAST_BARE := "res://painter/shaders/painter_tree_blockin_fast_bare.gdshader"
 # The variants a tree an event burns draws with (painter-fire), warmed with their group so the first
 # fire compiles nothing on the main thread.
 const TREE_STROKE_BURN := "res://painter/shaders/painter_tree_stroke_burn.gdshader"
@@ -171,6 +174,7 @@ static func base_shaders() -> PackedStringArray:
 			YARD_GROUND,
 			TREE_STROKE,
 			TREE_BLOCKIN,
+			TREE_BLOCKIN_FAST,
 			TREE_STROKE_BURN,
 			TREE_BLOCKIN_BURN,
 			WATER,
@@ -182,7 +186,13 @@ static func base_shaders() -> PackedStringArray:
 ## The leaf-drop tree shaders of a bare season.
 static func bare_shaders() -> PackedStringArray:
 	return PackedStringArray(
-		[TREE_STROKE_BARE, TREE_BLOCKIN_BARE, TREE_STROKE_BARE_BURN, TREE_BLOCKIN_BARE_BURN]
+		[
+			TREE_STROKE_BARE,
+			TREE_BLOCKIN_BARE,
+			TREE_BLOCKIN_FAST_BARE,
+			TREE_STROKE_BARE_BURN,
+			TREE_BLOCKIN_BARE_BURN
+		]
 	)
 
 
@@ -293,6 +303,7 @@ static func collect(bare: bool) -> Array[Dictionary]:
 	if bare:
 		_add(samples, "tree_stroke_bare", TREE_STROKE_BARE, LAYOUT_TREE, 0)
 		_add(samples, "tree_blockin_bare", TREE_BLOCKIN_BARE, LAYOUT_TREE, 0)
+		_add(samples, "tree_blockin_fast_bare", TREE_BLOCKIN_FAST_BARE, LAYOUT_TREE, 0)
 		_add(samples, "tree_stroke_bare_burn", TREE_STROKE_BARE_BURN, LAYOUT_TREE, 0)
 		_add(samples, "tree_blockin_bare_burn", TREE_BLOCKIN_BARE_BURN, LAYOUT_TREE, 0)
 		return samples
@@ -303,6 +314,7 @@ static func collect(bare: bool) -> Array[Dictionary]:
 	_add(samples, "solid_plain", SOLID, LAYOUT_PLAIN, 0)
 	_add(samples, "tree_stroke", TREE_STROKE, LAYOUT_TREE, 0)
 	_add(samples, "tree_blockin", TREE_BLOCKIN, LAYOUT_TREE, 0)
+	_add(samples, "tree_blockin_fast", TREE_BLOCKIN_FAST, LAYOUT_TREE, 0)
 	_add(samples, "tree_stroke_burn", TREE_STROKE_BURN, LAYOUT_TREE, 0)
 	_add(samples, "tree_blockin_burn", TREE_BLOCKIN_BURN, LAYOUT_TREE, 0)
 	_add(samples, "structure", STRUCTURE, LAYOUT_LIT, 0)

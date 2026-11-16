@@ -512,6 +512,13 @@ void vertex() {
 	// under it kept the masses and limbs over it.)
 	VERTEX = (VIEW_MATRIX * vec4(wp, 1.0)).xyz;
 	NORMAL = normalize(mat3(VIEW_MATRIX) * v_wn);
+#ifdef TREE_FAST
+	// The two whole-fragment kills the sun pass's shader discards (a role a species turns off, and a
+	// bare season's foliage) collapse the mass here instead, so this shader has no discard.
+	if (texelFetch(role_params, ivec2(int(v_row + 0.5), 2), 0).w < 0.5 || ((role < 0.5 || role > 7.5) && bare > 0.5)) {
+		alive = false;
+	}
+#endif
 	POSITION = alive ? PROJECTION_MATRIX * vec4(VERTEX, 1.0) : vec4(2.0, 2.0, 2.0, 1.0);
 	if (wood_v) {
 		// A limb stroke is painted in limb coordinates: its fragments get the axis point, not their own.
@@ -553,13 +560,17 @@ void fragment() {
 	float role = floor(v_role + 0.5);
 	vec4 rp2 = texelFetch(role_params, ivec2(int(v_row + 0.5), 2), 0);
 	vec4 f_rp3 = texelFetch(role_params, ivec2(int(v_row + 0.5), 3), 0);
+	bool foliage = role < 0.5 || role > 7.5;
+#ifndef TREE_FAST
+	// (TREE_FAST: no discard anywhere, so the depth pre-pass and the opaque pass keep early-z; the
+	// vertex stage collapses these two cases instead, and the rest is the sun pass's.)
 	if (rp2.w < 0.5) {
 		discard;
 	}
-	bool foliage = role < 0.5 || role > 7.5;
 	if (foliage && bare > 0.5) {
 		discard;
 	}
+#endif
 #ifdef TREE_BURN
 	// painter-fire: this fragment's place in the tree's burn. A crown mass burns away in patches
 	// (the discard is a world noise, so the pieces are bold and the edge is crisp); wood stays.
@@ -578,15 +589,18 @@ void fragment() {
 	vec4 f_rp6 = texelFetch(role_params, ivec2(int(v_row + 0.5), 6), 0);
 	// (Round 17: a bare crown draws nothing here; round 16's veil and its broken edge are gone. What
 	// is left of a bare willow, a few whips, is solid.)
+#ifndef TREE_FAST
 	if (foliage && v_form > 0.5 && f_rp3.y > 0.0 && (silhouette < 0.5 || silhouette > 1.5) && !(r16 > 0.5 && f_rp6.z > 0.5)) {
 		if (!g_sun && p_noise(v_wp * 2.3 + 7.0) < f_rp3.y * near7) {
 			discard;
 		}
 	}
+#endif
 	// tt-sim (painter-trees-polish): a crown mass's outline breaks into soft lobes by a world noise
 	// where it turns from the eye, so its 8-sided polygon and the flat facets at its rim never read
 	// as slabs between the strokes (the strokes carry the crown's edge). Camera pass only.
 	bool bush_m = foliage && v_bseed > 1.5;
+#ifndef TREE_FAST
 	if (foliage && (v_form < 1.5 || bush_m) && !g_sun) {
 		vec3 rim_eye = PROJECTION_MATRIX[3][3] == 0.0 ? normalize(INV_VIEW_MATRIX[3].xyz - v_wp) : normalize(INV_VIEW_MATRIX[2].xyz);
 		// (painter-perf-shadow: the noise is under 1, so a facing fragment cannot break: skip its lookup.)
@@ -617,6 +631,7 @@ void fragment() {
 			discard;
 		}
 	}
+#endif
 	vec3 to_sun = -normalize(sun_dir);
 	// Round 19: a limb stroke. Its place across the limb (w_a, 1 = the grown edge), its length along
 	// (w_s, metres), its edge (wandering, in limb coordinates), the snow that stands over its up side,
@@ -638,6 +653,8 @@ void fragment() {
 	vec3 w_lat = vec3(1.0, 0.0, 0.0);
 	vec3 w_up = vec3(0.0, 1.0, 0.0);
 	bool w_drift = false;
+#ifndef TREE_FAST
+	// (The limb ribbons' edge shape: a mass is never wood, so the fast variant leaves it out.)
 	if (wood) {
 		// (painter-look-wood3: a form above 3.5 is a strand that limbs leave from its last node, w_cap)
 		bool w_cap = v_form > 3.5;
@@ -713,6 +730,7 @@ void fragment() {
 		}
 		w_n = normalize(w_lat * an + frn * sqrt(max(1.0 - an * an, 0.0)) + vec3(0.0, 1e-5, 0.0));
 	}
+#endif
 	vec3 n = wood ? w_n : normalize(v_wn);
 	vec3 ln = normalize(mix(n, normalize(v_fn + vec3(0.0, 1e-6, 0.0)), calm * 0.8 * form19 * (1.0 - f_rp3.z)));
 	float ndl = dot(ln, to_sun) - v_under * 0.35 * calm * crown_occ;
@@ -938,6 +956,7 @@ void fragment() {
 		ALBEDO = role == ROLE_GROUND ? vec3(1.0) : vec3(0.0);
 	}
 	ROUGHNESS = 1.0;
+#ifndef TREE_FAST
 	if (!g_sun) {
 		// The crown masses dissolve in bold world-space pieces (a slow noise, about half a metre),
 		// a fine screen dither only softening each piece's rim: the plain dither read as a halftone
@@ -946,6 +965,7 @@ void fragment() {
 		float key = clamp(0.9 * p_noise(v_wp * 1.6 + 7.0) + 0.1 * bayer16(FRAGCOORD.xy / world_px_cell()), 0.0, 1.0);
 		tree_fades(VERTEX, INV_VIEW_MATRIX, key, kind10 > 0.5);
 	}
+#endif
 }
 
 // The colour is the palette's (ALBEDO, ambient off): the sun only steps the block-in into the cool

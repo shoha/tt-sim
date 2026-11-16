@@ -22,6 +22,9 @@ const SHADERS: Array[String] = [
 	PainterTrees.BLOCKIN_BARE_SHADER,
 ]
 
+## The crown masses' discard-free camera variants (painter-perf-blockin; test_painter_tree_fast).
+const FAST_SHADERS: Array[String] = [PainterTreeFast.SHADER, PainterTreeFast.BARE_SHADER]
+
 var _container: Node3D = null
 var _map: Node3D = null
 
@@ -80,7 +83,7 @@ func _node_count() -> int:
 
 
 func test_both_shaders_compile_against_the_wind_sun_and_fade_globals() -> void:
-	for path: String in SHADERS:
+	for path: String in SHADERS + FAST_SHADERS:
 		var names: Array = []
 		for u: Dictionary in (load(path) as Shader).get_shader_uniform_list():
 			names.append(u["name"])
@@ -155,15 +158,20 @@ func test_painted_rows_become_cells_and_hide_the_glb_trees() -> void:
 
 	assert_eq(trees.trees.size(), 2, "both oak rows painted")
 	assert_eq(trees.cells.size(), 1, "both in one 5 m cell")
-	assert_eq((trees.cells.values()[0]["nodes"] as Array).size(), 5, "five nodes a cell")
-	assert_eq(_node_count(), 5)
+	assert_eq((trees.cells.values()[0]["nodes"] as Array).size(), 6, "five nodes and a shadow twin")
+	assert_eq(_node_count(), 6)
 	for node in glb:
 		assert_false(node.visible, "GLB oak hidden")
 	var nodes: Array = trees.cells.values()[0]["nodes"]
 	assert_eq(
-		(nodes[0] as GeometryInstance3D).cast_shadow,
+		(nodes[1] as GeometryInstance3D).cast_shadow,
 		GeometryInstance3D.SHADOW_CASTING_SETTING_ON,
-		"the block-in casts"
+		"the limbs cast"
+	)
+	assert_eq(
+		(nodes[0] as GeometryInstance3D).cast_shadow,
+		GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"the camera masses cast none: their twin does"
 	)
 	assert_eq(
 		(nodes[2] as GeometryInstance3D).cast_shadow,
@@ -191,11 +199,11 @@ func test_a_bush_row_is_drawn_as_a_crown_and_hides_its_glb() -> void:
 	assert_eq(trees.cells.size(), 1, "the oak's cell")
 	assert_eq(trees.bush_cells.size(), 1, "the bush's cell")
 	var nodes: Array = trees.bush_cells.values()[0]["nodes"]
-	assert_eq(nodes.size(), 5)
+	assert_eq(nodes.size(), 6)
 	assert_null(nodes[1], "a bush cell has no limb ribbon")
 	var block := (nodes[0] as MultiMeshInstance3D).multimesh
 	assert_eq(block.mesh, PainterTreeMeshes.block(PainterTrees.BUSH_ELL_PER_INST, true))
-	assert_eq(_node_count(), 9, "five tree nodes and four bush nodes")
+	assert_eq(_node_count(), 11, "six tree nodes and five bush nodes")
 	for node in glb:
 		assert_false(node.visible, "GLB bush hidden")
 	for key: Vector3i in trees.trees:
@@ -470,6 +478,9 @@ func test_a_bare_season_swaps_to_the_bare_variants_and_back() -> void:
 			assert_eq(m.shader.resource_path, want, "%s material %d" % [mood, i])
 			var snow: float = m.get_shader_parameter(&"limb_snow17")
 			assert_eq(snow, 1.0 if is_bare else 0.0, "%s limb snow" % mood)
+		var fast := trees.fast_material
+		assert_eq(fast.shader.resource_path, PainterTreeFast.shader_path(is_bare, false), mood)
+		assert_eq(fast.get_shader_parameter(&"limb_snow17"), 1.0 if is_bare else 0.0, mood)
 	surfaces.release()
 
 

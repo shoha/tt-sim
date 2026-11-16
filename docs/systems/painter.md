@@ -698,6 +698,34 @@ summer +0.07 to +0.12 against +0.06.
   While `wind freeze` is on the driver freezes again before every capture, so materials made since
   (a Painted look change makes new ones) are held too.
 
+## The cost of a discard (painter-perf-blockin, 2026-11-16)
+
+The block-in's cost was never its geometry or its colour work: it was `discard`. A shader that holds
+any `discard` makes the depth pre-pass and the shadow pass run every fragment of its meshes and takes
+early-z from the opaque pass. Measured at the taiga home view (GPU, interleaved, in-run Classic
+anchor), the mere presence of a discard cost about 0.3 ms and the discards' own noise work about 0.3
+ms more; fewer vertices (coarser spheres, shared vertices, fewer dead slots) saved 0 to 0.07 ms, and
+a flat-colour fragment stage without discards saved most of the rest.
+
+So a cell's crown masses (node 0) draw with `painter_tree_blockin_fast.gdshader` (`_bare` in a bare
+season), the block-in body compiled with `TREE_FAST`: no discard anywhere. The two whole-fragment
+kills (a role a species turns off, `rp2.w`, and foliage in a bare season) collapse the mass in the
+vertex stage instead; the camera pass's thinning and rim-break dissolves, the bush foot, the ribbon
+edge shape and the canopy fade's `tree_fades` are compiled out of it. The masses cast no shadow; a
+twin node (`PainterTreeFast.SHADOW_NODE`, index 5 of the cell's nodes) shares node 0's MultiMesh,
+draws with the full block-in shader and is SHADOWS_ONLY, so the crown's shadow keeps its eroded edge
+and gaps (the sun pass's own discards). While a canopy fade is live (`CanopyFade.live()`, the view
+window, the brush or the cut published with w above 0) `PainterTreeFast.follow_fade` puts the full
+shader on the camera masses again, since the fade is a discard; a shader swap compiles, so it
+happens only when a fade starts or ends. An event's tree (`take`) and the limb ribbons keep the full
+shaders and one node. Rules for a change to the block-in body: any new `discard` goes inside
+`#ifndef TREE_FAST ... #endif` (`tests/unit/test_painter_tree_fast.gd` cuts those regions out and
+asserts none is left); a new whole-fragment kill of a mass belongs in the vertex stage's TREE_FAST
+block. Measured effect (2026-11-16, `docs/research/2026-11-09-prototypes/compare/painter_final28_perf_blockin/notes.md`):
+taiga home summer P-C +0.84 to +0.35, forest tokens summer +0.32 to +0.05, river zoom 8 +0.45 to +0.15.
+The look is the same to the eye at full size; the camera pass no longer breaks the crown's outline
+into soft lobes where it turns from the eye, so crowns read slightly more solid at their rims.
+
 ## Baked textures
 
 The ground's three brush masks (`PainterBrushes`), the trees' fourteen (`PainterTreeBrushes`) and the

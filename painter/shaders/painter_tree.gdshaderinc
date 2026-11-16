@@ -947,6 +947,9 @@ const float TREE_CUT_BEHIND = 0.5;
 // (0..1) is constant over a whole stroke or a whole mass, so a crown opens in bold pieces rather
 // than a stipple; a `trunk` stays through every fade but the cut. Only the camera's pass fades:
 // the sun's pass keeps the whole crown's shadow.
+// (TREE_FAST, painter-perf-blockin: the discard-free masses leave it out; PainterTrees swaps them for
+// the full shader while a fade is live.)
+#ifndef TREE_FAST
 void tree_fades(vec3 vertex_view, mat4 inv_view_matrix, float key, bool trunk) {
 	vec3 back = canopy_fade_view.xyz;
 	if (dot(inv_view_matrix[2].xyz, back) < 0.999) {
@@ -982,6 +985,7 @@ void tree_fades(vec3 vertex_view, mat4 inv_view_matrix, float key, bool trunk) {
 		discard;
 	}
 }
+#endif
 
 // The sun's cast shadow on a tree as a tone step (light() of both passes): 0 lit .. 1 shaded,
 // cut at the engine's attenuation 0.5 with a threshold wiggle of `cut_amp` by a world noise at

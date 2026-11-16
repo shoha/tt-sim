@@ -321,6 +321,9 @@ func base_materials() -> Array[ShaderMaterial]:
 			out.append(entry[3])
 	if _trees != null:
 		out.append_array(_trees.call("materials"))
+		var fast: Variant = _trees.get("fast_material")
+		if fast != null:
+			out.append(fast as ShaderMaterial)
 	return out
 
 

@@ -81,10 +81,12 @@ const BUSH_SLOT_PER_INST := 10
 ## key (PainterTreeSpecies.key_of) -> {"row", "d", "pos", "cell", "species", "bush"} for every tree
 ## and bush drawn.
 var trees: Dictionary = {}
-## cell -> {"keys": {key: true}, "nodes": [5 MultiMeshInstance3D]}.
+## cell -> {"keys": {key: true}, "nodes": [5 MultiMeshInstance3D, then the masses' shadow caster]}.
 var cells: Dictionary = {}
 ## The bushes' cells (BUSH_CELL_M), as `cells`.
 var bush_cells: Dictionary = {}
+## The crown masses' camera material (PainterTreeFast; null before the first paint), kept in step.
+var fast_material: ShaderMaterial = null
 
 var _map: Node3D = null
 var _scatters: Array[AuthoredScatter] = []
@@ -175,6 +177,8 @@ func retone(sheet: Dictionary, mood: String, elevation: float) -> void:
 		var m := all[i]
 		var slot := i % MATERIAL_SLOTS
 		var want := shader_path(slot < 2, is_bare, i >= MATERIAL_SLOTS)
+		if m == fast_material:
+			want = PainterTreeFast.shader_path(is_bare, CanopyFade.live())
 		if m.shader == null or m.shader.resource_path != want:
 			m.shader = load(want) as Shader
 		var own: Dictionary = _uniforms.get("block" if slot < 2 else "stroke", {})
@@ -431,6 +435,7 @@ func _make_materials() -> void:
 		m.set_meta(META, true)
 		m.set_meta(WindFoliage.META_STAND_IN, placeholder)
 		_materials.append(m)
+	fast_material = PainterTreeFast.make_material(_materials[0])
 	_tree_data.resize(_tree_cap * PainterTreePack.TREE_W * 4)
 	_tree_tex = ImageTexture.create_from_image(_tree_image())
 	_set_all(&"tree_tex", _tree_tex)
@@ -446,6 +451,8 @@ func _all_materials() -> Array[ShaderMaterial]:
 	var all: Array[ShaderMaterial] = []
 	all.append_array(_materials)
 	all.append_array(_burn_materials)
+	if fast_material != null:
+		all.append(fast_material)
 	return all
 
 
@@ -871,8 +878,9 @@ func _rebuild_cell(store: Dictionary, cell: Vector2i, bush: bool) -> void:
 
 
 ## The five nodes (block ellipsoids, limbs, stroke levels 0..2; null where a bush has none) that
-## draw the trees `keys` with `materials`. Instances stand at the trees' places, or at the origin
-## when `local` (an event's tree: its pivot node stands at the place and moves it).
+## draw the trees `keys` with `materials`, and for a cell (an event's tree keeps the one full-shader
+## node) the masses' shadow twin. Instances stand at the trees' places, or at the origin when
+## `local` (an event's tree: its pivot node stands at the place and moves it).
 func _make_nodes(
 	keys: Array, bush: bool, local: bool, materials: Array[ShaderMaterial], name_stem: String
 ) -> Array:
@@ -932,6 +940,8 @@ func _make_nodes(
 		if k >= 2:
 			node.visible = level_shown(_lod_now(), k - 2)
 		nodes.append(node)
+	if not local and fast_material != null and nodes[0] != null:
+		PainterTreeFast.split_masses(nodes, fast_material, materials[0], name_stem, META)
 	return nodes
 
 
@@ -969,19 +979,22 @@ func _on_frame() -> void:
 		_watching = false
 		(Engine.get_main_loop() as SceneTree).process_frame.disconnect(_on_frame)
 		return
+	PainterTreeFast.follow_fade(fast_material, _bare)
 	var lod := _lod_now()
 	if is_equal_approx(lod, _lod):
 		return
 	_lod = lod
 	for m in _materials:
 		m.set_shader_parameter(&"lod_level", lod)
+	if fast_material != null:
+		fast_material.set_shader_parameter(&"lod_level", lod)
 	for store: Dictionary in [cells, bush_cells]:
 		for cell: Vector2i in store:
 			var nodes: Array = store[cell]["nodes"]
-			for k in range(2, nodes.size()):
+			for k in range(2, 5):
 				(nodes[k] as Node3D).visible = level_shown(lod, k - 2)
 	for key: Vector3i in _held:
 		var nodes: Array = _held[key]["nodes"]
-		for k in range(2, nodes.size()):
+		for k in range(2, 5):
 			if is_instance_valid(nodes[k]):
 				(nodes[k] as Node3D).visible = level_shown(lod, k - 2)

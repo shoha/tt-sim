@@ -149,6 +149,16 @@ static func clear_cut() -> void:
 	_cut_asked = Vector4.ZERO
 
 
+## Whether any tree fade shows now: the view window, the brush or the cut last published with a w
+## above 0 (nothing published yet is not live). The painted trees' discard-free crown masses read
+## it, because only the full shader fades (painter-perf-blockin).
+static func live() -> bool:
+	for window: Vector4 in [_last_centre, _last_brush, _last_cut]:
+		if is_finite(window.w) and window.w > 0.0:
+			return true
+	return false
+
+
 ## Whether the cut is asked for (it may still be opening). For tests.
 static func cut_asked() -> Vector4:
 	return _cut_asked

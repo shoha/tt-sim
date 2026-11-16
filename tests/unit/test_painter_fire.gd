@@ -55,7 +55,13 @@ func _instances() -> int:
 	var total := 0
 	var root := _map.get_node_or_null(NodePath(PainterTrees.ROOT_NAME))
 	for node in root.get_children():
-		if not node.is_queued_for_deletion() and node is MultiMeshInstance3D:
+		# (The masses' shadow twin shares node 0's MultiMesh: counted once.)
+		var twin := (
+			node is GeometryInstance3D
+			and (node as GeometryInstance3D).cast_shadow
+			== GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+		)
+		if not node.is_queued_for_deletion() and node is MultiMeshInstance3D and not twin:
 			total += (node as MultiMeshInstance3D).multimesh.instance_count
 	return total
 
