@@ -33,6 +33,7 @@ var _buttons_tween: Tween
 @onready var toggle_asset_browser_button: Button = %ToggleAssetBrowserButton
 @onready var level_edit_panel: LevelEditPanel = %LevelEditPanel
 @onready var room_drawer: RoomDrawer = %RoomDrawer
+@onready var token_roster: TokenRoster = %TokenRoster
 
 
 func _ready() -> void:
@@ -73,11 +74,99 @@ func _ready() -> void:
 	# Add token and Save map step out while an open drawer's glass would lie over them.
 	add_to_group(DrawerContainer.WATCHERS)
 
+	_dress_bottom_buttons()
+	_wire_token_roster()
+
 	# Initially hide buttons since no level is loaded yet
 	_update_asset_browser_button_state()
 	_update_save_level_button_visibility()
 	_update_edit_mode_drawer()
 	_update_room_drawer()
+	_update_token_roster()
+
+
+## The two bottom-corner actions wear an icon and a tooltip that names what they do (W7), so
+## they read as a pair of actions with the rail's icons rather than two floating chips.
+func _dress_bottom_buttons() -> void:
+	toggle_asset_browser_button.icon = IconButton.load_icon("plus")
+	toggle_asset_browser_button.tooltip_text = tr("Add a token to the table")
+	save_level_button.icon = IconButton.load_icon("device-floppy")
+	save_level_button.tooltip_text = tr("Save this map with its tokens where they stand")
+
+
+## The roster is the HUD's way to find a token: a row centres the camera on it and pulses it,
+## Actions opens the token's own menu beside the drawer, Add token opens the browser. The
+## roster and the room drawer share the left edge, so opening one closes the other.
+func _wire_token_roster() -> void:
+	token_roster.setup(
+		_all_tokens,
+		_peer_controls_token,
+		func() -> bool: return NetworkManager.has_gm_access(),
+	)
+	token_roster.token_chosen.connect(_on_roster_token_chosen)
+	token_roster.menu_requested.connect(_on_roster_menu_requested)
+	token_roster.add_requested.connect(
+		func() -> void:
+			if toggle_asset_browser_button.visible:
+				toggle_asset_browser_button.button_pressed = true
+	)
+	token_roster.pane_requested.connect(func(_id: StringName) -> void: room_drawer.close())
+	room_drawer.pane_requested.connect(func(_id: StringName) -> void: token_roster.close())
+
+
+## Every token on the board, for the roster.
+func _all_tokens() -> Array:
+	return get_tree().get_nodes_in_group(BoardToken.GROUP_NAME)
+
+
+## Whether this peer controls `token`: held by a CONTROL permission in a session. The GM and a
+## solo game control everything, so the roster does not split their list into groups.
+func _peer_controls_token(token: BoardToken) -> bool:
+	if NetworkManager.has_gm_access() or not NetworkManager.is_networked():
+		return false
+	if not multiplayer.multiplayer_peer:
+		return false
+	return GameState.has_token_permission(
+		token.network_id, multiplayer.get_unique_id(), TokenPermissions.Permission.CONTROL
+	)
+
+
+## A roster row was pressed: the camera centres on the token and its glow pulses so the eye
+## finds it among the others (a second press pulses it again).
+func _on_roster_token_chosen(token: BoardToken) -> void:
+	if not is_instance_valid(token) or not _level_play_controller:
+		return
+	var game_map := _level_play_controller.get_game_map()
+	if game_map:
+		game_map.focus_camera_on(token.global_position)
+	token.add_highlight()
+	get_tree().create_timer(TokenRoster.PULSE_S).timeout.connect(
+		func() -> void:
+			if is_instance_valid(token):
+				token.remove_highlight()
+	)
+
+
+func _on_roster_menu_requested(token: BoardToken, at: Vector2) -> void:
+	if not is_instance_valid(token) or not _level_play_controller:
+		return
+	var game_map := _level_play_controller.get_game_map()
+	if game_map:
+		game_map.call(&"_on_token_context_menu_requested", token, at)
+
+
+## The roster's tab shows while a map is on the table, for everyone (a player finds their own
+## token with it too); it hides, closed, when the map goes.
+func _update_token_roster() -> void:
+	if not token_roster:
+		return
+	var has_level := _level_play_controller and _level_play_controller.has_active_level()
+	if has_level:
+		token_roster.visible = true
+		token_roster.reveal()
+		token_roster.refresh()
+	else:
+		token_roster.conceal()
 
 
 func _exit_tree() -> void:
@@ -133,6 +222,7 @@ func setup(level_play_controller: LevelPlayController) -> void:
 	_update_asset_browser_button_state()
 	_update_save_level_button_visibility()
 	_update_edit_mode_drawer()
+	_update_token_roster()
 
 
 # --- Network State Handling ---
@@ -146,6 +236,7 @@ func _on_connection_state_changed(
 	_update_save_level_button_visibility()
 	_update_edit_mode_drawer()
 	_update_room_drawer()
+	_update_token_roster()
 
 
 # --- Save Functionality ---
@@ -191,12 +282,14 @@ func _on_level_loaded(_level_data: LevelData) -> void:
 	_update_asset_browser_button_state()
 	_update_save_level_button_visibility()
 	_update_edit_mode_drawer()
+	_update_token_roster()
 
 
 func _on_level_cleared() -> void:
 	_update_asset_browser_button_state()
 	_update_save_level_button_visibility()
 	_update_edit_mode_drawer()
+	_update_token_roster()
 	# Also untoggle the buttons if they were pressed
 	if toggle_asset_browser_button:
 		toggle_asset_browser_button.button_pressed = false
@@ -395,6 +488,7 @@ func _snapped_if_enabled(game_map: GameMap, ground_pos: Vector3) -> Vector3:
 func _on_token_added(_token: BoardToken) -> void:
 	# Update save button visibility when a token is added
 	_update_save_level_button_visibility()
+	token_roster.refresh()
 
 
 # ============================================================================

@@ -32,6 +32,7 @@
 		"res://tests/unit/test_glass_roots.gd",
 		"res://tests/unit/test_gpu_options.gd",
 		"res://tests/unit/test_help_overlay_style.gd",
+		"res://tests/unit/test_hud_roster_and_toasts.gd",
 		"res://tests/unit/test_icon_button.gd",
 		"res://tests/unit/test_icon_rail.gd",
 		"res://tests/unit/test_input_hints.gd",
