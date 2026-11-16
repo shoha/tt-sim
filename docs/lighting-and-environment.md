@@ -490,8 +490,8 @@ assuming the code default is what is running.
 
 Two findings from the same investigation:
 
-- **Black terrain with the sun off, foliage still lit** was `occlusion_fade.gdshader`
-  dropping the ORM textures and copying only `StandardMaterial3D`'s scalar `metallic`,
+- **Black terrain with the sun off, foliage still lit** was `occlusion_fade.gdshader` (since
+  removed, 2026-11-15) dropping the ORM textures and copying only `StandardMaterial3D`'s scalar `metallic`,
   which glTF leaves at 1.0 as a multiplier. A pure metal has no diffuse lobe, so with no
   sun, no sky and no GI there was nothing to reflect. The foliage looked lit because
   `wind_foliage.gdshader` samples the real ORM (metallic about 0). Fixed by copying the

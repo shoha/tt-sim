@@ -218,7 +218,7 @@ static func _find_template(scene: Node3D, source_name: String) -> Node:
 ## build_scatter was given) tags the built node's "wind_foliage_category" meta and gates
 ## the grass cast_shadow branch below -- the wind-sway ShaderMaterial itself is applied
 ## once per species by build_scatter, not here. The "wind_foliage_category" meta lets
-## OcclusionFadeManager find tree-category instances without re-deriving the
+## the debug toggles find tree-category instances without re-deriving the
 ## classification itself. Grass-category instances also get cast_shadow forced to
 ## SHADOW_CASTING_SETTING_OFF -- see the inline comment where it's assigned below for
 ## why (measured perf finding, not a default carried by MultiMeshInstance3D itself).
@@ -281,7 +281,7 @@ static func _add_chunk_node(
 	multimesh_instance.name = node_stem + "_MultiMesh" + name_suffix
 	multimesh_instance.multimesh = multimesh
 	# Tags the node itself (not the Mesh resource) with its wind category so
-	# OcclusionFadeManager._collect_tree_materials() can find tree-category instances
+	# the debug toggles can find tree-category instances
 	# without re-deriving WindFoliage.classify_category()'s result.
 	multimesh_instance.set_meta("wind_foliage_category", wind_category)
 	if wind_category == "grass":

@@ -43,9 +43,8 @@ const DUPLICATE_INSTANCING_MAX_EXTENT := 2.0
 ##   per-instance frustum culling given up is only worth trading for a real draw-call
 ##   saving.
 ## - Meshes whose largest world-space extent exceeds `max_extent`. Anything big enough
-##   to hide a token behind it needs OcclusionFadeManager, which only fades real
-##   MeshInstance3D surfaces (and wind-foliage MultiMeshes, which carry the fade logic
-##   in their own shader). Pass 0.0 to disable this guard.
+##   to hide a token behind it stays a real node (the token ghost and picking read real
+##   surfaces; wind-foliage MultiMeshes carry their own shader). Pass 0.0 to disable this guard.
 ## - Skinned meshes: they deform per-instance, which a MultiMesh cannot express.
 ## - Nodes an AnimationPlayer drives: their transform is not static.
 ## - Nodes carrying a material_override / material_overlay / surface override, since
@@ -56,7 +55,7 @@ const DUPLICATE_INSTANCING_MAX_EXTENT := 2.0
 ## Nodes with children keep existing with `mesh = null` rather than being freed -- see
 ## _retire_instanced_source_node for why that matters for collision.
 ##
-## Known limitations and the worked-out path past each (occlusion fade, single-AABB
+## Known limitations and the worked-out path past each (single-AABB
 ## culling, per-instance picking, tunable thresholds, copied-mesh duplicates) are
 ## recorded in docs/ARCHITECTURE.md under "Known limitations and future iterations"
 ## -- read that before extending this, rather than re-deriving why a guard exists.

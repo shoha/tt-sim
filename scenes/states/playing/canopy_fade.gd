@@ -26,8 +26,8 @@ extends RefCounted
 ## round window of the ring's reach (set_brush; the shader's canopy_brush). It grows from
 ## the ring's centre over BRUSH_OPEN_S and, once let go (clear_brush), closes back in from
 ## its edge over BRUSH_CLOSE_S, so the crowns grow back rather than pop. It used to be a
-## token entry of the occlusion fade, whose per-pixel screen door dithered whole trees,
-## trunks included, so a cleared ring's neighbours read as half erased.
+## token entry of a per-token occlusion fade (removed 2026-11-15), whose per-pixel screen door
+## dithered whole trees, trunks included, so a cleared ring's neighbours read as half erased.
 ##
 ## The cut (set_cut; the shader's canopy_cut): one authoring piece (the Village tool's picked
 ## piece) clears every tree part, trunks and stems included, round it: a soft disc on the ground
@@ -80,8 +80,8 @@ static var play_strength := 0.9
 ## False holds the whole close-zoom window off, whatever the zoom (the brush window is not
 ## affected). The Settings menu's "Canopy fade" sets it (VisualEffectsController
 ## .set_canopy_fade_enabled), off by default: the window follows the screen centre and players
-## found the tunnel disruptive (2026-10-24), the token ghost and the per-token occlusion fade
-## now show tokens under foliage without it.
+## found the tunnel disruptive (2026-10-24); the token ghost shows tokens under foliage without it
+## (the per-token occlusion fade that once helped was removed 2026-11-15).
 static var enabled := DEFAULT_ENABLED
 ## False holds the eye view's near fade and the ghost's range fade off (EyeCanopy), the way the
 ## orbit view has them; on by default. A switch for render probes (before and after stills).

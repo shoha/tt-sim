@@ -10,7 +10,7 @@ func test_format_header_matches_column_order() -> void:
 		(
 			"elapsed_s,map_name,fps_avg,frame_time_avg_ms,frame_time_max_ms,"
 			+ "draw_calls,primitives,video_mem_mb,physics_objects,"
-			+ "perf_occlusion_fade_ms,perf_camera_update_ms,perf_grid_overlay_ms,"
+			+ "perf_camera_update_ms,perf_grid_overlay_ms,"
 			+ "render_cpu_ms,render_gpu_ms,visible_objects,visible_primitives,"
 			+ "visible_draw_calls,shadow_objects,shadow_primitives,shadow_draw_calls,"
 			+ "video_adapter_name,video_adapter_vendor,camera_zoom,"
@@ -41,7 +41,6 @@ func test_format_row_orders_and_formats_values() -> void:
 				"primitives": 1200000.0,
 				"video_mem_mb": 780.5,
 				"physics_objects": 340.0,
-				"perf_occlusion_fade_ms": 4.1,
 				"perf_camera_update_ms": 0.2,
 				"perf_grid_overlay_ms": 0.15,
 				"render_cpu_ms": 3.7,
@@ -75,7 +74,7 @@ func test_format_row_orders_and_formats_values() -> void:
 	assert_eq(
 		row,
 		(
-			'12.30,"River",34.50,29.40,51.00,812,1200000,780.50,340,4.10,0.20,0.15,3.70,2.50,'
+			'12.30,"River",34.50,29.40,51.00,812,1200000,780.50,340,0.20,0.15,3.70,2.50,'
 			+ "500,1000000,600,2000,4000000,2400,"
 			+ '"Apple M1","Apple",5.50,2.00,"4x","forward_plus",1280,800,1,1,1,0,1,0,0,0,0,0.00,0'
 		),
@@ -89,7 +88,7 @@ func test_format_row_quotes_map_name_containing_comma_and_quote() -> void:
 	assert_eq(
 		row,
 		(
-			'0.00,"River, Night ""Update""",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,0.00,'
+			'0.00,"River, Night ""Update""",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,'
 			+ '0,0,0,0,0,0,"","",0.00,0.00,"","",0,0,0,0,0,0,0,0,0,0,0,0.00,0'
 		),
 	)
@@ -102,7 +101,7 @@ func test_format_row_quotes_video_adapter_name_containing_comma() -> void:
 	assert_eq(
 		row,
 		(
-			'0.00,"",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,0.00,0,0,0,0,0,0,'
+			'0.00,"",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,0,0,0,0,0,0,'
 			+ '"Apple M1, 8-core GPU","",0.00,0.00,"","",0,0,0,0,0,0,0,0,0,0,0,0.00,0'
 		),
 	)
@@ -113,7 +112,7 @@ func test_format_row_defaults_missing_columns() -> void:
 	assert_eq(
 		row,
 		(
-			'0.00,"",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,0.00,0,0,0,0,0,0,"","",'
+			'0.00,"",0.00,0.00,0.00,0,0,0.00,0,0.00,0.00,0.00,0.00,0,0,0,0,0,0,"","",'
 			+ '0.00,0.00,"","",0,0,0,0,0,0,0,0,0,0,0,0.00,0'
 		),
 	)
@@ -122,7 +121,7 @@ func test_format_row_defaults_missing_columns() -> void:
 func test_render_gpu_ms_formats_with_two_decimal_places() -> void:
 	var row := PerformanceLogFormatter.format_row({"render_gpu_ms": 7.0})
 	var fields := row.split(",")
-	assert_eq(fields[13], "7.00")
+	assert_eq(fields[12], "7.00")
 
 
 func test_render_pass_count_columns_format_as_plain_integers() -> void:
@@ -144,12 +143,12 @@ func test_render_pass_count_columns_format_as_plain_integers() -> void:
 		)
 	)
 	var fields := row.split(",")
-	assert_eq(fields[14], "500")
-	assert_eq(fields[15], "1000000")
-	assert_eq(fields[16], "600")
-	assert_eq(fields[17], "2000")
-	assert_eq(fields[18], "4000000")
-	assert_eq(fields[19], "2400")
+	assert_eq(fields[13], "500")
+	assert_eq(fields[14], "1000000")
+	assert_eq(fields[15], "600")
+	assert_eq(fields[16], "2000")
+	assert_eq(fields[17], "4000000")
+	assert_eq(fields[18], "2400")
 
 
 func test_format_row_with_all_columns_has_expected_field_count() -> void:
@@ -166,7 +165,6 @@ func test_format_row_with_all_columns_has_expected_field_count() -> void:
 				"primitives": 1200000.0,
 				"video_mem_mb": 780.5,
 				"physics_objects": 340.0,
-				"perf_occlusion_fade_ms": 4.1,
 				"perf_camera_update_ms": 0.2,
 				"perf_grid_overlay_ms": 0.15,
 				"render_cpu_ms": 3.7,

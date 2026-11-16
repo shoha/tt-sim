@@ -494,7 +494,6 @@ func _foliage_library(step: Dictionary) -> void:
 		_i = steps.size()
 		return
 	if bool(step.get("fades_off", true)) and gm() != null:
-		gm().set_occlusion_fade_enabled(false)
 		CanopyFade.play_strength = 0.0
 	log_line(
 		(

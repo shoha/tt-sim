@@ -9,8 +9,7 @@ extends RefCounted
 ##   so a token can be put away from the centre the canopy window sits on.
 ## - `spawn_screen` (`fracs` [[fx, fy], ...], `preset`, `select`): avatars under screen points.
 ## - `mode`: `reset` (the shipped state), `ghost` (bool), `ghost_params` ({uniform: value},
-##   set on every overlay, for tuning), `occlusion` (bool, the per-token fade), `canopy` (bool,
-##   the close-zoom window).
+##   set on every overlay, for tuning), `canopy` (bool, the close-zoom window).
 ## - `info`: draw calls, primitives and token meshes of the last frame.
 ## - `report`: tokens and their screen positions.
 
@@ -300,14 +299,10 @@ static func _look(gm: GameMap, step: Dictionary) -> String:
 static func _mode(gm: GameMap, step: Dictionary) -> String:
 	var out := PackedStringArray()
 	if bool(step.get("reset", false)):
-		gm.set_occlusion_fade_enabled(true)
 		CanopyFade.enabled = CanopyFade.DEFAULT_ENABLED
 		TokenGhost.set_enabled(TokenGhost.DEFAULT_ENABLED, gm.get_tree())
 		TokenGhost.budget = TokenGhost.BUDGET_TOKENS
 		out.append("reset")
-	if step.has("occlusion"):
-		gm.set_occlusion_fade_enabled(bool(step.occlusion))
-		out.append("occlusion %s" % str(step.occlusion))
 	if step.has("canopy"):
 		CanopyFade.enabled = bool(step.canopy)
 		out.append("canopy %s" % str(step.canopy))

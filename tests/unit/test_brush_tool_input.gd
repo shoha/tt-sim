@@ -4,7 +4,7 @@ extends GutTest
 ## and what it means. Plain wheel stays the camera's; Shift+wheel sizes the brush (or scales
 ## a hovered prop); RMB cancels a stroke, removes a hovered prop, or puts the brush down.
 ## Then the host's dispatch: every registered tool's mode is a BrushMode the brush switches
-## to, a mode's fade focus reaches the occlusion fade, and a bare Tab between gestures switches
+## to, a mode's fade focus reaches the canopy fade, and a bare Tab between gestures switches
 ## a two-shape brush's shape (Fire, Water) and leaves the others' Tab alone.
 
 ## decide()'s `picks`: a mode that works the ground (Biome), or one that picks a target under

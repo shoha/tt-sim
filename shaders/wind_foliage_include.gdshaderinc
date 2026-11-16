@@ -1,4 +1,4 @@
-// Shared wind-sway vertex offset and PBR/occlusion-fade fragment logic for both
+// Shared wind-sway vertex offset and PBR fragment logic for both
 // wind_foliage.gdshader (alpha_to_coverage antialiased cutout, 4x MSAA) and
 // wind_foliage_no_aa.gdshader (plain cutout, no MSAA dependency) -- the two are A/B
 // tested against each other by DebugRenderToggles' "Foliage AA" checkbox (F3
@@ -9,12 +9,11 @@
 // Godot's shader compiler has a real limitation: fragment stage output built-ins
 // (ALBEDO, ROUGHNESS, METALLIC, AO, etc.) can only be assigned directly inside
 // vertex()/fragment(), not from any called function. To share the complete PBR and
-// occlusion-fade logic without code duplication (which would let the two variants
+// logic without code duplication (which would let the two variants
 // drift out of sync), apply_wind_foliage_pbr() uses out-parameters: the function
 // computes all PBR values and passes them back to the caller, which then assigns them
 // to the built-ins. Functions like wind_sway_vertex_offset take stage built-ins as
-// explicit parameters rather than reading them directly, matching the pattern already
-// used in occlusion_fade_include.gdshaderinc.
+// explicit parameters rather than reading them directly.
 
 uniform sampler2D albedo_texture : source_color, filter_linear_mipmap;
 uniform sampler2D orm_texture : hint_default_white, filter_linear_mipmap;
@@ -130,12 +129,11 @@ varying float local_vertex_y;
 // card_facing, and the canopy fade's position, apply_canopy_fade) read it, so a card keeps
 // one answer while its crown sways; taken from the swayed VERTEX, a card whose facing or
 // position sat at a threshold crossed it back and forth with the wind and popped in and out
-// (treewind, 2026-11-08). Lighting and the occlusion fade keep the swayed VERTEX.
+// (treewind, 2026-11-08). Lighting keeps the swayed VERTEX.
 varying vec3 rest_view;
 
-// Occlusion fade: lets a token show through tree foliage the same way it shows
-// through map geometry. See occlusion_fade_include.gdshaderinc.
-#include "res://shaders/occlusion_fade_include.gdshaderinc"
+// The Bayer dither and the dither cell size (the stipple key below).
+#include "res://shaders/screen_dither_include.gdshaderinc"
 
 // Canopy fade (CanopyFade, scenes/states/playing/canopy_fade.gd). The crowns standing in
 // front of the ground at the view centre dissolve over a soft round window around the
@@ -377,7 +375,7 @@ vec3 two_sided_foliage_normal(vec3 normal, bool front_facing) {
 // game's suns never sit there).
 // The key is the authored phase (COLOR.b: constant across a leaf card, shared along a
 // limb), so whole cards and whole limbs drop out one by one, bold shapes rather than a
-// stipple; an asset without authored weights falls back to the occlusion fade's Bayer
+// stipple; an asset without authored weights falls back to the screen dither's Bayer
 // dither on its cards and keeps its bark. `wind` is the fragment's COLOR.gb.
 // The brush window (canopy_brush) opens the canopy over a map brush's ring by the same law
 // and key, the larger of the two fades winning.
@@ -510,14 +508,14 @@ void apply_painted_albedo(
 #endif
 
 
-// Computes PBR and occlusion-fade fragment values. Uses out-parameters to pass
+// Computes PBR fragment values. Uses out-parameters to pass
 // results back to the caller (which then assigns them to built-ins) -- a workaround
 // for Godot's limitation that output built-ins can only be assigned directly inside
 // fragment(), not from a called function. Samples textures, unpacks ORM, applies
-// normal mapping, and calls apply_canopy_fade() (wind: the fragment's COLOR.gb) and
-// apply_occlusion_fade() to determine final alpha values. `vertex_view` is the swayed
-// view-space position (VERTEX), `rest_vertex_view` the rest one (the rest_view varying), which
-// the canopy fade and the edge-on cut read.
+// normal mapping, and calls apply_canopy_fade() (wind: the fragment's COLOR.gb) to determine
+// final alpha values. `vertex_view` is the swayed view-space position (VERTEX, no longer read
+// here: the per-token occlusion fade that used it was removed), `rest_vertex_view` the rest one
+// (the rest_view varying), which the canopy fade and the edge-on cut read.
 // Caller is responsible for assigning the out-parameters to their corresponding
 // built-ins and setting variant-specific ALPHA_SCISSOR_THRESHOLD/antialiasing values.
 void apply_wind_foliage_pbr(
@@ -583,9 +581,6 @@ void apply_wind_foliage_pbr(
 	}
 #endif
 
-	vec3 world_normal = mat3(inv_view_matrix) * normal;
-	apply_occlusion_fade(
-		world_normal, vertex_view, view_matrix, projection_matrix, frag_coord, viewport_size);
 }
 
 

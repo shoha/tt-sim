@@ -13,8 +13,8 @@ extends Node3D
 ## shadow and cull settings as the nodes it stands in for) holding one instance a thousandth
 ## of its size just under the ground at the view centre: inside the frustum and the shadow
 ## cascades, so every pass draws it, but covering no pixel. It lives FRAMES drawn frames. It
-## carries no wind_foliage_category meta, so the density budget and the occlusion fade never
-## see it.
+## carries no wind_foliage_category meta, so the density budget never
+## sees it.
 
 const FRAMES := 2
 const SCALE := 0.001

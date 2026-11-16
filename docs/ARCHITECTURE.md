@@ -660,11 +660,9 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   closes back in from its edge in 0.4 s. In play only while a press is held
   (`fade_held_only`). A mode may also ask for the canopy cut (`BrushMode.fade_cut`,
   `CanopyFade.set_cut`, the `canopy_cut` global), the one fade that takes trunks too: only the
-  Village tool's picked piece does (villages.md section 14). It was the occlusion fade's first token entry until 2026-10-10, whose
-  per-pixel screen door dithered whole trees, trunks included. Tree foliage materials are
-  registered with the occlusion fade at `floor_threshold` 2.0 (`FOLIAGE_FLOOR_THRESHOLD`): the
-  floor exemption meant for map floors also exempted every upward-facing leaf card, which left
-  canopies over tokens mostly opaque.
+  Village tool's picked piece does (villages.md section 14). It was a token entry of the per-token
+  occlusion fade until 2026-10-10 (that fade, whose per-pixel screen door dithered whole trees,
+  trunks included, was removed 2026-11-15: a covered token shows through the token ghost).
 
 **Save.** `save_async()` waits for scatter regeneration to land, then
 `AuthoringController.write_level()`: a new level gets `LevelManager.new_folder_name()`,
@@ -878,7 +876,7 @@ content libraries serve, the shipped core `res://libraries/core` first, in the f
 `importer="keep"` file; never `ResourceLoader`), takes the wind category from the library's
 catalog, and hands out a fresh `Mesh.duplicate()` per
 call so one map load's wind overrides never leak into the next. The output is the same
-nodes either way, so FoliageDensityController, OcclusionFadeManager and the foliage
+nodes either way, so FoliageDensityController and the foliage
 budget apply unchanged.
 
 Duplicate mesh instancing is a load-time draw-call optimisation: Blender linked
@@ -888,7 +886,7 @@ It needs nothing from the exporting tool, so it also applies to user-uploaded ma
 authored without terrain-paint — unlike `process_scatter_instances()`, whose
 Geoscatter instances are not real objects in the file and must be carried as scene
 extras. Groups are skipped when instancing would break something else: large meshes
-(OcclusionFadeManager only fades real MeshInstance3D surfaces), skinned or animated
+(a prop big enough to hide a token stays a real node), skinned or animated
 nodes, and anything with a material override. Source nodes that have children — a
 prop's own collision body, typically — are kept with `mesh = null` rather than freed,
 so collision survives.
@@ -898,17 +896,12 @@ so collision survives.
 Recorded from the first pass so a later one doesn't have to rediscover them. None are
 bugs; each is a deliberate trade made to keep the first version safe.
 
-1. **Instanced props get no occlusion fade.** OcclusionFadeManager swaps
-   StandardMaterial3D for its fade shader per MeshInstance3D surface, which a
-   MultiMesh has no equivalent of. Worked around today by the `max_extent` guard
-   (2.0m), which keeps anything token-sized out of a MultiMesh entirely. *Real fix:*
-   run the fade logic in the MultiMesh's own material, exactly as wind foliage already
-   does — `occlusion_fade_include.gdshaderinc` is shared, and
-   `OcclusionFadeManager._collect_tree_materials()` already registers ShaderMaterials
-   found on a MultiMesh's mesh surfaces. Note the material has to be set on the shared
-   `Mesh`'s surfaces, not as an override: MultiMeshInstance3D has no per-surface
-   override API (see `WindFoliage.apply_material`). Once that exists, `max_extent`
-   could be raised or dropped.
+1. **Instanced props are not covered-token aware.** (This was "no occlusion fade": the
+   per-token occlusion fade was removed 2026-11-15, but the `max_extent` guard (2.0m)
+   stays, so a prop big enough to hide a token is still a real node.) The token ghost
+   reads the depth buffer, so a MultiMesh prop covers a token and shows its ghost like
+   any other surface; `max_extent` could now be raised or dropped on that count, which
+   has not been measured.
 2. **A MultiMesh is culled as one AABB.** Props spread across a whole map are drawn
    whenever any part of the group is on screen, so this trades per-instance frustum
    culling for the draw-call saving. Fine for the small props it currently accepts.
@@ -1818,8 +1811,8 @@ brush scheduler, so both build identical nodes.
 - **Species:** each palette asset id is resolved once per instance (`PaletteLibrary.resolve`,
   `WindFoliage.apply_material` with the level's foliage overrides) and kept; rebuilds never
   create materials. A species first painted mid-session emits `species_added(materials)`;
-  the owner passes them to `GameMap.adopt_foliage_materials()` (occlusion fade registration,
-  then the current Antialiasing shader variant, the order load uses) and
+  the owner passes them to `GameMap.adopt_foliage_materials()` (the current Antialiasing shader
+  variant, the order load uses) and
   `LevelEnvironmentManager.add_wind_materials()` (cached for re-tuning and tuned to the
   overrides applied last). `prepare_biome()` starts threaded loads of a biome's asset
   scenes; species then resolve one per frame, and a finished brush job waits for its
@@ -1829,7 +1822,7 @@ brush scheduler, so both build identical nodes.
   species share; each resolved species is also drawn once, invisibly, for two frames
   (`PipelineWarmer`, `utils/pipeline_warmer.gd`, a child made on first use and never in a
   headless run: `<stem>_PipelineWarm` nodes without the foliage meta, so the density budget
-  and occlusion fade ignore them) so its draw-time pipelines compile then, not in the
+  ignores them) so its draw-time pipelines compile then, not in the
   frame a stroke's cells first appear. `warm_pipelines = false` turns that off for
   measurement. See `docs/PERFORMANCE.md` "First-use pipeline compilation in authoring".
 - **Cells:** one `MultiMeshInstance3D` per (asset id, 10 m cell) named
@@ -2123,10 +2116,10 @@ An avatar token is a `BoardToken` whose model is a figure `AvatarKit` assembles 
 
 - **The recipe as identity.** `avatar_recipe` (a Dictionary) on `BoardToken`, `TokenPlacement` and `TokenState`; non-empty means avatar (`is_avatar()`), and the pack ids stay empty. It is stored as written, not resolved, so a client with a newer kit shows the parts this one fell back from, and normalized on read (`AvatarRecipe.normalized`: JSON reads every number back as a float). `to_dict()` writes the key only for an avatar, so pack tokens' level entries and network payloads are unchanged and old levels load as they did. Every path that carries a pack token's ids carries the recipe: `BoardTokenFactory.create_from_placement_async` (level load), `RootNetworkHandler.create_token_from_state` (host to client, and undo of a removal), `TokenPlacement.sync_from_board_token` (in-play save; it copies the recipe because, unlike the ids, it can change live), `TokenState.diff` (a changed recipe syncs as a property change) and `TokenState.apply_to_token` (a client rebuilds its figure when the recipe differs).
 - **An `AvatarTokenView`** under the rigid body holding the figure. It draws the figure baked (`AvatarFigureBake`: skinned once on the CPU into one static `FigureMesh` with one surface per part and the parts' materials as surface overrides, shared between equal figures; the skinned figure stays off the tree as the bake's source, perf audit F-tokens-2), so an avatar is 3-6 draws, not one per body region. `BoardToken._set_mesh_transparency` hands it the hidden state, and it sets the figure's `hidden_fade` dither (0.5 in the GM's view; a figure's ShaderMaterial has no alpha). It re-takes the figure's shade ray whenever the token has moved 0.2 m or the sun has turned, so drags, synced moves, undo and sun edits all re-shade without a hook in each path; the ray uses the map's `AvatarShadeCache` (canopy crowns collected once per map load; `GameMap.notify_map_loaded` / `notify_map_clearing` drop it).
-- **Its own collision capsule** round the figure's posed body core (`AvatarExtent`: spine, head and legs, not the arms; radius clamped to 0.15-0.3 m), a convex hull with its bottom on the token's origin like a pack token's shape, which sizes the selection glow, the drag height, the landing and the occlusion fade.
+- **Its own collision capsule** round the figure's posed body core (`AvatarExtent`: spine, head and legs, not the arms; radius clamped to 0.15-0.3 m), a convex hull with its bottom on the token's origin like a pack token's shape, which sizes the selection glow, the drag height and the landing.
 
 - **Water: the swim rule.** `DraggableToken.water_draft()` passes an avatar's draft to the float rule (`WaterSurface.draft_for`): in floating water the figure sinks until the surface is at `SWIM_DEPTH_SHARE` (0.68) of its height, about the chest, and counts as submerged for the cue (`SWIM_SUBMERGED_SHARE`); wadeable water still stands it on the bed. The drag resolver during a drag is token-agnostic (float height); the drop settles to the swim depth.
-- **Occlusion fade.** An avatar's entry carries a negative radius (half the figure's height); `occlusion_fade_include.gdshaderinc` then clears an upright ellipse round the figure fully over its core and fades back to solid over the outer ring, instead of the round zone at `min_alpha` 0.3 pack tokens keep.
+- **Covered by scenery.** The token ghost draws the figure's silhouette through foliage and walls (the per-token occlusion fade, which cleared an ellipse round an avatar, was removed 2026-11-15).
 
 Spawning: `LevelPlayController.spawn_avatar(recipe, name, position, settle)` (the Add Token browser's "Avatar" tab, `AvatarTab`, opens the builder; `AvatarPresets` holds the recipes a new avatar starts from). Changing a placed avatar: `LevelPlayController.set_avatar_recipe(token, recipe)` updates the figure (`AvatarTokenFactory.set_recipe`), updates the placement and syncs `GameState` and clients. `set_recipe` rebuilds only what changed: colours or face cells swap the parts' materials (`AvatarKit.apply_look`, about 0.1-0.2 ms), a stance re-poses the skeleton and re-sizes the capsule (`apply_stance`, about 0.16 ms), parts or proportions build a new figure (0.3 ms with the proportions seen before, about 1.6 ms for new ones). `AvatarKit.cache` (`AvatarFigureCache`) shares proportion maps, rests and reshaped skins per proportion values, palettes per colour picks and materials per part, colours and face between figures; capsule shapes are shared by size (`AvatarExtent.capsule_shape`). `duplicate_token` copies an avatar by its recipe.
 
@@ -2328,7 +2321,7 @@ project/
 │   ├── tab_utils.gd         # TabContainer animation helpers
 │   ├── update_version.gd    # Version string parsing
 │   └── update_installer.gd  # Update installation
-├── shaders/             # GLSL shaders (lo-fi, occlusion fade, selection)
+├── shaders/             # GLSL shaders (lo-fi, token ghost, selection)
 ├── themes/              # Theme definitions (dark_theme.gd → dark_theme.tres)
 ├── tests/               # GUT unit tests and runnable test scenes
 ├── tools/               # Python scripts (audio normalization, hooks)

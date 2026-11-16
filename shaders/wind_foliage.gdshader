@@ -38,15 +38,11 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx, alpha_to_covera
  * a plain-cutout variant with no MSAA dependency, swapped in by DebugRenderToggles'
  * "Foliage AA" checkbox (F3 overlay) to A/B test whether that MSAA cost is worth it --
  * see docs/superpowers/specs/2026-08-10-performance-debug-toggles-design.md. Shared
- * sway/PBR/occlusion-fade logic lives in wind_foliage_include.gdshaderinc so the two
+ * sway/PBR logic lives in wind_foliage_include.gdshaderinc so the two
  * variants can't drift out of sync.
  *
- * OCCLUSION FADE: tree-category instances (see WindFoliage.classify_category) also
- * fade out when a token is hidden behind them, same as map geometry -- see
- * occlusion_fade_include.gdshaderinc (included transitively below), and
- * OcclusionFadeManager._collect_tree_materials() (scenes/states/playing/
- * occlusion_fade_manager.gd), which finds and feeds token uniforms to these exact
- * materials via their node's wind_foliage_category == "tree" metadata.
+ * A token covered by foliage is found through the token ghost (shaders/token_ghost.gdshader),
+ * not by fading the foliage: the per-token occlusion fade was removed (2026-11-15).
  *
  * MANAGED BY: WindFoliage.get_shader() (utils/wind_foliage.gd) loads this once and
  * reuses the compiled Shader resource across every species -- each species still

@@ -188,14 +188,3 @@ static func back_glow(toward_sun: float) -> float:
 static func is_camera_pass(view_origin: Vector3, eye: Vector3) -> bool:
 	return view_origin.distance_to(eye) < PASS_TOLERANCE_M
 
-
-## Where a fragment at view-space `fragment` lies in the plane of a token at view-space `token`
-## (both look down -Z, so a point in front of the token has the larger z), in the xy of that
-## plane. Orthographic views keep the xy (the view rays are parallel); a perspective view scales
-## it to the token's depth, so the offset is the real separation across the view ray the
-## occlusion fade tests. Mirrors occlusion_fade_include.gdshaderinc.
-static func token_plane_xy(fragment: Vector3, token: Vector3, perspective: bool) -> Vector2:
-	var xy := Vector2(fragment.x, fragment.y)
-	if perspective and fragment.z < -0.0001:
-		xy *= token.z / fragment.z
-	return xy

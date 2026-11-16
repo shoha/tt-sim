@@ -510,7 +510,7 @@ native/                     # C++ GDExtension: the native scatter generator (SCo
 libraries/core/             # The shipped core content library (plantgen's output, Git LFS; keep-importer sidecars; docs/systems/library.md)
 assets/fire/                # the fire's baked books (Git LFS; tools/fire_sim/README.md)
 tools/render_jobs/          # 1920x1080 scripted render jobs for look judgments (README inside)
-shaders/                    # GLSL shaders (lo-fi, occlusion fade, selection glow)
+shaders/                    # GLSL shaders (lo-fi, token ghost, selection glow)
 themes/                     # painted_theme_base.gd + paper/glass leaves → generated/*.tres
 tests/                      # GUT unit tests + runnable test scenes (F6 in editor)
 tools/                      # Python scripts (audio normalization, hooks, manifest generation)

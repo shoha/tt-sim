@@ -4,7 +4,6 @@
 [ext_resource type="PackedScene" uid="uid://y7g8xy3ginxi" path="res://scenes/states/playing/gameplay_menu.tscn" id="2_stlim"]
 [ext_resource type="Script" path="res://scenes/drag/drag_controller.gd" id="2_tyn2t"]
 [ext_resource type="Shader" uid="uid://cxn1njji80mb1" path="res://shaders/lofi_canvas.gdshader" id="5_lofi_canvas"]
-[ext_resource type="Script" uid="uid://2xyvhnhgntl" path="res://scenes/states/playing/occlusion_fade_manager.gd" id="6_occfade"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_lofi_canvas"]
 shader = ExtResource("5_lofi_canvas")
@@ -60,8 +59,5 @@ far = 1000.0
 
 [node name="DragController" type="Node3D" parent="WorldViewportLayer/SubViewportContainer/SubViewport" unique_id=390056310]
 script = ExtResource("2_tyn2t")
-
-[node name="OcclusionFadeManager" type="Node3D" parent="WorldViewportLayer/SubViewportContainer/SubViewport" unique_id=1128785975]
-script = ExtResource("6_occfade")
 
 [node name="GameplayMenu" parent="." unique_id=2132725076 instance=ExtResource("2_stlim")]

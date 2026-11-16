@@ -1,8 +1,8 @@
 shader_type spatial;
 render_mode cull_disabled, diffuse_burley, specular_schlick_ggx, alpha_to_coverage;
 
-// A burning tree (FireSweep's stand-ins): wind_foliage.gdshader, the same sway, PBR, canopy and
-// occlusion fades through the same include, plus a burn the fire drives per instance
+// A burning tree (FireSweep's stand-ins): wind_foliage.gdshader, the same sway, PBR and canopy
+// fade through the same include, plus a burn the fire drives per instance
 // (INSTANCE_CUSTOM.x, 0 untouched, rising past 1 as the tree burns). A tree catches in a few
 // bold patches, not all at once: each fragment's own moment (`catch_at`) comes from its height
 // up the tree and a slow noise about a metre across, so the heat climbs the crown in blotches.

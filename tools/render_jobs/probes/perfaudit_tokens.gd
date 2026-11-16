@@ -455,35 +455,6 @@ class Runner:
 
 	func _micro_tokens(cam: Camera3D) -> PackedStringArray:
 		var out := PackedStringArray()
-		var ofm: Node = _gm.occlusion_fade
-		var entries: Array[Vector4] = []
-		var t0 := Time.get_ticks_usec()
-		for i in 200:
-			entries = ofm.call("_collect_token_entries")
-		var t1 := Time.get_ticks_usec()
-		var image: Image = null
-		var view := cam.get_camera_transform().affine_inverse()
-		var proj := cam.get_camera_projection()
-		var tiles := OcclusionTiles.TILES
-		for i in 200:
-			var bins := OcclusionTiles.bin(entries, view, proj, tiles, Vector2(0.001, 0.002))
-			image = OcclusionTiles.build_image(entries, bins, tiles)
-		var t2 := Time.get_ticks_usec()
-		var texture := ImageTexture.create_from_image(image)
-		for i in 100:
-			texture.update(image)
-		var t3 := Time.get_ticks_usec()
-		out.append(
-			(
-				"occl collect %.1f us (%d entries), tiles and image %.1f us, upload %.1f us"
-				% [
-					(t1 - t0) / 200.0,
-					entries.size(),
-					(t2 - t1) / 200.0,
-					(t3 - t2) / 100.0,
-				]
-			)
-		)
 		TokenGhost.apply_budget(get_tree(), cam)
 		var t4 := Time.get_ticks_usec()
 		for i in 20:
@@ -696,8 +667,6 @@ class Runner:
 					if gi != null:
 						gi.cast_shadow = _shadow_saved[id]
 				_shadow_saved.clear()
-			"no_fade":
-				_gm.set_occlusion_fade_enabled(true)
 			"no_proc":
 				_set_token_processing(tokens, true)
 			"frozen":
@@ -728,8 +697,6 @@ class Runner:
 					for gi in t.rigid_body.find_children("*", "GeometryInstance3D", true, false):
 						_shadow_saved[gi.get_instance_id()] = gi.cast_shadow
 						gi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			"no_fade":
-				_gm.set_occlusion_fade_enabled(false)
 			"no_proc":
 				_set_token_processing(tokens, false)
 			"frozen":

@@ -53,6 +53,22 @@ const SELECTED_RIM := Color.GOLD
 ## as solid as before.
 const FILL_ALPHA := 0.54
 const RIM_ALPHA := 0.5
+## The ghost's parameter set under the painted look (painter-look-ghost, 2026-11-15; the owner chose
+## the ghost over a hole in the canopy as the way to find a covered token there). On painted
+## foliage the Classic set (dark navy ink rim over the part's own colours) read as a murky dark
+## smudge, and the gold selection as a flat yellow blob: here the fill is a pale warm wash (a cream
+## tint over a share of the part's own colour), the ink rim is thinner and a deep teal, and the gold
+## rim of a selected token stays. Shader uniforms only; Classic keeps the shader's defaults.
+const PAINTED_PARAMS := {
+	"ghost_tint": Color(1.0, 0.97, 0.88),
+	"own_colour": 0.6,
+	"ghost_alpha": 0.58,
+	"rim_alpha": 0.8,
+	"rim_power": 2.0,
+	"rim_color_default": Color(0.06, 0.14, 0.16),
+}
+## Meta on an overlay recording the look it was made for (a change of look rebuilds it).
+const LOOK_META := &"token_ghost_look"
 ## At most this many on-screen tokens are dressed at once, and how often the budget looks.
 const BUDGET_TOKENS := 16
 const BUDGET_PERIOD_S := 0.5
@@ -62,6 +78,9 @@ const CHEST_HEIGHT_M := 0.9
 const SKIPPED_NAMES: Array[StringName] = [&"PlaceholderModel"]
 
 static var enabled := DEFAULT_ENABLED
+## Whether the level is drawn in the painted look (LevelEnvironmentManager sets it; see
+## PAINTED_PARAMS). Static, so it outlives the manager and reaches tokens made later.
+static var painted := false
 ## The budget in force (BUDGET_TOKENS; a render probe changes it to measure the cost without it).
 static var budget := BUDGET_TOKENS
 static var _trimmed := false
@@ -80,6 +99,15 @@ static func set_enabled(on: bool, tree: SceneTree) -> void:
 			if node.has_meta(TRIMMED_META):
 				node.remove_meta(TRIMMED_META)
 		refresh_all(tree)
+
+
+## Switches the ghost between the Classic and the painted parameter set for every token under
+## `tree` and the tokens made later; does nothing when the look did not change.
+static func set_painted(on: bool, tree: SceneTree) -> void:
+	if on == painted:
+		return
+	painted = on
+	refresh_all(tree)
 
 
 ## Dresses every token under `tree` to match the current setting (after a map load).
@@ -217,7 +245,7 @@ static func _dress_mesh(mi: MeshInstance3D, highlighted: bool, bounds: Dictionar
 	var had: Variant = null
 	if ghost != null and ghost.has_meta(SOURCE_META):
 		had = ghost.get_meta(SOURCE_META)
-	if ghost == null or had != source:
+	if ghost == null or had != source or ghost.get_meta(LOOK_META, false) != painted:
 		ghost = _make_ghost(source)
 		mi.material_overlay = ghost
 	_set_rim(ghost, highlighted)
@@ -256,6 +284,11 @@ static func _make_ghost(source: Variant) -> ShaderMaterial:
 	mat.set_meta(SOURCE_META, source)
 	mat.set_shader_parameter("ghost_alpha", FILL_ALPHA)
 	mat.set_shader_parameter("rim_alpha", RIM_ALPHA)
+	mat.set_meta(LOOK_META, painted)
+	if painted:
+		for key: String in PAINTED_PARAMS:
+			if not key.ends_with("_default"):
+				mat.set_shader_parameter(key, PAINTED_PARAMS[key])
 	if source is Texture2D:
 		mat.set_shader_parameter("use_palette", true)
 		mat.set_shader_parameter("palette", source)
@@ -275,7 +308,9 @@ static func _set_rim(ghost: ShaderMaterial, highlighted: bool) -> void:
 		ghost.set_shader_parameter("rim_color", SELECTED_RIM)
 		ghost.set_shader_parameter("rim_strength", 1.0)
 	else:
-		ghost.set_shader_parameter("rim_color", null)
+		ghost.set_shader_parameter(
+			"rim_color", PAINTED_PARAMS.rim_color_default if painted else null
+		)
 		ghost.set_shader_parameter("rim_strength", null)
 
 

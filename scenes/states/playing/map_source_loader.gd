@@ -690,7 +690,7 @@ static func report_document_problem(message: String) -> void:
 ## Puts a built map root into `game_map` as LevelMap and applies everything that depends on
 ## the map being in the scene: the level's transform, its environment (map defaults
 ## extracted from the root, preset, overrides, sun, reflection probe), water, weather,
-## occlusion fade / foliage AA / camera bounds (GameMap.notify_map_loaded), the measure tool
+## foliage AA / camera bounds (GameMap.notify_map_loaded), the measure tool
 ## and grid configuration, and the wiring that hands wind materials of species first
 ## resolved later (AuthoredScatter.species_added) the same bookkeeping. `level` may be null
 ## (no level-specific settings are applied then). The foliage density budget is left to the
@@ -719,7 +719,7 @@ static func install(
 	if level:
 		# Unconditional: the renderer is fresh, and an all-zero WeatherSettings is a no-op.
 		game_map.apply_weather_overrides(level.weather.to_dict())
-	# Occlusion fade cache, foliage AA, camera bounds, debug toggles.
+	# Foliage AA, camera bounds, debug toggles.
 	game_map.notify_map_loaded()
 	# An authored map's ground may rise above Y = 0 (sculpted): keep the camera's near plane
 	# above it. A Blender map leaves the camera as it always was.

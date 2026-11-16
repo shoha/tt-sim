@@ -12,9 +12,8 @@ extends RefCounted
 ##                                      and 14 m tall stands `ahead` metres from `at` (toward the
 ##                                      world point `toward`, default the map centre), a token
 ##                                      `behind` it; the eye looks `off` degrees to the side of the
-##                                      token. `occl` registers the plank with the occlusion fade
-##                                      (a map surface); otherwise only the token ghost shows the
-##                                      token through it.
+##                                      token. `occl` is ignored (the per-token occlusion fade is
+##                                      gone); only the token ghost shows the token through it.
 ##   {action: "report"}                 one line: camera, canopy_eye global state
 ## The eye view is entered on the first action (CameraController.set_view_mode). Run the job's
 ## `leave` with eye_view.gd.
@@ -175,7 +174,8 @@ static func _ghost_still(base: Node, gm: GameMap, cc: CameraController, step: Di
 
 
 ## A plank 14 m tall (from 2 m below `ground_y`, to cover a slope), `width` wide and 0.5 m thick
-## across `dir`, standing at `xz` in the map container; with `occl` the occlusion fade takes its material as a map surface.
+## across `dir`, standing at `xz` in the map container (`occl` is ignored since the per-token
+## occlusion fade was removed).
 static func _plank(
 	gm: GameMap, xz: Vector2, ground_y: float, dir: Vector2, step: Dictionary
 ) -> MeshInstance3D:
@@ -190,8 +190,6 @@ static func _plank(
 	gm.map_container.add_child(mi)
 	mi.global_position = Vector3(xz.x, ground_y + 5.0, xz.y)
 	mi.look_at(mi.global_position + Vector3(dir.x, 0.0, dir.y), Vector3.UP)
-	if bool(step.get("occl", false)) and gm.occlusion_fade != null:
-		gm.occlusion_fade._convert_mesh_materials(mi)
 	return mi
 
 

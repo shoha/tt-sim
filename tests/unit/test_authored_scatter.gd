@@ -713,14 +713,11 @@ func test_growth_finishes_by_itself() -> void:
 
 
 func test_a_species_first_painted_mid_session_gets_the_load_time_bookkeeping() -> void:
-	# The game at load: occlusion fade set up, Antialiasing off (no-AA shader), wind
-	# materials cached for re-tuning. GameMap and its controller are wired by hand, the way
-	# GameMap._ready would, without the scene.
-	var fade := OcclusionFadeManager.new()
-	add_child_autofree(fade)
+	# The game at load: Antialiasing off (no-AA shader), wind materials cached for re-tuning.
+	# GameMap and its controller are wired by hand, the way GameMap._ready would, without the
+	# scene.
 	var game_map: GameMap = autofree(GameMap.new())
 	game_map.map_container = _map
-	game_map.occlusion_fade = fade
 	var effects: VisualEffectsController = autofree(VisualEffectsController.new())
 	effects._game_map = game_map
 	effects._foliage_antialiasing_level = Viewport.MSAA_DISABLED
@@ -728,7 +725,6 @@ func test_a_species_first_painted_mid_session_gets_the_load_time_bookkeeping() -
 
 	var scatter := _scatter()
 	scatter.build_all({PINE: _cell_rows(Vector2i(0, 0), 2)})
-	fade.setup(null, _map, autofree(Node3D.new()))
 	effects.apply_foliage_antialiasing()
 	environment.store_wind_materials(_map)
 	environment.apply_foliage_overrides({"tree_sway_speed": 2.5})
@@ -745,31 +741,8 @@ func test_a_species_first_painted_mid_session_gets_the_load_time_bookkeeping() -
 		assert_eq(material.shader, WindFoliage.shader_for(material, false), "AA variant")
 		assert_ne(material.shader, WindFoliage.get_shader(), "not the AA shader")
 		assert_ne(material.shader, FoliageLight.get_shader(), "not the painted AA shader")
-		assert_true(material in fade._tree_materials, "occlusion fade")
-		assert_true(material.get_shader_parameter("enable_occlusion"))
 		assert_true(material in environment._wind_materials["tree"], "wind re-tuning")
 		assert_eq(material.get_shader_parameter("sway_speed"), 2.5, "current wind tuning")
-	for material in scatter.species_materials(PINE):
-		assert_true(material in fade._tree_materials, "load-time species are unaffected")
-	fade.clear()
-
-
-func test_occlusion_registration_ignores_grass_and_waits_for_setup() -> void:
-	var fade := OcclusionFadeManager.new()
-	add_child_autofree(fade)
-	var tree := ShaderMaterial.new()
-	tree.shader = WindFoliage.get_shader()
-	tree.set_meta("wind_category", "tree")
-	var grass := ShaderMaterial.new()
-	grass.shader = WindFoliage.get_shader()
-	grass.set_meta("wind_category", "grass")
-	var materials: Array[ShaderMaterial] = [tree, grass]
-	fade.register_tree_materials(materials)
-	assert_eq(fade._tree_materials.size(), 0, "not set up yet")
-	fade.setup(null, _map, autofree(Node3D.new()))
-	fade.register_tree_materials(materials)
-	assert_eq(fade._tree_materials, [tree] as Array[ShaderMaterial])
-	fade.clear()
 
 
 # --- worker threads ---------------------------------------------------------------------

@@ -341,23 +341,6 @@ void vertex() {
 			if (PROJECTION_MATRIX[3][3] == 0.0 && e_far < 0.5 && !stem) {
 				rr *= 1.0 - smoothstep(0.8, 0.95, abs(dot(tgw, vcw)));
 			}
-			if (alive && rr < TREE_THIN_TWIG_R1 && abs(dot(normalize(INV_VIEW_MATRIX[2].xyz), normalize(sun_dir))) <= 0.9995) {
-				// painter-look-fade2: thin wood (a twig, a fine limb, the leader's tip: whatever is under
-				// TREE_THIN_TWIG_R1 metres of half width here) narrows toward nothing as this point nears a
-				// token, so a twig tapers out like a brush stroke lifting: no end is cut, no piece is left
-				// floating (the width follows the point's place, never a strand's own end). A limb over
-				// R1 and a trunk are unchanged (their fragment streaks are the fade's). The camera's pass
-				// only: the sun's keeps the shadow. Under half a pixel the ribbon collapses to its axis.
-				vec3 wv_t = (VIEW_MATRIX * vec4(wc, 1.0)).xyz;
-				vec4 ck_t = PROJECTION_MATRIX * vec4(wv_t, 1.0);
-				vec2 px_t = (ck_t.xy / max(abs(ck_t.w), 0.0001) * 0.5 + 0.5) * VIEWPORT_SIZE;
-				float a_t = tree_thin_at(wv_t, px_t, false, VIEW_MATRIX, PROJECTION_MATRIX, VIEWPORT_SIZE, TREE_THIN_CORE)
-					* (1.0 - smoothstep(TREE_THIN_TWIG_R0, TREE_THIN_TWIG_R1, rr));
-				if (a_t > 0.0) {
-					float s_t = 1.0 - smoothstep(0.0, TREE_THIN_TWIG_FULL, a_t);
-					rr = rr * s_t < 0.5 * px19 ? 0.0 : rr * s_t;
-				}
-			}
 			float h19 = wc.y - MODEL_MATRIX[3].y;
 			float sa = 0.0;
 			if (limb_snow17 > 0.0 && deposit > 0.0) {
@@ -895,14 +878,7 @@ void fragment() {
 		// grain over a token at a close zoom (painter-a2a3), a quarter share still dotted every
 		// rim (painter-a2a4). The wood stays through the canopy fades to ground the tree.
 		float key = clamp(0.9 * p_noise(v_wp * 1.6 + 7.0) + 0.1 * bayer16(FRAGCOORD.xy / world_px_cell()), 0.0, 1.0);
-		// painter-look-fade: a limb thins in dry-brush streaks along its length (the noise of its own dry
-		// breaks), so it stays one continuous thing; a twig is never thinned.
-		float thin_key = -1.0;
-		if (wood) {
-			thin_key = w_twig > 0.6 ? 2.0 : smoothstep(0.15, 0.85, p_noise(vec3(w_a * 3.3 + w_sd + 17.0, w_s / (w_wl * 3.0), w_sd * 0.7 + 5.0)));
-		}
-		tree_fades(VERTEX, INV_VIEW_MATRIX, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy,
-			VIEWPORT_SIZE, key, kind10 > 0.5, false, thin_key);
+		tree_fades(VERTEX, INV_VIEW_MATRIX, key, kind10 > 0.5);
 	}
 }
 

@@ -15,7 +15,6 @@ extends Node
 const SAMPLE_INTERVAL_SEC := 0.25
 
 const _CUSTOM_MONITOR_NAMES: PackedStringArray = [
-	&"perf/occlusion_fade_ms",
 	&"perf/camera_update_ms",
 	&"perf/grid_overlay_ms",
 ]

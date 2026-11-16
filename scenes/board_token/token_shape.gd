@@ -13,7 +13,7 @@ extends RefCounted
 ##
 ## Everything here is expressed in the rigid body's space and baked into the shape's points, so
 ## the shape node stays at the origin: the code that reads a token's footprint, base and top
-## (grounding, drop indicator, water depth, glow, occlusion fade) reads the shape's box and the
+## (grounding, drop indicator, water depth, glow) reads the shape's box and the
 ## node's position only, and rotation or scale on the node would escape it.
 ##
 ## The shape for a model with no authored one is the convex hull of every visible mesh's

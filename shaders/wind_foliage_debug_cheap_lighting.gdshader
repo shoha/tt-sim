@@ -11,7 +11,7 @@ render_mode cull_disabled, diffuse_lambert, specular_disabled;
  *
  * Unlike wind_foliage_debug_trivial.gdshader and wind_foliage_debug_unshaded.gdshader
  * (both isolation shaders used to localize the cost), this is a candidate REAL fix:
- * identical PBR texture sampling, wind sway, and occlusion fade to the real shader --
+ * identical PBR texture sampling and wind sway to the real shader --
  * the only difference is the render_mode line. Those two isolation shaders, plus an
  * M1 Xcode/Instruments GPU capture (fragment stage dominating by ~10x any other
  * stage), confirmed the framerate cost is Godot's diffuse_burley + specular_schlick_ggx

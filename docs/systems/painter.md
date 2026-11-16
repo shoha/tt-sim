@@ -333,8 +333,7 @@ off, GPU medians, painted minus classic: forest tokens summer +0.06, +0.08, +0.0
 - The shaders (`painter_tree_stroke.gdshader`, `painter_tree_blockin.gdshader`, shared
   `painter_tree.gdshaderinc`) are the spike's final composed code, sliced, with tt-sim's wind
   globals (the gust is WindModel's field), the `foliage_sun` global for the light's direction, the
-  canopy fades by whole strokes and masses (stems stay) and the token occlusion fade (its binding
-  copied from the scatter's own tree material). The spike's untone is gone: the Painted tonemap is
+  canopy fades by whole strokes and masses (stems stay). The spike's untone is gone: the Painted tonemap is
   linear at exposure 1, so the palette reaches the screen as written. The eye view's levels are
   pinned off (`e_far` 1). `tree_uniforms.json` holds the summer values the spike set on every
   other uniform. The field map (`field16`) has no tt-sim source yet: a neutral texel.
@@ -447,69 +446,25 @@ off, GPU medians, painted minus classic: forest tokens summer +0.06, +0.08, +0.0
   `test_painter_trees_draw` grows every species and fails if one outgrows it. The block-in's
   crown masses fade by a world noise of about half a metre with a light screen dither on each
   piece's rim (a plain 1 px dither read as halftone grain over a token).
-- The token fade (painter-look-fade, 2026-11-15; it replaced the token window of painter-a2a4,
-  painter-a2a5, painter-token-window and painter-trees-fix2, which CLEARED a ragged rim of strokes,
-  masses and limbs in front of a token: a floating trunk with a limb tail, detached stubs, fringes,
-  a glass-dome rim). A tree part nearer the camera than a token is THINNED, never cleared whole and
-  never alpha-blended (the look stays opaque; no new pass). The include reads OcclusionFadeManager's
-  token texture and screen tiles as the plants do (the tile's list in the camera's pass, the plain
-  loop otherwise). `tree_thin_one` gives one token's amount: a depth ease-in (the part is in front
-  of the token: `smoothstep(-0.9, -0.3, dz)` in zone radii for foliage, `(-0.45, -0.05)` for wood,
-  so a trunk just behind a token stays) times
-  `1 - smoothstep(core, 1, d)`, d the distance in the view plane in zone radii (an avatar's
-  figure ellipse, negative radius, `TREE_THIN_FIG_W` 0.8 wide); `tree_thin_at` takes the largest over
-  the tile's tokens (`tree_thin_tile`). There is no rim to see: the amount falls continuously from
-  the core to the zone's edge, so nothing collapses as a group, and the whole-tree collapse
-  (`tree_token_crown`) is gone. Three parts, each with its own way of using the amount:
-  - STROKES (leaf dabs) shrink away in the vertex stage (`tree_thin_vertex`, amount x
-    `TREE_THIN_STROKE` 0.9, tested at the stroke's anchor): `thin_s = clamp((key - f) / TREE_THIN_BAND, 0, 1)`
-    scales the dab's length and width, and a dab under `thin_s` 0.02 is not built. The key is
-    half the stroke's own hash and half its light (`clamp(ndl, 0, 1)`, `TREE_THIN_LIT` 0.5), so
-    sunlit dabs stay longest and shaded (dark) dabs go first: the token reads through a lighter
-    canopy rather than dark clots. Never a ground shadow dab (role ground), never the sun's pass.
-    No stroke is cut per fragment (the stroke shader's fragment call is `tree_fades(..., v_key,
-    v_key < 0.0, true, -1.0)`: `whole` skips the thinning).
-  - MASSES (the block-in's crown spheres) are discarded per fragment against a coarse world noise
-    (`tree_thin_key`: 0.4 m cells, `TREE_THIN_CELL`, plus a light bayer rim so the edge is not a
-    hard step) when the key is under amount x `TREE_THIN_MASS` (1.0); the core is `TREE_THIN_MASS_CORE`
-    (0.8) of the radius, so a mass is fully gone in front of the token and breaks into patches
-    toward its edge.
-  - WOOD (trunk and limb ribbons, `kind10` above 0.5) is thinned only to `TREE_THIN_WOOD` (0.55), in
-    dry-brush streaks: the key is `p_noise` on the limb's own coordinates (`w_a` around, `w_s`
-    along), so the wood breaks into lengthwise strokes and is never cut at an end. Twigs (`w_twig`
-    above 0.6) are never thinned per fragment (a cut twig would leave an orphan). Core
-    `TREE_THIN_CORE` 0.4.
-  - THIN WOOD (painter-look-fade2, 2026-11-15; the block-in's vertex stage): round 1 left twigs whole,
-    and where a birch crown stood between the camera and a token its dark and straw-coloured twig
-    ribbons scribbled across the token like scratches on a lens. A ribbon vertex whose half width `rr`
-    is under `TREE_THIN_TWIG_R1` (0.05 m; by width, not by the strand's class, so a limb's tapering tip
-    and a leader's top count, and a trunk or a limb over 0.05 m does not) narrows by the thinning at
-    its own point: `a = tree_thin_at(...) * (1 - smoothstep(R0 0.02, R1, rr))`, `rr *= 1 -
-    smoothstep(0, TREE_THIN_TWIG_FULL 0.55, a)`, and a ribbon under half a pixel collapses to its axis.
-    The width follows the point's place on the screen (the same smooth profile as the strokes), never
-    the strand's own ends, so a twig tapers out toward the token like a brush stroke lifting: no blunt
-    cut, nothing orphaned, nothing floating, and a limb is whole again past the zone. Camera pass
-    only (the sun's pass keeps the shadow), live ribbons only (`alive`), the tile list's lookup only
-    for ribbons under R1. Tried against it and dropped (frames in
-    `compare/painter_final19_fade/variants_sheet_*.png`): whole strands by their hash at the strand's
-    midpoint (the dark thin limbs stayed over the token, and a strand that crosses the zone
-    from outside stayed whole) and a tone lift of thin wood toward the crown's light colour (the
-    lines stay, olive instead of dark).
-  The vertex stage's `tree_token_near` pre-test (a tree's box against the tokens, `TREE_TOKEN_NEAR_M`
-  beyond a token's reach) runs only for live strokes, after the other kills. It runs after the
-  canopy fades and only in the camera's pass (the sun's pass keeps the whole crown's shadow; shadows
-  are unchanged). Both shaders hand their own view-space point to `tree_fades`: the stroke shader
-  and (painter-a2a5) the block-in (`skip_vertex_transform`, VERTEX and NORMAL in view space; it
-  wrote POSITION alone before, so Godot's VERTEX was the mesh's unit block at the tree's FOOT).
-  The vertex stage computes FRAGCOORD's tile as `(clip.xy / clip.w * 0.5 + 0.5) * VIEWPORT_SIZE`
-  with no row flip (measured). Cost against the window (GPU ms, Painted minus Classic, pinned
-  procedure; `docs/PERFORMANCE.md` "Painted token fade"): forest tokens summer +0.30 for the
-  window, +0.07 for the fade; no view got dearer; the thin-wood taper cost nothing measurable
-  (forest tokens summer +0.05 against +0.06 for main, all five views within 0.02 ms of main). Still
-  open: a few hairline tips (just over half a pixel) remain across a token; a bush's block-in over a
-  token (the eye view) breaks up only by the noise edge of its clear zone. `test_painter_trees_draw` checks the binding, the
-  VERTEX write, both functions in every tree shader, that no window function is left, that the
-  stroke thins in the vertex stage and the block-in per fragment.
+- A covered token in Painted (painter-look-ghost, 2026-11-15; it replaced the token fade of
+  painter-look-fade, which replaced the token windows of painter-a2a4, a2a5 and trees-fix2). Painted
+  cuts nothing away for a token: no stroke thins, no mass is discarded, no limb tapers, and the
+  per-token occlusion fade is gone from the whole game (`docs/PERFORMANCE.md` "Occlusion fade
+  removed"). Owner verdict 2026-11-15: a hole in the canopy is disorienting; players need to find and
+  select their tokens. A covered token is found through the Token ghost (`TokenGhost`,
+  `shaders/token_ghost.gdshader`): its silhouette reads through the strokes and block-ins because
+  they are in the depth buffer like any opaque surface. Painted gives the ghost its own wash
+  (`TokenGhost.PAINTED_PARAMS`, set by `LevelEnvironmentManager._publish_painted` through
+  `TokenGhost.set_painted`; shader parameters only): a warm cream `ghost_tint`, `own_colour` 0.6,
+  `ghost_alpha` 0.58, `rim_alpha` 0.8, `rim_power` 2.0 and a dark teal unselected rim, because the
+  default (a dark green silhouette) turned muddy over the painted crowns. Gold when selected or
+  hovered, as in Classic. Frames: `compare/painter_final20_ghost/` (`notes.md`). Both tree shaders
+  still hand their own view-space point to `tree_fades` (the canopy fades; `skip_vertex_transform`,
+  VERTEX and NORMAL in view space; the block-in wrote POSITION alone before painter-a2a5, so Godot's
+  VERTEX was the mesh's unit block at the tree's FOOT). `test_painter_trees_draw` checks that no
+  token-thinning code or uniform is left in the include or the two bodies, and `test_token_ghost`
+  checks the Painted wash and its restore. Open: an unselected ghost under a thick crown is a pale
+  blob, easy to miss for a small token until it is selected or hovered; its rim is thin.
 - One hand (painter-trees-polish): every broadleaf crown and the spruce paint with the oak's
   scalloped `lobed` brush (`tree_roles.json`; the lime's heart-shaped `scale`, the poplar's and
   rowan's `flick`, the spruce's `spray` and the birch's small `round` read as a second, cruder hand

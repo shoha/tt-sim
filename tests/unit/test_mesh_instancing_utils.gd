@@ -134,7 +134,7 @@ func test_does_not_group_nodes_with_different_meshes() -> void:
 
 
 func test_skips_meshes_large_enough_to_occlude_a_token() -> void:
-	# OcclusionFadeManager only fades real MeshInstance3D surfaces, so a prop big
+	# The token ghost and picking read real MeshInstance3D surfaces, so a prop big
 	# enough to hide a token must stay a real node.
 	var scene := Node3D.new()
 	var mesh := BoxMesh.new()

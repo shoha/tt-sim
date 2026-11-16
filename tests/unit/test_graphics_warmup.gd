@@ -115,7 +115,7 @@ func test_an_include_only_edit_changes_the_key() -> void:
 func test_the_real_shader_sources_include_the_includes() -> void:
 	var joined := "\n".join(GraphicsWarmup.shader_sources())
 	assert_string_contains(joined, "res://shaders/wind_foliage_include.gdshaderinc\n")
-	assert_string_contains(joined, "res://shaders/occlusion_fade_include.gdshaderinc\n")
+	assert_string_contains(joined, "res://shaders/screen_dither_include.gdshaderinc\n")
 	assert_string_contains(joined, "res://shaders/authored_ground.gdshaderinc\n")
 
 

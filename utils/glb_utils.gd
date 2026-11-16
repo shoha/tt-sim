@@ -323,7 +323,7 @@ static func _process_single_collision_node(
 		var static_body = StaticBody3D.new()
 		static_body.name = mesh_node.name.replace(suffix, "") + "_collision"
 		# Allow viewport picking rays to pass through map geometry so tokens
-		# behind walls/pillars remain selectable (see OcclusionFadeManager).
+		# behind walls/pillars remain selectable.
 		static_body.input_ray_pickable = false
 
 		var collision_shape = CollisionShape3D.new()
@@ -762,7 +762,7 @@ static func find_first_mesh_instance(root: Node) -> MeshInstance3D:
 
 
 ## Collect all visible MeshInstance3D nodes with actual geometry from a subtree.
-## Useful for building spatial caches (e.g. occlusion fade, LOD systems).
+## Useful for building spatial caches (e.g. LOD systems).
 ## @param root: The root node to search under
 ## @return: Flat array of all visible MeshInstance3D nodes with non-null meshes
 static func collect_visible_mesh_instances(root: Node) -> Array[MeshInstance3D]:

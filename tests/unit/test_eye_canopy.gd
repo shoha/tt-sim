@@ -307,29 +307,6 @@ func test_only_the_camera_at_the_eye_is_the_camera_pass() -> void:
 	assert_false(EyeCanopy.is_camera_pass(eye + Vector3(30.0, 60.0, -20.0), eye), "the sun's view")
 
 
-# --- the occlusion fade's projection fix -----------------------------------------------------
-
-
-func test_a_fragment_on_the_ray_to_the_token_has_no_offset_under_perspective() -> void:
-	var token := Vector3(3.0, 1.0, -12.0)
-	var fragment := token * 0.4
-	var offset := EyeCanopy.token_plane_xy(fragment, token, true) - Vector2(token.x, token.y)
-	assert_almost_eq(offset.length(), 0.0, 0.0001)
-	var unfixed := Vector2(fragment.x, fragment.y) - Vector2(token.x, token.y)
-	assert_gt(unfixed.length(), 1.0, "the old subtraction missed by metres at this angle")
-
-
-func test_the_orthographic_offset_is_the_view_space_xy_as_before() -> void:
-	var token := Vector3(3.0, 1.0, -12.0)
-	var fragment := Vector3(2.0, 0.5, -4.0)
-	assert_eq(EyeCanopy.token_plane_xy(fragment, token, false), Vector2(2.0, 0.5))
-
-
-func test_a_fragment_at_the_eye_plane_is_left_alone() -> void:
-	var xy := EyeCanopy.token_plane_xy(Vector3(1.0, 2.0, 0.0), Vector3(0.0, 0.0, -5.0), true)
-	assert_eq(xy, Vector2(1.0, 2.0))
-
-
 # --- the shaders' copies ---------------------------------------------------------------------
 
 
@@ -398,12 +375,6 @@ func test_the_eye_fade_is_tested_against_the_camera_origin_not_the_shadow_pass()
 	assert_string_contains(text, "if (eye_pass) {", "the eye term runs only in the camera's pass")
 	var ghost := FileAccess.get_file_as_string("res://shaders/token_ghost.gdshader")
 	assert_string_contains(ghost, "PROJECTION_MATRIX[3][3] < 0.5", "perspective only")
-
-
-func test_the_occlusion_fade_scales_by_projection_only_when_perspective() -> void:
-	var text := FileAccess.get_file_as_string("res://shaders/occlusion_fade_include.gdshaderinc")
-	assert_string_contains(text, "projection_matrix[3][3] < 0.5")
-	assert_string_contains(text, "fragment_xy *= token_view.z / vertex_view.z;")
 
 
 # --- what publish writes ---------------------------------------------------------------------

@@ -17,8 +17,7 @@ extends Node3D
 ##   │       └── SubViewport
 ##   │           ├── CameraHolder/Camera3D
 ##   │           ├── MapContainer (map geometry, environment)
-##   │           ├── DragController (tokens)
-##   │           └── OcclusionFadeManager (fades geometry hiding tokens)
+##   │           └── DragController (tokens)
 ##   └── GameplayMenu (CanvasLayer - UI on top)
 ##
 ## INPUT HANDLING NOTE:
@@ -85,10 +84,6 @@ var drag_and_drop_node: DragController = (
 	$WorldViewportLayer/SubViewportContainer/SubViewport/DragController
 )
 
-# OcclusionFadeManager - type resolved at runtime after editor imports the new script
-@onready var occlusion_fade: Node3D = get_node(
-	"WorldViewportLayer/SubViewportContainer/SubViewport/OcclusionFadeManager"
-)
 @onready var gameplay_menu: CanvasLayer = $GameplayMenu
 
 
@@ -812,16 +807,10 @@ func apply_grid_visual_settings(
 
 
 ## Gives wind materials created after load (AuthoredScatter.species_added: a species first
-## painted mid-session) the foliage AA variant and occlusion fade registration that
-## notify_map_loaded() gives load-time ones. Wind re-tuning is the environment manager's:
-## LevelEnvironmentManager.add_wind_materials().
+## painted mid-session) the foliage AA variant that notify_map_loaded() gives load-time ones.
+## Wind re-tuning is the environment manager's: LevelEnvironmentManager.add_wind_materials().
 func adopt_foliage_materials(materials: Array[ShaderMaterial]) -> void:
 	_visual_effects.adopt_foliage_materials(materials)
-
-
-## Enable or disable the occlusion fade effect
-func set_occlusion_fade_enabled(enabled: bool) -> void:
-	_visual_effects.set_occlusion_fade_enabled(enabled)
 
 
 ## Set the foliage antialiasing level (a Viewport.MSAA enum value) from the settings menu.
@@ -829,13 +818,11 @@ func set_foliage_antialiasing_level(level: int) -> void:
 	_visual_effects.set_foliage_antialiasing_level(level)
 
 
-## Notify the occlusion fade manager that a new map has been loaded.
-## Re-initializes and rebuilds the internal mesh cache so occlusion detection
-## works with the new geometry. Also computes camera soft bounds from map AABB.
+## Notify the map that a new map has been loaded: foliage antialiasing, token ghosts and the
+## camera's soft bounds from the map AABB are redone for the new geometry.
 func notify_map_loaded() -> void:
 	# Avatar tokens' shade rays collect the new map's canopies on their next ray.
 	AvatarShadeCache.clear()
-	_visual_effects.setup_occlusion_fade()
 	_visual_effects.apply_foliage_antialiasing()
 	_visual_effects.refresh_token_ghosts()
 
@@ -850,11 +837,9 @@ func notify_map_loaded() -> void:
 		_debug_render_toggles.refresh()
 
 
-## Clear occlusion fade state. Call before loading a new map.
-## The manager will be re-activated when notify_map_loaded() is called.
+## Call before loading a new map; notify_map_loaded() follows it.
 func notify_map_clearing() -> void:
 	AvatarShadeCache.clear()
-	_visual_effects.clear_occlusion_fade()
 
 	# Clean up any in-progress shake so the offset doesn't persist into the next level
 	_camera_controller.notify_map_clearing()

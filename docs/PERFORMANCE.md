@@ -6175,6 +6175,38 @@ for live ribbon vertices under 0.05 m wide and the tile lookup rejects a vertex 
 with one fetch, so it is free at these views. Raw logs: `compare/painter_final19_fade/cost_main_*` and
 `cost_new_*`. (The taiga row's Painted samples drift up 3.15 to 3.24 within each run, in both runs.)
 
+## Occlusion fade removed (card painter-look-ghost, 2026-11-15, look-pending)
+
+The per-token occlusion fade (`OcclusionFadeManager`, `shaders/occlusion_fade.gdshader`,
+`occlusion_fade_include.gdshaderinc`, `OcclusionTiles`, the token texture and tile globals, the
+Settings row and the Painted token thinning) is gone from both looks. Owner verdict 2026-11-15: the
+hole it opens in the canopy is disorienting; a covered token is found and selected through the
+Token ghost ("Token ghost", above). The sections about it in this file ("Occlusion fade: token data
+as a shared texture", "Occlusion fade tiles", "Painted token fade") are history: they describe code
+that no longer exists. The foliage shaders' dither helpers (`bayer16`, `world_px_cell`) moved to
+`shaders/screen_dither_include.gdshaderinc`; `CanopyFade` (the close-zoom window, default off) is a
+separate mechanism and stays.
+
+Gate: removing it had to cost nothing. Same pinned procedure (1920x1080, vsync off, in-run
+interleaved A/B, GPU 2.5 s median, 3 samples per cell, a warm-up drop first; 11 to 16 avatar tokens
+spread over the screen, 476 draw calls and 54 token meshes in the forest tokens view). "Fade" is the
+old build with the fade on (Painted at strength 1, Classic as shipped); "ghost only" is the same
+build with it off (ghost alone: what main now is). GPU ms, median of 3:
+
+| view | Painted fade | Painted ghost only | delta | Classic fade | Classic ghost only | delta |
+|------|--------------|--------------------|-------|--------------|--------------------|-------|
+| forest tokens summer | 3.137 | 3.027 | -0.110 | 3.492 | 2.599 | -0.893 |
+| forest home summer | 3.284 | 3.161 | -0.123 | 4.205 | 3.138 | -1.067 |
+| taiga home summer | 3.306 | 3.182 | -0.124 | 2.913 | 2.286 | -0.627 |
+| village (walls) 16 tokens | 3.237 | 3.154 | -0.083 | 4.035 | 3.382 | -0.653 |
+
+Ghost only is cheaper everywhere: Painted by 0.08 to 0.12 ms, Classic by 0.63 to 1.07 ms (Classic paid
+the fade on every foliage and map fragment). Beside the GPU: the per-frame token collect, tile bin and
+texture upload on the CPU (the `fade_token_cap` row of the perf budget counters and the
+`perf/occlusion_fade_ms` monitor went with it; the log column `perf_occlusion_fade_ms` is gone, so
+older CSVs have one more column). Raw logs: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final20_ghost/cost_all/log.txt`.
+Frames: the same folder (`notes.md`).
+
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
 What each Shadow quality tier (`directional_soft_shadow_filter_set_quality`) costs, and a "blur"

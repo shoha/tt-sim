@@ -82,8 +82,8 @@ const TREE_W: int = 8
 ## view, pixels unchanged). A spruce's boughs are 1 to 9 cm at the ages the game grows. 0 keeps
 ## every strand (the spike's own trees, which the port test compares).
 const BOUGH_R: float = 0.1
-## Metres the token pre-test (tree_token_near) allows past a tree's box (tree_row's texels 5 and 6)
-## for a stroke's size, shift and lift and the wind's sway; the shaders' TREE_BOX_PAD, which a test
+## Metres a stroke or clump reaches past a tree's box (tree_row's texels 5 and 6): its size, shift
+## and lift and the wind's sway; the shaders' TREE_BOX_PAD, which a test
 ## pins to this, and the cells' engine box (PainterTrees.BOUND_GROW) use the same. The per-tree view
 ## cull (tree_view_box) has its own, smaller margin (view_margin) and is on (painter-perf-cull).
 const BOUND_PAD: float = 2.5
@@ -619,7 +619,7 @@ static func tree_row(
 			c.x,
 			c.y,
 			c.z,
-			# 2 for a bush (PainterTreeBush, d "bush"): a crown the token window never takes whole.
+			# 2 for a bush (PainterTreeBush, d "bush"): a bush's crown (texel 3 w).
 			(2.0 if d.get("bush", false) else 1.0) if d["has_crown"] else 0.0,
 			r.x,
 			r.y,

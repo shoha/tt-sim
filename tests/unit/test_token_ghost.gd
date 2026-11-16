@@ -9,15 +9,19 @@ const SETTINGS_SCENE := preload("res://scenes/ui/settings_menu.tscn")
 const TEMP_PATH := "user://test_token_ghost_settings.cfg"
 
 var _was_enabled := true
+var _was_painted := false
 
 
 func before_each() -> void:
 	_was_enabled = TokenGhost.enabled
+	_was_painted = TokenGhost.painted
 	TokenGhost.enabled = true
+	TokenGhost.painted = false
 
 
 func after_each() -> void:
 	TokenGhost.enabled = _was_enabled
+	TokenGhost.painted = _was_painted
 	if FileAccess.file_exists(TEMP_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(TEMP_PATH))
 
@@ -297,6 +301,36 @@ func test_a_token_dressed_while_highlighted_starts_gold() -> void:
 	assert_eq(TokenGhost.overlay_of(part).get_shader_parameter("rim_color"), TokenGhost.SELECTED_RIM)
 
 
+# --- the Painted look's own wash ----------------------------------------------------------
+
+
+func test_the_painted_look_gives_the_ghost_its_own_wash_and_classic_keeps_the_default() -> void:
+	var part := _pack_part(Color.RED)
+	var token := _token([part])
+	TokenGhost.painted = false
+	TokenGhost.dress(token)
+	var ghost := TokenGhost.overlay_of(part)
+	assert_null(ghost.get_shader_parameter("ghost_tint"), "Classic sets no tint")
+	assert_null(ghost.get_shader_parameter("rim_color"), "Classic's rim keeps the shader default")
+	TokenGhost.set_painted(true, get_tree())
+	var painted_ghost := TokenGhost.overlay_of(part)
+	assert_not_null(painted_ghost)
+	for key: String in ["ghost_tint", "own_colour", "ghost_alpha", "rim_alpha", "rim_power"]:
+		assert_eq(painted_ghost.get_shader_parameter(key), TokenGhost.PAINTED_PARAMS[key], key)
+	assert_eq(
+		painted_ghost.get_shader_parameter("rim_color"),
+		TokenGhost.PAINTED_PARAMS.rim_color_default,
+		"the unselected rim is the painted dark teal"
+	)
+	token.add_highlight()
+	assert_eq(
+		painted_ghost.get_shader_parameter("rim_color"), TokenGhost.SELECTED_RIM, "gold when selected"
+	)
+	TokenGhost.set_painted(false, get_tree())
+	var back := TokenGhost.overlay_of(part)
+	assert_null(back.get_shader_parameter("ghost_tint"), "leaving Painted restores the default")
+
+
 # --- the draw-call budget ----------------------------------------------------------------
 
 
@@ -387,32 +421,40 @@ func test_the_setting_defaults_on_and_the_canopy_fade_defaults_off() -> void:
 	assert_false(CanopyFade.DEFAULT_ENABLED)
 
 
-func test_the_menu_saves_and_shows_the_three_options() -> void:
+func test_the_menu_saves_and_shows_the_two_options() -> void:
 	var menu: SettingsMenu = SETTINGS_SCENE.instantiate()
 	add_child_autofree(menu)
 	menu.token_ghost_check.set_pressed_no_signal(false)
-	menu.occlusion_fade_check.set_pressed_no_signal(false)
 	menu.canopy_fade_check.set_pressed_no_signal(true)
 	menu._save_settings(TEMP_PATH)
 	var config := ConfigFile.new()
 	assert_eq(config.load(TEMP_PATH), OK)
 	assert_eq(config.get_value("graphics", "token_ghost_enabled"), false)
-	assert_eq(config.get_value("graphics", "occlusion_fade_enabled"), false)
+	assert_false(config.has_section_key("graphics", "occlusion_fade_enabled"), "key retired")
 	assert_eq(config.get_value("graphics", "canopy_fade_enabled"), true)
 	SettingsSeeThrough.show_defaults(menu)
 	assert_true(menu.token_ghost_check.button_pressed)
-	assert_true(menu.occlusion_fade_check.button_pressed)
 	assert_false(menu.canopy_fade_check.button_pressed)
 	SettingsSeeThrough.show_saved(menu, config)
 	assert_false(menu.token_ghost_check.button_pressed)
-	assert_false(menu.occlusion_fade_check.button_pressed)
 	assert_true(menu.canopy_fade_check.button_pressed)
+
+
+func test_a_settings_file_with_the_retired_fade_key_still_loads() -> void:
+	var menu: SettingsMenu = SETTINGS_SCENE.instantiate()
+	add_child_autofree(menu)
+	var config := ConfigFile.new()
+	config.set_value("graphics", "occlusion_fade_enabled", false)
+	config.set_value("graphics", "token_ghost_enabled", false)
+	SettingsSeeThrough.show_saved(menu, config)
+	assert_false(menu.token_ghost_check.button_pressed)
+	assert_false(menu.has_node("%OcclusionFadeCheck"), "no row for the retired fade")
 
 
 func test_the_options_have_tooltips_and_the_menu_row_labels() -> void:
 	var menu: SettingsMenu = SETTINGS_SCENE.instantiate()
 	add_child_autofree(menu)
-	for check in [menu.token_ghost_check, menu.occlusion_fade_check, menu.canopy_fade_check]:
+	for check in [menu.token_ghost_check, menu.canopy_fade_check]:
 		assert_ne(check.tooltip_text, "")
 	assert_eq(
 		(menu.token_ghost_check.get_parent().get_node("Label") as Label).text, "Token ghost"

@@ -32,7 +32,7 @@ extends RefCounted
 ## as a crown with no skeleton: PainterTreeBush lays a few leaf pads in the asset mesh's box at the
 ## row's scale (no box until the asset has resolved, so no bush until then), and its GLB chunks hide
 ## as a tree's do. A bush's strokes and pads are a crown's, in a row of its own (the tree table's
-## texel 3 w is 2: the token window thins it stroke by stroke but never takes it whole). Bushes sit
+## texel 3 w is 2). Bushes sit
 ## in cells of their own, BUSH_CELL_M wide, whose nodes instance smaller blocks (BUSH_ELL_PER_INST
 ## spheres, BUSH_SLOT_PER_INST stroke slots), so a bush does not pay for a tree's 64 slots; and no
 ## tree lists a bush among its neighbouring forms.
@@ -189,7 +189,6 @@ func sync() -> void:
 	if _map == null:
 		return
 	_hide_glb()
-	_copy_occlusion()
 	_want = wanted(_scatters, _doc)
 	var dirty := {}
 	for key: Vector3i in trees.keys():
@@ -217,7 +216,6 @@ func release() -> void:
 		var node: Variant = _hidden[id]
 		if is_instance_valid(node):
 			(node as Node3D).visible = true
-			(node as Node3D).remove_meta(OcclusionFadeManager.KEEP_HIDDEN_META)
 	_hidden.clear()
 	if _root != null and is_instance_valid(_root):
 		# Out of the map at once, so a paint in the same frame makes a fresh root of the same name.
@@ -254,8 +252,6 @@ func is_growing() -> bool:
 func complete() -> void:
 	_wait_all()
 	_install_some(INF)
-	if _map != null:
-		_copy_occlusion()
 
 
 ## The materials every cell node draws with (0, 1 block-in; 2..4 the stroke levels).
@@ -365,33 +361,6 @@ func _set_all(uniform_name: StringName, value: Variant) -> void:
 		m.set_shader_parameter(uniform_name, value)
 
 
-## Takes the token occlusion fade's binding from the scatter's own tree materials (the
-## OcclusionFadeManager registered them), so a token under a painted crown shows as under a GLB one.
-## painter-trees-fix: a level loaded Painted is painted before its fade manager registers anything,
-## so this runs again when the growth has been installed (_step, complete()); with no registered
-## source the window is off, never left reading an earlier table's freed token texture.
-func _copy_occlusion() -> void:
-	for scatter in _scatters:
-		if not is_instance_valid(scatter):
-			continue
-		for asset_id: String in scatter.resolved_species():
-			if PainterTreeSpecies.species_for(asset_id) == "":
-				continue
-			for source in scatter.species_materials(asset_id):
-				if source.get_shader_parameter(&"enable_occlusion") != true:
-					continue
-				for uniform_name: StringName in [
-					&"enable_occlusion",
-					&"occlusion_tokens",
-					&"min_alpha",
-					&"lofi_pixelation",
-					&"lofi_dither_scale"
-				]:
-					_set_all(uniform_name, source.get_shader_parameter(uniform_name))
-				return
-	_set_all(&"enable_occlusion", false)
-
-
 # ---------------------------------------------------------------- the GLB nodes
 
 
@@ -408,8 +377,6 @@ func _hide_node(node: Node) -> void:
 	if PainterTreeSpecies.species_for(str(node.name)) == "" or not (node as Node3D).visible:
 		return
 	(node as Node3D).visible = false
-	# The fade manager still binds this hidden node's materials (_copy_occlusion reads them).
-	node.set_meta(OcclusionFadeManager.KEEP_HIDDEN_META, true)
 	_hidden[node.get_instance_id()] = node
 
 
@@ -486,8 +453,6 @@ func _step() -> void:
 	_install_some(INSTALL_MS * 1000.0)
 	if is_growing():
 		_queue_step()
-	else:
-		_copy_occlusion()
 
 
 ## Installs the grown trees whose chunk has finished, nearest first, for about `budget_us` of

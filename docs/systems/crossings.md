@@ -291,7 +291,7 @@ Bridge tool's gestures, pane and refusal readout are in [../UI_SYSTEMS.md](../UI
   fading back over 0.5 m; the scatter snapshots copy `crossings`). Trees keep a further
   1.2 m back (`CLEAR_TREE_M`) and shrubs and rocks 0.6 m (`CLEAR_SHRUB_M`), so no trunk, bush
   or boulder stands on a landing (P4b-3; a tall canopy further in front can still cover a
-  bridge from the camera, which the occlusion fade handles only over tokens). A dressed map's
+  bridge from the camera; a covered token shows through the token ghost). A dressed map's
   own Blender scatter is not cleared under a crossing.
 - **Networking:** nothing new: the crossings travel in `map.ttmap`, which is sent whole and
   hashed; every peer builds them from the entry.

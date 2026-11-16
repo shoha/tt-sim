@@ -71,10 +71,6 @@ uniform float fix12 = 0.0;
 uniform float fix13 = 0.0;
 // Which strokes this node draws: 0, 1, 2 the level; 3 the shadow strokes.
 uniform float pass10 = 1.0;
-// painter-perf-forest's A/B switch (0 = the shipped path): 2 every stroke runs the token window's
-// loops (no tree_token_near). (Skipping form_occ's ray where it could not change the tone was
-// measured too: 0.007 ms at forest tokens, not kept.)
-uniform int perf_off = 0;
 
 varying flat vec3 v_col;
 varying flat float v_brush;
@@ -1006,22 +1002,6 @@ void vertex() {
 			keep = 0.0;
 		}
 		keep *= 1.0 - kill10;
-		// painter-look-fade: the token fade. A stroke in front of a token (tree_token_near: a tree no token
-		// can reach skips the test; a ground dab and the sun's pass never thin) shrinks by how far its key
-		// lies over the thinning, so the crown thins smoothly as a token moves and a stroke is never cut
-		// at a rim. The key mixes the stroke's hash with its light (TREE_THIN_LIT), so the lit dabs stay
-		// longest and the shaded ones go first: the crown thins to its bright strokes, not to dark clots.
-		float thin_s = 1.0;
-		if (keep > 0.0 && !is_shadow && abs(role - ROLE_GROUND) > 0.5
-				&& ((perf_off & 2) != 0 || tree_token_near(box_c, box_h, VIEW_MATRIX, PROJECTION_MATRIX))) {
-			float thin_f = tree_thin_vertex((VIEW_MATRIX * vec4(anchor, 1.0)).xyz, VIEW_MATRIX,
-				PROJECTION_MATRIX, VIEWPORT_SIZE);
-			if (thin_f > 0.0) {
-				float tk = mix(fract(rnd * 13.7 + 0.31), clamp(ndl, 0.0, 1.0), TREE_THIN_LIT);
-				thin_s = clamp((tk - thin_f) / TREE_THIN_BAND, 0.0, 1.0);
-				keep *= step(0.02, thin_s);
-			}
-		}
 		if (big18) {
 			size *= 1.4;
 		}
@@ -1029,8 +1009,6 @@ void vertex() {
 		if (keep > 0.0) {
 			float len = size * sqrt(aspect);
 			float wid = size * inversesqrt(aspect);
-			len *= thin_s;
-			wid *= thin_s;
 			vec3 ax = wd - to_cam * dot(wd, to_cam);
 			ax = dot(ax, ax) < 0.003 ? normalize(INV_VIEW_MATRIX[0].xyz) : normalize(ax);
 			vec3 ay = cross(to_cam, ax);
@@ -1250,8 +1228,7 @@ void fragment() {
 	}
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 	ROUGHNESS = 1.0;
-	tree_fades(VERTEX, INV_VIEW_MATRIX, VIEW_MATRIX, PROJECTION_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE,
-		v_key, v_key < 0.0, true, -1.0);
+	tree_fades(VERTEX, INV_VIEW_MATRIX, v_key, v_key < 0.0);
 	v_wp_light = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 

@@ -98,7 +98,6 @@ var _quality: RefCounted = null
 @onready var lofi_check: CheckButton = %LofiCheck
 @onready var token_shading_option: OptionButton = %TokenShadingOption
 @onready var token_ghost_check: CheckButton = %TokenGhostCheck
-@onready var occlusion_fade_check: CheckButton = %OcclusionFadeCheck
 @onready var canopy_fade_check: CheckButton = %CanopyFadeCheck
 @onready var wind_motion_slider: HSlider = %WindMotionSlider
 @onready var wind_motion_label: Label = %WindMotionLabel
@@ -606,7 +605,7 @@ func _apply_settings() -> void:
 	# Apply lo-fi filter setting
 	_apply_lofi_setting()
 
-	# Apply token shading, token ghost, occlusion fade and canopy fade settings
+	# Apply token shading, token ghost and canopy fade settings
 	SettingsTokenShading.apply(self)
 	SettingsSeeThrough.apply(self, _find_game_map())
 

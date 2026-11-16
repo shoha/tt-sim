@@ -1,36 +1,28 @@
 class_name VisualEffectsController
 extends Node
 
-## Manages the lo-fi post-process shader, grid visual appearance, and the
-## occlusion fade effect for GameMap.
+## Manages the lo-fi post-process shader, grid visual appearance, foliage antialiasing and the
+## token ghost's budget for GameMap.
 ##
 ## Created as a child Node of GameMap in _ready() (mirrors the AssetManager
 ## facade/sub-component pattern). Reads node references (viewport_container,
-## occlusion_fade, map_container, camera_node, drag_and_drop_node, and the
-## lazily-created _grid_overlay) directly from the injected GameMap reference
-## at call time, since several of these are only set up after this
-## sub-component is constructed.
+## map_container, camera_node, and the lazily-created _grid_overlay) directly from the
+## injected GameMap reference at call time, since several of these are only set up after
+## this sub-component is constructed.
 
 var _game_map: GameMap = null
 
 var _lofi_material: ShaderMaterial = null  # Cached lo-fi material (from scene or created)
-var _occlusion_fade_enabled: bool = true  # Whether the occlusion fade effect is active
 var _foliage_antialiasing_level: int = Viewport.MSAA_DISABLED  # Current Antialiasing setting
 var _eye_view_active: bool = false  # The eye view raises the level to at least 4x
-
-## Last pixelation value pushed to the occlusion fade manager. The Visuals
-## drawer calls apply_lofi_overrides() on every slider tick, so _sync_lofi_pixelation()
-## uses this to skip redundant pushes. -1.0 (never a valid pixelation value)
-## means "not yet synced", forcing the next sync through.
-var _last_synced_pixelation: float = -1.0
 
 ## Seconds since the token ghost budget last looked at the tokens (TokenGhost.apply_budget).
 var _ghost_budget_s := 0.0
 
 
 ## Wire this controller to its owning GameMap and run initial setup:
-## cache the scene's lo-fi material, load lo-fi/occlusion settings from
-## config, and perform the initial occlusion fade setup.
+## cache the scene's lo-fi material and load the lo-fi, see-through and antialiasing settings
+## from config.
 func setup(game_map: GameMap) -> void:
 	_game_map = game_map
 
@@ -40,9 +32,7 @@ func setup(game_map: GameMap) -> void:
 		_lofi_material = game_map.viewport_container.material as ShaderMaterial
 
 	_load_lofi_setting()
-	_load_occlusion_fade_setting()
 	_load_see_through_settings()
-	setup_occlusion_fade()
 	_load_foliage_antialiasing_setting()
 	apply_foliage_antialiasing()
 
@@ -71,8 +61,6 @@ func set_lofi_enabled(enabled: bool) -> void:
 		else:
 			# Remove the shader to show unprocessed viewport
 			_game_map.viewport_container.material = null
-	# Keep occlusion dither grid aligned with lo-fi pixelation
-	_sync_lofi_pixelation()
 
 
 ## Create a default lo-fi material with sensible defaults
@@ -96,29 +84,6 @@ func apply_lofi_overrides(overrides: Dictionary) -> void:
 
 	for param_name in overrides:
 		_lofi_material.set_shader_parameter(param_name, overrides[param_name])
-
-	# If pixelation was among the overrides, sync it to the occlusion shader
-	if "pixelation" in overrides:
-		_sync_lofi_pixelation()
-
-
-## Sync the lo-fi pixelation value to the occlusion fade manager so its dither
-## grid aligns with the post-process pixelation. Pass 0 when lo-fi is off.
-func _sync_lofi_pixelation() -> void:
-	if not _game_map.occlusion_fade:
-		return
-	var px := 0.0
-	if _game_map.viewport_container and _game_map.viewport_container.material is ShaderMaterial:
-		var mat := _game_map.viewport_container.material as ShaderMaterial
-		var val = mat.get_shader_parameter("pixelation")
-		if val != null:
-			px = float(val)
-	# The drawer calls apply_lofi_overrides() on every slider tick -- skip the
-	# push when the value has not actually changed.
-	if px == _last_synced_pixelation:
-		return
-	_game_map.occlusion_fade.set_lofi_pixelation(px)
-	_last_synced_pixelation = px
 
 
 ## Load grid visual settings from config and apply to the overlay.
@@ -146,39 +111,10 @@ func apply_grid_visual_settings(
 		)
 
 
-## Load occlusion fade setting from config
-func _load_occlusion_fade_setting() -> void:
-	var config = ConfigFile.new()
-	var err = config.load(Paths.SETTINGS_PATH)
-	var enabled = true
-	if err == OK:
-		enabled = config.get_value("graphics", "occlusion_fade_enabled", true)
-	set_occlusion_fade_enabled(enabled)
-
-
-## Enable or disable the occlusion fade effect
-func set_occlusion_fade_enabled(enabled: bool) -> void:
-	_occlusion_fade_enabled = enabled
-	if not _game_map.occlusion_fade:
-		return
-	if enabled:
-		# Re-setup if a map is already loaded
-		if _game_map.map_container and _game_map.map_container.get_child_count() > 0:
-			_game_map.occlusion_fade.setup(
-				_game_map.camera_node, _game_map.map_container, _game_map.drag_and_drop_node
-			)
-			# The manager was just rebuilt, so force the next sync through even
-			# if the pixelation value happens to match the cached one.
-			_last_synced_pixelation = -1.0
-			_sync_lofi_pixelation()
-	else:
-		_game_map.occlusion_fade.clear()
-		_last_synced_pixelation = -1.0
-
-
 ## The saved Canopy fade setting (the close-zoom window round the screen centre), off by
 ## default, and the saved Token ghost setting, on by default. Loaded once at setup; the
-## Settings menu calls the setters below to apply a change at once.
+## Settings menu calls the setters below to apply a change at once. (graphics/occlusion_fade_enabled
+## in an old settings file is never read: the per-token occlusion fade was removed.)
 func _load_see_through_settings() -> void:
 	var config := ConfigFile.new()
 	config.load(Paths.SETTINGS_PATH)
@@ -191,7 +127,7 @@ func _load_see_through_settings() -> void:
 	TokenToon.painted = SettingsTokenShading.saved_id(config) == TokenToon.SHADING_PAINTED
 
 
-## Turns the close-zoom canopy window on or off (it is independent of the occlusion fade).
+## Turns the close-zoom canopy window on or off.
 func set_canopy_fade_enabled(enabled: bool) -> void:
 	CanopyFade.enabled = enabled
 
@@ -214,29 +150,6 @@ func _process(delta: float) -> void:
 	if _ghost_budget_s >= TokenGhost.BUDGET_PERIOD_S:
 		_ghost_budget_s = 0.0
 		TokenGhost.apply_budget(_game_map.get_tree(), _game_map.camera_node)
-
-
-## Clear the occlusion fade manager ahead of a map change. Called from
-## GameMap.notify_map_clearing() so the pixelation cache is dropped together
-## with the manager state it describes.
-func clear_occlusion_fade() -> void:
-	if _game_map.occlusion_fade:
-		_game_map.occlusion_fade.clear()
-	_last_synced_pixelation = -1.0
-
-
-## Initialize the occlusion fade manager with node references.
-## Called from setup() and again from GameMap.notify_map_loaded() whenever a
-## new map finishes loading (the mesh cache must be rebuilt for new geometry).
-func setup_occlusion_fade() -> void:
-	if _game_map.occlusion_fade and _occlusion_fade_enabled:
-		_game_map.occlusion_fade.setup(
-			_game_map.camera_node, _game_map.map_container, _game_map.drag_and_drop_node
-		)
-		# The manager was just rebuilt, so force the next sync through even if
-		# the pixelation value happens to match the cached one.
-		_last_synced_pixelation = -1.0
-		_sync_lofi_pixelation()
 
 
 func _load_foliage_antialiasing_setting() -> void:
@@ -297,12 +210,8 @@ func set_eye_view_antialiasing(active: bool) -> void:
 
 ## Gives wind materials created after the map loaded (a species first painted mid-session;
 ## see AuthoredScatter.species_added) the bookkeeping notify_map_loaded() gives load-time
-## ones: tree materials join the occlusion fade (while it is enabled), then every material
-## gets the current Antialiasing setting's shader variant. Registering before the swap
-## keeps the order setup_occlusion_fade() and apply_foliage_antialiasing() run in at load.
+## ones: every material gets the current Antialiasing setting's shader variant.
 func adopt_foliage_materials(materials: Array[ShaderMaterial]) -> void:
-	if _game_map.occlusion_fade and _occlusion_fade_enabled:
-		_game_map.occlusion_fade.register_tree_materials(materials)
 	_apply_antialiasing_variant(materials)
 
 

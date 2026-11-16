@@ -123,9 +123,6 @@
 		"res://scenes/states/playing/measure_tool.gd": {
 			"colour": 4
 		},
-		"res://scenes/states/playing/occlusion_fade_manager.gd": {
-			"colour": 6
-		},
 		"res://scenes/states/playing/sun_gizmo_tool.gd": {
 			"colour": 3
 		},

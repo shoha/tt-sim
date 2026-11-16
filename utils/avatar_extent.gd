@@ -3,7 +3,7 @@ extends RefCounted
 
 ## The body core of an assembled figure (AvatarKit.build_figure), which sizes an avatar
 ## token's collision capsule and through it the selection glow, the drag height, the landing
-## and the occlusion fade.
+## and the submerged cue.
 ##
 ## Measured on the posed skeleton, not the meshes' rest boxes, so a crouch is shorter and a
 ## lunge wider than the A-pose. Only the core bones count (spine, head and legs): a pushed
@@ -71,7 +71,7 @@ static func capsule(kit: AvatarKit, figure: Node3D) -> Dictionary:
 
 ## A capsule shape round the body core, its bottom on the token's origin: a convex hull of
 ## capsule points (an octagon at the equator of each cap, a smaller one halfway up the cap,
-## and the two poles), because the selection glow, the occlusion fade and the submerged cue
+## and the two poles), because the selection glow and the submerged cue
 ## read a token's collision box in the shape's own space and expect a pack token's layout
 ## (feet at the origin, shape not offset). Computing a hull costs a millisecond or more, so
 ## shapes are shared by size, rounded to SHAPE_STEP_M (Shape3D resources are shareable).

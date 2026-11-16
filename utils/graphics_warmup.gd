@@ -48,7 +48,6 @@ const COVERED_SHADERS := [
 	"res://shaders/ground_light_field_bake.gdshader",
 	"res://shaders/ground_steep_bake.gdshader",
 	"res://shaders/lofi_canvas.gdshader",
-	"res://shaders/occlusion_fade.gdshader",
 	"res://shaders/selection_glow.gdshader",
 	"res://shaders/structure_glow.gdshader",
 	"res://shaders/structure_lantern.gdshader",

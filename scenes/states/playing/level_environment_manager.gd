@@ -839,6 +839,8 @@ func _cancel_warmup_hold() -> void:
 ## surfaces host attached once followed the first table's freed container and never painted a
 ## second level (painter-trees-fix).
 func _publish_painted(state: Dictionary) -> void:
+	# Before the unchanged-state return: the flag is static and outlives the manager that set it.
+	TokenGhost.set_painted(not state.is_empty(), Engine.get_main_loop() as SceneTree)
 	if state == _painted_state:
 		return
 	_painted_state = state

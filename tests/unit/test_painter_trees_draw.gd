@@ -86,30 +86,29 @@ func test_both_shaders_compile_against_the_wind_sun_and_fade_globals() -> void:
 			names.append(u["name"])
 		for wanted: String in ["palette", "role_params", "row_map", "mass_tex", "tree_tex"]:
 			assert_has(names, wanted, "%s reads %s" % [path, wanted])
-		for wanted: String in ["wind_strength", "cast_amount", "enable_occlusion"]:
+		for wanted: String in ["wind_strength", "cast_amount"]:
 			assert_has(names, wanted, "%s has %s" % [path, wanted])
-		for gone: String in ["wind_time", "wind_amp", "sun_dir", "e_far", "pspike_untone_mode"]:
-			assert_does_not_have(names, gone, "%s has no spike %s" % [path, gone])
+		for gone: String in [
+			"wind_time", "wind_amp", "sun_dir", "e_far", "pspike_untone_mode", "enable_occlusion",
+			"occlusion_tokens", "token_fade_strength"
+		]:
+			assert_does_not_have(names, gone, "%s has no %s" % [path, gone])
 	var code := FileAccess.get_file_as_string(INCLUDE)
 	for global_name: String in [
 		"wind_dir", "wind_phase", "wind_gust", "foliage_sun", "canopy_fade_centre", "canopy_cut"
 	]:
 		assert_true(code.contains("global uniform vec4 %s;" % global_name), global_name)
-	assert_true(code.contains("occlusion_fade_include.gdshaderinc"), "the token occlusion fade")
+	assert_true(code.contains("screen_dither_include.gdshaderinc"), "the shared dither helpers")
+	assert_false(code.contains("occlusion_fade_include"), "the token occlusion fade is gone")
 	assert_false(code.contains("LIGHT_VERTEX"), "the shadow lookup never moves")
 
 
 ## painter-a2a5: the block-in wrote POSITION alone, so its fragment VERTEX was the mesh's unit
-## sphere at the tree's foot, and a token under a crown kept the masses and limbs over it. Every
-## tree shader binds the token texture, writes its own view-space VERTEX and tests the tokens
-## there; the include walks the screen tile's list and the plain loop.
-func test_every_tree_shader_tests_the_tokens_at_its_own_fragment() -> void:
+## sphere at the tree's foot. Every tree shader writes its own view-space VERTEX, so the canopy
+## fade tests the fragment, not the foot. (The per-token fade that first needed this was removed
+## 2026-11-15: a covered token is found through its ghost.)
+func test_every_tree_shader_fades_the_canopy_at_its_own_fragment() -> void:
 	for path: String in SHADERS:
-		var names: Array = []
-		for u: Dictionary in (load(path) as Shader).get_shader_uniform_list():
-			names.append(u["name"])
-		for wanted: String in ["enable_occlusion", "occlusion_tokens"]:
-			assert_has(names, wanted, "%s binds %s" % [path, wanted])
 		var code := _code(path)
 		assert_true(code.contains("skip_vertex_transform"), "%s places VERTEX itself" % path)
 		assert_true(
@@ -117,54 +116,32 @@ func test_every_tree_shader_tests_the_tokens_at_its_own_fragment() -> void:
 		)
 		assert_true(code.contains("tree_fades(VERTEX,"), "%s fades at its own fragment" % path)
 	var inc := FileAccess.get_file_as_string(INCLUDE)
-	for wanted: String in [
-		"occlusion_tiles_match(view_matrix, projection_matrix)",
-		"for (int i = first; i < end; i++)",
-		"for (int i = 0; i < occlusion_token_count; i++)",
-		"float tree_thin_at(",
-		"float tree_thin_vertex(",
-	]:
-		assert_true(inc.contains(wanted), "the token fade: %s" % wanted)
-	# The window it replaced (strokes taken whole, a tree taken whole, a rim) is gone.
 	for dead: String in [
-		"tree_token_stroke(", "tree_token_frag(", "tree_token_crown(", "tree_token_margin("
+		"occlusion_tiles_match(",
+		"occlusion_token_count",
+		"tree_thin_at(",
+		"tree_thin_vertex(",
+		"tree_token_near(",
+		"token_fade_strength",
+		"tree_token_stroke(",
+		"tree_token_frag(",
 	]:
-		assert_false(inc.contains(dead), "no window left: %s" % dead)
+		assert_false(inc.contains(dead), "no token fade left: %s" % dead)
 
 
-## painter-look-fade: the token fade thins, never clears (a cleared window left a trunk cut off in
-## mid air, strokes taken whole beside a token and a glass-dome rim). A stroke shrinks by its key
-## in its vertex stage (never a ground shadow dab, never the sun's pass); the block-in and the limbs
-## are thinned per fragment; no stroke is cut per fragment.
-func test_the_token_fade_thins_strokes_in_the_vertex_stage() -> void:
+## painter-perf-strokes: a dropped mark leaves before the wind and the placement, and the triangle
+## block's corner outside the unit square is discarded; the strokes and the block-in carry no
+## token thinning (it was removed 2026-11-15).
+func test_the_stroke_and_blockin_shaders_carry_no_token_thinning() -> void:
 	var stroke := _code(PainterTrees.STROKE_SHADER)
-	# painter-perf-forest: a tree no token's fade can reach (tree_token_near) skips the test.
-	assert_true(
-		stroke.contains("keep > 0.0 && !is_shadow && abs(role - ROLE_GROUND) > 0.5"),
-		"a live stroke that is no ground dab and not the sun's thins"
-	)
-	assert_true(stroke.contains("tree_thin_vertex("), "strokes thin in the vertex stage")
-	assert_true(
-		stroke.contains("v_key, v_key < 0.0, true, -1.0);"), "no per-fragment cut on a stroke"
-	)
-	# painter-perf-strokes: a dropped mark leaves before the wind and the placement, and the
-	# triangle block's corner outside the unit square is discarded.
 	assert_true(stroke.contains("float rnd2h = fract(rnd * 11.13 + 0.31);"), "early density test")
 	assert_true(stroke.contains("v_uv.x > 1.0 || v_uv.y > 1.0"), "the triangle's spare corner")
 	var block := _code(PainterTrees.BLOCKIN_SHADER)
-	assert_true(
-		block.contains("key, kind10 > 0.5, false, thin_key);"), "the block-in thins per fragment"
-	)
-	assert_false(block.contains("crown_gone"), "no mass is taken whole with its tree")
-	# painter-look-fade2: thin wood (a twig, a fine limb) narrows in the vertex stage as its points
-	# near a token, so it tapers out; the ribbon is never cut or dropped whole, and the sun's pass
-	# (the shadow) never thins.
-	assert_true(
-		block.contains("if (alive && rr < TREE_THIN_TWIG_R1 && abs(dot(normalize(INV_VIEW"),
-		"thin wood narrows only when alive, thin, and in the camera's pass"
-	)
-	assert_true(block.contains("rr = rr * s_t < 0.5 * px19 ? 0.0 : rr * s_t;"), "the ribbon narrows")
-	assert_false(block.contains("twig_mode"), "no exploration switch left in the shader")
+	for code: String in [stroke, block]:
+		assert_false(code.contains("tree_thin"), "no thinning call")
+		assert_false(code.contains("TREE_THIN"), "no thinning constant")
+		assert_false(code.contains("occlusion_token"), "no token binding")
+		assert_false(code.contains("enable_occlusion"), "no token binding switch")
 
 
 func test_painted_rows_become_cells_and_hide_the_glb_trees() -> void:
@@ -358,17 +335,11 @@ func test_a_second_level_in_one_process_gets_its_painted_trees() -> void:
 		assert_true(surfaces.is_active(), "the second level's ground and scatter painted")
 		for node: Node3D in second["glb"]:
 			assert_false(node.visible, "the second level's GLB oaks hidden")
-		# A level loaded Painted hides its tree chunks before the fade manager's setup(); the
-		# manager still registers them, so the painted trees take a live token binding from them.
-		var collected: Array[MultiMeshInstance3D] = []
-		OcclusionFadeManager._collect_tree_multimeshes(second["map"], collected)
-		assert_eq(collected.size(), (second["glb"] as Array).size(), "hidden oaks still registered")
 		RenderStyle.choice = RenderStyle.CHOICE_CLASSIC
 		manager.apply_render_style()
 		assert_eq(trees.trees.size(), 0, "leaving Painted frees the second level's trees")
 		for node: Node3D in second["glb"]:
 			assert_true(node.visible, "the second level's GLB oaks shown again")
-			assert_false(node.has_meta(OcclusionFadeManager.KEEP_HIDDEN_META), "the mark gone")
 		RenderStyle.choice = RenderStyle.CHOICE_PAINTED
 		manager.clear()
 		var container: Node = (

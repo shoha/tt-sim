@@ -318,9 +318,7 @@ static func _report(gm: GameMap) -> String:
 				)
 			)
 		)
-	var fade := gm.occlusion_fade
-	var entries: Variant = fade.get("_last_entries") if fade else null
-	return "%s | occlusion entries %s" % [" | ".join(out), str(entries)]
+	return " | ".join(out)
 
 
 static func _median(values: Array) -> float:

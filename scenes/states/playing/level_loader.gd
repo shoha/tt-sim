@@ -702,7 +702,7 @@ func save_level() -> String:
 
 ## Clear the loaded level map
 func clear_level_map() -> void:
-	# Clear occlusion fade state before freeing map geometry
+	# Let the game map drop its per-map caches before freeing map geometry
 	if _level_play_controller._game_map:
 		_level_play_controller._game_map.notify_map_clearing()
 

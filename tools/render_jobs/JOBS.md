@@ -480,8 +480,8 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   and the camera steps find their tokens by name (`look` `name` / `names`, with the pond's
   centre as `at` should a token be missing) rather than by spawn order.
   Captures at home, close (4.5 m) on the pair, the pair with the sunny one hidden from
-  players, and zoom 5 on each pond; `report` logs capsules, shade, the submerged cue and
-  the occlusion fade's entries; `timing` (`for: "timing"`) logs spawn and shade-ray medians
+  players, and zoom 5 on each pond; `report` logs capsules, shade, the submerged cue;
+  `timing` (`for: "timing"`) logs spawn and shade-ray medians
   with and without `AvatarShadeCache`. `avatar_token.gd cleanup` deletes the level.
   `jobs/avatar_token_profile.json` (about 7 s, from the title screen) runs `profile` twice:
   build, capsule and token creation medians and `set_recipe` per change type (repeated and
@@ -1084,9 +1084,9 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   only read them.
 - `jobs/token_ghost.json` (about 80 s, keeps no level): the token ghost on the shipped core library at
   taiga and temperate forest, home zoom (8 avatar tokens, the first selected) and zoom 5 (three
-  tokens), in three modes: `none` (ghost and occlusion fade off: the problem), `ghost_only`
-  (the ghost alone: the stress case, where the ghost does all the work) and `shipped` (ghost plus
-  occlusion fade, canopy fade off). 12 captures. Edit the `package` path to use another build.
+  tokens), in three modes: `none` (ghost off: the problem), `ghost_only`
+  (the ghost alone) and `shipped` (the same as `ghost_only` since the occlusion fade was removed,
+  2026-11-15; the job's `occlusion` keys are ignored). 12 captures. Edit the `package` path to use another build.
 - `jobs/token_ghost_perf.json` (about 80 s): the same two maps with 32 avatar tokens on screen
   (the token cap), vsync off, GPU median and draw calls for `none`, `full` (ghost, no budget),
   `capped` (ghost at the 16-token budget), repeated to show drift. Numbers in
@@ -1095,9 +1095,9 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   stream, 2026-11-09): a 100 ft temperate forest built and played, then `probes/perfaudit_tokens.gd`
   sweeps pack tokens (the shipped Beasts pack) and avatar tokens at 10, 50, 100, 250 and 500 on a
   grid over the map: spawn and despawn timings, memory per token, a node census, CPU micro timings
-  (picking rays, input dispatch with and without the token controllers, occlusion texture,
+  (picking rays, input dispatch with and without the token controllers,
   ghost budget, avatar shade) and in-run interleaved frame/GPU/render-CPU tables over variants
-  (ship, hidden, no ghost, no shadow, no occlusion fade, no per-token processing, frozen bodies,
+  (ship, hidden, no ghost, no shadow, no per-token processing, frozen bodies,
   original shading, and a MultiMesh ceiling). It also runs headless (`godot --headless --path ...
   --script res://tools/render_jobs/run.gd -- perfaudit_tokens`): no lane, and the frame column is
   then the CPU frame. It saves and removes `_avatartoken_perfaudit_tokens`.

@@ -13,22 +13,6 @@ func test_the_canopy_fade_is_off_by_default() -> void:
 	assert_false(CanopyFade.DEFAULT_ENABLED)
 
 
-func test_the_occlusion_fade_setting_leaves_the_canopy_fade_alone() -> void:
-	var was := CanopyFade.enabled
-	var effects := VisualEffectsController.new()
-	var game_map := GameMap.new()
-	effects._game_map = game_map
-	CanopyFade.enabled = true
-	effects.set_occlusion_fade_enabled(false)
-	assert_true(CanopyFade.enabled, "occlusion fade off does not touch the canopy fade")
-	CanopyFade.enabled = false
-	effects.set_occlusion_fade_enabled(true)
-	assert_false(CanopyFade.enabled, "occlusion fade on does not turn the canopy fade on")
-	CanopyFade.enabled = was
-	game_map.free()
-	effects.free()
-
-
 func test_the_canopy_fade_setting_switches_only_the_canopy_fade() -> void:
 	var was := CanopyFade.enabled
 	var effects := VisualEffectsController.new()

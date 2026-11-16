@@ -11,7 +11,7 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
  * alpha_to_coverage cutout antialiasing is worth its viewport-wide rendering cost.
  * See docs/superpowers/specs/2026-08-10-performance-debug-toggles-design.md.
  *
- * Identical wind-sway/PBR/occlusion-fade logic to wind_foliage.gdshader (shared via
+ * Identical wind-sway/PBR logic to wind_foliage.gdshader (shared via
  * wind_foliage_include.gdshaderinc, so the two can't drift out of sync) -- the only
  * difference is a plain ALPHA_SCISSOR cutout with a hard edge: no alpha_to_coverage
  * render mode, no antialiasing-edge built-ins, no MSAA dependency.

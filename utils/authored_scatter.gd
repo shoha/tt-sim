@@ -18,10 +18,10 @@ extends Node3D
 ## Species. Each palette asset id is resolved once per instance (PaletteLibrary.resolve,
 ## then WindFoliage.apply_material with the level's foliage overrides) and its mesh and
 ## materials are kept for the session. Rebuilding a cell never creates a material, so the
-## foliage AA shader swap, occlusion fade registration and wind re-tuning done at load stay
+## foliage AA shader swap and wind re-tuning done at load stay
 ## valid. A species first painted mid-session is new, though: species_added carries its
 ## wind materials, and the owner hands them to GameMap.adopt_foliage_materials() (AA
-## variant, occlusion fade) and LevelEnvironmentManager.add_wind_materials() (wind
+## variant) and LevelEnvironmentManager.add_wind_materials() (wind
 ## re-tuning), the same bookkeeping load-time materials get.
 ##
 ## Cells. One MultiMeshInstance3D per (asset id, cell), named

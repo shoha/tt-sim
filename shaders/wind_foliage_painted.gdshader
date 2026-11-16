@@ -5,8 +5,8 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx, alpha_to_covera
  * Wind Foliage Shader -- Painted Light Variant
  * ============================================
  *
- * wind_foliage.gdshader with FOLIAGE_PAINTED_LIGHT defined: the same wind, cutout, canopy
- * and occlusion fades, plus the painted crown light (a sun-ward albedo ramp, an edge-on
+ * wind_foliage.gdshader with FOLIAGE_PAINTED_LIGHT defined: the same wind, cutout and canopy
+ * fade, plus the painted crown light (a sun-ward albedo ramp, an edge-on
  * cut, silhouette ink, a soft two-tone light() and less ambient). The terms and their
  * defaults are in wind_foliage_include.gdshaderinc's FOLIAGE_PAINTED_LIGHT blocks.
  *

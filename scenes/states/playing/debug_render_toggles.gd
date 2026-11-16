@@ -32,7 +32,7 @@ extends Node
 ## Instruments GPU capture, which also showed the fragment stage dominating by ~10x
 ## any other stage.
 ## - Cheap lighting: a candidate real fix, not another isolation shader -- identical
-##   PBR texture sampling, wind sway, and occlusion fade to the real shader, but
+##   PBR texture sampling and wind sway to the real shader, but
 ##   diffuse_lambert + specular_disabled instead of diffuse_burley +
 ##   specular_schlick_ggx. Exists as a toggle rather than the shipped default so the
 ##   visual difference can be judged in-game before committing to it.
@@ -483,9 +483,8 @@ static func _get_debug_shader_for_mode(mode: String) -> Shader:
 
 ## Recursively collect visible MultiMeshInstance3D nodes tagged with the given
 ## wind_foliage_category (set by ScatterGlbUtils._build_multimesh_from_transforms, see
-## WindFoliage.classify_category). Mirrors
-## OcclusionFadeManager._collect_tree_multimeshes, generalized to any category since
-## tree and grass shadows are toggled independently here.
+## WindFoliage.classify_category). Any
+## category, since tree and grass shadows are toggled independently here.
 static func _collect_multimeshes_by_category(
 	node: Node, category: String, result: Array[MultiMeshInstance3D]
 ) -> void:
@@ -499,8 +498,8 @@ static func _collect_multimeshes_by_category(
 		_collect_multimeshes_by_category(child, category, result)
 
 
-## Recursively collect all visible MeshInstance3D nodes with geometry -- mirrors
-## OcclusionFadeManager._collect_mesh_instances. Foliage is MultiMeshInstance3D, a
+## Recursively collect all visible MeshInstance3D nodes with geometry.
+## Foliage is MultiMeshInstance3D, a
 ## different node type, so it is never included here.
 static func _collect_mesh_instances(node: Node, result: Array[MeshInstance3D]) -> void:
 	for child in node.get_children():

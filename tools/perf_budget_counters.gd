@@ -287,14 +287,6 @@ static func token_rows(parent: Node) -> Array[Dictionary]:
 			"F-tokens-4, 3355e42c"
 		),
 		_row(
-			"fade_token_cap",
-			"Occlusion fade token cap (collect and publish CPU)",
-			OcclusionFadeManager.MAX_TOKENS,
-			"",
-			"256; publish 2.4 ms at 500 uncapped, about 1.2 ms at the cap (inferred)",
-			"F-tokens-1, 823f69a0"
-		),
-		_row(
 			"covered_max_fps",
 			"Frame cap while the loading sheet covers the table",
 			LoadPacing.COVERED_MAX_FPS,

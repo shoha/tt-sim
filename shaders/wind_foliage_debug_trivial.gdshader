@@ -8,7 +8,7 @@ render_mode cull_disabled, unshaded;
  * Debug-only A/B counterpart to wind_foliage.gdshader, swapped in by
  * DebugRenderToggles' "Trivial foliage shader" checkbox (F3 performance overlay) to
  * isolate whether the real shader's per-fragment cost (PBR lighting, ORM/normal
- * texture samples, occlusion-fade math) is what drives a framerate drop, as opposed
+ * texture samples) is what drives a framerate drop, as opposed
  * to plain geometry/overdraw from the instance count -- which this variant leaves
  * unchanged (same wind-sway vertex offset, same alpha-scissor cutout silhouette).
  *
@@ -16,7 +16,7 @@ render_mode cull_disabled, unshaded;
  * uniforms from wind_foliage_include.gdshaderinc so its silhouette and motion exactly
  * match the real shader -- only the fragment stage's shading work differs. render_mode
  * unshaded skips Godot's lighting pass entirely, and only the albedo texture is
- * sampled (no ORM, no normal map, no occlusion-fade token loop).
+ * sampled (no ORM, no normal map).
  *
  * MANAGED BY: WindFoliage.get_shader_debug_trivial() (utils/wind_foliage.gd) loads
  * this once and reuses the compiled Shader resource, mirroring get_shader_no_aa()'s

@@ -432,7 +432,7 @@ func test_chunking_frees_the_template_exactly_once() -> void:
 
 func test_every_grass_chunk_keeps_its_category_meta_and_shadow_setting() -> void:
 	# Both are applied per built node, so chunking must not drop either: the meta is how
-	# OcclusionFadeManager finds foliage, and cast_shadow OFF is a measured -17% frame-time
+	# The debug toggles find foliage, and cast_shadow OFF is a measured -17% frame-time
 	# change for grass.
 	var scene := _scatter_scene({"GrassBlade": 25})
 	ScatterGlbUtils.process_scatter_instances(scene, {}, 10.0)

@@ -36,7 +36,7 @@ var picks: bool = false
 ## The brush's rays see crossings (the Bridge tool picks a deck where it is drawn); every
 ## other mode edits the ground under a deck or a stone.
 var sees_crossings: bool = false
-## The canopy over the cursor fades (BrushTool.occlusion_fade, at fade_focus()), so the ground
+## The canopy over the cursor fades (the canopy fade's brush window, at fade_focus()), so the ground
 ## being worked stays in view under a forest.
 var fades: bool = false
 
