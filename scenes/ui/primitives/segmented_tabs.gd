@@ -79,7 +79,9 @@ func select(id: StringName) -> void:
 	if not _tabs.has(id):
 		return
 	selected = id
-	(_tabs[id] as Button).set_pressed_no_signal(true)
+	# set_pressed_no_signal does not unpress the group's other buttons.
+	for other: StringName in _tabs:
+		(_tabs[other] as Button).set_pressed_no_signal(other == id)
 
 
 ## Enables or disables tab `id`; `tooltip` (when not empty) replaces its tooltip, so a disabled tab

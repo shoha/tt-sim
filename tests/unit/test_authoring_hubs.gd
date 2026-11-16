@@ -175,6 +175,19 @@ func test_the_help_names_each_tab_under_its_hub_and_each_rail_tool_with_its_key(
 # -- Tabs route to the tool they were -----------------------------------------------------
 
 
+func test_selecting_a_tab_leaves_only_that_tab_pressed() -> void:
+	# Round 1 of the captures showed two tabs drawn pressed: select() did not unpress the others.
+	var strip := SegmentedTabs.new()
+	add_child_autofree(strip)
+	strip.add_tab(&"a", "A")
+	strip.add_tab(&"b", "B")
+	strip.add_tab(&"c", "C")
+	strip.select(&"c")
+	assert_false(strip.tab(&"a").button_pressed, "the first tab let go")
+	assert_false(strip.tab(&"b").button_pressed)
+	assert_true(strip.tab(&"c").button_pressed)
+
+
 func test_a_rail_press_on_a_hub_opens_its_first_tab_and_picks_that_tool() -> void:
 	var panel := _panel()
 	var asked: Array[StringName] = []

@@ -266,6 +266,14 @@ static func _drawer(base: Node, step: Dictionary) -> String:
 	var pane := StringName(String(step.get("pane", "")))
 	if pane.is_empty():
 		drawer.open()
+	elif drawer is AuthoringPanel:
+		# A tool that is a hub's tab (thin_clear, bridge, wall...): its hub on the rail, then its tab.
+		var panel := drawer as AuthoringPanel
+		var hub := ToolRegistry.hub_of(pane)
+		if not panel.is_open or panel._rail.selected != hub:
+			panel._on_rail_item_pressed(hub)
+		if hub != pane:
+			panel._open_tab(panel._tab_id_for(hub, pane), hub)
 	elif not drawer.is_open or drawer._rail.selected != pane:
 		drawer._on_rail_item_pressed(pane)
 	return "%s drawer open on %s" % [which, drawer._rail.selected]
