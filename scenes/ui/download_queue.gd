@@ -298,7 +298,7 @@ func _expand_panel() -> void:
 	detail_panel.visible = true
 	detail_panel.modulate.a = 0.0
 	detail_panel.pivot_offset = detail_panel.size / 2
-	detail_panel.scale = Vector2(0.9, 0.9)
+	detail_panel.scale = UiMotion.travel(Vector2.ONE * UiMotion.PANEL_SCALE_FROM, Vector2.ONE)
 	icon_button.modulate = Color.WHITE
 
 	if _tween:
@@ -307,9 +307,14 @@ func _expand_panel() -> void:
 	_tween = create_tween()
 	_tween.set_parallel(true)
 	_tween.set_ease(Tween.EASE_OUT)
-	_tween.set_trans(Tween.TRANS_BACK)
-	_tween.tween_property(detail_panel, "modulate:a", 1.0, Constants.ANIM_FADE_OUT_DURATION)
-	_tween.tween_property(detail_panel, "scale", Vector2.ONE, Constants.ANIM_FADE_IN_DURATION)
+	_tween.set_trans(UiMotion.ARRIVE_TRANS)
+	_tween.tween_property(
+		detail_panel, "modulate:a", 1.0, UiMotion.fade_s(Constants.ANIM_FADE_IN_DURATION)
+	)
+	if detail_panel.scale != Vector2.ONE:
+		_tween.tween_property(
+			detail_panel, "scale", Vector2.ONE, Constants.ANIM_FADE_IN_DURATION
+		)
 
 	AudioManager.play(&"open")
 

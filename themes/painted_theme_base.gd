@@ -191,22 +191,32 @@ func _define_buttons() -> void:
 	for state: String in ["pressed_", "hover_pressed_"]:
 		toggle_chip["font_%scolor" % state] = c(ThemeColors.ON_STATE)
 	define_variant_style("ToggleChip", "Button", toggle_chip)
-	# Madder has one step: the press reads through the dropped shadow.
-	var danger := ThemeColors.DANGER_FILL
-	define_variant_style("Danger", "Button", _filled(danger, danger, danger, ThemeColors.ON_DANGER))
-	var clear := Color(c(ThemeColors.SURFACE), 0.0)
-	var bare := box(clear, RADIUS_CONTROL, CONTROL_PAD_H, CONTROL_PAD_V)
+	# Madder deepens a step on hover and another on press (the danger button once had one
+	# colour for all three and gave the pointer no answer).
 	define_variant_style(
-		"Ghost",
+		"Danger",
 		"Button",
-		_button(
-			bare,
-			inherit(bare, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
-			inherit(bare, {bg_color = c(ThemeColors.SURFACE_PRESS)}),
-			ThemeColors.TEXT_SOFT,
-			ThemeColors.TEXT
+		_filled(
+			ThemeColors.DANGER_FILL,
+			ThemeColors.DANGER_FILL_HOVER,
+			ThemeColors.DANGER_FILL_PRESS,
+			ThemeColors.ON_DANGER
 		)
 	)
+	var clear := Color(c(ThemeColors.SURFACE), 0.0)
+	var bare := box(clear, RADIUS_CONTROL, CONTROL_PAD_H, CONTROL_PAD_V)
+	var ghost := _button(
+		bare,
+		inherit(bare, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
+		inherit(bare, {bg_color = c(ThemeColors.SURFACE_PRESS)}),
+		ThemeColors.TEXT_SOFT,
+		ThemeColors.TEXT
+	)
+	# Its rest text is already the soft role, so a disabled Ghost steps down to the track role
+	# (3:1 on every surface): otherwise it read as live.
+	ghost.font_disabled_color = c(ThemeColors.TRACK)
+	ghost.icon_disabled_color = c(ThemeColors.TRACK)
+	define_variant_style("Ghost", "Button", ghost)
 	# A quiet action set in a column of words (the map panel's Add details): no pad at its sides,
 	# so its icon stands on the words' left edge, the caption size, soft ink at rest and ink under
 	# the pointer; the focus ring still draws outside it.
