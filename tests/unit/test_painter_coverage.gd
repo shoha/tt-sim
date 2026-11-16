@@ -42,9 +42,9 @@ func _wall(layer: Node3D, id: int, names: Array[String]) -> Node3D:
 
 func test_a_wall_layers_parts_are_painted_by_name_and_glass_stays_classic() -> void:
 	var layer := _wall_layer("AuthoredWalls")
-	var wall := _wall(
-		layer, 1, ["Stone", "Masonry", "Wood", "Roof", "Glass", "Wall_plaster", "Roof_slate", "Door_wood"]
-	)
+	var names: Array[String] = ["Stone", "Masonry", "Wood", "Roof", "Glass"]
+	names.append_array(["Wall_plaster", "Roof_slate", "Door_wood"])
+	var wall := _wall(layer, 1, names)
 	var before := {}
 	for node: Node in wall.get_children():
 		before[node] = (node as MeshInstance3D).material_override
@@ -75,6 +75,10 @@ func test_a_wall_built_later_and_a_boundary_layer_are_followed() -> void:
 	var later := _wall(layer, 2, ["Masonry", "Roof_tile"])
 	for node: Node in later.get_children():
 		assert_not_null((node as MeshInstance3D).material_override, "%s painted by the event" % node.name)
+	var crossings := _wall_layer("AuthoredCrossings")
+	var plank := _wall(crossings, 4, ["Wood", "Stones"])
+	for node: Node in plank.get_children():
+		assert_not_null((node as MeshInstance3D).material_override, "crossing %s painted" % node.name)
 	var boundaries := _wall_layer("AuthoredBoundaries")
 	var piers := _wall(boundaries, 3, ["Masonry"])
 	assert_not_null((piers.get_child(0) as MeshInstance3D).material_override, "the boundary layer too")
@@ -91,6 +95,8 @@ func test_wall_part_keys() -> void:
 	assert_eq(PainterBuildings.wall_part_key("Wall_brick"), "wall_brick")
 	assert_eq(PainterBuildings.wall_part_key("Roof_thatch"), "roof_thatch")
 	assert_eq(PainterBuildings.wall_part_key("Door_wood"), "door_wood")
+	for part in ["Stones", "Arch", "Ford"]:
+		assert_eq(PainterBuildings.wall_part_key(part), "wall_stone", "a crossing's %s" % part)
 	assert_eq(PainterBuildings.wall_part_key("Glass"), "")
 	assert_eq(PainterBuildings.wall_part_key("Collision"), "")
 	assert_eq(PainterBuildings.wall_part_key("Wall_unheard_of"), "")
@@ -98,7 +104,10 @@ func test_wall_part_keys() -> void:
 
 func test_the_toon_styles_trim_has_a_stand_in_kind() -> void:
 	var keys := ["wall_trim", "frame_trim", "door_trim", "trim_plaster", "frame_plaster"]
-	keys.append("frame_stone")
+	keys.append_array(["frame_stone", "ornament_wood", "ornament_bark", "ornament_cloth"])
+	keys.append("canopy_leaf")
+	for classic in ["ornament_glass", "ornament_metal", "door_metal"]:
+		assert_true(PainterBuildings.kind_of(classic).is_empty(), "%s stays Classic" % classic)
 	for key in keys:
 		assert_false(PainterBuildings.kind_of(key).is_empty(), "%s is painted" % key)
 

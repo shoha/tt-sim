@@ -1205,12 +1205,21 @@ painter_final25_coverage/matrix.md`. What the card filled:
   leaf mass); cactus and barrel cactus are solids in the cactus role, agave a mass, a dead shrub
   a bark mass. `WindFoliage` now copies the GLB material's name onto its shader material
   (Classic reads nothing from it).
-- **Wall layers.** `AuthoredWalls` (drawn walls, wall rows, street lots) and `AuthoredBoundaries`
-  wear the structures' stand-ins by part name (`PainterBuildings.wall_part_key`); the toon styles'
-  trim kinds (`wall_trim`, `frame_trim`, `door_trim`, `trim_plaster`, `frame_plaster`,
-  `frame_stone`) have KINDS rows.
-- **Known gaps** are listed in the matrix with their effort: baked settlement furnishings,
-  crossings, field plants, ornament and canopy parts, round and profile roofs (procgen records).
+- **A dry map's whole ground.** When one dry biome holds at least a quarter of the map and more
+  cells than any other biome (`PainterSurfaces._dominant_channel`), the second zone texture is 1
+  everywhere its biome is not displaced by another biome, density ignored, and the base surface's
+  shore (a savanna's or badlands' base is sand) is dropped from the zone map: a savanna reads
+  golden straw, the badlands baked terracotta, a burnt forest dark brown-grey char. A map with a
+  small patch of a dry biome keeps the density pull; a map with no dry biome has no second texture
+  and draws exactly as before.
+- **Wall layers.** `AuthoredWalls` (drawn walls, wall rows, street lots), `AuthoredBoundaries` and
+  `AuthoredCrossings` wear the structures' stand-ins by part name (`PainterBuildings.wall_part_key`:
+  a crossing's `Wood` is timber, `Stones`, `Arch` and `Ford` the stone ramp); the toon styles' trim
+  kinds (`wall_trim`, `frame_trim`, `door_trim`, `trim_plaster`, `frame_plaster`, `frame_stone`)
+  and the `ornament_wood`, `ornament_bark`, `ornament_cloth` and `canopy_leaf` parts have KINDS rows.
+  Metal (`door_metal`, `ornament_metal`) and glass stay Classic by earlier decision.
+- **Known gaps** are listed in the matrix with their effort: baked settlement furnishings, field
+  plants, round and profile roofs (procgen records).
 
 ## Verification
 

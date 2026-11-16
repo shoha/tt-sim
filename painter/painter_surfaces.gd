@@ -342,7 +342,10 @@ static func zone_image(doc: MapDocument) -> Image:
 	var sx := doc.samples_x()
 	var sz := doc.samples_z()
 	var n := sx * sz
-	var base := _mix_role(Vector4.ZERO, PainterGroundRoles.surface_role(doc.base_surface), 1.0)
+	var base_role := PainterGroundRoles.surface_role(doc.base_surface)
+	if base_role == "shore" and has_dominant_dry(doc):
+		base_role = "meadow"
+	var base := _mix_role(Vector4.ZERO, base_role, 1.0)
 	var biome_channel := PackedInt32Array()
 	var biome_target := PackedFloat32Array()
 	for id in doc.biome_ids:
@@ -438,10 +441,17 @@ static func biome_zone_image(doc: MapDocument) -> Image:
 		var plane := PackedFloat32Array()
 		plane.resize(n)
 		planes.append(plane)
+	var dominant := _dominant_channel(targets, slots)
 	for i in n:
 		var slot := slots[i]
-		if slot > 0 and slot <= targets.size() and targets[slot - 1] >= 0:
-			planes[targets[slot - 1]][i] = clampf(density[i] / 255.0 * BIOME_PULL, 0.0, 1.0)
+		var own := -1
+		if slot > 0 and slot <= targets.size():
+			own = targets[slot - 1]
+		if own >= 0 and own != dominant:
+			planes[own][i] = clampf(density[i] / 255.0 * BIOME_PULL, 0.0, 1.0)
+		elif dominant >= 0 and (own == dominant or slot == 0):
+			# The map's own dry biome paints the whole ground, not only where its scatter is dense.
+			planes[dominant][i] = 1.0
 	var bytes := PackedByteArray()
 	bytes.resize(n * 4)
 	for c in 3:
@@ -449,6 +459,43 @@ static func biome_zone_image(doc: MapDocument) -> Image:
 		for i in n:
 			bytes[i * 4 + c] = clampi(roundi(plane[i] * 255.0), 0, 255)
 	return Image.create_from_data(sx, sz, false, Image.FORMAT_RGBA8, bytes)
+
+
+## The biome zone map's channel (0 dry, 1 ash, 2 earth) of the map's dominant dry biome, -1 when
+## none: the dry biome whose cells are at least a quarter of the map and more than any other
+## biome's. `targets` is the channel of each biome slot (-1 for a biome that is none of them),
+## `slots` the document's biome_slots. Such a map's whole ground paints in that role (a savanna is
+## straw everywhere, not in patches).
+static func _dominant_channel(targets: PackedInt32Array, slots: PackedByteArray) -> int:
+	var counts := PackedInt32Array()
+	counts.resize(targets.size() + 1)
+	for slot in slots:
+		if slot <= targets.size():
+			counts[slot] += 1
+	var best := -1
+	var best_count := 0
+	var other := 0
+	for k in targets.size():
+		if targets[k] >= 0 and counts[k + 1] > best_count:
+			best = targets[k]
+			best_count = counts[k + 1]
+	for k in targets.size():
+		if targets[k] != best:
+			other = maxi(other, counts[k + 1])
+	if best >= 0 and best_count * 4 >= slots.size() and best_count > other:
+		return best
+	return -1
+
+
+## Whether `doc`'s ground is painted by one dry biome throughout (_dominant_channel): the zone map
+## then drops the base surface's shore (a savanna or badlands map's base is sand).
+static func has_dominant_dry(doc: MapDocument) -> bool:
+	var targets := PackedInt32Array()
+	for id in doc.biome_ids:
+		var at := PainterGroundRoles.index(PainterGroundRoles.biome_role(id))
+		var channel := at - PainterGroundRoles.BIOME_ROLES_FROM
+		targets.append(channel if channel >= 0 and channel < 3 else -1)
+	return doc.biome_slots.size() > 0 and _dominant_channel(targets, doc.biome_slots) >= 0
 
 
 ## Appends the channel (0 r .. 3 a, -1 for a role the zone map has no channel for) and the value a

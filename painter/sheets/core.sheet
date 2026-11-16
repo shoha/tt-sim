@@ -116,7 +116,7 @@
      lush green meadow). */
   dry-hue: 88;  dry-chroma: 0.85;  dry-lift: 0.03;
   drygrass-hue: 92;  drygrass-chroma: 0.95;  drygrass-lift: 0.07;
-  ash-hue: 62;  ash-chroma: 0.9;  ash-lift: -0.08;
+  ash-hue: 40;  ash-chroma: 1.5;  ash-lift: -0.29;
   earth-hue: 52;  earth-chroma: 1.9;  earth-lift: -0.13;
   /* A cactus and an agave: the leaf turned to a blue green and a little deeper. */
   cactus-hue: 172;  cactus-chroma: 0.7;  cactus-lift: -0.08;

@@ -130,9 +130,11 @@ func test_a_dry_biome_derives_its_tone_from_the_role_it_comes_from_and_follows_t
 		assert_lt(night.x, got.x, "%s is darker at night" % role)
 		var snow := PainterGroundRoles.derived(sheet, "winter", role, 60.0)
 		assert_ne(snow.snappedf(0.01), got.snappedf(0.01), "%s follows the mood" % role)
-	# dry reads straw, ash a dull warm grey, earth a baked orange (hue in degrees).
+	# dry reads straw, ash a dark ember brown, earth a baked orange (hue in degrees).
 	assert_between(PainterGroundRoles.derived(sheet, "summer", "dry", 60.0).z, 70.0, 100.0)
-	assert_lt(PainterGroundRoles.derived(sheet, "summer", "ash", 60.0).y, 0.05)
+	var ash := PainterGroundRoles.derived(sheet, "summer", "ash", 60.0)
+	assert_lt(ash.x, 0.55, "ash is dark")
+	assert_between(ash.z, 30.0, 70.0)
 	assert_between(PainterGroundRoles.derived(sheet, "summer", "earth", 60.0).z, 35.0, 70.0)
 
 
@@ -153,6 +155,47 @@ func test_the_biome_zone_map_exists_only_for_a_map_with_a_dry_biome() -> void:
 	doc.biome_slots.fill(2)
 	image = PainterSurfaces.biome_zone_image(doc)
 	assert_almost_eq(image.get_pixel(3, 3).b, 1.0, 0.01, "slot 2 is the badlands: b earth")
+
+
+func test_a_dry_map_paints_its_whole_ground_dry_and_a_mixed_map_only_where_the_biome_is() -> void:
+	var doc := MapDocument.create_flat(Vector2i(10, 10), "grass_meadow", "test", 7)
+	var n := doc.samples_x() * doc.samples_z()
+	doc.biome_ids = PackedStringArray(["savanna_summer_s1", "temperate_forest_summer_s1"])
+	doc.biome_slots.resize(n)
+	doc.biome_density.resize(n)
+	doc.biome_slots.fill(1)
+	doc.biome_density.fill(30)
+	assert_true(PainterSurfaces.has_dominant_dry(doc))
+	var image := PainterSurfaces.biome_zone_image(doc)
+	assert_almost_eq(image.get_pixel(4, 4).r, 1.0, 0.01, "sparse scatter, still all straw")
+	doc.biome_slots.fill(0)
+	assert_true(not PainterSurfaces.has_dominant_dry(doc), "no cell, no dominant biome")
+	# Half forest, a tenth savanna: the forest is the larger biome, nothing is dominant.
+	for i in n:
+		doc.biome_slots[i] = 2 if i % 10 > 0 else 1
+	assert_false(PainterSurfaces.has_dominant_dry(doc))
+	image = PainterSurfaces.biome_zone_image(doc)
+	var dry_cell := 0
+	for i in n:
+		if doc.biome_slots[i] == 1:
+			dry_cell = i
+			break
+	var px := Vector2i(dry_cell % doc.samples_x(), dry_cell / doc.samples_x())
+	assert_lt(image.get_pixel(px.x, px.y).r, 0.5, "a sparse patch keeps its density pull")
+
+
+func test_a_dry_maps_base_sand_does_not_paint_shore_under_the_biome() -> void:
+	var doc := MapDocument.create_flat(Vector2i(10, 10), "sand", "test", 7)
+	var n := doc.samples_x() * doc.samples_z()
+	doc.biome_ids = PackedStringArray(["rocky_badlands_summer_s1"])
+	doc.biome_slots.resize(n)
+	doc.biome_density.resize(n)
+	doc.biome_slots.fill(1)
+	doc.biome_density.fill(200)
+	var zone := PainterSurfaces.zone_image(doc)
+	assert_lt(zone.get_pixel(4, 4).a, 0.1, "no shore from the base surface")
+	doc.biome_ids = PackedStringArray(["temperate_forest_summer_s1"])
+	assert_gt(PainterSurfaces.zone_image(doc).get_pixel(4, 4).a, 0.9, "a forest map keeps it")
 
 
 func test_a_dry_biomes_tufts_are_straw_and_the_others_stay_green() -> void:

@@ -39,13 +39,17 @@ const STRUCTURES := "AuthoredStructures"
 ## Their `Wall_<id>` nodes hold parts named `Stone`, `Masonry`, `Wood`, `Roof`, `Glass`,
 ## `<Wall|Roof|Door>_<kind>`; wall_part_key() names the structures' `<role>_<kind>` each is
 ## painted as (no manner records exist for them: the A3b look).
-const WALL_LAYERS: Array[String] = ["AuthoredWalls", "AuthoredBoundaries"]
+const WALL_LAYERS: Array[String] = ["AuthoredWalls", "AuthoredBoundaries", "AuthoredCrossings"]
 ## The wall layers' fixed part names -> the structures' key (`Glass` and `Collision` keep Classic).
 const WALL_PARTS: Dictionary = {
 	"Stone": "wall_stone",
 	"Masonry": "wall_masonry",
 	"Wood": "trim_wood",
 	"Roof": "roof_wood",
+	# A crossing's parts (AuthoredCrossings: `Wood` above, and its stone, arch and ford meshes).
+	"Stones": "wall_stone",
+	"Arch": "wall_stone",
+	"Ford": "wall_stone",
 }
 ## The prefixes of a mill's and a vane's mesh names (AuthoredStructures.mill_node, vane_node).
 const PART_PREFIXES: Array[String] = ["cap_", "wheel_", "vane_"]
@@ -137,6 +141,12 @@ const KINDS: Dictionary = {
 	"frame_wood": ["timber", P_TIMBER, "timber", 0],
 	"opening_wood": [ACCENT, P_TIMBER, "timber", 3],
 	"door_wood": [ACCENT, P_TIMBER, "timber", 3],
+	# Ornament and canopy parts (card painter-coverage); glass (a light) and metal (door and
+	# ornament ironwork, a decision of the structures' cards) keep Classic.
+	"ornament_wood": ["timber", P_TIMBER, "timber", 0],
+	"ornament_bark": ["timber", P_TIMBER, "timber", 0],
+	"ornament_cloth": [ACCENT, P_TIMBER, "timber", 3],
+	"canopy_leaf": ["roof-turf", P_TURF, "roof", 0],
 	"dressing_props": [YARD, 0, "yard", PICK_YARD],
 	"dressing_ground": [YARD, 0, "yard", PICK_YARD_GROUND],
 }
