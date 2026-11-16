@@ -318,7 +318,11 @@ void vertex() {
 			// The end: a point. A strand that ends thick (a stem that dissolves into its forks) closes
 			// over a short length, under the bases of its forks.
 			// (painter-look-wood: and one that limbs leave from its last node, flag 16, keeps it too.)
-			float thick_end = (hfl & 16) != 0 ? 1.0 - twig : smoothstep(0.4, 0.7, pl.w / max(pf.w, 0.001)) * (1.0 - twig);
+			// (painter-look-wood2: ONLY a strand that limbs leave from its last node keeps its width. The
+			// ratio test that stood here (tip over base 0.4 to 0.7) kept every strand blunt whose radii the
+			// skeleton's least width had flattened: a sapling's leader, every unbranched stick and every
+			// dead stub ended in a square cut.)
+			float thick_end = (hfl & 16) != 0 ? 1.0 - twig : 0.0;
 			// (Closing a thick end to a point left a gap under the forks: it keeps its width and the
 			// fragment stage rounds it.)
 			// painter-look-wood: the point closes over the strand's LAST segment at most. It began at 0.78
@@ -589,6 +593,9 @@ void fragment() {
 	bool wood = v_form > 1.5;
 	float form19 = wood ? 0.0 : v_form;
 	float w_twig = 0.0;
+	// painter-look-wood2: the twig's base width on screen, in pixels (twig manner = a pixel or two; a
+	// sapling's sticks seen close are a dozen).
+	float w_px = 0.0;
 	float w_a = 0.0;
 	float w_s = 0.0;
 	float w_e = 1.0;
@@ -607,6 +614,7 @@ void fragment() {
 		w_sa = v_snow.y;
 		w_sd = v_bseed * 53.0;
 		w_wl = max(v_fn.z * 5.0, 0.1);
+		w_px = v_fn.z * abs(PROJECTION_MATRIX[1][1]) * VIEWPORT_SIZE.y / (PROJECTION_MATRIX[3][3] == 0.0 ? max(distance(INV_VIEW_MATRIX[3].xyz, v_wp), 0.1) : 1.0);
 		vec3 tgw = normalize(v_tg);
 		vec3 vcw = PROJECTION_MATRIX[3][3] == 0.0 ? normalize(INV_VIEW_MATRIX[3].xyz - v_wp) : normalize(INV_VIEW_MATRIX[2].xyz);
 		w_lat = cross(tgw, vcw);
@@ -653,7 +661,11 @@ void fragment() {
 			if (!g_sun && dry > 0.05 && !fine19 && p_noise(vec3(w_a * 3.3 + w_sd, w_s / (w_wl * 3.0), w_sd * 0.7)) < dry * 0.52) {
 				discard;
 			}
-			if (!g_sun && w_twig > 0.0 && p_noise(vec3(w_s / 0.2, w_sd, 4.0)) < twig_break19 * w_twig) {
+			// (painter-look-wood2: a twig's dry-brush breaks are for a hair on screen. On a stick a few pixels
+			// wide they cut it into floating pieces with square ends, and ate its base off its parent: they
+			// fade out by 4 pixels, and the first and last eighth of a twig never break.)
+			float brk = twig_break19 * w_twig * (1.0 - smoothstep(1.5, 4.0, w_px)) * smoothstep(0.08, 0.16, v_fn.y) * (1.0 - smoothstep(0.88, 0.94, v_fn.y));
+			if (!g_sun && brk > 0.0 && p_noise(vec3(w_s / 0.2, w_sd, 4.0)) < brk) {
 				discard;
 			}
 		}
@@ -834,9 +846,8 @@ void fragment() {
 		// The twig manner: lighter and greyer (or the species' twig colour), one tone nearly.
 		vec4 lf6 = texelFetch(role_params, ivec2(int(row_of(0.0, int(v_inst + 0.5)) + 0.5), 6), 0);
 		if (w_twig > 0.0 && (lf6.z > 0.5 || lf6.w > 0.0)) {
-			ALBEDO = mix(ALBEDO, palette_at(0.5 + (t - 0.5) * 0.6 + v_value, row_of(0.0, int(v_inst + 0.5)), 0.5), w_twig * twig_tone19);
-		}
-		// Snow as dabs along the up side: it stands out past the limb's edge in rounded lumps (w_out),
+			ALBEDO = mix(ALBEDO, palette_at(0.5 + (t - 0.5) * 0.6 + v_value, row_of(0.0, int(v_inst + 0.5)), 0.5), w_twig * twig_tone19 * (1.0 - smoothstep(3.0, 7.0, w_px)));
+		}		// Snow as dabs along the up side: it stands out past the limb's edge in rounded lumps (w_out),
 		// lies over the round top, and has a band of its blue shade where it meets the bark below.
 		float sc = dot(n, w_up);
 		float bnd = snow_bnd18(w_sa) + (p_noise(vec3(w_s / (w_wl * 0.8), 11.0, w_sd)) - 0.5) * 0.3;

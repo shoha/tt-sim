@@ -433,6 +433,22 @@ off, GPU medians, painted minus classic: forest tokens summer +0.06, +0.08, +0.0
   `painter_tree_digests.json` re-pinned; test_painter_baked unchanged. Cost (GPU, painted minus
   classic, 3 interleaved samples, 1920x1080): forest tokens summer +0.098 ms (main +0.126), winter
   -0.521 (main -0.517), forest home summer -0.586 (main -0.596).
+- Saplings, sticks, stubs and roots (painter-look-wood2, 2026-11-15; critic read of the winter wood
+  frames; evidence `docs/research/2026-11-09-prototypes/compare/painter_final21_wood/notes.md`).
+  Square-cut, floating pink sticks beside a dark pole were three shader causes in the block-in's
+  twig manner: the dry-brush breaks (`twig_break19`) cut a stick a few pixels wide into floating
+  pieces; the twig colour (the leaf's) painted every twig salmon at any size; and `thick_end` kept
+  every strand blunt whose tip was over 0.4 to 0.7 of its base, which the skeleton's least widths
+  made true of every sapling leader, unbranched stick and dead stub. Breaks fade by 4 px of the
+  twig's base width (`w_px`; use `abs(PROJECTION_MATRIX[1][1])`: it is negative in the viewport) and
+  never touch a twig's first and last eighth, the colour fades by 7 px, and only flag 16 keeps a
+  blunt end. In the skeleton: a limb's least width is 0.75 of a thin parent's (`LEAST_STICK` 0.011),
+  a stem's 0.012; `_forks` gives the stem's co-dominant forks the stem's width at its top (the
+  straight one `FORK_LEAD` 0.72, the rest by the pipe law, tapering to `FORK_TIP`); the stem
+  narrows by at most 1 - `NARROW_STEM` (0.8) per node; buttress roots are four points that bend
+  down and end under the ground. Lime and poplar bark are warm (chroma 0.044) and lime has furrow
+  marks. Open: the horizontal seam where a trunk meets its forks (a bark-pattern break at the stem
+  strand's end cap, not a width step). Digests re-pinned.
 - The eye view's rim (painter-look-winter): PainterSurfaces follows a scatter added to the map after
   the paint (`child_entered_tree` on the map root, `_bind_scatter`), so EyeRim's scatter gets the same
   painted plants and, through PainterTrees, painted trees and bushes (`PainterTrees.wanted` skips a

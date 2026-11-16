@@ -113,6 +113,9 @@ const W_PAD: float = 0.6
 ## one node to the next (the pipe model's step where a heavy limb leaves the trunk was a cone: the
 ## trunk above a fork stood a third of the width below it, under a limb thicker than itself).
 const NARROW_MIN: float = 0.62
+## painter-look-wood2: the stem's own floor (the trunk's width at one node is at least this share of
+## the node below).
+const NARROW_STEM: float = 0.8
 ## A limb's base flares to this many times its own width where it leaves its parent (no pegs), but
 ## never past FLARE_MAX of the parent's width there: the shader used to swell every limb 1.6 times
 ## on top of the pack's own collar, so a limb began up to 1.47 times as wide as its parent.
@@ -120,6 +123,12 @@ const FLARE: float = 1.6
 const FLARE_MAX: float = 0.92
 ## Limbs thinner than this are not flared (a few millimetres on a twig, and a node per twig).
 const FLARE_MIN_R: float = 0.05
+## painter-look-wood2: the straight fork's share of the stem's width where the stem divides, and
+## the share of its base a fork has left at its tip (see `_forks`).
+const FORK_LEAD: float = 0.72
+## The thinnest a stick on a thin parent is made (metres of radius).
+const LEAST_STICK: float = 0.011
+const FORK_TIP: float = 0.2
 
 
 class Sk:
@@ -477,11 +486,16 @@ static func _radii(sk: Sk, c: Dictionary) -> void:
 	for i: int in n:
 		var r: PackedFloat32Array = sk.rad[i]
 		var k: float = s
+		# painter-look-wood2: the least width is a stem's own 0.012 (a sapling's leader runs up to a
+		# fine tip, not a 4 cm pole), and a limb's is 0.75 of its parent's width at the joint when
+		# that is less (a stick on a thin stem began as thick as the stem: 0.019 on 0.019).
+		var least: float = 0.012 if i == 0 else (0.016 if sk.order[i] >= 3 else 0.019)
 		if sk.parent[i] >= 0:
 			var pr: float = sk.rad[sk.parent[i]][sk.at[i]]
 			k = minf(s, 0.8 * pr / maxf(r[0], 0.0001))
+			least = minf(least, maxf(0.75 * pr, LEAST_STICK))
 		for j: int in r.size():
-			r[j] = maxf(r[j] * k, 0.016 if sk.order[i] >= 3 else 0.019)
+			r[j] = maxf(r[j] * k, least)
 		sk.rad[i] = r
 	var t: PackedFloat32Array = sk.rad[0]
 	var top_r: float = lerpf(0.6, 0.12, c["lead"])
@@ -503,8 +517,11 @@ static func _steady(sk: Sk) -> void:
 		if sk.state[i] == 2:
 			continue
 		var r: PackedFloat32Array = sk.rad[i]
+		# (the stem narrows by less at a node: a drop of a third at one node read as a horizontal
+		# seam across the trunk under the crown)
+		var keep: float = NARROW_STEM if i == 0 else NARROW_MIN
 		for j: int in range(r.size() - 1):
-			r[j + 1] = maxf(r[j + 1], r[j] * NARROW_MIN)
+			r[j + 1] = maxf(r[j + 1], r[j] * keep)
 		sk.rad[i] = r
 
 
@@ -757,8 +774,40 @@ static func skeleton(
 			c["groups"] = int(c["groups"]) + 1
 			_grow(sk, c, 0, tp.size() - 1, top, dir, length, 0, int(c["groups"]), id, 0)
 	_radii(sk, c)
+	# (steadied first: the stem's top is what the forks share, and `_steady` raises it)
+	_steady(sk)
+	_forks(sk, clampf(float(c["pipe"]), 1.6, 3.2))
 	_collars(sk, float(c["collar"]))
 	return sk
+
+
+## painter-look-wood2: where the leader gives out, the stem divides into co-dominant limbs, and the
+## pipe model's radii left them thin: each carries only its own crown (a few thin twigs) while the
+## stem below stood at least 0.6 of the girth up to its last node (the floor `_radii` keeps), so the
+## trunk ended in a flat shoulder with limbs half its width pushed into it like a sleeve. The forks
+## now share the stem's width at the top as the pipe model says: the straight one (the first) takes
+## FORK_LEAD of it, the rest share what is left (their areas to the power `e` sum to the stem's),
+## and each tapers from there to FORK_TIP of that at its own tip. Only ever raised, never lowered.
+static func _forks(sk: Sk, e: float) -> void:
+	var top: int = sk.pts[0].size() - 1
+	var forks := PackedInt32Array()
+	for i: int in range(1, sk.pts.size()):
+		if sk.parent[i] == 0 and sk.order[i] == 0 and sk.at[i] == top:
+			forks.append(i)
+	if forks.size() < 2:
+		return
+	var big: float = sk.rad[0][top]
+	var share: float = clampf(
+		pow((1.0 - pow(FORK_LEAD, e)) / float(forks.size() - 1), 1.0 / e), 0.3, FORK_LEAD
+	)
+	for f: int in forks.size():
+		var i: int = forks[f]
+		var target: float = big * (FORK_LEAD if f == 0 else share)
+		var r: PackedFloat32Array = sk.rad[i]
+		var m: int = maxi(r.size() - 1, 1)
+		for j: int in r.size():
+			r[j] = maxf(r[j], target * lerpf(1.0, FORK_TIP, float(j) / float(m)))
+		sk.rad[i] = r
 
 
 ## Round 13: a limb leaving the stem tapers along its whole length (the pipe model alone leaves
@@ -769,16 +818,18 @@ static func _collars(sk: Sk, col: float) -> void:
 	for i: int in range(1, n):
 		var par: int = sk.parent[i]
 		var r: PackedFloat32Array = sk.rad[i]
+		var pr: float = sk.rad[par][sk.at[i]]
+		# (a stick on a thin parent: see `_radii`)
+		var least: float = minf(0.019, maxf(0.75 * pr, LEAST_STICK))
 		if par == 0 and sk.order[i] == 1 and r.size() >= 3:
 			var m: int = r.size() - 1
 			for j: int in m + 1:
-				r[j] = maxf(r[j] * lerpf(1.0, lerpf(1.0, 0.5, float(j) / float(m)), col), 0.019)
+				r[j] = maxf(r[j] * lerpf(1.0, lerpf(1.0, 0.5, float(j) / float(m)), col), least)
 		# A child is still thinner than what it leaves.
-		var pr: float = sk.rad[par][sk.at[i]]
 		if r[0] > 0.8 * pr:
 			var k: float = 0.8 * pr / r[0]
 			for j: int in r.size():
-				r[j] = maxf(r[j] * k, 0.016)
+				r[j] = maxf(r[j] * k, minf(0.016, least))
 		sk.rad[i] = r
 	_steady(sk)
 	# The flare: on every limb of any order wide enough to show one (the shader used to swell all

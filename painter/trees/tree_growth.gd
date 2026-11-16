@@ -93,14 +93,18 @@ static func tree(
 			var bd := Vector3(cos(ba), 0.0, sin(ba))
 			out.append(
 				PainterTreeBase._strand(
+					# painter-look-wood2: a root runs out of the trunk, bends down and thins to a
+					# point that goes under the ground. Three points ending at g * 0.2 and 4 cm up
+					# stood as log stubs with cut faces.
 					PackedVector3Array(
 						[
 							bd * g * 0.5 + Vector3.UP * (g * 1.0 + 0.15 * old),
-							bd * g * (1.2 + 0.3 * old) + Vector3.UP * g * 0.4,
-							bd * g * (1.8 + 0.6 * old) + Vector3.UP * 0.04
+							bd * g * (1.1 + 0.2 * old) + Vector3.UP * g * (0.55 + 0.1 * old),
+							bd * g * (1.8 + 0.5 * old) + Vector3.UP * g * 0.14,
+							bd * g * (2.6 + 0.8 * old) + Vector3.DOWN * 0.04
 						]
 					),
-					PackedFloat32Array([g * 0.5, g * 0.4, g * 0.2]),
+					PackedFloat32Array([g * 0.5, g * 0.38, g * 0.22, g * 0.08]),
 					0.0,
 					0.0,
 					0.0

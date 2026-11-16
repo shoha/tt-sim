@@ -4,123 +4,123 @@
 	"trees": {
 		"birch_0.3": {
 			"masses": 124.0,
-			"sha": "8dca6bb2455f4f8d76f8c6c0a1b33063299a2e97b72bbd85d5e4a66bbea4e809",
+			"sha": "b3dd9fe47578dc42666291e420444235acb491816291e3a15b12eabee962aaa3",
 			"texels": 1711.0
 		},
 		"birch_0.6": {
 			"masses": 287.0,
-			"sha": "ee5b29799c047e68dc31bc9e7aebf269812ac4c5ce366d2fdcb519cbbddf718e",
-			"texels": 3776.0
+			"sha": "e9118f723df0de7f23f3e7e3a8d39d060ec5d59c304d79bf778019ca94513503",
+			"texels": 3785.0
 		},
 		"birch_0.9": {
 			"masses": 322.0,
-			"sha": "7828fd8ccde3e34cace924423d4bb23dac251d5ecd3c0018ed0d8b09d0e9a075",
-			"texels": 4146.0
+			"sha": "79620930fa8fff62125ce35b271411a5159d54c76d3ca5573311674362120bd6",
+			"texels": 4159.0
 		},
 		"lime_0.3": {
 			"masses": 97.0,
-			"sha": "157452845dbd6cd52654c3bed739f7847674469bdaea840e36f5d01ad4d9cfff",
+			"sha": "aec8f83640de05fda87395ad2119455872aea3a1d87abeb3ccee1010ceb2202e",
 			"texels": 1560.0
 		},
 		"lime_0.6": {
 			"masses": 188.0,
-			"sha": "ca36abbe0819d255c852ed56b27b2010e72411bd4c4fd3d3b8cdb6fa81608cfc",
-			"texels": 2859.0
+			"sha": "a4d858db9445581545a66f4bb500ae4861ffa1f5e9a2cbe343c1fbfda6ee497a",
+			"texels": 2868.0
 		},
 		"lime_0.9": {
 			"masses": 224.0,
-			"sha": "a7b6bc223277b3deaeebf53e05220333457887b4422de525e6b66cfdb4fddb4d",
-			"texels": 3596.0
+			"sha": "ca8d17ca4a1de2d6c337b1cce41565d2fe8396b595c06c1785ca186900463bd2",
+			"texels": 3610.0
 		},
 		"oak_0.3": {
 			"masses": 179.0,
-			"sha": "f7728c0695ee3e317f019b9fe135be846d03f14c43502d653ab30931687eeeb6",
+			"sha": "9c61913ef528acc4722e90763fc76eb667699502718fea7492a010e6f32dc9d5",
 			"texels": 2383.0
 		},
 		"oak_0.6": {
 			"masses": 233.0,
-			"sha": "a40abe1ee1883c7f8b9327b5bcdd1d38b33b3f98b2ac6edaeaef1d4eaad13ad8",
-			"texels": 2928.0
+			"sha": "0df71d224cb4dee0ac8ffa43681d178616e94261a6d124473f9d54cd4cb208e0",
+			"texels": 2937.0
 		},
 		"oak_0.9": {
 			"masses": 255.0,
-			"sha": "dec3fe3766919fe270d306859efc5a8152ee0ab65662ef1f40e6b28c1158d41a",
-			"texels": 3441.0
+			"sha": "f5970d46c12e0ca8238312abce026cc4ec4a867c84d096ac135686c820b1521d",
+			"texels": 3457.0
 		},
 		"poplar_0.3": {
 			"masses": 89.0,
-			"sha": "db09372c0a9ddef8ab7106fbc338555fa003dd290d32f877b392af448a542d33",
+			"sha": "15d5a34bebe63a633fc88d1efeae118f4c3af8d86980b592be38620e9c090c34",
 			"texels": 1217.0
 		},
 		"poplar_0.6": {
 			"masses": 159.0,
-			"sha": "45cbf23a3e0e9e3b59cba2df6d36fee9dc1313d1f287534e6fdb6bb0ca5fdfc2",
-			"texels": 2096.0
+			"sha": "3bd5e5dfd275f3c7234b94e84eab9a239b4a63e1f45d9e4e2d570cf8166c3d8f",
+			"texels": 2105.0
 		},
 		"poplar_0.9": {
 			"masses": 158.0,
-			"sha": "79213ce3225309c05a6bbc2eeaa4939446179434fd22fee2a920f53e15b1b6de",
-			"texels": 2139.0
+			"sha": "bb2a8021bcb7f96f994f28d7df4e7f82da0827190b53e066f65c1431e6107adb",
+			"texels": 2152.0
 		},
 		"rowan_0.3": {
 			"masses": 54.0,
-			"sha": "f158d6a2296f9076485925548a8a8e8916a9a40c22bb69f8bb06a4493e4c178b",
+			"sha": "b6e9e06dff57ba69540d6d27f7e8c8078b4946fd5848a28ce572610c6be5973c",
 			"texels": 719.0
 		},
 		"rowan_0.6": {
 			"masses": 155.0,
-			"sha": "cc67f15df3bc02e0a83bce56f97bc96781689bad52f4dfd06af2a4a1b463c808",
-			"texels": 2036.0
+			"sha": "cc73a0392d79c1381d7ce6ba16981e12cfd8f760e7c4aad7a80644ae46cd6335",
+			"texels": 2046.0
 		},
 		"rowan_0.9": {
 			"masses": 197.0,
-			"sha": "3e25e7af6c3cf53c75f3796f3272e29e71c077f9100e4fcd2a529779e42a09fa",
-			"texels": 2689.0
+			"sha": "ac04d718612420797c27658e935deaba658ce050f731d33f67f32004972e2b04",
+			"texels": 2701.0
 		},
 		"scotspine_0.3": {
 			"masses": 75.0,
-			"sha": "74889a0fdfa82e330be4336c6c173d28d645a13328b7ccfb57e4320ca1675cde",
+			"sha": "a662c6b05f7b968317ae39e116a6c892dfe76b48e9e22d1556f7e9b3b28f926a",
 			"texels": 1102.0
 		},
 		"scotspine_0.6": {
 			"masses": 271.0,
-			"sha": "60c23cc6ac67382c05f62f47b986440a1ae79ea3fda166e8a6fbea36989195b3",
-			"texels": 3009.0
+			"sha": "092a2acf8274ec5e909b0f21406f3a632e87b0e0c3b24ee21d91680ffdcda83e",
+			"texels": 3018.0
 		},
 		"scotspine_0.9": {
 			"masses": 223.0,
-			"sha": "d8bb52fb600ae3f51c492254e8f27f1078d63c644c41b8e51ff5f2ecc2dcd1a4",
-			"texels": 2626.0
+			"sha": "2e457007eabb97d2c5a3367731d4725d7385de0cb7656f9fbb151791820dde90",
+			"texels": 2638.0
 		},
 		"spruce_0.3": {
 			"masses": 157.0,
-			"sha": "5b21973cbae8d1174fc4cc7c48fd96759b7534d52dcb990649bfe9df186bec7d",
+			"sha": "5c9b36920e4acd4335595287f38aa14d971110ae8ff752fcf03810342dfa26e5",
 			"texels": 2194.0
 		},
 		"spruce_0.6": {
 			"masses": 198.0,
-			"sha": "dbb04ce4ab446a88ecae06cfb8b40cf0bfda03aea20a4feda2d8805e387e9e96",
-			"texels": 2688.0
+			"sha": "bf3c8b07b035e5b9952860eb47814f7f78c8560a27699e7e42cc33cfcfe0089d",
+			"texels": 2697.0
 		},
 		"spruce_0.9": {
 			"masses": 201.0,
-			"sha": "137f451191541859cb994749dbb3c9115516ba70e2ac0019ab168ce8978b93a5",
-			"texels": 2811.0
+			"sha": "5a75d94330d450f103c62c368d95cb281eb04039f389a20267607a05e5acc07f",
+			"texels": 2823.0
 		},
 		"willow_0.3": {
 			"masses": 125.0,
-			"sha": "fb24d5f0681a977512ea299eb656431ec4b96ff398e8b21b425d37624c62c3a6",
+			"sha": "a595bcc16e78a16ebccd3000f42c5299ae073231b94be0b8edbd445a56f4ad94",
 			"texels": 1730.0
 		},
 		"willow_0.6": {
 			"masses": 329.0,
-			"sha": "58627a048c776bdbfa3915db08c400db3bced73d8dcbce23f04c4929aea453f1",
-			"texels": 4756.0
+			"sha": "47e2dd288ca064eda7657b12c4f9badd85cf68e7a0490d06f0d66bb8285c4f5d",
+			"texels": 4765.0
 		},
 		"willow_0.9": {
 			"masses": 361.0,
-			"sha": "e245f16caf2e6916f109092e1027214c527eb00e0529b6c1c84af6da3e317ce6",
-			"texels": 5467.0
+			"sha": "723896141a961fd4f22b10bedc289d33027861124047fa53c9cba43551572b13",
+			"texels": 5479.0
 		}
 	}
 }
