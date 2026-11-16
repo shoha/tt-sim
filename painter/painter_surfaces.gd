@@ -123,6 +123,8 @@ func release() -> void:
 	if _buildings != null:
 		_buildings.call("release")
 	_unbind()
+	if _ground != null:
+		FireLook.unmirror_glow(_ground)
 	for id: int in _overrides:
 		var pair: Array = _overrides[id]
 		if is_instance_valid(pair[0]):
@@ -299,6 +301,10 @@ func _ground_material() -> ShaderMaterial:
 		_skirt = _ground.duplicate() as ShaderMaterial
 		_skirt.set_meta(META, true)
 		_skirt.set_shader_parameter(&"skirt", true)
+	if not FireLook.glow_mirrors.has(_ground):
+		# The persistent ground fire (FireField) binds its bake to the terrain's own material, which
+		# this one replaces: it takes the same bake and draws the char and the glow its own way.
+		FireLook.mirror_glow(_ground, _terrain.get_material() if is_instance_valid(_terrain) else null)
 	return _ground
 
 
@@ -317,16 +323,70 @@ func _rebuild_zone() -> void:
 		return
 	var doc := _terrain.document
 	var image := zone_image(doc)
+	var burnt := char_image(doc)
 	var extent := doc.extent_m()
 	for material: ShaderMaterial in [_ground_material(), _skirt]:
 		material.set_shader_parameter(&"zone_map", ImageTexture.create_from_image(image))
 		material.set_shader_parameter(&"zone_present", true)
+		material.set_shader_parameter(
+			&"char_map", ImageTexture.create_from_image(burnt) if burnt != null else null
+		)
+		material.set_shader_parameter(&"char_present", burnt != null)
 		material.set_shader_parameter(&"layer_grid_origin", -extent * 0.5)
 		material.set_shader_parameter(&"layer_grid_step", doc.sample_step())
 		material.set_shader_parameter(&"half_extent", extent * 0.5)
 		material.set_shader_parameter(
 			&"base_meadow", 1.0 if PainterGroundRoles.surface_role(doc.base_surface) == "meadow" else 0.0
 		)
+
+
+## The burnt ground's share per height sample as an R8 image (the char role has no channel in the
+## zone map: it is rare, so its map exists only when the document names a burnt biome or an ash
+## surface, and costs nothing else), null when it names none (pure; painter-fire). A biome slot
+## pulls its density as the zone map's do; a surface weight is its share.
+static func char_image(doc: MapDocument) -> Image:
+	var biome_char := PackedByteArray()
+	var any := false
+	for id in doc.biome_ids:
+		var burnt := PainterGroundRoles.biome_role(id) == "char"
+		biome_char.append(1 if burnt else 0)
+		any = any or burnt
+	var surface_char := PackedByteArray()
+	for id in doc.surface_ids:
+		var burnt := PainterGroundRoles.surface_role(id) == "char"
+		surface_char.append(1 if burnt else 0)
+		any = any or burnt
+	if not any:
+		return null
+	var sx := doc.samples_x()
+	var sz := doc.samples_z()
+	var n := sx * sz
+	var plane := PackedFloat32Array()
+	plane.resize(n)
+	var slots := doc.biome_slots
+	var density := doc.biome_density
+	var weights := doc.surface_weights
+	var has_biomes := slots.size() == n and density.size() == n
+	var has_surfaces := weights.size() == n * MapDocument.SURFACE_BYTES
+	for i in n:
+		var v := 0.0
+		if has_biomes:
+			var slot := slots[i]
+			if slot > 0 and slot <= biome_char.size() and biome_char[slot - 1] == 1:
+				v = clampf(density[i] / 255.0 * BIOME_PULL, 0.0, 1.0)
+		if has_surfaces:
+			for e in 4:
+				var w := weights[n * 4 + i * 4 + e] / 255.0
+				var at := weights[i * 4 + e]
+				if w > 0.0 and at < surface_char.size() and surface_char[at] == 1:
+					v = maxf(v, w)
+		plane[i] = v
+	var blurred := _box(plane, sx, sz, ZONE_BLUR)
+	var bytes := PackedByteArray()
+	bytes.resize(n)
+	for i in n:
+		bytes[i] = clampi(roundi(blurred[i] * 255.0), 0, 255)
+	return Image.create_from_data(sx, sz, false, Image.FORMAT_R8, bytes)
 
 
 ## The zone map of `doc` as an RGBA8 image (pure; see _rebuild_zone). The document's arrays and the
@@ -597,8 +657,19 @@ func _tone_ground(sheet: Dictionary, mood: String, elevation: float) -> void:
 		var ramp := PainterTones.ramp(
 			sheet, mood, PainterGroundRoles.TONE_ROLE[role], elevation, "ground-"
 		)
-		lit.append_array([PainterTones.linear(ramp[2]), PainterTones.linear(ramp[5])])
-		shade.append_array([PainterTones.linear(ramp[0]), PainterTones.linear(ramp[3])])
+		var scale := PainterGroundRoles.CHAR_SCALE if role == "char" else Vector3.ONE
+		lit.append_array(
+			[
+				PainterTones.linear(ramp[2]) * scale,
+				PainterTones.linear(ramp[5]) * scale,
+			]
+		)
+		shade.append_array(
+			[
+				PainterTones.linear(ramp[0]) * scale,
+				PainterTones.linear(ramp[3]) * scale,
+			]
+		)
 	var num := func(prop: String) -> float: return PainterSheet.number(sheet, mood, prop, elevation)
 	var tone := func(role: String) -> Vector3:
 		return PainterTones.linear(PainterSheet.tone(sheet, mood, role, elevation))

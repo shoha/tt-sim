@@ -62,6 +62,12 @@ const TREE_STROKE := "res://painter/shaders/painter_tree_stroke.gdshader"
 const TREE_BLOCKIN := "res://painter/shaders/painter_tree_blockin.gdshader"
 const TREE_STROKE_BARE := "res://painter/shaders/painter_tree_stroke_bare.gdshader"
 const TREE_BLOCKIN_BARE := "res://painter/shaders/painter_tree_blockin_bare.gdshader"
+# The variants a tree an event burns draws with (painter-fire), warmed with their group so the first
+# fire compiles nothing on the main thread.
+const TREE_STROKE_BURN := "res://painter/shaders/painter_tree_stroke_burn.gdshader"
+const TREE_BLOCKIN_BURN := "res://painter/shaders/painter_tree_blockin_burn.gdshader"
+const TREE_STROKE_BARE_BURN := "res://painter/shaders/painter_tree_stroke_bare_burn.gdshader"
+const TREE_BLOCKIN_BARE_BURN := "res://painter/shaders/painter_tree_blockin_bare_burn.gdshader"
 ## The sky (PainterScene.SKY_SHADER) draws through a Sky, not a mesh: it is only compiled here.
 const SKY := "res://painter/shaders/painter_sky.gdshader"
 ## The vertex layouts the painter draws, as the slots each fills (the engine adds the tangent flag
@@ -141,13 +147,18 @@ static func covered_shaders() -> PackedStringArray:
 ## The shaders of the summer look.
 static func base_shaders() -> PackedStringArray:
 	return PackedStringArray(
-		[GROUND, PLANT, SOLID, STRUCTURE, MANNER, YARD, YARD_GROUND, TREE_STROKE, TREE_BLOCKIN]
+		[
+			GROUND, PLANT, SOLID, STRUCTURE, MANNER, YARD, YARD_GROUND, TREE_STROKE, TREE_BLOCKIN,
+			TREE_STROKE_BURN, TREE_BLOCKIN_BURN
+		]
 	)
 
 
 ## The leaf-drop tree shaders of a bare season.
 static func bare_shaders() -> PackedStringArray:
-	return PackedStringArray([TREE_STROKE_BARE, TREE_BLOCKIN_BARE])
+	return PackedStringArray(
+		[TREE_STROKE_BARE, TREE_BLOCKIN_BARE, TREE_STROKE_BARE_BURN, TREE_BLOCKIN_BARE_BURN]
+	)
 
 
 ## Whether the engine has anything to warm: false headless (nothing draws).
@@ -257,6 +268,8 @@ static func collect(bare: bool) -> Array[Dictionary]:
 	if bare:
 		_add(samples, "tree_stroke_bare", TREE_STROKE_BARE, LAYOUT_TREE, 0)
 		_add(samples, "tree_blockin_bare", TREE_BLOCKIN_BARE, LAYOUT_TREE, 0)
+		_add(samples, "tree_stroke_bare_burn", TREE_STROKE_BARE_BURN, LAYOUT_TREE, 0)
+		_add(samples, "tree_blockin_bare_burn", TREE_BLOCKIN_BARE_BURN, LAYOUT_TREE, 0)
 		return samples
 	_add(samples, "ground", GROUND, LAYOUT_GROUND, 0)
 	_add(samples, "plant_lit", PLANT, LAYOUT_LIT, 0)
@@ -265,6 +278,8 @@ static func collect(bare: bool) -> Array[Dictionary]:
 	_add(samples, "solid_plain", SOLID, LAYOUT_PLAIN, 0)
 	_add(samples, "tree_stroke", TREE_STROKE, LAYOUT_TREE, 0)
 	_add(samples, "tree_blockin", TREE_BLOCKIN, LAYOUT_TREE, 0)
+	_add(samples, "tree_stroke_burn", TREE_STROKE_BURN, LAYOUT_TREE, 0)
+	_add(samples, "tree_blockin_burn", TREE_BLOCKIN_BURN, LAYOUT_TREE, 0)
 	_add(samples, "structure", STRUCTURE, LAYOUT_LIT, 0)
 	_add(samples, "yard", YARD, LAYOUT_YARD, 0)
 	_add(samples, "yard_ground", YARD_GROUND, LAYOUT_YARD, 0)

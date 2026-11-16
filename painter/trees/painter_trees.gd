@@ -43,6 +43,16 @@ const BLOCKIN_SHADER := "res://painter/shaders/painter_tree_blockin.gdshader"
 ## leaf runs none of its code.
 const STROKE_BARE_SHADER := "res://painter/shaders/painter_tree_stroke_bare.gdshader"
 const BLOCKIN_BARE_SHADER := "res://painter/shaders/painter_tree_blockin_bare.gdshader"
+## The same four with TREE_BURN: a tree an event burns (take) draws with these, the burn an
+## instance uniform (painter-fire; docs/systems/painter.md "Fire and events").
+const STROKE_BURN_SHADER := "res://painter/shaders/painter_tree_stroke_burn.gdshader"
+const BLOCKIN_BURN_SHADER := "res://painter/shaders/painter_tree_blockin_burn.gdshader"
+const STROKE_BARE_BURN_SHADER := "res://painter/shaders/painter_tree_stroke_bare_burn.gdshader"
+const BLOCKIN_BARE_BURN_SHADER := "res://painter/shaders/painter_tree_blockin_bare_burn.gdshader"
+## The scatter's meta that names the host (a WeakRef to this), so an event finds the painted trees.
+const HOST_META := &"painter_trees_host"
+## Block-in ellipsoids, limbs and the three stroke levels: the materials of one set.
+const MATERIAL_SLOTS := 5
 const UNIFORMS := "res://painter/trees/tree_uniforms.json"
 const ROOT_NAME := "PainterTrees"
 ## Metadata on every material and node this draws with.
@@ -106,6 +116,11 @@ var _lod := -99.0
 var _bare := false
 ## False draws every slot in leaf too (the painter-perf-buried A/B; set_live_counts).
 var _live_counts := true
+## key -> {"key", "pivot", "nodes", "burning", "burn"}: the trees an event holds (take): out of
+## their cell's nodes, drawn by their own under a pivot the event moves.
+var _held: Dictionary = {}
+## The burning copies of the material set, made with the first burning tree.
+var _burn_materials: Array[ShaderMaterial] = []
 
 
 ## Draws the mapped tree rows of `scatters` under `map` in `state` ({"sheet", "mood",
@@ -130,6 +145,7 @@ func paint(
 	for scatter in _scatters:
 		if not scatter.child_entered_tree.is_connected(_on_scatter_child):
 			scatter.child_entered_tree.connect(_on_scatter_child)
+		scatter.set_meta(HOST_META, weakref(self))
 	retone(PainterSheet.load_sheet(str(state["sheet"])), str(state["mood"]), float(state["elevation"]))
 	sync()
 	_watch()
@@ -151,12 +167,14 @@ func retone(sheet: Dictionary, mood: String, elevation: float) -> void:
 	# season changes (a shader swap compiles).
 	var bare: Dictionary = _uniforms.get("bare", {})
 	var is_bare := crown_occ < 0.5
-	for i in _materials.size():
-		var m := _materials[i]
-		var want := shader_path(i < 2, is_bare)
+	var all := _all_materials()
+	for i in all.size():
+		var m := all[i]
+		var slot := i % MATERIAL_SLOTS
+		var want := shader_path(slot < 2, is_bare, i >= MATERIAL_SLOTS)
 		if m.shader == null or m.shader.resource_path != want:
 			m.shader = load(want) as Shader
-		var own: Dictionary = _uniforms.get("block" if i < 2 else "stroke", {})
+		var own: Dictionary = _uniforms.get("block" if slot < 2 else "stroke", {})
 		for uniform_name: String in bare:
 			var v: String = bare[uniform_name] if is_bare else own.get(uniform_name, "0.0")
 			m.set_shader_parameter(uniform_name, str_to_var(v))
@@ -164,7 +182,7 @@ func retone(sheet: Dictionary, mood: String, elevation: float) -> void:
 		# The slots a tree draws change with the variant: its stroke instances are made again.
 		_bare = is_bare
 		_restroke()
-	for m in _materials:
+	for m in all:
 		m.set_shader_parameter(&"crown_occ", crown_occ)
 		m.set_shader_parameter(&"leaf_fall", 1.0 - crown_occ)
 		m.set_shader_parameter(&"palette", palette)
@@ -177,8 +195,12 @@ func retone(sheet: Dictionary, mood: String, elevation: float) -> void:
 
 
 ## The tree shader a material draws with: the block-in's (`block`) or the strokes', in leaf or in
-## a bare season (`is_bare`).
-static func shader_path(block: bool, is_bare: bool) -> String:
+## a bare season (`is_bare`); `burning` the variant an event's burning tree draws with.
+static func shader_path(block: bool, is_bare: bool, burning: bool = false) -> String:
+	if burning:
+		if block:
+			return BLOCKIN_BARE_BURN_SHADER if is_bare else BLOCKIN_BURN_SHADER
+		return STROKE_BARE_BURN_SHADER if is_bare else STROKE_BURN_SHADER
 	if block:
 		return BLOCKIN_BARE_SHADER if is_bare else BLOCKIN_SHADER
 	return STROKE_BARE_SHADER if is_bare else STROKE_SHADER
@@ -192,7 +214,8 @@ func sync() -> void:
 	_want = wanted(_scatters, _doc)
 	var dirty := {}
 	for key: Vector3i in trees.keys():
-		if not _want.has(key):
+		# (An event's tree stays until the event lets go of it: drop() erases it then.)
+		if not _want.has(key) and not _held.has(key):
 			_erase_tree(key, dirty)
 	var todo: Array = []
 	for key: Vector3i in _want:
@@ -209,9 +232,17 @@ func release() -> void:
 	_batches.clear()
 	_pending.clear()
 	_want = {}
+	for key: Vector3i in _held:
+		var pivot: Node = _held[key]["pivot"]
+		if is_instance_valid(pivot):
+			pivot.queue_free()
+	_held.clear()
+	_burn_materials.clear()
 	for scatter in _scatters:
 		if is_instance_valid(scatter) and scatter.child_entered_tree.is_connected(_on_scatter_child):
 			scatter.child_entered_tree.disconnect(_on_scatter_child)
+		if is_instance_valid(scatter) and scatter.has_meta(HOST_META):
+			scatter.remove_meta(HOST_META)
 	for id: int in _hidden:
 		var node: Variant = _hidden[id]
 		if is_instance_valid(node):
@@ -266,6 +297,52 @@ func hidden_nodes() -> Array[Node3D]:
 		if is_instance_valid(_hidden[id]):
 			out.append(_hidden[id])
 	return out
+
+
+# ---------------------------------------------------------------- events
+
+
+## The painted trees' host of `scatter` (a PainterTrees), null under Classic: how a terrain event
+## finds the painted tree it is about to topple or burn.
+static func of(scatter: Node) -> PainterTrees:
+	if scatter == null or not scatter.has_meta(HOST_META):
+		return null
+	var ref: Variant = scatter.get_meta(HOST_META)
+	return (ref as WeakRef).get_ref() as PainterTrees if ref is WeakRef else null
+
+
+## Hands the painted tree standing at `position` (a scatter row's place, map frame) to an event:
+## the tree leaves its cell's nodes and is drawn by its own five under a pivot added to `parent`
+## (a node in the map frame) that the event moves, so no pack is rebuilt and the other trees of the
+## cell are untouched. `burning` draws it with the burn shaders (set_burn). The actor is
+## {"key", "pivot", "nodes", "burning"}, or {} when no painted tree stands there (not grown yet, a
+## species the look leaves as a GLB, a level not painted): the event then keeps its own stand-in.
+func take(position: Vector3, parent: Node3D, burning: bool) -> Dictionary:
+	return PainterTreeActors.take(self, position, parent, burning)
+
+
+## Sets the burn of a burning actor (take): 0 green, the leaves catch from the foot up as it
+## rises, gone by about 1.4 and the wood charred, FireSweep.burn_progress's scale.
+func set_burn(actor: Dictionary, value: float) -> void:
+	PainterTreeActors.set_burn(actor, value)
+
+
+## Lets an event's tree go: its pivot is freed and, when its row left the scatter meanwhile (the
+## event's change landed) the tree is erased now, else it stands in its cell again (an event that
+## was refused or undone).
+func drop(actor: Dictionary) -> void:
+	drop_all([actor])
+
+
+## drop() for every actor of `actors` with one rebuild of the tables (an event lets go of all its
+## trees at once).
+func drop_all(actors: Array) -> void:
+	PainterTreeActors.drop_all(self, actors)
+
+
+## How many trees events hold now.
+func held_count() -> int:
+	return _held.size()
 
 
 ## Every mapped tree row of `scatters` as key -> {"pos", "species", "asset", "cx", "seed"}, and a
@@ -357,8 +434,16 @@ func _make_materials() -> void:
 
 
 func _set_all(uniform_name: StringName, value: Variant) -> void:
-	for m in _materials:
+	for m in _all_materials():
 		m.set_shader_parameter(uniform_name, value)
+
+
+## The material set and the burning set (empty before the first burning tree).
+func _all_materials() -> Array[ShaderMaterial]:
+	var all: Array[ShaderMaterial] = []
+	all.append_array(_materials)
+	all.append_array(_burn_materials)
+	return all
 
 
 # ---------------------------------------------------------------- the GLB nodes
@@ -737,6 +822,8 @@ func _restroke() -> void:
 				continue
 			var buf := PackedFloat32Array()
 			for key: Vector3i in c["keys"]:
+				if _held.has(key):
+					continue
 				var t: Dictionary = trees[key]
 				var xf := Transform3D(Basis.IDENTITY, t["pos"])
 				PainterTreePack.add_instances(buf, xf, t["row"], _slot_units(t["d"]), per_slot)
@@ -764,6 +851,27 @@ func _rebuild_cell(store: Dictionary, cell: Vector2i, bush: bool) -> void:
 	if keys.is_empty() or _root == null:
 		store.erase(cell)
 		return
+	# A tree an event holds (take) is drawn by its own nodes, not by the cell's.
+	var live: Array = []
+	for key: Vector3i in keys:
+		if not _held.has(key):
+			live.append(key)
+	if live.is_empty():
+		return
+	var name_stem := "%s_%d_%d" % ["PainterBush" if bush else "PainterTree", cell.x, cell.y]
+	var made := _make_nodes(live, bush, false, _materials, name_stem)
+	for node: Node in made:
+		if node != null:
+			_root.add_child(node)
+	c["nodes"] = made
+
+
+## The five nodes (block ellipsoids, limbs, stroke levels 0..2; null where a bush has none) that
+## draw the trees `keys` with `materials`. Instances stand at the trees' places, or at the origin
+## when `local` (an event's tree: its pivot node stands at the place and moves it).
+func _make_nodes(
+	keys: Array, bush: bool, local: bool, materials: Array[ShaderMaterial], name_stem: String
+) -> Array:
 	var per_ell := BUSH_ELL_PER_INST if bush else PainterTreePack.ELL_PER_INST
 	var per_slot := BUSH_SLOT_PER_INST if bush else PainterTreePack.SLOT_PER_INST
 	var bufs: Array[PackedFloat32Array] = [
@@ -774,15 +882,18 @@ func _rebuild_cell(store: Dictionary, cell: Vector2i, bush: bool) -> void:
 	for key: Vector3i in keys:
 		var t: Dictionary = trees[key]
 		var d: Dictionary = t["d"]
-		var xf := Transform3D(Basis.IDENTITY, t["pos"])
+		var xf := Transform3D(Basis.IDENTITY, Vector3.ZERO if local else t["pos"])
 		var row: int = t["row"]
 		PainterTreePack.add_instances(bufs[0], xf, row, int(d["n_ell"]), per_ell)
 		PainterTreePack.add_instances(bufs[1], xf, row, int(d["n_seg"]), PainterTreePack.SEG_PER_INST)
 		PainterTreePack.add_instances(bufs[2], xf, row, _slot_units(d), per_slot)
 		var b: AABB = d["aabb"]
-		b.position += t["pos"]
+		if not local:
+			b.position += t["pos"]
 		box = b if first else box.merge(b)
 		first = false
+	# A tree that falls sweeps a sphere of its own height round its foot.
+	var reach := BOUND_GROW if not local else maxf(box.size.y, 4.0)
 	var meshes: Array[Mesh] = [
 		PainterTreeMeshes.block(per_ell, bush),
 		null if bush else PainterTreeMeshes.ribbon(),
@@ -805,9 +916,9 @@ func _rebuild_cell(store: Dictionary, cell: Vector2i, bush: bool) -> void:
 		if not buf.is_empty():
 			mm.buffer = buf
 		node.multimesh = mm
-		node.material_override = _materials[k]
-		node.custom_aabb = box.grow(BOUND_GROW)
-		node.name = "%s_%d_%d_%d" % ["PainterBush" if bush else "PainterTree", cell.x, cell.y, k]
+		node.material_override = materials[k]
+		node.custom_aabb = box.grow(reach)
+		node.name = "%s_%d" % [name_stem, k]
 		node.set_meta(META, true)
 		node.cast_shadow = (
 			GeometryInstance3D.SHADOW_CASTING_SETTING_ON
@@ -816,9 +927,8 @@ func _rebuild_cell(store: Dictionary, cell: Vector2i, bush: bool) -> void:
 		)
 		if k >= 2:
 			node.visible = level_shown(_lod_now(), k - 2)
-		_root.add_child(node)
 		nodes.append(node)
-	c["nodes"] = nodes
+	return nodes
 
 
 # ---------------------------------------------------------------- stroke levels
@@ -865,4 +975,9 @@ func _on_frame() -> void:
 		for cell: Vector2i in store:
 			var nodes: Array = store[cell]["nodes"]
 			for k in range(2, nodes.size()):
+				(nodes[k] as Node3D).visible = level_shown(lod, k - 2)
+	for key: Vector3i in _held:
+		var nodes: Array = _held[key]["nodes"]
+		for k in range(2, nodes.size()):
+			if is_instance_valid(nodes[k]):
 				(nodes[k] as Node3D).visible = level_shown(lod, k - 2)

@@ -61,6 +61,8 @@ const BILLOW := 0.36
 const ROLL := 0.15
 const ROLL_LENGTH := 2.6
 const TREE_CATEGORY := "tree"
+## The scatter's meta that holds a WeakRef to the painted trees' host (PainterTrees.HOST_META).
+const PAINTED_HOST_META := &"painter_trees_host"
 
 var duration: float = 2.8
 ## Per tree: {"stand_in": MultiMeshInstance3D, "slot", "base": Transform3D, "axis", "height",
@@ -193,6 +195,9 @@ func setup(editor: AuthoringEditor, event: TerrainEvent) -> bool:
 ## Plays the fall `elapsed` seconds in (after `delta` more seconds of puffs).
 func step(elapsed: float, delta: float) -> void:
 	for tree in _trees:
+		if tree.has("actor"):
+			move_actor(tree, _tree_transform(tree, elapsed))
+			continue
 		var multimesh := (tree.stand_in as MultiMeshInstance3D).multimesh
 		multimesh.set_instance_transform(tree.slot, _tree_transform(tree, elapsed))
 		var calm := calm_weight(elapsed - float(tree.start), float(tree.fall))
@@ -202,6 +207,8 @@ func step(elapsed: float, delta: float) -> void:
 		_ended = true
 		for tree in _trees:
 			(tree.stand_in as Node3D).visible = false
+			if tree.has("actor"):
+				(tree.actor.pivot as Node3D).visible = false
 
 
 ## True once the fall has played and its dust has settled.
@@ -223,8 +230,56 @@ func release() -> void:
 	if _scatter.cells_applied.is_connected(_on_cells_applied):
 		_scatter.cells_applied.disconnect(_on_cells_applied)
 	ScatterShrink.release(_scatter, _origins)
+	_drop_actors()
 	if not is_removed() and _area.has_area():
 		_scatter.request_region(_area)
+
+
+func _exit_tree() -> void:
+	_drop_actors()
+
+
+## Moves a tree's painted actor to where the effect puts the tree (`moved`, a transform of the
+## GLB tree's frame): the rotation and scale on top of the tree's own, about its foot. The painted
+## tree has its size in its pack, so the pivot takes only what the event adds to `tree.base`.
+func move_actor(tree: Dictionary, moved: Transform3D) -> void:
+	var base: Transform3D = tree.base
+	(tree.actor.pivot as Node3D).transform = Transform3D(
+		moved.basis * base.basis.inverse(), moved.origin
+	)
+
+
+## Whether the effect's trees burn (their painted actors take the burn shaders); FireSweep's.
+func _burns() -> bool:
+	return false
+
+
+## The painted trees' host (PainterTrees) of the scatter, null under Classic. Found by the
+## scatter's meta, so this script never names the painter's classes (the start-up graph holds
+## none of them).
+func _painted_host() -> Object:
+	if not is_instance_valid(_scatter) or not _scatter.has_meta(PAINTED_HOST_META):
+		return null
+	var ref: Variant = _scatter.get_meta(PAINTED_HOST_META)
+	return (ref as WeakRef).get_ref() if ref is WeakRef else null
+
+
+## Lets the painted trees go that this effect held (once: the actors are forgotten).
+func _drop_actors() -> void:
+	var actors: Array = []
+	for tree in _trees:
+		if tree.has("actor"):
+			actors.append(tree.actor)
+			tree.erase("actor")
+	if actors.is_empty():
+		return
+	var host := _painted_host()
+	if host != null:
+		host.call("drop_all", actors)
+	else:
+		for actor: Dictionary in actors:
+			if is_instance_valid(actor["pivot"]):
+				(actor["pivot"] as Node).queue_free()
 
 
 ## The trees `event` takes on `editor`'s map (trees_near).
@@ -290,6 +345,16 @@ func _stand_in(mesh: Mesh, trees: Array, event: TerrainEvent) -> void:
 		entry.stand_in = node
 		entry.slot = slot
 		entry.base = base
+		# Under the Painted look the tree drawn here is the painter's, not the GLB's: its own nodes
+		# under a pivot take the fall, and the GLB stand-in stays at nothing.
+		var host := _painted_host()
+		if host != null:
+			var actor: Dictionary = host.call("take", base.origin, self, _burns())
+			if not actor.is_empty():
+				entry["actor"] = actor
+				multimesh.set_instance_transform(
+					slot, Transform3D(Basis.from_scale(Vector3.ZERO), base.origin)
+				)
 		_trees.append(entry)
 
 

@@ -31,10 +31,13 @@ render_mode specular_disabled, ambient_light_disabled;
  */
 
 #include "res://painter/shaders/painter_noise.gdshaderinc"
+// The persistent ground fire's bake and constants (fire.md "The ground"): the terrain's fire_present,
+// fire_sim_map and fire_sim_rect are mirrored onto this material (FireLook.mirror_glow).
+#include "res://shaders/fire_glow.gdshaderinc"
 
 // Per role two variants (cool dark, warm light) of the lit and the shade colour, LINEAR.
-uniform vec3 g_lit[10];
-uniform vec3 g_shd[10];
+uniform vec3 g_lit[12];
+uniform vec3 g_shd[12];
 uniform vec3 litter_col = vec3(0.5, 0.4, 0.15);
 uniform vec3 drift_col = vec3(0.8, 0.8, 0.4);
 uniform float drift = 0.3;
@@ -61,6 +64,10 @@ uniform vec2 half_extent = vec2(30.0);
 uniform sampler2D zone_map : hint_default_black, filter_linear, repeat_disable;
 uniform bool zone_present = false;
 uniform float base_meadow = 1.0;
+// The burnt ground's share (role 5, `char`: the event fire's ash and burnt biome), present only when the
+// document names one (PainterSurfaces.char_image).
+uniform sampler2D char_map : hint_default_black, filter_linear, repeat_disable;
+uniform bool char_present = false;
 uniform sampler2D water_weights : hint_default_black, filter_linear, repeat_disable;
 uniform bool water_present = false;
 uniform vec2 layer_grid_origin = vec2(0.0);
@@ -72,6 +79,49 @@ varying vec3 f_shd;
 varying float f_edge;
 varying vec3 f_n;
 varying float f_cut;
+
+// The painted ground fire's scale on the classic char: the classic colours are linear albedo for a
+// filmic tonemap, and the painted tonemap is linear at exposure 1.
+const float BURN_LIFT = 4.5;
+const vec3 BURN_STRAW = vec3(0.5, 0.38, 0.14);
+const vec3 BURN_SHADE = vec3(0.62, 0.6, 0.68);
+// The glow's three painted steps (of its brightest channel) and the colour's strength.
+const vec3 BURN_STEPS = vec3(0.07, 0.3, 0.65);
+const float BURN_GLOW = 1.7;
+
+// The persistent fire at map point `xz`: the dried band, the scorch and the char laid on the role's
+// lit and shade colours (the char in flat steps of its tone, its edge broken by a brush noise), and
+// the glow's painted steps. One fetch where nothing burns, two where it does.
+vec3 burn_ground(vec2 xz, vec3 p, float clock, inout vec3 lit, inout vec3 shd) {
+	vec2 st = (xz - fire_sim_rect.xy) / fire_sim_rect.zw;
+	float edge = 1.0 / float(textureSize(fire_sim_map, 0).x);
+	st.x = clamp(st.x, edge, 1.0 - edge) * 0.5;
+	vec4 terms = texture(fire_sim_map, st);
+	if (terms.x + terms.y + terms.z <= 0.0) {
+		return vec3(0.0);
+	}
+	float k = clamp(dot(lit, vec3(0.3, 0.59, 0.11)) / 0.25, 0.6, 1.2);
+	lit = mix(lit, BURN_STRAW * k, terms.y);
+	shd = mix(shd, BURN_STRAW * k * 0.45, terms.y);
+	lit *= mix(vec3(1.0), vec3(0.55, 0.4, 0.28), terms.z);
+	shd *= mix(vec3(1.0), vec3(0.55, 0.4, 0.28), terms.z);
+	if (terms.x <= 0.0) {
+		return vec3(0.0);
+	}
+	float burnt = smoothstep(0.4, 0.6, terms.x + (p_noise(p * 2.1 + 31.0) - 0.5) * 0.4);
+	float tone = floor(terms.w * 6.0 + 0.5) / 6.0;
+	vec3 char_lit = fire_char_of(tone) * BURN_LIFT;
+	lit = mix(lit, char_lit, burnt);
+	shd = mix(shd, char_lit * BURN_SHADE, burnt);
+	vec4 glow = texture(fire_sim_map, st + vec2(0.5, 0.0));
+	float breathe = 0.88 + 0.12 * sin(clock * FIRE_BREATHE + glow.w * 12.0);
+	vec3 g = glow.rgb * glow.rgb * (FIRE_SIM_GLOW_MAX * breathe);
+	float peak = max(g.r, max(g.g, g.b));
+	float band = smoothstep(BURN_STEPS.x, BURN_STEPS.x + 0.05, peak) * 0.3
+		+ smoothstep(BURN_STEPS.y, BURN_STEPS.y + 0.06, peak) * 0.35
+		+ smoothstep(BURN_STEPS.z, BURN_STEPS.z + 0.08, peak) * 0.35;
+	return g / max(peak, 0.001) * band * BURN_GLOW;
+}
 
 // The zone map at a map-frame point (texel i's middle lies at origin + i * step).
 vec4 zone(vec2 xz) {
@@ -120,6 +170,14 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, out vec3 lit, o
 		vec2 muv = ((q + w * 0.3 - layer_grid_origin) / layer_grid_step + 0.5) / size;
 		if (textureLod(water_weights, muv, 0.0).a > 0.3) {
 			role = 4;
+		}
+	}
+	if (char_present) {
+		// Burnt ground over the meadow, the floor and the shore (a road through it stays a road).
+		vec2 csize = vec2(textureSize(char_map, 0));
+		float cw = textureLod(char_map, ((q + w * 0.5 - layer_grid_origin) / layer_grid_step + 0.5) / csize, 0.0).r;
+		if (cw + (p_noise(p * 1.3 + 77.0) - 0.5) * 0.35 > 0.5) {
+			role = 5;
 		}
 	}
 	if (pv > 0.46) {
@@ -284,9 +342,14 @@ void fragment() {
 		lit = mix(lit, foot_col, out_k);
 		shd = mix(shd, foot_col, out_k);
 	}
+	vec3 glow_em = vec3(0.0);
+	if (fire_present != 0 && !skirt) {
+		glow_em = burn_ground(xz, p, TIME, lit, shd);
+	}
+	EMISSION = glow_em;
 	f_lit = lit;
 	f_shd = shd;
-	f_cut = cut_amp > 0.0 ? be_cut(st) * cut_amp : 0.0;
+	f_cut =cut_amp > 0.0 ? be_cut(st) * cut_amp : 0.0;
 	f_edge = p_noise(p * 0.55 + 71.0);
 }
 

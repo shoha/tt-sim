@@ -23,21 +23,28 @@ extends RefCounted
 ## library (a `paint_role` field beside a surface's PBR set, and a biome's taken from its ground
 ## surface), so an imported library's surfaces keep their meaning; then these tables go.
 
-const ROLES: Array[String] = ["meadow", "floor", "path", "rock", "shore"]
-## The sheet role each ground role paints with (index for index with ROLES).
+const ROLES: Array[String] = ["meadow", "floor", "path", "rock", "shore", "char"]
+## The sheet role each ground role paints with (index for index with ROLES). `char` is the burnt
+## ground (painter-fire): the forest floor's ramp scaled to charcoal (CHAR_SCALE), so it follows
+## the mood and the sun like every ground and is never a fixed colour.
 const TONE_ROLE: Dictionary = {
 	"meadow": "ground",
 	"floor": "floor",
 	"path": "path",
 	"rock": "stone",
 	"shore": "shore",
+	"char": "floor",
 }
+## What the floor's linear colours are multiplied by for the burnt ground: a warm charcoal.
+const CHAR_SCALE := Vector3(0.38, 0.3, 0.26)
 const DEFAULT_ROLE := "meadow"
-## [role, words], first match wins (see the header).
+## [role, words], first match wins (see the header). The char role is the burnt ground: the
+## event fire's ash surface and its burnt biome (FireSweep.ASH, BURNT_BIOME).
 const SURFACE_RULES: Array = [
+	["char", ["ash", "char", "charred", "cinder", "scorched"]],
 	["rock", ["cliff", "scree", "rock", "boulder"]],
 	["shore", ["sand", "mud", "riverbed", "shore", "beach"]],
-	["floor", ["floor", "litter", "duff", "moss", "ash", "peat", "opening", "leaves"]],
+	["floor", ["floor", "litter", "duff", "moss", "peat", "opening", "leaves"]],
 	[
 		"path",
 		[
@@ -60,6 +67,7 @@ const SURFACE_RULES: Array = [
 	["meadow", ["grass", "meadow", "glade", "lawn", "snow"]],
 ]
 const BIOME_RULES: Array = [
+	["char", ["burnt", "burned", "scorched"]],
 	["shore", ["badlands", "desert", "beach", "dunes"]],
 	["meadow", ["meadow", "grassland", "savanna", "alpine", "wetland", "birch", "woodland"]],
 	["floor", ["forest", "taiga", "jungle"]],
