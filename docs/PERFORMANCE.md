@@ -6474,8 +6474,60 @@ second level loaded in the same session hitches once at 708 ms with 84 more surf
 window. The window starts at the title, so it includes the load; the per-frame files
 (`export_cold/*_frames.txt`) carry the counters.
 
-Exported per-cell GPU table (Painted minus Classic): NOT YET MEASURED. The lane was held by other cards
-after the machine crash; the exe and the jobs are ready (handoff `docs/plans/handoffs/painter-default-gate.md`).
+#### Round 2 (main with the canopy window removed, crossing stone and edge fixes; export rebuilt)
+
+Editor build, re-measured on the new main (same procedure, `r2_editor_*` folders; Painted minus Classic, GPU ms):
+
+| Cell | Painted | Classic | P - C | pairs |
+|------|---------|---------|-------|-------|
+| forest tokens summer z8 | 2.524 | 2.432 | +0.09 | +0.08 .. +0.10 |
+| river z8 | 3.077 | 2.848 | +0.23 | +0.17 .. +0.23 |
+| taiga home summer | 2.565 | 2.163 | +0.40 | +0.39 .. +0.42 |
+| village home winter 12 | 2.185 | 3.408 | -1.22 | -1.21 .. -1.20 |
+| village home summer 20 | 2.428 | 3.437 | -1.01 | -1.01 .. -1.00 |
+| fire (live) home | 2.734 | 2.746 | -0.01 | -0.03 .. +0.01 |
+| fire (live) zoom 8 | 2.224 | 2.412 | -0.19 | -0.22 .. -0.17 |
+
+Both readings of the owner's criterion: per cell, only taiga home is over the 0.3 ms bar (+0.40), and it sits on
+the "up to +0.4" allowance. Whole-frame average over these seven standard views (equal weight): -0.24 ms, so
+Painted is at or below Classic overall (-0.6 ms if the mid-burn fire frame, -2.0, is counted as a view).
+
+Exported per-cell GPU table: NOT OBTAINABLE on this machine, and why. The exported exe (release and debug template,
+windowed and exclusive fullscreen, vsync mode 0 from `settings.cfg`, from `override.cfg` `window/vsync/vsync_mode=0` and
+from the harness's `vsync_off` op, and under a second exe name, so not an NVIDIA per-exe profile) runs at exactly 60 fps
+(the display's refresh rate) in every scene, the title screen included (103 draw calls), with 17 to 21 ms of
+`TIME_PROCESS` per frame, while the editor binary on the same project, look and level runs at 320 to 418 fps with
+2.8 ms (`r2_export_diag*`, `r2_editor_diag`, `jobs/diag.gd`: the editor reports vsync 1 until `vsync_off` and then
+uncapped; the exe stays at 60 either way). With the GPU at about 4 ms of a 16.7 ms frame it downclocks, and the GPU
+medians scatter by +-0.3 ms and more (taiga Classic 5.09, 5.01, 3.21 in one run), so no Painted-minus-Classic figure
+from the exe is meaningful. The cause was not found (not vsync, `Engine.max_fps` 0, not focus, not the display mode);
+it is a harness blocker for exported GPU numbers, and it also means the exe never ran uncapped, so whether the
+shipped game itself is capped to the refresh rate with vsync disabled in Settings is a question for the owner (the
+exe reported mode 0 and presented at 60 Hz).
+
+#### The second-level hitch and the editor segfault (round 2)
+
+Per-frame logging in the exe (`jobs/frames.gd`: frame time, pipeline counters, PainterWarmup phase, whether the
+loader's overlay is up; `r2_export_hitch0..2`, three cold runs, fresh user folder, vsync on):
+- The warm-up has always finished (phase ALL_DONE) before the first play. Pipelines still compile at each level: the
+  surface counter grows by 151 (forest, first), 124 (taiga) and 176 (village) per level, with frames of 100 to 220 ms
+  while the overlay is up (the cover hides them).
+- `hitch1` (the first completed run): after the cover lifted, one frame of 1236 ms (forest, 1.3 s after the
+  reveal) and one of 763 ms (taiga, 0.8 s after), each with only +2 surface and +1 specialization pipelines, a tree-cell
+  count unchanged: not the painted trees' install, and a stall far larger than the compile counters explain, so
+  most likely the driver compiling a shader the engine had never asked it for before. `hitch2` (a fresh folder again,
+  the NVIDIA driver cache now warm) had no frame above 207 ms, all of them under the cover. So the 700 ms hitch is not
+  reproducible on demand here: it needs a cold driver cache, which was not cleared (not ours to delete).
+- No code change was made: the warm-up compiles one triangle per shader and vertex layout, not a MultiMesh draw, and
+  that is the likely hole (each new level adds 124 to 176 pipelines), but a fix that draws every level's real
+  instances before the reveal is not small; the least invasive candidate is to hold the cover a few more frames after the
+  Painted apply so the first draws' compiles happen under it. Not implemented, not measured.
+- The editor segfaults (exit 139) on the first run of a freshly built level and a crash of one cold exported run (exit
+  0xC0000005) are the same family: the Windows event log for the exe names the faulting module `nvgpucomp64.dll`
+  (the NVIDIA driver's shader compiler, 32.0.16.2124), offset 0x1745ac. Repro: a fresh user folder, first play of a
+  Painted level in a new process (1 of 4 cold exported runs; 2 of about 8 first runs in the editor); intermittent. It
+  looks like an NVIDIA driver crash under concurrent pipeline compiles (the warm-up's six threads against the
+  engine's own), not a script fault.
 
 ### Linux (WSL2 Ubuntu 24.04, Godot 4.7.2 Linux editor binary, Mesa llvmpipe Vulkan 1.4, Forward+)
 
