@@ -123,10 +123,13 @@
      lush green meadow). */
   dry-hue: 88;  dry-chroma: 0.85;  dry-lift: 0.03;
   drygrass-hue: 92;  drygrass-chroma: 0.95;  drygrass-lift: 0.07;
-  ash-hue: 40;  ash-chroma: 1.5;  ash-lift: -0.29;
+  ash-hue: 48;  ash-chroma: 1.9;  ash-lift: -0.27;
   earth-hue: 52;  earth-chroma: 1.9;  earth-lift: -0.13;
   /* A cactus and an agave: the leaf turned to a blue green and a little deeper. */
   cactus-hue: 172;  cactus-chroma: 0.7;  cactus-lift: -0.08;
+  /* A burnt forest's dead wood (snags, logs, stumps): the bark role turned nearly neutral and a
+     step darker, so the standing trunks read as char against the ash ground. */
+  charcoal-hue: 45;  charcoal-chroma: 0.45;  charcoal-lift: -0.2;
 
   /* The water (PainterWater, painter_water.gdshader; card painter-water): one luminous wash in
      three depth bands, shallows lightest and most turquoise, the deep the most saturated blue,
@@ -139,7 +142,7 @@
   water-shallow: oklch(0.86 0.090 190);  water-mid: oklch(0.72 0.110 215);
   water-deep: oklch(0.60 0.115 238);
   water-lit: oklch(0.90 0.060 215);  water-shade: oklch(0.50 0.100 250);
-  water-foam: oklch(0.98 0.015 200);  water-glint: oklch(0.99 0.030 95);
+  water-foam: oklch(0.98 0.015 200);  water-glint: oklch(0.97 0.095 92);
   water-ice: oklch(0.93 0.030 235);
   water-strokes: 0.55;  water-stroke-len: 1.5;  water-boil: 3.2;  water-glints: 0.8;
   water-opacity: 0.92;  water-foam-width: 0.22;  ice-over: 0;
@@ -435,9 +438,9 @@
     roof-snow: 0.45;
     /* Open water a slate teal, the still ponds frozen to a pale periwinkle (ice-over), a silver
        low glint; the shallows stay a clear pale teal. */
-    water-shallow: oklch(0.82 0.060 200);  water-mid: oklch(0.62 0.070 215);
-    water-deep: oklch(0.45 0.070 235);  water-lit: oklch(0.86 0.040 215);
-    water-shade: oklch(0.38 0.070 245);  water-foam: oklch(0.98 0.012 230);
+    water-shallow: oklch(0.84 0.085 196);  water-mid: oklch(0.67 0.100 212);
+    water-deep: oklch(0.50 0.105 232);  water-lit: oklch(0.89 0.060 210);
+    water-shade: oklch(0.42 0.095 242);  water-foam: oklch(0.98 0.012 230);
     water-glint: oklch(0.97 0.020 230);  water-ice: oklch(0.92 0.040 270);
     ice-over: 1;  water-strokes: 0.5;  water-glints: 0.6;
   }

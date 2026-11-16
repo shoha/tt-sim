@@ -382,11 +382,13 @@ void fragment() {
 	float live = (1.0 - ice_k) * smoothstep(0.08, 0.4, column);
 	float px = world_units_per_pixel;
 	float jitter = mix(1.1, 0.4, flow_k);
-	vec2 la = stroke_layer(p, dir, jitter, flow_ws, 1.0, CELL, p_strokes, p_stroke_len, 0.11, p_boil, px, vec3(0.0));
+	// Still water (a pond) takes more strokes than a river: its wash has no flow to carry the eye.
+	float share = p_strokes * (1.0 + 0.9 * (1.0 - flow_k));
+	vec2 la = stroke_layer(p, dir, jitter, flow_ws, 1.0, CELL, share, p_stroke_len, 0.11, p_boil, px, vec3(0.0));
 	x = mix(x, p_lit, la.x * live);
 	a = max(a, la.x * live * 0.9);
 	if (fine) {
-		vec2 lb = stroke_layer(p, dir, jitter, flow_ws, 9.0, CELL * 1.13, p_strokes * 0.8, p_stroke_len * 1.2, 0.13, p_boil * 1.3, px, vec3(0.0));
+		vec2 lb = stroke_layer(p, dir, jitter, flow_ws, 9.0, CELL * 1.13, share * 0.8, p_stroke_len * 1.2, 0.13, p_boil * 1.3, px, vec3(0.0));
 		x = mix(x, p_shade, lb.x * live * 0.85);
 		a = max(a, lb.x * live * 0.95);
 	}

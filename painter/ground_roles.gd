@@ -59,6 +59,7 @@ const DERIVED: Dictionary = {
 	"earth": ["path", "earth"],
 	"dry-grass": ["grass", "drygrass"],
 	"cactus": ["leaf", "cactus"],
+	"charcoal": ["bark", "charcoal"],
 }
 ## The zone map's second texture holds these (r dry, g ash, b earth): index in ROLES from here.
 const BIOME_ROLES_FROM := 5

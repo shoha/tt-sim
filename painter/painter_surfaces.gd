@@ -334,7 +334,7 @@ func solid_meshes() -> Dictionary:
 	for entry: Array in _swapped:
 		if (
 			int(entry[4]["kind"]) == PainterPlantRoles.KIND_SOLID
-			and str(entry[4]["role"]) in ["stone", "bark"]
+			and str(entry[4]["role"]) in ["stone", "bark", PainterPlantRoles.CHARCOAL_ROLE]
 		):
 			out[(entry[0] as Mesh).get_instance_id()] = true
 	return out
@@ -894,7 +894,8 @@ static func _tone_plant(
 	var low := int(entry["kind"]) in [PainterPlantRoles.KIND_GRASS, PainterPlantRoles.KIND_FLOWER]
 	# Logs and stumps shade like the painted stems, to their own brown (painter-trees-polish: the
 	# mood's full violet pull read maroon on a log's shaded side at a lower sun).
-	var prefix := "grass-" if low else ("bark-" if str(entry["role"]) == "bark" else "")
+	var wood := str(entry["role"]) in ["bark", PainterPlantRoles.CHARCOAL_ROLE]
+	var prefix := "grass-" if low else ("bark-" if wood else "")
 	var tone_role := str(entry["role"])
 	var derived := Vector3(-1.0, 0.0, 0.0)
 	if PainterGroundRoles.DERIVED.has(tone_role):

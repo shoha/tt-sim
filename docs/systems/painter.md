@@ -785,6 +785,17 @@ compiles none.
 - One-offs left on the first Painted install: the painter scripts' GDScript compile (about 0.5 s
   debug; the warm-up's coordinator thread now loads them off the main thread) and `ground+plant retone` (about 130 ms the first
   time). House builds with manner records cost +27 to 45 % in procgen's recording, not in `painter/`.
+- **`ERROR: Invalid Task ID` at `worker_thread_pool.cpp:408`** (painter-loose-ends, 2026-11-16): a
+  render job that leaves one map and plays the next while the warm-up's `again` run is still
+  building prints it once, with the backtrace `PainterWarmup._work` (the line of
+  `RenderingServer.mesh_create_from_surfaces`). It reproduced in the first full job that
+  played three saved maps in a row (once, before the second play; batch 2's job with the same
+  transitions printed none), so it is a race. The id is the engine's own: the
+  rendering device waits on a pipeline-compile task of the WorkerThreadPool that another thread
+  (the map load's draws, or another warm-up worker making the same pipeline) already finished and
+  released; no script in `painter/` holds or waits on a task id (the warm-up uses `Thread`, the
+  workers share a mutex-guarded index). The frames after it were normal. Not guarded in script (a guard would serialise the workers, the cost the
+  worker count exists to avoid); kept here so a repeat is not read as a regression.
 
 ## Buildings
 
@@ -1359,6 +1370,19 @@ The look (`painter_water.gdshader`, no screen texture):
 `painter_waterfall.gdshader` is the fall: unshaded, the same vertex contract as Classic's, chunky
 white streaks over the shallow and mid tones, with the sheet's foam.
 
+Full-size verdicts (card painter-loose-ends, 2026-11-16, frames in
+`compare/painter_final29_loose_ends/`): summer, dusk, night and winter read as the sheet's moods
+at zoom 8 and 20, the Low water quality (second layer and glints off) is a plausible plainer
+version, the SubmergedMarker ring draws over the water and the fall, the submerged lower body of a
+token at eye level is a translucent teal form (not grey), and the river past the map edge carries on
+into the skirt. Changes from that pass: the glint is gold (`water-glint` oklch 0.97 0.095 92: the
+earlier near-white tick read as a stroke), winter's open water is a luminous slate teal (chroma
+about 0.09 to 0.105, not the first grey-teal), and still water takes more strokes than a river
+(`share = p_strokes * (1 + 0.9 * (1 - flow_k))`: a pond had three or four dabs in 40 m2, now a
+dozen). Open: the in-map ground and the ground skirt differ in tone and brushwork at the map edge (a
+hard seam), the river ribbon repeats one stroke row mirrored at the edge, and the shore lap
+glitters in small triangles on a pond's steep bank.
+
 Sheet: roles `water-shallow`, `water-mid`, `water-deep`, `water-lit`, `water-shade`, `water-foam`,
 `water-glint`, `water-ice`; numbers `water-strokes`, `water-stroke-len`, `water-boil`,
 `water-glints`, `water-opacity`, `water-foam-width`, `ice-over`; per-mood overrides in
@@ -1422,6 +1446,18 @@ painter_final25_coverage/matrix.md`. What the card filled:
   kinds (`wall_trim`, `frame_trim`, `door_trim`, `trim_plaster`, `frame_plaster`, `frame_stone`)
   and the `ornament_wood`, `ornament_bark`, `ornament_cloth` and `canopy_leaf` parts have KINDS rows.
   Metal (`door_metal`, `ornament_metal`) and glass stay Classic by earlier decision.
+- **Burnt forest, loose ends** (card painter-loose-ends, 2026-11-16; frames
+  `compare/painter_final29_loose_ends/`). The ash ground was retuned to hue 48, chroma x1.9, lift
+  -0.27 (a warm ember brown, not the mauve of the first retune), and the burnt forest's dead wood
+  (the DeadTree snags, logs, stumps, sticks, dead shrubs: any bark-role asset whose biome folder
+  has the ground role `ash`) is the `charcoal` role (`PainterPlantRoles.CHARCOAL_ROLE`, DERIVED
+  from `bark` by `charcoal-hue 45`, `-chroma 0.45`, `-lift -0.2`), so the trunks read as char against
+  the ash instead of honey wood on brown ground. `for_surface` returns it for a `charred` entry's
+  bark surface; other biomes' snags and logs keep the bark role.
+- **Crossings** (timber `Wood`, `Stones`, `Arch`, `Ford`) were captured over a river at full size:
+  all four are painted and match the painted water and ground. The arch and the ford's bank slabs
+  take the wall-stone tone, which is pale and slightly bleached against sand banks (open: a
+  crossing-specific darker stone key).
 - **Known gaps** are listed in the matrix with their effort: baked settlement furnishings, field
   plants, round and profile roofs (procgen records).
 

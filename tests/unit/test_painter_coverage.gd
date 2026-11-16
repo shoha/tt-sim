@@ -148,3 +148,30 @@ func test_the_desert_plants_are_not_green_leaf_crowns() -> void:
 		PainterPlantRoles.KIND_CROWN,
 		"a real bush stays a crown"
 	)
+
+
+func test_a_burnt_forests_dead_wood_is_charcoal_and_other_biomes_keep_their_bark() -> void:
+	var snag := PainterPlantRoles.of("burnt_forest_summer_s1/Tree_DeadTree_v0_burnt_forest", "tree")
+	assert_true(bool(snag.get("charred", false)), "a burnt snag is flagged")
+	var bark := ORMMaterial3D.new()
+	bark.resource_name = "Tree_DeadTree_v0_Bark"
+	var surface := PainterPlantRoles.for_surface(snag, bark)
+	assert_eq(surface["role"], PainterPlantRoles.CHARCOAL_ROLE)
+	assert_eq(surface["kind"], PainterPlantRoles.KIND_SOLID)
+	var elsewhere := PainterPlantRoles.of("savanna_summer_s1/Tree_DeadTree_v0", "tree")
+	assert_eq(PainterPlantRoles.for_surface(elsewhere, bark)["role"], "bark", "a savanna snag")
+	for word in ["Log_Medium", "Stump_Large", "Branch_Pile"]:
+		var wood := PainterPlantRoles.of("burnt_forest_summer_s1/" + word + "_v0", "")
+		assert_eq(wood["role"], PainterPlantRoles.CHARCOAL_ROLE, "%s is char" % word)
+		var green := PainterPlantRoles.of("temperate_forest_summer_s1/" + word + "_v0", "")
+		assert_eq(green["role"], "bark", "%s elsewhere is wood" % word)
+	var shrub := PainterPlantRoles.of("burnt_forest_summer_s1/Bush_DeadShrub_v0", "tree")
+	assert_eq(shrub["role"], PainterPlantRoles.CHARCOAL_ROLE)
+
+
+func test_charcoal_is_darker_and_less_chromatic_than_the_bark_it_comes_from() -> void:
+	var sheet := PainterSheet.load_sheet("core")
+	var base := PainterSheet.tone_lch(sheet, "summer", "bark", 60.0)
+	var char_tone := PainterGroundRoles.derived(sheet, "summer", PainterPlantRoles.CHARCOAL_ROLE, 60.0)
+	assert_lt(char_tone.x, base.x - 0.1, "darker")
+	assert_lt(char_tone.y, base.y, "less chroma")

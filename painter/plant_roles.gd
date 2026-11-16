@@ -28,6 +28,10 @@ const CROWN_TONES := "res://painter/trees/tree_tones.gd"
 const DRY_GRASS_ROLE := "dry-grass"
 ## The tone role of a cactus and an agave (PainterGroundRoles.DERIVED).
 const CACTUS_ROLE := "cactus"
+## The tone role of wood in a burnt forest (a snag, a log, a stump, a stick): the bark role derived
+## darker and nearly neutral, so the dead trees read as char against the ash ground, not as honey
+## wood (PainterGroundRoles.DERIVED; painter-loose-ends).
+const CHARCOAL_ROLE := "charcoal"
 ## [kind, sheet role, words], first match wins (substrings of the asset id, lower case).
 const RULES: Array = [
 	[
@@ -79,8 +83,9 @@ static func of(asset_id: String, wind_category: String, flower: bool = false) ->
 		return _entry(KIND_SOLID, CACTUS_ROLE)
 	if id.contains("agave"):
 		return _entry(KIND_MASS, CACTUS_ROLE)
+	var burnt := _burnt_biome(asset_id)
 	if id.contains("deadshrub"):
-		return _entry(KIND_MASS, "bark")
+		return _entry(KIND_MASS, CHARCOAL_ROLE if burnt else "bark")
 	if wind_category == "tree":
 		for word in TREE_MASS_WORDS:
 			if id.contains(word):
@@ -90,6 +95,7 @@ static func of(asset_id: String, wind_category: String, flower: bool = false) ->
 		if PainterTreeSpecies.species_for(asset_id).is_empty():
 			var entry := _entry(KIND_MASS, "leaf")
 			entry["by_surface"] = true
+			entry["charred"] = burnt
 			return entry
 		return {}
 	if flower:
@@ -100,6 +106,8 @@ static func of(asset_id: String, wind_category: String, flower: bool = false) ->
 				var role := str(rule[1])
 				if int(rule[0]) == KIND_GRASS and _dry_biome(asset_id):
 					role = DRY_GRASS_ROLE
+				elif role == "bark" and burnt:
+					role = CHARCOAL_ROLE
 				return _entry(int(rule[0]), role)
 	# Anything else that sways is a leaf mass; anything still is a stone.
 	if wind_category != "":
@@ -115,7 +123,7 @@ static func for_surface(entry: Dictionary, material: Material) -> Dictionary:
 		return entry
 	var name := "" if material == null else material.resource_name.to_lower()
 	if name.contains("bark"):
-		return _entry(KIND_SOLID, "bark")
+		return _entry(KIND_SOLID, CHARCOAL_ROLE if bool(entry.get("charred", false)) else "bark")
 	return _entry(KIND_MASS, "leaf")
 
 
@@ -128,6 +136,15 @@ static func _dry_biome(asset_id: String) -> bool:
 		return false
 	var role := PainterGroundRoles.biome_role(folder.get_file())
 	return role == "dry" or role == "earth" or role == "ash"
+
+
+## True when the asset's biome folder is a burnt forest (the ground role ash), whose dead wood is
+## charcoal.
+static func _burnt_biome(asset_id: String) -> bool:
+	var folder := asset_id.get_base_dir()
+	if folder.is_empty():
+		return false
+	return PainterGroundRoles.biome_role(folder.get_file()) == "ash"
 
 
 static func _entry(kind: int, role: String) -> Dictionary:
