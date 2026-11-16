@@ -460,11 +460,11 @@ func _bind_wet() -> void:
 	_ground.set_shader_parameter(&"water_present", wet != null)
 
 
-## The scorched ground's share per height sample as an R8 image (the `char` role has no channel in the
-## zone maps: it is rare, so its map exists only when the document names an ash surface, the scar a
-## fire event stamps, and costs nothing else), null when it names none (pure; painter-fire). A burnt
-## BIOME is not char: it is the `ash` role of the biome zone map (painter-coverage), and the scar
-## lies over it. A surface weight is the share.
+## The scorched ground's share per height sample as an R8 image (the `char` role has no channel in
+## the zone maps: it is rare, so its map exists only when the document names an ash surface, the
+## scar a fire event stamps, and costs nothing else), null when it names none (pure; painter-fire).
+## A burnt BIOME is not char: it is the `ash` role of the biome zone map (painter-coverage), and
+## the scar lies over it. A surface weight is the share.
 static func char_image(doc: MapDocument) -> Image:
 	var any := false
 	var surface_char := PackedByteArray()

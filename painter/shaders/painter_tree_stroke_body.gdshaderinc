@@ -1184,7 +1184,7 @@ void vertex() {
 				}
 				if (!is_shadow) {
 					float heat_b = 0.0;
-					v_col = burn_paint(v_col, s_b, rb, heat_b);
+					v_col = burn_paint(v_col, s_b, rb, !foliage, heat_b);
 					v_heat = heat_b;
 				}
 			}

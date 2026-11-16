@@ -927,7 +927,7 @@ void fragment() {
 #ifdef TREE_BURN
 	{
 		float burn_heat = 0.0;
-		ALBEDO = burn_paint(ALBEDO, burn_s, burn_r, burn_heat);
+		ALBEDO = burn_paint(ALBEDO, burn_s, burn_r, !foliage, burn_heat);
 		EMISSION = ALBEDO * burn_heat;
 	}
 #endif

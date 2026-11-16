@@ -32,13 +32,24 @@ bool burn_gone(float s, float r, bool leaf) {
 
 // The mark `s` past catching, in the painted fire's colours (linear), and how much of it glows
 // (`heat`, 0..1, the emission's share of the colour).
-vec3 burn_paint(vec3 col, float s, float r, out float heat) {
+vec3 burn_paint(vec3 col, float s, float r, bool wood, out float heat) {
 	heat = 0.0;
 	if (s <= 0.0) {
 		return col;
 	}
 	float lum = dot(col, vec3(0.3, 0.59, 0.11));
 	vec3 char_c = mix(vec3(0.03, 0.022, 0.02), vec3(0.075, 0.052, 0.04), r) + vec3(lum * 0.06);
+	if (wood) {
+		// A trunk or limb does not go in bands (that striped a bare trunk up its length): it kisses
+		// to orange, glows down through ember red and settles into charcoal in one smooth fall, and
+		// the snag it leaves is charcoal, not a red-brown wood.
+		vec3 snag = mix(vec3(0.026, 0.02, 0.018), vec3(0.06, 0.045, 0.036), r) + vec3(lum * 0.03);
+		float t = s / (BURN_EMBER * 2.2);
+		vec3 hot = mix(vec3(1.0, 0.42, 0.07), vec3(0.5, 0.1, 0.035), smoothstep(0.0, 0.5, t));
+		float cool = smoothstep(0.35, 1.0, t);
+		heat = 0.6 * (1.0 - cool);
+		return mix(hot, snag, cool);
+	}
 	float e = s / BURN_EMBER;
 	if (e < 1.0) {
 		if (e < 0.22) {
