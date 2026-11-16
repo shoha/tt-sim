@@ -19,9 +19,24 @@ const MAX_VISIBLE_TOASTS := 5
 const DEFAULT_DURATION := 3.0
 ## A toast with an action stays long enough to read it and reach for the button.
 const ACTION_DURATION := 6.0
-const ICON_SIZE := 20
+const ICON_SIZE := 24
+## A kept toast (duration 0) has a close control this big, and an error among them leaves by
+## itself after this many seconds (the pointer on it holds it).
+const CLOSE_PX := 40.0
+const ERROR_KEPT_S := 12.0
+## The column's resting distance from the bottom edge (the scene's margin_bottom).
+const REST_MARGIN_PX := 80.0
 ## The meta a toast carries its tag in (dismiss_tag).
 const TAG_META := &"tt_toast_tag"
+## Its words, kind and repeat count, for _repeat_of.
+const MESSAGE_META := &"tt_toast_message"
+const TYPE_META := &"tt_toast_type"
+const COUNT_META := &"tt_toast_count"
+## A toast the pointer has left stays at least this long.
+const HOVER_GRACE_S := 1.0
+## A toast arrives sliding this far up into place while it fades in (UI_TASTE M3: the offset
+## transform, never the container's layout) and leaves sliding the other way.
+const SLIDE_PX := 10.0
 ## A toast hugs its one line up to this width and wraps past it: room for a two-line warning
 ## ("Maps are built offline. Leave the session to build or edit a map.") rather than three,
 ## and a short one ("Raise undone") is no wider than its words (the 2a critic: a 360 px chip
@@ -64,6 +79,13 @@ func _process(_delta: float) -> void:
 	var margin := toast_vbox.get_parent() as Control
 	margin.offset_left = span.x - rect.position.x
 	margin.offset_right = span.y - rect.end.x
+	# Above the hint bar when it is on show (two lines at 720p stand taller than the column's
+	# resting margin), by the bar's height beyond that margin and a 8 px gap.
+	var bar := get_tree().get_first_node_in_group(InputHints.GROUP) as InputHints
+	var lift := 0.0
+	if bar != null and bar.top_edge() < INF:
+		lift = maxf(0.0, rect.end.y - bar.top_edge() + 8.0 - REST_MARGIN_PX)
+	margin.offset_bottom = -lift
 
 
 ## Show a toast for `duration` seconds, or as long as its words take to read when that is
@@ -80,37 +102,101 @@ func show_toast(
 	icon: String = "",
 	tag: StringName = &"",
 ) -> void:
+	var has_action := action.is_valid() and not action_label.is_empty()
+	# The same words again (a move repeated, a save pressed twice) join the toast already up:
+	# it stays a little longer and counts, instead of a second chip stacking (toast overload).
+	if not has_action and _repeat_of(message, type, tag, maxf(duration, reading_seconds(message))):
+		return
 	var toast = _create_toast(message, type, icon)
 	toast.set_meta(TAG_META, tag)
-	var has_action := action.is_valid() and not action_label.is_empty()
+	toast.set_meta(MESSAGE_META, message)
+	toast.set_meta(TYPE_META, type)
 	if has_action:
 		var button := _action_button(action_label, action_icon)
 		button.pressed.connect(_on_action_pressed.bind(toast, action))
 		toast.get_child(0).add_child(button)
+	# A toast with no time on it (duration 0) stays until sent away: it carries a close control,
+	# and an error among them goes by itself after ERROR_KEPT_S, so none piles up unseen.
+	var lifetime := duration
+	if duration <= 0.0:
+		toast.get_child(0).add_child(_close_button(toast))
+		toast.gui_input.connect(_on_kept_input.bind(toast))
+		if type == ToastType.ERROR:
+			lifetime = ERROR_KEPT_S
 	toast_vbox.add_child(toast)
 	_fit_one_line(toast, max_width(type, has_action))
 	_active_toasts.append(toast)
 
 	# Limit visible toasts
 	while _active_toasts.size() > MAX_VISIBLE_TOASTS:
-		var oldest = _active_toasts.pop_front()
+		var oldest: Control = _active_toasts[_eviction_index()]
 		if oldest and is_instance_valid(oldest):
 			_dismiss_toast(oldest, true)
+		else:
+			_active_toasts.erase(oldest)
 
 	# Animate in
 	_animate_toast_in(toast, type)
 
-	# Schedule dismissal. Held weakly: a toast dismissed at once (the oldest past
-	# MAX_VISIBLE_TOASTS) is freed before its timer runs, and a lambda that captured it
-	# errors on the freed capture.
-	if duration > 0:
-		var held: WeakRef = weakref(toast)
-		get_tree().create_timer(maxf(duration, reading_seconds(message))).timeout.connect(
-			func() -> void:
-				var shown: Control = held.get_ref()
-				if shown != null:
-					_dismiss_toast(shown, false)
-		)
+	# Schedule dismissal on a timer the toast owns, so it goes with the toast when that is
+	# freed early (the oldest past MAX_VISIBLE_TOASTS) and holds while the pointer rests on
+	# it: a toast being read or aimed at (its Undo) never leaves under the pointer.
+	if lifetime > 0:
+		var timer := Timer.new()
+		timer.name = "DismissTimer"
+		timer.one_shot = true
+		timer.wait_time = maxf(lifetime, reading_seconds(message))
+		toast.add_child(timer)
+		timer.timeout.connect(_dismiss_toast.bind(toast, false))
+		timer.start()
+		toast.mouse_entered.connect(timer.set_paused.bind(true))
+		toast.mouse_exited.connect(_resume_after_hover.bind(timer))
+
+
+## The index of the toast that makes room for a new one: the oldest that is not an error (an
+## error says what failed and how to recover, and a run of good news must not push it off
+## screen unread), else the oldest of all.
+func _eviction_index() -> int:
+	for i in _active_toasts.size():
+		var toast: Control = _active_toasts[i]
+		if not is_instance_valid(toast) or toast.get_meta(TYPE_META, -1) != ToastType.ERROR:
+			return i
+	return 0
+
+
+## Whether a toast with this `message` and `type` is already up (an action toast never joins):
+## if so it counts one more ("x2") and restarts its timer for `seconds`, and this returns true.
+func _repeat_of(message: String, type: ToastType, tag: StringName, seconds: float) -> bool:
+	for toast in _active_toasts:
+		if not is_instance_valid(toast) or toast.is_queued_for_deletion():
+			continue
+		if toast.get_meta(MESSAGE_META, "") != message or toast.get_meta(TYPE_META, -1) != type:
+			continue
+		if toast.get_meta(TAG_META, &"") != tag:
+			continue
+		var count: int = int(toast.get_meta(COUNT_META, 1)) + 1
+		toast.set_meta(COUNT_META, count)
+		var badge := toast.get_child(0).get_node_or_null("Count") as Label
+		if badge == null:
+			badge = Label.new()
+			badge.name = "Count"
+			badge.theme_type_variation = &"Caption"
+			badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			toast.get_child(0).add_child(badge)
+		badge.text = "x%d" % count
+		var timer := toast.get_node_or_null("DismissTimer") as Timer
+		if timer != null:
+			timer.start(seconds)
+		return true
+	return false
+
+
+## The pointer left a toast: it stays a moment longer, then goes.
+func _resume_after_hover(timer: Timer) -> void:
+	if not is_instance_valid(timer):
+		return
+	timer.paused = false
+	timer.start(maxf(timer.time_left, HOVER_GRACE_S))
 
 
 ## Fades out every toast shown with `tag` (a toast whose subject changed under it: a removal
@@ -191,6 +277,28 @@ func _fit_one_line(toast: Control, limit_px: float) -> void:
 	toast.custom_minimum_size.x = minf(ceilf(rest + words) + 2.0, limit_px)
 
 
+## The close control of a kept toast: a 40 px ghost button with the cross icon, so the way out
+## is visible and not only a click on the words (W7: a tooltip and an accessible name).
+func _close_button(toast: Control) -> Button:
+	var button := AnimatedButton.new()
+	button.name = "Close"
+	button.icon = IconButton.load_icon("x")
+	button.theme_type_variation = &"Ghost"
+	button.custom_minimum_size = Vector2(CLOSE_PX, CLOSE_PX)
+	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	button.tooltip_text = tr("Dismiss")
+	button.accessibility_name = tr("Dismiss this message")
+	button.pressed.connect(_dismiss_toast.bind(toast, false))
+	return button
+
+
+## A click on a kept toast's words sends it away too.
+func _on_kept_input(event: InputEvent, toast: Control) -> void:
+	var click := event as InputEventMouseButton
+	if click != null and click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
+		_dismiss_toast(toast, false)
+
+
 ## The action at a toast's end: a quiet Secondary button with its icon and a verb.
 func _action_button(label: String, icon: String) -> Button:
 	var button := AnimatedButton.new()
@@ -211,13 +319,19 @@ func _on_action_pressed(toast: Control, action: Callable) -> void:
 
 
 func _animate_toast_in(toast: Control, type: ToastType = ToastType.INFO) -> void:
-	# Fade-only animation — avoids fighting with VBoxContainer layout management.
+	# Fade and a short slide on the offset transform, which does not re-sort the column.
+	# Reduce motion keeps the fade (short) and drops the slide (UI_TASTE M5).
 	toast.modulate.a = 0.0
+	toast.offset_transform_enabled = true
+	toast.offset_transform_position = Vector2(0.0, UiMotion.travel(SLIDE_PX, 0.0))
 
 	var tween = create_tween()
+	tween.set_parallel(true)
 	tween.set_ease(Tween.EASE_OUT)
-	tween.set_trans(Tween.TRANS_CUBIC)
-	tween.tween_property(toast, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
+	tween.set_trans(UiMotion.ARRIVE_TRANS)
+	var seconds := UiMotion.fade_s(UiMotion.PANEL_IN_S)
+	tween.tween_property(toast, "modulate:a", 1.0, seconds)
+	tween.tween_property(toast, "offset_transform_position", Vector2.ZERO, seconds)
 
 	# Play a sound matching the toast type
 	match type:
@@ -237,6 +351,8 @@ func _dismiss_toast(toast: Control, immediate: bool) -> void:
 
 	# Remove from tracking
 	var idx = _active_toasts.find(toast)
+	if idx < 0 and not immediate:
+		return  # already leaving: its timer fired again after dismiss_tag or an Undo
 	if idx >= 0:
 		_active_toasts.remove_at(idx)
 
@@ -244,8 +360,16 @@ func _dismiss_toast(toast: Control, immediate: bool) -> void:
 		toast.queue_free()
 		return
 
+	# The chip no longer counts as a target while it fades (a press on its Undo would land
+	# on nothing), and leaves faster than it arrived (UI_TASTE M1).
+	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var tween = create_tween()
+	tween.set_parallel(true)
 	tween.set_ease(Tween.EASE_IN)
-	tween.set_trans(Tween.TRANS_CUBIC)
-	tween.tween_property(toast, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
+	tween.set_trans(UiMotion.EXIT_TRANS)
+	var seconds := UiMotion.fade_s(UiMotion.PANEL_OUT_S)
+	tween.tween_property(toast, "modulate:a", 0.0, seconds)
+	if not UiMotion.reduced():
+		toast.offset_transform_enabled = true
+		tween.tween_property(toast, "offset_transform_position", Vector2(0.0, SLIDE_PX * 0.5), seconds)
 	tween.finished.connect(toast.queue_free)

@@ -33,6 +33,13 @@ extends CanvasLayer
 ## open or close (DrawerContainer.WATCHERS), an obstacle when it shows or hides; a window
 ## resize and a change of chips refit it too.
 
+## The group the bar is in, for the toast column to find it.
+const GROUP := &"input_hints_bar"
+## The hints stay this long with no change, then the bar fades (it comes back when the hints
+## change, or when the pointer goes to the bottom edge).
+const IDLE_S := 20.0
+## The bottom band (canvas px) in which the pointer wakes a faded bar.
+const WAKE_BAND_PX := 96.0
 ## How far below its resting place the bar starts its entrance, in pixels.
 const SLIDE_DISTANCE := 12.0
 const BAR_IN_DURATION := 0.25
@@ -63,6 +70,10 @@ var _bar_shown: bool = false
 ## Where the backdrop stands for the open drawers: its x shift.
 var _shift_tween: Tween
 var _shift: float = 0.0
+## The idle fade: the bar's backdrop fades out when the hints have stood unchanged for IDLE_S.
+var _idle_timer: Timer
+var _idle_tween: Tween
+var _idle_faded: bool = false
 
 @onready var hints_container: HFlowContainer = %HintRow
 @onready var _bar: MarginContainer = %HintBar
@@ -75,7 +86,60 @@ func _ready() -> void:
 	_bar.offset_transform_position = Vector2(0.0, SLIDE_DISTANCE)
 	_backdrop.offset_transform_enabled = true
 	add_to_group(DrawerContainer.WATCHERS)
+	add_to_group(GROUP)
 	get_viewport().size_changed.connect(on_drawers_moved, CONNECT_DEFERRED)
+	_idle_timer = Timer.new()
+	_idle_timer.name = "IdleTimer"
+	_idle_timer.one_shot = true
+	_idle_timer.wait_time = IDLE_S
+	_idle_timer.timeout.connect(_fade_idle)
+	add_child(_idle_timer)
+
+
+## The y of the bar's top edge while it is on show, INF while it is hidden or faded: the toast
+## column lifts itself above it (ToastContainer._process), so the two never overlap.
+func top_edge() -> float:
+	if not _bar_shown or _idle_faded:
+		return INF
+	return _backdrop.get_global_rect().position.y
+
+
+## The pointer going to the bottom edge, where the bar stands, brings a faded bar back.
+func _input(event: InputEvent) -> void:
+	if not _idle_faded or not event is InputEventMouseMotion:
+		return
+	var rect := get_viewport().get_visible_rect()
+	if get_viewport().get_mouse_position().y >= rect.end.y - WAKE_BAND_PX:
+		_wake()
+
+
+## The bar is on show again: a faded one fades back in, and the idle clock starts over.
+func _wake() -> void:
+	if _idle_timer == null:
+		return
+	_idle_timer.start()
+	if not _idle_faded:
+		return
+	_idle_faded = false
+	_fade_backdrop(1.0, UiMotion.fade_s(UiMotion.PANEL_IN_S))
+
+
+## Nothing has changed the hints for IDLE_S: the bar has taught what it can, so it fades out
+## and the board has the whole bottom edge. A tool's own hints never fade (they are the way
+## to use the tool). The Help key and the bottom edge bring it back.
+func _fade_idle() -> void:
+	if not _tool_hints.is_empty() or not _bar_shown:
+		_idle_timer.start()
+		return
+	_idle_faded = true
+	_fade_backdrop(0.0, UiMotion.fade_s(UiMotion.PANEL_OUT_S * 2.0))
+
+
+func _fade_backdrop(alpha: float, seconds: float) -> void:
+	if _idle_tween and _idle_tween.is_valid():
+		_idle_tween.kill()
+	_idle_tween = create_tween().set_trans(UiMotion.ARRIVE_TRANS).set_ease(Tween.EASE_OUT)
+	_idle_tween.tween_property(_backdrop, "modulate:a", alpha, seconds)
 
 
 ## Centre the bar in the board span the open drawers leave free, as near that centre as the
@@ -310,6 +374,7 @@ func _are_hints_equal(new_hints: Array) -> bool:
 ## the bar is hidden (or on its way out) nobody sees single chips, so stale ones
 ## go at once and new ones arrive opaque; the bar's own entrance carries them.
 func _sync() -> void:
+	_wake()
 	var shown := shown_hints()
 	if shown.is_empty():
 		_show_bar(false)

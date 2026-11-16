@@ -562,7 +562,7 @@ which may only fall): `drawer_container.gd` 12 overrides, `download_queue.gd` / 
   size and Wind motion are in a new Accessibility tab; every row carries a one-sentence
   `Caption` under it, each group a quiet Reset, the footer an unsaved/applied line, the header a
   search box. The row table is `SettingsSpec` (docs/UI_SYSTEMS.md "Settings Menu" says how to add a
-  row); UI_TASTE S5 to S9 are the rules. Group headings use `Heading`, descriptions `Caption`,
+  row); UI_TASTE S5, S6, S8, S9 and S10 (the settings pass) are the rules. Group headings use `Heading`, descriptions `Caption`,
   Reset `Ghost`, the unsaved line `CaptionState`: no colour is set by hand.
 - **Map building (authoring):** done by card ui-authoring (2026-11-15; UI_TASTE "2026-11-15 map
   building", UI_SYSTEMS "Map building chrome"): the tool drawer and rail are paper (a one-constant
@@ -570,10 +570,20 @@ which may only fall): `drawer_container.gd` 12 overrides, `download_queue.gd` / 
   (`_define_drawer`: `DrawerPanel`, `DrawerCard`, `DrawerTab`, `DrawerRail` by `Left` or `Right`,
   and `DrawerMargin`, `DrawerMarginRoomy`), so `drawer_container.gd` has no theme overrides left.
   `avatar_swatch_row.gd` (7 overrides) is the avatar builder's, not map building's, and is open.
-- **Gameplay HUD:** glass is right here (play continues), but the toasts and hint bar are
-  low-contrast small chips over a bright board, the top-right camera disc cluster and the
-  right rail carry no labels, and `Add token` is the lone bottom-right button with no
-  relation to the rail. Toast text and icon sizes are at the 14 px floor.
+- **Gameplay HUD** (card ui-hud, 2026-11-15; the audit is in `docs/research/2026-11-09-prototypes/compare/painter_ui4_hud/notes.md`):
+  glass is right here (play continues). Done: a token roster drawer (T) to find and select a
+  token, toasts that slide, count repeats and pause under the pointer (24 px kind icons), a hint
+  bar that fades once taught, and 40 px bottom actions with an icon and a tooltip each.
+  Round 2 (the UI critic's 12/20): the picked token is marked on the board by a screen-space
+  chalk ring and portrait pin (`TokenFocusMarker`), rows carry the token's portrait and numbered
+  duplicate names, health bars are 4 px with a visible track (the `ProgressSuccess` /
+  `ProgressDanger` variants gained `background`: the `track` role at 0.5), kept toasts have a
+  40 px close control, the camera cluster's buttons are 40 px, and the rail tab says "Tokens".
+  Roles only: the roster takes `CardStrip` / `CardStripSelected`, `Caption`, `H3`, `Ghost` and
+  `ProgressSuccess` / `ProgressDanger`; the one theme change is that track; no override is
+  added (the bypass baseline is unchanged). Still open: the Visuals rail's 36 px items
+  (`IconRail.ITEM_SIZE`, shared with authoring, whose twelve tools would need the height) and
+  the token context menu (left for a later card).
 - **Shared:** title, room, pause and confirms are already paper on the sky and need only the
   per-card polish above; the avatar builder and asset browser (glass over play) were not
   audited in this pass beyond their capture.

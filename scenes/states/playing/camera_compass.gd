@@ -29,7 +29,8 @@ enum Tilt { NONE, FLATTER, TOP_DOWN, STEEPER }
 ## The canvas layer it lives on: above the board, below the menu.
 const LAYER := 1
 const DIAL_RADIUS := 26.0
-const BUTTON_RADIUS := 17.0
+## The buttons' radius: 40 px across, the HUD's target floor (UI_TASTE S7; they were 34 and 26).
+const BUTTON_RADIUS := 20.0
 ## Distance from the dial's centre to a button's centre.
 const BUTTON_REACH := 54.0
 const MARGIN := 16.0
@@ -38,9 +39,9 @@ const RAIL_WIDTH := 44.0
 const SLIDE_SECONDS := 0.25
 ## The tilt row below the dial: arrows TILT_REACH either side of the gauge, one TILT_STEP each.
 const TILT_ROW_GAP := 6.0
-const TILT_BUTTON_RADIUS := 13.0
-const GAUGE_RADIUS := 15.0
-const TILT_REACH := 38.0
+const TILT_BUTTON_RADIUS := 20.0
+const GAUGE_RADIUS := 20.0
+const TILT_REACH := 46.0
 const TILT_STEP := 15.0
 
 var _slide: Tween = null
