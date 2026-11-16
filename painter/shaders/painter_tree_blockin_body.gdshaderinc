@@ -12,6 +12,9 @@
 // Instance: the tree's transform, INSTANCE_CUSTOM (tree row, first unit of this instance).
 
 #include "res://painter/shaders/painter_tree.gdshaderinc"
+#ifdef TREE_BURN
+#include "res://painter/shaders/painter_tree_burn.gdshaderinc"
+#endif
 
 uniform float silhouette = 0.0;
 // A stem's step darker at its foot (PainterOcclusion: 0 off, the sheet's base-dark).
@@ -557,6 +560,18 @@ void fragment() {
 	if (foliage && bare > 0.5) {
 		discard;
 	}
+#ifdef TREE_BURN
+	// painter-fire: this fragment's place in the tree's burn. A crown mass burns away in patches
+	// (the discard is a world noise, so the pieces are bold and the edge is crisp); wood stays.
+	vec4 burn_b5 = texelFetch(tree_tex, ivec2(5, int(v_row + 0.5)), 0);
+	vec4 burn_b6 = texelFetch(tree_tex, ivec2(6, int(v_row + 0.5)), 0);
+	float burn_up = clamp((v_wp.y - MODEL_MATRIX[3].y - (burn_b5.y - burn_b6.y)) / max(2.0 * burn_b6.y, 0.5), 0.0, 1.0);
+	float burn_r = p_noise(v_wp * 1.1 + 5.0);
+	float burn_s = burn_since(burn_up, burn_r);
+	if (burn_gone(burn_s, burn_r, foliage)) {
+		discard;
+	}
+#endif
 	float near7 = cap_on > 1.5 ? smoothstep(0.0, 1.0, lod_level) : 1.0;
 	// Round 15 (row 6: z twig, w ridge). twig: a bare crown has no solid at home zoom (its twig
 	// strokes stand alone); with distance the solid closes, so a far bare wood is soft masses.
@@ -909,6 +924,13 @@ void fragment() {
 			ALBEDO = palette_at(dot(n, to_sun) > 0.05 ? (v_height < cap18 * 0.6 ? 0.9 : 0.5) : 0.12, dep_row, 0.5);
 		}
 	}
+#ifdef TREE_BURN
+	{
+		float burn_heat = 0.0;
+		ALBEDO = burn_paint(ALBEDO, burn_s, burn_r, !foliage, burn_heat);
+		EMISSION = ALBEDO * burn_heat;
+	}
+#endif
 	ALBEDO = haze17(ALBEDO, -VERTEX.z);
 	if (silhouette > 1.5) {
 		ALBEDO = foliage ? vec3(0.0) : vec3(1.0);

@@ -344,6 +344,12 @@ func step(elapsed: float, delta: float) -> void:
 	for tree in _trees:
 		var t := elapsed - float(tree.start)
 		var burn := float(tree.burn)
+		if tree.has("actor"):
+			# The painted tree burns by the same progress, on its own shaders (painter-fire).
+			move_actor(tree, snag_transform(tree.base, elapsed, end))
+			_painted_host().call("set_burn", tree.actor, burn_progress(t, burn))
+			_kindle(tree, t)
+			continue
 		var multimesh := (tree.stand_in as MultiMeshInstance3D).multimesh
 		multimesh.set_instance_custom_data(tree.slot, Color(burn_progress(t, burn), 0.0, 0.0, 0.0))
 		multimesh.set_instance_transform(tree.slot, snag_transform(tree.base, elapsed, end))
@@ -364,6 +370,8 @@ func step(elapsed: float, delta: float) -> void:
 		_gone = true
 		for tree in _trees:
 			(tree.stand_in as Node3D).visible = false
+			if tree.has("actor"):
+				(tree.actor.pivot as Node3D).visible = false
 
 
 ## When the snags are gone and the char's going is centred, `elapsed` seconds in
@@ -405,6 +413,11 @@ func _find(editor: AuthoringEditor, event: TerrainEvent) -> Array[Dictionary]:
 	var found := burnable(_scatter, event.centre, event.radius_m, editor.palette_root)
 	_nearest = float(found[0].distance) if not found.is_empty() else 0.0
 	return found
+
+
+## A fire's painted trees burn (their actors draw with the burn shaders).
+func _burns() -> bool:
+	return true
 
 
 ## The fire's two pools (see the header), its flames banded; a path's sized for its trees.

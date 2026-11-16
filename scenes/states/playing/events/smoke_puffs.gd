@@ -54,6 +54,8 @@ func _init(pool_size: int = 32) -> void:
 	multimesh.use_colors = true
 	multimesh.use_custom_data = true
 	multimesh.mesh = crown_mesh()
+	# The shared material takes the current look's shader (FireVariants: Painted's warm smoke).
+	_material.shader = FireVariants.shader_for(FireVariants.SMOKE)
 	multimesh.instance_count = capacity
 	_born.resize(capacity)
 	_life.resize(capacity)

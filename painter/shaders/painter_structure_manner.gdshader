@@ -42,6 +42,7 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
 
 #include "res://painter/shaders/painter_noise.gdshaderinc"
 #include "res://painter/shaders/painter_structure_common.gdshaderinc"
+#include "res://painter/shaders/painter_building_burn.gdshaderinc"
 
 uniform int pattern = 0;
 uniform int pick = 0;
@@ -853,6 +854,14 @@ void fragment() {
 		float sky = clamp(n.y, 0.0, 1.0) * (1.0 - clamp(course_m / 0.9, 0.0, 1.0));
 		f_shd = mix(f_shd, f_mid, 0.4 * sky * sky);
 	}
+	// A varying cannot be an inout argument: the burn works on copies.
+	vec3 burn_shd = f_shd;
+	vec3 burn_mid = f_mid;
+	vec3 burn_lit = f_lit;
+	EMISSION = building_burn(wp, clamp(v_h, 0.0, 1.0), burn_shd, burn_mid, burn_lit);
+	f_shd = burn_shd;
+	f_mid = burn_mid;
+	f_lit = burn_lit;
 	f_n = n;
 	f_wob = wob;
 	bool paint_slope = on_slope && cover < 0.5;

@@ -101,9 +101,10 @@ func _init(pool_size: int = CAPACITY, priority: int = RENDER_PRIORITY) -> void:
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if not _materials.has(priority):
 		var material := ShaderMaterial.new()
-		material.shader = SHADER
 		material.render_priority = priority
 		_materials[priority] = material
+	# The shared material takes the current look's shader (FireVariants: Painted's stepped flames).
+	(_materials[priority] as ShaderMaterial).shader = FireVariants.shader_for(FireVariants.PUFF)
 	var quad := QuadMesh.new()
 	quad.size = Vector2.ONE
 	quad.material = _materials[priority]
