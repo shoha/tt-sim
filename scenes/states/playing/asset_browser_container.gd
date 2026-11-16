@@ -17,11 +17,11 @@ const AddPackDialogScene := preload("res://scenes/ui/add_pack_dialog.tscn")
 # started from full opacity and only the scale-in was visible.
 func _on_ready() -> void:
 	# Slide in from the right instead of a pure scale-up
-	scale_in_from = Vector2(0.95, 0.95)
-	scale_out_to = Vector2(0.97, 0.97)
-	fade_in_duration = 0.25
+	scale_in_from = Vector2(0.96, 0.96)
+	scale_out_to = Vector2(0.98, 0.98)
+	fade_in_duration = Constants.ANIM_FADE_IN_DURATION
 	fade_out_duration = Constants.ANIM_FADE_OUT_DURATION
-	trans_in_type = Tween.TRANS_BACK
+	trans_in_type = UiMotion.ARRIVE_TRANS
 
 	asset_browser.asset_selected.connect(_on_asset_selected)
 	asset_browser.avatar_build_requested.connect(_on_avatar_build_requested)

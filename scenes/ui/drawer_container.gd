@@ -58,7 +58,7 @@ const _TAB_BADGE_MARGIN := 4.0
 ## Width of the tab handle button.
 @export var tab_width: float = 36.0
 ## Duration of the slide animation.
-@export var slide_duration: float = 0.25
+@export var slide_duration: float = UiMotion.PANEL_IN_S
 ## Whether the drawer starts open.
 @export var start_open: bool = false
 ## Whether to play open/close sounds.
@@ -638,8 +638,14 @@ func _animate_to_state() -> void:
 
 	_slide_tween = create_tween()
 	_slide_tween.set_ease(Tween.EASE_OUT)
-	_slide_tween.set_trans(Tween.TRANS_CUBIC)
-	_slide_tween.tween_property(_sled, "position:x", target, slide_duration)
+	_slide_tween.set_trans(UiMotion.ARRIVE_TRANS)
+	if UiMotion.reduced():
+		# Reduce motion: no travel. Opening fades the sled in where it stands; closing cuts.
+		_sled.position.x = target
+		_sled.modulate.a = 0.0 if is_open else 1.0
+		_slide_tween.tween_property(_sled, "modulate:a", 1.0, UiMotion.FADE_ONLY_S)
+	else:
+		_slide_tween.tween_property(_sled, "position:x", target, slide_duration)
 	_slide_tween.finished.connect(_on_slide_finished, CONNECT_ONE_SHOT)
 	_notify_watchers()
 

@@ -35,6 +35,8 @@ came from is the local branch `painterspike` (handoff `docs/plans/handoffs/paint
 | painted tree shaders | `painter/shaders/painter_tree_stroke.gdshader`, `painter_tree_blockin.gdshader` (and their `_bare` variants, one body each: `painter_tree_{stroke,blockin}_body.gdshaderinc`), `painter_tree.gdshaderinc` (+ `painter/trees/tree_uniforms.json`) | The spike's stroke and block-in passes on tt-sim's wind, sun and fades |
 | `PainterBuildings` | `painter/painter_buildings.gd` | The buildings' host: stand-ins on the structures' wall, roof, timber and stone parts, toned from the sheet, and back |
 | painted structure shader | `painter/shaders/painter_structure.gdshader` | The selector light on a structure part: three sheet tones, a pattern per material, dabs, fold ink |
+| `PainterWater` | `painter/painter_water.gd` | The water's host: swaps the shader of the shared water and fall materials and back (see "Water") |
+| painted water, fall | `painter/shaders/painter_water.gdshader`, `painter_waterfall.gdshader` | A depth-banded wash with a stroke lattice, a shore lap ribbon and token arcs; the fall's chunky streaks |
 
 `LevelEnvironmentManager` owns one `PainterScene`, loaded by path (`PAINTER_SCENE`) the first time a
 level is drawn Painted, so neither the start-up nor a Classic level compiles the painter
@@ -1211,6 +1213,68 @@ coloured masses, a few accents, shadow-lit by the sheet's sun.
   thatch or tile slope can read as cloud shadow at close zoom (the grain is a faint horizontal
   tick); slate tongues are dark navy dabs; a bare tongue still keeps the blanket's rounded
   shading; half-timber roofs show little colour; winter walls are bluer but still grey-violet.
+
+## Water
+
+Under Painted the water and the falls draw with the painter's shaders (card painter-water,
+2026-11-15; the research is `docs/research/2026-11-15-painted-water/report.md`, candidate C1).
+`PainterWater` (`painter/painter_water.gd`, loaded by path from `PainterSurfaces` like
+`PainterBuildings`) swaps the `shader` of the two SHARED materials, `WaterGlbUtils.water_material()`
+and `AuthoredWater.fall_material()`, not a per-mesh override: the shared material reaches every
+water mesh, every later rebuild and the river ribbon past the edge, and `process_water_meshes()`
+would undo an override. A `ShaderMaterial` keeps its parameters and a mesh its instance uniforms
+across a shader swap (probe, 2026-11-15), so the flow map, disturbance points, skirt uniforms and
+the level's Motion keys keep working: `painter_water.gdshader` declares Classic's names for them.
+The sheet's colours go under `p_` names Classic does not read (so `apply_water_settings()` cannot
+fight them); `release()` puts both shaders back, removes the META and sets every `p_` uniform to
+null, so the materials are as they were. Classic's `water.gdshader` and `waterfall.gdshader` are not
+touched (a copy of the helpers, no shared include).
+
+The look (`painter_water.gdshader`, no screen texture):
+- **A wash in three depth bands.** The depth buffer's water column picks shallow, mid and deep
+  (`water-shallow`, `water-mid`, `water-deep`) with soft-edged, posterised steps (`BAND_1` 0.2,
+  `BAND_2` 0.85, `POSTERISE` 0.6). It is drawn alpha-blended (`water-opacity`) over the opaque
+  painted ground, so the ground's brushwork shows through the shallows.
+- **A stroke lattice.** World-space, jittered cells (2.4 m) with one stroke per cell at a
+  `water-strokes` share, `water-stroke-len` long, along the flow (the flow map) or the wind; each
+  cell boils on its own phase (`water-boil` s) and the seed changes only at envelope 0, so it
+  never swims with the camera. Strokes fade out by pixel footprint. `stroke_layer(...)` is a clean
+  function (coverage, id) another source can replace (card painter-water-c2 prototypes a baked
+  atlas). A second, longer layer and the sun-side glint ticks (`water-glints`, kept where a
+  stroke's own small tilt reflects the sun) are skipped under the Low water quality.
+- **The shore lap.** An iso-depth ribbon of `water-foam-width` m from the depth buffer's column
+  gradient (the slope is floored at 0.06; a steep bed, a fall lip, can still thin it, and the
+  speckle the C2 prototype saw there did not show in the fall frames).
+- **Tokens.** Disturbance points (rings, wakes) are drawn as broken arc strokes, and a token or rock
+  standing in the water gets a foam wrap.
+- **Light.** `light()` is a lit/shade selector like the ground's: cast shadows (a tree's, a cliff's)
+  take the wash toward `p_shade_mul`, which is `SHADE_SHARE` (0.55) of the ground's own shade-to-lit
+  ratio, so the water cools with the ground beside it.
+- **Winter ice.** `ice-over` (winter: 1) freezes SLOW water (a pond, a lake, not a river or a fall)
+  to the `water-ice` wash with a few long cracks, open round every disturbance point, so a token
+  never stands on ice. It is visual only: the float and drown rules are unchanged (the report's open
+  question; see the card's report).
+- **The wet band.** The painted ground darkens and cools in a brushed band along the water's
+  edge (`painter_ground.gdshader`, `ground_at`, `WET_EDGE`), from the water weights texture the
+  ground already binds.
+
+`painter_waterfall.gdshader` is the fall: unshaded, the same vertex contract as Classic's, chunky
+white streaks over the shallow and mid tones, with the sheet's foam.
+
+Sheet: roles `water-shallow`, `water-mid`, `water-deep`, `water-lit`, `water-shade`, `water-foam`,
+`water-glint`, `water-ice`; numbers `water-strokes`, `water-stroke-len`, `water-boil`,
+`water-glints`, `water-opacity`, `water-foam-width`, `ice-over`; per-mood overrides in
+`core.sheet` (dusk's wash is blue-violet, night's deep and dim, winter's pale).
+
+Cost (pinned, interleaved in-run A/B, vsync off, `viewport_get_measured_render_time_gpu`, RTX 3080,
+a 150 m forest with a river, a pond, a fall and a long river along the south edge; Painted vs Classic
+water on the same painted ground, medians of two interleaved pairs): summer zoom 8 2.16 vs 2.23 ms,
+zoom 20 2.69 vs 2.80, eye 2.87 vs 2.97; winter zoom 8 2.11 vs 2.18, zoom 20 2.60 vs 2.70. Painted is
+0.05 to 0.11 ms CHEAPER than Classic in every view (no normal-map reads, no screen texture).
+
+Warm-up: both shaders are in `PainterWarmup` (plain layout and the fall layout).
+`test_painter_water.gd` covers the swap, the exact restore, the kept parameters, re-toning, the
+fall following and the shade factor.
 
 ## The painted state signal
 

@@ -339,7 +339,7 @@ loading_overlay.show_indeterminate(RoomScreen.OPENING, true, RoomScreen.OPENING_
   it fades off the finished table on hide (0.4 s). `show_indeterminate()` lays the shared
   `Scrim` (C4) over the screen behind it.
 - Determinate bar: tweened to each new value (0.25 s). Indeterminate: a lake segment glides
-  back and forth along the bar; under Reduce motion (`UiMotion.reduced()`, the OS setting)
+  back and forth along the bar; under Reduce motion (`UiMotion.reduced()`, the OS setting or Settings)
   it rests in the middle and breathes in opacity. The glide stops when the overlay hides.
 - Blocks mouse input while visible (the sky and the scrim are full-rect `ColorRect`s).
 
@@ -1086,8 +1086,14 @@ live one ends the silence; see `docs/SOUND_EFFECTS.md`.
   an old settings file's `graphics/occlusion_fade_enabled` is ignored.)
 - **Wind motion** slider (`SettingsWindMotion`, `graphics/wind_motion`, 0 to 100 percent, default
   100): scales how far plants, cloth and weather lean and sway on this player's screen. It moves the
-  `Wind` autoload as the slider moves (Apply saves it); 0 holds everything still, and the OS
-  reduce-motion setting also holds it still and wins. Not a level field and never networked.
+  `Wind` autoload as the slider moves (Apply saves it); 0 holds everything still, and Reduce
+  motion (the OS flag or the Settings row below) also holds it still and wins. Not a level field and
+  never networked.
+- **Reduce motion** check (below Interface size, `ui/reduce_motion`, default off; saves and applies
+  the moment it is toggled like Interface size, `UiPreferences`): `UiMotion.reduced()` is true when
+  it is on or the OS reduce-animation flag is. Every UI animation reads it (UI_TASTE.md "2026-11-15
+  foundation pass": fades of at most 0.12 s, no scale, lift, slide or stagger; hover and press keep
+  their colour). Reset to defaults turns it off.
 - Antialiasing, shadow quality, water quality option buttons
 - **Eye view smoothing** (`graphics/eye_smoothing`, below Foliage edges, default on): the eye view's
   MSAA 4x raise; off keeps the Antialiasing setting there (`SettingsGpuOptions`)

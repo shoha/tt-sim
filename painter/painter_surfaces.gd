@@ -6,8 +6,9 @@ extends RefCounted
 ## materials coloured from the sheet (docs/systems/painter.md "Surfaces"). The scatter's mapped
 ## trees are drawn by PainterTrees (painter/trees/painter_trees.gd, loaded by path here), which
 ## hides their GLB nodes, and the built structures' walls, roofs and timber by PainterBuildings
-## (painter/painter_buildings.gd, loaded by path here too); water and tokens keep their Classic
-## materials (later cards).
+## (painter/painter_buildings.gd, loaded by path here too), the water and the falls by PainterWater
+## (painter/painter_water.gd, loaded by path here too: the shader of the two shared materials);
+## tokens keep their Classic materials (later cards).
 ##
 ## Events, never a poll. LevelEnvironmentManager owns one (made by path on the first Painted
 ## level, so neither the start-up nor a Classic level compiles it) and its signal
@@ -50,6 +51,8 @@ const TREES := "res://painter/trees/painter_trees.gd"
 const BUILDINGS := "res://painter/painter_buildings.gd"
 ## The ground's contact occlusion host (PainterOcclusion), loaded by path on the first painted map.
 const OCCLUSION := "res://painter/painter_occlusion.gd"
+## The painted water's host (PainterWater), loaded by path on the first painted map.
+const WATER := "res://painter/painter_water.gd"
 ## Metadata on every material this paints with.
 const META := &"painter_surface"
 ## The map root's name under the map container (MapSourceLoader.install).
@@ -81,6 +84,8 @@ var _trees: RefCounted = null
 var _buildings: RefCounted = null
 ## The contact occlusion host (a PainterOcclusion), made on the first paint().
 var _occlusion: RefCounted = null
+## The painted water (a PainterWater), made on the first paint().
+var _water: RefCounted = null
 
 
 ## Follows `manager`'s painted_look_changed for the map under `map_container`; called again with
@@ -118,6 +123,9 @@ func paint(map: Node3D, state: Dictionary) -> bool:
 		_buildings = (load(BUILDINGS) as GDScript).new()
 	_buildings.call("paint", _map, applied)
 	_ground_occlusion()
+	if _water == null:
+		_water = (load(WATER) as GDScript).new()
+	_water.call("paint", _map, applied)
 	return true
 
 
@@ -129,6 +137,8 @@ func release() -> void:
 		_trees.call("release")
 	if _buildings != null:
 		_buildings.call("release")
+	if _water != null:
+		_water.call("release")
 	_unbind()
 	for id: int in _overrides:
 		var pair: Array = _overrides[id]
@@ -354,6 +364,11 @@ func buildings() -> RefCounted:
 	return _buildings
 
 
+## The painted water (a PainterWater), null before the first paint().
+func water() -> RefCounted:
+	return _water
+
+
 # ---------------------------------------------------------------- the ground
 
 
@@ -414,6 +429,18 @@ func _rebuild_zone() -> void:
 		material.set_shader_parameter(
 			&"base_meadow", 1.0 if PainterGroundRoles.surface_role(doc.base_surface) == "meadow" else 0.0
 		)
+	_bind_wet()
+
+
+## Gives the ground the terrain's wet dressing (its wet line darkens the bank in a brush-edged
+## band); the skirt has none. The texture is updated in place by the terrain, so one bind serves
+## every edit; a terrain that had no water yet binds it when its first one is made.
+func _bind_wet() -> void:
+	if _ground == null or not is_instance_valid(_terrain):
+		return
+	var wet := _terrain.get_water_texture()
+	_ground.set_shader_parameter(&"water_weights", wet)
+	_ground.set_shader_parameter(&"water_present", wet != null)
 
 
 ## The zone map of `doc` as an RGBA8 image (pure; see _rebuild_zone). The document's arrays and the
@@ -665,6 +692,7 @@ func _retone() -> void:
 	var mood: String = applied["mood"]
 	var elevation: float = applied["elevation"]
 	_tone_ground(sheet, mood, elevation)
+	_bind_wet()
 	for swap: Array in _swapped:
 		_tone_plant(swap[3], swap[4], sheet, mood, elevation)
 
