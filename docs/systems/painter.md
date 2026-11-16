@@ -1203,10 +1203,30 @@ by event (findings: `docs/research/2026-11-09-prototypes/compare/painter_final25
   but never reads as moss. It has no channel in the RGBA zone map: `PainterSurfaces.char_image(doc)`
   makes an R8 map only when the document names a burnt biome or an ash surface (else null and
   `char_present` is false), and the shader takes role 5 over the meadow, floor and shore (not a path).
-- **Not done (gaps).** Structures: no runtime event damages a structure (ForestFall and FireSweep skip
-  them, BridgeCollapse cuts only crossings), so there is no ruin state; a house in a fire front is not
-  burnt (proposal in the findings). Event flames, smoke and the ground burn are Classic effects drawn
-  as they are; they read acceptably in the captures but were not repainted.
+- **The event fire's own shaders.** `FireVariants` (`scenes/effects/fire_variants.gd`) builds Painted
+  variants of `event_puff`, `fire_smoke` and `ground_burn` from the originals' source with a list of
+  edits (Classic files untouched; `test_painter_fire` checks every edit still matches its text). A
+  static flag, set by `LevelEnvironmentManager._publish_painted`, picks the shader when an effect is
+  created (`EventPuffs._init`, `SmokePuffs._init`, `GroundBurn`). Painted: time held in 10 Hz steps,
+  a warmer yellow flame heart, embers as small firm dabs, the smoke a lilac-warm grey that takes more
+  of the sun's colour (the mood reaches it through the light, as it does a crown; no sheet role is
+  read), a broader paint patch, the burn's char a warm brown. `fire_flames` already draws a 12 Hz
+  flipbook and is left alone. The variants are warmed with the painter's shaders (`PainterWarmup`).
+- **Buildings.** `painter_building_burn.gdshaderinc` adds `instance uniform float burn` to
+  `painter_structure.gdshader` and `painter_structure_manner.gdshader` (char climbing from the foot in
+  flat steps, a red then orange ember band that glows). `PainterBuildings.take(structure)`,
+  `set_burn(actor, v)` and `drop(actor)` hand a building's painted parts to an event. A structure's
+  parts are nodes already, so no pivot is made. No event calls it yet.
+- **Perf** (2026-11-15, pinned 1920x1080, vsync off, in-run interleaved, GPU median ms). Fire event
+  mid-burn, forest at zoom 16: Classic 3.805 / 3.893, Painted on this branch 3.110 / 3.125 (0.7 ms
+  under Classic), Painted on main 3.845 / 3.864 (the GLB stand-ins and the painted trees both drew).
+  Calm, no fire in the level: Painted minus Classic is +0.13..+0.17 ms in the village and +0.07..+0.12 ms
+  in the forest on both the branch and main, the same within the run's 0.03 ms noise: the painted
+  ground's fire branch costs nothing where no fire exists.
+- **Not done (gaps).** No runtime event damages a structure (ForestFall and FireSweep skip them,
+  BridgeCollapse cuts only crossings), so there is no ruin state and no FireSweep branch that burns a
+  house; rubble would be a second structure document (a procgen task). Burning wood marks (trunks) step
+  through gold, orange and red bands that read as stripes up a trunk in a bare season.
 
 ## The painted state signal
 
