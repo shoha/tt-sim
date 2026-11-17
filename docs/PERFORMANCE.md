@@ -6419,6 +6419,130 @@ Still over: river zoom 8 and taiga home summer, and the forest sits on the line.
 1.0 ms) plus level 1 strokes (about 0.4). No look-neutral lever remained for it. The 0.3 ms criterion is a
 guardrail; the remaining gap is the painted trees' crown masses, which are the look.
 
+## Exported build and Linux check, 2026-11-16 (card painter-default-gate)
+
+Three facts that block making the Painted look the default. Evidence and logs:
+`D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final30_default_gate/` (`notes.md`, one folder per
+run). Main `64e84f3f`, RTX 3080, pinned procedure (1920x1080, in-run interleaved P C x3, GPU 2.5 s median, the
+lane held), levels built fresh on main (`_painter-default-gate_*`, same recipes as the recheck's) and the recheck's
+river level.
+
+### Editor build, main 64e84f3f (Painted minus Classic, GPU ms)
+
+| Cell | Painted | Classic | P - C | pairs |
+|------|---------|---------|-------|-------|
+| forest tokens summer, zoom 8 | 2.593 | 2.512 | +0.08 | +0.06 .. +0.10 |
+| river zoom 8 summer | 3.065 | 2.867 | +0.20 | +0.19 .. +0.22 |
+| taiga home summer | 2.612 | 2.219 | +0.39 | +0.37 .. +0.43 |
+| village home winter, sun 12 | 2.199 | 3.412 | -1.21 | -1.21 .. -1.20 |
+| village home summer, sun 20 | 2.472 | 3.436 | -0.96 | -0.97 .. -0.96 |
+| fire (live) home | 2.644 | 2.749 | -0.11 | -0.15 .. -0.10 |
+| fire (live) zoom 8 | 2.287 | 2.484 | -0.20 | -0.20 .. -0.19 |
+| fire event mid-burn (forest, fire at 2.0 of 4.0 s, zoom 8, one pair) | 3.326 | 5.358 | -2.03 | - |
+
+Fire zoom 8 was +0.31 before the block-in discard-free change and is now -0.20: both the Painted frame (2.660 ->
+2.287) and the Classic one (2.350 -> 2.484, a different run) moved. Only taiga home is over the 0.3 ms bar (+0.39;
+the blockin card's +0.35).
+
+### Exported release build
+
+Built the CI way (`--export-release "Windows Desktop"`, 4.7.2 templates in `%APPDATA%/Godot/export_templates`),
+with `tools/*` dropped from the preset's exclude filter (uncommitted) so `tools/render_jobs` is in the pack, plus
+the gitignored probe scripts and a release `libttscatter` built in the worktree (`scons target=template_release`).
+An exported exe ignores `--script`, so the harness runs through an `override.cfg` autoload (`export_runner.gd`,
+from the exportbake card: `RJExport` autoload, `-- --rj-job=<json> --rj-out=<dir>`), with its own user folder
+named in the same `override.cfg`. Cold folder: fresh (no pipeline cache, `settings.cfg` look=1 so the Painted
+warm-up runs behind the title). The NVIDIA driver's own shader cache is global and was not cleared. The
+exported exe ran at the display's refresh rate (frame pairs 13.9 / 20.8 ms: vsync stayed on, `settings.cfg`'s
+`vsync=false` is not applied in the exe; the in-job `vsync_off` op handles the GPU cells).
+
+First Painted level in a fresh export (`g_cold.json`, `record` op, CPU frame times with vsync on, so medians are
+the refresh interval; the worst frame is the figure):
+
+| Window | Frames | Worst frame | Pipelines compiled in the window |
+|--------|--------|-------------|----------------------------------|
+| first play of the forest (title to settled, 6 s) | 553 | 284.1 ms (two such frames: 206 and 374, 200-284 ms) | surface 0 -> 116, spec 0 -> 160 |
+| 8 s settled, Painted | 480 | 24.3 ms | 0 |
+| Classic to Painted switch (5 s) | 301 | 87.4 ms (frame 2) | 0 new (all warm) |
+| Painted to Classic switch (4 s) | 243 | 22.2 ms | 0 |
+| second level play (taiga, title to settled) | 330 | 708.6 ms (frame 30; surface 211 -> 295) | surface +84, spec +39 |
+
+The editor figures from `docs/systems/painter.md` "Warm-up" (debug, 2026-11-14, a different machine state): first
+Painted level worst covered frame 237-251 ms cold and 207-213 ms warm, toggle 243 ms. The export's first level
+is 284 ms (same order; it does not beat the editor), its switch 87 ms (much smaller than the editor's 243 ms), but a
+second level loaded in the same session hitches once at 708 ms with 84 more surface pipelines compiled in that
+window. The window starts at the title, so it includes the load; the per-frame files
+(`export_cold/*_frames.txt`) carry the counters.
+
+#### Round 2 (main with the canopy window removed, crossing stone and edge fixes; export rebuilt)
+
+Editor build, re-measured on the new main (same procedure, `r2_editor_*` folders; Painted minus Classic, GPU ms):
+
+| Cell | Painted | Classic | P - C | pairs |
+|------|---------|---------|-------|-------|
+| forest tokens summer z8 | 2.524 | 2.432 | +0.09 | +0.08 .. +0.10 |
+| river z8 | 3.077 | 2.848 | +0.23 | +0.17 .. +0.23 |
+| taiga home summer | 2.565 | 2.163 | +0.40 | +0.39 .. +0.42 |
+| village home winter 12 | 2.185 | 3.408 | -1.22 | -1.21 .. -1.20 |
+| village home summer 20 | 2.428 | 3.437 | -1.01 | -1.01 .. -1.00 |
+| fire (live) home | 2.734 | 2.746 | -0.01 | -0.03 .. +0.01 |
+| fire (live) zoom 8 | 2.224 | 2.412 | -0.19 | -0.22 .. -0.17 |
+
+Both readings of the owner's criterion: per cell, only taiga home is over the 0.3 ms bar (+0.40), and it sits on
+the "up to +0.4" allowance. Whole-frame average over these seven standard views (equal weight): -0.24 ms, so
+Painted is at or below Classic overall (-0.6 ms if the mid-burn fire frame, -2.0, is counted as a view).
+
+Exported per-cell GPU table: NOT OBTAINABLE on this machine, and why. The exported exe (release and debug template,
+windowed and exclusive fullscreen, vsync mode 0 from `settings.cfg`, from `override.cfg` `window/vsync/vsync_mode=0` and
+from the harness's `vsync_off` op, and under a second exe name, so not an NVIDIA per-exe profile) runs at exactly 60 fps
+(the display's refresh rate) in every scene, the title screen included (103 draw calls), with 17 to 21 ms of
+`TIME_PROCESS` per frame, while the editor binary on the same project, look and level runs at 320 to 418 fps with
+2.8 ms (`r2_export_diag*`, `r2_editor_diag`, `jobs/diag.gd`: the editor reports vsync 1 until `vsync_off` and then
+uncapped; the exe stays at 60 either way). With the GPU at about 4 ms of a 16.7 ms frame it downclocks, and the GPU
+medians scatter by +-0.3 ms and more (taiga Classic 5.09, 5.01, 3.21 in one run), so no Painted-minus-Classic figure
+from the exe is meaningful. The cause was not found (not vsync, `Engine.max_fps` 0, not focus, not the display mode);
+it is a harness blocker for exported GPU numbers, and it also means the exe never ran uncapped, so whether the
+shipped game itself is capped to the refresh rate with vsync disabled in Settings is a question for the owner (the
+exe reported mode 0 and presented at 60 Hz).
+
+#### The second-level hitch and the editor segfault (round 2)
+
+Per-frame logging in the exe (`jobs/frames.gd`: frame time, pipeline counters, PainterWarmup phase, whether the
+loader's overlay is up; `r2_export_hitch0..2`, three cold runs, fresh user folder, vsync on):
+- The warm-up has always finished (phase ALL_DONE) before the first play. Pipelines still compile at each level: the
+  surface counter grows by 151 (forest, first), 124 (taiga) and 176 (village) per level, with frames of 100 to 220 ms
+  while the overlay is up (the cover hides them).
+- `hitch1` (the first completed run): after the cover lifted, one frame of 1236 ms (forest, 1.3 s after the
+  reveal) and one of 763 ms (taiga, 0.8 s after), each with only +2 surface and +1 specialization pipelines, a tree-cell
+  count unchanged: not the painted trees' install, and a stall far larger than the compile counters explain, so
+  most likely the driver compiling a shader the engine had never asked it for before. `hitch2` (a fresh folder again,
+  the NVIDIA driver cache now warm) had no frame above 207 ms, all of them under the cover. So the 700 ms hitch is not
+  reproducible on demand here: it needs a cold driver cache, which was not cleared (not ours to delete).
+- No code change was made: the warm-up compiles one triangle per shader and vertex layout, not a MultiMesh draw, and
+  that is the likely hole (each new level adds 124 to 176 pipelines), but a fix that draws every level's real
+  instances before the reveal is not small; the least invasive candidate is to hold the cover a few more frames after the
+  Painted apply so the first draws' compiles happen under it. Not implemented, not measured.
+- The editor segfaults (exit 139) on the first run of a freshly built level and a crash of one cold exported run (exit
+  0xC0000005) are the same family: the Windows event log for the exe names the faulting module `nvgpucomp64.dll`
+  (the NVIDIA driver's shader compiler, 32.0.16.2124), offset 0x1745ac. Repro: a fresh user folder, first play of a
+  Painted level in a new process (1 of 4 cold exported runs; 2 of about 8 first runs in the editor); intermittent. It
+  looks like an NVIDIA driver crash under concurrent pipeline compiles (the warm-up's six threads against the
+  engine's own), not a script fault.
+
+### Linux (WSL2 Ubuntu 24.04, Godot 4.7.2 Linux editor binary, Mesa llvmpipe Vulkan 1.4, Forward+)
+
+No GPU path in WSL (`/dev/dxg` exists but there is no dzn or NVIDIA Vulkan ICD; only lavapipe), so this is software
+Vulkan: correctness, not speed (the first Painted level took 126 s of warm-up and a worst frame of 85 s).
+Project copied to the WSL disk, `--headless --import` (2 min; the expected font/theme errors on the first pass),
+a clean second pass, then the render-job harness windowed on WSLg with the Painted taiga level, the first-launch
+graphics warm-up forced (`--warm-graphics`) and the Look setting Painted (so `PainterWarmup` ran behind the title).
+Result: the Painted taiga frame draws (pines, birches, boulders, a log, soft cast shadows; the look reads as it
+does on Windows), `GraphicsWarmup` finished (46 samples built, 0 skipped), and the log has no `SHADER ERROR`, no
+script error and no pipeline error: the only `ERROR` lines are ALSA's "no sound card". Not proved: speed or
+hitching on a real Linux GPU, the water, fire-burn and building shaders at draw time (the taiga level has none of
+them; `PainterWarmup` compiles them in its groups and printed no error), Linux native scatter (no `.so` built, the
+GDScript generator ran). macOS cannot be checked here.
+
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
 What each Shadow quality tier (`directional_soft_shadow_filter_set_quality`) costs, and a "blur"

@@ -77,6 +77,7 @@ func test_the_water_sample_matches_the_real_water_surface() -> void:
 ## The falls sample (P4c-4) draws the real falls mesh's layout on the waterfall shader, from
 ## a warm-up document whose river falls over a tier.
 func test_the_falls_sample_matches_the_real_falls_mesh() -> void:
+	PainterStateReset.classic()
 	var samples := AuthoredWater.warmup_samples()
 	assert_eq(samples[1].name, "falls")
 	var doc := AuthoredWater.warmup_falls_document()

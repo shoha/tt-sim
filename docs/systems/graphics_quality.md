@@ -71,7 +71,9 @@ preset itself. Card autoquality (2026-11-10); the numbers and the captures are i
 
 - **The flag: `tt_sim/graphics/auto_quality`** (project setting, default false in code; SHIPPED ON
   in `project.godot` since 2026-11-10, board perf-look-quality-low: ship). Off = the game as before:
-  no measurement, no pick, the presets and Re-detect still in Settings. To turn the pick off, set
+  no measurement, no pick, the presets and Re-detect still in Settings. A pick never touches the
+  Look row (`graphics/look`): the default is Painted for every GPU tier, Classic one choice away
+  (docs/systems/painter.md "The default and a stored choice"). To turn the pick off, set
   `graphics/auto_quality=false` under `[tt_sim]` in `project.godot`, or put
   ```
   [tt_sim]
