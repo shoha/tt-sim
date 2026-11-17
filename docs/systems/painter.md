@@ -798,6 +798,14 @@ compiles none.
   released; no script in `painter/` holds or waits on a task id (the warm-up uses `Thread`, the
   workers share a mutex-guarded index). The frames after it were normal. Not guarded in script (a guard would serialise the workers, the cost the
   worker count exists to avoid); kept here so a repeat is not read as a regression.
+- **An intermittent access violation in the NVIDIA shader compiler** (`nvgpucomp64.dll`, driver
+  32.0.16.2124, exit 0xC0000005) on a first launch: 2 crashes in 51 Painted cold runs of an exported
+  build on the shared driver cache, 0 in 38 Classic, 0 in 66 runs with an empty or seeded private
+  driver cache. Both were inside the first-launch GraphicsWarmup's COMPILE phase, before any painter
+  thread ran, so it is not the painter warm-up's concurrency (card painter-compile-crash,
+  docs/PERFORMANCE.md "Cold driver cache, the intermittent compiler crash and the level-entry frame").
+  Not reproducible on demand, so no code change; do not "fix" it by cutting PainterWarmup workers
+  without a repro.
 
 ## Buildings
 

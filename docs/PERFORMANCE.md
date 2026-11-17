@@ -7414,6 +7414,42 @@ What is left, worst first (main-thread frames of the final code):
 - Not measured here: an exported build (GraphicsWarmup runs there), and the library serve at boot
   (368 ms headless, before the title).
 
+## Cold driver cache, the intermittent compiler crash and the level-entry frame (card painter-compile-crash, 2026-11-16)
+
+Evidence: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final33_compile_crash/` (`notes.md`,
+`runs/summary.csv`, one folder per run, `jobs/run_cold.ps1`). RTX 3080, NVIDIA 32.0.16.2124, the exported release
+build (Vulkan 1.4, Forward+; it is NOT D3D12), lane held, one process at a time.
+
+**Making a cold run on demand without deleting anything.** The NVIDIA driver cache is global and keyed by shader
+content, not by exe path: 50 copies of one export at new paths were warm after the first runs. The driver reads
+`__GL_SHADER_DISK_CACHE_PATH` for Vulkan on Windows: pointing it at an empty folder per run (and
+`__GL_SHADER_DISK_CACHE_SKIP_CLEANUP=1`) gives a truly cold driver cache (42 to 62 MB of entries written per run), the
+shared cache untouched. A fresh Godot user folder per run (a levels + `settings.cfg` template) makes Godot's own
+caches cold. `jobs/run_cold.ps1` does both, runs the job through the `override.cfg` autoload and records exit codes.
+
+**The crash.** Not reproducible on demand. Painted 2 of 51 on the shared driver cache, Classic 0 of 38, cold or
+seeded private driver cache 0 of 66; both crashes were in the first ten runs of a new build, in the first-launch
+GraphicsWarmup's COMPILE phase 8 to 10 s after launch (before PainterWarmup starts), and 47 clean Painted runs followed on the shared cache. The
+Painted-only reading is not supported (Fisher p about 0.3). WER keeps one bucket per fault module and offset, so only
+the earlier campaign's crashes are in the event log. Raising `threading/worker_pool/max_threads` to 64 did not raise the rate.
+No speculative change was made. If it returns: the probable cause is a driver race in concurrent pipeline compiles
+(the engine's pipeline compiles on the WorkerThreadPool, also the family of the `Invalid Task ID` race in
+painter.md "Warm-up"); first try fewer WorkerThreadPool threads (`threading/worker_pool/max_threads`) with the
+harness on a build whose shaders changed (the first runs of a new build are where both crashes sat).
+
+**The level-entry frame.** On a cold driver cache the first play of a level has one frame of 1.1 to 1.5 s: the frame
+the loader's last step ends in (trees installed, +72 surface and +40 specialization pipelines compiled). Painted
+(n = 41 fresh and seeded-by-title runs) 1143 to 1548 ms; Classic (13) 1075 to 1141 ms; on a warm driver cache Painted
+199 to 226 ms (51 runs) and Classic 178 to 203 ms (38). The frame is the engine compiling the real level's draws,
+which the warm-ups' one-triangle samples do not cover, in both looks; it ends under the loading overlay's last
+image. A driver cache that has seen any level removes it (seeded from a Classic level run: 197 to 218 ms). The
+earlier "700 to 1200 ms after the cover lifted" was not reproduced in any of the 66 cold runs. Not fixed: covering
+the level's real draws before the reveal is the untried work.
+
+**The exported 60 fps lock** (unexplained): at the title the exe shows vsync mode 0 and `max_fps` 0 and runs at 59 to
+60 fps with 21 to 24 ms of process time under vsync modes 0, 1 and 3 alike, while the editor binary runs 320 to 418 fps.
+Not D3D12; nothing in the game's scripts differs between editor and export. Next probe: a stock Godot export of an empty project.
+
 ## Minimum-spec estimate (topic minspec2, 2026-11-10)
 
 The target (board answer perf-minspec, "1060"): a GTX 1060 / RX 580 / Iris Xe class GPU at 1080p,
