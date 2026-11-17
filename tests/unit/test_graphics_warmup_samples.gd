@@ -77,6 +77,7 @@ func test_the_water_sample_matches_the_real_water_surface() -> void:
 ## The falls sample (P4c-4) draws the real falls mesh's layout on the waterfall shader, from
 ## a warm-up document whose river falls over a tier.
 func test_the_falls_sample_matches_the_real_falls_mesh() -> void:
+	PainterStateReset.classic()
 	var samples := AuthoredWater.warmup_samples()
 	assert_eq(samples[1].name, "falls")
 	var doc := AuthoredWater.warmup_falls_document()
@@ -89,11 +90,7 @@ func test_the_falls_sample_matches_the_real_falls_mesh() -> void:
 	assert_not_null(instance, "the warm-up falls document has a curtain")
 	assert_eq(_format_of(samples[1]), instance.mesh.surface_get_format(0), "falls layout")
 	assert_eq((samples[1].material as ShaderMaterial).shader, AuthoredWater.FALLS_SHADER)
-	# The shared material holds the painter's fall shader while a Painted level is applied (Painted
-	# is the default, so an earlier test in the shard may have left one drawn).
-	var shared := AuthoredWater.fall_material().shader
-	var painted_shader := load("res://painter/shaders/painter_waterfall.gdshader") as Shader
-	assert_true([AuthoredWater.FALLS_SHADER, painted_shader].has(shared), "classic or painted falls")
+	assert_eq(AuthoredWater.fall_material().shader, AuthoredWater.FALLS_SHADER)
 
 
 func _triangle(with_colors: bool) -> ArrayMesh:

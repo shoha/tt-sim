@@ -261,6 +261,7 @@ func test_classic_draws_the_original_fire_shaders_and_painted_the_variants() -> 
 
 
 func test_the_painted_ground_mirrors_the_terrains_fire_bake_and_lets_go() -> void:
+	PainterStateReset.classic()
 	var terrain := ShaderMaterial.new()
 	var painted := ShaderMaterial.new()
 	var bake := ImageTexture.create_from_image(Image.create(4, 4, false, Image.FORMAT_RGBA8))
