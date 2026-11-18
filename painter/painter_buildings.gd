@@ -34,6 +34,11 @@ const SHADER := "res://painter/shaders/painter_structure.gdshader"
 const META := &"painter_building"
 ## The structures' node under a map root (AuthoredStructures.NODE_NAME).
 const STRUCTURES := "AuthoredStructures"
+## A ruin's node carries this meta (StructureRuin.META): the roof pieces still standing over it
+## (slabs and the bare rafters, whose slate or tile read as pale blue-grey sticks in the air) are
+## drawn charred, the building burn shader held at RUIN_ROOF_BURN (fully charred).
+const RUIN_META := &"tt_ruin"
+const RUIN_ROOF_BURN := 1.7
 ## The structures node's meta that holds a WeakRef to this host (StructureBurn.HOST_META).
 const HOST_META := &"painter_buildings_host"
 ## The map's other wall layers (card painter-coverage): drawn walls, wall rows and the streets' lots
@@ -393,6 +398,7 @@ func _on_structure(node: Node) -> void:
 func _dress(structure: Node) -> void:
 	if applied.is_empty():
 		return
+	var ruin: bool = structure.get_meta(RUIN_META, false)
 	for node: Node in structure.find_children("*", "MeshInstance3D", true, false):
 		var mesh_instance := node as MeshInstance3D
 		var key := part_key(str(node.name))
@@ -400,6 +406,8 @@ func _dress(structure: Node) -> void:
 			continue
 		_swapped[mesh_instance.get_instance_id()] = [mesh_instance, mesh_instance.material_override]
 		mesh_instance.material_override = _material(key)
+		if ruin and str(kind_of(key)[2]) == "roof" and _burnable(mesh_instance.material_override.shader):
+			mesh_instance.set_instance_shader_parameter(&"burn", RUIN_ROOF_BURN)
 	if hand_drawn:
 		if manner == null:
 			manner = PainterMannerHost.new(self)

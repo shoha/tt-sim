@@ -42,6 +42,9 @@ extends MultiMeshInstance3D
 ## larger capacity holds one event's every puff at once.
 
 enum Kind { BLOB, PLUME, RING, FLAME, EMBER, CROWN_FLAME }
+## Added to a brush blob's kind in the shader's custom data (the shader's is_kind rounds it away,
+## the Painted variant's blob edge reads it: puff_kind > 0.1).
+const BRUSH_MARK := 0.3
 
 const CAPACITY := 96
 const SHADER := preload("res://shaders/event_puff.gdshader")
@@ -89,6 +92,8 @@ var _aspect := PackedFloat32Array()
 var _gravity := PackedFloat32Array()
 var _seed := PackedFloat32Array()
 var _kind := PackedByteArray()
+## 1 for a blob made by emit_brush (a firm, brush-edged dust under Painted), else 0.
+var _brush := PackedByteArray()
 var _colors := PackedColorArray()
 var _next := 0
 var _live := 0
@@ -122,6 +127,7 @@ func _init(pool_size: int = CAPACITY, priority: int = RENDER_PRIORITY) -> void:
 	_gravity.resize(capacity)
 	_seed.resize(capacity)
 	_kind.resize(capacity)
+	_brush.resize(capacity)
 	_from.resize(capacity)
 	_velocity.resize(capacity)
 	_blown.resize(capacity)
@@ -151,6 +157,18 @@ func emit(
 	axis: Vector3 = Vector3.ZERO
 ) -> void:
 	_take(Kind.BLOB, at, velocity, axis, size, aspect, life, color, gravity)
+
+
+## A dust blob as emit's (never thrown) that the Painted look draws with a firm, brush-wobbled edge
+## (FireVariants.EDITS; Classic draws it as any blob): the dust of a collapsing building
+## (StructureBurn), where a soft disc read as a pale smudge. Other events' dust is unchanged.
+func emit_brush(
+	at: Vector3, velocity: Vector3, size: float, life: float, color: Color, aspect: float = ROUND
+) -> void:
+	_take(Kind.BLOB, at, velocity, Vector3.ZERO, size, aspect, life, color, 0.0)
+	var slot := (_next - 1 + capacity) % capacity
+	_brush[slot] = 1
+	_shape(slot, _aspect[slot])
 
 
 ## A plume standing on `at`: a column of water `size` metres wide shooting up to `height`
@@ -293,6 +311,7 @@ func _take(
 	_born[slot] = _clock
 	_life[slot] = maxf(life, 0.05)
 	_kind[slot] = kind
+	_brush[slot] = 0
 	_from[slot] = at
 	_velocity[slot] = velocity
 	_blown[slot] = _dust_drift(at) if kind == Kind.BLOB and gravity <= 0.0 else Vector3.ZERO
@@ -323,7 +342,13 @@ func _shape(slot: int, shape: float, age: float = 0.0) -> void:
 	var bold := 0.0 if kind == Kind.BLOB and _gravity[slot] <= 0.0 else 1.0
 	if kind == Kind.FLAME or kind == Kind.CROWN_FLAME:
 		bold = age
-	multimesh.set_instance_custom_data(slot, Color(_seed[slot], shape, kind, bold))
+	var marker := kind_marker(kind, _brush[slot] == 1)
+	multimesh.set_instance_custom_data(slot, Color(_seed[slot], shape, marker, bold))
+
+
+## The kind a puff hands the shader: its Kind, a blob made by emit_brush BRUSH_MARK above it. Pure.
+static func kind_marker(kind: int, brush: bool) -> float:
+	return float(kind) + (BRUSH_MARK if brush else 0.0)
 
 
 ## Moves blob `slot` `age` seconds (`k` of its life) in; returns its alpha's share (a thrown

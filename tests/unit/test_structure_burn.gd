@@ -145,6 +145,65 @@ func test_the_slump_squashes_about_the_foot_to_the_ruin_height() -> void:
 	assert_lt(StructureBurn.RUIN_HEIGHT, 0.2, "a low heap, not a lowered house")
 
 
+func test_the_fall_gathers_speed_and_the_heap_bounces_once_to_rest() -> void:
+	var pivot := Vector3.ZERO
+	var half := StructureBurn.collapse_pose(0.36, pivot, Vector3.RIGHT, 0.0).basis.get_scale().y
+	var quarter := StructureBurn.collapse_pose(0.18, pivot, Vector3.RIGHT, 0.0).basis.get_scale().y
+	assert_gt(1.0 - half, (1.0 - quarter) * 2.0, "the second stretch of the fall is the longer drop")
+	var low := StructureBurn.collapse_pose(StructureBurn.SETTLE_FROM, pivot, Vector3.RIGHT, 0.0)
+	var up := StructureBurn.collapse_pose(0.86, pivot, Vector3.RIGHT, 0.0)
+	var rest := StructureBurn.collapse_pose(1.0, pivot, Vector3.RIGHT, 0.0)
+	assert_gt(up.basis.get_scale().y, low.basis.get_scale().y, "it bounces up")
+	assert_almost_eq(rest.basis.get_scale().y, StructureBurn.RUIN_HEIGHT, 0.001, "and rests")
+
+
+func test_the_dust_is_a_rich_ochre_ring_outside_the_footprint() -> void:
+	var dust := StructureBurn.dust_color()
+	var pale := ForestFall.DUST
+	assert_gt(dust.s, pale.s, "richer than a fallen tree's dust")
+	assert_lt(dust.v, pale.v, "darker")
+	assert_gt(StructureBurn.DUST_RING, 1.0, "outside the footprint's own radius")
+	var brush := EventPuffs.kind_marker(EventPuffs.Kind.BLOB, true)
+	var plain := EventPuffs.kind_marker(EventPuffs.Kind.BLOB, false)
+	assert_gt(brush, 0.1, "the brush blob is marked for the Painted edge")
+	assert_eq(plain, 0.0, "any other blob is not")
+	assert_lt(brush, 0.5, "and still a blob to the shader's kinds (is_kind rounds it away)")
+	assert_eq(EventPuffs.kind_marker(EventPuffs.Kind.RING, false), 2.0)
+	var puffs := EventPuffs.new(4, FireSweep.FLAME_PRIORITY)
+	add_child_autofree(puffs)
+	puffs.emit_brush(Vector3.ZERO, Vector3.ZERO, 1.0, 1.0, dust)
+	puffs.emit(Vector3.ZERO, Vector3.ZERO, 1.0, 1.0, dust)
+	assert_eq(puffs._brush[0], 1, "the brush blob is flagged")
+	assert_eq(puffs._brush[1], 0, "the plain one is not")
+
+
+func test_a_ruins_roof_pieces_are_drawn_charred_under_painted() -> void:
+	_doc.structures.append(Structure.make(4, "core:ruin_cottage", _plan(Vector2.ZERO), 5))
+	var structures := AuthoredStructures.create(_doc)
+	_map.add_child(structures)
+	var node := structures.get_structure_node(4)
+	if node == null:
+		return
+	assert_true(bool(node.get_meta(StructureRuin.META, false)), "marked a ruin")
+	assert_eq(PainterBuildings.RUIN_META, StructureRuin.META, "the painter reads the same meta")
+	var buildings := _painted(structures)
+	var roofs := 0
+	for found: Node in node.find_children("*", "MeshInstance3D", true, false):
+		var mi := found as MeshInstance3D
+		var is_roof := PainterBuildings.kind_of(String(mi.name)).size() > 2 and String(
+			PainterBuildings.kind_of(String(mi.name))[2]
+		) == "roof"
+		var raw: Variant = mi.get_instance_shader_parameter(&"burn")
+		var burn := 0.0 if raw == null else float(raw)
+		if is_roof:
+			roofs += 1
+			assert_eq(burn, PainterBuildings.RUIN_ROOF_BURN, "%s is charred" % mi.name)
+		else:
+			assert_eq(burn, 0.0, "%s is not" % mi.name)
+	assert_gt(roofs, 0, "the ruin has roof pieces")
+	buildings.release()
+
+
 func test_the_burn_runs_on_into_the_break_up_and_the_flames_are_out_first() -> void:
 	assert_eq(StructureBurn.break_value(-1.0), 0.0)
 	assert_eq(StructureBurn.break_value(0.0), 0.0)

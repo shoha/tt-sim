@@ -31,13 +31,22 @@ const BY_WORD: Array[Array] = [
 	["canal", "ruin_townhouse"],
 ]
 const ROUND_ID := "ruin_tower"
+## Set on a ruin's structure node (AuthoredStructures._structure_node): true. The painted look chars
+## the roof pieces left standing over one (PainterBuildings.RUIN_ROOF_BURN, which keeps this name).
+const META := &"tt_ruin"
 
 
 ## Whether `structure` is a ruin already (family `ruin` or the tag): it is not burnable.
 static func is_ruin(structure: Structure) -> bool:
-	var row := LibraryStructureStore.structure(structure.recipe)
+	return is_ruin_recipe(structure.recipe)
+
+
+## Whether the recipe id `recipe` is a ruin's (is_ruin's test; the node of a structure carries it as
+## the `ruin` meta so the painter can char the roof pieces that stand over it).
+static func is_ruin_recipe(recipe: String) -> bool:
+	var row := LibraryStructureStore.structure(recipe)
 	if row.is_empty():
-		return structure.recipe.get_slice(":", 1).begins_with("ruin_")
+		return recipe.get_slice(":", 1).begins_with("ruin_")
 	return String(row.get("family", "")) == FAMILY or (row.get("tags", []) as Array).has(FAMILY)
 
 

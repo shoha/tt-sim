@@ -50,15 +50,19 @@ const CATCH_JITTER := 0.3
 ## How long a building burns (catching to fully charred), and where in that it starts to slump.
 const BURN_S := Vector2(2.2, 2.6)
 const COLLAPSE_AT := 0.8
-const COLLAPSE_S := 1.1
+const COLLAPSE_S := 1.3
 ## The height a collapsed building stands at, a share of its own, and the widest it spreads.
 const RUIN_HEIGHT := 0.14
 const SPREAD := 0.12
 ## Its lean as it slumps (degrees, held at the end), the share of its height it sinks into the
 ## ground and the shiver (metres).
 const LEAN_DEG := 9.0
-const SINK := 0.05
-const SHIVER_M := 0.05
+const SINK := 0.16
+const SHIVER_M := 0.08
+## The final settle: after the drop (SETTLE_FROM of the way on) the heap bounces up SETTLE of its
+## height and comes to rest, quickly (a short, stronger thud).
+const SETTLE_FROM := 0.72
+const SETTLE := 0.09
 ## How far the burn value runs past BURN_RATE as it breaks up (the shader's BURN_BREAK_CUT drops
 ## chunks as it climbs; painter_building_burn.gdshaderinc).
 const BREAK_SPAN := 1.0
@@ -66,16 +70,20 @@ const BREAK_SPAN := 1.0
 const STEP_S := 0.1
 ## Flames and dust puffs one building puts in the flame pool, smoke billows in the smoke pool.
 const FLAMES := 10
-const DUST_PUFFS := 6
+const DUST_PUFFS := 8
 const DUST_ROUNDS := 2
-## How far into the slump (collapse_amount) the second round of dust rolls out.
-const DUST_AGAIN_AT := 0.55
+## How far into the slump (collapse_amount) the second round of dust rolls out (with the thud).
+const DUST_AGAIN_AT := 0.7
+## How far out from the footprint's middle the ring of dust starts, in footprint radii: just
+## outside the walls, so it reads beside the building and not behind its roof.
+const DUST_RING := 1.3
 const FLAME_SLOTS := FLAMES + DUST_PUFFS * DUST_ROUNDS
 const SMOKE_SLOTS := 3
 ## How much of ForestFall.DUST's lightness the burnt building's dust keeps (it rolls out of ash,
 ## a warm earth tone, not the pale dust of a fallen tree), and its alpha.
-const DUST_DARKEN := 0.6
-const DUST_ALPHA := 0.7
+const DUST_DARKEN := 0.7
+const DUST_SATURATE := 1.6
+const DUST_ALPHA := 0.8
 ## Flames' life (seconds), their width against the building's height and their feet's height
 ## range (a share of it).
 const FLAME_LIFE := Vector2(0.4, 0.6)
@@ -216,17 +224,20 @@ static func break_value(x: float) -> float:
 
 
 ## The transform a building `x` (0..1, collapse_amount) into its slump takes, in the frame of its
-## own node: squashed about `pivot` (its foot) from 1 to RUIN_HEIGHT with a quick drop and a small
-## settle at the end, spreading SPREAD wide, leaning `lean` (-1..1) up to LEAN_DEG about `axis` (a
-## horizontal unit vector, the lean held), sinking `sink` metres and shivering. x = 0 is the
-## identity. Pure.
+## own node: squashed about `pivot` (its foot) from 1 to RUIN_HEIGHT in a fall that gathers speed
+## and a short bounce at the end (SETTLE), spreading SPREAD wide, leaning `lean` (-1..1) up to
+## LEAN_DEG about `axis` (a horizontal unit vector, the lean held), sinking `sink` metres and
+## shivering. x = 0 is the identity. Pure.
 static func collapse_pose(
 	x: float, pivot: Vector3, axis: Vector3, lean: float, sink: float = 0.0
 ) -> Transform3D:
 	if x <= 0.0:
 		return Transform3D.IDENTITY
-	var drop := smoothstep(0.0, 1.0, x)
-	var settle := 0.03 * sin(PI * clampf((x - 0.75) / 0.25, 0.0, 1.0))
+	# It falls under its own weight (the drop eases in, so it gathers speed) to the heap by
+	# SETTLE_FROM, then the heap bounces up SETTLE and comes to rest.
+	var fall := clampf(x / SETTLE_FROM, 0.0, 1.0)
+	var drop := fall * fall
+	var settle := SETTLE * sin(PI * clampf((x - SETTLE_FROM) / (1.0 - SETTLE_FROM), 0.0, 1.0))
 	var height := lerpf(1.0, RUIN_HEIGHT, drop) + settle
 	var wide := 1.0 + SPREAD * drop
 	var tilt := deg_to_rad(LEAN_DEG) * lean * drop
@@ -424,16 +435,19 @@ func _flame(entry: Dictionary, at: int) -> void:
 	)
 
 
-## The warm earth tone of a burnt building's dust (ForestFall.DUST darkened, more opaque).
+## The warm ochre of a burnt building's dust (ForestFall.DUST darkened and made richer, more opaque:
+## it rolls out of ash and old thatch, not the pale dust of a fallen tree).
 static func dust_color() -> Color:
 	var tone := ForestFall.DUST.darkened(DUST_DARKEN)
+	tone.s = minf(tone.s * DUST_SATURATE, 1.0)
 	tone.a = DUST_ALPHA
 	return tone
 
 
-## DUST_PUFFS puffs of dust (round number `again`, 0 or 1) rolling out of the footprint's edge as
-## the building slumps: the second round is turned half a puff along and smaller, so the rings
-## overlap as a cloud, not a row.
+## DUST_PUFFS puffs of dust (round number `again`, 0 or 1) in a ring just outside the footprint
+## (DUST_RING radii out) as the building slumps, brush-edged under Painted (EventPuffs.emit_brush):
+## the second round is turned half a puff along and smaller, so the rings overlap as a cloud, not
+## a row.
 func _dust(entry: Dictionary, draws: PackedFloat32Array, again: int) -> void:
 	var height := float(entry.height)
 	var radius := float(entry.radius)
@@ -441,14 +455,12 @@ func _dust(entry: Dictionary, draws: PackedFloat32Array, again: int) -> void:
 	for i in DUST_PUFFS:
 		var angle := (float(i) + 0.5 * float(again) + draws[i]) / float(DUST_PUFFS) * TAU
 		var out := Vector3(cos(angle), 0.0, sin(angle))
-		_flames.emit(
-			(entry.pivot as Vector3) + out * radius * 1.0 + Vector3(0.0, height * 0.1, 0.0),
-			out * (0.7 + 0.5 * draws[i + 1]) + Vector3(0.0, 0.5, 0.0),
+		_flames.emit_brush(
+			(entry.pivot as Vector3) + out * radius * DUST_RING + Vector3(0.0, height * 0.08, 0.0),
+			out * (0.7 + 0.5 * draws[i + 1]) + Vector3(0.0, 0.4, 0.0),
 			clampf(height * 0.5, 1.0, 2.6) * shrink,
 			1.4 + 0.3 * draws[i + 2],
-			dust_color(),
-			0.0,
-			EventPuffs.ROUND
+			dust_color()
 		)
 
 

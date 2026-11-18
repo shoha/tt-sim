@@ -1352,15 +1352,18 @@ by event (findings: `docs/research/2026-11-09-prototypes/compare/painter_final25
   from the foot of each part, an ember band at its edge, roofs darkening with the walls (flat
   steps); flames stand in its footprint as the burn climbs (the last is out before the slump, so
   none stands over a lowered roof) and a smoke billow rises over it. At 0.8 of its burn it slumps
-  over 1.1 s: the structure node itself (its parts are nodes already) squashes to 14 percent of its
-  height about its foot, spreads 12 percent, leans up to 9 degrees (held) and sinks 5 percent of its
+  over 1.3 s: the structure node itself (its parts are nodes already) falls under its own weight (the
+  drop eases in) to 14 percent of its height about its foot by 0.72 of the way, bounces up 9 percent
+  and settles, spreads 12 percent, leans up to 9 degrees (held) and sinks 16 percent of its
   height, while the `burn` value runs on from 1.7 to 2.7 and the building burn shader drops chunks
   of the charred parts (`building_break`: a brush noise of about 1.5 m patches mixed with height up
   the part, so the roof breaks up first and a few low stumps stay; `discard` in both structure
-  shaders, a compare when `burn` is 0), and two rounds of six warm dust puffs roll out of the
-  footprint (`StructureBurn.collapse_pose`, `dust_color`, held in 10 Hz steps like the other
-  painted event variants; the Painted event-puff variant gives a dust blob a firm brush-wobbled
-  edge, `FireVariants.EDITS`). The charred, broken, lowered building is the stand-in for its ruin
+  shaders, a compare when `burn` is 0), and two rounds of eight ochre dust puffs ring the footprint
+  (1.3 radii out, the second round with the thud: `StructureBurn.collapse_pose`, `dust_color`, held
+  in 10 Hz steps like the other painted event variants). The dust is `EventPuffs.emit_brush`: a
+  blob whose kind carries a 0.3 marker, which only the Painted event-puff variant reads to draw a
+  firm brush-wobbled edge (`FireVariants.EDITS`); tree-fall and every other event's dust is
+  unchanged. The charred, broken, lowered building is the stand-in for its ruin
   until the change lands. The painted `burn` comes from the buildings host
   (`PainterBuildings.HOST_META` on the `AuthoredStructures` node, a WeakRef: `StructureBurn` never
   names a painter class); **under Classic there is no host and nothing of the building plays** (the
@@ -1377,13 +1380,19 @@ by event (findings: `docs/research/2026-11-09-prototypes/compare/painter_final25
   is not a rectangle and outside the ruin's sizes). It travels to peers as the ordinary
   `structures` op, a save keeps it, and an undo of the entry (one step) brings the buildings back.
   The ruin recipes are procgen's own (stone, ragged skyline, standing gables, rubble, moss), so the
-  ruin is not charred: the `char` ash scar the fire lays over the ground round it is. A late joiner
+  walls are not charred: the `char` ash scar the fire lays over the ground round it is. Their roof
+  pieces are: a ruin's node carries the meta `StructureRuin.META`, and under Painted
+  `PainterBuildings._dress` holds the roof meshes of such a node at `burn` 1.7 (`RUIN_ROOF_BURN`,
+  fully charred), so the bare rafters that stand over the walls read dark charred timber, not pale
+  slate-blue sticks (any ruin, burnt or placed). A late joiner
   gets only the ops, as for burnt trees. Cost (2026-11-18, pinned 1920x1080, vsync off, in-run
-  interleaved x3, GPU median ms, zoom 8, a village of three houses, fire frozen at 2.0 s): burning
-  Classic 2.477 / 2.483 / 2.474, Painted 2.073 / 2.059 / 2.076 (0.4 ms under Classic; Classic plays no
-  house burn); calm Classic 1.963 / 1.920 / 1.923, Painted 1.846 / 1.833 / 1.852.
-  Open: a charred ruin (a document flag the painter reads to keep the char), a structure-only
-  ignition (a fire still needs a forest to start), and walls and fences.
+  interleaved x3, GPU median ms, zoom 8, a village of three houses, the fire frozen at 3.3 s with
+  two houses slumping in dust): burning Classic 2.522 / 2.598 / 2.602 (plays no house burn), Painted
+  2.040 / 2.091 / 2.094, Painted with the buildings let go (same fire, trees and ground) 2.051 /
+  2.059 / 2.057: the burn's own cost is within the noise (about 0.0 ms, -0.01 to +0.04), and Painted
+  stays about 0.5 ms under Classic. Calm Classic 1.963 / 1.920 / 1.923, Painted 1.846 / 1.833 /
+  1.852. Open: a structure-only ignition (a fire still needs a forest to start), and walls and
+  fences.
 - **Perf** (2026-11-15, pinned 1920x1080, vsync off, in-run interleaved, GPU median ms). Fire event
   mid-burn, forest at zoom 16: Classic 3.805 / 3.893, Painted on this branch 3.110 / 3.125 (0.7 ms
   under Classic), Painted on main 3.845 / 3.864 (the GLB stand-ins and the painted trees both drew).
