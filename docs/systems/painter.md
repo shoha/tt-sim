@@ -1350,16 +1350,67 @@ by event (findings: `docs/research/2026-11-09-prototypes/compare/painter_final25
   `painter_structure.gdshader` and `painter_structure_manner.gdshader` (char climbing from the foot in
   flat steps, a red then orange ember band that glows). `PainterBuildings.take(structure)`,
   `set_burn(actor, v)` and `drop(actor)` hand a building's painted parts to an event. A structure's
-  parts are nodes already, so no pivot is made. No event calls it yet.
+  parts are nodes already, so no pivot is made. `StructureBurn` (card painter-structure-fire) calls
+  it, below.
+- **Buildings a fire burns (card painter-structure-fire).** A fire that starts in a forest also takes
+  every building whose footprint lies in its circle or along its path (`StructureBurn.find`, at most 8,
+  nearest first; a ruin never burns again). `FireSweep` holds a `StructureBurn` beside its trees. Each
+  building catches when the ground front reaches its middle (0.8 of the way, plus up to 0.3 s) and
+  burns 2.2 to 2.6 s: its `burn` instance uniform goes 0 to 1.7 (`burn_progress`'s scale, so a tree
+  and a house beside each other char on one curve), the painter's building burn shader laying char
+  from the foot of each part, an ember band at its edge, roofs darkening with the walls (flat
+  steps); flames stand in its footprint as the burn climbs (the last is out before the slump, so
+  none stands over a lowered roof) and a smoke billow rises over it. At 0.8 of its burn it slumps
+  over 1.3 s: the structure node itself (its parts are nodes already) falls under its own weight (the
+  drop eases in) to 14 percent of its height about its foot by 0.72 of the way, bounces up 9 percent
+  and settles, spreads 12 percent, leans up to 9 degrees (held) and sinks 16 percent of its
+  height, while the `burn` value runs on from 1.7 to 2.7 and the building burn shader drops chunks
+  of the charred parts (`building_break`: a brush noise of about 1.5 m patches mixed with height up
+  the part, so the roof breaks up first and a few low stumps stay; `discard` in both structure
+  shaders, a compare when `burn` is 0), and two rounds of eight ochre dust puffs ring the footprint
+  (1.3 radii out, the second round with the thud: `StructureBurn.collapse_pose`, `dust_color`, held
+  in 10 Hz steps like the other painted event variants). The dust is `EventPuffs.emit_brush`: a
+  blob whose kind carries a 0.3 marker, which only the Painted event-puff variant reads to draw a
+  firm brush-wobbled edge (`FireVariants.EDITS`); tree-fall and every other event's dust is
+  unchanged. The charred, broken, lowered building is the stand-in for its ruin
+  until the change lands. The painted `burn` comes from the buildings host
+  (`PainterBuildings.HOST_META` on the `AuthoredStructures` node, a WeakRef: `StructureBurn` never
+  names a painter class); **under Classic there is no host and nothing of the building plays** (the
+  owner's call, 2026-11-18: no more work on Classic): it stands through the fire, the fire's
+  change does not wait for it, and it pops to its ruin when the history entry applies, so a Classic
+  and a Painted board hold the same map.
+  The fire's change waits for the last collapse (`FireSweep.hold_s`, which `TerrainEvents.advance`
+  reads), so the ruin never lands mid-slump.
+- **The ruin is document state.** The GM's change (`TerrainEvents._burn`) gains a third part in
+  the fire's one history entry: `StructureEditor.burn_down` replaces each burnt building's record
+  with its ruin, the same footprint, seed and style under the `ruin_*` recipe of core (`StructureRuin`:
+  a round plan takes the tower, a barn the barn, a chapel the chapel, a townhouse the townhouse,
+  else the cottage; `ruin` raised to 0.85), or removes the building when no ruin fits (a plan that
+  is not a rectangle and outside the ruin's sizes). It travels to peers as the ordinary
+  `structures` op, a save keeps it, and an undo of the entry (one step) brings the buildings back.
+  The ruin recipes are procgen's own (stone, ragged skyline, standing gables, rubble, moss), so the
+  walls are not charred: the `char` ash scar the fire lays over the ground round it is. Their roof
+  pieces are: a ruin's node carries the meta `StructureRuin.META`, and under Painted
+  `PainterBuildings._dress` holds the roof meshes of such a node at `burn` 1.7 (`RUIN_ROOF_BURN`,
+  fully charred), so the bare rafters that stand over the walls read dark charred timber, not pale
+  slate-blue sticks (any ruin, burnt or placed). A late joiner
+  gets only the ops, as for burnt trees. Cost (2026-11-18, pinned 1920x1080, vsync off, in-run
+  interleaved x3, GPU median ms, zoom 8, a village of three houses, the fire frozen at 3.3 s with
+  two houses slumping in dust): burning Classic 2.522 / 2.598 / 2.602 (plays no house burn), Painted
+  2.040 / 2.091 / 2.094, Painted with the buildings let go (same fire, trees and ground) 2.051 /
+  2.059 / 2.057: the burn's own cost is within the noise (about 0.0 ms, -0.01 to +0.04), and Painted
+  stays about 0.5 ms under Classic. Calm Classic 1.963 / 1.920 / 1.923, Painted 1.846 / 1.833 /
+  1.852. Open: a structure-only ignition (a fire still needs a forest to start), and walls and
+  fences.
 - **Perf** (2026-11-15, pinned 1920x1080, vsync off, in-run interleaved, GPU median ms). Fire event
   mid-burn, forest at zoom 16: Classic 3.805 / 3.893, Painted on this branch 3.110 / 3.125 (0.7 ms
   under Classic), Painted on main 3.845 / 3.864 (the GLB stand-ins and the painted trees both drew).
   Calm, no fire in the level: Painted minus Classic is +0.13..+0.17 ms in the village and +0.07..+0.12 ms
   in the forest on both the branch and main, the same within the run's 0.03 ms noise: the painted
   ground's fire branch costs nothing where no fire exists.
-- **Not done (gaps).** No runtime event damages a structure (ForestFall and FireSweep skip them,
-  BridgeCollapse cuts only crossings), so there is no ruin state and no FireSweep branch that burns a
-  house; rubble would be a second structure document (a procgen task).
+- **Not done (gaps).** ForestFall does not damage structures; BridgeCollapse cuts only crossings;
+  a fire burns buildings (above) but not walls or fences, and the ruin it leaves is core's stone
+  `ruin_*` recipe on the same footprint, not a charred rubble document (a procgen task).
 
 ## Water
 

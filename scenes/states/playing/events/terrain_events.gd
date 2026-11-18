@@ -222,7 +222,11 @@ func advance(delta: float) -> void:
 		var node: Node3D = entry.node
 		if node != null:
 			node.call(&"step", elapsed, delta)
-		if elapsed >= event.duration_s and entry.owns_op and not entry.get("applied", false):
+		var due := event.duration_s
+		if node != null and node.has_method(&"hold_s"):
+			# A fire's buildings may still be collapsing: the change waits for them.
+			due = maxf(due, float(node.call(&"hold_s")))
+		if elapsed >= due and entry.owns_op and not entry.get("applied", false):
 			if edits.editor.is_stroking():
 				continue
 			entry.applied = true
@@ -287,7 +291,9 @@ func _apply(event: TerrainEvent) -> void:
 ## biome painted over the forest (its snags and litter replace the trees there, MaskStroke's
 ## contest thinning the forest just past it), or a Clear as a fall's where the palette has no
 ## burnt biome, then ash (or its stand-in) laid over the ground, which keeps what grows there
-## (FireSweep.plan_for). One undo takes both back.
+## (FireSweep.plan_for). The buildings the fire reached (StructureBurn.find) are replaced by their
+## ruins in the same entry (StructureEditor.burn_down; the fire waits for their collapse,
+## FireSweep.hold_s). One undo takes all back.
 ##
 ## Along a path the same two strokes are capsules along its segments (a capsule's exposure on
 ## its axis is a dab's at its centre, so the centre line ends as a circle's centre does): the
@@ -318,6 +324,10 @@ func _burn(event: TerrainEvent) -> void:
 		if editor.begin_surface_stroke(surface, false):
 			_dabs(whole, event.radius_m * FireSweep.ASH_REACH, FireSweep.ASH_SECONDS)
 			editor.end_stroke()
+	# The buildings in the fire's reach burn down to their ruins (or go), in the same entry.
+	var burnt := StructureBurn.ids_in(editor.document, event)
+	if not burnt.is_empty():
+		editor.structures.burn_down(burnt, label_for(event.kind))
 	editor.history.end_group(label_for(event.kind))
 
 

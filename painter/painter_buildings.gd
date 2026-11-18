@@ -34,6 +34,13 @@ const SHADER := "res://painter/shaders/painter_structure.gdshader"
 const META := &"painter_building"
 ## The structures' node under a map root (AuthoredStructures.NODE_NAME).
 const STRUCTURES := "AuthoredStructures"
+## A ruin's node carries this meta (StructureRuin.META): the roof pieces still standing over it
+## (slabs and the bare rafters, whose slate or tile read as pale blue-grey sticks in the air) are
+## drawn charred, the building burn shader held at RUIN_ROOF_BURN (fully charred).
+const RUIN_META := &"tt_ruin"
+const RUIN_ROOF_BURN := 1.7
+## The structures node's meta that holds a WeakRef to this host (StructureBurn.HOST_META).
+const HOST_META := &"painter_buildings_host"
 ## The map's other wall layers (card painter-coverage): drawn walls, wall rows and the streets' lots
 ## (AuthoredWalls.NODE_NAME) and the villages' stone boundaries (AuthoredBoundaries.BOUNDARY_NODE).
 ## Their `Wall_<id>` nodes hold parts named `Stone`, `Masonry`, `Wood`, `Roof`, `Glass`,
@@ -245,8 +252,8 @@ func painted() -> Array[MeshInstance3D]:
 ## and the hand-drawn shaders both carry the `burn` instance uniform, from
 ## painter_building_burn.gdshaderinc), or {} when nothing of it is painted. A structure's parts
 ## are nodes already, so no pivot is needed to burn one; the structure's own transform is the
-## event's to move. Nothing calls it yet: no event burns a building (docs/systems/painter.md "Fire
-## and events").
+## event's to move. StructureBurn (a fire's buildings, card painter-structure-fire) calls it through
+## the structures node's meta HOST_META (docs/systems/painter.md "Fire and events").
 func take(structure: Node, burning: bool = true) -> Dictionary:
 	var nodes: Array[MeshInstance3D] = []
 	if is_instance_valid(structure):
@@ -360,14 +367,18 @@ func _bind(structures: Node) -> void:
 		return
 	_unbind()
 	_structures = structures
+	# FireSweep's buildings (StructureBurn) find this host by the node's meta, never by class name.
+	_structures.set_meta(HOST_META, weakref(self))
 	_structures.child_entered_tree.connect(_on_structure)
 	for child in _structures.get_children():
 		_dress(child)
 
 
 func _unbind() -> void:
-	if is_instance_valid(_structures) and _structures.child_entered_tree.is_connected(_on_structure):
-		_structures.child_entered_tree.disconnect(_on_structure)
+	if is_instance_valid(_structures):
+		if _structures.child_entered_tree.is_connected(_on_structure):
+			_structures.child_entered_tree.disconnect(_on_structure)
+		_structures.remove_meta(HOST_META)
 	_structures = null
 
 
@@ -387,6 +398,7 @@ func _on_structure(node: Node) -> void:
 func _dress(structure: Node) -> void:
 	if applied.is_empty():
 		return
+	var ruin: bool = structure.get_meta(RUIN_META, false)
 	for node: Node in structure.find_children("*", "MeshInstance3D", true, false):
 		var mesh_instance := node as MeshInstance3D
 		var key := part_key(str(node.name))
@@ -394,6 +406,8 @@ func _dress(structure: Node) -> void:
 			continue
 		_swapped[mesh_instance.get_instance_id()] = [mesh_instance, mesh_instance.material_override]
 		mesh_instance.material_override = _material(key)
+		if ruin and str(kind_of(key)[2]) == "roof" and _burnable(mesh_instance.material_override.shader):
+			mesh_instance.set_instance_shader_parameter(&"burn", RUIN_ROOF_BURN)
 	if hand_drawn:
 		if manner == null:
 			manner = PainterMannerHost.new(self)

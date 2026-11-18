@@ -10,6 +10,8 @@
 		"res://tests/unit/test_painter_warmup.gd",
 		"res://tests/unit/test_ground_clipmap_strips_warm.gd",
 		"res://tests/unit/test_painter_buildings.gd",
+		"res://tests/unit/test_structure_burn.gd",
+		"res://tests/unit/test_structure_fire.gd",
 		"res://tests/unit/test_painter_water.gd",
 		"res://tests/unit/test_painter_manner.gd",
 		"res://tests/unit/test_painter_trees.gd",

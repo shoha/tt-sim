@@ -101,6 +101,9 @@ void fragment() {
 	METALLIC = 0.0;
 	vec3 n = normalize(v_wn);
 	vec3 wp = v_wp;
+	if (building_break(wp, clamp(v_h, 0.0, 1.0))) {
+		discard;
+	}
 	// The variant: broad soft patches, their edges broken by a finer octave.
 	float pn = mix(p_noise(wp * patch_freq + 7.0), p_noise(wp * patch_freq * 3.3 + 21.0), 0.3);
 	float variant = mix(0.5, smoothstep(0.36, 0.64, pn), patch_mix);

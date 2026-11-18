@@ -254,6 +254,9 @@ void fragment() {
 	METALLIC = 0.0;
 	vec3 n = normalize(v_wn);
 	vec3 wp = v_wp;
+	if (building_break(wp, clamp(v_h, 0.0, 1.0))) {
+		discard;
+	}
 	int code = int(floor(v_rec.z + 0.01));
 	// A wall's course in metres rides in the code's fraction (0: the pattern's own), a hip face's
 	// taper (metres along the eave a metre up the slope) in sixteenths in the accent's whole part.
