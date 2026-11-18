@@ -42,6 +42,17 @@ func test_viewports_wait_until_asked_and_draw_once() -> void:
 	GroundClipmapStrips.render_warm(_warm, _warm.size())
 
 
+func test_the_session_keeps_every_warm_material() -> void:
+	var samples := GroundClipmapStrips.warm_samples(_warm)
+	assert_eq(samples.size(), 4)
+	for sample: Dictionary in samples:
+		assert_true(sample["material"] is ShaderMaterial)
+	var before := GraphicsWarmup.kept_material_count()
+	GraphicsWarmup.keep_materials(samples)
+	assert_eq(GraphicsWarmup.kept_material_count(), before + 4)
+	GraphicsWarmup.release_materials()
+
+
 func test_the_framebuffer_is_the_strips_own() -> void:
 	for vp in _warm:
 		assert_true(vp.own_world_3d)

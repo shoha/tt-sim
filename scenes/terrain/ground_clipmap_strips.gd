@@ -189,6 +189,17 @@ static func warm_viewports() -> Array[SubViewport]:
 	return out
 
 
+## The materials of `warm` (warm_viewports()) in GraphicsWarmup.keep_materials' shape: the session
+## keeps them, since a material freed while the engine still specializes its pipelines waits for
+## those compiles (0.4 s at the next level load; GraphicsWarmupScreen._finish).
+static func warm_samples(warm: Array[SubViewport]) -> Array:
+	var out: Array = []
+	for vp in warm:
+		var mi := vp.get_child(vp.get_child_count() - 1) as MeshInstance3D
+		out.append({"material": mi.material_override})
+	return out
+
+
 ## Draws warm viewport `index` of warm_viewports() once, in this frame's draw.
 static func render_warm(warm: Array[SubViewport], index: int) -> void:
 	if index >= 0 and index < warm.size() and is_instance_valid(warm[index]):

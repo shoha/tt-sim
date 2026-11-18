@@ -278,7 +278,10 @@ func _process(_delta: float) -> void:
 				_start_draw()
 		Phase.DRAW:
 			if _strip_next < _strips.size():
-				# One strip pipeline a frame: each is a large shader's compile.
+				# One strip pipeline a frame: each is a large shader's compile. The one drawn the
+				# frame before has done its work and goes now, not with the screen at the hand-over.
+				if _strip_next > 0:
+					_strips[_strip_next - 1].queue_free()
 				GroundClipmapStrips.render_warm(_strips, _strip_next)
 				_strip_next += 1
 			elif _warmer.pending_count() == 0 and _drained():
@@ -449,6 +452,9 @@ func _start_draw() -> void:
 	# own: one viewport per shader and pass, drawn a frame apart (_process).
 	_strips = GroundClipmapStrips.warm_viewports()
 	_strip_next = 0
+	# The session keeps the materials: freed while the engine still specializes their pipelines, one
+	# waits for those compiles.
+	GraphicsWarmup.keep_materials(GroundClipmapStrips.warm_samples(_strips))
 	for strip in _strips:
 		add_child(strip)
 	for sample in _results:
@@ -529,6 +535,9 @@ func _finish() -> void:
 	# cold cache (perf audit S6). The session keeps them (GraphicsWarmup.keep_materials) and
 	# Root releases them on its way out; only the geometry goes now.
 	GraphicsWarmup.keep_materials(_samples)
+	for strip in _strips:
+		if is_instance_valid(strip):
+			strip.queue_free()
 	_samples.clear()
 	_results.clear()
 	var kept := GraphicsWarmup.kept_material_count()
