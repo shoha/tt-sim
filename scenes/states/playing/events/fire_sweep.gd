@@ -161,10 +161,6 @@ const FLAME_LATE := Color(0.61, 0.018, 0.004, 1.0)
 const EMBER := Color(1.0, 0.35, 0.036, 1.0)
 const BURN_SHADER := preload("res://shaders/wind_foliage_burn.gdshader")
 
-## False leaves buildings out of the fire (StructureBurn; an A/B switch for tests and measurements).
-## Read when an event is set up and when its change is made (TerrainEvents._burn).
-static var burn_structures := true
-
 var _flames: EventPuffs = null
 var _smoke: SmokePuffs = null
 ## The buildings the fire burns (StructureBurn), made in setup.
@@ -338,8 +334,7 @@ func setup(editor: AuthoringEditor, event: TerrainEvent) -> bool:
 			heights.append(_ground_y(editor.document, p))
 		_ground.setup_path(_path, heights, event.radius_m, _spread, duration, event.seed_value)
 		_place_path_front(editor.document, event)
-	if burn_structures:
-		_light_structures(editor, event)
+	_light_structures(editor, event)
 	return true
 
 

@@ -325,10 +325,9 @@ func _burn(event: TerrainEvent) -> void:
 			_dabs(whole, event.radius_m * FireSweep.ASH_REACH, FireSweep.ASH_SECONDS)
 			editor.end_stroke()
 	# The buildings in the fire's reach burn down to their ruins (or go), in the same entry.
-	if FireSweep.burn_structures:
-		var burnt := StructureBurn.ids_in(editor.document, event)
-		if not burnt.is_empty():
-			editor.structures.burn_down(burnt, label_for(event.kind))
+	var burnt := StructureBurn.ids_in(editor.document, event)
+	if not burnt.is_empty():
+		editor.structures.burn_down(burnt, label_for(event.kind))
 	editor.history.end_group(label_for(event.kind))
 
 

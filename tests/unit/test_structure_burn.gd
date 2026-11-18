@@ -3,7 +3,7 @@ extends GutTest
 ## The buildings a fire burns (card painter-structure-fire; StructureBurn, StructureRuin,
 ## StructureEditor.burn_down, docs/systems/painter.md "Fire and events"): which buildings a fire
 ## reaches, the burn and collapse timeline and pose, the painted host's `burn` uniform on a
-## building's parts, the collapse under Classic (no host), the ruin the change leaves as one history
+## building's parts, that Classic (no host) plays nothing, the ruin the change leaves as one history
 ## entry that travels to a peer, its undo, and a ruin that does not burn again.
 
 const STATE := {"sheet": "core", "mood": "summer", "elevation": 60.0}
@@ -65,7 +65,15 @@ func _rng() -> RandomNumberGenerator:
 	return rng
 
 
-## A burn of the middle house (id 2) of `structures`, caught at second 0.
+## `structures`' parts drawn by the painter (the host a burn needs); the caller releases it.
+func _painted(structures: AuthoredStructures) -> PainterBuildings:
+	var buildings := PainterBuildings.new()
+	assert_true(buildings.paint(_map, STATE))
+	assert_not_null(StructureBurn.host_of(structures), "the host is found by the node's meta")
+	return buildings
+
+
+## A burn of the middle house (id 2) of `structures` (painted), caught at second 0.
 func _burn_middle(structures: AuthoredStructures) -> StructureBurn:
 	var found: Array[Dictionary] = [
 		{"id": 2, "centre": Vector2(0, 0), "radius": 3.9, "distance": 0.0, "start": 0.0}
@@ -126,6 +134,36 @@ func test_the_slump_squashes_about_the_foot_to_the_ruin_height() -> void:
 	assert_lt(mid.basis.get_scale().y, 1.0, "part way down")
 	assert_true(
 		StructureBurn.collapse_pose(0.5, pivot, axis, 1.0).is_equal_approx(mid), "no randomness"
+	)
+	# It leans (held, not swinging back), sinks and is a strong squash from the game camera.
+	var leaning := (done.basis * Vector3.UP).normalized()
+	assert_almost_eq(
+		leaning.angle_to(Vector3.UP), deg_to_rad(StructureBurn.LEAN_DEG), 0.01, "leaning at the end"
+	)
+	var sunk := StructureBurn.collapse_pose(1.0, pivot, axis, 1.0, 0.4)
+	assert_almost_eq((sunk * pivot).y, pivot.y - 0.4, 0.001, "sunk into the ground")
+	assert_lt(StructureBurn.RUIN_HEIGHT, 0.2, "a low heap, not a lowered house")
+
+
+func test_the_burn_runs_on_into_the_break_up_and_the_flames_are_out_first() -> void:
+	assert_eq(StructureBurn.break_value(-1.0), 0.0)
+	assert_eq(StructureBurn.break_value(0.0), 0.0)
+	assert_almost_eq(StructureBurn.break_value(0.5), StructureBurn.BREAK_SPAN * 0.5, 0.001)
+	assert_eq(StructureBurn.break_value(9.0), StructureBurn.BREAK_SPAN)
+	var slump_at := StructureBurn.BURN_S.x * StructureBurn.COLLAPSE_AT
+	assert_lt(
+		StructureBurn.BURN_S.x * StructureBurn.FLAME_WHEN.y + StructureBurn.FLAME_LIFE.y,
+		slump_at,
+		"no flame stands over a lowered roof"
+	)
+	var dust := StructureBurn.dust_color()
+	assert_lt(dust.r, ForestFall.DUST.r, "darker than a fallen tree's dust")
+	assert_gt(dust.a, ForestFall.DUST.a, "more opaque")
+	var include := "res://painter/shaders/painter_building_burn.gdshaderinc"
+	var shader := FileAccess.get_file_as_string(include)
+	assert_true(
+		shader.contains("const float BURN_CHARRED = %.1f;" % StructureBurn.BURN_RATE),
+		"the shader's charred value is the burn's"
 	)
 
 
@@ -245,9 +283,7 @@ func test_a_building_no_ruin_fits_is_removed() -> void:
 
 func test_a_painted_building_burns_collapses_and_is_let_go() -> void:
 	var structures := _built()
-	var buildings := PainterBuildings.new()
-	assert_true(buildings.paint(_map, STATE))
-	assert_not_null(StructureBurn.host_of(structures), "the host is found by the node's meta")
+	var buildings := _painted(structures)
 	var node := structures.get_structure_node(2)
 	var burn := _burn_middle(structures)
 	var entry: Dictionary = burn.entries[0]
@@ -266,9 +302,12 @@ func test_a_painted_building_burns_collapses_and_is_let_go() -> void:
 	assert_eq(node.transform, Transform3D.IDENTITY, "standing before its collapse")
 	burn.step(burn.end_at() + 0.2)
 	assert_eq(
-		float(part.get_instance_shader_parameter(&"burn")), StructureBurn.BURN_RATE, "charred"
+		float(part.get_instance_shader_parameter(&"burn")),
+		StructureBurn.BURN_RATE + StructureBurn.BREAK_SPAN,
+		"charred and broken up"
 	)
 	assert_almost_eq(node.transform.basis.get_scale().y, StructureBurn.RUIN_HEIGHT, 0.01)
+	assert_lt(node.transform.origin.y, 0.0, "sunk a little")
 	assert_true(burn.is_done(burn.end_at()))
 	assert_false(burn.landed(), "the stand-in waits for the change")
 	burn.release()
@@ -280,6 +319,7 @@ func test_a_painted_building_burns_collapses_and_is_let_go() -> void:
 
 func test_the_stand_in_is_landed_when_its_node_goes() -> void:
 	var structures := _built()
+	var buildings := _painted(structures)
 	var burn := _burn_middle(structures)
 	burn.step(burn.end_at() + 0.2)
 	assert_false(burn.landed())
@@ -289,18 +329,24 @@ func test_the_stand_in_is_landed_when_its_node_goes() -> void:
 	assert_true(burn.landed(), "the ruin's node took its place")
 	burn.step(burn.end_at() + 0.4)
 	burn.release()
+	buildings.release()
 
 
-func test_classic_collapses_without_a_host_and_char() -> void:
+func test_classic_plays_nothing_and_the_building_stands_until_the_change() -> void:
 	var structures := _built()
 	assert_null(StructureBurn.host_of(structures), "no painter, no host")
 	var node := structures.get_structure_node(2)
-	var burn := _burn_middle(structures)
-	assert_true((burn.entries[0].actor as Dictionary).is_empty(), "nothing to char")
-	burn.step(burn.end_at() + 0.2)
-	assert_almost_eq(node.transform.basis.get_scale().y, StructureBurn.RUIN_HEIGHT, 0.01)
+	var found: Array[Dictionary] = [
+		{"id": 2, "centre": Vector2(0, 0), "radius": 3.9, "distance": 0.0, "start": 0.0}
+	]
+	var puffs := _puffs()
+	var burn := StructureBurn.new()
+	assert_eq(burn.setup(structures, found, puffs[0], puffs[1], _rng(), Vector3.ZERO), 0)
+	assert_eq(burn.end_at(), 0.0, "the change waits for nothing")
+	burn.step(3.0)
+	assert_eq(node.transform, Transform3D.IDENTITY, "standing through the fire")
+	assert_true(burn.landed())
 	burn.release()
-	assert_eq(node.transform, Transform3D.IDENTITY)
 
 
 func test_a_burn_with_no_structures_node_or_a_missing_one_holds_nothing() -> void:
@@ -316,8 +362,7 @@ func test_a_burn_with_no_structures_node_or_a_missing_one_holds_nothing() -> voi
 	burn.release()
 
 
-func test_a_fire_waits_for_its_buildings_to_collapse() -> void:
+func test_a_fire_with_no_buildings_waits_for_nothing_of_theirs() -> void:
 	var sweep := FireSweep.new()
 	autofree(sweep)
 	assert_eq(sweep.hold_s(), sweep.duration, "no buildings: its own duration")
-	assert_true(FireSweep.burn_structures, "buildings burn by default")

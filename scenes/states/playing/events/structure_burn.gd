@@ -14,8 +14,11 @@ extends RefCounted
 ##   the burn climbs and smoke billows over it.
 ## - Collapse. COLLAPSE_AT of the way through its burn it slumps over COLLAPSE_S seconds: the
 ##   structure node itself (its parts are nodes already) squashes to RUIN_HEIGHT of its height
-##   about its foot with a small lean and a shiver, dust rolling out of its footprint. Every
-##   motion is held in STEP_S (10 Hz) steps, as the painted event variants are.
+##   about its foot, leans LEAN_DEG and sinks a little, while the burn shader breaks it up (the
+##   `burn` value runs on past BURN_RATE by BREAK_SPAN and the shader drops chunks of the charred
+##   parts, the roof's first: painter_building_burn.gdshaderinc), and two rounds of warm dust roll
+##   out of its footprint. Every motion is held in STEP_S (10 Hz) steps, as the painted event
+##   variants are.
 ## - The ruin. The charred, lowered building stands as the stand-in for its ruin until the
 ##   event's change lands: the GM's side replaces the record with its ruin recipe on the same
 ##   footprint (StructureRuin, StructureEditor.burn_down, one history entry with the fire's
@@ -25,8 +28,10 @@ extends RefCounted
 ##
 ## The painted `burn` instance uniform comes from the painter's buildings host
 ## (PainterBuildings.take, set_burn, drop; found by the structures node's meta, never by naming
-## a painter class: the start-up graph holds none). Under Classic there is no host: the building
-## still collapses and leaves its ruin, with no char (Classic's materials carry no burn).
+## a painter class: the start-up graph holds none). Under Classic there is no host and nothing
+## here plays: the building stands through the fire and becomes its ruin when the change lands
+## (the owner's call, 2026-11-18: no more work on Classic), so a Classic board and a Painted one
+## still hold the same map.
 ##
 ## Bounded: a fixed set of at most MAX_STRUCTURES, every random draw made in setup, a frame only
 ## compares the step index (a tick sets uniforms and one transform per building and emits a few
@@ -47,26 +52,38 @@ const BURN_S := Vector2(2.2, 2.6)
 const COLLAPSE_AT := 0.8
 const COLLAPSE_S := 1.1
 ## The height a collapsed building stands at, a share of its own, and the widest it spreads.
-const RUIN_HEIGHT := 0.3
-const SPREAD := 0.08
-## Its lean as it slumps (degrees) and the shiver (metres).
-const LEAN_DEG := 3.5
+const RUIN_HEIGHT := 0.14
+const SPREAD := 0.12
+## Its lean as it slumps (degrees, held at the end), the share of its height it sinks into the
+## ground and the shiver (metres).
+const LEAN_DEG := 9.0
+const SINK := 0.05
 const SHIVER_M := 0.05
+## How far the burn value runs past BURN_RATE as it breaks up (the shader's BURN_BREAK_CUT drops
+## chunks as it climbs; painter_building_burn.gdshaderinc).
+const BREAK_SPAN := 1.0
 ## Every motion is held for this long (10 Hz, as the painted variants).
 const STEP_S := 0.1
 ## Flames and dust puffs one building puts in the flame pool, smoke billows in the smoke pool.
 const FLAMES := 10
-const DUST_PUFFS := 5
-const FLAME_SLOTS := FLAMES + DUST_PUFFS + 1
+const DUST_PUFFS := 6
+const DUST_ROUNDS := 2
+## How far into the slump (collapse_amount) the second round of dust rolls out.
+const DUST_AGAIN_AT := 0.55
+const FLAME_SLOTS := FLAMES + DUST_PUFFS * DUST_ROUNDS
 const SMOKE_SLOTS := 3
+## How much of ForestFall.DUST's lightness the burnt building's dust keeps (it rolls out of ash,
+## a warm earth tone, not the pale dust of a fallen tree), and its alpha.
+const DUST_DARKEN := 0.6
+const DUST_ALPHA := 0.7
 ## Flames' life (seconds), their width against the building's height and their feet's height
 ## range (a share of it).
-const FLAME_LIFE := Vector2(0.5, 0.8)
+const FLAME_LIFE := Vector2(0.4, 0.6)
 const FLAME_WIDE := Vector2(0.14, 0.24)
 const FLAME_UP := Vector2(0.08, 0.5)
-## The share of its burn a building's flames rise in: none after it starts to slump (they stood
-## over a lowered roof as stickers, round 1).
-const FLAME_WHEN := Vector2(0.2, 0.7)
+## The share of its burn a building's flames rise in: the last is out (FLAME_WHEN.y of the burn
+## plus FLAME_LIFE.y) before the slump starts at COLLAPSE_AT, so none stands over a lowered roof.
+const FLAME_WHEN := Vector2(0.15, 0.5)
 const FLAME_TALL := 1.3
 ## Draws a building keeps: flames (when, angle, distance, height, size) then lean sign.
 const DRAWS_PER_FLAME := 5
@@ -74,9 +91,9 @@ const DRAW_LEAN := FLAMES * DRAWS_PER_FLAME
 const DRAWS := DRAW_LEAN + 1
 
 ## Per building: {"id", "node": its Structure_<id> Node3D, "base": the node's own transform,
-## "pivot": its foot's middle, "radius", "height", "start", "burn", "actor": the host's take (or
-## {}), "draws", "value": the last burn set, "flames", "smoked", "dusted", "settled" (the last
-## pose set), "end": when it is done}.
+## "pivot": its foot's middle, "radius", "height", "start", "burn", "actor": the host's take,
+## "draws", "value": the last burn set, "flames", "smoked", "dusted" (rounds of dust so far),
+## "settled" (the last pose set), "end": when it is done}.
 var entries: Array[Dictionary] = []
 
 var _host: Object = null
@@ -86,7 +103,8 @@ var _tick := -1
 var _drift := Vector3.ZERO
 
 
-## The painted buildings' host of `structures` (an AuthoredStructures node), null under Classic.
+## The painted buildings' host of `structures` (an AuthoredStructures node), null under Classic
+## (where no building plays a burn).
 static func host_of(structures: Node) -> Object:
 	if structures == null or not structures.has_meta(HOST_META):
 		return null
@@ -191,21 +209,30 @@ static func stepped(t: float) -> float:
 	return floorf(t / STEP_S) * STEP_S
 
 
+## The burn shader's value `x` (0..1, collapse_amount) into a slump: BREAK_SPAN of the way on past
+## BURN_RATE as x runs 0 to 1 (0 before it). Pure.
+static func break_value(x: float) -> float:
+	return clampf(x, 0.0, 1.0) * BREAK_SPAN
+
+
 ## The transform a building `x` (0..1, collapse_amount) into its slump takes, in the frame of its
 ## own node: squashed about `pivot` (its foot) from 1 to RUIN_HEIGHT with a quick drop and a small
-## settle at the end, spreading SPREAD wide, leaning `lean` (-1..1) LEAN_DEG about `axis` (a
-## horizontal unit vector) and shivering. x = 0 is the identity. Pure.
-static func collapse_pose(x: float, pivot: Vector3, axis: Vector3, lean: float) -> Transform3D:
+## settle at the end, spreading SPREAD wide, leaning `lean` (-1..1) up to LEAN_DEG about `axis` (a
+## horizontal unit vector, the lean held), sinking `sink` metres and shivering. x = 0 is the
+## identity. Pure.
+static func collapse_pose(
+	x: float, pivot: Vector3, axis: Vector3, lean: float, sink: float = 0.0
+) -> Transform3D:
 	if x <= 0.0:
 		return Transform3D.IDENTITY
 	var drop := smoothstep(0.0, 1.0, x)
 	var settle := 0.03 * sin(PI * clampf((x - 0.75) / 0.25, 0.0, 1.0))
 	var height := lerpf(1.0, RUIN_HEIGHT, drop) + settle
 	var wide := 1.0 + SPREAD * drop
-	var tilt := deg_to_rad(LEAN_DEG) * lean * sin(PI * x)
+	var tilt := deg_to_rad(LEAN_DEG) * lean * drop
 	var basis := Basis(axis, tilt) * Basis.from_scale(Vector3(wide, height, wide))
 	var shake := SHIVER_M * (1.0 - x) * minf(x * 6.0, 1.0)
-	var shiver := Vector3(sin(x * 61.0), 0.0, cos(x * 47.0)) * shake
+	var shiver := Vector3(sin(x * 61.0), -sink * drop, cos(x * 47.0)) * Vector3(shake, 1.0, shake)
 	return Transform3D(basis, pivot - basis * pivot + shiver)
 
 
@@ -225,7 +252,7 @@ func setup(
 	_drift = drift
 	_host = host_of(structures)
 	entries.clear()
-	if structures == null:
+	if structures == null or _host == null:
 		return 0
 	for item in found:
 		var node := structures.get_node_or_null("Structure_%d" % int(item.id)) as Node3D
@@ -233,6 +260,9 @@ func setup(
 			continue
 		var box := bounds_of(node)
 		if box.size.y <= 0.0:
+			continue
+		var actor: Dictionary = _host.call("take", node, true)
+		if actor.is_empty():
 			continue
 		var centre: Vector2 = item.centre
 		var burn := rng.randf_range(BURN_S.x, BURN_S.y)
@@ -255,18 +285,16 @@ func setup(
 			"height": box.size.y,
 			"start": float(item.get("start", 0.0)),
 			"burn": burn,
-			"actor": {},
+			"actor": actor,
 			"draws": draws,
 			"value": -1.0,
 			"flames": 0,
 			"smoked": 0,
-			"dusted": false,
+			"dusted": 0,
 			"settled": false,
 			"end": 0.0,
 		}
 		entry.end = float(entry.start) + end_after(burn)
-		if _host != null:
-			entry.actor = _host.call("take", node, true)
 		entries.append(entry)
 	return entries.size()
 
@@ -331,7 +359,7 @@ func release() -> void:
 	for entry in entries:
 		if is_instance_valid(entry.node):
 			(entry.node as Node3D).transform = entry.base
-			if _host != null and not (entry.actor as Dictionary).is_empty():
+			if is_instance_valid(_host):
 				_host.call("drop", entry.actor)
 		entry.actor = {}
 	entries.clear()
@@ -341,11 +369,11 @@ func _advance(entry: Dictionary, t: float) -> void:
 	if t < 0.0 or not is_instance_valid(entry.node):
 		return
 	var burn := float(entry.burn)
-	var value := burn_value(t, burn)
-	if value != float(entry.value):
+	var x := collapse_amount(t, burn)
+	var value := burn_value(t, burn) + break_value(x)
+	if value != float(entry.value) and is_instance_valid(_host):
 		entry.value = value
-		if _host != null and not (entry.actor as Dictionary).is_empty():
-			_host.call("set_burn", entry.actor, value)
+		_host.call("set_burn", entry.actor, value)
 	var draws: PackedFloat32Array = entry.draws
 	while int(entry.flames) < FLAMES:
 		var at := int(entry.flames) * DRAWS_PER_FLAME
@@ -356,17 +384,21 @@ func _advance(entry: Dictionary, t: float) -> void:
 	if int(entry.smoked) < 1 and t >= 0.45 * burn:
 		entry.smoked = 1
 		_billow(entry, 0.5, 1.2)
-	var x := collapse_amount(t, burn)
 	if x > 0.0:
-		if not entry.dusted:
-			entry.dusted = true
-			_dust(entry, draws)
+		if int(entry.dusted) < 1:
+			entry.dusted = 1
+			_dust(entry, draws, 0)
 			_billow(entry, 0.7, 1.6)
+		if int(entry.dusted) < DUST_ROUNDS and x >= DUST_AGAIN_AT:
+			entry.dusted = DUST_ROUNDS
+			_dust(entry, draws, 1)
 		if x < 1.0 or not entry.settled:
 			entry.settled = x >= 1.0
 			var heading := draws[1] * TAU
 			var axis := Vector3(cos(heading), 0.0, sin(heading))
-			var pose := collapse_pose(x, entry.pivot, axis, draws[DRAW_LEAN] * 2.0 - 1.0)
+			var lean := draws[DRAW_LEAN] * 2.0 - 1.0
+			var sink := SINK * float(entry.height)
+			var pose := collapse_pose(x, entry.pivot, axis, lean, sink)
 			(entry.node as Node3D).transform = pose * (entry.base as Transform3D)
 
 
@@ -392,21 +424,31 @@ func _flame(entry: Dictionary, at: int) -> void:
 	)
 
 
-## DUST_PUFFS puffs of dust rolling out of the footprint's edge as the building slumps.
-func _dust(entry: Dictionary, draws: PackedFloat32Array) -> void:
+## The warm earth tone of a burnt building's dust (ForestFall.DUST darkened, more opaque).
+static func dust_color() -> Color:
+	var tone := ForestFall.DUST.darkened(DUST_DARKEN)
+	tone.a = DUST_ALPHA
+	return tone
+
+
+## DUST_PUFFS puffs of dust (round number `again`, 0 or 1) rolling out of the footprint's edge as
+## the building slumps: the second round is turned half a puff along and smaller, so the rings
+## overlap as a cloud, not a row.
+func _dust(entry: Dictionary, draws: PackedFloat32Array, again: int) -> void:
 	var height := float(entry.height)
 	var radius := float(entry.radius)
+	var shrink := 1.0 - 0.25 * float(again)
 	for i in DUST_PUFFS:
-		var angle := (float(i) + draws[i]) / float(DUST_PUFFS) * TAU
+		var angle := (float(i) + 0.5 * float(again) + draws[i]) / float(DUST_PUFFS) * TAU
 		var out := Vector3(cos(angle), 0.0, sin(angle))
 		_flames.emit(
-			(entry.pivot as Vector3) + out * radius * 1.1 + Vector3(0.0, height * 0.06, 0.0),
-			out * (0.5 + 0.5 * draws[i + 1]) + Vector3(0.0, 0.25, 0.0),
-			clampf(height * 0.6, 1.2, 3.2),
-			1.2 + 0.2 * draws[i + 2],
-			ForestFall.DUST,
+			(entry.pivot as Vector3) + out * radius * 1.0 + Vector3(0.0, height * 0.1, 0.0),
+			out * (0.7 + 0.5 * draws[i + 1]) + Vector3(0.0, 0.5, 0.0),
+			clampf(height * 0.5, 1.0, 2.6) * shrink,
+			1.4 + 0.3 * draws[i + 2],
+			dust_color(),
 			0.0,
-			EventPuffs.SQUAT
+			EventPuffs.ROUND
 		)
 
 

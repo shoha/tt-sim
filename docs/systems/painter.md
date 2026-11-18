@@ -1350,14 +1350,23 @@ by event (findings: `docs/research/2026-11-09-prototypes/compare/painter_final25
   burns 2.2 to 2.6 s: its `burn` instance uniform goes 0 to 1.7 (`burn_progress`'s scale, so a tree
   and a house beside each other char on one curve), the painter's building burn shader laying char
   from the foot of each part, an ember band at its edge, roofs darkening with the walls (flat
-  steps); flames stand in its footprint as the burn climbs and a smoke billow rises over it. At 0.8
-  of its burn it slumps over 1.1 s: the structure node itself (its parts are nodes already) squashes
-  to 30 percent of its height about its foot, spreads 8 percent, leans 3.5 degrees and shivers, with
-  five squat dust puffs rolling out of its footprint (`StructureBurn.collapse_pose`, held in 10 Hz
-  steps like the other painted event variants). The charred, lowered building is the stand-in for
-  its ruin until the change lands. The painted `burn` comes from the buildings host
+  steps); flames stand in its footprint as the burn climbs (the last is out before the slump, so
+  none stands over a lowered roof) and a smoke billow rises over it. At 0.8 of its burn it slumps
+  over 1.1 s: the structure node itself (its parts are nodes already) squashes to 14 percent of its
+  height about its foot, spreads 12 percent, leans up to 9 degrees (held) and sinks 5 percent of its
+  height, while the `burn` value runs on from 1.7 to 2.7 and the building burn shader drops chunks
+  of the charred parts (`building_break`: a brush noise of about 1.5 m patches mixed with height up
+  the part, so the roof breaks up first and a few low stumps stay; `discard` in both structure
+  shaders, a compare when `burn` is 0), and two rounds of six warm dust puffs roll out of the
+  footprint (`StructureBurn.collapse_pose`, `dust_color`, held in 10 Hz steps like the other
+  painted event variants; the Painted event-puff variant gives a dust blob a firm brush-wobbled
+  edge, `FireVariants.EDITS`). The charred, broken, lowered building is the stand-in for its ruin
+  until the change lands. The painted `burn` comes from the buildings host
   (`PainterBuildings.HOST_META` on the `AuthoredStructures` node, a WeakRef: `StructureBurn` never
-  names a painter class); under Classic there is no host and the building collapses without char.
+  names a painter class); **under Classic there is no host and nothing of the building plays** (the
+  owner's call, 2026-11-18: no more work on Classic): it stands through the fire, the fire's
+  change does not wait for it, and it pops to its ruin when the history entry applies, so a Classic
+  and a Painted board hold the same map.
   The fire's change waits for the last collapse (`FireSweep.hold_s`, which `TerrainEvents.advance`
   reads), so the ruin never lands mid-slump.
 - **The ruin is document state.** The GM's change (`TerrainEvents._burn`) gains a third part in
@@ -1369,7 +1378,10 @@ by event (findings: `docs/research/2026-11-09-prototypes/compare/painter_final25
   `structures` op, a save keeps it, and an undo of the entry (one step) brings the buildings back.
   The ruin recipes are procgen's own (stone, ragged skyline, standing gables, rubble, moss), so the
   ruin is not charred: the `char` ash scar the fire lays over the ground round it is. A late joiner
-  gets only the ops, as for burnt trees. `FireSweep.burn_structures` (default true) switches it off.
+  gets only the ops, as for burnt trees. Cost (2026-11-18, pinned 1920x1080, vsync off, in-run
+  interleaved x3, GPU median ms, zoom 8, a village of three houses, fire frozen at 2.0 s): burning
+  Classic 2.477 / 2.483 / 2.474, Painted 2.073 / 2.059 / 2.076 (0.4 ms under Classic; Classic plays no
+  house burn); calm Classic 1.963 / 1.920 / 1.923, Painted 1.846 / 1.833 / 1.852.
   Open: a charred ruin (a document flag the painter reads to keep the char), a structure-only
   ignition (a fire still needs a forest to start), and walls and fences.
 - **Perf** (2026-11-15, pinned 1920x1080, vsync off, in-run interleaved, GPU median ms). Fire event

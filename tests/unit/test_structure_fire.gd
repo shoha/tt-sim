@@ -1,12 +1,13 @@
 extends GutTest
 
 ## A fire over a house in a forest, end to end without a network (card painter-structure-fire;
-## test_fire_event's harness): the GM's board and a client's play it, the house stands collapsing
-## on both until the change, then the GM's change is one history entry of three parts (the burnt
-## biome, the ash, the structures) and the client's copy gets the ruin as ops; the maps match, an
-## undo brings the house back on both, and a late joiner gets only the ops. A fire with buildings
-## off (FireSweep.burn_structures) leaves them.
+## test_fire_event's harness): the GM's board and a client's play it painted, the house stands
+## collapsing on both until the change, then the GM's change is one history entry of three parts
+## (the burnt biome, the ash, the structures) and the client's copy gets the ruin as ops; the maps
+## match, an undo brings the house back on both, and a late joiner gets only the ops. Under Classic
+## (no painted host) nothing of the house plays and the same change still lands.
 
+const STATE := {"sheet": "core", "mood": "summer", "elevation": 60.0}
 const DIR := "user://_painter-structure-fire_test/"
 const LEVEL := DIR + "map.ttmap"
 const FOREST := "temperate_forest_summer_s1"
@@ -29,7 +30,6 @@ func before_all() -> void:
 
 
 func after_all() -> void:
-	FireSweep.burn_structures = true
 	for file_name in DirAccess.get_files_at(DIR):
 		DirAccess.remove_absolute(DIR + file_name)
 	DirAccess.remove_absolute(DIR.trim_suffix("/"))
@@ -122,6 +122,12 @@ func test_a_fire_burns_the_house_down_on_every_board_and_the_change_keeps_it() -
 	var gm := await _load(true)
 	var client := await _load(false)
 	await _settle([gm, client], "the loads")
+	PainterSheet.clear_cache()
+	var painters: Array[PainterBuildings] = []
+	for copy: Copy in [gm, client]:
+		var painter := PainterBuildings.new()
+		assert_true(painter.paint(copy.root, STATE), "the board draws painted")
+		painters.append(painter)
 	var key := gm.edits.table_key
 	gm.edits.op_logged.connect(
 		func(index: int, bytes: PackedByteArray) -> void: client.edits.receive_op(key, index, bytes)
@@ -187,24 +193,29 @@ func test_a_fire_burns_the_house_down_on_every_board_and_the_change_keeps_it() -
 	assert_eq(joiner.edits.events.active_count(), 0, "no motion for a late joiner")
 	await _settle([gm, joiner], "the late joiner's catch-up")
 	assert_true(joiner.doc.structures[0].same_as(gm.doc.structures[0]), "the ruin for the joiner")
+	for painter in painters:
+		painter.release()
 	assert_engine_error(0, "no accent dropped")
 
 
-func test_a_fire_with_buildings_off_leaves_them() -> void:
+func test_under_classic_the_house_plays_nothing_and_still_becomes_its_ruin() -> void:
 	var made: bool = FileAccess.file_exists(LEVEL) or await _make_level()
 	if not made:
 		return
 	var gm := await _load(true)
 	await _settle([gm], "the load")
-	FireSweep.burn_structures = false
-	var before := gm.doc.structures[0].copy()
+	var entries := []
+	gm.edits.history.recorded.connect(func(recorded: Dictionary) -> void: entries.append(recorded))
 	var fire := TerrainEvent.fire(FIRE_CENTRE, RADIUS, 9)
 	assert_eq(gm.edits.events.start(fire), "")
 	gm.edits.events.advance(0.1)
 	var effect := gm.edits.events.effects()[0] as FireSweep
-	assert_eq(effect._structures.entries.size(), 0, "no building caught")
-	gm.edits.events.advance(fire.duration_s + 0.1)
-	FireSweep.burn_structures = true
+	assert_eq(effect._structures.entries.size(), 0, "no painted host: nothing of the house plays")
+	assert_eq(effect.hold_s(), fire.duration_s, "the change waits for nothing")
+	gm.edits.events.advance(fire.duration_s * 0.5)
+	assert_eq(_house(gm).transform, Transform3D.IDENTITY, "standing through the fire")
+	gm.edits.events.advance(fire.duration_s)
 	await _settle([gm], "the fire")
-	assert_true(gm.doc.structures[0].same_as(before), "the house stands, as the switch says")
+	assert_eq(entries.size(), 1, "one history entry")
+	assert_true(StructureRuin.is_ruin(gm.doc.structures[0]), "the change still leaves the ruin")
 	assert_engine_error(0, "no accent dropped")
