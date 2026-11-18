@@ -1453,7 +1453,8 @@ calls.
 ## Coverage (card painter-coverage, 2026-11-15)
 
 The audit of Classic against Painted is `docs/research/2026-11-09-prototypes/compare/
-painter_final25_coverage/matrix.md`. What the card filled:
+painter_final25_coverage/matrix.md`; the current, code-read class-by-class audit and its ranked gaps
+(main 4f1b82b8, 2026-11-18) is `docs/painter-coverage-audit.md`. What the card filled:
 
 - **Biome ground and tufts.** Three more ground roles, `dry` (savanna), `ash` (burnt forest) and
   `earth` (rocky badlands), and the plant roles `dry-grass` and `cactus`, are DERIVED
