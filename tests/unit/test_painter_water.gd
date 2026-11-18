@@ -16,7 +16,6 @@ var _fall_shader: Shader = null
 
 
 func before_each() -> void:
-	PainterStateReset.classic()
 	PainterSheet.clear_cache()
 	_water_shader = WaterGlbUtils.water_material().shader
 	_fall_shader = AuthoredWater.fall_material().shader

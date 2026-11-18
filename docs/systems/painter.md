@@ -79,7 +79,11 @@ chose Classic before the flip and saved is switched once and picks Classic again
 `LevelData.look` loads unchanged; a new map (`AuthoringController.new_level`) carries
 `{"style": "painted"}`, which only Map's choice reads. Headless runs and CI: `PainterWarmup` is a
 no-op there (`available()` false), and the static `RenderStyle.choice` starts Painted, so a test
-that needs Classic pins `RenderStyle.choice` itself. Render jobs have no Look knob: they read the
+that needs Classic pins `RenderStyle.choice` itself. The painter's process-wide state (the two shared
+water materials, `FireLook.glow_mirrors`, the fire and ghost painted flags, `RenderStyle.choice`,
+`FoliageLight.last_sun`, the A/B flags) is put back to a fresh process's before every test script by
+the GUT pre-run hook (`tests/gut_pre_run.gd`, `PainterStateReset`), so no script depends on which ran
+before it (painter-test-reset: shards in reverse and rotated order, 8 and 2 shards, 0 failures). Render jobs have no Look knob: they read the
 settings file of the user folder they run in, so a folder with no stored look renders Painted now.
 
 ## Who owns the light
