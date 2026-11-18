@@ -63,15 +63,15 @@ const SMOKE_SLOTS := 3
 ## range (a share of it).
 const FLAME_LIFE := Vector2(0.5, 0.8)
 const FLAME_WIDE := Vector2(0.14, 0.24)
-const FLAME_UP := Vector2(0.1, 0.8)
+const FLAME_UP := Vector2(0.08, 0.5)
+## The share of its burn a building's flames rise in: none after it starts to slump (they stood
+## over a lowered roof as stickers, round 1).
+const FLAME_WHEN := Vector2(0.2, 0.7)
 const FLAME_TALL := 1.3
 ## Draws a building keeps: flames (when, angle, distance, height, size) then lean sign.
 const DRAWS_PER_FLAME := 5
 const DRAW_LEAN := FLAMES * DRAWS_PER_FLAME
 const DRAWS := DRAW_LEAN + 1
-const DUST := Color(0.98, 0.82, 0.55, 0.5)
-const FLAME := Color(0.75, 0.047, 0.006, 1.0)
-const FLAME_LATE := Color(0.61, 0.018, 0.004, 1.0)
 
 ## Per building: {"id", "node": its Structure_<id> Node3D, "base": the node's own transform,
 ## "pivot": its foot's middle, "radius", "height", "start", "burn", "actor": the host's take (or
@@ -349,7 +349,7 @@ func _advance(entry: Dictionary, t: float) -> void:
 	var draws: PackedFloat32Array = entry.draws
 	while int(entry.flames) < FLAMES:
 		var at := int(entry.flames) * DRAWS_PER_FLAME
-		if t < lerpf(0.25, 0.95, draws[at]) * burn:
+		if t < lerpf(FLAME_WHEN.x, FLAME_WHEN.y, draws[at]) * burn:
 			break
 		_flame(entry, at)
 		entry.flames = int(entry.flames) + 1
@@ -388,7 +388,7 @@ func _flame(entry: Dictionary, at: int) -> void:
 		wide,
 		wide * FLAME_TALL,
 		life,
-		FLAME if draws[at + 4] < 0.6 else FLAME_LATE
+		FireSweep.FLAME if draws[at + 4] < 0.6 else FireSweep.FLAME_LATE
 	)
 
 
@@ -400,11 +400,11 @@ func _dust(entry: Dictionary, draws: PackedFloat32Array) -> void:
 		var angle := (float(i) + draws[i]) / float(DUST_PUFFS) * TAU
 		var out := Vector3(cos(angle), 0.0, sin(angle))
 		_flames.emit(
-			(entry.pivot as Vector3) + out * radius * 0.8 + Vector3(0.0, height * 0.08, 0.0),
+			(entry.pivot as Vector3) + out * radius * 1.1 + Vector3(0.0, height * 0.06, 0.0),
 			out * (0.5 + 0.5 * draws[i + 1]) + Vector3(0.0, 0.25, 0.0),
 			clampf(height * 0.6, 1.2, 3.2),
 			1.2 + 0.2 * draws[i + 2],
-			DUST,
+			ForestFall.DUST,
 			0.0,
 			EventPuffs.SQUAT
 		)
