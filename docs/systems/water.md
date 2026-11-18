@@ -100,7 +100,9 @@ Phase 4, P4-1 is data and algorithms only; the surface, carve and tool follow. P
   the Image's first row, which Godot samples at v near 0); its centre is at
   u = (i + 0.5) / nx, v = (j + 0.5) / nz. R, G = (flow x, -flow z) * 0.5 + 0.5, because
   the shader reads f = rg * 2 - 1 as Blender-style local (x, y) and rotates local
-  (f.x, 0, -f.y) through the model matrix. Border texels are still (128, 128).
+  (f.x, 0, -f.y) through the model matrix. Border texels repeat the flow of the texel just
+  inside them (they were still (128, 128) until painter-water-edge3: the in-map water's last
+  quarter metre read as still water, a pale hairline across a river at the map edge).
   `test_water_flow_baker.gd` decodes bakes through a mirror of `water_flow()`.
 
 ## Runtime
@@ -534,7 +536,7 @@ tokens past the edge. The probe that chose the rendering is P6-0
   the skirt receives them like the map, and making it cast them changed nothing. The in-map water of an end at the
   edge stays at its level out to the edge (`WaterMeshBuilder._run_out`) instead of falling
   away as a run-out sheet, which drew a step against the ribbon. Its flow UVs are the flow map's texels
-  just inside the edge at the mouth (the border texels are still water), across the channel by
+  just inside the edge at the mouth (the border texels repeat the flow inside them), across the channel by
   the offset, so the edge's flow carries on; in a bend the ripples keep the edge's direction.
 - **Ponds and lakes** (P6-4, `PondExits`): a pond painted against the edge was cut off there,
   the look rivers had. An exit is a run of at least two boundary samples on one side of the

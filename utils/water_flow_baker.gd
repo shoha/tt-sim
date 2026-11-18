@@ -16,8 +16,9 @@ extends RefCounted
 ##   R, G = (flow x, -flow z) * 0.5 + 0.5 as bytes (round(value * 255)): the shader reads
 ##   f = rg * 2 - 1 as Blender-style local (x, y) and turns it into local (f.x, 0, -f.y),
 ##   which with the identity transform is map (x, z). |f| is the 0..1 speed factor.
-##   Every border texel is still water (128, 128), so clamp-to-edge sampling off the map
-##   reads as still.
+##   Every border texel repeats the flow of the texel just inside it (EDGE_INSET_TEXELS), so a
+##   river that leaves the map keeps its flow to the edge and clamp-to-edge sampling off the map
+##   reads as the edge's flow (still where the edge is dry).
 ##
 ## Field, as terrain-paint: each river's course is its control line Chaikin-smoothed twice
 ## (WaterGeometry.river_course()); per texel the nearest segment's distance d and unit
@@ -44,6 +45,8 @@ const SMOOTHING_M := 0.75
 const BANK_FADE_PASSES_AT_512 := 3
 ## The byte of zero flow.
 const STILL := 128
+## The border texels copy the flow of the texel this many in from the edge (_encode).
+const EDGE_INSET_TEXELS := 1
 
 
 ## Texels per axis for a map of `extent` metres: extent / TEXEL_M rounded up, clamped to
@@ -204,7 +207,10 @@ static func _box_mean(
 	return out
 
 
-## Clamp |F| to 1, apply the bank fade, pack (x, -z) and force the border still.
+## Clamp |F| to 1, apply the bank fade, pack (x, -z). A border texel takes the flow of the texel
+## just inside it (EDGE_INSET_TEXELS), so a river that leaves the map keeps its flow out to the
+## edge: with the border forced still, the last quarter metre of the in-map water read as still
+## water (ice in winter, a pale hairline across the river at the mouth, card painter-water-edge3).
 static func _encode(
 	flow_x: PackedFloat32Array,
 	flow_z: PackedFloat32Array,
@@ -214,16 +220,19 @@ static func _encode(
 	var out := PackedByteArray()
 	out.resize(texels.x * texels.y * 2)
 	out.fill(STILL)
-	for j in range(1, texels.y - 1):
-		for i in range(1, texels.x - 1):
+	var inset := mini(EDGE_INSET_TEXELS, (mini(texels.x, texels.y) - 1) >> 1)
+	for j in texels.y:
+		for i in texels.x:
 			var k := j * texels.x + i
-			if fade[k] <= 0.0:
+			var src := clampi(j, inset, texels.y - 1 - inset) * texels.x
+			src += clampi(i, inset, texels.x - 1 - inset)
+			if fade[src] <= 0.0:
 				continue
-			var f := Vector2(flow_x[k], -flow_z[k])
+			var f := Vector2(flow_x[src], -flow_z[src])
 			var length := f.length()
 			if length > 1.0:
 				f /= length
-			f *= fade[k]
+			f *= fade[src]
 			out[k * 2] = clampi(roundi((f.x * 0.5 + 0.5) * 255.0), 0, 255)
 			out[k * 2 + 1] = clampi(roundi((f.y * 0.5 + 0.5) * 255.0), 0, 255)
 	return out

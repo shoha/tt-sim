@@ -196,7 +196,10 @@ func test_no_flow_outside_the_water() -> void:
 	)
 
 
-func test_border_is_still() -> void:
+## A river that runs out of the map keeps its flow on the border texels (they repeat the texel
+## just inside), so the in-map water's last cell is not still: it drew a pale hairline across the
+## river at the mouth (painter-water-edge3). Dry border texels stay still.
+func test_border_repeats_the_edge_flow() -> void:
 	var doc := _flat(20)
 	var half := doc.extent_m().x * 0.5
 	_add_river(doc, 1, PackedVector2Array([Vector2(-half, 0), Vector2(half, 0)]), 2.0, 1.0)
@@ -204,12 +207,36 @@ func test_border_is_still() -> void:
 	var rg: PackedByteArray = baked["rg"]
 	var size: Vector2i = baked["size"]
 	var row := size.y >> 1
-	assert_eq(_texel(rg, size, 0, row), Vector2i(128, 128), "left edge on the river")
-	assert_eq(_texel(rg, size, size.x - 1, row), Vector2i(128, 128), "right edge")
 	assert_gt(_texel(rg, size, 1, row).x, 200, "one texel in, it flows")
+	assert_eq(_texel(rg, size, 0, row), _texel(rg, size, 1, row), "left edge on the river")
+	assert_eq(
+		_texel(rg, size, size.x - 1, row), _texel(rg, size, size.x - 2, row), "right edge"
+	)
 	for i in size.x:
 		assert_eq(_texel(rg, size, i, 0), Vector2i(128, 128))
 		assert_eq(_texel(rg, size, i, size.y - 1), Vector2i(128, 128))
+
+
+## Sampled as the shader does, across the in-map water's last 0.4 m (the mesh's UVs run to the map
+## edge) the river's flow stays what it is just inside: no still strip at the mouth.
+func test_the_flow_holds_to_the_map_edge() -> void:
+	var doc := _flat(20)
+	var extent := doc.extent_m()
+	var half := extent.x * 0.5
+	_add_river(doc, 1, PackedVector2Array([Vector2(-half, 0), Vector2(half, 0)]), 2.0, 1.0)
+	var baked := _bake(doc)
+	var inside := _shader_flow(baked["rg"], baked["size"], extent, Vector2(half - 1.0, 0.0))
+	assert_gt(inside.length(), 0.3, "the river flows inside")
+	for back in [0.0, 0.05, 0.12, 0.2, 0.3, 0.4]:
+		var at := _shader_flow(baked["rg"], baked["size"], extent, Vector2(half - back, 0.0))
+		assert_almost_eq(at.length(), inside.length(), 0.05, "%.2f m inside the edge" % back)
+
+
+func test_a_dry_map_edge_stays_still() -> void:
+	var doc := _flat(20)
+	var baked := _bake(doc)
+	var rg: PackedByteArray = baked["rg"]
+	assert_eq(rg.count(WaterFlowBaker.STILL), rg.size(), "no water, no flow anywhere")
 
 
 # --- conventions ----------------------------------------------------------------------
