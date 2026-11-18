@@ -109,6 +109,10 @@ var _labels := PackedStringArray()
 var _built_rids: Array = []
 var _next_sample := 0
 var _warmer: PipelineWarmer = null
+## The ground clipmap strip warm viewports (GroundClipmapStrips.warm_viewports) and how many have
+## been drawn.
+var _strips: Array[SubViewport] = []
+var _strip_next := 0
 ## The drain probe (_drained): when the wait began, and the WorkerThreadPool task posted behind
 ## the compiles (-1 before).
 var _drain_start_msec := -1
@@ -273,7 +277,14 @@ func _process(_delta: float) -> void:
 				_thread = null
 				_start_draw()
 		Phase.DRAW:
-			if _warmer.pending_count() == 0 and _drained():
+			if _strip_next < _strips.size():
+				# One strip pipeline a frame: each is a large shader's compile. The one drawn the
+				# frame before has done its work and goes now, not with the screen at the hand-over.
+				if _strip_next > 0:
+					_strips[_strip_next - 1].queue_free()
+				GroundClipmapStrips.render_warm(_strips, _strip_next)
+				_strip_next += 1
+			elif _warmer.pending_count() == 0 and _drained():
 				_finish()
 	var status := _status_now()
 	# Only a changed line goes to the label (an empty one leaves it as it is).
@@ -437,6 +448,15 @@ func _start_draw() -> void:
 	_viewport.add_child(_warmer)
 	# The ground look's 2D bakes draw in viewports of their own format (card viewdraw).
 	add_child(GroundLookBake.warm_viewport())
+	# The ground clipmap's strip bake draws chunks with the bake shaders in 3D viewports of their
+	# own: one viewport per shader and pass, drawn a frame apart (_process).
+	_strips = GroundClipmapStrips.warm_viewports()
+	_strip_next = 0
+	# The session keeps the materials: freed while the engine still specializes their pipelines, one
+	# waits for those compiles.
+	GraphicsWarmup.keep_materials(GroundClipmapStrips.warm_samples(_strips))
+	for strip in _strips:
+		add_child(strip)
 	for sample in _results:
 		_built_names.append(String(sample.name))
 		var mesh := GraphicsWarmup.sample_mesh(sample)
@@ -515,6 +535,9 @@ func _finish() -> void:
 	# cold cache (perf audit S6). The session keeps them (GraphicsWarmup.keep_materials) and
 	# Root releases them on its way out; only the geometry goes now.
 	GraphicsWarmup.keep_materials(_samples)
+	for strip in _strips:
+		if is_instance_valid(strip):
+			strip.queue_free()
 	_samples.clear()
 	_results.clear()
 	var kept := GraphicsWarmup.kept_material_count()

@@ -17,6 +17,13 @@ extends RefCounted
 
 const BAKE_SHADER := preload("res://shaders/authored_ground_bake.gdshader")
 const BAKE_LOOKED_SHADER := preload("res://shaders/authored_ground_bake_looked.gdshader")
+## The edge of the warm-up's strip viewport, in pixels.
+const WARM_PX := 64
+## The slots a ground chunk's vertex stream fills (the layout PainterWarmup.LAYOUT_GROUND pins):
+## vertex, normal, uv, uv2, index.
+const WARM_LAYOUT: Array[int] = [
+	Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_TEX_UV, Mesh.ARRAY_TEX_UV2, Mesh.ARRAY_INDEX
+]
 
 ## [kind][pass] -> SubViewport, empty while not made.
 var viewports: Array = []
@@ -149,7 +156,70 @@ func gpu_ms(kind: int) -> float:
 	return ms
 
 
-func _viewport(vp_name: String, size: Vector2i) -> SubViewport:
+## The strip bake's pipelines, one small strip viewport each (a bake shader, a bake pass), in the
+## strip's own framebuffer format (the same _viewport) with a ground chunk's vertex layout
+## (WARM_LAYOUT), not drawing yet: the caller renders them one a frame (render_warm), since each
+## compiles a large shader and four in one frame froze the warm-up's bar for 1.2 s. The
+## first-launch graphics warm-up adds them, so the pipelines compile there: a level's first strip
+## draw, a third of a second after the painted look landed, compiled them in one frame of 0.7 to
+## 1.2 s on a cold driver cache, after the loading cover had lifted (card painter-level-entry).
+## Pixels: none of a map's (their own worlds, freed with the warm-up).
+static func warm_viewports() -> Array[SubViewport]:
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _warm_arrays())
+	var out: Array[SubViewport] = []
+	for shader: Shader in [BAKE_SHADER, BAKE_LOOKED_SHADER]:
+		for p in 2:
+			var stem := shader.resource_path.get_file().get_basename()
+			var vp := _viewport("ClipStripWarm_%s_%d" % [stem, p], Vector2i(WARM_PX, WARM_PX))
+			var mat := ShaderMaterial.new()
+			mat.shader = shader
+			mat.render_priority = 0
+			mat.set_shader_parameter("bake_pass", p)
+			var mi := MeshInstance3D.new()
+			mi.mesh = mesh
+			mi.material_override = mat
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			vp.add_child(mi)
+			var cam := vp.get_child(0) as Camera3D
+			cam.current = true
+			cam.position = Vector3(0.0, 10.0, 0.0)
+			cam.size = 4.0
+			out.append(vp)
+	return out
+
+
+## The materials of `warm` (warm_viewports()) in GraphicsWarmup.keep_materials' shape: the session
+## keeps them, since a material freed while the engine still specializes its pipelines waits for
+## those compiles (0.4 s at the next level load; GraphicsWarmupScreen._finish).
+static func warm_samples(warm: Array[SubViewport]) -> Array:
+	var out: Array = []
+	for vp in warm:
+		var mi := vp.get_child(vp.get_child_count() - 1) as MeshInstance3D
+		out.append({"material": mi.material_override})
+	return out
+
+
+## Draws warm viewport `index` of warm_viewports() once, in this frame's draw.
+static func render_warm(warm: Array[SubViewport], index: int) -> void:
+	if index >= 0 and index < warm.size() and is_instance_valid(warm[index]):
+		warm[index].render_target_update_mode = SubViewport.UPDATE_ONCE
+
+
+## One triangle in a ground chunk's vertex layout (WARM_LAYOUT), at the origin.
+static func _warm_arrays() -> Array:
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	var uv := PackedVector2Array([Vector2.ZERO, Vector2.RIGHT, Vector2.DOWN])
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3.ZERO, Vector3.RIGHT, Vector3.BACK])
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.UP, Vector3.UP, Vector3.UP])
+	arrays[Mesh.ARRAY_TEX_UV] = uv
+	arrays[Mesh.ARRAY_TEX_UV2] = uv
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2])
+	return arrays
+
+
+static func _viewport(vp_name: String, size: Vector2i) -> SubViewport:
 	var vp := SubViewport.new()
 	vp.name = vp_name
 	vp.own_world_3d = true

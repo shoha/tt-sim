@@ -7567,8 +7567,32 @@ the loader's last step ends in (trees installed, +72 surface and +40 specializat
 199 to 226 ms (51 runs) and Classic 178 to 203 ms (38). The frame is the engine compiling the real level's draws,
 which the warm-ups' one-triangle samples do not cover, in both looks; it ends under the loading overlay's last
 image. A driver cache that has seen any level removes it (seeded from a Classic level run: 197 to 218 ms). The
-earlier "700 to 1200 ms after the cover lifted" was not reproduced in any of the 66 cold runs. Not fixed: covering
-the level's real draws before the reveal is the untried work.
+earlier "700 to 1200 ms after the cover lifted" was not reproduced in any of the 66 cold runs. Fixed by card
+painter-level-entry, below.
+
+**The level-entry frame, found and fixed (card painter-level-entry, 2026-11-18).** Evidence:
+`D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final34_level_entry/` (`notes.md`, `runs/summary.csv`,
+`jobs/`). The earlier reading (the frame the loader ends in, "the engine compiling the level's real draws") was wrong
+on both counts. A per-frame log with the draw span (`RenderingServer.frame_pre_draw` to `frame_post_draw`) and a diff
+of the visible geometry signatures placed it: one DRAW frame of 1.2 s (forest) and 0.7 s (taiga) about 0.28 s AFTER the
+cover lifted (the loader flag is false from the lift), with only +2 surface and +1 specialization pipelines in the
+counters, in both levels, in the editor binary with `--warm-graphics` and in the export. What first drew in that frame
+was the ground clipmap's strip bake: `GroundClipmapStrips.make` copies the chunks onto the bake shaders
+(`authored_ground_bake.gdshader`, `_looked`) in strip viewports of their own, a third of a second after the painted
+look landed (the ground's rebake), and the first draw compiles those large shaders' pipelines for the strip's
+framebuffer. The first-launch warm-up compiled the two shaders (`get_rid`) but never drew them in a strip-format
+viewport. Not the occlusion rebuild (delayed 30 s: unchanged), not the overlay's reveal (2.5 s: unchanged), not the sun
+shadows (off: unchanged), not tokens (taiga has none). The fix: `GroundClipmapStrips.warm_viewports()` (four tiny
+viewports, a bake shader and pass each, a chunk's vertex layout) drawn by the warm-up's DRAW phase one a frame, so on a
+true first launch the compile happens behind the progress bar (DRAW worst frame 323 to 495 ms, the whole warm-up +0.1
+s) instead of at the first level's reveal. Exported release build, cold driver cache (private empty
+`__GL_SHADER_DISK_CACHE_PATH` per run), a fresh Godot user folder, Painted (before n = 9, after n = 9): the worst frame
+after the lift 1226-1335 ms to 40-57 ms; the taiga level in the same session 688-870 ms to 45-63 ms; Classic (3 each)
+1112-1279 to 23-28 and 699-773 to 22-24. Cover time (first loading frame to lift) is unchanged: Painted forest
+3.40-3.67 s before and 3.37-3.62 s after, taiga 0.53-0.63 s both. Warm driver cache (4 pairs): worst after-lift frame
+31-33 and 23-25 ms, cover 3.57-3.65 s and 3.48-3.66 s, nothing changed. Cost: on a cold cache one frame at the start of the
+first level's load (behind the loading overlay) grew from about 130 to 480-750 ms (Painted and Classic alike); warm it
+is absent. Its cause was not found (not the strip viewports' freeing, not their materials, which the session keeps).
 
 **The exported 60 fps lock** (unexplained): at the title the exe shows vsync mode 0 and `max_fps` 0 and runs at 59 to
 60 fps with 21 to 24 ms of process time under vsync modes 0, 1 and 3 alike, while the editor binary runs 320 to 418 fps.

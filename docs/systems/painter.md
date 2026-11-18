@@ -802,7 +802,12 @@ compiles none.
   Classic to Painted switch's worst frame 764 to 831 ms -> 161 to 206 ms, the first Painted level load
   3.2 s -> 2.1 to 2.9 s, its worst covered frame 1.1 s -> 0.35 to 0.39 s. With the pipeline caches
   off (a first launch or a new driver) the first level's worst covered frame was 1.1 to 1.5 s until the
-  warm-up's order changed (above: 0.24 to 0.25 s now). An exported release build was not measured.
+  warm-up's order changed (above: 0.24 to 0.25 s now). Exported release build (card painter-level-entry):
+  on a cold driver cache the first level still had one frame of 1.2 s (the second, 0.7 s) about 0.28 s
+  after the cover lifted: the ground clipmap's strip bake drawing for the first time (not a painter shader;
+  it follows the painted look's ground rebake). The first-launch GraphicsWarmup now draws it
+  (`GroundClipmapStrips.warm_viewports`, DRAW phase, one a frame): after the lift the worst frame is 40 to 57 ms
+  (docs/PERFORMANCE.md "The level-entry frame, found and fixed").
 - One-offs left on the first Painted install: the painter scripts' GDScript compile (about 0.5 s
   debug; the warm-up's coordinator thread now loads them off the main thread) and `ground+plant retone` (about 130 ms the first
   time). House builds with manner records cost +27 to 45 % in procgen's recording, not in `painter/`.
@@ -1499,7 +1504,8 @@ calls.
 ## Coverage (card painter-coverage, 2026-11-15)
 
 The audit of Classic against Painted is `docs/research/2026-11-09-prototypes/compare/
-painter_final25_coverage/matrix.md`. What the card filled:
+painter_final25_coverage/matrix.md`; the current, code-read class-by-class audit and its ranked gaps
+(main 4f1b82b8, 2026-11-18) is `docs/painter-coverage-audit.md`. What the card filled:
 
 - **Biome ground and tufts.** Three more ground roles, `dry` (savanna), `ash` (burnt forest) and
   `earth` (rocky badlands), and the plant roles `dry-grass` and `cactus`, are DERIVED
