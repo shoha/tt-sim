@@ -63,6 +63,20 @@ func test_parse_args_defaults_to_half_the_processors_capped() -> void:
 	assert_eq(Shards.parse_args(PackedStringArray(["-n=0"]), 24).shards, 1)
 
 
+func test_order_reverses_or_rotates_a_shard_and_defaults_to_alphabetical() -> void:
+	var scripts := PackedStringArray(["a", "b", "c", "d", "e"])
+	assert_eq(Shards.ordered(scripts, Shards.ORDER_ALPHABETICAL), scripts)
+	assert_eq(Shards.ordered(scripts, "nonsense"), scripts, "an unknown name changes nothing")
+	assert_eq(
+		Shards.ordered(scripts, Shards.ORDER_REVERSE), PackedStringArray(["e", "d", "c", "b", "a"])
+	)
+	assert_eq(
+		Shards.ordered(scripts, Shards.ORDER_ROTATED), PackedStringArray(["c", "d", "e", "a", "b"])
+	)
+	assert_eq(Shards.parse_args(PackedStringArray(["--order=reverse"]), 4).order, "reverse")
+	assert_eq(Shards.parse_args(PackedStringArray(), 4).order, Shards.ORDER_ALPHABETICAL)
+
+
 func test_committed_table_keeps_the_slow_scripts_and_weighs_the_rest_by_their_mean() -> void:
 	var table := Shards.committed_table({"slow": 12.345, "edge": 1.0, "a": 0.2, "b": 0.4, "*": 9.0})
 	assert_eq(table, {"slow": 12.3, "edge": 1.0, "*": 0.3})

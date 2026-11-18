@@ -107,6 +107,7 @@
 	"include_subdirs": false,
 	"prefix": "test_",
 	"suffix": ".gd",
+	"pre_run_script": "res://tests/gut_pre_run.gd",
 	"post_run_script": "res://tests/gut_post_run.gd",
 	"log_level": 1,
 	"should_exit": true,
