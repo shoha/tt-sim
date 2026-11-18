@@ -29,6 +29,17 @@ const EDITS: Dictionary = {
 	PUFF: [
 		["TIME", STEPPED],
 		["FIRE_CORE = vec3(1.0, 0.79, 0.27);", "FIRE_CORE = vec3(1.0, 0.86, 0.36);"],
+		# A brush blob (EventPuffs.emit_brush, kind marked 0.3 up: a collapsing building's dust only)
+		# is a brush-edged puff: a firm body and a short soft edge wobbled round its rim, not a disc
+		# fading over half its radius. Every other blob keeps its fade.
+		[
+			"shape = 1.0 - smoothstep(inner, 0.98 * edge, length(p));",
+			(
+				"shape = puff_kind > 0.1 ? 1.0 - smoothstep(0.84 * edge, 0.98 * edge,"
+				+ " length(p) + 0.07 * sin(a * 7.0 + puff_seed * 40.0))"
+				+ " : 1.0 - smoothstep(inner, 0.98 * edge, length(p));"
+			),
+		],
 		[
 			"shape = (1.0 - smoothstep(0.15, 1.0, r)) * (0.75 + 0.25 * sin(",
 			"shape = (1.0 - smoothstep(0.5, 1.0, r)) * (0.8 + 0.2 * sin("

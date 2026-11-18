@@ -11,6 +11,7 @@ extends GutTest
 const TESTS_DIR := "res://tests/"
 const FULL_CONFIG := ".gutconfig.json"
 const POST_RUN_HOOK := "res://tests/gut_post_run.gd"
+const PRE_RUN_HOOK := "res://tests/gut_pre_run.gd"
 const SUBSET_PREFIX := ".gutconfig_"
 ## The subsets AGENTS.md documents. A scan that misses one means the scan itself broke (the
 ## files start with a dot, which DirAccess treats as hidden on some platforms).
@@ -34,6 +35,20 @@ func test_every_documented_subset_has_a_config() -> void:
 	var configs := _subset_configs()
 	for subset in DOCUMENTED_SUBSETS:
 		assert_has(configs, "%s%s.json" % [SUBSET_PREFIX, subset])
+
+
+## The pre-run hook resets the painter's process-wide state before every script
+## (tests/gut_pre_run.gd, PainterStateReset): a config without it lets a leak cross scripts.
+func test_every_config_names_the_pre_run_hook() -> void:
+	assert_true(FileAccess.file_exists(PRE_RUN_HOOK), PRE_RUN_HOOK + " exists")
+	var configs := _subset_configs()
+	configs.append(FULL_CONFIG)
+	for file_name in configs:
+		var config: Variant = JSON.parse_string(
+			FileAccess.get_file_as_string(TESTS_DIR + file_name)
+		)
+		if config is Dictionary:
+			assert_eq(config.get("pre_run_script", ""), PRE_RUN_HOOK, file_name)
 
 
 func test_every_config_names_the_post_run_hook() -> void:

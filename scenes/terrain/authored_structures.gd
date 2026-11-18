@@ -626,8 +626,7 @@ func _structure_node(id: int, parts: Dictionary) -> Node3D:
 	var style: String = parts.get("style", "")
 	var tone: String = parts.get("stone_tone", "")
 	var meshes: Array = parts.get("meshes", [])
-	# A weathervane's arrow, shaft and tail turn in the wind (StructureVane): they leave the static
-	# meshes.
+	# A weathervane's arrow, shaft and tail turn in the wind (StructureVane): not static meshes.
 	var vane := StructureVane.split(meshes, parts.get("tag_table", PackedStringArray()))
 	if not vane.is_empty():
 		meshes = vane.rest
@@ -641,6 +640,7 @@ func _structure_node(id: int, parts: Dictionary) -> Node3D:
 	if not mill.is_empty():
 		node.add_child(mill_node(mill, int(parts.get("id", 0)), style, tone))
 	node.set_meta(TAGS_META, parts.get("tag_table", PackedStringArray()))
+	node.set_meta(StructureRuin.META, StructureRuin.is_ruin_recipe(String(parts.get("recipe", ""))))
 	_add_dressing(node, parts.get("dressing", {}))
 	_add_decor(node, parts)
 	var faces: PackedVector3Array = parts.get("collision", PackedVector3Array())

@@ -16,7 +16,8 @@ extends SceneTree
 ## or, on a clean machine such as CI, the committed table tests/gut_times.json, which lists the
 ## scripts of a second or more and weighs every other script at its "*" entry. `--write-times`
 ## rewrites that table from this run. Inside a shard the scripts keep the serial run's
-## (alphabetical) order. One script never splits, so the longest script bounds the wall time.
+## (alphabetical) order unless `--order=reverse|rotated` asks for a hostile one. One script never
+## splits, so the longest script bounds the wall time.
 ##
 ## When every shard has exited, the runner prints one line per shard, each failing test with
 ## its first message, and the totals, then exits 1 when a shard failed, crashed or hung. A
@@ -41,6 +42,10 @@ const GUT_CMDLN := "res://addons/gut/gut_cmdln.gd"
 const MAX_DEFAULT_SHARDS := 8
 ## The committed table names the scripts at or above this many seconds.
 const COMMIT_MIN_S := 1.0
+## Run orders inside a shard (`--order=`): the serial run's, and two hostile ones.
+const ORDER_ALPHABETICAL := "alphabetical"
+const ORDER_REVERSE := "reverse"
+const ORDER_ROTATED := "rotated"
 const POLL_S := 0.2
 const POLL_FPS := 10
 const HANG_S := 900.0
@@ -66,6 +71,8 @@ func _initialize() -> void:
 	if times.is_empty():
 		times = _read_json(COMMITTED_TIMES)
 	var shards := partition(scripts, times, int(opts.shards))
+	for shard: Dictionary in shards:
+		shard.scripts = ordered(shard.scripts, str(opts.order))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
 	if FileAccess.file_exists(LOCK_FILE):
 		var held := FileAccess.get_file_as_string(LOCK_FILE)
@@ -97,18 +104,40 @@ func _initialize() -> void:
 	quit(0 if ok else 1)
 
 
+## `scripts` (a shard's, alphabetical) in the run order `order` names: ORDER_ALPHABETICAL as is,
+## ORDER_REVERSE last to first, ORDER_ROTATED starting from the middle (the second half, then the
+## first). The hostile orders are for proving that no script depends on what ran before it
+## (painter-test-reset); an unknown name leaves the order alone.
+static func ordered(scripts: PackedStringArray, order: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	match order:
+		ORDER_REVERSE:
+			for i in range(scripts.size() - 1, -1, -1):
+				out.append(scripts[i])
+		ORDER_ROTATED:
+			var half := int(scripts.size() / 2.0)
+			out.append_array(scripts.slice(half))
+			out.append_array(scripts.slice(0, half))
+		_:
+			out = scripts
+	return out
+
+
 ## The options after `--`: `-n=<shards>` (default half of `processors`, at most
-## MAX_DEFAULT_SHARDS), `-gconfig=<path>` (a relative path is under res://) and
-## `--write-times`.
+## MAX_DEFAULT_SHARDS), `-gconfig=<path>` (a relative path is under res://), `--order=<name>` (see
+## ordered) and `--write-times`.
 static func parse_args(args: PackedStringArray, processors: int) -> Dictionary:
 	var opts := {
 		"shards": clampi(int(processors / 2.0), 1, MAX_DEFAULT_SHARDS),
 		"config": DEFAULT_CONFIG,
 		"write_times": false,
+		"order": ORDER_ALPHABETICAL,
 	}
 	for arg in args:
 		if arg.begins_with("-n="):
 			opts.shards = maxi(1, int(arg.substr(3)))
+		elif arg.begins_with("--order="):
+			opts.order = arg.substr(8)
 		elif arg.begins_with("-gconfig="):
 			var path := arg.substr(9)
 			var absolute := path.contains("://") or path.is_absolute_path()

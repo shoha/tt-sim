@@ -96,8 +96,10 @@ other committed home.
   entry, and burns away the small plants under it on open ground (grass, flowers, bushes
   cleared to bare ash; rocks stay; user, 2026-10-11); Tab means "the brush's other shape" for every tool with two (Start a fire: Circle and
   Path; Fire: Area and Line; Water: River and Pond); along a path, snags stand only where trees
-  stood, while the ash runs the whole path. Drawing a fire line (the Fire tool's Line, Start a
-  fire's Path) uses the same affordance as drawing a river: the river's ribbon at the brush
+  stood, while the ash runs the whole path. Buildings the event's circle or path reaches burn
+  down too (card painter-structure-fire, 2026-11-18): each is replaced by its ruin in the same
+  history entry, so one undo brings the village back (docs/systems/fire.md "Buildings"). Drawing a
+  fire line (the Fire tool's Line, Start a fire's Path) uses the same affordance as drawing a river: the river's ribbon at the brush
   width with its chevrons, tinted fire orange instead of the water tint (user, 2026-10-11).
   Choosing a two-shape brush's shape is one primitive too: Fire's Area / Line and Start a
   fire's Circle / Path use Water's River / Pond Shape field (same tiles, icons, order, Tab and

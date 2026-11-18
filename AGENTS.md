@@ -255,6 +255,18 @@ never `SHIPPED_DATA_ROOT`. Not moved: the Level Editor's autosave (`LevelEditorH
 at `user://levels/_autosave/`) and the update installer's restart scripts, which only an
 interactive session writes.
 
+**Painter state is reset between scripts, by the runner.** Painted is the default look, so a script
+that applies a level environment leaves the shared water materials, `FireLook.glow_mirrors`, the
+fire and ghost painted flags and the like painted for whatever runs after it in the same process
+(shard count and order decide who that is). `tests/gut_pre_run.gd`, the `pre_run_script` of every
+`tests/.gutconfig*.json` (a new config must name it; `test_gut_subsets.gd` checks), connects to
+GUT's `start_script` signal and calls `PainterStateReset.classic()` (tests/unit/painter_state_reset.gd,
+which lists what it restores) before each script, so a test never calls it. A test that needs
+Painted sets it itself (`RenderStyle.choice`, `FireVariants.set_painted`); one that needs Classic
+needs nothing. New painter-related process-wide state goes into `PainterStateReset` (both
+`classic()` and `dirty()`). `test_painter_test_isolation.gd` proves the hook in a child GUT process;
+`gut_shards.gd --order=reverse|rotated` runs each shard's scripts in a hostile order.
+
 **After a fresh clone or when new `class_name` scripts are added**, run the import step first (required once):
 ```
 godot --headless --import --path .
