@@ -141,12 +141,16 @@ const COLUMN_SIZE := 0.45
 ## Pools: every puff of one fire at once (flames: a crown's tongues and a spark a tree, and the
 ## ground's tongues; smoke: a billow a tree and the column's).
 const FLAMES_PER_TREE := CROWN_TONGUES + 1
-const FLAME_POOL := FLAMES_PER_TREE * MAX_TREES + FRONT_TONGUES
-const SMOKE_POOL := MAX_TREES + 2
+const STRUCTURE_FLAMES := StructureBurn.MAX_STRUCTURES * StructureBurn.FLAME_SLOTS
+const STRUCTURE_SMOKE := StructureBurn.MAX_STRUCTURES * StructureBurn.SMOKE_SLOTS
+const FLAME_POOL := FLAMES_PER_TREE * MAX_TREES + FRONT_TONGUES + STRUCTURE_FLAMES
+const SMOKE_POOL := MAX_TREES + 2 + STRUCTURE_SMOKE
 ## A path's ground tongues (spread along it, a longer line than a ring holds) and its pools.
 const PATH_FRONT_TONGUES := 56
-const PATH_FLAME_POOL := FLAMES_PER_TREE * FirePath.MAX_TREES + PATH_FRONT_TONGUES
-const PATH_SMOKE_POOL := FirePath.MAX_TREES + 2
+const PATH_FLAME_POOL := (
+	FLAMES_PER_TREE * FirePath.MAX_TREES + PATH_FRONT_TONGUES + STRUCTURE_FLAMES
+)
+const PATH_SMOKE_POOL := FirePath.MAX_TREES + 2 + STRUCTURE_SMOKE
 ## Draw order: the flames over the water and the ring.
 const FLAME_PRIORITY := EventPuffs.RENDER_PRIORITY + 2
 ## Colours (linear, see the header): a flame's rim (shows a deep red-orange; its bands burn
@@ -157,8 +161,14 @@ const FLAME_LATE := Color(0.61, 0.018, 0.004, 1.0)
 const EMBER := Color(1.0, 0.35, 0.036, 1.0)
 const BURN_SHADER := preload("res://shaders/wind_foliage_burn.gdshader")
 
+## False leaves buildings out of the fire (StructureBurn; an A/B switch for tests and measurements).
+## Read when an event is set up and when its change is made (TerrainEvents._burn).
+static var burn_structures := true
+
 var _flames: EventPuffs = null
 var _smoke: SmokePuffs = null
+## The buildings the fire burns (StructureBurn), made in setup.
+var _structures := StructureBurn.new()
 var _ground: GroundBurn = null
 ## The way the smoke drifts (map frame, horizontal, metres a second), the stand's middle on
 ## the ground and its trees' mean height, drawn in setup. The drift follows the global wind
@@ -328,7 +338,31 @@ func setup(editor: AuthoringEditor, event: TerrainEvent) -> bool:
 			heights.append(_ground_y(editor.document, p))
 		_ground.setup_path(_path, heights, event.radius_m, _spread, duration, event.seed_value)
 		_place_path_front(editor.document, event)
+	if burn_structures:
+		_light_structures(editor, event)
 	return true
+
+
+## The buildings in the fire's reach catch (StructureBurn): each when the front reaches its middle,
+## a little ahead of it (StructureBurn.CATCH_SHARE).
+func _light_structures(editor: AuthoringEditor, event: TerrainEvent) -> void:
+	var found := StructureBurn.find(editor.document, event)
+	if found.is_empty() or not is_instance_valid(editor.map_root):
+		return
+	for entry in found:
+		var middle: Vector2 = entry.centre
+		var at := Vector3(middle.x, _ground_y(editor.document, middle), middle.y)
+		entry["start"] = (
+			StructureBurn.CATCH_SHARE * _front_time(at, event)
+			+ _rng.randf_range(0.0, StructureBurn.CATCH_JITTER)
+		)
+	var structures := editor.map_root.get_node_or_null(AuthoredStructures.NODE_NAME)
+	_structures.setup(structures, found, _flames, _smoke, _rng, _drift)
+
+
+## When the event's change may be made: its own duration, or later while a building still collapses.
+func hold_s() -> float:
+	return maxf(duration, _structures.end_at())
 
 
 ## Plays the fire `elapsed` seconds in (after `delta` more seconds of flames and smoke).
@@ -363,6 +397,7 @@ func step(elapsed: float, delta: float) -> void:
 	while _columns < COLUMN_AT.size() and elapsed >= COLUMN_AT[_columns]:
 		_column(_columns)
 		_columns += 1
+	_structures.step(elapsed)
 	_smoke.step(delta)
 	_flames.step(delta)
 	_ground.step(elapsed, end)
@@ -386,7 +421,24 @@ func end_at(elapsed: float) -> float:
 func is_played(elapsed: float) -> bool:
 	var charred := GroundBurn.char_at(elapsed, end_at(elapsed)) > 0.0
 	var idle := _flames.is_idle() and _smoke.is_idle()
-	return elapsed >= duration and _landed_at < INF and idle and not charred
+	return elapsed >= hold_s() and _landed_at < INF and idle and not charred
+
+
+## Whether the change has landed: the trees' cells rebuilt and every burnt building replaced.
+func is_removed() -> bool:
+	return super() and _structures.landed()
+
+
+## Lets go of what the fire held: its buildings stand again if the change never came (once it did,
+## their nodes are gone), then the trees (ForestFall.release).
+func release() -> void:
+	_structures.release()
+	super()
+
+
+func _exit_tree() -> void:
+	_structures.release()
+	super()
 
 
 ## Whether the change has landed on this board since the event's end: every cell a burnt tree

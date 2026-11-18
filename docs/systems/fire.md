@@ -427,6 +427,17 @@ char and glow in its own stepped manner, and a tree FireSweep burns is a painted
 its cell (`PainterTrees.take`) and drawn with the burn shader variants. Details and gaps:
 [painter.md](painter.md) "Fire and events".
 
+## Buildings (card painter-structure-fire, 2026-11-18)
+
+A fire event that starts in a forest also burns the buildings (`MapDocument.structures`) whose
+footprint its circle or path reaches (`StructureBurn`, at most 8): each catches with the front, chars
+(the painter's building burn shader under Painted; no char under Classic, the collapse is the same),
+slumps to a third of its height under dust, and the GM's change replaces its record with its ruin
+(core's `ruin_*` recipe, `StructureRuin`, or removal when none fits) in the fire's one history entry,
+so peers, saves, late joiners and undo follow as for burnt trees. The charred scar round it is the
+ash surface. `FireSweep.burn_structures` switches it off. Details: [painter.md](painter.md) "Fire
+and events".
+
 ## Open work
 
 See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".

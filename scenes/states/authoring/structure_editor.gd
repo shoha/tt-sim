@@ -318,6 +318,31 @@ func remove(structure_id: int) -> bool:
 	return true
 
 
+## Burns structures `ids` down as one history entry labelled `label` (a fire's change): each is
+## replaced by its ruin (StructureRuin.ruin_of: a ruin recipe on the same footprint), or removed
+## when no ruin fits; a ruin or an unknown id is left as it is. False when nothing changed.
+func burn_down(ids: Array, label: String = "Burn down") -> bool:
+	var doc := _editor().document
+	var after: Array[Structure] = []
+	var changed := false
+	for entry in doc.structures:
+		if not ids.has(entry.id):
+			after.append(entry)
+			continue
+		var ruin := StructureRuin.ruin_of(entry, doc.extent_m(), _editor().map_scale())
+		if ruin != null:
+			after.append(ruin)
+			changed = true
+		elif not StructureRuin.is_ruin(entry):
+			changed = true
+		else:
+			after.append(entry)
+	if not changed:
+		return false
+	_change(label, after)
+	return true
+
+
 ## Refreshes the structures near an edit of the ground or water over `area` (map XZ; an empty
 ## rectangle: everywhere), without a history entry of its own: AuthoredStructures rebuilds the
 ## structures whose ground changed. Returns what the edit's entry needs to refresh them again on
