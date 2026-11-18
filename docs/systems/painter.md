@@ -1517,9 +1517,19 @@ painter_final25_coverage/matrix.md`; the current, code-read class-by-class audit
     exit is untouched). `d_h = column_raw / min(slope, 1.0)` for the pond's glitter was tried and
     changed nothing visible, so it was dropped; the shards on a steep pond bank remain (the bed's
     depth, per terrain triangle, is the likely source).
-  - Open: a hairline across the river exactly at the map edge (white over snow in winter, a faint sliver
-    in summer, also in Classic): a gap or T-junction between the in-map water mesh's last row and the
-    ribbon's first (`RiverExitMesh._ribbon_piece`), not a shader effect. The ribbon fades through a
+  - Round 3 (card painter-water-edge3, frames `painter_final36_water_edge3/before`, `after`): the hairline
+    across a river at the map edge was not a gap (a probe of the in-map mesh and the ribbon showed both
+    reach the edge row, level and collinear) but the flow map: its border texels were forced still, so the
+    in-map water's last cell (UVs run to the edge) read as still water, which the painted water draws as
+    ice in winter (`still` in the ice term) and as a different stroke field in summer, and Classic as a
+    sliver. `WaterFlowBaker._encode` now repeats the flow of the texel inside it on the border
+    (`EDGE_INSET_TEXELS`), so the flow holds to the edge (maps saved before keep the old bytes until the
+    water is next baked). The `edge_band` ramp is now 0.3 to 2.2 m (it was 0.4 to 1.1: over a metre the
+    bank foam and the pale shallows thickened abruptly as the fade began, which read as a step). On a
+    steep bank the lap's edge softens (`steep`, slope 0.5 to 1.3) and the outer dashes are cut off from
+    slope 0.9 (`dash_gate` 0.35 to 0.9) and drawn as soft dabs, so the pond's shards thin out; a steep
+    river bank loses some of its dashes too. Open: the notches at a fall's lip (the curtain is narrower
+    than the pool above, so the white shoulders step in at both sides of the lip). The ribbon fades through a
     pale turquoise before the green.
 - **Known gaps** are listed in the matrix with their effort: baked settlement furnishings, field
   plants, round and profile roofs (procgen records).

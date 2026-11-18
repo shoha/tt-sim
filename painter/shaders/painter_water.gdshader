@@ -289,12 +289,13 @@ void fragment() {
 	// Where a river leaves the map the terrain's bed and the channel patch's meet in a crease: the low
 	// column there drew a row of white dabs (the depth-slope wrap), a vertical strip of ice rim and a
 	// dip in the wash's alpha across the river (painter-edges2). The shore effects keyed to a shallow
-	// column fade out within a metre of the map's edge, on either side (p_exit: set with the river's
-	// ribbon, SkirtExits.ribbon_material).
+	// column fade out towards the map's edge, on either side (p_exit: set with the river's ribbon,
+	// SkirtExits.ribbon_material). The ramp is long (0.3 to 2.2 m): over a metre it read as a step where
+	// the bank foam and the pale shallows thicken as the fade begins (painter-water-edge3).
 	float edge_band = 1.0;
 	if (p_exit) {
 		float edge_sd = max(abs(p.x) - skirt_half_extent.x, abs(p.y) - skirt_half_extent.y);
-		edge_band = smoothstep(0.4, 1.1, abs(edge_sd));
+		edge_band = smoothstep(0.3, 2.2, abs(edge_sd));
 	}
 
 	// ---- The wash -----------------------------------------------------------------------------
@@ -424,14 +425,18 @@ void fragment() {
 	float lap_w = p_foam_w * (0.8 + 0.25 * sin(TIME * 1.1 + p_noise(vec3(p.x * 0.3, 2.0, p.y * 0.3)) * 6.28));
 	float bite_n = p_noise(vec3(p.x * 2.6, floor(TIME * 0.5), p.y * 2.6));
 	float thr = lap_w * (0.4 + 0.75 * bite_n);
-	float lap = (1.0 - smoothstep(thr - 0.03, thr + 0.02, d_h)) * smoothstep(0.0, 0.03, d_h + 0.02);
+	// On a steep bank the gradient (and so d_h) jumps from one mesh triangle to the next: the lap's
+	// edge softens there, so it reads as a brushed edge and not a row of crisp triangles.
+	float steep = smoothstep(0.5, 1.3, slope);
+	float lap_soft = 0.1 * steep;
+	float lap = (1.0 - smoothstep(thr - 0.03 - lap_soft, thr + 0.02 + lap_soft, d_h)) * smoothstep(0.0, 0.03, d_h + 0.02);
 	float dash_n = p_noise(vec3(p.x * 3.1, 4.0 + floor(TIME * 0.4), p.y * 3.1));
 	float outer = lap_w * 1.5;
-	// The outer dashes sit on a gently sloped shore only: on a steep bank the gradient (and so d_h)
-	// jumps from one mesh triangle to the next and the dashes broke into small glitter triangles
-	// (card painter-edges), so they thin out as the bank steepens.
-	float dash_gate = 1.0 - smoothstep(0.6, 1.4, slope);
-	float dashes = (1.0 - smoothstep(0.03, 0.06, abs(d_h - outer))) * smoothstep(0.64, 0.72, dash_n) * dash_gate;
+	// The outer dashes sit on a gently sloped shore only: on a steep bank they broke into small
+	// glitter triangles (cards painter-edges, painter-water-edge3), so they are cut off from a
+	// slope of 0.9 (a bank about 42 degrees steep) and soft dabs, not crisp ticks, before it.
+	float dash_gate = 1.0 - smoothstep(0.35, 0.9, slope);
+	float dashes = (1.0 - smoothstep(0.02, 0.08 + world_units_per_pixel, abs(d_h - outer))) * smoothstep(0.6, 0.76, dash_n) * dash_gate;
 	float shore_foam = max(lap, dashes) * ground_like * smoothstep(0.0, 0.01, column_raw + 0.004);
 	// Riffles: dense short dashes along the flow on fast, shallow water.
 	float rapid = smoothstep(0.18, 0.4, flow_speed) * (1.0 - smoothstep(0.25, 0.7, column));
