@@ -142,6 +142,20 @@ street". The brush's picked street is `WallBrush.selected_id` (`selection_change
 holds a selection takes Escape (`BrushMode.has_selection`). The Events pane (the GM's live brush)
 has no Split button.
 
+Crowded streets are refused (card painter-roof-round4, 2026-11-19; owner on the guild test level:
+"some buildings are colliding"). A street's lots reach about 9.4 m from its line (the 3 m setback plus
+a lot's depth), so two parallel streets drawn closer than about 19 m put houses through houses.
+`StreetCrowding.crowded_by(doc, wall)` (`utils/street_crowding.gd`, pure) plans the new street's lots
+and those of every other street whose reach (`WallGeometry.clear_bounds`) meets its own, and returns
+the first street whose lots overlap the new one's by more than `OVERLAP_M` (0.1 m; backyards that
+only touch pass), separating axes on each lot's four corners. `WallEditor.plan` refuses such a street
+(`last_refusal` `REFUSED_CROWDED`) while it is drawn, so the readout and the release toast say
+`WallBrush.CROWDED`: "Too close to another street's houses: draw it further away." Nothing is nudged: a
+street is a line the author drew. Two streets whose lines cross are exempt (a crossroads is drawn on
+purpose; its corner lots still meet). Only streets are asked: a street and a structure, a fence or a
+stone wall are not checked against each other. Tested in `test_street_crowding.gd`; the toast frame
+is `painter_final68_roof_round4/after/ov_toast.png` in the prototypes' compare folder.
+
 Not yet: corner plots, and a yard that is not fence or low wall (gardens, trees), plus finer
 control than the species.
 

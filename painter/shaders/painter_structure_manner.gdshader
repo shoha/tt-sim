@@ -81,6 +81,11 @@ varying flat int v_tone;
 // painter-look-houses3: three stone houses with one grey wall, one door and one roof). A part
 // that is not set takes the middle.
 instance uniform vec2 bld = vec2(0.5);
+// How far the wind scoured a blanket's crest (snow_gap; 1 on the hand-drawn houses). A wall
+// layer's blanket sets 0 (PainterStreetSnow, card painter-roof-round4): its lots lay their slopes in
+// one frame each, so the gaps fell at one place on every house of a row, beside its chimney, and
+// read as a brown slit (owner, final60) rather than wind.
+instance uniform float scour = 1.0;
 varying flat vec2 v_bld;
 varying vec2 v_fuv;
 varying vec4 v_rec;
@@ -631,7 +636,7 @@ void fragment() {
 			// The layer's frame: the slope's own metres, offset per piece by its accent.
 			vec2 sf = f + acc * 13.0;
 			if (code == 10 && under < 0.05 && up > 0.3) {
-				cover = 1.0 - snow_gap(sf, vl - f.y) * step(0.0, vl - f.y);
+				cover = 1.0 - snow_gap(sf, vl - f.y) * step(0.0, vl - f.y) * scour;
 			}
 			// The shared paint: broad washes, swells and hollows wider along the eave than down the
 			// slope, and the dabs that break the light's turn (painter_snow.gdshaderinc).

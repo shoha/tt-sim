@@ -144,6 +144,9 @@ func _arrive(key: int, id: int, built: Dictionary, generation: int) -> void:
 	mi.mesh = mesh
 	mi.material_override = _material
 	mi.set_instance_shader_parameter(&"bld", PainterMannerHost.building_seed(id))
+	# No wind-scoured crest gaps: in a row's one frame they fell beside every chimney (the manner
+	# shader's `scour`, card painter-roof-round4).
+	mi.set_instance_shader_parameter(&"scour", 0.0)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	part.add_child(mi)
 	_nodes[id] = mi

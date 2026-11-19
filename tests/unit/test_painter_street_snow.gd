@@ -204,6 +204,11 @@ func test_a_winter_wall_layer_wears_blankets() -> void:
 		assert_eq(laid[0].get_parent(), roof, "in its roof's frame")
 		assert_eq(laid[0].cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 		assert_eq(laid[0].material_override, buildings.manner.snow_material(), "the manner's snow")
+		assert_eq(
+			float(laid[0].get_instance_shader_parameter(&"scour")),
+			0.0,
+			"no crest gaps (they fell beside every chimney of a row)"
+		)
 	buildings.paint(map, {"sheet": "core", "mood": "summer", "elevation": 40.0})
 	assert_eq(buildings.street_snow.laid().size(), 0, "no blanket without roof snow")
 	buildings.release()

@@ -2192,6 +2192,34 @@ Owner verdicts on the roof-polish frames, taken one by one (evidence:
   board and a flat roof, neighbouring lots' seam, a winter wall layer's blankets, grey by saturation);
   `test_painter_buildings.gd` (one bodied cap in both roof shaders).
 
+## Roof round 4 (card painter-roof-round4, 2026-11-19; look-pending)
+
+Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final68_roof_round4/` (notes.md, jobs/).
+
+- **The slit beside every street chimney.** It was the blanket's own crest gaps (`snow_gap`, drawn in
+  the roof's tone by the manner shader's code 10): a wall layer's blanket lays every lot's slopes
+  in one frame from the lot's corner, so the gaps fell at the same place on every house of a row,
+  beside its chimney, and read as a brown slit (final60 st_win_z9_p and z30). The manner shader has an
+  `instance uniform float scour` (1 on the hand-drawn houses, where the gaps stay); PainterStreetSnow
+  sets 0 on each blanket. A headless gap probe (a grid of downward rays over roof and blanket) found
+  no hole in the blanket on the level's street, so the geometry was never the cause. Also, a street gable's two slopes
+  end 6 to 10 cm apart across a flat ridge board, and each blanket crested over its own side, leaving
+  a bare line on the ridge headless (map seed 9): `PainterStreetSnow._join_ridges` carries both ridges
+  to the board's middle (a pair parallel, level within `LEVEL_M`, `RIDGE_JOIN_M` 0.2 apart at most).
+- **The market's bare orange ends.** Not slopes: the guild and market species clad their gable ends in
+  roof tile, upright triangles inside the Roof part (up 0, h 0 to 1), and `snow_cover_roof` gave an
+  upright face nothing. `snow_gable(up)` in `painter_snow.gdshaderinc` covers a roof's upright faces;
+  only the A3b roof shader calls it (a hand-drawn house's gables are walls, and its round roofs keep
+  their upright foot). `snow_frame`'s second coordinate is the height on an upright face, so the
+  washes do not run as stripes there.
+- **Crowded streets** are refused at placement: walls.md "Streets".
+- Still seen: short red slashes on the market's ridges near the chimneys (the A3b roof shader's own
+  `snow_gap`, which the blanket does not cover everywhere); preset 6's L-plan roofs still get few
+  blankets (strips fallback). Not timed: the ridge join runs on the worker; the gable term is two
+  smoothsteps in the A3b fragment; crowding plans nearby rows' lots on each replan of a street drag.
+- Tests: `test_painter_street_snow.gd` (a ridge board closes between the crests; a street blanket's
+  `scour` is 0), `test_street_crowding.gd`.
+
 ## The eye backdrop (card painter-eye-backdrop, 2026-11-18; look-pending)
 
 At the eye the painted sky was a flat gradient over a hard ground line where Classic's `EyeSky`
