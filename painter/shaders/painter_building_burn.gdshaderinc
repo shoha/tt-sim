@@ -18,9 +18,10 @@ const float BURN_EMBER_BAND = 0.34;
 // building comes down in rigid charred pieces (each piece carries the burn as its part does, so it
 // starts at the building's char), and the charcoal deepens. Embers glow in seams through it as it breaks
 // (two flat bands, a hot orange core in a deep red, along a brush noise), brightest as the slabs fall
-// and dying to a low smoulder once they rest (EMBER_SMOULDER of it).
+// and dying to a low smoulder once they rest (EMBER_SMOULDER of it). EMBER_SEAM is a crack's half
+// width in metres at its widest (the red rim; the core under half of it).
 const float BURN_CHARRED = 1.7;
-const float EMBER_SEAM = 0.05;
+const float EMBER_SEAM = 0.09;
 const float EMBER_SMOULDER = 0.3;
 const float BURN_DEEPEN = 0.3;
 
@@ -31,15 +32,29 @@ bool building_break(vec3 wp, float h) {
 	return false;
 }
 
-// The ember seams' emission at world `wp` of a collapsing building (burn past BURN_CHARRED).
+// The ember seams' emission at world `wp` of a collapsing building (burn past BURN_CHARRED). A seam is
+// a crack, not a ring (painter-ground-fire-round3: the contour of one smooth noise closed into rings
+// on a big slab, like leopard spots): the contour of a two-octave field, its point pushed along by a
+// finer noise so the line goes jagged, and its width tapered to nothing by a slow gate, so each line
+// opens into a few crack runs that thin out and stop. The width is in metres (the field's distance to
+// its contour, by its screen derivatives): cut in field units, a flat stretch of the field swelled a
+// line into a broad flame-shaped band (round 2). Called in uniform control flow (burn is the draw's),
+// so the derivatives hold.
 vec3 building_embers(vec3 wp) {
 	float k = clamp(burn - BURN_CHARRED, 0.0, 1.0);
 	float glow = smoothstep(0.0, 0.12, k) * (1.0 - (1.0 - EMBER_SMOULDER) * smoothstep(0.5, 1.0, k));
-	float seam = abs(p_noise(wp * 0.55 + 23.0) - 0.5);
-	if (seam < EMBER_SEAM * 0.45) {
+	vec3 q = wp * 0.55 + 23.0;
+	// (Round 1 of the card pushed harder and wider, 0.5 at 2.4 per metre with a 0.35 second octave:
+	// the lines curled into a tangle of flame-like swirls.)
+	q.xz += (p_noise(wp * 3.4 + 7.0) - 0.5) * vec2(0.3, -0.25);
+	float field = p_noise(q) * 0.75 + p_noise(q * 2.3 + 11.0) * 0.25;
+	float open = smoothstep(0.42, 0.62, p_noise(wp * 0.33 + 61.0));
+	float metres = abs(field - 0.5) / max(fwidth(field), 1.0e-5) * length(fwidth(wp));
+	float width = EMBER_SEAM * open;
+	if (metres < width * 0.45) {
 		return vec3(1.0, 0.36, 0.05) * glow;
 	}
-	return seam < EMBER_SEAM ? vec3(0.42, 0.06, 0.018) * glow : vec3(0.0);
+	return metres < width ? vec3(0.42, 0.06, 0.018) * glow : vec3(0.0);
 }
 
 // Lays the burn on the three tones (shade, mid, lit: linear) of the surface at world point `wp`,
@@ -48,6 +63,8 @@ vec3 building_burn(vec3 wp, float h, inout vec3 shd, inout vec3 mid, inout vec3 
 	if (burn <= 0.0) {
 		return vec3(0.0);
 	}
+	// The seams before any per-pixel branch: they take screen derivatives.
+	vec3 embers = burn > BURN_CHARRED ? building_embers(wp) : vec3(0.0);
 	float n = p_noise(wp * 0.9 + 41.0);
 	float since = burn * 1.1 - (0.75 * h + 0.35 * n);
 	if (since <= 0.0) {
@@ -60,7 +77,7 @@ vec3 building_burn(vec3 wp, float h, inout vec3 shd, inout vec3 mid, inout vec3 
 		shd = vec3(0.022, 0.017, 0.016) * tone;
 		mid = vec3(0.042, 0.032, 0.028) * tone;
 		lit = vec3(0.075, 0.056, 0.046) * tone;
-		return burn > BURN_CHARRED ? building_embers(wp) : vec3(0.0);
+		return embers;
 	}
 	shd = vec3(0.05, 0.02, 0.014);
 	mid = vec3(0.11, 0.036, 0.016);
