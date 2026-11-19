@@ -118,6 +118,56 @@ func test_lot_wood_takes_the_props_honey() -> void:
 	assert_eq(PainterBuildings.wall_part_key("Wall_unheard_of"), "")
 
 
+func test_plank_houses_are_less_honey_than_their_fences() -> void:
+	# Card painter-walls-round3 (owner: "Plank houses less honey"): a street house's planks sit
+	# between the board houses' tone and the lot honey, its yard fence keeps the honey.
+	var sheet := PainterSheet.load_sheet("core")
+	for mood: String in ["summer", "winter", "grimdark"]:
+		var honey := PainterBuildings.lot_wood_middle(sheet, mood, 40.0)
+		var boards := PainterSheet.tone_lch(sheet, mood, PainterBuildings.HOUSE_WOOD_FROM, 40.0)
+		var house := PainterBuildings.house_wood_middle(sheet, mood, 40.0)
+		assert_lt(house.y, honey.y, "%s: less chroma than the honey" % mood)
+		assert_gt(house.y, minf(boards.y, honey.y) - 1e-5, "%s: no greyer than the boards" % mood)
+		assert_lt(absf(house.x - boards.x), absf(honey.x - boards.x) + 1e-5, mood)
+	var host := PainterBuildings.new()
+	host.applied = {"sheet": "core", "mood": "summer", "elevation": 40.0}
+	var lot: ShaderMaterial = host.call("_material", "lot_wood")
+	assert_true(bool(lot.get_shader_parameter(&"house_planks")), "the lot wood reads the house flag")
+	var ramps: PackedVector3Array = lot.get_shader_parameter(&"ramps")
+	var house_ramp := PainterBuildings.ramp(
+		PainterSheet.load_sheet("core"), "summer", PainterBuildings.HOUSE_WOOD_ROLE, 40.0, "wall"
+	)
+	assert_eq(ramps.slice(6, 12), house_ramp, "the second ramp is the plank houses'")
+	var boards_material: ShaderMaterial = host.call("_material", "wall_boards")
+	assert_false(bool(boards_material.get_shader_parameter(&"house_planks")))
+
+
+func test_a_rows_wood_flags_its_houses_and_not_its_yards() -> void:
+	var yards := PackedByteArray([0, 1, 0])
+	var flags := WallGeometry.house_flags(PackedInt32Array([0, 1, 2, -1, 7]), yards)
+	var want := PackedVector2Array(
+		[Vector2.RIGHT, Vector2.ZERO, Vector2.RIGHT, Vector2.ZERO, Vector2.ZERO]
+	)
+	assert_eq(flags, want, "house, yard, house, untagged, unknown tag")
+
+
+func test_wall_leaves_get_the_contact_pass() -> void:
+	var stand_in := ShaderMaterial.new()
+	stand_in.shader = load("res://painter/shaders/painter_plant.gdshader") as Shader
+	stand_in.set_shader_parameter(&"alpha_scissor_threshold", 0.37)
+	var contact := PainterIvyContact.attach(stand_in)
+	assert_not_null(contact)
+	assert_eq(stand_in.next_pass, contact)
+	assert_true(contact.has_meta(PainterIvyContact.META))
+	assert_almost_eq(float(contact.get_shader_parameter(&"alpha_scissor_threshold")), 0.37, 1e-6)
+	assert_eq(PainterIvyContact.attach(stand_in), contact, "hung once")
+	PainterIvyContact.enabled = false
+	var bare := ShaderMaterial.new()
+	assert_null(PainterIvyContact.attach(bare))
+	assert_null(bare.next_pass)
+	PainterIvyContact.enabled = true
+
+
 func test_a_crossings_stone_is_a_darker_quieter_wall_stone_in_every_mood() -> void:
 	# Card painter-edges: the arch, the ford slabs and the stepping stones were the wall stone,
 	# pale cream against sand banks; the crossing stone is derived from it by crossing-* numbers.

@@ -351,6 +351,9 @@ func _dress_decor(structure: Node) -> void:
 			# One form for the whole mesh: no foot darkening, no instance origin to read.
 			stand_in.set_shader_parameter(&"casts_shadow", false)
 			stand_in.set_meta(META, true)
+			# The wall's leaves get a soft contact shade on the wall under them (PainterIvyContact).
+			if int(entry["kind"]) == PainterPlantRoles.KIND_WALL_LEAF:
+				PainterIvyContact.attach(stand_in)
 			_decor[original.get_instance_id()] = stand_in
 			if not applied.is_empty():
 				_tone_decor(stand_in, entry, PainterSheet.load_sheet(applied["sheet"]))

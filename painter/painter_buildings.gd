@@ -74,6 +74,13 @@ const CROSSING_FROM := "wall-stone"
 const LOT_WOOD_ROLE := "lot-wood"
 const LOT_WOOD_FROM := "timber"
 const LOT_WOOD_CHROMA := 0.85
+## The second ramp of the wall layers' wood: a street house's planks (WallGeometry.house_flags),
+## the board houses' own tone (HOUSE_WOOD_FROM) moved HOUSE_WOOD_HONEY of the way to the lot's
+## honey, so a plank house reads as weathered warm boards and its yard fence as honey (owner
+## 2026-11-19: "Plank houses less honey"). Derived at tone time, so it follows every mood and sun.
+const HOUSE_WOOD_ROLE := "house-wood"
+const HOUSE_WOOD_FROM := "wall-boards"
+const HOUSE_WOOD_HONEY := 0.3
 ## The prefixes of a mill's and a vane's mesh names (AuthoredStructures.mill_node, vane_node).
 const PART_PREFIXES: Array[String] = ["cap_", "wheel_", "vane_"]
 ## A picked roof's tones, in the shader's order.
@@ -454,6 +461,7 @@ func _material(key: String) -> ShaderMaterial:
 	if path == SHADER:
 		material.set_shader_parameter(&"pattern", int(kind[1]))
 		material.set_shader_parameter(&"pick", pick)
+		material.set_shader_parameter(&"house_planks", str(kind[0]) == LOT_WOOD_ROLE)
 	_materials[key] = material
 	if not applied.is_empty():
 		_tone(material, kind, PainterSheet.load_sheet(applied["sheet"]))
@@ -498,6 +506,8 @@ func _tone(material: ShaderMaterial, kind: Array, sheet: Dictionary) -> void:
 		families.append("stone")
 	else:
 		roles.append(str(kind[0]))
+		if str(kind[0]) == LOT_WOOD_ROLE:
+			roles.append(HOUSE_WOOD_ROLE)
 		if int(kind[1]) == P_STONE or int(kind[1]) == P_SLATE:
 			# Stone and slate carry the leaf's ramp as a second role (slots 6 to 11) for the
 			# moss and lichen the manner shader lays on them (card painter-look-houses), and the
@@ -573,12 +583,14 @@ static func ramp(
 				base = crossing_tone(sheet, mood, elevation)
 			LOT_WOOD_ROLE:
 				base = lot_wood_middle(sheet, mood, elevation)
+			HOUSE_WOOD_ROLE:
+				base = house_wood_middle(sheet, mood, elevation)
 			_:
 				base = PainterSheet.tone_lch(sheet, mood, role, elevation)
 	var shape := shape_of(sheet, mood, elevation, family)
 	var hue_spread := PainterSheet.number(sheet, mood, "hue-spread", elevation)
 	var value_spread := PainterSheet.number(sheet, mood, "value-spread", elevation)
-	if family == "roof":
+	if family != "timber":
 		value_spread *= roof_spread(base.x)
 	var out := PackedVector3Array()
 	for variant in 2:
@@ -596,7 +608,8 @@ static func ramp(
 ## The spread is a lightness step, so on grimdark's dark roofs (about 0.32) the same 0.035 swung the
 ## light a third either way and the variant patches read as camouflage (owner, 2026-11-18: "why is
 ## everything so splotchy?"); held to a share of the lightness it swings it as much as summer's.
-## Pure.
+## Walls and stone take it too (card painter-walls-round3: "the walls are still splotchy"); the
+## timber beams, thin and dark by design, keep the whole spread. Pure.
 static func roof_spread(lightness: float) -> float:
 	return clampf(lightness / ROOF_SPREAD_L, ROOF_SPREAD_MIN, 1.0)
 
@@ -625,6 +638,20 @@ static func lot_wood_middle(sheet: Dictionary, mood: String, elevation: float) -
 		PainterSheet.tone_lch(sheet, mood, LOT_WOOD_FROM, elevation)
 	)
 	return Vector3(honey.x, honey.y * LOT_WOOD_CHROMA, honey.z)
+
+
+## The middle tone (OKLCH) of a street house's planks (HOUSE_WOOD_ROLE): the board houses' tone
+## moved HOUSE_WOOD_HONEY of the way to the lot's honey (lightness, chroma and hue), so it sits
+## between the structures' boards and the fences in every mood. Pure.
+static func house_wood_middle(sheet: Dictionary, mood: String, elevation: float) -> Vector3:
+	var boards := PainterSheet.tone_lch(sheet, mood, HOUSE_WOOD_FROM, elevation)
+	var honey := lot_wood_middle(sheet, mood, elevation)
+	var t := HOUSE_WOOD_HONEY
+	return Vector3(
+		lerpf(boards.x, honey.x, t),
+		lerpf(boards.y, honey.y, t),
+		fposmod(boards.z + wrapf(honey.z - boards.z, -180.0, 180.0) * t, 360.0)
+	)
 
 
 ## The middle tone (OKLCH) of a crossing's stone: the wall stone's, its hue turned by

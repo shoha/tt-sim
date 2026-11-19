@@ -56,6 +56,7 @@ static func classic() -> void:
 	PainterVillage.furnishings = true
 	PainterVillage.decor_plants = true
 	PainterVillage.field_plants = true
+	PainterIvyContact.enabled = true
 	PainterMannerHost.snow_body = true
 	PainterMannerHost.hand = true
 	PainterMannerSnow.blanket = true
@@ -94,6 +95,7 @@ static func dirty() -> PackedStringArray:
 				PainterVillage.furnishings
 				and PainterVillage.decor_plants
 				and PainterVillage.field_plants
+				and PainterIvyContact.enabled
 			)
 				or not (PainterMannerHost.snow_body and PainterMannerHost.hand)
 			or not PainterMannerSnow.blanket

@@ -55,6 +55,11 @@ uniform vec3 ramps[24];
 // A picked roof's reference tones (OKLab, the four roles' middles in the mood a paint is read in:
 // PainterBuildings.paint_refs) that its ramp turns from to its paint.
 uniform vec3 paint_ref[4];
+// The street lots' planks (the wall layers' `Wood`): a vertex whose UV2.x is 1 is a house's (its
+// walls, frames and trim; WallGeometry.house_flags) and takes the second ramp, the plank houses'
+// calmer wood; a yard fence, a drawn fence and a bridge deck (0) keep the props' honey (owner
+// 2026-11-19: "Plank houses less honey"; the fences keep their warmth).
+uniform bool house_planks = false;
 // The share of a roof under snow (sheet roof-snow) and the snow's LINEAR [shade, mid, lit].
 uniform float snow = 0.0;
 uniform vec3 snow_ramp[3];
@@ -90,14 +95,23 @@ varying vec3 f_mid;
 varying vec3 f_lit;
 varying float f_wob;
 // x: half the width of the light's steps, y: how far the wobble moves them (soft on snow), z: the
-// light's share under which a point is in cast shadow.
-varying vec3 f_soft;
+// light's share under which a point is in cast shadow, w: how far the wobble moves that share.
+varying vec4 f_soft;
+
+// A wall's share of the variant patches and of the dabs (card painter-walls-round3, owner on the
+// grimdark streets: "the walls are still splotchy"): a wall is a few broad soft tones, its
+// weathering at the foot, never camouflage.
+const float WALL_PATCHES = 0.55;
+const float WALL_DABS = 0.45;
 
 void vertex() {
 	v_wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	v_wn = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	v_h = COLOR.a;
 	v_tone = tone_of(pick, COLOR.rgb);
+	if (house_planks && UV2.x > 0.5) {
+		v_tone = 1;
+	}
 	v_turn = vec4(1.0, 0.0, 0.0, 1.0);
 	if (paint_turns(pattern, pick)) {
 		// A tile or wooden roof (a street lot's, a wall row's): the role nearest its paint, its ramp
@@ -138,8 +152,8 @@ void fragment() {
 	// The variant: broad soft patches, their edges broken by a finer octave. A roof is one broad
 	// mass and takes half the patches and half the dabs (card painter-roof-clay: on a street's big
 	// roofs the full patches and dark dabs read as camouflage blotches; the hand-drawn manner's
-	// slopes are as calm).
-	float calm = pattern >= 5 ? 0.5 : 1.0;
+	// slopes are as calm). A wall takes WALL_PATCHES of them and WALL_DABS of its dabs.
+	float calm = pattern >= 5 ? 0.5 : WALL_PATCHES;
 	float pn = mix(p_noise(wp * patch_freq + 7.0), p_noise(wp * patch_freq * 3.3 + 21.0), 0.3);
 	float variant = mix(0.5, smoothstep(0.36, 0.64, pn), patch_mix * calm);
 	// `dark` pulls toward the variant's shade, `light` toward its lit colour.
@@ -148,7 +162,7 @@ void fragment() {
 	// Dabs: a few soft spots a step darker or lighter, about a metre across, so a slope or a wall
 	// is never one smooth field (the prototype's roofs: blotches over the base colour).
 	float bn = p_noise(wp * dab_freq + 33.0);
-	float dab = (pattern >= 5 ? calm : dab_wall) * dabs;
+	float dab = (pattern >= 5 ? calm : dab_wall * WALL_DABS) * dabs;
 	// A slate's dark dabs read as blotches up close: a lighter share of them. Every roof's dark dabs
 	// are halved again (a quarter of their old share, as the hand-drawn slopes' 0.5 of 0.5), since
 	// they pull the tile toward its violet shade and read as damp stains on a big street roof.
@@ -206,7 +220,7 @@ void fragment() {
 			float row = floor(r);
 			float c = u / 0.62 + 0.5 * mod(row, 2.0) + p_hash(vec3(row, 3.0, 1.0)) * 0.3;
 			float blk = p_hash(vec3(row, floor(c), 7.0));
-			variant = clamp(variant + (blk - 0.5) * 0.8, 0.0, 1.0);
+			variant = clamp(variant + (blk - 0.5) * 0.6, 0.0, 1.0);
 			dark += max(p_line(r, 0.1), p_line(c, 0.06)) * 0.4;
 		} else if (pattern == 2) {
 			// Logs: a round of 0.3 m with a dark seam and a lit belly.
@@ -290,17 +304,22 @@ void fragment() {
 	// roof too, and its light step barely wobbles: a slope is one plane, so it is lit or not as a
 	// whole (card painter-roofs-ivy: at grimdark's tone-hi 0.66 and a low sun a street roof's slope
 	// sat at the step and the wobble and the partial self-shadow broke it into camouflage patches).
+	// A wall face is one plane as well (card painter-walls-round3: at grimdark's tone-hi a street's
+	// sunward plank walls broke into tan patches over brown): its step barely wobbles and turns over
+	// a little more softly, so a face that sits at the step is one even blend; a cast shadow's edge
+	// on it wobbles half as far.
 	float roof = pattern >= 5 ? 1.0 : 0.0;
-	f_soft = vec3(
-		mix(mix(0.01, 0.02, roof), 0.06, cover),
-		mix(mix(0.12, 0.03, roof), 0.32, cover),
-		mix(mix(0.5, 0.3, roof), 0.3, cover));
+	f_soft = vec4(
+		mix(mix(0.03, 0.02, roof), 0.06, cover),
+		mix(0.03, 0.32, cover),
+		mix(mix(0.5, 0.3, roof), 0.3, cover),
+		mix(0.1, 0.2, roof));
 }
 
 void light() {
 	if (LIGHT_IS_DIRECTIONAL) {
 		vec3 lw = normalize((INV_VIEW_MATRIX * vec4(LIGHT, 0.0)).xyz);
-		float cast = 1.0 - smoothstep(f_soft.z - 0.05, f_soft.z + 0.05, ATTENUATION + (f_wob - 0.5) * 0.2);
+		float cast = 1.0 - smoothstep(f_soft.z - 0.05, f_soft.z + 0.05, ATTENUATION + (f_wob - 0.5) * f_soft.w);
 		float x = dot(normalize(f_n), lw) + (f_wob - 0.5) * f_soft.y;
 		vec3 col = mix(f_shd, f_mid, smoothstep(tone_lo - f_soft.x, tone_lo + f_soft.x, x));
 		col = mix(col, f_lit, smoothstep(tone_hi - f_soft.x, tone_hi + f_soft.x, x));
