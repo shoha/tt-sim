@@ -98,7 +98,12 @@ func test_painting_puts_stand_ins_on_the_prop_surfaces_and_release_restores_them
 		if _is_painted_part(entry[3]):
 			var stand_in := now as ShaderMaterial
 			assert_not_null(stand_in, "%s painted" % entry[3])
-			assert_eq(stand_in.shader.resource_path, PainterVillage.PROP_SHADER)
+			var shader := (
+				PainterVillage.GLOW_SHADER
+				if str(entry[3]).ends_with(StructureGlow.KIND)
+				else PainterVillage.PROP_SHADER
+			)
+			assert_eq(stand_in.shader.resource_path, shader)
 			assert_true(stand_in.has_meta(PainterVillage.META))
 			painted += 1
 		else:
@@ -116,19 +121,44 @@ func test_painting_puts_stand_ins_on_the_prop_surfaces_and_release_restores_them
 	assert_eq(village.painted_count(false), 0)
 
 
-func test_the_lights_the_glow_and_the_water_of_a_prop_stay_classic() -> void:
+func test_the_lights_and_the_water_of_a_prop_stay_classic_and_the_halo_is_painted() -> void:
 	var layer := _dressed(_editor())
+	var before := _surfaces(layer)
 	var village := PainterVillage.new()
 	village.paint(_map, STATE)
 	var seen := 0
-	for entry: Array in _surfaces(layer):
+	var halos := 0
+	for entry: Array in before:
 		var key: String = entry[3]
-		if key == "prop:glass" or key.begins_with("water:") or key.ends_with(StructureGlow.KIND):
-			var now := (entry[0] as Mesh).surface_get_material(entry[1])
+		var now := (entry[0] as Mesh).surface_get_material(entry[1])
+		if key.ends_with(StructureGlow.KIND):
+			# The lantern's halo gets its own painted shader (painter_glow), not the prop's.
+			assert_true(now.has_meta(PainterVillage.META), "the halo is painted")
+			assert_eq((now as ShaderMaterial).shader.resource_path, PainterVillage.GLOW_SHADER)
+			halos += 1
+		elif key == "prop:glass" or key.begins_with("water:"):
 			assert_false(now.has_meta(PainterVillage.META), "%s is a light or water" % key)
 			seen += 1
 	assert_gt(seen, 0, "the street has a lantern or a well")
+	assert_gt(halos, 0, "the street's lanterns carry a halo")
 	village.release()
+
+
+func test_a_props_wood_is_the_timbers_lifted_toward_honey() -> void:
+	var timber := Vector3(0.45, 0.075, 52.0)
+	var wood := PainterVillage.prop_wood_middle(timber)
+	assert_gt(wood.x, timber.x * 1.3, "lighter")
+	assert_gt(wood.y, timber.y, "richer")
+	assert_gt(wood.z, timber.z, "turned toward honey")
+	var cap := PainterVillage.WOOD_MAX_L + 0.0001
+	assert_lte(wood.x, cap, "never past the cap")
+	assert_lte(PainterVillage.prop_wood_middle(Vector3(0.9, 0.05, 350.0)).x, cap)
+	assert_between(PainterVillage.prop_wood_middle(Vector3(0.3, 0.02, 355.0)).z, 0.0, 360.0)
+	assert_lt(
+		PainterVillage.prop_wood_middle(Vector3(0.24, 0.015, 30.0)).x,
+		wood.x,
+		"relative: grimdark's timber stays darker"
+	)
 
 
 func test_a_map_never_painted_keeps_its_classic_materials() -> void:
@@ -186,8 +216,12 @@ func test_the_tones_are_the_sheets_and_follow_the_mood_and_the_sun() -> void:
 	var noon: PackedVector3Array = material.get_shader_parameter(&"ramps")
 	assert_eq(noon.size(), PainterVillage.RAMP_SLOTS)
 	var sheet := PainterSheet.load_sheet("core")
-	var timber := PainterBuildings.ramp(sheet, "summer", "timber", 60.0, "timber")
-	assert_eq(noon[1], timber[1], "the timber ramp is the buildings'")
+	var beam := PainterSheet.tone_lch(sheet, "summer", "timber", 60.0)
+	var middle := PainterVillage.prop_wood_middle(beam)
+	var timber := PainterBuildings.ramp(sheet, "summer", "timber", 60.0, "timber", middle)
+	assert_eq(noon[1], timber[1], "the wood ramp is the timber's lifted toward honey")
+	var plaster := PainterBuildings.ramp(sheet, "summer", "plaster", 60.0, "wall")
+	assert_eq(noon[6 * 6 + 1], plaster[1], "the other ramps are the buildings'")
 	assert_eq(float(material.get_shader_parameter(&"snow")), 0.0, "no snow in summer")
 	village.paint(_map, WINTER)
 	assert_same(village.prop_materials()["free"], material, "the same material is re-toned")

@@ -187,9 +187,21 @@ void fragment() {
 	// The fold line: where the shading normal turns within a pixel (a corner, an eave lip).
 	dark += smoothstep(0.2, 0.6, length(fwidth(NORMAL))) * ink;
 	// Snow on a roof (winter): the snow's own tones, the marks under it mostly hidden.
-	float cover = pattern >= 5 ? snow_cover(snow, wp, up, h) : 0.0;
-	dark = clamp(dark * marks * (1.0 - cover * 0.85), 0.0, 0.85);
-	light = clamp(light * marks * (1.0 - cover * 0.85), 0.0, 0.8);
+	// It has a body (roof_snow_body): a lit top, its edge falling into the shade, its shadow on the roof.
+	vec3 body = pattern >= 5 ? roof_snow_body(snow, wp, up, h) : vec3(0.0);
+	float cover = body.x;
+	// No roof mark shows through the layer (the course dashes read as a grid of ticks on it).
+	float marks_under = pattern >= 5 ? (1.0 - cover) : (1.0 - cover * 0.85);
+	dark = clamp(dark * marks * marks_under, 0.0, 0.85);
+	light = clamp(light * marks * marks_under, 0.0, 0.8);
+	dark = clamp(dark + body.y * 0.5 + body.z * 0.32, 0.0, 0.85);
+	// The layer swells: broad light and shade across the snow, by tilting its shading normal along
+	// the fall line (the face's own `up` and the marks keep the plain normal).
+	vec3 shade_n = n;
+	if (cover > 0.0) {
+		float swell = p_noise(wp * 0.6 + 5.0) - 0.5;
+		shade_n = normalize(n + vec3(down.x, 0.0, down.y) * swell * 1.2 * cover);
+	}
 	int base = v_tone * 6;
 	vec3 shd = mix(ramps[base], ramps[base + 3], variant);
 	vec3 mid = mix(ramps[base + 1], ramps[base + 4], variant);
@@ -209,7 +221,7 @@ void fragment() {
 	f_shd = burn_shd;
 	f_mid = burn_mid;
 	f_lit = burn_lit;
-	f_n = n;
+	f_n = shade_n;
 	f_wob = p_noise(wp * 1.7 + 5.0);
 }
 

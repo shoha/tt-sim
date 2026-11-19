@@ -94,6 +94,21 @@ func test_painting_swaps_the_parts_and_release_restores_them_exactly() -> void:
 	assert_false(buildings.is_active())
 
 
+func test_a_roof_without_a_blanket_mesh_lies_under_snow_with_a_body() -> void:
+	# The street lots' and walls' roofs (no manner records) draw the A3b fallback: its winter snow is
+	# roof_snow_body (a lit top, an edge that falls into shade, a lip and a shadow), not the old
+	# patches of snow_cover alone (card painter-village-polish).
+	var common := FileAccess.get_file_as_string(
+		"res://painter/shaders/painter_structure_common.gdshaderinc"
+	)
+	assert_string_contains(common, "vec3 roof_snow_body(float snow")
+	var shader := load(PainterBuildings.SHADER) as Shader
+	assert_string_contains(shader.code, "roof_snow_body(snow, wp, up, h)")
+	assert_string_contains(shader.code, "shade_n", "the snow swells: its shading normal is tilted")
+	var manner := FileAccess.get_file_as_string(PainterMannerHost.SHADER)
+	assert_false(manner.contains("vec3 roof_snow_body"), "the hand-drawn shader keeps its own blanket")
+
+
 func test_a_new_elevation_retones_the_same_materials() -> void:
 	_village()
 	var buildings := PainterBuildings.new()

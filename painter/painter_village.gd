@@ -17,8 +17,9 @@ extends RefCounted
 ## What it swaps, and the exact restore. A settlement cell is ONE MeshInstance3D with a surface per
 ## `<role>:<kind>` material (SettlementBake); a prop's surfaces (role `prop`, kinds wood, stone,
 ## thatch, accent and cloth) get painted_prop stand-ins by mesh.surface_set_material, the original
-## kept per surface and put back by release(). A lantern's glass, the glow halos and a well's
-## water keep Classic (lights; the water is no terrain water). A structure's `decor_baked` mesh
+## kept per surface and put back by release(). A lantern's glass and a well's water keep Classic
+## (lights; the water is no terrain water); a lantern's halo gets painter_glow.gdshader (a painted
+## halo of three torn steps, one shared material). A structure's `decor_baked` mesh
 ## has a surface per wind material: each gets the plants' stand-in (painter_plant.gdshader, kind
 ## solid: the baked mesh has no per-plant origin for a leaf mass's form) in the leaf role, or the
 ## bark role for a material named `*bark*`; the plants' own wind, fade and cutout uniforms are
@@ -31,6 +32,8 @@ extends RefCounted
 ## materials.
 
 const PROP_SHADER := "res://painter/shaders/painter_prop.gdshader"
+## The lantern halo's (a prop surface of kind StructureGlow.KIND).
+const GLOW_SHADER := "res://painter/shaders/painter_glow.gdshader"
 ## Metadata on every material this paints with.
 const META := &"painter_village"
 ## The map's layers this follows (AuthoredSettlements.NODE_NAME, PainterBuildings.STRUCTURES).
@@ -53,6 +56,11 @@ const TONES: Array = [
 ]
 ## A kind whose every vertex takes one tone (the shader's force_tone), else the paint chooses.
 const FORCED: Dictionary = {"stone": 1, "thatch": 2}
+## A prop wood's middle tone against the timber role's (prop_wood_middle).
+const WOOD_VALUE := 1.7
+const WOOD_CHROMA := 1.45
+const WOOD_TURN := 14.0
+const WOOD_MAX_L := 0.8
 ## Slots of the ramps uniform (eight tones of six).
 const RAMP_SLOTS := 48
 
@@ -71,6 +79,8 @@ var _settlements: Node = null
 var _structures: Node = null
 ## "free", "stone" or "thatch" -> the shared prop stand-in.
 var _props: Dictionary = {}
+## The painted lantern halo's material (null until a halo needs it).
+var _glow: ShaderMaterial = null
 ## Original decor material instance id -> its stand-in.
 var _decor: Dictionary = {}
 ## [WeakRef of the mesh, surface, original, stand-in, is decor] per replaced surface.
@@ -245,9 +255,21 @@ func _dress_cell(node: Node) -> void:
 		var part := str(original.get_meta(AuthoredSettlements.PART_META, "")).split(":")
 		if part.size() != 2 or part[0] != StructureLook.PROP or CLASSIC_KINDS.has(part[1]):
 			continue
-		var stand_in := _prop_material(str(part[1]))
+		var stand_in: ShaderMaterial = (
+			_glow_material() if part[1] == StructureGlow.KIND else _prop_material(str(part[1]))
+		)
 		_swapped.append([weakref(mesh), i, original, stand_in, false])
 		mesh.surface_set_material(i, stand_in)
+
+
+## The painted lantern halo (painter_glow.gdshader), shared by every halo; it takes no sheet tone
+## (the lantern's amber is a light, not a mood's colour).
+func _glow_material() -> ShaderMaterial:
+	if _glow == null:
+		_glow = ShaderMaterial.new()
+		_glow.shader = load(GLOW_SHADER) as Shader
+		_glow.set_meta(META, true)
+	return _glow
 
 
 ## The shared stand-in for a prop surface of `kind` (made on first use, toned at once).
@@ -267,12 +289,33 @@ func _prop_material(kind: String) -> ShaderMaterial:
 	return material
 
 
+## The middle tone (OKLCH) of a prop's wood from the timber role's (`timber`, the houses' dark
+## beams): `WOOD_VALUE` times its lightness (at most `WOOD_MAX_L`), `WOOD_CHROMA` times its chroma
+## and its hue turned `WOOD_TURN` degrees toward honey, so a fence, a barrel or a cart reads as
+## honey oak beside the painted houses (Classic's props are honey) and follows every mood and sun
+## as the beams do. Relative: night's and grimdark's timber stays darker. Pure.
+static func prop_wood_middle(timber: Vector3) -> Vector3:
+	return Vector3(
+		minf(timber.x * WOOD_VALUE, WOOD_MAX_L),
+		timber.y * WOOD_CHROMA,
+		fposmod(timber.z + WOOD_TURN, 360.0)
+	)
+
+
 func _tone_prop(material: ShaderMaterial, sheet: Dictionary) -> void:
 	var mood: String = applied["mood"]
 	var elevation: float = applied["elevation"]
 	var ramps := PackedVector3Array()
-	for tone: Array in TONES:
-		ramps.append_array(PainterBuildings.ramp(sheet, mood, str(tone[0]), elevation, str(tone[1])))
+	for index in TONES.size():
+		var tone: Array = TONES[index]
+		var middle := (
+			prop_wood_middle(PainterSheet.tone_lch(sheet, mood, "timber", elevation))
+			if index == 0
+			else Vector3(-1.0, 0.0, 0.0)
+		)
+		ramps.append_array(
+			PainterBuildings.ramp(sheet, mood, str(tone[0]), elevation, str(tone[1]), middle)
+		)
 	ramps.resize(RAMP_SLOTS)
 	material.set_shader_parameter(&"ramps", ramps)
 	material.set_shader_parameter(

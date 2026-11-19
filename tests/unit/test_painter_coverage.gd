@@ -90,7 +90,7 @@ func test_a_wall_built_later_and_a_boundary_layer_are_followed() -> void:
 func test_wall_part_keys() -> void:
 	assert_eq(PainterBuildings.wall_part_key("Stone"), "wall_stone")
 	assert_eq(PainterBuildings.wall_part_key("Masonry"), "wall_masonry")
-	assert_eq(PainterBuildings.wall_part_key("Wood"), "trim_wood")
+	assert_eq(PainterBuildings.wall_part_key("Wood"), "wall_boards")
 	assert_eq(PainterBuildings.wall_part_key("Roof"), "roof_wood")
 	assert_eq(PainterBuildings.wall_part_key("Wall_brick"), "wall_brick")
 	assert_eq(PainterBuildings.wall_part_key("Roof_thatch"), "roof_thatch")

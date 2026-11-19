@@ -1656,7 +1656,8 @@ in `docs/research/2026-11-09-prototypes/compare/painter_final37_village/` (`note
   (`_is_plant_source`; `_scatters` is now an untyped Array) and `PainterTrees` draws its mapped tree
   and bush rows as stroke crowns, exactly as for a scatter, hiding the GLB chunk nodes; the rest wear
   the plants' stand-ins. Seasonal behaviour is the sheet's, like every painted plant.
-- **Left Classic on purpose:** `prop:glass` (lantern glass), glow and water parts (lights). Cloth no
+- **Left Classic on purpose:** `prop:glass` (lantern glass) and water parts (lights; the lantern's
+  halo is painted since card painter-village-polish, below). Cloth no
   longer sways (the Classic cloth wind is on the Classic material). Planter flowers lose their petal
   accents (the decor stand-in is a solid).
 - **A/B switches** for measurement: `PainterVillage.furnishings`, `decor_plants`, `field_plants`
@@ -1667,6 +1668,50 @@ in `docs/research/2026-11-09-prototypes/compare/painter_final37_village/` (`note
   village with fields, winter -0.57 and summer -0.52 (Painted before the card: -0.30 and -0.32); the
   12-loose-house village, winter -1.13 and summer -0.93 (unchanged by the card: it has no props or
   fields). Raw numbers: `compare/painter_final37_village/notes.md`.
+
+## Village polish (card painter-village-polish, 2026-11-19; look-pending)
+
+Frames and the bisect: `docs/research/2026-11-09-prototypes/compare/painter_final40_village_polish/`
+(`notes.md`). Owner answers 2026-11-19: lighter, warmer timber; the winter village roofs' snow reads as
+flat splotches.
+
+- **Roof snow of the street lots was never bodied.** The manner houses' blanket (above) did not
+  regress (frames at 5b3c08f0 and main are the same). The flat splotches are on roofs that have no
+  manner records: the street lots', wall rows' and boundaries' roofs, Classic until painter-coverage
+  (bf4d0219) painted the wall layers (`PainterBuildings.WALL_LAYERS`) with the A3b fallback shader
+  (`painter_structure.gdshader`), whose snow was `snow_cover`'s patchy tint. Those roofs now take
+  `roof_snow_body` (`painter_structure_common.gdshaderinc`, A3b only): in winter's `roof-snow`
+  the snow covers most of a slope in broad brush-edged masses from two noises (a metre and a third of
+  one), has a continuous lip along the eave whose first stretch is the layer's shaded face, bare
+  stretches opening above the eave, a heaped ridge, an inner edge band that falls into the snow's
+  shade and an outer band that casts a shadow on the roof; the snow's shading normal is tilted along
+  the fall line by a 1.7 m noise so it has broad lit swells and blue hollows (`shade_n`; the face's own
+  `up` and the marks keep the plain normal), and no roof mark shows under it (the course dashes read
+  as a grid of ticks). Still discard-free, no new texture reads; `snow_cover` stays for the
+  hand-drawn shader's `snow_body` false A/B. A GDScript twin is not needed (shader only; a test pins the
+  names).
+- **Plank walls.** The wall layers' `Wood` part maps to `wall_boards` (honey boards, the pattern
+  with seams), not `trim_wood` (the dark beam role): the street lots' bodies and fences read as wood,
+  not chocolate slabs.
+- **Props' wood is lighter and warmer.** `PainterVillage.prop_wood_middle(timber)`: the timber role's
+  middle tone with its lightness times `WOOD_VALUE` 1.7 (at most `WOOD_MAX_L` 0.8), chroma times
+  `WOOD_CHROMA` 1.45 and hue turned `WOOD_TURN` 14 degrees toward honey; relative, so dusk and grimdark
+  timber stay dark and winter's follows the sheet. `PainterBuildings.ramp` takes an optional `middle`.
+  `painter_prop.gdshader` spans a wood paint's darkness over its own range (0.2 to 0.82, not 0.6 to
+  0.92), so fences (paint 0.45) take the middle of the ramp and posts (0.24) the dark end.
+- **Lantern halo.** The halo surfaces (`prop:glow`, a quad of four coincident vertices) were being
+  swapped for the prop shader and so drew nothing in Painted. `PainterVillage` now gives them
+  `painter_glow.gdshader` (`GLOW_SHADER`, one shared material, sample `glow` in `PainterWarmup`): the
+  Classic billboard (UV corner, UV2 half-size) painted as three soft-edged steps (a wide amber wash,
+  a warmer middle, a pale core) with a torn outline (the radius wanders with the angle), blended over
+  the scene, no discard. Lantern glass stays Classic.
+- **Frames of what had none** (owner, "show me those first"): decor_baked ivy, flags and flower boxes
+  (all four surfaces on `painter_plant.gdshader`; game camera and eye level), the grimdark village,
+  lamps and cloth: `notes.md`.
+- **Not done:** baked ivy is a solid flat green with no lit or shaded form at eye level; cloth does
+  not sway and a flag's tone follows the slate ramp (a dark navy); the street lots' roofs show
+  camouflage-like variant patches in grimdark (the A3b patches); fences read tan-grey beside the
+  honey barrels at noon (the timber ramp's shade turns away from honey).
 - Tests: `test_painter_village.gd` (the swap and exact restore, Classic lights kept, a cell baked
   later, the layer made later, the tone rule, mood and sun, decor stand-ins and restore, field
   plants as a source, orchard trees drawn by `PainterTrees`, the A/B switches, no per-frame hooks);

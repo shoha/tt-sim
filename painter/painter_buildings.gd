@@ -51,7 +51,8 @@ const WALL_LAYERS: Array[String] = ["AuthoredWalls", "AuthoredBoundaries", "Auth
 const WALL_PARTS: Dictionary = {
 	"Stone": "wall_stone",
 	"Masonry": "wall_masonry",
-	"Wood": "trim_wood",
+	# A plank wall (a street lot's body, a fence), not a beam: the boards' own lighter honey role.
+	"Wood": "wall_boards",
 	"Roof": "roof_wood",
 	# A crossing's parts (AuthoredCrossings: `Wood` above, and its stone, arch and ford meshes).
 	"Stones": "crossing_stone",
@@ -533,14 +534,24 @@ static func snow_ramp(sheet: Dictionary, mood: String, elevation: float) -> Pack
 
 
 ## The six LINEAR colours [shade0, mid0, lit0, shade1, mid1, lit1] of building role `role`
-## (`family` "wall", "stone", "roof" or "timber") in `mood` at `elevation`. Pure.
+## (`family` "wall", "stone", "roof" or "timber") in `mood` at `elevation`; `middle` (lightness 0 or
+## more) is the middle tone (OKLCH) to use in place of the role's own. Pure.
 static func ramp(
-	sheet: Dictionary, mood: String, role: String, elevation: float, family: String
+	sheet: Dictionary,
+	mood: String,
+	role: String,
+	elevation: float,
+	family: String,
+	middle: Vector3 = Vector3(-1.0, 0.0, 0.0)
 ) -> PackedVector3Array:
 	var base := (
-		crossing_tone(sheet, mood, elevation)
-		if role == CROSSING_ROLE
-		else PainterSheet.tone_lch(sheet, mood, role, elevation)
+		middle
+		if middle.x >= 0.0
+		else (
+			crossing_tone(sheet, mood, elevation)
+			if role == CROSSING_ROLE
+			else PainterSheet.tone_lch(sheet, mood, role, elevation)
+		)
 	)
 	var shape := shape_of(sheet, mood, elevation, family)
 	var hue_spread := PainterSheet.number(sheet, mood, "hue-spread", elevation)

@@ -104,7 +104,10 @@ void vertex() {
 	v_wn = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	v_tone = force_tone >= 0 ? force_tone : prop_tone(COLOR.rgb);
 	// 0 for a dark paint, 1 for a light one (oak runs about 0.62 to 0.86, hay and cloth above).
-	v_paint = clamp((max(COLOR.r, max(COLOR.g, COLOR.b)) - 0.6) / 0.32, 0.0, 1.0);
+	// Wood's paints run darker (the fences' 0.45, posts 0.24, boards 0.81): its own span, so a
+	// fence takes the middle of the honey ramp and not its darkest variant.
+	float top = max(COLOR.r, max(COLOR.g, COLOR.b));
+	v_paint = v_tone == 0 ? clamp((top - 0.2) / 0.62, 0.0, 1.0) : clamp((top - 0.6) / 0.32, 0.0, 1.0);
 }
 
 void fragment() {
