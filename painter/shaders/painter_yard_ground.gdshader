@@ -11,8 +11,13 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled;
  * path tone whose edge is a brushed, scalloped line where the fade crosses half (a slow and a fine
  * world noise move it), lit in the light's three steps; under winter's snow (`snow`, the sheet's
  * roof-snow) it is mostly gone.
+ * The contact pool at a building's walls (card painter-pool-shapes) darkens the wash as it does the
+ * ground under it: the same field (PainterOcclusion's occ_map, its r) through the same brushed
+ * threshold and the same deeper, cooler tone, so the shade at the walls' foot is not hidden by the
+ * wash laid over it. Off (one uniform branch) until the field is bound.
  *
- * MANAGED BY: PainterBuildings (painter/painter_buildings.gd, kind "dressing_ground").
+ * MANAGED BY: PainterBuildings (painter/painter_buildings.gd, kind "dressing_ground"); the pool's
+ * uniforms by PainterOcclusion (painter/painter_occlusion.gd).
  */
 
 #include "res://painter/shaders/painter_noise.gdshaderinc"
@@ -24,6 +29,13 @@ uniform float tone_hi = 0.48;
 uniform float cast_amount = 0.94;
 // The wash's opacity inside its edge.
 uniform float wash = 0.75;
+// The contact field and its tones (painter_ground.gdshader's, set by PainterOcclusion).
+uniform sampler2D occ_map : hint_default_black, filter_linear, repeat_disable;
+uniform bool occ_present = false;
+uniform vec2 occ_origin = vec2(0.0);
+uniform float occ_step = 0.5;
+uniform vec4 occ_k = vec4(0.0, 0.0, 0.8, 0.3);
+uniform vec4 occ_tint = vec4(0.9, 1.0, 0.96, 0.35);
 
 varying vec3 v_wp;
 varying float v_a;
@@ -32,6 +44,7 @@ varying vec3 f_shd;
 varying vec3 f_mid;
 varying vec3 f_lit;
 varying float f_wob;
+varying float f_pool;
 
 void vertex() {
 	v_wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -51,6 +64,12 @@ void fragment() {
 	f_mid = mix(ramps[1], ramps[4], variant);
 	f_lit = mix(ramps[2], ramps[5], variant);
 	f_wob = p_noise(wp * 1.7 + 5.0);
+	f_pool = 0.0;
+	if (occ_present && occ_k.x > 0.0) {
+		vec2 size = vec2(textureSize(occ_map, 0));
+		float s = textureLod(occ_map, (wp.xz - occ_origin) / (size * occ_step), 0.0).r;
+		f_pool = smoothstep(0.4, 0.5, s + (p_noise(wp * 1.3 + 80.0) - 0.5) * 0.3) * occ_k.x;
+	}
 }
 
 void light() {
@@ -59,6 +78,10 @@ void light() {
 		float x = dot(normalize(NORMAL), LIGHT) + (f_wob - 0.5) * 0.12;
 		vec3 col = mix(f_shd, f_mid, smoothstep(tone_lo - 0.01, tone_lo + 0.01, x));
 		col = mix(col, f_lit, smoothstep(tone_hi - 0.01, tone_hi + 0.01, x));
-		DIFFUSE_LIGHT += mix(col, f_shd, cast * cast_amount);
+		col = mix(col, f_shd, cast * cast_amount);
+		// The contact pool: the wash's lit tone darkened and leaned toward its shade and cool, as
+		// the ground's (painter_ground's deep).
+		vec3 deep = mix(f_lit, f_shd, occ_tint.a) * occ_k.z * occ_tint.rgb;
+		DIFFUSE_LIGHT += mix(col, deep, f_pool);
 	}
 }

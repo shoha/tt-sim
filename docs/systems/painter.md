@@ -305,9 +305,10 @@ wall, or under a token's feet, and no trunk or stone was darker where it met the
 
 - **The ground's contact field.** A CPU raster at 0.5 m a texel over the map's extent, RG8: r a POOL
   (a crown's projected disc, centred halfway from the trunk to the crown's middle, radius 0.5 of the
-  crown's half width plus 0.5 m; a bush's own disc grown a third; a rock's, log's or stump's oriented
-  box, from the scatter's instance transforms; a structure's footprint box grown 0.9 m), g a CORE (the
-  seam at a trunk's foot, 0.55 m + 5 % of its height; a rock's or a wall's base 0.35 m). Each footprint
+  crown's half width plus 0.5 m, for the trees the painter does not grow too; a bush's own disc grown
+  a third; a rock's, log's or stump's oriented box rounded by its narrower half, from the scatter's
+  instance transforms; a structure's own plan, below), g a CORE (the seam at a trunk's foot, 0.55 m +
+  5 % of its height; a rock's base 0.22 m, a wall's 0.3 m). Each footprint
   is a coverage whose 0.5 contour is its nominal edge (`cover`), the texels keep the maximum. The
   painted ground shader reads it with one fetch (a no-op branch when off) and thresholds it through
   its own brush noise, so a pool is a flat stroke-edged shape, not a blur. The pool is the ground's
@@ -320,6 +321,26 @@ wall, or under a token's feet, and no trunk or stone was darker where it met the
   wider pool plus a deeper disc under the feet. Rebuilt 0.3 s after the painted trees install or
   erase (`PainterTrees.changed`), the scatter applies cells, a structure comes or goes or the
   ground is edited: 17-24 ms for 215-317 footprints (forest, village, taiga maps of 200 ft).
+- **Pool shapes** (card painter-pool-shapes, 2026-11-18; the coverage sweep's gap 2). A structure's
+  pool was its meshes' bounding box grown 0.9 m, and the box held the yard's skirt and path
+  (`dressing_ground`, 10-14 m across, 5 m past the door), so a row of houses read as one hard-edged
+  teal slab; a tree the painter does not grow (acacia, palm, dead tree: a scatter solid by its bark)
+  got its crown's bounding box as a rectangle. Now `PainterFootprint` (`painter/painter_footprint.gd`)
+  takes a structure's plan from its collision's lowest faces (vertices within 1.8 m of the lowest:
+  the walls' and piles' feet, never the roof's overhang or the yard): their convex hull, fitted by
+  the smallest turned rectangle round it, corners rounded so the shape keeps the hull's area (a
+  house a rectangle with 0.4 m corners, a round hut, tulou or hex tower about a disc, a castle or a
+  gatehouse its whole mass). Its reach past the walls is 0.3 + 0.035 of the plan's size + 0.02 of
+  its height (0.4-1.0 m), then +-15 % by the node's name, so a barn is not a hut. A structure
+  without collision falls back to its meshes' bounds without the dressing. A solid is a tree when
+  its mesh carries a leaf surface beside its bark (`solid_meshes` maps each id to that) or it is
+  taller than 2 m and 1.6 times its half width; it gets the painted trees' disc and seam. The yard
+  wash (`painter_yard_ground`) reads the same field through the same brushed threshold and deep
+  tone, so the shade at a wall's foot shows through it (one fetch per yard fragment; its uniforms
+  are set with the ground's). Bake: the structures' pass over the two coverage galleries (32
+  structures, headless) went from 29-31 ms to 17.5 ms, the pooled area from 4479 to 2167 m2; the
+  hull fit is about 2 ms of it. No per-frame CPU cost. Frames:
+  `compare/painter_final43_pool_shapes/`.
 - **Base gradients.** A stem (the block-in's bark, `base_dark`, over its lowest 0.9 m) and a scatter
   stone or log (`painter_selector`'s solid branch, over its lowest 45 %) are a step darker at their
   foot, so they grow out of the ground; the heaped snow at a winter trunk's foot still wins.
