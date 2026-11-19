@@ -109,6 +109,9 @@ static func process_duplicate_mesh_instancing(
 		multimesh_instance.name = String(representative.name) + "_MultiMesh"
 		multimesh_instance.multimesh = multimesh
 		multimesh_instance.cast_shadow = representative.cast_shadow
+		# The group keeps its first node's glTF extras (the painter roles, ASSET_PIPELINE.md).
+		if representative.has_meta("extras"):
+			multimesh_instance.set_meta("extras", representative.get_meta("extras"))
 		scene.add_child(multimesh_instance)
 
 		for node in nodes:

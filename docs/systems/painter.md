@@ -1508,17 +1508,28 @@ calls.
 ## GLB maps (card painter-glb-parity, 2026-11-18)
 
 A Blender-made `map.glb` loads as plain nodes (MeshInstance3D terrain, props, ScatterGlbUtils
-chunks, MeshInstancingUtils MultiMeshes); the contract (ASSET_PIPELINE.md) names no ground, role
-or asset-class extra, so `PainterGlbMap` (painter/painter_glb_map.gd, made by path by
-PainterSurfaces on the first painted map) reads what is there, and `PainterGlbRoles`
-(painter/glb_roles.gd, pure) holds the rules.
+chunks, MeshInstancingUtils MultiMeshes); `PainterGlbMap` (painter/painter_glb_map.gd, made by
+path by PainterSurfaces on the first painted map) reads what is there, and `PainterGlbRoles`
+(painter/glb_roles.gd, pure) holds the rules. The contract names two OPTIONAL extras
+(ASSET_PIPELINE.md "Painter roles", card painter-glb-roles, 2026-11-19): `tt_paint_role`
+(`ground-meadow`, `ground-path`, `ground-rock`, `roof`, `bark`, `stone`, `leaf`, `keep`) and
+`tt_ground`. `PainterGlbRoles` is their one reader (`extras_of`, `extra_role`, `ground_mark`,
+`ground_zone`, `prop_role`'s `extras` argument); precedence is the explicit extra, then the name and
+material rules, then the shape and colour rules, and a map without them is read exactly as before.
+No producer writes them yet; `tests/unit/glb_roles_fixture.gd` writes a small map that carries them
+(test_painter_glb_roles.gd). The bullets below are the rules without extras, with the extras'
+overrides noted:
 
 - **Ground.** A single-surface mesh that is wide, shallow and faces up (`is_ground`) gets the
   painted ground shader as `material_override` in the map's world frame (`world_frame`). Its zone
   (meadow, path, rock, shore) is classified on the GPU from the baked albedo (`glb_zone`,
   `glb_classify`: a planar UV fit from `uv_affine`), so the artist's layout stays and the sheet
   supplies tones, brush marks and shade. No texture or UVs that are not one planar map: one role
-  by the colour.
+  by the colour. Extras: `tt_ground` true (or a `ground-*` role) makes any mesh ground, several
+  surfaces included (then one role by the first surface's colour, no zone read); `tt_ground` false or
+  `keep` makes it never ground; `ground-meadow` is the shader's base zone, `ground-path` and
+  `ground-rock` read a one-texel swatch albedo (`ZONE_SWATCH`, `_force_zone`) through the same zone
+  read, so no shader changed.
 - **Trees.** A scatter chunk of a tree (`wind_foliage_category` "tree") whose name resolves to a
   painted species (`tree_species`: treecube names, then words such as oak, pine) is hidden and its
   instances become PainterTrees rows (`PainterGlbMap.rows_on(map)`, scaled by mesh height over the
@@ -1526,7 +1537,8 @@ PainterSurfaces on the first painted map) reads what is there, and `PainterGlbRo
   plant or solid stand-ins through `PainterSurfaces.swap_surface`.
 - **Props.** A MeshInstance3D (or a duplicate MultiMesh) gets a painted solid stand-in per surface
   in the sheet role its material or node name says (`prop_role`: roof, bark, stone, leaf; else
-  by colour when untextured).
+  by colour when untextured). A `tt_paint_role` on the material, node or mesh (that order) names the
+  role outright (`roof` is `roof-clay`) or `keep`; scatter chunks and trees ignore the extras.
 - **Left as authored** (listed per node by `left_as_authored()`): lights, glass, ironwork, water
   (PainterWater owns it), textured surfaces whose names say nothing, terrain of several surfaces
   or non-planar UVs, nodes with a material override, hidden nodes, StaticBody3D, authored layers.
