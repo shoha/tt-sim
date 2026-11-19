@@ -64,6 +64,21 @@ uniform bool path_map_present = false;
 // and the strength of the faces' strata bands.
 uniform float cliff_edge = 0.0;
 uniform float cliff_strata = 0.0;
+// The polish (PainterGroundPaths): the lip's snow cap (the meadow's snow), the foot's share of the
+// way to its shade colour, the lip's gold tint; a path under snow dusted at its edges.
+uniform float cliff_snow = 0.0;
+uniform float cliff_foot = 0.0;
+// A cliff face's lit colour this share of the way to its shade (a middle value under the lit top).
+uniform float cliff_face = 0.0;
+uniform float cliff_warm = 0.0;
+uniform float path_dust = 0.0;
+// The meadow's gold and moss swathes (PainterMeadowSwathes): gold's two variants then moss's, lit
+// and shade; the field's gold and moss thresholds and whether any is drawn; the map's seed (the
+// field's offset, the gold and the moss edge's shift).
+uniform vec3 sw_lit[4];
+uniform vec3 sw_shd[4];
+uniform vec3 sw_k = vec3(1.0, 0.0, 0.0);
+uniform vec4 sw_seed = vec4(0.0);
 // A stone's seam: how much darker the gap between cobbles, plates, tiles and boards is.
 const float SEAM_DARK = 0.38;
 // The strata bands' height (m) on a cliff face.
@@ -378,6 +393,8 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float
 			scorch_rim = smoothstep(0.28, 0.5, brushed);
 		}
 	}
+	// The role a path lies on (its edge's snow dusting is the meadow's or the floor's).
+	int under = role;
 	if (pv > 0.46) {
 		role = 2;
 	}
@@ -400,7 +417,7 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float
 		if (kind > 0) {
 			// A stone takes its own step off the band's slow patches; the seam is a deeper shade.
 			variant = clamp(0.5 + pn * patches * 0.5 + pat.x * 1.4, 0.0, 1.0);
-			vstep = (1.0 + (fract(pat.z * 41.7) - 0.5) * 0.12 * step(0.001, abs(pat.x))) * (1.0 - pat.y * SEAM_DARK);
+			vstep = (1.0 + (fract(pat.z * 41.7) - 0.5) * 0.12 * step(0.001, abs(pat.x))) * (1.0 - pat.y * SEAM_DARK * (1.0 - path_dust * 0.5));
 		}
 	}
 	if (role == 3 && cliff_strata > 0.0) {
@@ -422,6 +439,35 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float
 	}
 	lit *= vstep;
 	shd *= vstep;
+	// A cliff face lit by the sun is still a middle value under its lit top (a pale sandstone face
+	// at the lit colour read as a cream band on the badlands' orange, a step that did not read).
+	if (role == 3) {
+		lit = mix(lit, shd, smoothstep(0.3, 0.6, slope) * cliff_face);
+	}
+	// The meadow's broad gold and moss swathes (PainterMeadowSwathes): one slow field through the
+	// meadow's warp, its highs gold and its lows moss. The block-in takes a swathe in two steps and a
+	// mark takes it at its middle, so the edge is brushed, not a gradient.
+	if (role == 0 && sw_k.z > 0.0) {
+		vec2 sq = (q + w * 1.5) * 0.045 + sw_seed.xy;
+		float f = p_n2(sq, 7.0) * 0.72 + p_n2(sq * 2.6 + 3.1, 9.0) * 0.28 + j * 0.06;
+		float gold = smoothstep(sw_k.x + sw_seed.z, sw_k.x + sw_seed.z + 0.05, f);
+		float moss = 1.0 - smoothstep(sw_k.y - sw_seed.w - 0.05, sw_k.y - sw_seed.w, f);
+		if (mk < 0.5) {
+			gold = floor(gold * 2.0 + 0.5) * 0.5;
+			moss = floor(moss * 2.0 + 0.5) * 0.5;
+		}
+		float v = clamp(variant, 0.0, 1.0);
+		lit = mix(mix(lit, mix(sw_lit[0], sw_lit[1], v), gold), mix(sw_lit[2], sw_lit[3], v), moss);
+		shd = mix(mix(shd, mix(sw_shd[0], sw_shd[1], v), gold), mix(sw_shd[2], sw_shd[3], v), moss);
+	}
+	// Under snow a path's edge beside the snowy meadow or floor is dusted white, in two steps (a
+	// stone's hash moves the line, so it follows the stones).
+	if (role == 2 && path_dust > 0.0 && under <= 1) {
+		float e = (pv - 0.46 + (pat.z - 0.5) * 0.1) / (0.25 * path_dust);
+		float dust = floor((1.0 - smoothstep(0.35, 1.0, e)) * 2.0 + 0.5) * 0.42;
+		lit = mix(lit, role_col(true, under, variant), dust);
+		shd = mix(shd, role_col(false, under, variant), dust);
+	}
 	lit = mix(lit, lit * vec3(1.45, 0.78, 0.4), scorch_rim * 0.65);
 	shd = mix(shd, shd * vec3(1.35, 0.8, 0.5), scorch_rim * 0.65);
 	// A village field's soil and rows over the role (not a cliff face, not a fire's scar).
@@ -620,17 +666,33 @@ void fragment() {
 	}
 	// A cliff's top edge (the ground convex, toward a steep drop) takes a lit lip, its foot
 	// (concave) a darker one: the mean curvature from the screen derivatives of the normal and
-	// the position, about 2 per metre at a terrace's rim, under 0.3 on rolling ground.
+	// the position, about 2 per metre at a terrace's rim, under 0.3 on rolling ground. Only where a
+	// steep face is near (the slope, or the slope half a metre on by its own gradient): a shallow
+	// crease on a tier's top (two strokes' caps meeting at a notch) bends the normal as fast but
+	// barely tilts it, and drew a thin light line there. The lip is a little gold (`cliff_warm`)
+	// and under snow takes the meadow's snow as a cap; the foot goes part way to its shade colour.
 	if (cliff_edge > 0.0 && !skirt) {
 		vec3 wpos = vec3(v_xz.x, v_wy, v_xz.y);
 		vec3 dpx = dFdx(wpos);
 		vec3 dpy = dFdy(wpos);
 		float curv = (dot(dFdx(n), dpx) + dot(dFdy(n), dpy)) / max(dot(dpx, dpx) + dot(dpy, dpy), 1e-6);
+		float slope_grad = (abs(dFdx(slope)) + abs(dFdy(slope))) / max(length(dpx) + length(dpy), 1e-4);
+		float near = smoothstep(0.12, 0.3, slope + slope_grad * 0.5);
 		float brush = (p_noise(p * 3.1 + 57.0) - 0.5) * 0.6;
-		float lip = smoothstep(0.5, 0.9, curv + brush) * (1.0 - smoothstep(0.45, 0.7, slope));
-		float foot = smoothstep(0.5, 0.9, -curv + brush);
-		lit *= 1.0 + cliff_edge * lip - cliff_edge * 0.6 * foot;
-		shd *= 1.0 + cliff_edge * 0.5 * lip - cliff_edge * 0.6 * foot;
+		float lip = smoothstep(0.5, 0.9, curv + brush) * (1.0 - smoothstep(0.45, 0.7, slope)) * near;
+		float foot = smoothstep(0.4, 0.8, -curv + brush) * near;
+		vec3 warm = vec3(1.0 + cliff_warm * 0.5, 1.0, 1.0 - cliff_warm * 0.5);
+		lit *= 1.0 + cliff_edge * lip * warm;
+		shd *= 1.0 + cliff_edge * 0.5 * lip * warm;
+		lit = mix(lit, shd, foot * cliff_foot);
+		shd *= 1.0 - foot * cliff_foot * 0.3;
+		if (cliff_snow > 0.0) {
+			float cap = smoothstep(0.35, 0.65, curv + brush) * (1.0 - smoothstep(0.5, 0.8, slope)) * near;
+			cap = floor(cap * 2.0 + 0.5) * 0.5 * cliff_snow;
+			float sv = p_noise(p * 0.6 + 41.0);
+			lit = mix(lit, role_col(true, 0, sv), cap);
+			shd = mix(shd, role_col(false, 0, sv), cap);
+		}
 	}
 	if (skirt) {
 		lit = mix(lit, foot_col, out_k);

@@ -221,19 +221,51 @@ role's shade, which the ground's full violet pull swings to dark purple. `Painte
   surface from `CLIFF_REF` (the core grey cliff), so a badlands cliff is a pale sandstone and a
   basalt one darker. Its shade takes `cliff-pull` (0.25) of the ground's pull and `cliff-shade-lift`
   (0.12) more depth (`PainterTones.ramp`'s `pull` and `shade_lift`): a warm grey stone in shade
-  (round 1, -16, 1.8 and 0.4, read rosy mauve). Open: under winter a badlands cliff follows the
-  winter stone's blue while the badlands ground keeps its derived orange, a blue band on orange. On a face
+  (round 1, -16, 1.8 and 0.4, read rosy mauve). Under winter the stone is blue, and a badlands cliff
+  followed it as a blue band on the orange ground: a mood's `cliff-own` (winter 0.85, else 0) moves
+  the cliff's chroma and hue that share of the way, in OKLab's a-b plane, to the bare rock's own (the
+  surface's colour as the summer cliff paints it, at the mood's lightness), so a winter face is warm
+  rock under the snow. On a face
   (slope over 0.3 to 0.6) the tone steps in soft strata bands 0.6 m high by the pixel's height, each
   band's top 9 % lighter and its foot 7 % darker (`cliff-strata`); no marks are searched on a face
   (slope over 0.4: laid in XZ they stretched down it as smears). A convex rim (the mean curvature
   from the screen derivatives of the normal and position over 0.5 to 0.9 per metre, broken by a
   brush noise) takes a lit lip of `cliff-edge` (0.22) and a concave foot a darker one.
+- **Polish** (card painter-ground-polish, 2026-11-19; look-pending). The lip and foot count only
+  where a steep face is near (the slope, or the slope half a metre on by its own screen gradient,
+  over 0.12 to 0.3): a shallow crease on a tier's top, where two strokes' round caps meet at a
+  notch, bends the normal as fast as a rim but barely tilts it, and drew a thin light line there.
+  The lip takes `cliff-warm` (0.5) of a gold tint; the foot (curvature 0.4 to 0.8) goes `cliff-foot`
+  (0.65) of the way to its shade colour; a lit face (slope 0.3 to 0.6) goes `cliff-face` (0.35) of
+  the way to its shade, a middle value under the lit top (lip and foot alone left a pale sandstone
+  face a cream band on the badlands' orange). Under snow (`cliff-snow`, winter 0.85) the lip is a
+  cap in the meadow's snow (a wider band, curvature 0.35 to 0.65, in two steps, so its lower edge
+  scallops down the face). A path under snow (`path-dust`, winter 0.6) is lifted 0.3 of the way to
+  the snow's lightness (`PainterGroundPaths.dusted`; cobble, flagstone and tiles read heavy mid
+  grey), its seams 30 % shallower, and its edge beside a snowy meadow or floor dusted with the
+  snow in two steps (a stone's hash moves the line).
 - Cost: one slot-map fetch on path pixels only (and one for a winning path mark), the pattern's
-  hashes there, the curvature's four derivatives everywhere; the CPU slot map only when two path
-  surfaces are painted (a pass over the weights and one box blur per painted slot). Not yet timed
-  with the pinned procedure (the card's bar is 0.4 ms).
+  hashes there, the curvature's four derivatives everywhere (the polish adds two derivatives of
+  the slope and, under snow, one noise); the CPU slot map only when two path surfaces are painted
+  (a pass over the weights and one box blur per painted slot). Not yet timed with the pinned
+  procedure (the card's bar is 0.4 ms).
 - Frames: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final47_ground_surfaces/`
-  (`after_r2/sheet_*.png`: before Painted, after Painted, Classic per row).
+  (`after_r2/sheet_*.png`: before Painted, after Painted, Classic per row); the polish's in
+  `painter_final54_ground_polish/` (`before/`, `after_r1/`, `after_r2/` full size, `sheet_*.png`).
+
+Meadow swathes (card painter-ground-polish, 2026-11-19; look-pending). Classic's meadow carries big
+gold-ochre and moss-green patches from its ground textures; the painted meadow was one calm mint
+green. `PainterMeadowSwathes` (`painter/painter_meadow_swathes.gd`) gives the meadow role a few bold
+soft shapes in its own tone: gold is the mood's `ground` turned `gold-turn` (-40 degrees), chroma
+times `gold-chroma` (1.05), lifted `gold-lift` (0.06); moss turned `moss-turn` (-6), `moss-chroma`
+1.1, `moss-lift` -0.08; each on the ground's ramp, so every mood and sun moves them. They lie on one
+slow field in the ground shader (two octaves of 2D value noise, about 22 and 9 m, through the
+meadow's warp): its highest `gold-share` (0.2) is gold, its lowest `moss-share` (0.17) moss, so the
+two never touch. The block-in takes a swathe in two steps and a mark takes it at its middle, so the
+edge is brushed. The map's seed moves the field and each edge (`seed_of`, bound with the path slots),
+so maps differ. Winter's shares are 0 (no swathes on the snow). Round 1 at -48 read ochre-orange,
+and salmon at dusk and in autumn; at -40 the summer gold is luminous, dusk's still salmon-orange
+under the rose sun (open). Cost: two 2D noises on meadow pixels, no fetch; not timed.
 
 Shade ramp. `PainterTones.steps` draws a role's shade from `shade-keep` of its own chroma plus a
 pull of `shade-pull` toward `shade-hue` (the ground reads `ground-shade-keep`, grass and flowers
