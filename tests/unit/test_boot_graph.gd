@@ -26,7 +26,10 @@ extends GutTest
 ## names at start-up; it names nothing.
 ## 348 with RiverProfile (painter-river-profile): the river's profile WaterCarve reads (WaterCarve
 ## was in the graph already); it names nothing that was not.
-const LIMIT_SCRIPTS := 348
+## 349 with WaterFallFrames (painter-fall-frame-foam): the fall frames the water build derives
+## once for the surface and the curtains; it names only WaterFallMesh and WaterCarve, which
+## WaterMeshBuilder already brought in.
+const LIMIT_SCRIPTS := 349
 
 var _classes: Dictionary = {}
 var _strings := RegEx.create_from_string(

@@ -119,18 +119,34 @@ const LAYOUT_MANNER: Array[int] = [
 	Mesh.ARRAY_CUSTOM0,
 	Mesh.ARRAY_INDEX
 ]
-## The falls' mesh (WaterFallMesh: curtain, ring and mist in one surface); the water's own surface
-## (WaterMeshBuilder, a Blender plane) is LAYOUT_PLAIN.
+## The falls' mesh (WaterFallMesh: curtain, ring and mist in one surface) and the authored water
+## surface (WaterMeshBuilder), both with the fall frames in CUSTOM0 and CUSTOM1 (FRAME_FLAGS); a
+## Blender plane and the river ribbon past the map edge are LAYOUT_PLAIN.
 const LAYOUT_FALL: Array[int] = [
 	Mesh.ARRAY_VERTEX,
 	Mesh.ARRAY_NORMAL,
 	Mesh.ARRAY_COLOR,
 	Mesh.ARRAY_TEX_UV,
 	Mesh.ARRAY_TEX_UV2,
+	Mesh.ARRAY_CUSTOM0,
+	Mesh.ARRAY_CUSTOM1,
+	Mesh.ARRAY_INDEX
+]
+const LAYOUT_WATER: Array[int] = [
+	Mesh.ARRAY_VERTEX,
+	Mesh.ARRAY_NORMAL,
+	Mesh.ARRAY_TEX_UV,
+	Mesh.ARRAY_CUSTOM0,
+	Mesh.ARRAY_CUSTOM1,
 	Mesh.ARRAY_INDEX
 ]
 ## What the manner meshes carry in CUSTOM0 (PainterMannerMesh.FORMAT).
 const MANNER_FLAGS := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
+## What the water surface and the falls carry in CUSTOM0 and CUSTOM1 (WaterFallFrames.FORMAT).
+const FRAME_FLAGS := (
+	(Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT)
+	| (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
+)
 const SHEET_SCRIPT := "res://painter/sheet.gd"
 ## The sheet a look names when it names none (RenderStyle.DEFAULT_SHEET).
 const DEFAULT_SHEET := "core"
@@ -304,7 +320,7 @@ static func triangle(slots: Array[int]) -> Array:
 				arrays[slot] = PackedColorArray([Color.WHITE, Color.WHITE, Color.WHITE])
 			Mesh.ARRAY_TEX_UV, Mesh.ARRAY_TEX_UV2:
 				arrays[slot] = uv
-			Mesh.ARRAY_CUSTOM0:
+			Mesh.ARRAY_CUSTOM0, Mesh.ARRAY_CUSTOM1:
 				arrays[slot] = PackedFloat32Array([0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0])
 			Mesh.ARRAY_INDEX:
 				arrays[slot] = PackedInt32Array([0, 1, 2])
@@ -345,7 +361,8 @@ static func collect(bare: bool) -> Array[Dictionary]:
 	_add(samples, "glow", GLOW, LAYOUT_GLOW, 0)
 	_add(samples, "manner", MANNER, LAYOUT_MANNER, MANNER_FLAGS)
 	_add(samples, "water", WATER, LAYOUT_PLAIN, 0)
-	_add(samples, "waterfall", WATERFALL, LAYOUT_FALL, 0)
+	_add(samples, "water_framed", WATER, LAYOUT_WATER, FRAME_FLAGS)
+	_add(samples, "waterfall", WATERFALL, LAYOUT_FALL, FRAME_FLAGS)
 	return samples
 
 

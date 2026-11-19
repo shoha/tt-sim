@@ -23,7 +23,8 @@ The water it belongs to is [water.md](water.md); the bridge refusal is in
 | `utils/water_edit.gd` | `WaterEdit` | `plan_river` runs the plan half in order; `join_line` treats face points as dry and moves an end on the face to the pool |
 | `utils/water_geometry.gd` | `WaterGeometry` | `reach_ranges(ground, max_drop, forced, free)`: lips as forced boundaries, face points free of the reach rule |
 | `utils/water_carve.gd` | `WaterCarve` | `bed_line(..., falls)`, `step_shape(..., full)`, `fall_shape`, `fall_profile`, `fall_foot`, `fall_gorge`; `CREST_M`, `FALL_LIP_M`, `FALL_LIP_WIDTH_M`, `FALL_BANK_SLOPE`, `FALL_BANK_REACH_M` |
-| `utils/water_fall_mesh.gd` | `WaterFallMesh` | Pure: every fall's curtain, foam ring and mist in one mesh: `crest_widths`, `trajectory`, `width_code`, `ring_radius`, `ring_centre`, `MESH_NAME`; the vertex contract is its header |
+| `utils/water_fall_mesh.gd` | `WaterFallMesh` | Pure: every fall's curtain, foam ring and mist in one mesh: `build`, `from_frames`, `crest_widths`, `trajectory`, `width_code`, `ring_radius`, `ring_centre`, `MESH_NAME`; the vertex contract is its header |
+| `utils/water_fall_frames.gd` | `WaterFallFrames` | Pure: one frame per fall (lip, direction, crest widths, `x_pool`, drop, and the traced columns the curtain is built from): `frames`, `frame`, `channels`, `window_distance`, `vertex_frame`, `vertex_channels`, `water_arc`, `curtain_arc`, `FORMAT`; the CUSTOM0/CUSTOM1 vertex contract is its header |
 | `utils/water_mesh_builder.gd` | `WaterMeshBuilder` | `cascades()` skips a fall, `fall_cells()` tucks the lip cells, `build()`'s `"falls"` and `"falls_aabb"` keys |
 | `scenes/terrain/authored_water.gd` | `AuthoredWater` | The `AuthoredWater-falls` instance, `fall_material()`, `warm_fall_material()`, `get_falls_instance()`, `FALLS_RENDER_PRIORITY` |
 | `shaders/waterfall.gdshader` | | The curtain / ring / mist shader, branching on COLOR.g |
@@ -148,7 +149,20 @@ geometry with its own shader and one shared material.
   top clears the brink (the cue an away-facing fall keeps); the mesh's `custom_aabb` grows by
   the largest puff x 1.3 + 0.9 m for the shader's rise and growth. The vertex contract (UV,
   UV2, COLOR.r edge fade, COLOR.g kind 0 curtain / 0.5 ring / 1 mist, COLOR.b puff seed,
-  outward normals, clockwise from the front) is the class header.
+  CUSTOM0/CUSTOM1 the curtain's fall frame, outward normals, clockwise from the front) is the
+  class header.
+- **Fall frames** (card painter-fall-frame-foam): `WaterFallFrames` (`utils/water_fall_frames.gd`,
+  pure) derives one frame per fall once per build (lip, direction, the crest's wetted half-widths,
+  `x_pool` where the curtain's middle column meets the pool, the drop; plus the traced columns,
+  so `WaterFallMesh.from_frames` traces nothing again). Both meshes carry it as two RGBA float
+  channels, CUSTOM0 (lip x, lip z, dir x, dir z) and CUSTOM1 (left and right half-width, x_pool,
+  drop), added with `WaterFallFrames.FORMAT`: the curtain's vertices their own fall's, every
+  vertex of the water surface the frame whose window holds it (1.2 m upstream of the lip to
+  2.5 m past `x_pool`, 1.5 x the wider half-width plus 0.6 m across; the nearer fall where two
+  overlap), zeros elsewhere and on the ring and the mist. Classic's shaders ignore the channels.
+  The frame's pseudo-arc (metres along the water from the lip: `along` upstream, `along + drop`
+  on the pool, `max(along, 0) + metres fallen` on the curtain) is 0 at the lip and
+  `x_pool + drop` at the foot on both sides of each join, which is what the painted white keys on.
 - **Node:** `AuthoredWater-falls` (`WaterFallMesh.MESH_NAME`), a sibling `MeshInstance3D`
   whose name deliberately does not end in `-water`, so `WaterGlbUtils.process_water_meshes()`
   leaves it alone; no shadow, no collision (a token dropped on it lands by the downward ray on
@@ -321,7 +335,9 @@ sculpt stroke by a fall re-evaluates `is_fall` on the new ground, and sculpting 
   short, a tall and a diagonal fall, a pond dug beside a stream's head, undermined stations),
   `test_water_tool.gd` (a fall stroke lands the same from
   the worker and undoes exactly), `test_water_fall_mesh.gd` (the curtain, ring and mist
-  geometry), `test_authored_water.gd` (the lip tuck and the falls instance),
+  geometry), `test_water_fall_frames.gd` (one frame per fall with the curtain's numbers, the
+  pseudo-arc continuous over the lip and the foot, the window a vertex takes, both meshes'
+  CUSTOM0/CUSTOM1), `test_authored_water.gd` (the lip tuck and the falls instance),
   `test_glb_utils_water.gd` (every forwarded key is a uniform; a palette change reaches the
   fall material), `test_graphics_warmup.gd` (the falls sample), `test_crossings.gd` (a
   crossing keeps clear of a waterfall, and is allowed 2 m upstream), `test_bridge_tool.gd` (a
@@ -346,10 +362,18 @@ Under the Painted look `AuthoredWater.fall_material()` (the one shared fall mate
 tones instead of Classic's blurred cards. `PainterWater` swaps the shader and restores Classic's;
 the mesh and its instance uniforms are untouched. The fall's silhouette (the rounded cap on the
 channel above, the tube-shaped plunge pool) is the mesh's, the same under both shaders. The painted
-curtain runs 3 cm under the pool into a foam line across its whole width (the ring's foam, a solid
-core along the foot), its glass is the river's blue, and a fall's crest keeps a flat bed across a
-narrow channel (`WaterCarve.FALL_CREST_TOE_SOFT_M`), so the river joins the fall at both ends (card
-painter-fall-continuity). Details: [painter.md](painter.md) "Water".
+curtain runs 3 cm under the pool, its glass is the river's blue, and a fall's crest keeps a flat
+bed across a narrow channel (`WaterCarve.FALL_CREST_TOE_SOFT_M`), so the river joins the fall at
+both ends (card painter-fall-continuity). The white over the brink and at the foot is ONE shape
+(card painter-fall-frame-foam): `painter/shaders/painter_fall_white.gdshaderinc` draws it from
+the fall frame (above) on the river and the pool (`painter_water.gdshader`) and on the curtain
+(`painter_waterfall.gdshader`), keyed to the frame's pseudo-arc, so it runs over both joins
+without a seam: the river whitens over its last 0.7 m to full white at the lip and gives the
+curtain back its streaks by 0.8 m down, and past the foot white the same foam fades to the pool's
+wash over about a metre (no edge of its own). The
+painted look draws no foam ring and no lip roll of the curtain's own (the ring's vertices
+collapse in the painter shader's `vertex()`; Classic still draws the ring, which is why the mesh
+keeps it). Details: [painter.md](painter.md) "Water".
 
 ## Open work
 

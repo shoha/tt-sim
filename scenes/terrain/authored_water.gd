@@ -151,6 +151,7 @@ static func warmup_samples() -> Array[Dictionary]:
 			"arrays": WaterMeshBuilder.build(warmup_document())["arrays"],
 			"material": GraphicsWarmup.material_for(WATER_SHADER),
 			"multimesh": false,
+			"flags": WaterFallFrames.FORMAT,
 		},
 		{
 			"name": "falls",
@@ -158,6 +159,7 @@ static func warmup_samples() -> Array[Dictionary]:
 			"arrays": WaterMeshBuilder.build(warmup_falls_document())["falls"],
 			"material": GraphicsWarmup.material_for(FALLS_SHADER),
 			"multimesh": false,
+			"flags": WaterFallFrames.FORMAT,
 		},
 	]
 	return samples
@@ -230,7 +232,7 @@ static func _surface_mesh(
 	arrays: Array, flow: PackedByteArray, flow_size: Vector2i
 ) -> MeshInstance3D:
 	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, WaterFallFrames.FORMAT)
 	# Only a carrier: process_water_meshes() lifts the emission texture onto the shared water
 	# material and overrides this one.
 	var material := StandardMaterial3D.new()
@@ -276,7 +278,7 @@ static func warm_flow_carrier() -> void:
 ## `aabb` (grown for the packed mist) as the mesh's custom AABB.
 static func _falls_mesh(arrays: Array, aabb: AABB) -> MeshInstance3D:
 	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, WaterFallFrames.FORMAT)
 	if aabb.has_volume() or aabb.has_surface():
 		mesh.custom_aabb = aabb
 	mesh.surface_set_material(0, fall_material())

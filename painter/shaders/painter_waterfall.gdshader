@@ -5,19 +5,22 @@ render_mode blend_mix, depth_draw_opaque, cull_disabled, unshaded;
  * Painted waterfall (the AuthoredWater-falls mesh under the Painted look)
  * =====================================================================
  *
- * The fall's three kinds in the painter's manner (card painter-water): a curtain of vertical
- * ragged streaks over a glass wash, a white roll at the lip, a foam ring of broken arcs at the
- * foot, and a few broad soft mist shapes. The vertex contract is waterfall.gdshader's
+ * The fall in the painter's manner (card painter-water): a curtain of vertical ragged streaks over
+ * a glass wash and a few broad soft mist shapes. The vertex contract is waterfall.gdshader's
  * (WaterFallMesh): COLOR.g 0 curtain, 0.5 ring, 1 mist; the curtain's UV is (metres across, metres
  * fallen) and UV2 (fall height, pool level), COLOR.r the side edge fade, COLOR.a the crest width
- * over 8 m; the ring's UV2 holds its radius; a mist puff's four vertices sit at its centre with UV2
- * the corner's offset in metres and COLOR.b its seed. The water surface this stands on does not
- * bob (painter_water.gdshader), so the ring does not either.
+ * over 8 m; a mist puff's four vertices sit at its centre with UV2 the corner's offset in metres and
+ * COLOR.b its seed; CUSTOM0 and CUSTOM1 the curtain's fall frame (WaterFallFrames).
+ *
+ * The white over the brink and at the foot is not the curtain's own (card painter-fall-frame-foam):
+ * painter_fall_white.gdshaderinc draws it from the fall frame on the curtain here and on the river
+ * and the pool in painter_water.gdshader, one shape over both joins. So the Painted look draws no
+ * foam ring: the ring's vertices (Classic's, waterfall.gdshader) collapse to a point in vertex().
  *
  * Unshaded: every colour is the sheet's, so a cliff's shadow cannot grey the white water. The
  * curtain is a few bold tongues, not a noise field: a column of 0.3 m, each its own dash falling
  * with the water (feature positions in fall time, so they accelerate and lengthen), ragged-ended
- * by the ground's brush streak. The mist and the ring step in time, three or four steps a second:
+ * by the ground's brush streak. The mist and the white step in time, a few steps a second:
  * nothing slides.
  *
  * Colour names are Classic's where Classic's settings reach them (wave_speed, flow_strength,
@@ -25,6 +28,7 @@ render_mode blend_mix, depth_draw_opaque, cull_disabled, unshaded;
  */
 
 #include "res://painter/shaders/painter_noise.gdshaderinc"
+#include "res://painter/shaders/painter_fall_white.gdshaderinc"
 
 uniform float wave_speed : hint_range(0.0, 5.0) = 0.6;
 uniform float flow_strength : hint_range(0.0, 2.0) = 1.0;
@@ -45,14 +49,11 @@ const float GRAVITY = 9.81;
 const float WIDTH_DECODE_M = 8.0;
 const float NARROW_WIDTH_M = 1.2;
 const float WIDE_WIDTH_M = 3.0;
-// The roll over the brink: white from the lip down this far, scalloped by a slow noise across.
-const float LIP_ROLL_M = 0.4;
-const float LIP_SCALLOP_ACROSS = 1.3;
 const float BOTTOM_WHITE_SHARE = 0.3;
 // The curtain runs into the pool (card painter-fall-continuity): its white foot ends in the 3 cm
-// the mesh reaches under the pool level, torn by a few centimetres only, where the plunge foam
-// takes over. (It used to fade out up to 0.42 m over the pool, which left the face showing as a
-// dark gap between the curtain and the water.)
+// the mesh reaches under the pool level, torn by a few centimetres only, where the pool's foot
+// white takes over. (It used to fade out up to 0.42 m over the pool, which left the face showing as
+// a dark gap between the curtain and the water.)
 const float BOTTOM_SINK_M = 0.03;
 const float BOTTOM_FADE_M = 0.025;
 const float BOTTOM_TEAR_M = 0.04;
@@ -74,17 +75,6 @@ const float COLUMN_M = 0.3;
 const float DASH_CYCLE = 0.55;
 const float DASH_DUTY = 0.5;
 const float STREAK_RATE = 0.5;
-// The ring: where its foot lies in radii upstream of the centre, the reach, the arcs per radius
-// and the steps a second the arcs spread at.
-const float RING_FOOT = 0.3;
-// The foot is a line across the curtain's width, not a point: its half-length in radii (the crest
-// is 0.91 radii either side, RING_WIDTH_FACTOR), and the solid white core round it.
-const float RING_FOOT_HALF = 0.78;
-const float RING_CORE = 0.22;
-const float RING_REACH = 0.9;
-const float RING_STRETCH = 1.25;
-const float RING_ARCS = 2.5;
-const float RING_STEP_HZ = 3.5;
 // The mist: the rise (m) and the cycle (s) of a puff, its growth, the steps its rise is drawn in,
 // the soft fade against the scene (m), its three lobes (spread, growth of spread, radii, rim share).
 const float MIST_RISE_M = 0.5;
@@ -106,14 +96,10 @@ varying float fall_width;
 varying vec2 uv;
 varying vec2 uv2;
 varying float mist_phase;
-
-
-// The water's run from the lip, in metres, for `v` metres fallen (water.gdshader's lip_run).
-float lip_run(float v, float t_fall) {
-	float t_first = sqrt(2.0 * 0.03 / GRAVITY);
-	float strip = 0.3 + 1.4 * t_first;
-	return strip * clamp(v / 0.03, 0.0, 1.0) + 1.4 * max(t_fall - t_first, 0.0);
-}
+// The curtain's fall frame (WaterFallFrames, flat: one fall per triangle) and its map XZ.
+varying flat vec4 fall_a;
+varying flat vec4 fall_b;
+varying vec2 fall_xz;
 
 
 float fall_scene_depth(vec2 screen_uv, mat4 inv_projection) {
@@ -131,7 +117,14 @@ void vertex() {
 	uv = UV;
 	uv2 = UV2;
 	mist_phase = 0.0;
-	if (COLOR.g > 0.75) {
+	fall_a = CUSTOM0;
+	fall_b = CUSTOM1;
+	fall_xz = VERTEX.xz;
+	if (COLOR.g > 0.25 && COLOR.g < 0.75) {
+		// The foam ring is Classic's: here the pool's own foot white (painter_water.gdshader) is the
+		// plunge's foam, so the ring collapses to a point and draws nothing.
+		VERTEX = vec3(0.0);
+	} else if (COLOR.g > 0.75) {
 		// Mist: a billboard that rises, grows and sways over its cycle, at the puff's phase; its
 		// rise and growth go in steps.
 		float cycle = fract(TIME / MIST_CYCLE_S + COLOR.b);
@@ -177,28 +170,10 @@ void fragment() {
 		ALBEDO = mix(mix(p_foam, p_sky, 0.55), p_foam, core);
 		ALPHA = body * mix(0.7, 1.0, core) * life * soft * mist_alpha;
 	} else if (kind > 0.25) {
-		// ---- Foam ring: broken arcs spreading from the foot in steps ------------------------------
-		float radius = max(uv2.x, 1e-3);
-		vec2 q = uv / radius;
-		// Distance from the foot LINE across the curtain's width (its rounded ends stretched).
-		vec2 from_foot = vec2(
-			max(abs(q.x) - RING_FOOT_HALF, 0.0) * RING_STRETCH, q.y + RING_FOOT
-		);
-		float d = length(from_foot);
-		float density = 1.0 - smoothstep(0.1, RING_REACH, d);
-		float tick = floor(TIME * RING_STEP_HZ * max(wave_speed, 0.2));
-		float arcs = 0.5 + 0.5 * sin((d * RING_ARCS - tick * 0.28) * TAU);
-		float churn = be_n2(uv * 2.6 + vec2(tick * 1.7, tick * 0.9));
-		float foam = smoothstep(0.38, 0.52, density * (0.45 + 0.55 * arcs) + (churn - 0.5) * 0.6);
-		// The plunge itself: solid white along the foot, a churned edge, where the curtain's white
-		// foot lands, so the curtain and the pool join in one mass of foam.
-		float core = 1.0 - smoothstep(RING_CORE * 0.6, RING_CORE + 0.12 * churn, d);
-		foam = max(foam, core);
-		foam *= smoothstep(0.0, 0.25, edge);
-		ALBEDO = mix(p_foam, p_lit, 0.2 * (1.0 - density));
-		ALPHA = foam * foam_gain;
+		// The ring (collapsed in vertex()).
+		discard;
 	} else {
-		// ---- Curtain: a glass wash, vertical ragged streaks, the roll at the lip ----------------
+		// ---- Curtain: a glass wash, vertical ragged streaks, the fall white --------------------
 		float v = max(uv.y, 0.0);
 		float u = uv.x;
 		float height = max(uv2.x, 0.01);
@@ -227,15 +202,9 @@ void fragment() {
 			float across2 = 1.0 - smoothstep(0.12, 0.2, abs(fract(cu2) - 0.5));
 			streak = max(streak, dash2 * across2 * 0.7);
 		}
-		// The roll at the lip: white where the run from the lip passes a slow scalloped threshold.
-		float scallop_n = be_n2(vec2(u * LIP_SCALLOP_ACROSS + 3.7, floor(TIME * 1.5) * 0.4));
-		float run = lip_run(v, t_fall);
-		float start = 0.3 * scallop_n;
-		float scallop = smoothstep(start, start + 0.08, run);
-		float waver = 0.2 * (0.5 - scallop_n);
-		float roll_fade = 1.0 - smoothstep(0.1 + waver, LIP_ROLL_M + waver, v);
-		float lip_floor = smoothstep(0.17, 0.2, run) * roll_fade;
-		float lip = max(scallop * roll_fade, lip_floor);
+		// The roll over the brink and the white at the foot: the fall white of the river and the pool
+		// (painter_fall_white.gdshaderinc), so both joins are one shape.
+		float lip = fall_white_curtain(fall_a, fall_b, fall_xz, v);
 		float narrow = 1.0 - smoothstep(NARROW_WIDTH_M, WIDE_WIDTH_M, fall_width);
 		float bottom = smoothstep(height * (1.0 - BOTTOM_WHITE_SHARE), height, v);
 		float entrained = mix(0.06, 0.5, narrow) + smoothstep(0.0, 2.5, v) * mix(0.12, 0.25, narrow);

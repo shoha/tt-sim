@@ -60,6 +60,10 @@ extends RefCounted
 ## cells straddling the lip line would still stick one sample out over the face at the upper
 ## level; fall_cells() turns them into sheet cells whose downstream corners are tucked under
 ## the face (the lip roll of the curtain hides the tucked quad). Run-out ends are unchanged.
+## Every vertex of the surface carries the fall frame whose window holds it in CUSTOM0 and
+## CUSTOM1 (WaterFallFrames.vertex_channels; zeros away from a fall), the frames the curtains
+## are built from, so the painted water and the painted curtain draw one white over the brink and
+## the foot (card painter-fall-frame-foam).
 
 const MESH_NAME := "AuthoredWater-water"
 ## Rings of tucked cells added past the covered cells (see the header).
@@ -103,14 +107,15 @@ const PERCHED_SLOPE := 2.4
 ## Side of the square tiles a body's WaterZone footprint is split into (metres).
 const ZONE_TILE_M := 5.0
 
-## The water of `doc`: {"arrays": Mesh arrays of the merged surface ([] with no water),
-## "levels": PackedFloat32Array per sample (the owning body's level, WaterGeometry.DRY where
-## no body's area holds the sample), "wet": PackedByteArray per sample (1 where the ground is
-## below its level), "bodies": Array of {"id", "level", "floats" (bool), "faces"
-## (PackedVector3Array, the body's triangles for its surface collision), "tiles" (Array of
-## Rect2, map XZ, the WaterZone footprint)}, one per body with covered cells, "falls": Mesh
-## arrays of the waterfalls (WaterFallMesh.build; [] with none), "falls_aabb": their bounds
-## grown by the largest mist puff (ArrayMesh.custom_aabb)}.
+## The water of `doc`: {"arrays": Mesh arrays of the merged surface ([] with no water; CUSTOM0
+## and CUSTOM1 hold each vertex's fall frame, WaterFallFrames, so add them with
+## WaterFallFrames.FORMAT), "levels": PackedFloat32Array per sample (the owning body's level,
+## WaterGeometry.DRY where no body's area holds the sample), "wet": PackedByteArray per
+## sample (1 where the ground is below its level), "bodies": Array of {"id", "level",
+## "floats" (bool), "faces" (PackedVector3Array, the body's triangles for its surface
+## collision), "tiles" (Array of Rect2, map XZ, the WaterZone footprint)}, one per body with
+## covered cells, "falls": Mesh arrays of the waterfalls (WaterFallMesh.from_frames; [] with
+## none), "falls_aabb": their bounds grown by the largest mist puff (ArrayMesh.custom_aabb)}.
 @warning_ignore("integer_division")
 static func build(doc: MapDocument) -> Dictionary:
 	var columns := doc.samples_x()
@@ -148,9 +153,14 @@ static func build(doc: MapDocument) -> Dictionary:
 	for i: int in tucked:
 		if not sheets.has(i):
 			sheets[i] = tucked[i]
+	# One frame per fall, read by the surface's vertices and by the curtain's (WaterFallFrames).
+	var frames := WaterFallFrames.frames(doc, falls)
 	out["arrays"] = _arrays(doc, cells, sheets, owner, wet, buried)
+	var channels := WaterFallFrames.vertex_channels(frames, out["arrays"][Mesh.ARRAY_VERTEX])
+	out["arrays"][Mesh.ARRAY_CUSTOM0] = channels[0]
+	out["arrays"][Mesh.ARRAY_CUSTOM1] = channels[1]
 	out["bodies"] = _bodies(doc, cells, wet, owner)
-	var fall_mesh := WaterFallMesh.build(doc, falls)
+	var fall_mesh := WaterFallMesh.from_frames(frames)
 	out["falls"] = fall_mesh.arrays
 	out["falls_aabb"] = fall_mesh.aabb
 	return out
