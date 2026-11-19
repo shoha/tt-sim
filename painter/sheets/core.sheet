@@ -161,9 +161,13 @@
      Softened (painter-ground-fire-round3, owner: "patches too strong"): smaller shares, a gold
      closer to the meadow's value and chroma, a moss a smaller step darker, and the gold never
      redder than hue 96, so dusk's and autumn's yellow-green ground keeps a warm gold (round 1 at 88
-     and lift 0.03 still read peach at dusk and a dull ochre in summer). */
-  gold-share: 0.13;  gold-turn: -34;  gold-chroma: 0.88;  gold-lift: 0.05;  gold-hue-min: 96;
-  moss-share: 0.12;  moss-turn: -6;  moss-chroma: 1.0;  moss-lift: -0.05;
+     and lift 0.03 still read peach at dusk and a dull ochre in summer). Quieter again
+     (painter-ground-fire-round4, owner a second time: "still too strong"): a swathe takes at most
+     half its tone (swathe-mix; the probe sheet showed 0.35, 0.5 and 0.65), smaller shares, and a
+     three-step edge over twice the rim, so they read as gentle variation in the meadow. */
+  gold-share: 0.11;  gold-turn: -34;  gold-chroma: 0.88;  gold-lift: 0.05;  gold-hue-min: 96;
+  moss-share: 0.10;  moss-turn: -6;  moss-chroma: 1.0;  moss-lift: -0.05;
+  swathe-mix: 0.5;
   /* The village fields (PainterFields; painter-fields): the tilled soil is the path turned to a
      warm earth, richer and deeper; a crop is the grass moved to its plant's own colour (ripe wheat
      gold, a young crop fresh green), a step lighter and richer than the meadow, so a field reads

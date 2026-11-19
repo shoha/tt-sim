@@ -13,8 +13,11 @@ extends RefCounted
 ## - Where they lie: one slow field in the ground shader (two octaves of value noise, about 22 m
 ##   and 9 m) through the meadow's own warp; its highest `gold-share` of the ground is gold, its
 ##   lowest `moss-share` moss, so the two never touch and a meadow band runs between them. The
-##   block-in takes each swathe in two steps (half, then whole) and a brush mark takes it whole at
+##   block-in takes each swathe in three steps over a wide rim and a brush mark takes it whole at
 ##   its middle, so the edge is brushed, never a gradient.
+## - Gentle: a swathe takes at most `swathe-mix` of its tone over the meadow (round 4: the owner
+##   twice found the patches too strong, so they are a soft shift in the meadow's colour, not a
+##   patch laid on it).
 ## - No sameness: the map's seed moves the field and each swathe's edge (up to SEED_EDGE of the
 ##   field, about a third of the share either way), so one map is mostly gold-flecked and the next
 ##   moss-dark.
@@ -50,7 +53,8 @@ static func seed_of(map_seed: int) -> Vector4:
 
 ## The swathes' uniforms in `mood` at `elevation`, keyed by the ground shader's names: `sw_lit` and
 ## `sw_shd` (gold's two variants, then moss's, linear) and `sw_k` (the field value above which gold
-## lies, below which moss lies, and 1 when either is drawn).
+## lies, below which moss lies, 1 when either is drawn, and `swathe-mix`: the most of its tone a
+## swathe takes over the meadow).
 static func tones(sheet: Dictionary, mood: String, elevation: float) -> Dictionary:
 	var lit := PackedVector3Array()
 	var shd := PackedVector3Array()
@@ -66,8 +70,11 @@ static func tones(sheet: Dictionary, mood: String, elevation: float) -> Dictiona
 		&"sw_lit": lit,
 		&"sw_shd": shd,
 		&"sw_k":
-		Vector3(
-			threshold(gold), 1.0 - threshold(moss), 1.0 if gold > 0.0 or moss > 0.0 else 0.0
+		Vector4(
+			threshold(gold),
+			1.0 - threshold(moss),
+			1.0 if gold > 0.0 or moss > 0.0 else 0.0,
+			clampf(PainterSheet.number(sheet, mood, "swathe-mix", elevation), 0.0, 1.0)
 		),
 	}
 

@@ -256,16 +256,25 @@ role's shade, which the ground's full violet pull swings to dark purple. `Painte
 Meadow swathes (card painter-ground-polish, 2026-11-19; look-pending). Classic's meadow carries big
 gold-ochre and moss-green patches from its ground textures; the painted meadow was one calm mint
 green. `PainterMeadowSwathes` (`painter/painter_meadow_swathes.gd`) gives the meadow role a few bold
-soft shapes in its own tone: gold is the mood's `ground` turned `gold-turn` (-40 degrees), chroma
-times `gold-chroma` (1.05), lifted `gold-lift` (0.06); moss turned `moss-turn` (-6), `moss-chroma`
-1.1, `moss-lift` -0.08; each on the ground's ramp, so every mood and sun moves them. They lie on one
+soft shapes in its own tone: gold is the mood's `ground` turned `gold-turn` (-34 degrees), chroma
+times `gold-chroma` (0.88), lifted `gold-lift` (0.05), never redder than `gold-hue-min` (96: dusk's
+and autumn's yellow-green ground turned salmon); moss turned `moss-turn` (-6), `moss-chroma` 1.0,
+`moss-lift` -0.05; each on the ground's ramp, so every mood and sun moves them. They lie on one
 slow field in the ground shader (two octaves of 2D value noise, about 22 and 9 m, through the
-meadow's warp): its highest `gold-share` (0.2) is gold, its lowest `moss-share` (0.17) moss, so the
-two never touch. The block-in takes a swathe in two steps and a mark takes it at its middle, so the
-edge is brushed. The map's seed moves the field and each edge (`seed_of`, bound with the path slots),
-so maps differ. Winter's shares are 0 (no swathes on the snow). Round 1 at -48 read ochre-orange,
-and salmon at dusk and in autumn; at -40 the summer gold is luminous, dusk's still salmon-orange
-under the rose sun (open). Cost: two 2D noises on meadow pixels, no fetch; not timed.
+meadow's warp): its highest `gold-share` (0.11) is gold, its lowest `moss-share` (0.10) moss, so the
+two never touch. The block-in takes a swathe in three steps over a 0.1 rim of the field and a mark
+takes it at its middle, so the edge is brushed; a swathe takes at most `swathe-mix` (0.5) of its tone,
+so it reads as a gentle shift in the meadow, not a patch (painter-ground-fire-round3 and round4: the
+owner twice found the patches too strong; round 4's probe sheet showed 0.35, 0.5 and 0.65). The
+map's seed moves the field and each edge (`seed_of`, bound with the path slots), so maps differ.
+Winter's shares are 0 (no swathes on the snow). Cost: two 2D noises on meadow pixels, no fetch; not
+timed.
+
+A collapsing building's ember cracks (`painter_building_burn.gdshaderinc` `building_embers`, round 3
+and 4): the contour of a warped two-octave field, tapered by a slow gate, never rings; a crack's half
+width at its widest is `EMBER_SEAM` (0.07 m) plus `EMBER_SEAM_PX` (3 screen pixels), measured by the
+field's and the point's screen derivatives, so it reads at zoom 30 (about 6 to 8 px) and stays a
+crack at zoom 8. Where lines crowd on a fallen slab's edge they merge into broken ember patches.
 
 Shade ramp. `PainterTones.steps` draws a role's shade from `shade-keep` of its own chroma plus a
 pull of `shade-pull` toward `shade-hue` (the ground reads `ground-shade-keep`, grass and flowers
