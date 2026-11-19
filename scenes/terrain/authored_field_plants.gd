@@ -10,6 +10,16 @@ extends Node3D
 ## left out. A refresh rebuilds only when the plants or the ground under them moved (a key of both).
 ## No collision: walk-through, as the scatter is. The species' wind materials are not registered
 ## with the level's wind re-tuning (the default preset holds).
+##
+## For the Painted look the layer answers the way a scatter does (rows_by_asset, resolved_species,
+## and the two signals), so PainterSurfaces and PainterTrees draw its orchard trees, bushes and
+## flowers with the painted trees' and plants' own machinery; Classic reads none of it.
+
+## Emitted after every rebuild (the cells are not tracked: the list is empty), as a scatter's
+## cells_applied: the painted look paints the species not yet painted and syncs its trees.
+signal cells_applied(cells: Array[Vector2i])
+## Never emitted (a field's species resolve at once); the painted look follows it on a scatter.
+signal species_added(materials: Array[ShaderMaterial])
 
 const NODE_NAME := "AuthoredFieldPlants"
 
@@ -19,6 +29,10 @@ var builds: int = 0
 
 var _key: String = ""
 var _palette_root: String = PaletteLibrary.DEFAULT_ROOT
+## The plants of the last build (plants_of) and the species it resolved: asset id -> {"mesh",
+## "wind_category", "height", "flower"} (the meshes every chunk node of the asset draws).
+var _plants: Dictionary = {}
+var _species: Dictionary = {}
 
 
 ## The layer under map root `root` brought up to `doc` (created only when a field has plants).
@@ -81,6 +95,42 @@ func refresh(_doc: MapDocument, plants: Dictionary) -> void:
 	placed = 0
 	for rows: Array in plants.values():
 		placed += rows.size()
+	_plants = plants
+	_species = {}
 	if not plants.is_empty():
-		ScatterGlbUtils.build_scatter(self, plants, PaletteLibrary.resolver(_palette_root))
+		ScatterGlbUtils.build_scatter(self, plants, _resolve)
 	builds += 1
+	cells_applied.emit([] as Array[Vector2i])
+
+
+## The plants as a scatter lists its rows: asset id -> flat rows of MapDocument.ROW_STRIDE floats
+## (x, y, z, rotation quaternion, scale x y z).
+func rows_by_asset() -> Dictionary:
+	var out := {}
+	for asset: String in _plants:
+		var flat := PackedFloat32Array()
+		for row: Array in _plants[asset]:
+			flat.append_array(PackedFloat32Array(row))
+		out[asset] = flat
+	return out
+
+
+## Every resolved species as a scatter lists them (asset id -> {"mesh", "wind_category", "height",
+## "flower"}); the meshes are the ones the chunk nodes draw, so a material set on a surface shows
+## on every plant of the asset.
+func resolved_species() -> Dictionary:
+	return _species
+
+
+## PaletteLibrary.resolve for build_scatter, keeping the species it hands out (resolved_species).
+func _resolve(asset_id: String) -> Dictionary:
+	var template := PaletteLibrary.resolve(asset_id, _palette_root)
+	var mesh := template.get("mesh") as Mesh
+	if mesh != null:
+		_species[asset_id] = {
+			"mesh": mesh,
+			"wind_category": template.get("wind_category", ""),
+			"height": maxf(mesh.get_aabb().end.y, 0.0),
+			"flower": template.get("flower", false) == true,
+		}
+	return template

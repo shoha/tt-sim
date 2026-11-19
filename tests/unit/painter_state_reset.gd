@@ -23,8 +23,8 @@ extends RefCounted
 ##   - FoliageLight.last_sun (the published sun every light gate reads): LAST_SUN_FRESH;
 ##   - FoliageDensityController.fraction (the ground-cover thinning a zoomed-out level camera sets,
 ##     found by the reverse 2-shard run: test_authored_scatter saw 14 of 20 drawn): 1.0;
-##   - the painter's A/B flags (PainterBuildings, PainterMannerHost, PainterMannerSnow,
-##     PainterMannerBlanket, PainterTreeBush): their declared defaults;
+##   - the painter's A/B flags (PainterBuildings, PainterVillage, PainterMannerHost,
+##     PainterMannerSnow, PainterMannerBlanket, PainterTreeBush): their declared defaults;
 ##   - PainterSheet's parsed-sheet cache: emptied.
 ## Not here: PainterWarmup (a no-op while headless, `available()`), PainterSurfaces and
 ## PainterScene (instances a level environment manager owns, freed with it), RenderingServer's
@@ -51,6 +51,9 @@ static func classic() -> void:
 	FoliageDensityController.fraction = 1.0
 	PainterBuildings.hand_drawn = true
 	PainterBuildings.paint_yard = true
+	PainterVillage.furnishings = true
+	PainterVillage.decor_plants = true
+	PainterVillage.field_plants = true
 	PainterMannerHost.snow_body = true
 	PainterMannerHost.hand = true
 	PainterMannerSnow.blanket = true
@@ -77,7 +80,12 @@ static func dirty() -> PackedStringArray:
 		"painter A/B flags",
 		(
 			not (PainterBuildings.hand_drawn and PainterBuildings.paint_yard)
-			or not (PainterMannerHost.snow_body and PainterMannerHost.hand)
+			or not (
+				PainterVillage.furnishings
+				and PainterVillage.decor_plants
+				and PainterVillage.field_plants
+			)
+				or not (PainterMannerHost.snow_body and PainterMannerHost.hand)
 			or not PainterMannerSnow.blanket
 			or PainterMannerBlanket.step_s != PainterMannerBlanket.FIELD_STEP_S_M
 			or PainterTreeBush.clump_roots != PainterTreeBush.ROOTS_PAD

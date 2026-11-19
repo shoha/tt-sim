@@ -122,7 +122,7 @@ func complete() -> void:
 ## Puts the sheet's tones for `mood` at sun `elevation` on every prop stand-in.
 func retone(sheet: Dictionary, mood: String, elevation: float) -> void:
 	for entry: Array in _props:
-		PainterSurfaces._tone_plant(entry[3], entry[4], sheet, mood, elevation)
+		PainterPlantTone.tone(entry[3], entry[4], sheet, mood, elevation)
 
 
 ## The prop stand-ins that darken at their base (stone and wood).
@@ -464,7 +464,7 @@ func _dress_prop(node: MeshInstance3D) -> void:
 		_props.append(record)
 		if not applied.is_empty():
 			var sheet := PainterSheet.load_sheet(str(applied["sheet"]))
-			PainterSurfaces._tone_plant(
+			PainterPlantTone.tone(
 				stand_in, entry, sheet, str(applied["mood"]), float(applied["elevation"])
 			)
 		any = true

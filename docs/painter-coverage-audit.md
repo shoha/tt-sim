@@ -28,10 +28,10 @@ classes marked no or partial below are still Classic. The look is nonetheless th
 | Flowers, grass, sprigs, stubble, litter | yes | yes | KIND_FLOWER, KIND_GRASS, KIND_SOLID (litter), dry-grass role in dry biomes |
 | Rocks, boulders, logs, stumps, branches | yes | yes | KIND_SOLID, stone or bark or charcoal role |
 | EyeRim (eye-view hedges and copses) | yes | yes | the rim is an `AuthoredScatter`, bound by `_on_map_child` and `_on_scatter_shown` |
-| Library asset whose surface is neither a wind ShaderMaterial nor a BaseMaterial3D | no | no | `_stand_in` returns null: the surface keeps its own material (low: core has none known) |
+| Library asset whose surface is neither a wind ShaderMaterial nor a BaseMaterial3D | no | no | `stand_in_of` returns null: the surface keeps its own material (low: core has none known) |
 | Library asset whose name matches no rule | stone fallback | partial | `PainterPlantRoles.of` ends `still -> stone`, `swaying -> leaf mass`: a user-library prop or plant gets a stone or leaf tone whatever it is |
 | Legacy GLB maps (a `map.glb` with no `AuthoredTerrain` or `AuthoredScatter`) | sky, light, water, ground, trees, scatter and named props (PainterGlbMap, 2026-11-18) | yes, with listed limits | `_bind` finds only the authoring nodes; `PainterGlbMap` scans the rest of `LevelMap` over frames (docs/systems/painter.md "GLB maps"); verified on a fixture world |
-| Field plants: village orchard trees, garden flowers and shrubs, hedged boundaries (`AuthoredFieldPlants`) | no | no | its own MultiMeshes built by `ScatterGlbUtils.build_scatter`; nothing in `painter/` mentions the layer, and `PainterSurfaces` binds only `AuthoredScatter` (whether it shares meshes with the scatter's painted ones is not verified) |
+| Field plants: village orchard trees, garden flowers and shrubs, hedged boundaries, crops (`AuthoredFieldPlants`) | yes | yes | since painter-village-parity (2026-11-18) the layer answers like a scatter (`rows_by_asset`, `resolved_species`, `cells_applied`, `species_added`) and `PainterSurfaces` binds it as a plant source: its mapped trees and bushes are drawn by `PainterTrees`, the rest wear the plants' stand-ins (its meshes are its own, not the scatter's, so it reports the ones it resolved) |
 | Clipmap ground bake | not checked | open | `painter_surfaces.gd` header still says "the clipmap keeps baking the Classic ground underneath"; `ground_clipmap*` and `authored_ground_*_looked` shaders exist; not verified what shows beyond the chunks |
 
 ## Structures and village layers
@@ -43,8 +43,8 @@ classes marked no or partial below are still Classic. The look is nonetheless th
 | Street rows, drawn walls, village boundaries, crossings (timber, stones, arch, ford) | yes | yes | `WALL_LAYERS`, `wall_part_key`, `crossing_stone` role |
 | Round and profile roofs, Taper pieces (windmill cap, wizard tower, spire) | mass look only | partial | no procgen records, so no hand-drawn strokes (roadmap A queue item 7; per docs, not re-read in procgen) |
 | Panes, lantern glass, glow halos, door and ornament metal, water parts of a structure | no | no | no KINDS row, kept Classic by decision (they are lights and ironwork) |
-| `decor_baked` (a structure's baked decor plants) | no | no | no KINDS row; header comment lists "decor plants" as Classic |
-| Settlement furnishings (`AuthoredSettlements`: crates, barrels, carts, laundry, signposts, lamp posts, wells, haystacks, baked per cell) | no | no | not in `WALL_LAYERS`; no reference in `painter/`; baked cells keep the structures' Classic materials |
+| `decor_baked` (a structure's baked decor plants: ivy, planters, flower boxes) | yes | yes | since painter-village-parity `PainterVillage` swaps each surface of the baked mesh for the plants' stand-in (solid kind, bark or leaf role), shared per original material; the non-bakable decor MultiMeshes (`decor_<asset>`) are not covered |
+| Settlement furnishings (`AuthoredSettlements`: crates, barrels, carts, laundry, signposts, lamp posts, wells, haystacks, baked per cell) | yes | yes | since painter-village-parity the `prop:*` surfaces (not glass) wear `painter_prop.gdshader` (`PainterVillage`): sheet ramps chosen by the procgen paint, winter snow caps; `prop:glass`, glow and water parts stay Classic by decision; cloth no longer sways in the wind |
 | Structure destruction (burn, ruin) | pending | no | `PainterBuildings.take/set_burn/drop` exist; no event drives them on main; branch `painter-structure-fire` is in review, not merged |
 
 ## Water, fire, sky, weather, tokens, UI
@@ -79,12 +79,11 @@ classes marked no or partial below are still Classic. The look is nonetheless th
    glass, ironwork, unnamed textured surfaces, multi-surface terrain, no skirt and no contact pools
    on GLB ground) is listed there. Verified by render on a test-only fixture world, not a real
    Blender map.
-3. **Settlement furnishings and `decor_baked` (M to H in any street village, high at eye level).**
-   Props at human scale sit beside painted houses and paving: crates, barrels, carts, wells, lamp
-   posts. A painted material for the baked cells (like the yard's props shader) is the fix; M effort.
-4. **Field plants (M in village maps).** Orchards, gardens and hedged boundaries are Classic wind
-   foliage next to painted trees and bushes: a visible style seam at the village edge. M effort
-   (bind `AuthoredFieldPlants` like a scatter, if its meshes are separate).
+3. ~~**Settlement furnishings and `decor_baked`**~~ CLOSED (card painter-village-parity,
+   2026-11-18): `PainterVillage`, `painter_prop.gdshader`; `docs/systems/painter.md` "Village
+   furnishings". Left Classic by decision: glass, glow, water; the non-bakable decor MultiMeshes.
+4. ~~**Field plants**~~ CLOSED (same card): `AuthoredFieldPlants` is a plant source of
+   `PainterSurfaces` and `PainterTrees`.
 5. **Weather and bursts (M, only while active).** Rain and snow particles, splash, dust and sparkle
    bursts have no painted form; falling snow over a painted winter is the most visible. Small
    shader cards, but the look judgement (stepped, brush-edged particles) is the work.
@@ -97,7 +96,7 @@ records), panes and metal (L, by design), user-library fallbacks (L), grid and s
 
 - Anything about how a Classic-form class reads next to the painted ones (the seam, not the code).
 - Legacy GLB maps: only the binding code was read; no GLB map was loaded.
-- Whether `AuthoredFieldPlants` meshes are shared with the scatter's painted species.
+- (Settled by painter-village-parity: `AuthoredFieldPlants` resolves its own meshes, not the scatter's.)
 - The clipmap's far ground under Painted and eye-level read of the overlays (grid, pings, measure).
 - Round and profile roofs: status is taken from the docs and matrix, procgen was not re-read.
 - macOS and AMD/Intel (see `painter-roadmap.md` open items); Linux only via llvmpipe.
