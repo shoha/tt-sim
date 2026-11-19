@@ -362,23 +362,26 @@ func test_fall_profile_is_the_tier_face_with_a_harder_lip() -> void:
 
 
 func test_fall_walls_steepen_down_the_face_and_relax_past_the_pool() -> void:
-	# The side-wall rule (P4c-2b, bed_line's gorge share): 0 along a flat reach, rising over the
+	# The side-wall rule (P4c-2b, the profile's gorge share): 0 along a flat reach, rising over the
 	# pool tail to 1 at the lip, 1 down the face to the carved foot, back to 0 over the plunge
 	# length; a riffle step never has it. At 1 the bank rises at FALL_BANK_SLOPE and the cut
 	# reaches FALL_BANK_REACH_M; at 0 section() and blend_with_ground() are exactly the
 	# ordinary ones (the riffle carve is byte-identical).
 	var depth := WaterBody.depth_for(WaterBody.Depth.ANKLE)
 	var drop := 3.0
-	var bounds := PackedFloat32Array([10.0])
-	var levels := PackedFloat32Array([drop, 0.0])
-	var taper := Vector2i.ZERO
 	var fall := PackedByteArray([1])
 	var riffle := PackedByteArray([0])
 	var tail := WaterCarve.step_shape(drop, 0.0, depth, true).y
 	var foot := WaterCarve.fall_foot(drop, depth)
 	var length := WaterFalls.plunge_length(drop)
 	var at := func(s: float, flags: PackedByteArray) -> float:
-		return WaterCarve.bed_line(s, bounds, levels, depth, 20.0, taper, flags).z
+		var profile := RiverProfile.new()
+		profile.bounds = PackedFloat32Array([10.0])
+		profile.levels = PackedFloat32Array([drop, 0.0])
+		profile.depth = depth
+		profile.total = 20.0
+		profile.flags = flags
+		return profile.at(s).z
 	assert_eq(at.call(10.0 - tail - 0.5, fall), 0.0, "the flat reach above the pool tail")
 	assert_between(at.call(10.0 - tail * 0.5, fall), 0.3, 0.7, "rising over the pool tail")
 	assert_almost_eq(at.call(10.0, fall), 1.0, 1e-6, "at the lip")

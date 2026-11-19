@@ -10,8 +10,10 @@ extends GutTest
 ## core rebuild moves the core library's hash in the manifest; re-pinned hilltop only on
 ## 2026-11-18 for card painter-fall-lip, whose deeper fall crest, WaterCarve.fall_crest_depth(),
 ## moves the ground of the hilltop's carved river fall; again for card painter-fall-continuity,
-## whose flat crest across a channel, WaterCarve.FALL_CREST_TOE_SOFT_M, moves it once more)
-## refreshes the digests: run each case and paste what it prints.
+## whose flat crest across a channel, WaterCarve.FALL_CREST_TOE_SOFT_M, moves it once more; and
+## for card painter-river-profile, whose sill runs on past the lip down the face uneased,
+## RiverProfile.at(), so the fall keeps its width through the lip) refreshes the digests: run
+## each case and paste what it prints.
 
 const BIOME := "temperate_forest_summer_s1"
 const SEED := 1234
@@ -19,7 +21,7 @@ const SEED := 1234
 const CASES: Array = [
 	[100, "flat", "5e52e0594ba8c9f8"],
 	[100, "valley", "c8af70660bc766fd"],
-	[100, "hilltop", "a20917b0985a9780"],
+	[100, "hilltop", "eae32bee749ea2fd"],
 	[100, "terraces", "0becb3b9a192ce53"],
 	[100, "lakeshore", "d3a8126b4438ae95"],
 	[100, "gorge", "fbf162fd80c3f25e"],

@@ -241,8 +241,21 @@ sculpt stroke by a fall re-evaluates `is_fall` on the new ground, and sculpting 
   carved yet) is carved as a waterfall, not a riffle (`bed_line(..., falls)`, one byte per
   shared point, passed through `WaterEditor.compute`). The pool tail still rises to the full
   crest (`CREST_M` 5 cm under the upper level whatever the depth: `step_shape(..., full)`
-  skips the small-step `CREST_RISE_PER_DROP` rule, so a fall is never a low bar), and below
-  the lip the bed follows `fall_shape(x, upper, lower, depth)`: bed = max(crest -
+  skips the small-step `CREST_RISE_PER_DROP` rule, so a fall is never a low bar; since card
+  painter-fall-lip the crest is `fall_crest_depth()`, the channel's depth up to 12 cm). The
+  sill (card painter-river-profile, `RiverProfile.at()`'s sill share): from the top of the pool
+  tail over the lip and down the face, while the water over the bed is a crest's (up to twice
+  it), the cross-section is a flat sill to the profile's edge (`section()`: the shore at
+  `MAX_SHORE_SLOPE`, the toe rounding `FALL_CREST_TOE_SOFT_M`) and the top-of-bank easing is
+  off (`blend_with_ground(..., sill)`: k = `TOP_SOFT_M` (1 - sill)), so the channel keeps its
+  wetted width through the lip. Before, the flat crest stopped at the lip line, the first row
+  past it took the lower reach's rounded section (`TOE_SOFT_M` lifted the middle to 4 cm under
+  the level) and the easing left the waterline about 4 cm proud on a tier standing 0.15 m over
+  the level: on the fall spike's map the first row past the lip of the short ankle fall had 2
+  of 4 samples under the level (now 4 of 4; the tall ankle fall 2 to 4, the tall waist 10 to
+  12, the wide waist 14 to 16, the diagonal 9 to 10; wetted width 5 cm past the short fall's
+  lip 0.85 to 1.05 m of 1.1). Below the lip the bed follows
+  `fall_shape(x, upper, lower, depth)`: bed = max(crest -
   `fall_profile`(x, rise), plunge bed + basin). `fall_profile` is the tier profile upside down
   (`HeightBrush.soft_tier_offset` with a harder lip, `FALL_LIP_M` 0.1 over `FALL_LIP_WIDTH_M`
   0.25 against a tier's 0.25 over 0.5, the tier face angle `TIER_FACE_DEG` 74 and the same
@@ -303,7 +316,10 @@ sculpt stroke by a fall re-evaluates `is_fall` on the new ground, and sculpting 
 - **Unit tests** (`tests/unit/`): `test_water_falls.gd` (the rule and the plan; a stroke with
   no drop run plans byte-identically to v0.1.29), `test_water_carve.gd` (the profile, the
   walls, rock across the hillside channel, a notch not a quarry, the plunge depth, a tier face
-  changed only in the notch, no saw), `test_water_tool.gd` (a fall stroke lands the same from
+  changed only in the notch, no saw), `test_river_profile.gd` (the profile's fall entries,
+  level and width continuity, the sill through the lip, the width held through the lip of a
+  short, a tall and a diagonal fall, a pond dug beside a stream's head, undermined stations),
+  `test_water_tool.gd` (a fall stroke lands the same from
   the worker and undoes exactly), `test_water_fall_mesh.gd` (the curtain, ring and mist
   geometry), `test_authored_water.gd` (the lip tuck and the falls instance),
   `test_glb_utils_water.gd` (every forwarded key is a uniform; a palette change reaches the
