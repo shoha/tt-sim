@@ -46,14 +46,16 @@ const EDITS: Dictionary = {
 		],
 		# The brush blob is a layered painted puff (card painter-fire-polish): a cool lilac shade on
 		# its underside, its body, and a lit warm cap (a second lobe high on it, wobbled), three flat
-		# tones with soft steps instead of one tan wash.
+		# tones with soft steps instead of one tan wash. The underside is a lilac at the dust's own
+		# value, not the dust times a lilac (painter-ground-fire-round3: a tan has too little blue for
+		# a multiply to turn it lilac; it read a darker tan), and it takes the lower half of the puff.
 		[
 			"const vec3 SHADE_WATER = vec3(0.6, 0.75, 0.97);",
 			(
 				"const vec3 SHADE_WATER = vec3(0.6, 0.75, 0.97);\n"
 				+ "const vec3 BRUSH_LIT = vec3(1.5, 1.32, 1.0);\n"
 				+ "const vec3 BRUSH_MID = vec3(0.98, 0.86, 0.92);\n"
-				+ "const vec3 BRUSH_SHADE = vec3(0.62, 0.52, 0.88);"
+				+ "const vec3 BRUSH_LILAC = vec3(0.86, 0.76, 1.3);"
 			),
 		],
 		[
@@ -64,8 +66,9 @@ const EDITS: Dictionary = {
 				+ "\t\tvec2 cap_at = (p - vec2(0.16 * sin(puff_seed * 23.0), -0.3)) * vec2(1.0, 1.2);\n"
 				+ "\t\tfloat cap_r = length(cap_at) + 0.06 * sin(a * 5.0 + puff_seed * 31.0);\n"
 				+ "\t\tfloat cap = 1.0 - smoothstep(0.5, 0.58, cap_r);\n"
-				+ "\t\tfloat under = smoothstep(0.3, 0.6, p.y + 0.05 * sin(a * 3.0 + puff_seed * 9.0));\n"
-				+ "\t\tbody = COLOR.rgb * mix(mix(BRUSH_MID, BRUSH_SHADE, under), BRUSH_LIT, cap);\n"
+				+ "\t\tfloat under = smoothstep(0.08, 0.34, p.y + 0.06 * sin(a * 3.0 + puff_seed * 9.0));\n"
+				+ "\t\tvec3 lilac = dot(COLOR.rgb, vec3(0.3, 0.55, 0.15)) * BRUSH_LILAC;\n"
+				+ "\t\tbody = mix(mix(COLOR.rgb * BRUSH_MID, lilac, under), COLOR.rgb * BRUSH_LIT, cap);\n"
 				+ "\t}"
 			),
 		],
