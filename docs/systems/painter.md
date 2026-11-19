@@ -1585,20 +1585,21 @@ painter_final25_coverage/matrix.md`; the current, code-read class-by-class audit
     slope 0.9 (`dash_gate` 0.35 to 0.9) and drawn as soft dabs, so the pond's shards thin out; a steep
     river bank loses some of its dashes too. The ribbon fades through a
     pale turquoise before the green.
-- **Fall lip (card painter-fall-lip, 2026-11-18, look-pending).** Measured cause: the carve leaves the
-  channel narrower at a fall's lip line than in the pool above (the lip's crest sill, `CREST_M` 5 cm
-  under the level, is shallower than the pool tail's bed, and the gorge's steeper bank rises over it),
-  so the wetted width at the lip is 74 to 80 percent of the channel on waist falls (1.11 of 1.5 half
-  width, 1.61 of 2.0), 73 percent on a tall ankle fall and a dry crest (the `DRY_CREST_SHARE` fallback,
-  50 percent) on a short ankle fall; the pool above ends 0.3 to 0.5 m short of the lip. A mesh cannot
-  draw water outside the ground's crossing (the ground is opaque and stands above the level there),
-  so `WaterFallMesh` only softens the join: a LEAD_M (0.6 m) lead-in of flat rows above the lip at the
-  wetted width of each place (never narrower than the lip's), fading in toward the lip (COLOR.r), and
-  a short side-edge fade over the brink rows (`EDGE_FADE_LIP_M` 0.08 m, growing to 0.35 m over 0.6 m
-  fallen) so the white roll reaches the pool's outline. Classic's fall takes the same mesh (its edge
-  fade is COLOR.r too). Open: the notch itself is carve geometry (`WaterCarve.fall_shape`/`bed_line`:
-  deepen the crest and widen the lip cut to the channel, which changes saved ground and the carve's
-  pinned tests); until then a narrow fall still reads as a notch in the brink.
+- **Fall lip (card painter-fall-lip, 2026-11-18, look-pending).** Measured cause: the carve's crest
+  sill was `CREST_M`, 5 cm under the upper level, and `blend_with_ground` eases a small cut
+  (TOP_SOFT_M) while the tier plateau stands about 15 cm over the level beside the channel, so the
+  sill rose to ground height: the wetted width at the lip was 74 to 80 percent of the channel on waist
+  falls (1.11 of 1.5 half width, 1.61 of 2.0), 73 percent on a tall ankle fall and a dry crest (the
+  `DRY_CREST_SHARE` fallback, 50 percent) on a short ankle fall, and the pool above ended 0.3 to 0.5 m
+  short of the lip. A mesh cannot draw water outside the ground's crossing (the ground is opaque), so
+  the fix is in the carve: `WaterCarve.fall_crest_depth()` keeps a fall's crest the channel's depth
+  under the level, between 5 cm and `FALL_CREST_DEPTH_M` (12 cm), in `step_shape`, `fall_shape` and
+  `fall_foot`. New carves only (a saved map keeps its ground). After it the lip is 88 and 91 percent of
+  the channel on the waist and wide falls (1.33 of 1.5, 1.82 of 2.0) and 85 percent on the tall ankle
+  fall (0.47); the short ankle fall's lip (0.31 of 0.55, a 1.1 m channel whose lip row mixes with the
+  first face row) still funnels over its last 0.7 m, but the pool now runs into the curtain. `WaterFallMesh` is unchanged (a first try
+  of mesh lead-in rows and a brink edge fade moved the wetted width by under 3 percent and was
+  dropped).
 - **Known gaps** are listed in the matrix with their effort: baked settlement furnishings, field
   plants, round and profile roofs (procgen records).
 
