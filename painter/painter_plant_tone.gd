@@ -7,6 +7,24 @@ extends RefCounted
 ## (PainterVillage) and a GLB map's props and plants (PainterGlbMap) all tone through it.
 
 
+## The instance uniform that keeps a node's plants from the sheet's thinning (painter_plant).
+const PLACED := &"painter_placed"
+
+
+## Marks every drawn node of the hand-placed props' layer (the scatter named
+## MapSourceLoader.PROPS_NODE among `scatters`) so the painted plant shader never thins it: what an
+## author places stands (painter-flowers). Classic's materials do not read the mark. Idempotent; run
+## whenever the painted species are looked at, so cells built later are marked too.
+static func mark_placed(scatters: Array) -> void:
+	for scatter: Variant in scatters:
+		if not is_instance_valid(scatter) or str(scatter.name) != MapSourceLoader.PROPS_NODE:
+			continue
+		for node in (scatter as Node).find_children("*", "GeometryInstance3D", true, false):
+			var geometry := node as GeometryInstance3D
+			if geometry.get_instance_shader_parameter(PLACED) == null:
+				geometry.set_instance_shader_parameter(PLACED, 1.0)
+
+
 ## Sets a stand-in's ramp, accents and numbers for `entry` (PainterPlantRoles.of()).
 static func tone(
 	material: ShaderMaterial, entry: Dictionary, sheet: Dictionary, mood: String, elevation: float
@@ -32,15 +50,24 @@ static func tone(
 	for i in names.size():
 		material.set_shader_parameter(names[i], ramp[i])
 	var accents := PackedVector3Array()
-	for role in ["flower-gold", "flower-rose", "flower-violet", "flower-white"]:
+	for role in PainterFlowerHue.ROLES:
 		accents.append(PainterTones.linear(PainterSheet.tone(sheet, mood, role, elevation)))
 	material.set_shader_parameter(&"accent", accents)
+	# A flower's bloom (PainterFlowerHue.for_surface): its role, whether the surface is dabs, the
+	# dab's box and the cards the shader grows (none: no growth).
+	material.set_shader_parameter(&"petal_role", int(entry.get("petal", -1)))
+	material.set_shader_parameter(&"petal_dab", bool(entry.get("dab", false)))
+	material.set_shader_parameter(&"dab_box", entry.get("dab_box", Vector4(0.5, 0.5, 0.5, 0.5)))
+	var centres: Variant = entry.get("centres")
+	material.set_shader_parameter(&"bloom_centres", centres)
+	material.set_shader_parameter(&"bloom_grow", centres != null)
 	material.set_shader_parameter(
 		&"tone_lo", PainterSheet.number(sheet, mood, "tone-lo", elevation)
 	)
 	material.set_shader_parameter(
 		&"tone_hi", PainterSheet.number(sheet, mood, "tone-hi", elevation)
 	)
+	# The frequency of the slow field that steps a drift of blooms lighter or darker.
 	material.set_shader_parameter(
 		&"group_freq", PainterSheet.number(sheet, mood, "flower-mix", elevation)
 	)

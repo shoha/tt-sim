@@ -14,7 +14,8 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled;
  * uniform keeps its value. A plain alpha-scissor cutout, and the foliage AA swap leaves it alone
  * (WindFoliage.META_STAND_IN); a wide grass tuft's card is cut into round dabs instead of its
  * texture's teeth, with winter snow on the dabs and over its foot (painter_selector's tuft_dab,
- * painter-plants-fix3). Known fault (painter-a1c): in the eye view (4x MSAA, where the
+ * painter-plants-fix3); a flower's bloom cards are one dab each in the flower's own accent, grown
+ * to read at the orbit view (bloom_dab, bloom_grown; painter-flowers). Known fault (painter-a1c): in the eye view (4x MSAA, where the
  * Classic foliage swaps to its alpha-to-coverage twin) thin grass blades alias into fine broken
  * light lines where they cross a dark bush; an alpha-to-coverage twin swapped like the Classic's
  * is the planned fix.
@@ -34,6 +35,10 @@ varying flat vec4 v_os;
 // The height fraction, then a tuft card's atlas layer and the tuft's seed (painter_selector's
 // tuft_card: constant over a card).
 varying vec3 v_hk;
+// 1 on the layer of hand-placed props (PainterSurfaces marks it): never thinned, so what an author
+// places stands under Painted (painter-flowers: a placed bell cluster and a carpet were thinned
+// away at the eye). Ground cover still casts nothing.
+instance uniform float painter_placed = 0.0;
 
 void vertex() {
 	local_vertex_y = VERTEX.y;
@@ -42,8 +47,18 @@ void vertex() {
 		hk.yz = tuft_card(VERTEX, UV, MODEL_MATRIX[3].xyz);
 	}
 	v_hk = hk;
+	if (kind == 3 && petal_dab && bloom_grow && !IN_SHADOW_PASS) {
+		// A bloom card grown to read at the view (painter_selector's bloom_grown).
+		VERTEX = bloom_grown(
+			VERTEX, VERTEX_ID, MODEL_MATRIX, INV_VIEW_MATRIX, PROJECTION_MATRIX, VIEWPORT_SIZE
+		);
+	}
 	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
-	VERTEX *= grow_scale(MODEL_MATRIX[3].xyz) * selector_keep(MODEL_MATRIX[3].xyz, IN_SHADOW_PASS);
+	float kept = selector_keep(MODEL_MATRIX[3].xyz, IN_SHADOW_PASS);
+	if (painter_placed > 0.5 && !IN_SHADOW_PASS) {
+		kept = 1.0;
+	}
+	VERTEX *= grow_scale(MODEL_MATRIX[3].xyz) * kept;
 	v_os = vec4(MODEL_MATRIX[3].xyz, length(MODEL_MATRIX[1].xyz));
 	v_wn = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	v_wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -73,10 +88,20 @@ void fragment() {
 			discard;
 		}
 	}
+	// A bloom card is one dab (painter_selector's bloom_dab), cut in place of its texture (never
+	// fetched).
+	bool bloom = kind == 3 && petal_dab && petal_role >= 0;
+	vec2 blot = vec2(1.0, 0.0);
+	if (bloom) {
+		blot = bloom_dab(UV, fract(v_hk.y * 0.37 + v_hk.z));
+		if (blot.x < 0.5) {
+			discard;
+		}
+	}
 	NORMAL = two_sided_foliage_normal(NORMAL, FRONT_FACING);
 	float alpha = 1.0;
 	vec4 tex = vec4(0.0, 1.0, 0.0, 1.0);
-	if (!tuft_wide()) {
+	if (!tuft_wide() && !bloom) {
 		vec3 pbr_albedo;
 		float pbr_ao;
 		float pbr_roughness;
@@ -119,6 +144,10 @@ void fragment() {
 				* mix(0.84, 1.04, smoothstep(-0.9, 0.6, dab.z));
 		}
 		snow = dab.w;
+	}
+	if (bloom) {
+		// A dab turns from a darker foot to a lit top, so a head of them reads as a rounded form.
+		mul *= mix(0.84, 1.04, smoothstep(-0.9, 0.6, blot.y));
 	}
 	f_n = n;
 	f_variant = variant;

@@ -75,6 +75,8 @@ const DEFAULT_ROLES: Array[String] = [
 	"flower-rose",
 	"flower-violet",
 	"flower-white",
+	"flower-red",
+	"flower-blue",
 	"dry-leaf",
 	"water-shallow",
 	"water-mid",

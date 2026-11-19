@@ -807,6 +807,7 @@ static func _mix_role(v: Vector4, role: String, w: float) -> Vector4:
 ## Paints every resolved species not looked at yet; returns the new [mesh, surface, original,
 ## stand-in, entry] records.
 func _paint_species() -> Array:
+	PainterPlantTone.mark_placed(_scatters)
 	var added: Array = []
 	for scatter in _scatters:
 		if not is_instance_valid(scatter):
@@ -827,7 +828,7 @@ func _paint_species() -> Array:
 				var swap := swap_surface(
 					mesh,
 					i,
-					PainterPlantRoles.for_surface(entry, mesh.surface_get_material(i)),
+					PainterPlantRoles.for_surface(entry, mesh.surface_get_material(i), mesh, i),
 					float(record["height"])
 				)
 				if not swap.is_empty():
