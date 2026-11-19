@@ -104,6 +104,13 @@ varying vec4 f_tune;
 // shade a cast shadow takes (a roof's a tint, not a black shape).
 varying vec2 f_cast;
 
+// A wall's share of the variant patches and of the dabs, and its light step's wobble (card
+// painter-walls-round3, owner on the grimdark streets: "the walls are still splotchy"): a wall is a
+// few broad soft tones, lit or not as a whole face, its weathering at the foot.
+const float WALL_PATCHES = 0.55;
+const float WALL_DABS = 0.45;
+const float WALL_WOBBLE = 0.03;
+
 void vertex() {
 	v_wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	v_wn = normalize(mat3(MODEL_MATRIX) * NORMAL);
@@ -308,12 +315,12 @@ void fragment() {
 	if (code == 4 && pick >= 6) {
 		chim_base = (pick == 7 && ul < 0.5) || (pick == 6 && v_bld.x < 0.42) ? 12 : 0;
 	}
-	float dab = (pattern >= 5 ? 1.0 : dab_wall) * dabs;
+	float dab = (pattern >= 5 ? 1.0 : dab_wall * WALL_DABS) * dabs;
 	// A roof's dabs are a few subtle brushed patches (blotches read as stains); a slate's fewer. A
 	// roof with no record (a round or Taper roof: one broad mass) takes half its variant patches and
 	// half its dabs as well (card painter-roofs-ivy: they read blotchy).
 	bool loose_roof = code == 0 && pattern >= 5;
-	variant = mix(0.5, variant, loose_roof ? 0.5 : 1.0);
+	variant = mix(0.5, variant, loose_roof ? 0.5 : (pattern < 5 ? WALL_PATCHES : 1.0));
 	float dab_hi = on_slope ? 0.68 : 0.62;
 	float dab_lit = on_slope || loose_roof ? 0.5 : 1.0;
 	// (A roof's dark dabs are halved, card painter-look-houses3: soft dark blotches read as damp stains.)
@@ -856,10 +863,13 @@ void fragment() {
 	// painter-look-houses2: camouflage blotches on the brown roof and the thatch); on a wall a little
 	// softer than before.
 	f_cast = vec2(paint_slope ? 0.2 : (on_course ? 0.09 : 0.05), paint_slope ? 0.55 : 1.0);
+	// A wall's light step turns a little softer and barely wobbles (WALL_WOBBLE), so a face at the
+	// step is one even blend and not tan patches over brown (card painter-walls-round3).
+	bool wall_face = on_course && !roofy;
 	f_tune = vec4(
-		paint_slope ? 0.025 : soft,
+		paint_slope ? 0.025 : (wall_face ? max(soft, 0.03) : soft),
 		on_course ? 0.7 : (on_slope ? 0.45 : (code == 10 ? 0.5 : 0.2)),
-		paint_slope ? 0.06 : (code == 10 ? 0.32 : mix(0.12, 0.32, roofy && code == 0 ? cover : 0.0)),
+		paint_slope ? 0.06 : (code == 10 ? 0.32 : (wall_face ? WALL_WOBBLE : mix(0.12, 0.32, roofy && code == 0 ? cover : 0.0))),
 		on_slope || code == 10 ? 0.3 : 0.5);
 }
 

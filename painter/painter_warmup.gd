@@ -61,6 +61,8 @@ const YARD := "res://painter/shaders/painter_yard.gdshader"
 const YARD_GROUND := "res://painter/shaders/painter_yard_ground.gdshader"
 const PROP := "res://painter/shaders/painter_prop.gdshader"
 const GLOW := "res://painter/shaders/painter_glow.gdshader"
+## The decor ivy's contact shade (PainterIvyContact), a second pass over the decor's leaf cards.
+const IVY_CONTACT := "res://painter/shaders/painter_ivy_contact.gdshader"
 const TREE_STROKE := "res://painter/shaders/painter_tree_stroke.gdshader"
 const TREE_BLOCKIN := "res://painter/shaders/painter_tree_blockin.gdshader"
 const TREE_STROKE_BARE := "res://painter/shaders/painter_tree_stroke_bare.gdshader"
@@ -185,6 +187,7 @@ static func base_shaders() -> PackedStringArray:
 			YARD_GROUND,
 			PROP,
 			GLOW,
+			IVY_CONTACT,
 			TREE_STROKE,
 			TREE_BLOCKIN,
 			TREE_BLOCKIN_FAST,
@@ -333,6 +336,9 @@ static func collect(bare: bool) -> Array[Dictionary]:
 	_add(samples, "tree_stroke_burn", TREE_STROKE_BURN, LAYOUT_TREE, 0)
 	_add(samples, "tree_blockin_burn", TREE_BLOCKIN_BURN, LAYOUT_TREE, 0)
 	_add(samples, "structure", STRUCTURE, LAYOUT_LIT, 0)
+	# A street row's wood carries its house flags in UV2 (WallGeometry.house_flags).
+	_add(samples, "structure_row_wood", STRUCTURE, LAYOUT_GLOW, 0)
+	_add(samples, "ivy_contact", IVY_CONTACT, LAYOUT_LIT, 0)
 	_add(samples, "yard", YARD, LAYOUT_YARD, 0)
 	_add(samples, "yard_ground", YARD_GROUND, LAYOUT_YARD, 0)
 	_add(samples, "prop", PROP, LAYOUT_LIT, 0)

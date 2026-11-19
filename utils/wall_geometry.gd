@@ -32,6 +32,8 @@ const ROOF_PART := "roof"
 const EXTRA_PART := "extra"
 ## The kinds a wall's parts hold under their own key (the others go to EXTRA_PART).
 const OWN_KINDS: Array[String] = ["stone", "masonry", "wood", "glass"]
+## How a row's yard provenance paths end (procgen row_gen: "<side>/lot<n>/yard").
+const YARD_TAG := "/yard"
 ## How far past each facade line the street's corridor reaches, so a tree's trunk stands behind
 ## the houses and its crown does not hang over the street (a crown is 2 to 4 m wide).
 const STREET_CLEAR_EXTRA_M := 2.0
@@ -194,7 +196,10 @@ static func _row_surfaces(
 	var groups := PackedInt32Array()
 	var lots := {}
 	var palettes: Array = []
+	# 1 for a tag of a lot's yard (procgen's row_gen tags its fence "<lot>/yard"), else 0.
+	var yards := PackedByteArray()
 	for path in geometry.tag_table:
+		yards.append(1 if path.ends_with(YARD_TAG) else 0)
 		var role := StructureLook.role_of_tag_path(path)
 		var roof := role == StructureLook.ROOF
 		roles.append(StructureLook.ROOF if roof else StructureLook.WALL)
@@ -222,12 +227,29 @@ static func _row_surfaces(
 			parts[ROOF_PART] = mesh.arrays
 		elif not roof and not door and OWN_KINDS.has(kind):
 			parts[kind] = mesh.arrays
+			if kind == "wood":
+				var arrays: Array = mesh.arrays
+				arrays[Mesh.ARRAY_TEX_UV2] = house_flags(mesh.get("tags", PackedInt32Array()), yards)
 		elif door:
 			# A door's painted wood and metal handle (card streetdoors), drawn as a structure's.
 			extra.append({"kind": kind, "roof": false, "door": true, "arrays": mesh.arrays})
 		else:
 			extra.append({"kind": kind, "roof": roof, "arrays": mesh.arrays})
 	parts[EXTRA_PART] = extra
+
+
+## A street row's wood, one UV2 per vertex: x 1 where the vertex is a house's (its plank walls,
+## frames and trim), 0 where it is a yard's fence (`yards[tag]` 1) or has no tag. Only the Painted
+## look reads it (painter_structure's `house_planks`: the plank houses' calmer wood, the fences
+## the props' honey); Classic's row material never samples UV2. Pure.
+static func house_flags(tags: PackedInt32Array, yards: PackedByteArray) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	out.resize(tags.size())
+	for v in tags.size():
+		var tag := tags[v]
+		var house := tag >= 0 and tag < yards.size() and yards[tag] == 0
+		out[v] = Vector2(1.0 if house else 0.0, 0.0)
+	return out
 
 
 ## Every wall of `doc`: {"walls": [parts, ...]}.

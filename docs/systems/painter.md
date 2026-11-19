@@ -1997,7 +1997,7 @@ with more body", "why don't these share an implementation for snow coverage?", t
   bridge decks) is `lot_wood`, role `LOT_WOOD_ROLE`: the props' honey
   (`PainterVillage.prop_wood_middle` of the timber) at `LOT_WOOD_CHROMA` 0.85 of its chroma
   (`PainterBuildings.lot_wood_middle`), so a fence matches the barrels and a plank house is honey,
-  not orange.
+  not orange (since painter-walls-round3 a street house's planks take the calmer `house-wood`, below).
 - **Lantern halo** (`painter_glow.gdshader`): the wash reaches 0.84 of the quad (`reach`), alphas
   0.15, 0.34, 0.88 (were 0.22, 0.45, 0.95), energy 1.12 (was 1.25).
 - **Cost.** No texture reads; on winter roofs the A3b layer evaluates about 34 hashes (the
@@ -2166,6 +2166,37 @@ backdrop, drawn only at the eye:
   strip rather than a defined range; no GLB-map seed (a map without a document shares the default
   skyline); cost not timed (the backdrop runs only on sky pixels at the eye; two cloud-field
   evaluations of 18 circles each where clouds can be, three ranges below about 15 degrees).
+
+## Calm walls, ivy contact, plank houses (card painter-walls-round3, 2026-11-19; look-pending)
+
+Owner, 2026-11-19: of the grimdark streets "the walls are still splotchy. the roofs are better"; of the
+ivy "any kind of AO or similar we could add or fake to make them feel more grounded on the building?";
+of the honey lot wood "Plank houses less honey". Frames and notes:
+`docs/research/2026-11-09-prototypes/compare/painter_final61_walls_round3/`.
+
+- **Calm walls.** The tan patches were the wall light step's wobble (0.12 of N.L) at grimdark's tone-hi
+  0.66 and a 25 degree sun: a sunward wall sits at N.L about 0.64, on the step (the roofs' cause in
+  painter-roofs-ivy). Both structure shaders: a wall's step wobbles 0.03 and turns over 0.03 wide, its
+  variant patches are `WALL_PATCHES` 0.55 and its dabs `WALL_DABS` 0.45 of before; A3b's cast edge on a
+  wall wobbles 0.1 (`f_soft.w`) and its stone blocks spread 0.6. `PainterBuildings.ramp` holds the
+  value-spread to a share of the lightness (`roof_spread`) on walls and stone as on roofs; timber keeps it.
+- **Ivy contact** (`PainterIvyContact`, `painter_ivy_contact.gdshader`): each decor wall-leaf stand-in
+  gets a next pass that draws its leaf cards again, multiplied (unshaded, no depth, no shadow) over what
+  is behind each card's clear texels: one soft round blot per card, let 4 cm down the card and gone
+  before its edge, a cool dark tint at 0.45. A clump's cards add up to a soft shade in and round it.
+  The library's leaf textures have no mipmaps at runtime, so the shade is a shape per card, not a blurred
+  cutout (a first try with the shifted cutout drew dark leaf outlines). `PainterIvyContact.enabled` is
+  the A/B switch.
+- **Plank houses.** A street row's `Wood` mesh is every wood surface of the row, the houses and the
+  lots' yard fences together. `WallGeometry.house_flags` writes UV2.x 1 on a row's wood where the vertex
+  is not a yard's (procgen tags a fence `<lot>/yard`); Classic never reads UV2. The `lot_wood` material
+  has `house_planks` on and a second ramp, `HOUSE_WOOD_ROLE` (`house_wood_middle`: wall-boards moved
+  `HOUSE_WOOD_HONEY` 0.3 of the way to the lot honey), so plank houses read as weathered warm boards and
+  fences, drawn fences and decks keep the honey. The warm-up also warms the structure shader in the UV2
+  layout.
+- **Open:** cost not timed; walls in grimdark read a little flat (raise `WALL_PATCHES` first); no
+  under-eave weathering on A3b walls (no top in their data); the contact shade is subtle at the game
+  camera.
 
 ## Verification
 
