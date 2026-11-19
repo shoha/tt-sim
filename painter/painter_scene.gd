@@ -8,6 +8,9 @@ extends RefCounted
 ## per-frame poll. It loads by path on first use (LevelEnvironmentManager.PAINTER_SCENE), so the
 ## start-up compiles none of the painter.
 ##
+## The sky's eye backdrop (far hills and clouds, card painter-eye-backdrop) takes its colours from
+## PainterBackdrop at every take; EyeSky switches it on at the eye and sets the map's skyline.
+##
 ## Ownership. Painted takes the sun's colour and energy, the sky (painter_sky.gdshader), the
 ## ambient light, the tonemap (linear, exposure 1, so sheet colours reach the screen as written),
 ## glow, SSAO and colour adjustments (off), the fog's colour (the mood's haze; whether there is
@@ -134,6 +137,10 @@ func _apply_env(
 	_material.set_shader_parameter(
 		&"glow_amount", GLOW_AMOUNT * clampf(float(tones["sun-energy"]), 0.0, 1.0)
 	)
+	# The eye view's hills and clouds (drawn only while EyeSky sets eye_on), in the mood's tones.
+	var backdrop := PainterBackdrop.uniforms(sheet, mood, elevation)
+	for key: StringName in backdrop:
+		_material.set_shader_parameter(key, backdrop[key])
 	env.background_mode = Environment.BG_SKY
 	env.background_color = tones["horizon"]
 	if env.sky != sky:

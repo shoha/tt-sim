@@ -215,3 +215,77 @@ func test_the_skirt_fades_to_the_foot_colour_under_the_painted_sky() -> void:
 		wanted["skirt_hold_m"], SkirtBackdrop.EYE_HOLD_M, "the ground holds past the edge at the eye"
 	)
 	assert_eq(SkirtBackdrop.uniforms(null, Vector3.FORWARD)["skirt_hold_m"], 0.0, "not elsewhere")
+
+
+## An Environment as the painted look leaves it (PainterScene: its sky material marked
+## `painter_sky`), with a preset's fog at the default hold on the sky.
+func _painted_env() -> Environment:
+	var env := Environment.new()
+	var material := ShaderMaterial.new()
+	material.shader = load("res://painter/shaders/painter_sky.gdshader") as Shader
+	material.set_meta(EyeSky.PAINTER_SKY_META, true)
+	var sky := Sky.new()
+	sky.sky_material = material
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky
+	env.fog_enabled = true
+	env.fog_sky_affect = 1.0
+	return env
+
+
+func test_the_painted_sky_draws_its_backdrop_at_the_eye_and_not_after() -> void:
+	var env := _painted_env()
+	var sky := env.sky
+	var material := sky.sky_material as ShaderMaterial
+	_sky.sync(env, SUN)
+	assert_false(_sky.is_active(), "no Classic sky is installed under Painted")
+	assert_eq(env.sky, sky, "the painted sky stays")
+	assert_eq(material.get_shader_parameter("eye_on"), 1.0)
+	var params := EyeSky.painter_params("temperate_forest_summer_s1", 5)
+	assert_almost_eq(float(material.get_shader_parameter("eye_seed")), params[&"eye_seed"], 1e-5)
+	assert_almost_eq(
+		float(material.get_shader_parameter("crown_deg")), params[&"crown_deg"], 1e-5, "tree-line"
+	)
+	assert_eq(env.fog_sky_affect, EyeSky.PAINTER_SKY_FOG, "the fog no longer hides the sky")
+	_sky.leave()
+	assert_eq(material.get_shader_parameter("eye_on"), 0.0, "the table view draws no backdrop")
+	assert_eq(env.fog_sky_affect, 1.0, "the fog's hold on the sky is back")
+
+
+func test_two_maps_have_skylines_of_their_own() -> void:
+	var a := EyeSky.painter_params("temperate_forest_summer_s1", 5)
+	var b := EyeSky.painter_params("temperate_forest_summer_s1", 6)
+	var c := EyeSky.painter_params("grassland_meadow_summer_s1", 5)
+	assert_ne(a[&"eye_seed"], b[&"eye_seed"], "another seed, another skyline")
+	assert_ne(a[&"eye_seed"], c[&"eye_seed"], "another biome, another skyline")
+	assert_eq(a.keys().size(), 7)
+
+
+func test_painted_taking_over_drops_the_classic_eye_sky_and_keeps_its_own() -> void:
+	var env := _flat_env()
+	_sky.sync(env, SUN)
+	assert_true(_sky.is_active())
+	# What PainterScene.take writes over the Classic eye sky (a Settings Apply while in the eye).
+	var painted := _painted_env()
+	env.background_mode = Environment.BG_SKY
+	env.sky = painted.sky
+	env.fog_light_color = Color(0.9, 0.8, 0.7)
+	_sky.sync(env, SUN)
+	assert_false(_sky.is_active())
+	assert_eq(env.sky, painted.sky, "the painted sky stays")
+	assert_eq(env.fog_light_color, Color(0.9, 0.8, 0.7), "the painted haze stays")
+	assert_eq(env.fog_mode, Environment.FOG_MODE_EXPONENTIAL, "the Classic eye's fog mode went back")
+	assert_eq(env.fog_depth_begin, 3.0)
+	assert_eq((env.sky.sky_material as ShaderMaterial).get_shader_parameter("eye_on"), 1.0)
+
+
+func test_classic_taking_over_switches_the_painted_backdrop_off() -> void:
+	var env := _painted_env()
+	var material := env.sky.sky_material as ShaderMaterial
+	_sky.sync(env, SUN)
+	# PainterScene released: the level's flat colour is back.
+	env.background_mode = Environment.BG_COLOR
+	env.sky = null
+	_sky.sync(env, SUN)
+	assert_eq(material.get_shader_parameter("eye_on"), 0.0)
+	assert_true(_sky.is_active(), "the Classic eye sky is installed")
