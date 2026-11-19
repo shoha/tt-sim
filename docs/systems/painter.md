@@ -1970,7 +1970,8 @@ with more body", "why don't these share an implementation for snow coverage?", t
 - **Not done:** a roof with no blanket mesh (street lots, round roofs) has its body only in
   shading, not geometry: no overhanging lip or verge roll, so it still reads flatter than the
   hand-drawn houses at home zoom; A3b knows no verge distance; steep spires (the wizard tower)
-  hold no snow; a few tiny dark specks where a ridge gap meets a far roof's ridge.
+  hold no snow (since card painter-roof-polish a cap and ledges, "Roof polish" below); a few tiny
+  dark specks where a ridge gap meets a far roof's ridge.
 - Tests: `test_painter_buildings.gd` (every roof and prop shader includes the layer, no old
   coverage left), `test_painter_manner.gd` (no veil, grain or bare strokes), `test_painter_coverage.gd`
   (`Wood` is `lot_wood`, its middle the props' honey at 0.85 chroma in three moods).
@@ -2044,10 +2045,52 @@ and notes: `docs/research/2026-11-09-prototypes/compare/painter_final51_roof_cla
 - **Not done:** the A3b tile's per-piece variant still reads as a patchwork of lighter and rosier
   tiles at zoom 16 where Classic is a smooth red; a hip face's course dashes run down the slope and
   read busier than a gable's; the street's fixed-kind roofs (`Roof_shingle`, `Roof_slate`, ...)
-  keep their role's colour, not their paint's.
+  keep their role's colour, not their paint's. (All three done by card painter-roof-polish, below.)
 - Tests: `test_painter_buildings.gd` (a street lot's roof is a picked tile roof, its A3b material
   carries the four reference tones, a wall's none, the shader turns and reads no texture),
   `test_painter_coverage.gd` (`Roof` is `roof_tile`).
+
+## Roof polish (card painter-roof-polish, 2026-11-19; look-pending)
+
+The gaps the roofs-ivy, roof-clay and roof-snow cards left. Frames and notes:
+`docs/research/2026-11-09-prototypes/compare/painter_final55_roof_polish/` (`notes.md`; `before/`, `r1/`,
+`r2_full/` the verdict).
+
+- **Steep roofs carry snow.** A spire's cone faces up only 0.25 to 0.35 (a headless probe: crystal spire,
+  wizard tower), under `snow_hold`'s 0.24 to 0.42 ramp, so it held nothing or a half hold drawn as long
+  streaks, which on a dark spire read as a glossy highlight. Both roof shaders now take
+  `snow_cover_roof` (`painter_snow.gdshaderinc`): the layer by slope where a face holds it, and under
+  about 0.4 of up `snow_steep` instead: a cap over the upper third (`h` from 0.52, its edge in soft
+  tongues) and thin broken ledges every `SNOW_LEDGE_M` 0.6 m below it, sparse near the eave and closer
+  toward the cap, evening out to a light share where a ledge is under a few pixels. Near-vertical faces
+  and undersides hold none. The props keep `snow_cover_of(snow_hold(...))`.
+- **Calm street tiles.** The A3b shader's tiles, slates and shingles draw soft course banding: a shadow
+  under each course's lip across the whole slope, each course a touch apart (a hash per course, 0.14 of
+  variant), the slope lighter toward its ridge (0.16 of light by `h`), fading before a course is under
+  about three pixels. The per-tile variant (the patchwork of lighter and rosier tiles at zoom 16) and the
+  broken dashes (busy ticks on a hip face) are gone.
+- **Fixed-kind roofs follow their paint.** A street's `Roof_shingle` (alpine hamlet) and `Roof_slate`
+  (modern row), and any structure's slate or shingle roof in the A3b look, turn their ramp from their
+  kind's summer middle to the paint (`paint_turns`), as the picked roofs do. Their paint is grey only under
+  `PAINT_GREY_KIND` 0.015 of chroma (`paint_grey`; a picked roof's stays 0.04): the kind fixes the role,
+  so the paint's hue is the only colour cue (alpine's blue-grey shingle, C 0.026, drew brown). A slate
+  takes the nearest of its material's own three ramps (slate, the moss's leaf, the ridge cap's clay:
+  `paint_slate_tone`), since the slate's lit step is near grey (the sun's yellow pull cancels its blue)
+  and turned 146 degrees to a modern row's peach paint it drew pink (`r1`). The manner shader's roofs with
+  no record take the same threshold and slate choice.
+- **Pale and dark paints land.** `PAINT_VALUE` is 0.7 to 1.5 (was 0.82 to 1.22): the crystal spire's pale
+  aqua is 1.45 times its role's lightness and drew a darker, more saturated azure. A tone the ratio lifts
+  past `PAINT_KNEE` 0.8 rolls off toward white (`paint_turned`) instead of clipping.
+- **Not done.** The tulou: its paint is a light blue-grey (L0.58 C0.020 h249, the probe), the turn
+  already lands its middle there, and its near-flat ring sits in the lit step; Classic's dark grey-brown
+  is Classic's own course shadows and warm ridge grade, not the paint. The crystal spire is still bluer
+  than Classic's aqua (its shade step's blue pull turns with it). The ledges read crisp and thin up close.
+- **Cost.** No texture reads. Winter roofs: two more 2D noises a fragment on a steep face; the tile
+  banding replaces two hashes with one; the knee four ops per turned tone; the slate choice per vertex.
+  Not timed on the lane.
+- Tests: `test_painter_buildings.gd` (a slate or shingle street roof turns from its kind's summer middle,
+  the slate's third ramp is the clay; a pale paint lands; both roof shaders take the roof cover, the
+  props the layer by slope; A3b tiles band by course with no per-tile variant or dashes).
 
 ## The eye backdrop (card painter-eye-backdrop, 2026-11-18; look-pending)
 

@@ -73,10 +73,29 @@ int tone_of(int pick, vec3 c) {
 // chroma and the lightness by their ratios (held to PAINT_CHROMA and PAINT_VALUE), so the mood's
 // own moves of the role (grimdark's darker, greyer roofs) carry over and the shade and lit steps
 // keep their relation. A paint under PAINT_GREY of chroma keeps its role and its hue, and takes
-// only the ratios (a cream felt, a charcoal tile).
+// only the ratios (a cream felt, a charcoal tile); a roof of a fixed kind (a slate or shingle
+// roof: its role is its kind's, so the paint's hue is its only colour cue) turns its hue from
+// PAINT_GREY_KIND (an alpine lot's blue-grey shingle, C 0.026, drew brown). The lightness ratio's
+// range is wide enough for a pale or a dark paint to land on its own lightness (card
+// painter-roof-polish: at 0.82 to 1.22 the crystal spire's pale aqua, 1.45 times its role's,
+// drew a darker, more saturated azure), and a tone the ratio lifts past PAINT_KNEE rolls off
+// toward white instead of clipping.
 const float PAINT_GREY = 0.04;
+const float PAINT_GREY_KIND = 0.015;
 const vec2 PAINT_CHROMA = vec2(0.5, 2.6);
-const vec2 PAINT_VALUE = vec2(0.82, 1.22);
+const vec2 PAINT_VALUE = vec2(0.7, 1.5);
+const float PAINT_KNEE = 0.8;
+
+// Whether a roof of `pattern` under pick mode `pick` (a ShaderMaterial's uniforms) follows its
+// paint in the A3b shader: a picked tile or wooden roof, and a slate or shingle roof of its kind.
+bool paint_turns(int pattern, int pick) {
+	return pattern >= 5 && (pick == 1 || pick == 2 || (pick == 0 && (pattern == 6 || pattern == 7)));
+}
+
+// The chroma under which a paint is grey to a roof of pick mode `pick` (0 a fixed kind).
+float paint_grey(int pick) {
+	return pick == 0 ? PAINT_GREY_KIND : PAINT_GREY;
+}
 
 // A LINEAR colour in OKLab (L, a, b).
 vec3 paint_lab(vec3 c) {
@@ -117,6 +136,16 @@ int paint_roof_tone(vec3 lab) {
 	return hue < 200.0 ? 3 : 1;
 }
 
+// The tone a slate roof of a fixed kind takes by its coloured paint `lab`, among its material's own
+// ramps (0 the slate, 1 the moss's leaf, 2 the ridge cap's clay): a red, orange or ochre paint the
+// clay, a green or teal the leaf, the rest the slate, so its turn stays small (card
+// painter-roof-polish: the slate's ramp turned 146 degrees to a modern row's peach paint drew pink,
+// since its lit step is near grey, the sun's yellow pull cancelling the slate's blue).
+int paint_slate_tone(vec3 lab) {
+	int t = paint_roof_tone(lab);
+	return t == 0 || t == 2 ? 2 : (t == 3 ? 1 : 0);
+}
+
 // The turn from reference tone `ref` (OKLab) to paint `lab`: (cos, sin) of the hue turn (none for a
 // `grey` paint), the chroma ratio and the lightness ratio.
 vec4 paint_turn(vec3 lab, vec3 ref, bool grey) {
@@ -131,7 +160,9 @@ vec4 paint_turn(vec3 lab, vec3 ref, bool grey) {
 vec3 paint_turned(vec3 col, vec4 t) {
 	vec3 lab = paint_lab(col);
 	vec2 ab = vec2(lab.y * t.x - lab.z * t.y, lab.y * t.y + lab.z * t.x) * t.z;
-	return paint_linear(vec3(lab.x * t.w, ab));
+	float l = lab.x * t.w;
+	float over = max(l - PAINT_KNEE, 0.0);
+	return paint_linear(vec3(l - over + over / (1.0 + over * 4.0), ab));
 }
 
 // (Where a roof lies under snow is painter_snow.gdshaderinc's, shared with the props: card

@@ -139,11 +139,14 @@ void vertex() {
 		// recipe's roof paint, as Classic's does. A picked roof takes the role nearest the paint,
 		// and every roof's ramp is turned from that role's tone to the paint (paint_turn); a grey
 		// paint keeps its role's hue and takes only its lightness and greyness (a cream felt yurt,
-		// a charcoal pagoda).
+		// a charcoal pagoda); a roof of a fixed kind turns its hue from a lower chroma (paint_grey),
+		// and a slate roof takes the nearest of its own three ramps (paint_slate_tone).
 		vec3 lab = paint_lab(COLOR.rgb);
-		bool grey = length(lab.yz) < PAINT_GREY;
+		bool grey = length(lab.yz) < paint_grey(pick);
 		if (pick > 0 && !grey) {
 			v_tone = paint_roof_tone(lab);
+		} else if (pick == 0 && pattern == 6 && !grey) {
+			v_tone = paint_slate_tone(lab);
 		}
 		v_turn = paint_turn(lab, paint_ref[v_tone], grey);
 	}
@@ -674,8 +677,9 @@ void fragment() {
 		} else if (roofy) {
 			// A roof with no record (a round or Taper roof, or any roof while snow_body is off): the
 			// shared layer painted on its face (painter_snow.gdshaderinc, as the street lots' A3b
-			// roofs), its frame from the face and h, its body in its rolled shading normal.
-			cover = snow_cover_of(snow_hold(snow, up), fr.xy) * (1.0 - snow_gap(fr.xy, fr.w));
+			// roofs), its frame from the face and h, its body in its rolled shading normal; a spire
+			// too steep for the layer takes a cap over its upper third and thin ledges (snow_steep).
+			cover = snow_cover_roof(snow, up, h, fr.xy, fbroad) * (1.0 - snow_gap(fr.xy, fr.w));
 			hide = 1.0;
 			vec4 sp = snow_paint(fr.xy, fbroad);
 			vec3 roll = snow_roll(fr.z, fr.w, fr.xy);

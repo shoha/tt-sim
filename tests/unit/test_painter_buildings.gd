@@ -404,5 +404,86 @@ func test_a_street_lot_roof_follows_its_paint() -> void:
 	assert_null(wall.get_shader_parameter(&"paint_ref"))
 
 
+func test_a_slate_or_shingle_street_roof_follows_its_paint() -> void:
+	# Card painter-roof-polish: a street's fixed-kind roofs (an alpine lot's `Roof_shingle`, a
+	# modern row's `Roof_slate`) kept their role's colour, so a blue-grey shingle drew brown and
+	# peach and teal slates blue-grey. They keep their kind's ramp and turn it from the kind's own
+	# summer middle to the paint, from a lower chroma than a picked roof's grey.
+	var sheet := PainterSheet.load_sheet("core")
+	var buildings := PainterBuildings.new()
+	buildings.applied = {"sheet": "core", "mood": "grimdark", "elevation": 27.0}
+	for pair in [["Roof_shingle", "roof-shingle"], ["Roof_slate", "roof-slate"]]:
+		var kind := PainterBuildings.kind_of(PainterBuildings.wall_part_key(pair[0]))
+		assert_eq(int(kind[3]), 0, "%s keeps its kind's ramp" % pair[0])
+		var material := ShaderMaterial.new()
+		material.shader = load(PainterBuildings.SHADER) as Shader
+		buildings._tone(material, kind, sheet)
+		var refs: PackedVector3Array = material.get_shader_parameter(&"paint_ref")
+		var want := PainterSheet.oklab_of(
+			PainterSheet.tone_lch(sheet, PainterBuildings.PAINT_REF_MOOD, pair[1], 27.0)
+		)
+		assert_almost_eq(refs[0].distance_to(want), 0.0, 0.0001, "%s turns from summer's" % pair[0])
+	var common := FileAccess.get_file_as_string(
+		"res://painter/shaders/painter_structure_common.gdshaderinc"
+	)
+	assert_string_contains(common, "(pick == 0 && (pattern == 6 || pattern == 7))")
+	assert_string_contains(common, "const float PAINT_GREY_KIND")
+	# A slate takes the nearest of its own three ramps (slate, leaf, clay), so a peach paint turns
+	# the clay a few degrees and not the slate half round (its near-grey lit step drew pink).
+	assert_string_contains(common, "int paint_slate_tone(")
+	for path: String in [PainterBuildings.SHADER, PainterMannerHost.SHADER]:
+		var code := FileAccess.get_file_as_string(path)
+		assert_string_contains(code, "paint_grey(pick)", path)
+		assert_string_contains(code, "v_tone = paint_slate_tone(lab)", path)
+	assert_string_contains(FileAccess.get_file_as_string(PainterBuildings.SHADER), "paint_turns(")
+	var slate := PainterBuildings.new()
+	slate.applied = {"sheet": "core", "mood": "summer", "elevation": 40.0}
+	var mat := ShaderMaterial.new()
+	mat.shader = load(PainterBuildings.SHADER) as Shader
+	slate._tone(mat, PainterBuildings.kind_of("roof_slate"), sheet)
+	var slate_refs: PackedVector3Array = mat.get_shader_parameter(&"paint_ref")
+	var clay := PainterSheet.oklab_of(PainterSheet.tone_lch(sheet, "summer", "roof-clay", 40.0))
+	assert_almost_eq(slate_refs[2].distance_to(clay), 0.0, 0.0001, "the slate's third is the clay")
+
+
+func test_a_pale_paint_lands_on_its_own_lightness() -> void:
+	# Card painter-roof-polish: the crystal spire's pale aqua (L 0.84, 1.45 times its role's) was
+	# held to 1.22 and drew a darker, more saturated azure. The range takes it, and a lifted tone
+	# rolls off toward white instead of clipping.
+	var common := FileAccess.get_file_as_string(
+		"res://painter/shaders/painter_structure_common.gdshaderinc"
+	)
+	var at := common.find("const vec2 PAINT_VALUE = vec2(")
+	assert_gt(at, -1)
+	var nums := common.substr(at + 30, 20).split(")")[0].split(",")
+	assert_lt(nums[0].strip_edges().to_float(), 0.75, "a dark paint (0.37 on a 0.50 shingle) lands")
+	assert_gt(nums[1].strip_edges().to_float(), 1.45, "a pale paint (the crystal spire's) lands")
+	assert_string_contains(common, "PAINT_KNEE")
+
+
+func test_a_steep_roof_holds_a_cap_and_ledges() -> void:
+	# Card painter-roof-polish: a spire (up 0.25 to 0.35) held no snow, or long streaks that read
+	# as a glossy highlight. Both roof shaders take the roof cover, whose steep part is a cap over
+	# the upper third and ledges along the courses; the props keep the layer by slope.
+	var snow := FileAccess.get_file_as_string("res://painter/shaders/painter_snow.gdshaderinc")
+	for fn in ["float snow_steep(", "float snow_cover_roof("]:
+		assert_string_contains(snow, fn)
+	for path: String in [PainterBuildings.SHADER, PainterMannerHost.SHADER]:
+		var code := FileAccess.get_file_as_string(path)
+		assert_string_contains(code, "snow_cover_roof(snow, up, h,", path)
+		assert_false(code.contains("snow_cover_of(snow_hold("), "%s: no bare slope hold" % path)
+	var prop := FileAccess.get_file_as_string(PainterVillage.PROP_SHADER)
+	assert_string_contains(prop, "snow_cover_of(snow_hold(snow, n.y)")
+
+
+func test_a3b_tiles_band_by_course_without_a_patchwork() -> void:
+	# Card painter-roof-polish: each tile's own variant read as a patchwork of lighter and rosier
+	# tiles at zoom 16, and the broken dashes as busy ticks on a hip face: soft bands by course.
+	var code := FileAccess.get_file_as_string(PainterBuildings.SHADER)
+	assert_false(code.contains("float piece = p_hash"), "no variant per tile")
+	assert_false(code.contains("float dash = step("), "no broken dashes")
+	assert_string_contains(code, "float banding =")
+
+
 func _srgb(linear: Vector3) -> Color:
 	return Color(linear.x, linear.y, linear.z).linear_to_srgb()
