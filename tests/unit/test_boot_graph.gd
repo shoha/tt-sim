@@ -24,7 +24,10 @@ extends GutTest
 ## graphics rows have; TokenMarkers and the pin code load by path.
 ## 347 with SunShadowQuality (painter-errors-fix): the shadow tier's 45-line setter, which Settings
 ## names at start-up; it names nothing.
-const LIMIT_SCRIPTS := 347
+## 348 with WaterFallFrames (painter-fall-frame-foam): the fall frames the water build derives
+## once for the surface and the curtains; it names only WaterFallMesh and WaterCarve, which
+## WaterMeshBuilder already brought in.
+const LIMIT_SCRIPTS := 348
 
 var _classes: Dictionary = {}
 var _strings := RegEx.create_from_string(

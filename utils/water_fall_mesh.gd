@@ -6,6 +6,8 @@ extends RefCounted
 ## all in one mesh at the map origin with an identity transform, built by
 ## WaterMeshBuilder.build() (the "falls" key) on the water refresh worker and turned into the
 ## `AuthoredWater-falls` node by AuthoredWater. Summary: docs/systems/waterfalls.md (Runtime).
+## Each fall is built from its frame (WaterFallFrames.frame: the crest widths, the rows and every
+## column's trajectory, traced once there), the frame the water surface's vertices carry too.
 ##
 ## Curtain. One ribbon per fall across the wetted width at the crest (crest_widths(): the
 ## ground along the lip line read outward from the course until it stands at the upper
@@ -40,12 +42,18 @@ extends RefCounted
 ##           aeration and edge bite by the width, so a narrow fall is a white ribbon and a
 ##           wide one glass between bold tongues; 8-bit, so 3 cm steps up to 8 m); ring and
 ##           mist: 1.
+##   CUSTOM0, CUSTOM1  (RGBA float, WaterFallFrames.FORMAT) the curtain's fall frame
+##           (WaterFallFrames: lip, direction, crest half-widths, x_pool, drop), from which the
+##           painted look draws one white over the brink, the curtain and the foot
+##           (painter_fall_white.gdshaderinc); zeros on the ring and the mist.
 ## Triangles wind clockwise seen from the front (Godot's front face), the front being the
 ## downstream side for the curtain and above for the ring. The mist quads are packed (all
 ## four vertices at the puff's centre), so the mesh's own bounds miss them: build() returns
 ## the bounds grown by the largest puff for ArrayMesh.custom_aabb.
 ##
-## Foam ring: a flat disc RING_WIDTH_FACTOR x the fall's width across, RING_SEGMENTS rim
+## Foam ring (Classic's: waterfall.gdshader draws it; the painted look collapses it and draws
+## the pool's own foot white from the frame instead, card painter-fall-frame-foam): a flat disc
+## RING_WIDTH_FACTOR x the fall's width across, RING_SEGMENTS rim
 ## vertices round a centre, RING_LIFT_M over the lower level (the shader adds the water's
 ## bob), centred where the middle column meets the pool, RING_FORWARD of its radius
 ## downstream (the churn spreads downstream; the part behind the face is under the rock).
@@ -140,19 +148,25 @@ const KIND_MIST := 1.0
 const GOLDEN := 0.6180339887
 
 
-## The falls mesh of `doc` for its `falls` (WaterFalls.falls(doc)): {"arrays": Mesh arrays
-## (vertex, normal, UV, UV2, colour, index; [] with no fall), "aabb": the bounds grown by the
-## largest mist puff at the shader's full growth plus its rise (for ArrayMesh.custom_aabb),
-## "count": the falls built}.
+## The falls mesh of `doc` for its `falls` (WaterFalls.falls(doc)): from_frames() of their
+## frames (WaterFallFrames.frames).
 static func build(doc: MapDocument, falls: Array[Dictionary]) -> Dictionary:
+	var built := from_frames(WaterFallFrames.frames(doc, falls))
+	if not built.arrays.is_empty():
+		built["count"] = falls.size()
+	return built
+
+
+## The falls mesh of the fall `frames` (WaterFallFrames.frames, which traced every curtain
+## column): {"arrays": Mesh arrays (vertex, normal, UV, UV2, colour, CUSTOM0, CUSTOM1, index; []
+## with no fall; add them with WaterFallFrames.FORMAT), "aabb": the bounds grown by the largest
+## mist puff at the shader's full growth plus its rise (for ArrayMesh.custom_aabb), "count": the
+## falls built}.
+static func from_frames(frames: Array[Dictionary]) -> Dictionary:
 	var buffers := _Buffers.new()
 	var largest_puff := 0.0
-	for fall in falls:
-		if fall.upper_index < 0 or fall.upper_index >= doc.water_bodies.size():
-			continue
-		if fall.lower_index < 0 or fall.lower_index >= doc.water_bodies.size():
-			continue
-		largest_puff = maxf(largest_puff, _fall(doc, fall, buffers))
+	for frame in frames:
+		largest_puff = maxf(largest_puff, _fall(frame, buffers))
 	if buffers.vertices.is_empty():
 		return {"arrays": [], "aabb": AABB(), "count": 0}
 	var bounds := AABB(buffers.vertices[0], Vector3.ZERO)
@@ -161,7 +175,7 @@ static func build(doc: MapDocument, falls: Array[Dictionary]) -> Dictionary:
 	return {
 		"arrays": buffers.arrays(),
 		"aabb": bounds.grow(mist_bounds_margin(largest_puff)),
-		"count": falls.size(),
+		"count": frames.size(),
 	}
 
 
@@ -341,41 +355,34 @@ static func ring_centre(lip: Vector2, dir: Vector2, pool_x: float, radius: float
 	return lip + dir * (pool_x + RING_FORWARD * radius)
 
 
-## Builds one fall into `buffers`; returns its largest puff's half-size (for the bounds).
-static func _fall(doc: MapDocument, fall: Dictionary, buffers: _Buffers) -> float:
-	var upper: WaterBody = doc.water_bodies[fall.upper_index]
-	var lower: WaterBody = doc.water_bodies[fall.lower_index]
-	var lip: Vector2 = fall.lip
-	var dir: Vector2 = fall.dir
-	if dir == Vector2.ZERO:
-		return 0.0
+## Builds the fall of one `frame` (WaterFallFrames.frame) into `buffers`; returns its largest
+## puff's half-size (for the bounds).
+static func _fall(frame: Dictionary, buffers: _Buffers) -> float:
+	var lip: Vector2 = frame.lip
+	var dir: Vector2 = frame.dir
 	var across := dir.orthogonal()
-	var top: float = fall.top
-	var bottom: float = fall.bottom
-	var drop := top - bottom
-	var depth := lower.depth_m()
-	var widths := crest_widths(doc, lip, dir, fall.half_width, top)
-	var v0 := V0_BASE + V0_PER_SPEED * upper.speed
-	var rows := row_falls(drop)
-	var offsets := column_offsets(widths)
-	var x_max := WaterCarve.fall_foot(drop, depth) + END_PAST_FOOT_M
+	var top: float = frame.top
+	var bottom: float = frame.bottom
+	var drop: float = frame.drop
+	var widths: Vector2 = frame.widths
 	var outward := Vector3(dir.x, 0.0, dir.y)
-	var columns: Array[PackedVector3Array] = []
-	for w in offsets:
-		columns.append(trajectory(doc, lip + across * w, dir, top, bottom, depth, v0, rows, x_max))
-	_curtain(buffers, columns, offsets, widths, rows, outward, drop, bottom)
-	# Where the middle of the curtain meets the pool: the pool-level row of the column
-	# nearest the course.
-	var middle := 0
-	for i in offsets.size():
-		if absf(offsets[i]) < absf(offsets[middle]):
-			middle = i
-	var pool_row := rows.size() - 2
-	var at_pool := columns[middle][pool_row]
-	var pool_x := (Vector2(at_pool.x, at_pool.z) - lip).dot(dir)
+	_curtain(
+		buffers,
+		frame.columns,
+		frame.offsets,
+		widths,
+		frame.rows,
+		outward,
+		drop,
+		bottom,
+		WaterFallFrames.channels(frame)
+	)
+	# Where the middle of the curtain meets the pool (the frame's x_pool: the pool-level row of
+	# the column nearest the course).
+	var pool_x: float = frame.x_pool
 	var width := widths.x + widths.y
 	_ring(buffers, lip, dir, across, pool_x, width, bottom)
-	return _mist(buffers, fall, lip, dir, across, pool_x, width, drop, top, bottom)
+	return _mist(buffers, frame.fall, lip, dir, across, pool_x, width, drop, top, bottom)
 
 
 ## COLOR.a of a curtain `width` metres wide at the crest (see the header).
@@ -392,7 +399,8 @@ static func _curtain(
 	rows: PackedFloat32Array,
 	outward: Vector3,
 	drop: float,
-	bottom: float
+	bottom: float,
+	frame_channels: Array[float]
 ) -> void:
 	var first := buffers.vertices.size()
 	var count := offsets.size()
@@ -416,7 +424,8 @@ static func _curtain(
 				normal.normalized(),
 				Vector2(w + widths.x, rows[k]),
 				Vector2(drop, bottom),
-				Color(fade, KIND_CURTAIN, 0.0, code)
+				Color(fade, KIND_CURTAIN, 0.0, code),
+				frame_channels
 			)
 	for i in count - 1:
 		for k in rows.size() - 1:
@@ -530,14 +539,28 @@ class _Buffers:
 	var uvs := PackedVector2Array()
 	var uv2s := PackedVector2Array()
 	var colors := PackedColorArray()
+	var custom0 := PackedFloat32Array()
+	var custom1 := PackedFloat32Array()
 	var indices := PackedInt32Array()
 
-	func add(p: Vector3, normal: Vector3, uv: Vector2, uv2: Vector2, color: Color) -> void:
+	## One vertex; `frame_channels` are its fall frame's (WaterFallFrames.channels), none for the
+	## ring and the mist.
+	func add(
+		p: Vector3,
+		normal: Vector3,
+		uv: Vector2,
+		uv2: Vector2,
+		color: Color,
+		frame_channels: Array[float] = WaterFallFrames.NONE
+	) -> void:
 		vertices.append(p)
 		normals.append(normal)
 		uvs.append(uv)
 		uv2s.append(uv2)
 		colors.append(color)
+		for k in 4:
+			custom0.append(frame_channels[k])
+			custom1.append(frame_channels[k + 4])
 
 	## Triangle a, b, c wound so its front (Godot: clockwise seen from the front, the face
 	## normal (c - a) x (b - a)) faces `front`.
@@ -557,5 +580,7 @@ class _Buffers:
 		out[Mesh.ARRAY_TEX_UV] = uvs
 		out[Mesh.ARRAY_TEX_UV2] = uv2s
 		out[Mesh.ARRAY_COLOR] = colors
+		out[Mesh.ARRAY_CUSTOM0] = custom0
+		out[Mesh.ARRAY_CUSTOM1] = custom1
 		out[Mesh.ARRAY_INDEX] = indices
 		return out

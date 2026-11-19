@@ -1587,7 +1587,10 @@ The look (`painter_water.gdshader`, no screen texture):
   ground already binds.
 
 `painter_waterfall.gdshader` is the fall: unshaded, the same vertex contract as Classic's, chunky
-white streaks over the shallow and mid tones, with the sheet's foam.
+white streaks over the shallow and mid tones, with the sheet's foam. The white over the brink and at
+the foot is shared with the water (`painter_fall_white.gdshaderinc`, from the fall frame in
+CUSTOM0/CUSTOM1; card painter-fall-frame-foam below), so it has no lip roll and no foam ring of its
+own: the ring is Classic's only.
 
 Full-size verdicts (card painter-loose-ends, 2026-11-16, frames in
 `compare/painter_final29_loose_ends/`): summer, dusk, night and winter read as the sheet's moods
@@ -1815,6 +1818,19 @@ painter_final25_coverage/matrix.md`; the current, code-read class-by-class audit
   stands over the curtain's outer columns: widening the curtain did not show, a carve matter), the
   plunge pools' pale walls, small steps at the pond's upper shoulders, and two small dark-blue spill
   faces beside the tall ankle fall's lip pool.
+- **One fall white (card painter-fall-frame-foam, 2026-11-19, look-pending; frames, metrics and
+  notes in `compare/painter_final64_fall_frame_foam/`).** Stage 1 of the fall spike's plan
+  (`compare/painter_final63_fall_spike/`, approach 1 made production). Each fall's frame
+  (`WaterFallFrames`, `docs/systems/waterfalls.md` "Fall frames") rides in CUSTOM0/CUSTOM1 of the
+  water surface and the curtain, read through flat varyings, and
+  `painter/shaders/painter_fall_white.gdshaderinc` draws one white from it over the brink (soft
+  upstream edge, about 0.25 m), down the curtain and over the foot (two-valued, churned, its reach
+  growing with the drop), plus a pale turquoise halo past the foot on the pool. The curtain's own lip
+  roll and the painted foam ring (its shader branch and constants) are gone; the ring's vertices
+  stay in the mesh for Classic and collapse in the painter shader. Continuity probe, 27 captures per
+  look (9 cases x 3 time samples, half size): foot dL 24.6 -> 6.2, foot bands 1.41 -> 0.26; the lip
+  numbers are in the notes. Left: the classes this does not touch (C1, C2 pinch, C5 pale walls, C6,
+  C7 head slab; stages 2 to 4 of the plan).
 - **Known gaps** are listed in the matrix with their effort: round and profile roofs (procgen
   records). The settlement furnishings and the field plants were filled by painter-village-parity
   (next section).
