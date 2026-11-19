@@ -15,6 +15,12 @@ extends RefCounted
 ## footprint's nominal edge (`cover`), the texels take the maximum. The shader thresholds it
 ## through the ground's own brush noise, so a pool is a flat stroke-edged shape in the ground's
 ## deeper shade, not a blur (the painter's ground is flat shapes with firm wandering edges).
+## Every pool follows its thing's own shape (card painter-pool-shapes): a crown's disc, also for the
+## trees the painter does not grow (acacia, palm, dead tree: scatter solids by their bark); a rock's
+## or a log's rounded box; a building's own plan (PainterFootprint: its walls' feet, never its yard
+## or its roof's overhang) as a rounded rectangle whose reach grows with its size and height. The
+## yard's skirt and path (painter_yard_ground) read the field too, so the shade at a wall's foot
+## shows through the wash laid over it.
 ## Tokens are the only moving things: their feet discs go in a small uniform array refreshed
 ## when one moved (one pass over the token group a frame, no field rebuild).
 ## Base gradients (the second half of the look): a trunk, a rock or a log is a step darker over
@@ -28,6 +34,14 @@ const TEXEL_M := 0.5
 ## Seconds of quiet before a changed map's field is rebuilt (growth installs trees every frame).
 const REBUILD_DELAY_S := 0.3
 const MAX_TOKENS := 32
+## A scatter solid taller than this (metres) and than TREE_SLENDER of its crown's half width is a
+## tree (a dead tree carries no leaf surface to tell it by): a crown's disc, not a box.
+const TREE_M := 2.0
+const TREE_SLENDER := 1.6
+## The seam at a building's walls (metres past them).
+const WALL_SEAM_M := 0.3
+## The yard's ground (PainterBuildings' stand-in of `dressing_ground`), which reads the pool too.
+const YARD_KEY := "dressing_ground"
 ## The sheet's numbers read here (all DEFAULT_NUMBERS).
 const POOL := "occ-pool"
 const CORE := "occ-core"
@@ -116,6 +130,10 @@ func _apply() -> void:
 		material.set_shader_parameter(&"occ_tint", tint)
 		var ring := Vector2(float(_numbers[CORE]), float(_numbers[POOL])) * tk
 		material.set_shader_parameter(&"tok_k", ring)
+	var yard := _yard_material()
+	if yard != null:
+		yard.set_shader_parameter(&"occ_k", k)
+		yard.set_shader_parameter(&"occ_tint", tint)
 	var base := float(_numbers[BASE]) * (1.0 if base_on else 0.0)
 	for material: ShaderMaterial in _surfaces.call("base_materials"):
 		material.set_shader_parameter(&"base_dark", base)
@@ -130,8 +148,19 @@ func _clear_ground() -> void:
 		material.set_shader_parameter(&"occ_present", false)
 		material.set_shader_parameter(&"tok_n", 0)
 		material.set_shader_parameter(&"tok", zero)
+	var yard := _yard_material()
+	if yard != null:
+		yard.set_shader_parameter(&"occ_present", false)
 	for material: ShaderMaterial in _surfaces.call("base_materials"):
 		material.set_shader_parameter(&"base_dark", 0.0)
+
+
+## The yard ground's stand-in (one shared by every structure), null before a yard was painted.
+func _yard_material() -> ShaderMaterial:
+	var holder: Object = _surfaces.call("buildings") if _surfaces != null else null
+	if holder == null:
+		return null
+	return holder.call("material_of", YARD_KEY) as ShaderMaterial
 
 
 # ---------------------------------------------------------------- the field
@@ -166,11 +195,16 @@ func rebuild() -> void:
 		_tex = ImageTexture.create_from_image(image)
 	else:
 		_tex.update(image)
-	for material: ShaderMaterial in _surfaces.call("ground_materials"):
+	var targets: Array[ShaderMaterial] = _surfaces.call("ground_materials")
+	var yard := _yard_material()
+	if yard != null:
+		targets.append(yard)
+	for material: ShaderMaterial in targets:
 		material.set_shader_parameter(&"occ_map", _tex)
 		material.set_shader_parameter(&"occ_origin", _origin)
 		material.set_shader_parameter(&"occ_step", TEXEL_M)
 		material.set_shader_parameter(&"occ_present", true)
+	_apply()
 
 
 ## The painted trees and bushes: a pool under the crown's projection (centre halfway from the
@@ -197,7 +231,9 @@ func _add_trees(pool: PackedFloat32Array, core: PackedFloat32Array) -> void:
 		_disc(core, p.x, p.z, 0.55 + 0.05 * box.size.y)
 
 
-## Rocks, logs and stumps of the scatter: an oriented box each, a pool round it, a seam at its foot.
+## Rocks, logs and stumps of the scatter: a box rounded by its narrower half (a stone round, a log a
+## capsule), a pool round it and a seam at its foot. A tree the painter does not grow (its mesh
+## carries a leaf surface beside its bark, or it is tall and slender: TREE_M) gets a crown's disc.
 func _add_solids(pool: PackedFloat32Array, core: PackedFloat32Array) -> void:
 	var meshes: Dictionary = _surfaces.call("solid_meshes")
 	if meshes.is_empty():
@@ -209,6 +245,7 @@ func _add_solids(pool: PackedFloat32Array, core: PackedFloat32Array) -> void:
 			var mm := (node as MultiMeshInstance3D).multimesh
 			if mm == null or mm.mesh == null or not meshes.has(mm.mesh.get_instance_id()):
 				continue
+			var leafy := bool(meshes[mm.mesh.get_instance_id()])
 			var box := mm.mesh.get_aabb()
 			var to_world := (node as Node3D).global_transform
 			for i in mm.instance_count:
@@ -217,13 +254,33 @@ func _add_solids(pool: PackedFloat32Array, core: PackedFloat32Array) -> void:
 				var sz := xf.basis.z.length()
 				var half := Vector2(box.size.x * sx, box.size.z * sz) * 0.5
 				var c := xf * box.get_center()
-				var yaw := atan2(xf.basis.x.z, xf.basis.x.x)
+				var height := box.size.y * xf.basis.y.length()
 				_count += 1
-				_box(pool, c.x, c.z, yaw, half, 0.45 + 0.35 * half.length())
-				_box(core, c.x, c.z, yaw, half, 0.22)
+				if leafy or (height > TREE_M and height > TREE_SLENDER * maxf(half.x, half.y)):
+					_tree(pool, core, xf.origin, c, maxf(half.x, half.y), height)
+					continue
+				var yaw := atan2(xf.basis.x.z, xf.basis.x.x)
+				var corner := minf(half.x, half.y)
+				_box(pool, c.x, c.z, yaw, half, 0.45 + 0.35 * half.length(), corner)
+				_box(core, c.x, c.z, yaw, half, 0.22, corner)
 
 
-## Structures: each one's footprint box, a pool round it and a seam at its walls.
+## A tree's pool, as the painted trees' (_add_trees): a disc under the crown's projection, centred
+## halfway from the trunk's foot `foot` to the crown's middle `crown`, and a seam at the trunk.
+func _tree(
+	pool: PackedFloat32Array,
+	core: PackedFloat32Array,
+	foot: Vector3,
+	crown: Vector3,
+	half: float,
+	height: float
+) -> void:
+	_disc(pool, (foot.x + crown.x) * 0.5, (foot.z + crown.z) * 0.5, half * 0.5 + 0.5)
+	_disc(core, foot.x, foot.z, 0.55 + 0.05 * height)
+
+
+## Structures: each one's own plan (PainterFootprint: its walls' feet, a rounded rectangle), a pool
+## reaching a little past its walls (more for a larger, taller one) and a seam at them.
 func _add_structures(pool: PackedFloat32Array, core: PackedFloat32Array) -> void:
 	var holder: Object = _surfaces.call("buildings")
 	if holder == null:
@@ -235,27 +292,17 @@ func _add_structures(pool: PackedFloat32Array, core: PackedFloat32Array) -> void
 		var root := child as Node3D
 		if root == null or not root.is_inside_tree():
 			continue
-		var to_local := root.global_transform.affine_inverse()
-		var lo := Vector2(INF, INF)
-		var hi := Vector2(-INF, -INF)
-		for mi: Node in root.find_children("*", "MeshInstance3D", true, false):
-			var m := mi as MeshInstance3D
-			if m.mesh == null:
-				continue
-			var rel := to_local * m.global_transform
-			var box := m.mesh.get_aabb()
-			for corner in 8:
-				var q := rel * box.get_endpoint(corner)
-				lo = lo.min(Vector2(q.x, q.z))
-				hi = hi.max(Vector2(q.x, q.z))
-		if lo.x > hi.x:
+		var plan := PainterFootprint.of_structure(root)
+		if plan.is_empty():
 			continue
-		var centre := root.global_transform * Vector3((lo.x + hi.x) * 0.5, 0.0, (lo.y + hi.y) * 0.5)
-		var half := (hi - lo) * 0.5
-		var yaw := atan2(root.global_basis.x.z, root.global_basis.x.x)
+		var c: Vector2 = plan["centre"]
+		var half: Vector2 = plan["half"]
+		var yaw: float = plan["yaw"]
+		var corner: float = plan["corner"]
+		var reach := PainterFootprint.reach(half, float(plan["height"]), String(root.name))
 		_count += 1
-		_box(pool, centre.x, centre.z, yaw, half, 0.9)
-		_box(core, centre.x, centre.z, yaw, half, 0.35)
+		_box(pool, c.x, c.y, yaw, half, reach, corner)
+		_box(core, c.x, c.y, yaw, half, WALL_SEAM_M, corner)
 
 
 ## The coverage at `x` (distance over the footprint's nominal reach): 1 inside, 0.5 at the reach,
@@ -281,11 +328,20 @@ func _disc(field: PackedFloat32Array, x: float, z: float, r: float) -> void:
 				field[at] = v
 
 
-## Writes a box (half extents `half` in its own x, z, turned by `yaw` about +y) grown by `reach`
-## metres at world (x, z) into `field`, keeping the maximum.
+## Writes a box (half extents `half` in its own x, z, turned by `yaw` about +y, its corners rounded
+## by `corner` metres, at most its narrower half) grown by `reach` metres at world (x, z) into
+## `field`, keeping the maximum.
 func _box(
-	field: PackedFloat32Array, x: float, z: float, yaw: float, half: Vector2, reach: float
+	field: PackedFloat32Array,
+	x: float,
+	z: float,
+	yaw: float,
+	half: Vector2,
+	reach: float,
+	corner: float = 0.0
 ) -> void:
+	var r := clampf(corner, 0.0, minf(half.x, half.y))
+	var inner := half - Vector2(r, r)
 	var rad := half.length() + reach * 1.45
 	var i0 := maxi(0, floori((x - rad - _origin.x) / TEXEL_M))
 	var i1 := mini(_size.x - 1, floori((x + rad - _origin.x) / TEXEL_M))
@@ -298,9 +354,9 @@ func _box(
 		for i in range(i0, i1 + 1):
 			var dx := _origin.x + (i + 0.5) * TEXEL_M - x
 			# Into the box's frame (its +x axis at `yaw` from world +x towards +z).
-			var lx := absf(dx * cs + dz * sn) - half.x
-			var lz := absf(-dx * sn + dz * cs) - half.y
-			var d := Vector2(maxf(lx, 0.0), maxf(lz, 0.0)).length() + minf(maxf(lx, lz), 0.0)
+			var lx := absf(dx * cs + dz * sn) - inner.x
+			var lz := absf(-dx * sn + dz * cs) - inner.y
+			var d := Vector2(maxf(lx, 0.0), maxf(lz, 0.0)).length() + minf(maxf(lx, lz), 0.0) - r
 			var v := cover(d / reach)
 			var at := j * _size.x + i
 			if v > field[at]:

@@ -383,16 +383,21 @@ func base_materials() -> Array[ShaderMaterial]:
 	return out
 
 
-## The instance ids of the scatter meshes drawn as stones and wood (rocks, logs, stumps): the solids
-## whose footprint the ground's field holds.
+## The instance ids of the scatter meshes drawn as stones and wood (rocks, logs, stumps, and the
+## bark of the trees the painter does not grow): the solids whose footprint the ground's field
+## holds. Each maps to whether the mesh also carries a leaf surface (an acacia's or a palm's
+## crown: a tree, whose pool is a crown's disc).
 func solid_meshes() -> Dictionary:
 	var out := {}
+	var leafy := {}
 	for entry: Array in _swapped:
-		if (
-			int(entry[4]["kind"]) == PainterPlantRoles.KIND_SOLID
-			and str(entry[4]["role"]) in ["stone", "bark", PainterPlantRoles.CHARCOAL_ROLE]
-		):
-			out[(entry[0] as Mesh).get_instance_id()] = true
+		var id := (entry[0] as Mesh).get_instance_id()
+		if int(entry[4]["kind"]) != PainterPlantRoles.KIND_SOLID:
+			leafy[id] = true
+		elif str(entry[4]["role"]) in ["stone", "bark", PainterPlantRoles.CHARCOAL_ROLE]:
+			out[id] = false
+	for id: int in out:
+		out[id] = leafy.has(id)
 	return out
 
 
