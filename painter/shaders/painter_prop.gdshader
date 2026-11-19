@@ -16,7 +16,8 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled;
  * over honey wood. How light or dark the paint is picks the ramp's variant (the sheet's two
  * lightnesses of each role), so two barrels are never the same brown; broad soft patches and a few
  * soft brush streaks break each part's one tone into a few dabs, a fold line gives the edges a
- * confident ink, and in winter what faces up wears the roof snow's ramp in a scalloped cap.
+ * confident ink, and in winter what faces up wears the roofs' shared snow layer as a soft cap
+ * (painter_snow.gdshaderinc).
  *
  * The selector light of the plants and buildings (painter_selector, painter_structure): ALBEDO
  * white, the ambient off, light() picks the shade, middle or lit colour from N.L and the sun's
@@ -30,6 +31,7 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled;
  */
 
 #include "res://painter/shaders/painter_noise.gdshaderinc"
+#include "res://painter/shaders/painter_snow.gdshaderinc"
 
 // LINEAR [shade0, mid0, lit0, shade1, mid1, lit1] for each of the eight tones: 0 timber, 1 wall
 // stone, 2 thatch, 3 clay, 4 turf, 5 slate, 6 plaster, 7 spare (the thatch's again).
@@ -63,6 +65,8 @@ varying vec3 f_shd;
 varying vec3 f_mid;
 varying vec3 f_lit;
 varying float f_wob;
+// x: half the width of the light's steps, y: how far the wobble moves them (soft on snow).
+varying vec2 f_soft;
 
 // The sheet ramp a part's paint takes (the paint as the recipe wrote it, sRGB-like numbers).
 int prop_tone(vec3 c) {
@@ -129,14 +133,29 @@ void fragment() {
 	float light = max(streak, 0.0) * 0.16;
 	// The fold line: where the shading normal turns within a pixel (a box's edge, a lid's lip).
 	dark += smoothstep(0.2, 0.6, length(fwidth(NORMAL))) * ink;
-	// Snow on what faces up (winter): a scalloped cap, not a blanket.
+	// Snow on what faces up (winter): the roofs' shared layer (painter_snow.gdshaderinc), a soft
+	// thick cap: its top lit and swelling, the light turning over it in soft dabs, and where a part
+	// curves away from the sky (a haystack's shoulder, a barrel's rim) its edge rounds off into the
+	// blue shade, never a scalloped patch. A prop is small: the layer's frame is the world's at 1.6
+	// times, so a swell is a crate's size.
 	float cover = 0.0;
+	vec4 sp = vec4(0.0, 0.0, 0.5, 0.0);
+	float rim = 0.0;
 	if (snow > 0.0) {
-		float cap = n.y + (p_noise(wp * 5.0 + 9.0) - 0.5) * 0.35;
-		cover = smoothstep(0.46, 0.52, cap) * clamp(snow * 2.2, 0.0, 1.0);
+		vec2 sf = wp.xz * 1.6;
+		cover = snow_cover_of(snow_hold(snow, n.y), sf);
+		sp = snow_paint(sf, 1.0);
+		rim = cover * (1.0 - smoothstep(0.5, 0.85, n.y));
+		vec3 roll = snow_roll(SNOW_FAR, SNOW_FAR, sf);
+		vec2 flat_n = n.xz;
+		vec2 away = length(flat_n) > 0.05 ? normalize(flat_n) : vec2(0.7071);
+		n = normalize(n + vec3(away.x, 0.0, away.y) * (roll.x + rim * 0.6) * cover);
 	}
-	dark = clamp(dark * (1.0 - cover * 0.8), 0.0, 0.7);
-	light = clamp(light * (1.0 - cover * 0.8), 0.0, 0.6);
+	dark = clamp(dark * (1.0 - cover), 0.0, 0.7);
+	light = clamp(light * (1.0 - cover), 0.0, 0.6);
+	vec2 sm = snow_marks(cover, sp, rim * 0.5, 0.0);
+	dark = clamp(dark + sm.x, 0.0, 0.7);
+	light = clamp(light + sm.y, 0.0, 0.6);
 	int base = v_tone * 6;
 	vec3 shd = mix(ramps[base], ramps[base + 3], variant);
 	vec3 mid = mix(ramps[base + 1], ramps[base + 4], variant);
@@ -145,20 +164,24 @@ void fragment() {
 	mid = mix(mid, snow_ramp[1], cover);
 	lit = mix(lit, snow_ramp[2], cover);
 	vec3 deep = shd * 0.82;
-	f_shd = mix(mix(shd, deep, dark), mid, light * 0.5);
-	f_mid = mix(mix(mid, shd, dark), lit, light * 0.6);
-	f_lit = mix(mix(lit, mid, dark), lit * 1.06, light);
+	vec3 o_shd = mix(mix(shd, deep, dark), mid, light * 0.5);
+	vec3 o_mid = mix(mix(mid, shd, dark), lit, light * 0.6);
+	vec3 o_lit = mix(mix(lit, mid, dark), lit * 1.06, light);
+	f_lit = snow_warm(o_lit, sp.w * cover);
+	f_shd = mix(o_shd, snow_sky_shade(o_shd, o_mid, clamp(n.y, 0.0, 1.0) * (1.0 - rim)), cover);
+	f_mid = o_mid;
 	f_n = n;
-	f_wob = p_noise(wp * 1.7 + 5.0);
+	f_wob = mix(p_noise(wp * 1.7 + 5.0), sp.z, cover);
+	f_soft = vec2(mix(0.01, 0.06, cover), mix(0.12, 0.32, cover));
 }
 
 void light() {
 	if (LIGHT_IS_DIRECTIONAL) {
 		vec3 lw = normalize((INV_VIEW_MATRIX * vec4(LIGHT, 0.0)).xyz);
 		float cast = 1.0 - smoothstep(0.45, 0.55, ATTENUATION + (f_wob - 0.5) * 0.2);
-		float x = dot(normalize(f_n), lw) + (f_wob - 0.5) * 0.12;
-		vec3 col = mix(f_shd, f_mid, smoothstep(tone_lo - 0.01, tone_lo + 0.01, x));
-		col = mix(col, f_lit, smoothstep(tone_hi - 0.01, tone_hi + 0.01, x));
+		float x = dot(normalize(f_n), lw) + (f_wob - 0.5) * f_soft.y;
+		vec3 col = mix(f_shd, f_mid, smoothstep(tone_lo - f_soft.x, tone_lo + f_soft.x, x));
+		col = mix(col, f_lit, smoothstep(tone_hi - f_soft.x, tone_hi + f_soft.x, x));
 		DIFFUSE_LIGHT += mix(col, f_shd, cast * cast_amount);
 	}
 }

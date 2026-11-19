@@ -27,9 +27,11 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
  * (pick 3). Winter (`snow` above 0, the sheet's roof-snow, cards painter-roof-snow,
  * painter-buildings-fix and -fix2): a roof slope lies under a blanket mesh (code 10,
  * PainterMannerBlanket: thick in the middle, soft at the edges, its normals carry its shape)
- * drawn in the snow's ramp with broad brush washes, lighter and bluer, a soft light and a blue
- * shade under the eave's lip (the code's fraction); a roof piece under it hides its own marks
- * whole. The other snow strips (code 9, PainterMannerSnow: chimney cushions and collars, sill
+ * painted as the shared snow layer (painter_snow.gdshaderinc, the street lots' and the props'
+ * too): broad brush washes, swells and hollows, a soft light broken into dabs, a few soft gaps
+ * along the ridge and a blue shade under the eave's lip (the code's fraction); a roof piece under
+ * it hides its own marks whole, and a roof with no record wears the layer painted on its face.
+ * The other snow strips (code 9, PainterMannerSnow: chimney cushions and collars, sill
  * pads, the lips and caps of a roof without a blanket) take the snow's ramp whole, lit by their
  * own normals, with a slightly darker foot and a blue underside. The light's wobble (and so a light edge or
  * a tree's shadow) follows each piece's strokes: along the courses on a wall, down the fall line
@@ -42,6 +44,7 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
 
 #include "res://painter/shaders/painter_noise.gdshaderinc"
 #include "res://painter/shaders/painter_structure_common.gdshaderinc"
+#include "res://painter/shaders/painter_snow.gdshaderinc"
 #include "res://painter/shaders/painter_building_burn.gdshaderinc"
 
 uniform int pattern = 0;
@@ -49,8 +52,8 @@ uniform int pick = 0;
 uniform vec3 ramps[30];
 uniform float snow = 0.0;
 uniform vec3 snow_ramp[3];
-// False draws winter's roofs as before card painter-roof-snow (snow_cover's patches; an A/B
-// switch for measurements, PainterMannerHost.snow_body).
+// False draws winter's roofs without their blanket meshes: every roof takes the shared layer
+// painted on its face, as a roof with no record does (an A/B switch, PainterMannerHost.snow_body).
 uniform bool snow_body = true;
 uniform float tone_lo = -0.08;
 uniform float tone_hi = 0.48;
@@ -125,15 +128,8 @@ void vertex() {
 	v_rec = CUSTOM0;
 }
 
-// 2D value noise, 0..1, one cell per unit: four hashes where p_noise takes eight (every stroke
-// noise has a constant third coordinate; card painter-manner-c halved their cost this way).
-float p_n2(vec2 p, float seed) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	f = f * f * (3.0 - 2.0 * f);
-	return mix(mix(p_hash(vec3(i, seed)), p_hash(vec3(i + vec2(1.0, 0.0), seed)), f.x),
-		mix(p_hash(vec3(i + vec2(0.0, 1.0), seed)), p_hash(vec3(i + vec2(1.0, 1.0), seed)), f.x), f.y);
-}
+// (p_n2 and p_wash, the 2D stroke noise and the broad washes, live in painter_noise.gdshaderinc:
+// the shared roof snow paints with them too.)
 
 float p_line(float x, float w) {
 	float f = fract(x);
@@ -166,30 +162,6 @@ vec2 p_strokes(vec2 f, float row, float cell, float share, float width, float da
 	float dry = smoothstep(0.25, 0.45, p_n2(vec2(f.x * 7.0, ri * 3.1), seed));
 	float on = step(1.0 - share, h) * body * mix(0.35, 1.0, dry);
 	float is_dark = step(h, 1.0 - share + share * dark_share);
-	return vec2(on * is_dark, on * (1.0 - is_dark));
-}
-
-// Broad brush washes along x in rows `row` metres high, one per `cell` metres at most and
-// `share` of the cells drawn: each its own length (45 to 95 % of its cell), height in the row
-// and thickness (`thick` to twice it, a share of the row), tapered, dragged dry along x.
-// Returns (dark, light), `dark_share` of the washes dark.
-vec2 p_wash(vec2 f, float row, float cell, float share, float thick, float dark_share, float seed) {
-	float r = f.y / row;
-	float ri = floor(r);
-	float x = f.x / cell + p_hash(vec3(ri, seed, 1.0)) * 7.0;
-	float ci = floor(x);
-	float h = p_hash(vec3(ri, ci, seed));
-	float len = mix(0.45, 0.95, p_hash(vec3(ri, ci, seed + 1.7)));
-	float start = (1.0 - len) * p_hash(vec3(ri, ci, seed + 3.1));
-	float along = (fract(x) - start) / len;
-	float body = smoothstep(0.0, 0.14, along) * (1.0 - smoothstep(0.7, 1.0, along));
-	float centre = 0.5 + (p_hash(vec3(ri, ci, seed + 5.3)) - 0.5) * 0.35;
-	float th = thick * mix(1.0, 2.0, p_hash(vec3(ri, ci, seed + 7.9)));
-	float across = abs(fract(r) - centre) / th;
-	body *= 1.0 - smoothstep(0.3, 0.5, across + (p_n2(vec2(f.x * 2.3, ri), seed) - 0.5) * 0.2);
-	float dry = smoothstep(0.2, 0.55, p_n2(vec2(f.x * 4.0, f.y * 16.0), seed));
-	float on = step(1.0 - share, h) * body * mix(0.25, 1.0, dry);
-	float is_dark = step(p_hash(vec3(ri, ci, seed + 9.4)), dark_share);
 	return vec2(on * is_dark, on * (1.0 - is_dark));
 }
 
@@ -594,10 +566,14 @@ void fragment() {
 	float snow_light = 0.0;
 	float soft = 0.01;
 	float swell = 0.0;
-	// How much of its roof's ramp a blanket's snow lets through where it lies (code 10 only).
-	float thin = 0.0;
 	float snow_mark = 0.0;
+	// The painted layer's rounded underside on a roof with no record (snow_roll's y).
+	float snow_under = 0.0;
 	if (snow > 0.0) {
+		// The shared layer's frame on a face with no record (taken here, outside the branches on
+		// the piece's code: it reads screen derivatives) and how broad a metre is on it.
+		vec4 fr = snow_frame(wp, n, h);
+		float fbroad = 1.0 - smoothstep(0.08, 0.16, length(fwidth(fr.xy)));
 		if (code == 10 || (snow_body && code > 0 && roofy && code != 7)) {
 			// The blanket (code 10, PainterMannerBlanket), or a roof piece under it (its own
 			// marks hidden whole: dashes through the snow read as dirt, cards
@@ -611,55 +587,24 @@ void fragment() {
 			cover = 1.0;
 			hide = 1.0;
 			// Roof colour through the snow (cards painter-look-houses3 and -roofs-winter: every roof
-			// one white slab, then bare slots with a snow rim): the blanket carries its roof's tone
-			// (v_tone, from the snow mesh's vertex colour), so where the snow is thin it is drawn in
-			// that roof's own ramp, feathered by the same noises that thin it, not cut away. `thin`
-			// is how much of the roof the snow lets through where it still lies (a veil), and
-			// `cover` falls where it has slid or blown off: along the ridge in long soft strokes, in
-			// a few stretches of each verge, and in broken strokes above the eave. (Round patches
-			// and eave teeth read as holes and stickers; these are strokes along the roof's own
-			// lines.) The roof piece under the blanket stays plain snow.
+			// one white slab): the blanket carries its roof's tone (v_tone, from the snow mesh's
+			// vertex colour), so where the wind scoured the crest it is drawn in that roof's own
+			// ramp. Only there (card painter-roof-snow 2026-11-18, owner: "much patchier"): the
+			// shared layer's few short soft gaps along the ridge (snow_gap); the verge stretches,
+			// eave strokes, flecks and the veil of thin snow are gone. The roof piece under the
+			// blanket stays plain snow.
+			// The layer's frame: the slope's own metres, offset per piece by its accent.
+			vec2 sf = f + acc * 13.0;
 			if (code == 10 && under < 0.05 && up > 0.3) {
-				float line_x = wp.x * 0.7 + wp.z * 0.55;
-				float to_ridge = vl - f.y;
-				float gap_b = smoothstep(0.36, 0.6, p_n2(vec2(line_x * 0.7, 3.0), 114.0));
-				float reach = 0.25 + 1.2 * p_n2(vec2(line_x * 1.5, 7.0), 117.0);
-				// (A tongue's tip wanders, so the strokes run down the slope, not as a straight band.)
-				reach *= 0.75 + 0.5 * p_n2(vec2(f.x * 3.1, 8.0), 124.0);
-				float ridge_b = gap_b * (1.0 - smoothstep(reach * 0.4, reach, to_ridge)) * step(0.0, to_ridge);
-				float dx = min(f.x, ul - f.x);
-				float verge_b = (1.0 - smoothstep(0.05, 0.2 + 0.55 * p_n2(vec2(f.y * 1.1, 9.0), 118.0), dx))
-					* step(0.0, dx) * smoothstep(0.36, 0.55, p_n2(vec2(f.y * 0.45, 4.0), 119.0));
-				// Above the eave: dry strokes along it, each its own length and height, never the
-				// whole run (the lip's edge stays snow).
-				float eave_g = smoothstep(0.42, 0.6, p_n2(vec2(f.x * 0.4, 21.0), 120.0));
-				float eave_b = eave_g * (1.0 - smoothstep(0.08, 0.3 + 0.4 * p_n2(vec2(f.x * 1.1, 22.0), 121.0), f.y)) * 0.62;
-				// (Card painter-look-roofs-winter2: the snow edge was a smooth fade, an airbrushed band.
-				// The tongue's edge is now a dry brush's: a few broad dabs (stretched along the eave) and
-				// a fine ragged drag push the ramp across a narrow threshold, and flecks of snow stay
-				// inside the bare stroke.)
-				float edge = (p_n2(f * vec2(5.5, 2.4), 128.0) - 0.5) * 0.5
-					+ (p_n2(f * 2.2, 115.0) - 0.5) * 0.4
-					+ (p_n2(f * vec2(13.0, 7.0), 116.0) - 0.5) * 0.2;
-				float bare = max(max(ridge_b, verge_b * 0.9), eave_b) + edge;
-				cover = 1.0 - smoothstep(0.42, 0.52, bare);
-				cover = max(cover, smoothstep(0.7, 0.76, p_n2(f * vec2(4.5, 2.4) + acc * 3.0, 129.0)) * 0.9);
-				// A veil of the roof's colour: not a fog over the whole blanket (that read as milky,
-				// translucent snow, measured by drawing it away), but a few dry streaks down the fall
-				// line with ragged edges, strongest at the eave and the verges where the snow is thin.
-				float vein = smoothstep(0.52, 0.6, p_n2(vec2(f.x * 0.8, f.y * 0.2) + acc * 5.0, 122.0));
-				thin = vein * min(0.18 + 0.32 * (1.0 - smoothstep(0.0, 1.5, f.y)) + 0.2 * (1.0 - smoothstep(0.0, 0.9, dx)), 0.6);
+				cover = 1.0 - snow_gap(sf, vl - f.y) * step(0.0, vl - f.y);
 			}
-			vec2 sw = p_wash(f, 1.3, 4.2, 0.5, 0.34, 0.45, 41.0 + acc * 7.0);
-			// The mass's patches lie wider along the eave than down the slope (card
-			// painter-buildings-fix4: taller ones read as vertical blotches), its hollows lower.
-			float mass = p_n2(vec2(f.x * 0.42, f.y * 0.62) + acc * 13.0, 47.0)
-				+ (p_n2(vec2(f.x * 2.2, f.y * 1.4), 48.0) - 0.5) * 0.3;
-			float hollow = smoothstep(0.54, 0.7, mass) * (1.0 - under);
-			swell = (1.0 - smoothstep(0.34, 0.48, mass)) * (1.0 - under);
-			snow_dark = sw.x * 0.3 * broad * (1.0 - under) + under * 0.6 + hollow * 0.17;
-			snow_light = sw.y * 0.5 * broad * (1.0 - under);
-			snow_dark *= cover;
+			// The shared paint: broad washes, swells and hollows wider along the eave than down the
+			// slope, and the dabs that break the light's turn (painter_snow.gdshaderinc).
+			vec4 sp = snow_paint(sf, broad);
+			swell = sp.w * (1.0 - under);
+			vec2 sm = snow_marks(cover, sp, under, 0.0);
+			snow_dark = sm.x;
+			snow_light = sm.y;
 			if (code == 10 && cover < 0.95) {
 				// The bare roof's own marks, short dark and light strokes along the eave (the rows of
 				// tile, shingle or straw), so a tongue is a painted stretch of roof, not a flat tone.
@@ -671,20 +616,10 @@ void fragment() {
 			// read as a dark olive hole.)
 			snow_light = snow_light * cover + (1.0 - cover) * 0.5 + snow_mark;
 			swell *= cover;
-			if (code == 10) {
-				// The blanket's rounded shape would read as soft airbrushed gradients, so its light
-				// and shade are cut into broad brush dabs (the wobble, which shifts where the light
-				// turns, is a two-scale dab noise pushed through a steep step) and a dry-brush grain
-				// of long fine streaks along the eave breaks the white at close zoom.
-				float dab_c = p_n2(f * vec2(1.5, 0.8) + acc * 9.0, 61.0);
-				float dab_f = p_n2(f * vec2(5.5, 2.4) + acc * 4.0, 62.0);
-				float dabs_s = smoothstep(0.3, 0.7, dab_c + (dab_f - 0.5) * 0.55);
-				wob = mix(wob, clamp(dabs_s + (sw.y - sw.x) * 0.4, 0.0, 1.0), cover);
-				float grain = p_n2(f * vec2(3.0, 22.0) + acc * 7.0, 63.0);
-				snow_dark += cover * broad * smoothstep(0.64, 0.8, grain) * 0.14 * (1.0 - under);
-			} else {
-				wob = mix(wob, 0.5 + (sw.y - sw.x) * 0.45, cover);
-			}
+			// The blanket's rounded shape would read as soft airbrushed gradients, so its light and
+			// shade are cut into the layer's broad brush dabs (the wobble shifts where the light
+			// turns). (The dry-brush grain of fine streaks is gone, card painter-roof-snow: softer.)
+			wob = mix(wob, sp.z, cover);
 			// A blanket's light turns over a narrow step (card painter-look-roofs-winter2: a wide one,
 			// 0.15, read as a glossy airbrushed sheen, measured); its shape's light and shade break
 			// along the dabs above instead.
@@ -712,7 +647,21 @@ void fragment() {
 			hide = 0.6;
 			soft = 0.06;
 		} else if (roofy) {
-			cover = snow_cover(snow, wp, up, h);
+			// A roof with no record (a round or Taper roof, or any roof while snow_body is off): the
+			// shared layer painted on its face (painter_snow.gdshaderinc, as the street lots' A3b
+			// roofs), its frame from the face and h, its body in its rolled shading normal.
+			cover = snow_cover_of(snow_hold(snow, up), fr.xy) * (1.0 - snow_gap(fr.xy, fr.w));
+			hide = 1.0;
+			vec4 sp = snow_paint(fr.xy, fbroad);
+			vec3 roll = snow_roll(fr.z, fr.w, fr.xy);
+			vec2 sm = snow_marks(cover, sp, roll.y, roll.z);
+			snow_dark = sm.x;
+			snow_light = sm.y;
+			snow_under = roll.y;
+			swell = sp.w * cover;
+			wob = mix(wob, sp.z, cover);
+			soft = mix(0.01, 0.06, cover);
+			n = normalize(n + vec3(down.x, 0.0, down.y) * roll.x * cover);
 		}
 	}
 	dark = clamp(dark * marks * (1.0 - cover * hide) + snow_dark, 0.0, 0.85);
@@ -761,9 +710,8 @@ void fragment() {
 	float lay = cover;
 	if (code == 10) {
 		// The snow takes its roof's tone: a warm cast over clay, thatch and shingle, a cool one over
-		// slate and turf, and lets a veil of the roof's own colour through where it is thin.
+		// slate and turf.
 		snow_tint = v_tone == 0 ? vec3(1.015, 0.985, 0.955) : (v_tone == 1 ? vec3(0.97, 0.99, 1.035) : (v_tone == 2 ? vec3(1.01, 0.985, 0.95) : (v_tone == 3 ? vec3(0.98, 1.01, 0.97) : vec3(1.02, 1.0, 0.93))));
-		lay = cover * (1.0 - thin);
 		// Where the roof shows, the winter ramps are lifted a little so a bare stroke is a colour
 		// and not a dark slab: the straw (a pale cream) to gold, the slate to a clearer blue, the
 		// shingle's brown warmer.
@@ -783,7 +731,7 @@ void fragment() {
 	f_mid = mix(mix(mid, shd, dark), lit, light * 0.6);
 	f_lit = mix(mix(lit, mid, dark), lit * 1.06, light);
 	// Swells of snow and the sunlit stone are warm: a stone wall's light side leans to straw.
-	f_lit = mix(f_lit, f_lit * vec3(1.0, 0.975, 0.9), swell * 0.6);
+	f_lit = snow_warm(f_lit, swell);
 	f_lit = mix(f_lit, f_lit * vec3(1.06, 1.0, 0.86), pattern == 1 && on_course ? 0.7 : 0.0);
 	float bk = v_bld.x * 2.0 - 1.0;
 	if (pattern == 1 && on_course) {
@@ -851,11 +799,12 @@ void fragment() {
 		f_shd *= vec3(0.93, 0.97, 1.07);
 	}
 	if (code == 10) {
-		// Snow facing the sky is never the deep shade blue: a blanket's top in the roof's own
-		// shade takes some of the mid tone (card painter-buildings-fix4: a shaded roof read as one
-		// mid-blue slab at eye level), its lip's front and underside stay blue.
+		// Snow facing the sky is never the deep shade blue (snow_sky_shade): a blanket's top in the
+		// roof's own shade takes some of the mid tone, its lip's front and underside stay blue.
 		float sky = clamp(n.y, 0.0, 1.0) * (1.0 - clamp(course_m / 0.9, 0.0, 1.0));
-		f_shd = mix(f_shd, f_mid, 0.4 * sky * sky);
+		f_shd = snow_sky_shade(f_shd, f_mid, sky);
+	} else if (roofy && cover > 0.0 && snow > 0.0) {
+		f_shd = mix(f_shd, snow_sky_shade(f_shd, f_mid, clamp(up, 0.0, 1.0) * (1.0 - snow_under)), cover);
 	}
 	// A varying cannot be an inout argument: the burn works on copies.
 	vec3 burn_shd = f_shd;
@@ -875,7 +824,7 @@ void fragment() {
 	f_tune = vec4(
 		paint_slope ? 0.025 : soft,
 		on_course ? 0.7 : (on_slope ? 0.45 : (code == 10 ? 0.5 : 0.2)),
-		paint_slope ? 0.06 : (code == 10 ? 0.32 : 0.12),
+		paint_slope ? 0.06 : (code == 10 ? 0.32 : mix(0.12, 0.32, roofy && code == 0 ? cover : 0.0)),
 		on_slope || code == 10 ? 0.3 : 0.5);
 }
 

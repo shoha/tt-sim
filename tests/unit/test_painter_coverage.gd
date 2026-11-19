@@ -90,13 +90,28 @@ func test_a_wall_built_later_and_a_boundary_layer_are_followed() -> void:
 func test_wall_part_keys() -> void:
 	assert_eq(PainterBuildings.wall_part_key("Stone"), "wall_stone")
 	assert_eq(PainterBuildings.wall_part_key("Masonry"), "wall_masonry")
-	assert_eq(PainterBuildings.wall_part_key("Wood"), "wall_boards")
+	assert_eq(PainterBuildings.wall_part_key("Wood"), "lot_wood")
 	assert_eq(PainterBuildings.wall_part_key("Roof"), "roof_wood")
 	assert_eq(PainterBuildings.wall_part_key("Wall_brick"), "wall_brick")
 	assert_eq(PainterBuildings.wall_part_key("Roof_thatch"), "roof_thatch")
 	assert_eq(PainterBuildings.wall_part_key("Door_wood"), "door_wood")
 	for part in ["Stones", "Arch", "Ford"]:
 		assert_eq(PainterBuildings.wall_part_key(part), "crossing_stone", "a crossing's %s" % part)
+
+
+func test_lot_wood_takes_the_props_honey() -> void:
+	# The wall layers' planks and yard fences match the props' honey timber in every mood (card
+	# painter-roof-snow, owner: "warmer fences too").
+	var sheet := PainterSheet.load_sheet("core")
+	for mood: String in ["summer", "winter", "dusk"]:
+		var timber := PainterSheet.tone_lch(sheet, mood, PainterBuildings.LOT_WOOD_FROM, 40.0)
+		var honey := PainterVillage.prop_wood_middle(timber)
+		var middle := PainterBuildings.lot_wood_middle(sheet, mood, 40.0)
+		assert_almost_eq(middle.x, honey.x, 1e-5, "%s: the props' lightness" % mood)
+		assert_almost_eq(middle.z, honey.z, 1e-5, "%s: the props' hue" % mood)
+		assert_almost_eq(middle.y, honey.y * PainterBuildings.LOT_WOOD_CHROMA, 1e-5, mood)
+		var lot := PainterBuildings.ramp(sheet, mood, PainterBuildings.LOT_WOOD_ROLE, 40.0, "wall")
+		assert_eq(lot, PainterBuildings.ramp(sheet, mood, "timber", 40.0, "wall", middle), mood)
 	assert_eq(PainterBuildings.wall_part_key("Glass"), "")
 	assert_eq(PainterBuildings.wall_part_key("Collision"), "")
 	assert_eq(PainterBuildings.wall_part_key("Wall_unheard_of"), "")

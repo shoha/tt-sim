@@ -35,6 +35,7 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
 
 #include "res://painter/shaders/painter_noise.gdshaderinc"
 #include "res://painter/shaders/painter_structure_common.gdshaderinc"
+#include "res://painter/shaders/painter_snow.gdshaderinc"
 #include "res://painter/shaders/painter_building_burn.gdshaderinc"
 
 // 0 plaster, 1 stone, 2 log, 3 boards, 4 timber, 5 tile, 6 slate, 7 shingle, 8 thatch, 9 turf.
@@ -77,6 +78,9 @@ varying vec3 f_shd;
 varying vec3 f_mid;
 varying vec3 f_lit;
 varying float f_wob;
+// x: half the width of the light's steps, y: how far the wobble moves them (soft on snow), z: the
+// light's share under which a point is in cast shadow.
+varying vec3 f_soft;
 
 void vertex() {
 	v_wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -186,21 +190,31 @@ void fragment() {
 	}
 	// The fold line: where the shading normal turns within a pixel (a corner, an eave lip).
 	dark += smoothstep(0.2, 0.6, length(fwidth(NORMAL))) * ink;
-	// Snow on a roof (winter): the snow's own tones, the marks under it mostly hidden.
-	// It has a body (roof_snow_body): a lit top, its edge falling into the shade, its shadow on the roof.
-	vec3 body = pattern >= 5 ? roof_snow_body(snow, wp, up, h) : vec3(0.0);
-	float cover = body.x;
+	// Snow on a roof (winter): the shared layer of painter_snow.gdshaderinc, as the hand-drawn
+	// houses' and the props' (one soft thick cushion: a lit top, a lip rolling over the eave with a
+	// blue underside, a crest at the ridge, a few soft gaps along it). No record here: its frame
+	// comes from the face and h.
+	float cover = 0.0;
+	vec4 sp = vec4(0.0, 0.0, 0.5, 0.0);
+	vec3 roll = vec3(0.0);
+	if (pattern >= 5 && snow > 0.0) {
+		vec4 fr = snow_frame(wp, n, h);
+		float broad = 1.0 - smoothstep(0.08, 0.16, length(fwidth(fr.xy)));
+		cover = snow_cover_of(snow_hold(snow, up), fr.xy) * (1.0 - snow_gap(fr.xy, fr.w));
+		sp = snow_paint(fr.xy, broad);
+		roll = snow_roll(fr.z, fr.w, fr.xy);
+	}
 	// No roof mark shows through the layer (the course dashes read as a grid of ticks on it).
-	float marks_under = pattern >= 5 ? (1.0 - cover) : (1.0 - cover * 0.85);
-	dark = clamp(dark * marks * marks_under, 0.0, 0.85);
-	light = clamp(light * marks * marks_under, 0.0, 0.8);
-	dark = clamp(dark + body.y * 0.5 + body.z * 0.32, 0.0, 0.85);
-	// The layer swells: broad light and shade across the snow, by tilting its shading normal along
-	// the fall line (the face's own `up` and the marks keep the plain normal).
+	dark = clamp(dark * marks * (1.0 - cover), 0.0, 0.85);
+	light = clamp(light * marks * (1.0 - cover), 0.0, 0.8);
+	vec2 sm = snow_marks(cover, sp, roll.y, roll.z);
+	dark = clamp(dark + sm.x, 0.0, 0.85);
+	light = clamp(light + sm.y, 0.0, 0.8);
+	// The layer's shape: its shading normal rolls along the fall line (the face's own `up` and the
+	// marks keep the plain normal).
 	vec3 shade_n = n;
 	if (cover > 0.0) {
-		float swell = p_noise(wp * 0.6 + 5.0) - 0.5;
-		shade_n = normalize(n + vec3(down.x, 0.0, down.y) * swell * 1.2 * cover);
+		shade_n = normalize(n + vec3(down.x, 0.0, down.y) * roll.x * cover);
 	}
 	int base = v_tone * 6;
 	vec3 shd = mix(ramps[base], ramps[base + 3], variant);
@@ -210,9 +224,12 @@ void fragment() {
 	mid = mix(mid, snow_ramp[1], cover);
 	lit = mix(lit, snow_ramp[2], cover);
 	vec3 deep = shd * 0.82;
-	f_shd = mix(mix(shd, deep, dark), mid, light * 0.5);
-	f_mid = mix(mix(mid, shd, dark), lit, light * 0.6);
-	f_lit = mix(mix(lit, mid, dark), lit * 1.06, light);
+	vec3 o_shd = mix(mix(shd, deep, dark), mid, light * 0.5);
+	vec3 o_mid = mix(mix(mid, shd, dark), lit, light * 0.6);
+	vec3 o_lit = mix(mix(lit, mid, dark), lit * 1.06, light);
+	f_lit = snow_warm(o_lit, sp.w * cover);
+	f_shd = mix(o_shd, snow_sky_shade(o_shd, o_mid, up * (1.0 - roll.y)), cover);
+	f_mid = o_mid;
 	// A varying cannot be an inout argument: the burn works on copies.
 	vec3 burn_shd = f_shd;
 	vec3 burn_mid = f_mid;
@@ -222,16 +239,21 @@ void fragment() {
 	f_mid = burn_mid;
 	f_lit = burn_lit;
 	f_n = shade_n;
-	f_wob = p_noise(wp * 1.7 + 5.0);
+	// On snow the light turns over a soft step that the layer's dabs push about (its light and
+	// shade break into brush dabs); elsewhere a crisp step with a small wobble.
+	f_wob = mix(p_noise(wp * 1.7 + 5.0), sp.z, cover);
+	// A point on snow is in cast shadow only under a fuller shadow (the hand-drawn roofs' 0.3), so a
+	// grazing sun's partial self-shadow on the roof draws no hatch of ticks across the layer.
+	f_soft = vec3(mix(0.01, 0.06, cover), mix(0.12, 0.32, cover), mix(0.5, 0.3, cover));
 }
 
 void light() {
 	if (LIGHT_IS_DIRECTIONAL) {
 		vec3 lw = normalize((INV_VIEW_MATRIX * vec4(LIGHT, 0.0)).xyz);
-		float cast = 1.0 - smoothstep(0.45, 0.55, ATTENUATION + (f_wob - 0.5) * 0.2);
-		float x = dot(normalize(f_n), lw) + (f_wob - 0.5) * 0.12;
-		vec3 col = mix(f_shd, f_mid, smoothstep(tone_lo - 0.01, tone_lo + 0.01, x));
-		col = mix(col, f_lit, smoothstep(tone_hi - 0.01, tone_hi + 0.01, x));
+		float cast = 1.0 - smoothstep(f_soft.z - 0.05, f_soft.z + 0.05, ATTENUATION + (f_wob - 0.5) * 0.2);
+		float x = dot(normalize(f_n), lw) + (f_wob - 0.5) * f_soft.y;
+		vec3 col = mix(f_shd, f_mid, smoothstep(tone_lo - f_soft.x, tone_lo + f_soft.x, x));
+		col = mix(col, f_lit, smoothstep(tone_hi - f_soft.x, tone_hi + f_soft.x, x));
 		DIFFUSE_LIGHT += mix(col, f_shd, cast * cast_amount);
 	}
 }

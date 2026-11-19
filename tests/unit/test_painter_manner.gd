@@ -296,16 +296,20 @@ func test_the_manner_shader_loads_with_the_sheet_uniforms() -> void:
 		assert_has(names, want)
 
 
-func test_the_snow_blanket_is_opaque_snow_with_brush_dab_edges() -> void:
+func test_the_snow_blanket_is_opaque_soft_snow() -> void:
 	# card painter-look-roofs-winter2: drawn away one term at a time the milky, see-through look was
 	# the veil of the roof's ramp laid over the whole blanket (a smooth fog) and the gloss was the
-	# blanket's wide light step (0.15). The veil is now a few ragged streaks, the step narrow, and the
-	# dead soft-modelling branch in light() is gone; a regression that brings either back fails here.
+	# blanket's wide light step (0.15); the step stays narrow and the soft-modelling branch gone.
+	# Card painter-roof-snow (owner: "much patchier", "softer"): no veil at all, no dry grain, no bare
+	# strokes but the shared layer's few soft gaps along the ridge.
 	var code := (load(PainterMannerHost.SHADER) as Shader).code
 	assert_false(code.contains("soft = code == 10 ? 0.15"), "the blanket's step is narrow")
 	assert_false(code.contains("f_tune.x > 0.1"), "no wide soft-modelling branch")
-	assert_true(code.contains("thin = vein *"), "the veil is streaks, not a fog")
-	assert_true(code.contains("float grain ="), "the blanket carries a dry-brush grain")
+	assert_false(code.contains("thin = vein *"), "no veil of thin snow")
+	assert_false(code.contains("float grain ="), "no dry-brush grain")
+	assert_false(code.contains("float verge_b"), "no bare stretches at the verges")
+	assert_true(code.contains("snow_gap(sf, vl - f.y)"), "only the shared ridge gaps")
+	assert_true(code.contains("snow_paint(sf, broad)"), "the blanket paints the shared layer")
 
 
 func test_the_collider_follows_the_field_and_is_cut_only_above_the_walls() -> void:

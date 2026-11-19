@@ -51,8 +51,9 @@ const WALL_LAYERS: Array[String] = ["AuthoredWalls", "AuthoredBoundaries", "Auth
 const WALL_PARTS: Dictionary = {
 	"Stone": "wall_stone",
 	"Masonry": "wall_masonry",
-	# A plank wall (a street lot's body, a fence), not a beam: the boards' own lighter honey role.
-	"Wood": "wall_boards",
+	# A plank wall (a street lot's body, a yard fence, a bridge deck), not a beam: the props' honey
+	# (LOT_WOOD_ROLE), so a fence matches the barrels beside it (card painter-roof-snow).
+	"Wood": "lot_wood",
 	"Roof": "roof_wood",
 	# A crossing's parts (AuthoredCrossings: `Wood` above, and its stone, arch and ford meshes).
 	"Stones": "crossing_stone",
@@ -64,6 +65,12 @@ const WALL_PARTS: Dictionary = {
 const CROSSING_ROLE := "crossing-stone"
 ## The role CROSSING_ROLE is derived from.
 const CROSSING_FROM := "wall-stone"
+## The role the wall layers' wood (a street lot's planks, a yard fence, a bridge deck) takes: the
+## props' honey, derived at tone time from the timber role (PainterVillage.prop_wood_middle), so
+## it follows every mood and sun as the props do (owner 2026-11-18: "warmer fences too").
+const LOT_WOOD_ROLE := "lot-wood"
+const LOT_WOOD_FROM := "timber"
+const LOT_WOOD_CHROMA := 0.85
 ## The prefixes of a mill's and a vane's mesh names (AuthoredStructures.mill_node, vane_node).
 const PART_PREFIXES: Array[String] = ["cap_", "wheel_", "vane_"]
 ## A picked roof's tones, in the shader's order.
@@ -131,6 +138,7 @@ const KINDS: Dictionary = {
 	"wall_log": ["wall-log", P_LOG, "wall", 0],
 	"wall_boards": ["wall-boards", P_BOARDS, "wall", 0],
 	"wall_wood": ["wall-boards", P_BOARDS, "wall", 0],
+	"lot_wood": [LOT_WOOD_ROLE, P_BOARDS, "wall", 0],
 	"roof_thatch": ["roof-thatch", P_THATCH, "roof", 0],
 	"roof_slate": ["roof-slate", P_SLATE, "roof", 0],
 	"roof_shingle": ["roof-shingle", P_SHINGLE, "roof", 0],
@@ -544,15 +552,15 @@ static func ramp(
 	family: String,
 	middle: Vector3 = Vector3(-1.0, 0.0, 0.0)
 ) -> PackedVector3Array:
-	var base := (
-		middle
-		if middle.x >= 0.0
-		else (
-			crossing_tone(sheet, mood, elevation)
-			if role == CROSSING_ROLE
-			else PainterSheet.tone_lch(sheet, mood, role, elevation)
-		)
-	)
+	var base := middle
+	if base.x < 0.0:
+		match role:
+			CROSSING_ROLE:
+				base = crossing_tone(sheet, mood, elevation)
+			LOT_WOOD_ROLE:
+				base = lot_wood_middle(sheet, mood, elevation)
+			_:
+				base = PainterSheet.tone_lch(sheet, mood, role, elevation)
 	var shape := shape_of(sheet, mood, elevation, family)
 	var hue_spread := PainterSheet.number(sheet, mood, "hue-spread", elevation)
 	var value_spread := PainterSheet.number(sheet, mood, "value-spread", elevation)
@@ -565,6 +573,16 @@ static func ramp(
 		for step: Vector3 in steps:
 			out.append(PainterTones.linear(PainterSheet.color_of_lch(step)))
 	return out
+
+
+## The middle tone (OKLCH) of the wall layers' wood (LOT_WOOD_ROLE): the props' honey
+## (PainterVillage.prop_wood_middle of the timber role) at `LOT_WOOD_CHROMA` of its chroma, so a
+## whole street house of planks is honey and not orange, and a fence still matches a barrel. Pure.
+static func lot_wood_middle(sheet: Dictionary, mood: String, elevation: float) -> Vector3:
+	var honey := PainterVillage.prop_wood_middle(
+		PainterSheet.tone_lch(sheet, mood, LOT_WOOD_FROM, elevation)
+	)
+	return Vector3(honey.x, honey.y * LOT_WOOD_CHROMA, honey.z)
 
 
 ## The middle tone (OKLCH) of a crossing's stone: the wall stone's, its hue turned by

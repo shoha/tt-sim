@@ -1743,6 +1743,51 @@ flat splotches.
   plants as a source, orchard trees drawn by `PainterTrees`, the A/B switches, no per-frame hooks);
   `test_painter_warmup.gd` lists the prop shader.
 
+## One roof snow (card painter-roof-snow, 2026-11-18; look-pending)
+
+Frames: `docs/research/2026-11-09-prototypes/compare/painter_final45_roof_snow/` (`notes.md`, before,
+r1, full). Owner answers 2026-11-18: the roof snow reads as flat splotches, "make it feel softer and
+with more body", "why don't these share an implementation for snow coverage?", the manner houses
+"much patchier"; lantern halos "tone it down a little"; "warmer fences too".
+
+- **One implementation.** `painter/shaders/painter_snow.gdshaderinc` is the only roof snow: the
+  hand-drawn blanket (code 10) and the roof pieces under it, the hand-drawn roofs with no record
+  (round and Taper roofs, and every roof while `PainterMannerHost.snow_body` is off), the A3b roofs
+  of the street lots, wall rows and boundaries, and the props' up faces all call it. `snow_hold` (a
+  face's share by its slope), `snow_cover_of` (whole, none, or long soft streaks down a steep run,
+  never a veil), `snow_gap` (a few short soft gaps along the ridge: the only bare roof),
+  `snow_paint` (the blanket's broad washes, swells and hollows and the dabs that move the light's
+  turn, now shared), `snow_roll` (for a layer with no mesh: the shading normal rolls over the eave
+  in a lip, a 0.2 m front in the blue shade under a lit roll, a lit heap at the ridge, a slow
+  drift), `snow_frame` (a face's metres along the eave, up the slope and to the eave and the ridge,
+  from h's screen-space rate against height, so a lip is the same width on any roof),
+  `snow_marks`, `snow_warm`, `snow_sky_shade`. `snow_cover` (the cow-spot patches),
+  `roof_snow_body` and the props' scalloped cap are gone; `p_n2` and `p_wash` moved to
+  `painter_noise.gdshaderinc`.
+- **Calmer blanket.** The blanket's verge stretches, eave strokes, flecks, `thin` veil and dry
+  grain are gone; only the shared ridge gaps show the roof's colour.
+- **Light on snow.** The A3b and prop shaders turn the light over a soft step (0.06) pushed by the
+  layer's dabs, as the blanket does, and on A3b snow a point is in cast shadow only under 0.3 of the
+  light (the hand-drawn roofs' threshold): a grazing sun's partial self-shadow drew a diagonal hatch
+  of ticks across the street roofs.
+- **Fences.** The wall layers' `Wood` part (street lots' planks, yard fences, window frames,
+  bridge decks) is `lot_wood`, role `LOT_WOOD_ROLE`: the props' honey
+  (`PainterVillage.prop_wood_middle` of the timber) at `LOT_WOOD_CHROMA` 0.85 of its chroma
+  (`PainterBuildings.lot_wood_middle`), so a fence matches the barrels and a plank house is honey,
+  not orange.
+- **Lantern halo** (`painter_glow.gdshader`): the wash reaches 0.84 of the quad (`reach`), alphas
+  0.15, 0.34, 0.88 (were 0.22, 0.45, 0.95), energy 1.12 (was 1.25).
+- **Cost.** No texture reads; on winter roofs the A3b layer evaluates about 34 hashes (the
+  blanket's paint) where `roof_snow_body` took about 24; the props' cap adds the layer's 2D noises
+  in winter only. Not measured on the lane (no new texture fetch).
+- **Not done:** a roof with no blanket mesh (street lots, round roofs) has its body only in
+  shading, not geometry: no overhanging lip or verge roll, so it still reads flatter than the
+  hand-drawn houses at home zoom; A3b knows no verge distance; steep spires (the wizard tower)
+  hold no snow; a few tiny dark specks where a ridge gap meets a far roof's ridge.
+- Tests: `test_painter_buildings.gd` (every roof and prop shader includes the layer, no old
+  coverage left), `test_painter_manner.gd` (no veil, grain or bare strokes), `test_painter_coverage.gd`
+  (`Wood` is `lot_wood`, its middle the props' honey at 0.85 chroma in three moods).
+
 ## Verification
 
 - Unit: `test_painter_sheet.gd` (lint, resolver, continuity), `test_render_style.gd` (table,

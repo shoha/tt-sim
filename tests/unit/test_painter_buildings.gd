@@ -94,19 +94,30 @@ func test_painting_swaps_the_parts_and_release_restores_them_exactly() -> void:
 	assert_false(buildings.is_active())
 
 
-func test_a_roof_without_a_blanket_mesh_lies_under_snow_with_a_body() -> void:
-	# The street lots' and walls' roofs (no manner records) draw the A3b fallback: its winter snow is
-	# roof_snow_body (a lit top, an edge that falls into shade, a lip and a shadow), not the old
-	# patches of snow_cover alone (card painter-village-polish).
+func test_every_roof_and_prop_shares_one_snow_layer() -> void:
+	# One snow implementation (card painter-roof-snow, owner: "why don't these share an
+	# implementation for snow coverage?"): the hand-drawn houses' blanket and their roofs with no
+	# record, the street lots' A3b roofs and the props all paint painter_snow.gdshaderinc's layer;
+	# none keeps a coverage of its own (snow_cover's patches, roof_snow_body, the scalloped cap).
+	var include := "res://painter/shaders/painter_snow.gdshaderinc"
+	var snow := FileAccess.get_file_as_string(include)
+	for fn in ["float snow_hold(", "vec4 snow_paint(", "vec3 snow_roll(", "vec4 snow_frame("]:
+		assert_string_contains(snow, fn)
+	assert_false(snow.contains("texture("), "the layer reads no texture")
 	var common := FileAccess.get_file_as_string(
 		"res://painter/shaders/painter_structure_common.gdshaderinc"
 	)
-	assert_string_contains(common, "vec3 roof_snow_body(float snow")
-	var shader := load(PainterBuildings.SHADER) as Shader
-	assert_string_contains(shader.code, "roof_snow_body(snow, wp, up, h)")
-	assert_string_contains(shader.code, "shade_n", "the snow swells: its shading normal is tilted")
-	var manner := FileAccess.get_file_as_string(PainterMannerHost.SHADER)
-	assert_false(manner.contains("vec3 roof_snow_body"), "the hand-drawn shader keeps its own blanket")
+	assert_false(common.contains("float snow_cover("), "the old patches are gone")
+	assert_false(common.contains("vec3 roof_snow_body("), "the old A3b body is gone")
+	var paths := [PainterBuildings.SHADER, PainterMannerHost.SHADER, PainterVillage.PROP_SHADER]
+	for path: String in paths:
+		var code := FileAccess.get_file_as_string(path)
+		assert_string_contains(code, '#include "%s"' % include, path)
+		assert_string_contains(code, "snow_paint(", path)
+		assert_false(code.contains("smoothstep(0.46, 0.52, cap)"), "%s: no scalloped cap" % path)
+	var a3b := FileAccess.get_file_as_string(PainterBuildings.SHADER)
+	assert_string_contains(a3b, "snow_roll(", "a roof without a blanket mesh rolls its normal")
+	assert_string_contains(a3b, "shade_n", "the layer's shape is in its shading normal")
 
 
 func test_a_new_elevation_retones_the_same_materials() -> void:

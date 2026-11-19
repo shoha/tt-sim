@@ -1,7 +1,7 @@
 /*
  * What the two painted structure shaders share (painter_structure.gdshader, the A3b look, and
  * painter_structure_manner.gdshader, the hand-drawn manner): which of a material's four sheet
- * ramps a vertex takes from its recipe paint, and where a roof lies under snow.
+ * ramps a vertex takes from its recipe paint. Their roof snow is painter_snow.gdshaderinc's.
  * Needs painter_noise.gdshaderinc included first.
  */
 
@@ -66,47 +66,5 @@ int tone_of(int pick, vec3 c) {
 	return (pick > 0 && pick < 6) ? roof_tone(c, pick == 2) : 0;
 }
 
-// How much of a roof point lies under snow: `snow` the sheet's share (0 none), `wp` the world
-// point, `up` the normal's Y, `h` 0 at the eave to 1 at the ridge. Broad soft drifts, thicker
-// toward the ridge, none on a steep run or under the eave.
-float snow_cover(float snow, vec3 wp, float up, float h) {
-	if (snow <= 0.0) {
-		return 0.0;
-	}
-	float sn = p_noise(wp * 0.45 + 71.0) * 0.6 + p_noise(wp * 1.9 + 13.0) * 0.15 + h * 0.3;
-	float edge = 1.0 - snow * 1.05;
-	return smoothstep(edge - 0.03, edge + 0.03, sn) * smoothstep(0.3, 0.5, up)
-		* smoothstep(0.02, 0.12, h);
-}
-
-// Snow with a body on a roof that has no blanket mesh (the A3b look: street lots, wall rows,
-// (named roof_snow_body: the hand-drawn shader has a uniform snow_body)
-// boundaries; card painter-village-polish). x: how much of the point lies under snow (0 none to 1),
-// y: the snow's own edge band, on the snow side (a layer rounds off and falls into its shade), z:
-// the band on the bare side (the layer's thickness throws a shadow on the roof) and, with the
-// lip, the eave's underside. The share `snow` (sheet roof-snow, 0.45 in winter) is how deep it
-// lies: at winter's it covers most of a slope in broad brush-edged masses, a thick continuous lip
-// along the eave, ragged bare stretches above the eave and a heaped ridge; `wp` the world point,
-// `up` the normal's Y, `h` 0 at the eave to 1 at the ridge. A few bold shapes from two noises
-// (about a metre across and a third of that): no per-pixel grain.
-vec3 roof_snow_body(float snow, vec3 wp, float up, float h) {
-	if (snow <= 0.0) {
-		return vec3(0.0);
-	}
-	float depth = clamp(snow * 2.0, 0.0, 1.0);
-	float slope = smoothstep(0.3, 0.5, up);
-	float n = p_noise(wp * 0.8 + 71.0) * 0.75 + p_noise(wp * 2.7 + 13.0) * 0.25;
-	float eave_stretch = 1.0 - smoothstep(0.0, 0.32, h);
-	// The field is positive where snow lies; bare stretches open above the eave and thin toward the
-	// ridge's opposite, as the blanket's tongues do.
-	float field = n + h * 0.45 - (0.55 - depth * 0.52 + eave_stretch * 0.22 * depth);
-	float cover = smoothstep(-0.02, 0.03, field);
-	float lip = 1.0 - smoothstep(0.03, 0.06, h);
-	float ridge = smoothstep(0.9, 0.97, h);
-	cover = max(cover, max(lip * 0.9, ridge) * depth) * slope;
-	float inner = cover * (1.0 - smoothstep(0.02, 0.16, field)) * (1.0 - max(lip, ridge));
-	float outer = (1.0 - cover) * smoothstep(-0.16, -0.03, field) * slope;
-	// The lip's underside: the first stretch of the eave is the layer's shaded face.
-	inner += cover * (1.0 - smoothstep(0.0, 0.025, h)) * 0.8;
-	return vec3(cover, clamp(inner, 0.0, 1.0), outer);
-}
+// (Where a roof lies under snow is painter_snow.gdshaderinc's, shared with the props: card
+// painter-roof-snow 2026-11-18 replaced snow_cover's patches and roof_snow_body here.)
