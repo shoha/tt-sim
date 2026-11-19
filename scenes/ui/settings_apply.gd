@@ -43,9 +43,7 @@ static func preview(menu: SettingsMenu) -> void:
 	SettingsSeeThrough.apply(menu, game_map)
 	# Global renderer settings: no map is needed, so they apply from the title screen too. Shadow
 	# quality is scoped to directional shadows, as DebugRenderToggles' "Hard sun shadows" tested.
-	RenderingServer.directional_soft_shadow_filter_set_quality(
-		menu.shadow_quality_option.get_selected_id()
-	)
+	SunShadowQuality.set_quality(menu.shadow_quality_option.get_selected_id())
 	var skip_low_detail := menu.water_quality_option.get_selected_id() == SettingsMenu.WaterQuality.LOW
 	RenderingServer.global_shader_parameter_set("water_quality_skip_fine_detail", skip_low_detail)
 	RenderingServer.global_shader_parameter_set("water_quality_skip_refraction", skip_low_detail)

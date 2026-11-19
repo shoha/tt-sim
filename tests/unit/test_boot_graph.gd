@@ -22,7 +22,9 @@ extends GutTest
 ## LevelData and the Settings graphics helper name; the rest of painter/ loads on first use.
 ## 346 with SettingsTokenPins (painter-look-ghost2): the Settings row's helper, as the other
 ## graphics rows have; TokenMarkers and the pin code load by path.
-const LIMIT_SCRIPTS := 346
+## 347 with SunShadowQuality (painter-errors-fix): the shadow tier's 45-line setter, which Settings
+## names at start-up; it names nothing.
+const LIMIT_SCRIPTS := 347
 
 var _classes: Dictionary = {}
 var _strings := RegEx.create_from_string(

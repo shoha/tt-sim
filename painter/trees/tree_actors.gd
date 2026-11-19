@@ -74,6 +74,15 @@ static func drop_all(host: PainterTrees, actors: Array) -> void:
 		host._rebuild(dirty)
 
 
+## Shows the stroke levels of `nodes` (a cell's or an actor's five, see PainterTrees._make_nodes)
+## that `lod` draws. A cell whose every tree an event holds keeps its entry with no nodes (take
+## rebuilds it empty until drop_all), so a zoom change mid-event finds fewer than five.
+static func show_levels(nodes: Array, lod: float) -> void:
+	for k in range(2, mini(nodes.size(), 5)):
+		if is_instance_valid(nodes[k]):
+			(nodes[k] as Node3D).visible = PainterTrees.level_shown(lod, k - 2)
+
+
 ## The host's burn material set: a copy of each of its five with the burn variant of the shader.
 static func make_burn_materials(host: PainterTrees) -> void:
 	for k in host._materials.size():

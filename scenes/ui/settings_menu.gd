@@ -233,7 +233,7 @@ static func apply_startup_graphics_settings() -> void:
 		DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED
 	)
 
-	RenderingServer.directional_soft_shadow_filter_set_quality(saved_shadow_quality(config))
+	SunShadowQuality.set_quality(saved_shadow_quality(config))
 	RenderScale.current = RenderScale.stored(config)
 	SettingsGpuOptions.apply_startup(config)
 

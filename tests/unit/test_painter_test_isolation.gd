@@ -31,6 +31,7 @@ func test_classic_restores_every_item_it_names() -> void:
 	PainterMannerHost.hand = false
 	PainterMannerBlanket.step_s = 9.0
 	PainterTreeBush.clump_roots = 99
+	SunShadowQuality.set_quality(RenderingServer.SHADOW_QUALITY_HARD)
 	var leaked := PainterStateReset.dirty()
 	for item in [
 		"water material",
@@ -42,6 +43,7 @@ func test_classic_restores_every_item_it_names() -> void:
 		"RenderStyle.choice",
 		"FoliageLight.last_sun",
 		"FoliageDensityController.fraction",
+		"SunShadowQuality",
 		"painter A/B flags"
 	]:
 		assert_has(leaked, item, "dirty() names %s" % item)

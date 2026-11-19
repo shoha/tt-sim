@@ -903,12 +903,16 @@ compiles none.
   building prints it once, with the backtrace `PainterWarmup._work` (the line of
   `RenderingServer.mesh_create_from_surfaces`). It reproduced in the first full job that
   played three saved maps in a row (once, before the second play; batch 2's job with the same
-  transitions printed none), so it is a race. The id is the engine's own: the
-  rendering device waits on a pipeline-compile task of the WorkerThreadPool that another thread
-  (the map load's draws, or another warm-up worker making the same pipeline) already finished and
-  released; no script in `painter/` holds or waits on a task id (the warm-up uses `Thread`, the
-  workers share a mutex-guarded index). The frames after it were normal. Not guarded in script (a guard would serialise the workers, the cost the
-  worker count exists to avoid); kept here so a repeat is not read as a regression.
+  transitions printed none), so it is a race. Found and fixed (painter-errors-fix, 2026-11-19, from
+  the 4.7.2-stable sources): `RenderingServer.directional_soft_shadow_filter_set_quality` clears
+  every 3D shader's pipelines even for the tier already set (`_update_shader_quality_settings`,
+  `PipelineHashMapRD::clear_pipelines`), and `DebugRenderToggles.refresh` re-applied the saved tier
+  at every map load, while the warm-up's workers built that world's pipelines. `clear_pipelines`
+  waits on a shader's pending compile tasks without taking their ids out of its table, so a worker's
+  `wait_for_pipeline` then waits on a released task: the error at `_work`, or the other way round at
+  `debug_render_toggles.gd:272` (both seen). The clear also threw away the pipelines the warm-up had
+  just made. Every caller now goes through `SunShadowQuality.set_quality`, which skips the tier in
+  force (`test_painter_warmup` fails on a direct call). A real tier change still clears them all.
 - **An intermittent access violation in the NVIDIA shader compiler** (`nvgpucomp64.dll`, driver
   32.0.16.2124, exit 0xC0000005) on a first launch: 2 crashes in 51 Painted cold runs of an exported
   build on the shared driver cache, 0 in 38 Classic, 0 in 66 runs with an empty or seeded private

@@ -277,7 +277,7 @@ class Rig:
 		var q := int(cfg.get("q", _orig.q))
 		if q != _q:
 			_q = q
-			RenderingServer.directional_soft_shadow_filter_set_quality(q)
+			SunShadowQuality.set_quality(q)
 		var atlas := int(cfg.get("atlas", _orig.atlas))
 		if atlas != _atlas:
 			_atlas = atlas

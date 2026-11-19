@@ -558,3 +558,45 @@ func test_stroke_levels_follow_the_camera_size() -> void:
 	assert_false(PainterTrees.level_shown(1.0, 0))
 	assert_true(PainterTrees.level_shown(0.5, 0) and PainterTrees.level_shown(0.5, 1), "a blend")
 	assert_true(PainterTrees.level_shown(-3.0, 0), "far: level 0 only")
+
+
+## painter-errors-fix: an event that takes every tree of a cell leaves the cell's entry with no
+## nodes until it lets them go; a zoom change then (a new stroke level) must still reach the other
+## cells and the event's own trees. It indexed the empty cell's nodes: an out-of-bounds error at
+## every zoom change during a fire, which left the rest showing the old level.
+func test_a_zoom_change_mid_event_reaches_every_cell_and_held_tree() -> void:
+	var scatter := _scatter()
+	scatter.set_cells({Vector2i(0, 0): {OAK: _rows([Vector2(1, 1), Vector2(8, 1)])}})
+	var surfaces := PainterSurfaces.new()
+	surfaces.paint(_map, STATE)
+	var trees := _painted(surfaces)
+	var parent := Node3D.new()
+	_map.add_child(parent)
+	var actor := trees.take(Vector3(1, 0, 1), parent, false)
+	assert_false(actor.is_empty(), "the tree is taken")
+	var drawn: Array = [actor["nodes"]]
+	var emptied := 0
+	for cell: Vector2i in trees.cells:
+		var nodes: Array = trees.cells[cell]["nodes"]
+		if nodes.is_empty():
+			emptied += 1
+		else:
+			drawn.append(nodes)
+	assert_eq(emptied, 1, "its cell keeps its entry with no nodes while the event holds the tree")
+	assert_eq(drawn.size(), 2, "the held tree and the other cell")
+	var camera := Camera3D.new()
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = PainterTrees.HOME_SIZE * 2.0
+	_map.add_child(camera)
+	camera.make_current()
+	trees.call("_on_frame")
+	var lod := PainterTrees.lod_for(camera.size)
+	for nodes: Array in drawn:
+		for k in range(2, 5):
+			assert_eq(
+				(nodes[k] as Node3D).visible,
+				PainterTrees.level_shown(lod, k - 2),
+				"stroke level %d at the new zoom" % (k - 2)
+			)
+	trees.drop_all([actor])
+	surfaces.release()

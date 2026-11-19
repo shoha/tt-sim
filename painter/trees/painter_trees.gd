@@ -81,7 +81,8 @@ const BUSH_SLOT_PER_INST := 10
 ## key (PainterTreeSpecies.key_of) -> {"row", "d", "pos", "cell", "species", "bush"} for every tree
 ## and bush drawn.
 var trees: Dictionary = {}
-## cell -> {"keys": {key: true}, "nodes": [5 MultiMeshInstance3D, then the masses' shadow caster]}.
+## cell -> {"keys": {key: true}, "nodes": [5 MultiMeshInstance3D, then the masses' shadow caster]};
+## "nodes" is empty while an event holds all its trees (PainterTreeActors.show_levels).
 var cells: Dictionary = {}
 ## The bushes' cells (BUSH_CELL_M), as `cells`.
 var bush_cells: Dictionary = {}
@@ -989,11 +990,6 @@ func _on_frame() -> void:
 		fast_material.set_shader_parameter(&"lod_level", lod)
 	for store: Dictionary in [cells, bush_cells]:
 		for cell: Vector2i in store:
-			var nodes: Array = store[cell]["nodes"]
-			for k in range(2, 5):
-				(nodes[k] as Node3D).visible = level_shown(lod, k - 2)
+			PainterTreeActors.show_levels(store[cell]["nodes"], lod)
 	for key: Vector3i in _held:
-		var nodes: Array = _held[key]["nodes"]
-		for k in range(2, 5):
-			if is_instance_valid(nodes[k]):
-				(nodes[k] as Node3D).visible = level_shown(lod, k - 2)
+		PainterTreeActors.show_levels(_held[key]["nodes"], lod)

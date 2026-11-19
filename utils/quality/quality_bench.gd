@@ -331,7 +331,7 @@ func _assemble() -> void:
 	var config := ConfigFile.new()
 	config.load(Paths.SETTINGS_PATH)
 	_saved_shadow_quality = int(SettingsMenu.saved_shadow_quality(config))
-	RenderingServer.directional_soft_shadow_filter_set_quality(SettingsMenu.DEFAULT_SHADOW_QUALITY)
+	SunShadowQuality.set_quality(SettingsMenu.DEFAULT_SHADOW_QUALITY)
 	var camera := Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = CAMERA_SIZE
@@ -414,7 +414,7 @@ func _restore() -> void:
 		LoadPacing.uncover(self)
 		_covered = false
 	if _saved_shadow_quality >= 0:
-		RenderingServer.directional_soft_shadow_filter_set_quality(_saved_shadow_quality)
+		SunShadowQuality.set_quality(_saved_shadow_quality)
 		_saved_shadow_quality = -1
 	for rid: RID in _built.get("rids", []):
 		if rid.is_valid():
