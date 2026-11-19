@@ -1823,14 +1823,18 @@ painter_final25_coverage/matrix.md`; the current, code-read class-by-class audit
   (`compare/painter_final63_fall_spike/`, approach 1 made production). Each fall's frame
   (`WaterFallFrames`, `docs/systems/waterfalls.md` "Fall frames") rides in CUSTOM0/CUSTOM1 of the
   water surface and the curtain, read through flat varyings, and
-  `painter/shaders/painter_fall_white.gdshaderinc` draws one white from it over the brink (soft
-  upstream edge, about 0.25 m), down the curtain and over the foot (two-valued, churned, its reach
-  growing with the drop), plus a pale turquoise halo past the foot on the pool. The curtain's own lip
-  roll and the painted foam ring (its shader branch and constants) are gone; the ring's vertices
-  stay in the mesh for Classic and collapse in the painter shader. Continuity probe, 27 captures per
-  look (9 cases x 3 time samples, half size): foot dL 24.6 -> 6.2, foot bands 1.41 -> 0.26; the lip
-  numbers are in the notes. Left: the classes this does not touch (C1, C2 pinch, C5 pale walls, C6,
-  C7 head slab; stages 2 to 4 of the plan).
+  `painter/shaders/painter_fall_white.gdshaderinc` draws one white from it: over the brink a
+  gradient (the river whitens over its last 0.7 m to full white at the lip, the curtain's streaks
+  return by 0.8 m down), at the foot a two-valued churned white whose reach grows with the drop,
+  and past it a halo of the same foam fading to the pool's wash over about a metre. The curtain's
+  own lip roll and the painted foam ring (its shader branch and constants) are gone; the ring's
+  vertices stay in the mesh for Classic and collapse in the painter shader. Round 2 had a white band
+  starting 0.55 m up the river and a separate pale turquoise halo shape: the band raised the lip's
+  step (dL 9.9 -> 12.3) and the halo read as a stripe with a dark sliver under the white; round 3
+  made both gradients. Continuity probe, 27 captures per look (9 cases x 3 time samples, half size,
+  round 3): lip dL 6.8 -> 5.8, foot dL 25.4 -> 3.4, foot bands 1.11 -> 0.11. The fades read soft,
+  a little airbrushed, against the painted wash. Left: the classes this does not touch (C1, C2
+  pinch, C5 pale walls, C6, C7 head slab; stages 2 to 4 of the plan).
 - **Known gaps** are listed in the matrix with their effort: round and profile roofs (procgen
   records). The settlement furnishings and the field plants were filled by painter-village-parity
   (next section).

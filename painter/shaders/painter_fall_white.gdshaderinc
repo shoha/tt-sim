@@ -11,12 +11,14 @@
 // fallen; 0 at the lip on both sides and x_pool + drop where the curtain's middle meets the pool.
 // Include after painter_noise.gdshaderinc (be_n2).
 
-// The brink: white from FW_BRINK_UP_M upstream to FW_BRINK_DOWN_M over the curtain (soft edges),
-// wobbled across by FW_WOBBLE, out to FW_BRINK_SIDE half-widths.
-const float FW_BRINK_UP_M = 0.55;
-const float FW_BRINK_UP_SOFT_M = 0.08;
-const float FW_BRINK_DOWN_M = 0.2;
-const float FW_BRINK_DOWN_SOFT_M = 0.45;
+// The brink: a gradient, not a shape. The river whitens over its last FW_BRINK_UP_M to full white
+// at the lip, holds it FW_BRINK_DOWN_M down the curtain and gives it back to the curtain's own
+// streaks by FW_BRINK_DOWN_END_M, wobbled across by FW_WOBBLE, out to FW_BRINK_SIDE half-widths.
+// Round 2's two-valued band starting 0.55 m upstream read as a white bar laid across the river and
+// drew the lip's largest colour step (dL 12 against main's 7 to 10, painter-fall-frame-foam).
+const float FW_BRINK_UP_M = 0.7;
+const float FW_BRINK_DOWN_M = 0.1;
+const float FW_BRINK_DOWN_END_M = 0.8;
 const float FW_BRINK_SIDE = 0.85;
 const float FW_BRINK_SIDE_SOFT = 1.05;
 const float FW_WOBBLE = 0.18;
@@ -37,22 +39,31 @@ const float FW_FOOT_SIDE_SOFT = 1.45;
 const float FW_EDGE_LOW = 0.42;
 const float FW_EDGE_HIGH = 0.58;
 const float FW_STEP_HZ = 2.0;
-// The brink's edge is softer: the river whitens over about 0.25 m as it speeds up to the lip (a
-// crisp edge there read as a white bar laid across the river, and drew the largest colour step of
-// the lip in the continuity probe, painter-fall-frame-foam round 2).
-const float FW_BRINK_EDGE_LOW = 0.25;
-const float FW_BRINK_EDGE_HIGH = 0.75;
-// The halo: the plunge's aerated water past the foot white on the pool, one more bold shape
-// FW_HALO_REACH times the foot's reach and out to FW_HALO_SIDE half-widths, so the foam steps down
-// to the wash through a pale tone instead of jumping from white to the deep band.
-const float FW_HALO_REACH = 1.9;
-const float FW_HALO_SIDE = 1.2;
-const float FW_HALO_SIDE_SOFT = 1.7;
+// The halo: the plunge's aerated water past the foot white on the pool, a gradient of the same foam
+// out of the white's own edge (the same churned distance, full where the white ends) to the pool's
+// wash over FW_HALO_LEN_M, out to FW_HALO_SIDE half-widths. Round 2's halo was a second
+// two-valued shape in a fixed pale turquoise with its own churn: it read as a stripe with a wavy
+// top under the white, and where its churn dropped out the deep pool showed as a dark sliver right
+// under the white. The gradient ends inside the frame's window (WaterFallFrames.WINDOW_DOWN_M,
+// WINDOW_SIDE), so no triangle cuts it off.
+const float FW_HALO_START = 0.4;
+const float FW_HALO_LEN_M = 1.0;
+const float FW_HALO_SIDE = 1.1;
+const float FW_HALO_SIDE_SOFT = 1.5;
 
 
 // The foot's reach past the pool point for a fall `drop` high (metres of arc).
 float fall_foot_reach(float drop) {
 	return clamp(FW_REACH_BASE_M + FW_REACH_PER_DROP * drop, FW_REACH_MIN_M, FW_REACH_MAX_M);
+}
+
+
+// How far past the foot's pool point pseudo-arc `a` lies, in reaches of the foot white, churned
+// across and stepped in time (`t_step`): the white ends at about 0.5, the halo starts there.
+float fall_foot_distance(float a, float a_pool, float drop, float across, float t_step) {
+	float reach = fall_foot_reach(drop);
+	float churn = be_n2(vec2(across * 1.6 + 4.1, (a - a_pool) * 2.2 - t_step * 0.6));
+	return (a - a_pool) / reach + FW_CHURN * (churn - 0.5);
 }
 
 
@@ -63,18 +74,25 @@ float fall_white_arc(float a, float a_pool, float drop, float across, float half
 	float t_step = floor(TIME * FW_STEP_HZ);
 	float n = be_n2(vec2(across * 2.3 + 1.7, t_step * 0.37));
 	float wob = FW_WOBBLE * (n - 0.5);
-	float brink = smoothstep(-FW_BRINK_UP_M, -FW_BRINK_UP_SOFT_M, a + wob)
-		* (1.0 - smoothstep(FW_BRINK_DOWN_M, FW_BRINK_DOWN_SOFT_M, a + wob));
+	float brink = smoothstep(-FW_BRINK_UP_M, 0.0, a + wob)
+		* (1.0 - smoothstep(FW_BRINK_DOWN_M, FW_BRINK_DOWN_END_M, a + wob));
 	brink *= 1.0 - smoothstep(FW_BRINK_SIDE, FW_BRINK_SIDE_SOFT, q);
-	float reach = fall_foot_reach(drop);
-	float churn = be_n2(vec2(across * 1.6 + 4.1, (a - a_pool) * 2.2 - t_step * 0.6));
-	float foot = 1.0 - smoothstep(0.0, reach, a - a_pool + FW_CHURN * (churn - 0.5) * reach);
+	float foot = 1.0 - smoothstep(0.0, 1.0, fall_foot_distance(a, a_pool, drop, across, t_step));
 	foot *= smoothstep(a_pool - FW_FOOT_BEFORE_M, a_pool - FW_FOOT_BEFORE_SOFT_M, a);
 	foot *= 1.0 - smoothstep(FW_FOOT_SIDE, FW_FOOT_SIDE_SOFT, q);
-	return max(
-		smoothstep(FW_BRINK_EDGE_LOW, FW_BRINK_EDGE_HIGH, brink),
-		smoothstep(FW_EDGE_LOW, FW_EDGE_HIGH, foot)
-	);
+	return max(brink, smoothstep(FW_EDGE_LOW, FW_EDGE_HIGH, foot));
+}
+
+
+// The halo at pseudo-arc `a` on the pool (arguments as fall_white_arc): 1 where the foot white
+// ends, falling smoothly to 0 over FW_HALO_LEN_M; the caller takes the max with the white.
+float fall_halo_arc(float a, float a_pool, float drop, float across, float half_w) {
+	float q = abs(across) / max(half_w, 0.05);
+	float reach = fall_foot_reach(drop);
+	float d = fall_foot_distance(a, a_pool, drop, across, floor(TIME * FW_STEP_HZ));
+	float h = 1.0 - smoothstep(FW_HALO_START, FW_HALO_START + FW_HALO_LEN_M / reach, d);
+	h *= smoothstep(a_pool - FW_FOOT_BEFORE_M, a_pool - FW_FOOT_BEFORE_SOFT_M, a);
+	return h * (1.0 - smoothstep(FW_HALO_SIDE, FW_HALO_SIDE_SOFT, q));
 }
 
 
@@ -92,31 +110,13 @@ float fall_white_water(vec4 f0, vec4 f1, vec2 p) {
 		return 0.0;
 	}
 	vec3 fp = fall_frame_point(f0, f1, p);
-	float a = fp.x < 0.0 ? fp.x : fp.x + f1.w;
-	return fall_white_arc(a, f1.z + f1.w, f1.w, fp.y, fp.z);
-}
-
-
-// The halo of the pool at map point `p` (see FW_HALO_REACH): 0..1, 0 upstream of the lip and with
-// no frame.
-float fall_halo_water(vec4 f0, vec4 f1, vec2 p) {
-	if (dot(f0.zw, f0.zw) < 0.25) {
-		return 0.0;
-	}
-	vec3 fp = fall_frame_point(f0, f1, p);
 	if (fp.x < 0.0) {
-		return 0.0;
+		return fall_white_arc(fp.x, f1.z + f1.w, f1.w, fp.y, fp.z);
 	}
 	float a = fp.x + f1.w;
 	float a_pool = f1.z + f1.w;
-	float q = abs(fp.y) / max(fp.z, 0.05);
-	float t_step = floor(TIME * FW_STEP_HZ);
-	float reach = fall_foot_reach(f1.w) * FW_HALO_REACH;
-	float churn = be_n2(vec2(fp.y * 1.1 + 9.3, (a - a_pool) * 1.4 - t_step * 0.4));
-	float h = 1.0 - smoothstep(0.0, reach, a - a_pool + FW_CHURN * (churn - 0.5) * reach);
-	h *= smoothstep(a_pool - FW_FOOT_BEFORE_M, a_pool - FW_FOOT_BEFORE_SOFT_M, a);
-	h *= 1.0 - smoothstep(FW_HALO_SIDE, FW_HALO_SIDE_SOFT, q);
-	return smoothstep(FW_EDGE_LOW, FW_EDGE_HIGH, h);
+	float white = fall_white_arc(a, a_pool, f1.w, fp.y, fp.z);
+	return max(white, fall_halo_arc(a, a_pool, f1.w, fp.y, fp.z));
 }
 
 

@@ -352,7 +352,9 @@ both ends (card painter-fall-continuity). The white over the brink and at the fo
 (card painter-fall-frame-foam): `painter/shaders/painter_fall_white.gdshaderinc` draws it from
 the fall frame (above) on the river and the pool (`painter_water.gdshader`) and on the curtain
 (`painter_waterfall.gdshader`), keyed to the frame's pseudo-arc, so it runs over both joins
-without a seam; past the foot white a pale turquoise halo steps the pool down to its wash. The
+without a seam: the river whitens over its last 0.7 m to full white at the lip and gives the
+curtain back its streaks by 0.8 m down, and past the foot white the same foam fades to the pool's
+wash over about a metre (no edge of its own). The
 painted look draws no foam ring and no lip roll of the curtain's own (the ring's vertices
 collapse in the painter shader's `vertex()`; Classic still draws the ring, which is why the mesh
 keeps it). Details: [painter.md](painter.md) "Water".

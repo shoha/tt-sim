@@ -419,11 +419,6 @@ void fragment() {
 		a = max(a, lb.x * live * 0.95);
 	}
 	x = mix(x, p_shade, crack * 0.7);
-	// The plunge's aerated water past the foot white: one pale turquoise shape, so the foam steps
-	// down to the wash instead of jumping to the deep band (painter_fall_white.gdshaderinc).
-	float halo = fall_halo_water(fall_a, fall_b, fall_xz) * (1.0 - ice_k);
-	x = mix(x, mix(p_shallow, p_lit, 0.5), halo);
-	a = max(a, halo * 0.9);
 
 	// ---- Whites -----------------------------------------------------------------------------
 	float foam_k = clamp(foam_strength, 0.5, 1.5);
@@ -480,7 +475,8 @@ void fragment() {
 	edge_foam *= edge_band;
 	shore_foam *= edge_band;
 	float foam = clamp(max(max(shore_foam, edge_foam), max(ring_cov, wake_cov)) * foam_k, 0.0, 1.0);
-	// The fall white: the river's share of the roll over the brink, the pool's of the foot foam.
+	// The fall white: the river's share of the brink's gradient, the pool's of the foot foam and its
+	// halo, which fades from the white to this wash (painter_fall_white.gdshaderinc).
 	foam = max(foam, fall_white_water(fall_a, fall_b, fall_xz));
 	foam *= 1.0 - ice_k * 0.85 * (1.0 - open_water);
 	a = max(a, foam * 0.96);
