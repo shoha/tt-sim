@@ -142,19 +142,37 @@ street". The brush's picked street is `WallBrush.selected_id` (`selection_change
 holds a selection takes Escape (`BrushMode.has_selection`). The Events pane (the GM's live brush)
 has no Split button.
 
-Crowded streets are refused (card painter-roof-round4, 2026-11-19; owner on the guild test level:
-"some buildings are colliding"). A street's lots reach about 9.4 m from its line (the 3 m setback plus
-a lot's depth), so two parallel streets drawn closer than about 19 m put houses through houses.
+Crowded streets are nudged clear (card painter-roof-round4 refused them, 2026-11-19, owner on the guild
+test level: "some buildings are colliding"; card painter-roof-round5 nudges them, owner: "Nudge instead
+of refusing"). A street's lots reach about 9 m from its line (the 3 m setback plus a lot's depth), so
+two parallel streets drawn closer than about 17 to 19 m put houses through houses.
 `StreetCrowding.crowded_by(doc, wall)` (`utils/street_crowding.gd`, pure) plans the new street's lots
 and those of every other street whose reach (`WallGeometry.clear_bounds`) meets its own, and returns
 the first street whose lots overlap the new one's by more than `OVERLAP_M` (0.1 m; backyards that
-only touch pass), separating axes on each lot's four corners. `WallEditor.plan` refuses such a street
-(`last_refusal` `REFUSED_CROWDED`) while it is drawn, so the readout and the release toast say
-`WallBrush.CROWDED`: "Too close to another street's houses: draw it further away." Nothing is nudged: a
-street is a line the author drew. Two streets whose lines cross are exempt (a crossroads is drawn on
-purpose; its corner lots still meet). Only streets are asked: a street and a structure, a fence or a
-stone wall are not checked against each other. Tested in `test_street_crowding.gd`; the toast frame
-is `painter_final68_roof_round4/after/ov_toast.png` in the prototypes' compare folder.
+only touch pass), separating axes on each lot's four corners. Two streets whose lines cross are exempt
+(a crossroads is drawn on purpose; its corner lots still meet).
+
+`StreetCrowding.nudge(doc, wall, extent)` moves a crowded new street as a whole, perpendicular to the
+crowding street's line and away from it (`away_from`, the side the new street's middle is on), by the
+least distance that clears every overlapping lot pair (`separation`, the least shift along the
+direction that parts two lots), repeated up to `NUDGE_TRIES` times when the first move crowds another
+row. It gives up, and `WallEditor.plan` refuses, when the move would pass `MAX_NUDGE_M` (8 m: a street
+drawn onto another is refused, not carried off) or meet a third street (`BLOCKED_STREET`, a new
+crossing counts), leave the map (`BLOCKED_EDGE`, `wall_problem`) or lose lots to water
+(`BLOCKED_WATER`, fewer standing lots after the move on a map with water). The refusal says why:
+`WallBrush.CROWDED` "Too close to another street's houses to move it: draw it further away.",
+`CROWDED_EDGE` "...and the map ends there: draw it elsewhere.", `CROWDED_WATER` "...and water is in
+the way: draw it elsewhere." A nudged street is laid where it was moved, its style re-read at its new
+middle, and while it is drawn the readout adds `WallBrush.NUDGED` "Moved a little away from the next
+street." (the gentle notice of a structure moved clear, StructureNote). Only a new street is nudged:
+extending a laid street that crowds another is still refused (moving it would move the laid part).
+The move is deterministic (pure maths on the document). Only streets are asked: a street and a
+structure, a fence or a stone wall are not checked against each other. A nudged street lands with its
+lots just clear, so the two rows' houses stand back to back and their yard fences (which reach past
+the row lots) can cross. Tested in `test_street_crowding.gd` (distance and direction, the other side,
+determinism, a crossing, a third street, the map's edge, a street drawn onto another); frames in the
+prototypes' compare folder, `painter_final71_roof_round5/after/ov_nudge_drag.png`, `ov_nudge_top.png`
+and `ov_refused.png`.
 
 Not yet: corner plots, and a yard that is not fence or low wall (gardens, trees), plus finer
 control than the species.

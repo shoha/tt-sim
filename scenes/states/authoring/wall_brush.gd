@@ -50,7 +50,11 @@ const FULL := "The map holds as many walls as it can. Remove one to make room."
 const LONG := "That wall is too long. End it and start another."
 const POINTS := "That wall has as many corners as it can. End it and start another."
 const INVALID := "A wall cannot stand there."
-const CROWDED := "Too close to another street's houses: draw it further away."
+const CROWDED := "Too close to another street's houses to move it: draw it further away."
+const CROWDED_EDGE := "Too close to another street, and the map ends there: draw it elsewhere."
+const CROWDED_WATER := "Too close to another street, and water is in the way: draw it elsewhere."
+## The readout's note when a new street was nudged clear of another's houses (WallEditor.plan).
+const NUDGED := "Moved a little away from the next street."
 const NOTHING := "There is no wall here to remove."
 const SPLIT_NOTHING := "No building of the library stands in for this street."
 const SPLIT_FULL := "The map cannot hold that many more buildings."
@@ -83,6 +87,9 @@ var to: Vector3 = Vector3.INF
 ## The wall the side makes now (map frame; null when refused), and why not.
 var preview: Wall = null
 var refusal: StringName = &""
+## How far the plan nudged the street drawn clear of another's houses (map metres), or 0: the
+## preview stands there and the readout says it moved (NUDGED).
+var nudged_m: float = 0.0
 ## The wall under the pointer while Ctrl is held (its id), or -1.
 var hover_id: int = -1
 ## Microseconds of the last plan, for measurement.
@@ -111,6 +118,10 @@ static func refusal_text(reason: StringName) -> String:
 			return INVALID
 		WallEditor.REFUSED_CROWDED:
 			return CROWDED
+		WallEditor.REFUSED_CROWDED_EDGE:
+			return CROWDED_EDGE
+		WallEditor.REFUSED_CROWDED_WATER:
+			return CROWDED_WATER
 	return ""
 
 
@@ -227,6 +238,7 @@ func _plan(editor: AuthoringEditor) -> void:
 		{"seed": row_seed, "side": row_side, "preset": _variation_preset()}
 	)
 	refusal = editor.walls.last_refusal
+	nudged_m = editor.walls.last_nudge_m if preview != null else 0.0
 	last_plan_usec = Time.get_ticks_usec() - started
 	_planned_to = to
 
@@ -277,6 +289,7 @@ func reset() -> void:
 	drawing = false
 	preview = null
 	refusal = &""
+	nudged_m = 0.0
 	_planned_to = Vector3.INF
 
 
@@ -468,6 +481,8 @@ func draw(
 				"",
 				preview.preset
 			)
+			if nudged_m > 0.0:
+				text += "  " + NUDGED
 		elif ok:
 			text = readout(kind, from.distance_to(to), 0.0, cell_m, per_cell, label)
 		BridgeBrush.draw_pill(
