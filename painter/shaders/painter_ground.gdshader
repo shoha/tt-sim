@@ -50,6 +50,24 @@ uniform float mark_thin = 0.25;
 uniform vec2 mark_px = vec2(0.06, 0.16);
 // The cast shadow step's wiggle (attenuation units) by the brush streak.
 uniform float cut_amp = 0.0;
+// The path surfaces (PainterGroundPaths): per slot two variants of the lit and the shade colour
+// (LINEAR) and a pattern (PainterGroundRoles.PATH_KINDS: 0 dirt, 1 cobble, 2 plates, 3 tiles,
+// 4 gravel, 5 planks); the slot map (R8, the slot index, 255 none) or, with no map, the one slot
+// the map paints (-1: the path role's own tone, the dirt pattern).
+uniform vec3 p_lit[16];
+uniform vec3 p_shd[16];
+uniform int p_kind[8];
+uniform int path_only = -1;
+uniform sampler2D path_map : hint_default_black, filter_nearest, repeat_disable;
+uniform bool path_map_present = false;
+// The cliff stone: the value step of the lit lip at a cliff's top edge (and the dark at its foot),
+// and the strength of the faces' strata bands.
+uniform float cliff_edge = 0.0;
+uniform float cliff_strata = 0.0;
+// A stone's seam: how much darker the gap between cobbles, plates, tiles and boards is.
+const float SEAM_DARK = 0.38;
+// The strata bands' height (m) on a cliff face.
+const float STRATA_H = 0.6;
 // The sun height (sine of its elevation, 20 degrees) under which the turned-from-the-sun step
 // shrinks with it (light()).
 const float TURN_SUN_FULL = 0.34;
@@ -209,10 +227,107 @@ vec2 small_zones(vec2 q) {
 		smoothstep(0.5, 0.72, p_noise(vec3(q.x * 0.12, 4.0, q.y * 0.16) + 60.0)));
 }
 
+// The path slot at map point `q` (PainterGroundPaths): the slot map's, or the map's one slot; -1
+// for none (the path role's own tone).
+int path_slot(vec2 q) {
+	if (!path_map_present) {
+		return path_only;
+	}
+	vec2 size = vec2(textureSize(path_map, 0));
+	int s = int(textureLod(path_map, ((q - layer_grid_origin) / layer_grid_step + 0.5) / size, 0.0).r * 255.0 + 0.5);
+	return s < 8 ? s : -1;
+}
+
+// The pattern of path kind `kind` at map point `q` for a pixel `px` metres wide: x the stone's own
+// variant offset (about -0.5 to 0.5), y the seam (0 on a stone, 1 in the gap between), z the
+// stone's hash (its edge against the grass). One flat colour a stone, as a mark is one: a cobble
+// a rounded dab in courses, a flagstone a plate of a jittered cell grid (the nearest of nine
+// centres; the seam where the second is nearly as near), a tile a square, a pebble a dot, a board
+// a run along x. The courses and grids wander with a slow warp, so no line is ruled. A stone
+// under three pixels fades to the flat block-in (no shimmer), its seam a little sooner.
+vec3 path_pattern(int kind, vec2 q, float px) {
+	vec3 p = vec3(q.x, 0.0, q.y);
+	vec2 warp = (vec2(p_noise(p * 0.45 + 101.0), p_noise(p * 0.45 + 131.0)) - 0.5);
+	float wob = p_noise(p * 7.0 + 17.0) - 0.5;
+	float size = 0.4;
+	vec3 r = vec3(0.0, 0.0, 0.5);
+	if (kind == 1) {
+		vec2 g = q / vec2(0.38, 0.34) + warp * 0.9;
+		float row = floor(g.y);
+		g.x += mod(row, 2.0) * 0.5 + p_hash(vec3(row, 5.0, 3.0)) * 0.3;
+		vec2 c = floor(g);
+		float h = p_hash(vec3(c.x, 21.0, c.y));
+		// A round dab, a little squared (a rectangle read as brick courses).
+		vec2 a = abs(fract(g) - 0.5) / (0.47 - 0.06 * fract(h * 7.1));
+		float d = length(a) * 0.8 + max(a.x, a.y) * 0.2;
+		r = vec3(h - 0.5, smoothstep(0.9, 1.06, d + wob * 0.22), h);
+	} else if (kind == 2) {
+		size = 0.95;
+		vec2 g = q / size + warp * 0.6;
+		vec2 c0 = floor(g);
+		float f1 = 9.0;
+		float f2 = 9.0;
+		vec2 id = c0;
+		for (int dy = -1; dy <= 1; dy++) {
+			for (int dx = -1; dx <= 1; dx++) {
+				vec2 c = c0 + vec2(float(dx), float(dy));
+				vec2 o = vec2(p_hash(vec3(c.x, 41.0, c.y)), p_hash(vec3(c.x, 43.0, c.y)));
+				float d = length(g - c - 0.5 - (o - 0.5) * 0.75);
+				if (d < f1) {
+					f2 = f1;
+					f1 = d;
+					id = c;
+				} else if (d < f2) {
+					f2 = d;
+				}
+			}
+		}
+		float h = p_hash(vec3(id.x, 47.0, id.y));
+		r = vec3(h - 0.5, 1.0 - smoothstep(0.07, 0.15, f2 - f1 + wob * 0.06), h);
+	} else if (kind == 3) {
+		size = 0.7;
+		vec2 g = q / size + warp * 0.25;
+		vec2 c = floor(g);
+		vec2 f = fract(g);
+		float e = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
+		float h = p_hash(vec3(c.x, 51.0, c.y));
+		r = vec3((h - 0.5) * 0.7, 1.0 - smoothstep(0.035, 0.075, e + wob * 0.025), h);
+	} else if (kind == 4) {
+		size = 0.2;
+		vec2 g = q / size + warp * 0.4;
+		vec2 c = floor(g);
+		float h = p_hash(vec3(c.x, 61.0, c.y));
+		vec2 o = vec2(fract(h * 13.1), fract(h * 29.7)) - 0.5;
+		float d = length(fract(g) - 0.5 - o * 0.4);
+		float dot_k = (1.0 - smoothstep(0.2, 0.3, d + wob * 0.1)) * step(0.35, h);
+		r = vec3((fract(h * 7.3) > 0.45 ? 0.55 : -0.5) * dot_k, 0.0, 0.5 + (h - 0.5) * 0.3);
+	} else if (kind == 5) {
+		size = 0.3;
+		float row = floor(q.y / size + warp.y * 0.2);
+		float hr = p_hash(vec3(row, 71.0, 7.0));
+		float len = 1.5 + fract(hr * 9.7) * 1.3;
+		float u = (q.x + hr * 3.0) / len;
+		float col = floor(u);
+		float fy = fract(q.y / size + warp.y * 0.2) * size;
+		float fx = fract(u) * len;
+		float e = min(min(fy, size - fy), min(fx, len - fx) * 0.6);
+		float h = p_hash(vec3(col, 73.0, row));
+		r = vec3(h - 0.5, 1.0 - smoothstep(0.016, 0.032, e + wob * 0.008), h);
+	}
+	float cells = size / max(px, 0.0001);
+	r.x *= smoothstep(1.5, 3.0, cells);
+	r.y *= smoothstep(3.0, 6.0, cells);
+	return r;
+}
+
 // The ground's lit and shade colour at `q`: for a block-in pixel (mk 0, h 0.5: flat shapes with
 // firm wandering edges) or for one mark (mk 1 a stroke, 2 a small drift or litter mark; `h` its
-// own hash, `vo` its offset to a neighbouring tone), asked once at the mark's middle.
-void ground_at(vec2 q, float slope, float h, float mk, float vo, out vec3 lit, out vec3 shd) {
+// own hash, `vo` its offset to a neighbouring tone), asked once at the mark's middle. A path
+// surface with a pattern (path_pattern) is drawn in the block-in only, each stone asked at the
+// pixel; a stone's own hash moves the path's edge, so the edge is made of whole stones. On a
+// cliff face (rock, steep) the tone steps in soft strata bands by the pixel's height `wy`, each
+// band's top a step lighter (a ledge catching the light).
+void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float wy, out vec3 lit, out vec3 shd) {
 	vec3 p = vec3(q.x, 0.0, q.y);
 	float j = (h - 0.5) * min(mk, 1.0);
 	// A slow warp carries the meadow's edge against the forest floor; the path keeps its line.
@@ -220,7 +335,17 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, out vec3 lit, o
 	vec4 zb = zone(q + w);
 	vec4 zp = zone(q + w * 0.15);
 	float meadow = step(0.5, zb.r + (p_noise(p * 0.9 + 5.0) - 0.5) * 0.3 + j * 0.25);
-	float pv = zp.g + (p_noise(p * 1.4 + 33.0) - 0.5) * 0.35 + j * 0.3;
+	int pslot = -1;
+	int kind = 0;
+	vec3 pat = vec3(0.0, 0.0, 0.5);
+	if (zp.g > 0.2) {
+		pslot = path_slot(q);
+		kind = pslot >= 0 ? p_kind[pslot] : 0;
+		if (kind > 0 && mk < 0.5) {
+			pat = path_pattern(kind, q, px);
+		}
+	}
+	float pv = zp.g + (p_noise(p * 1.4 + 33.0) - 0.5) * 0.35 + j * 0.3 + (pat.z - 0.5) * 0.25;
 	int role = meadow > 0.5 ? 0 : 1;
 	if (zone2_present) {
 		vec2 size2 = vec2(textureSize(zone2_map, 0));
@@ -265,12 +390,35 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, out vec3 lit, o
 		pn = floor(pn * 5.0 + 0.5) / 5.0;
 	}
 	float variant = 0.5 + pn * patches + vo;
+	float vstep = 1.0;
 	if (role == 2) {
 		variant = mk > 0.5 ? fract(h * 5.77 + 0.3)
 			: floor(p_noise(p * vec3(0.7, 1.0, 0.7) + 19.0) * 3.0) * 0.5;
+		if (kind > 0) {
+			// A stone takes its own step off the band's slow patches; the seam is a deeper shade.
+			variant = clamp(0.5 + pn * patches * 0.5 + pat.x * 1.4, 0.0, 1.0);
+			vstep = (1.0 + (fract(pat.z * 41.7) - 0.5) * 0.12 * step(0.001, abs(pat.x))) * (1.0 - pat.y * SEAM_DARK);
+		}
 	}
-	lit = role_col(true, role, variant);
-	shd = role_col(false, role, variant);
+	if (role == 3 && cliff_strata > 0.0) {
+		float face = smoothstep(0.3, 0.6, slope) * cliff_strata;
+		float t = wy / STRATA_H + (p_noise(p * 0.5 + 15.0) - 0.5) * 0.9 + (p_noise(p * 2.2 + 25.0) - 0.5) * 0.15;
+		float band = floor(t);
+		float f = fract(t);
+		float bv = mix(p_hash(vec3(band, 81.0, 3.0)), p_hash(vec3(band + 1.0, 81.0, 3.0)), smoothstep(0.85, 1.0, f));
+		variant = mix(variant, bv, face);
+		vstep = mix(1.0, 1.0 + 0.09 * smoothstep(0.55, 0.85, f) - 0.07 * (1.0 - smoothstep(0.0, 0.18, f)), face);
+	}
+	if (role == 2 && pslot >= 0) {
+		float v = clamp(variant, 0.0, 1.0);
+		lit = mix(p_lit[pslot * 2], p_lit[pslot * 2 + 1], v);
+		shd = mix(p_shd[pslot * 2], p_shd[pslot * 2 + 1], v);
+	} else {
+		lit = role_col(true, role, variant);
+		shd = role_col(false, role, variant);
+	}
+	lit *= vstep;
+	shd *= vstep;
 	lit = mix(lit, lit * vec3(1.45, 0.78, 0.4), scorch_rim * 0.65);
 	shd = mix(shd, shd * vec3(1.35, 0.8, 0.5), scorch_rim * 0.65);
 	// The wet band beside the water (card painter-water): the dressing's wet line (water_weights.a,
@@ -369,7 +517,9 @@ void fragment() {
 	vec2 a_k = xz;
 	float h_k = 0.5;
 	float l_k = 0.0;
-	bool search = brushes_present && marks > 0.0 && px_m <= mark_px.y;
+	// No marks on a steep face: laid in the map's XZ they stretch down it as smears (the face is
+	// the block-in's strata).
+	bool search = brushes_present && marks > 0.0 && px_m <= mark_px.y && slope < 0.4;
 	for (int layer = 0; layer < 3 && search; layer++) {
 		// The small marks exist only in a drift or litter zone, and not when they are a pixel or two.
 		if (layer == 2 && (max(sz.x, sz.y) <= 0.0 || px_m > mark_px.x)) {
@@ -446,12 +596,33 @@ void fragment() {
 			}
 		}
 	}
+	// A path mark over a patterned path surface goes: its stones are the block-in's.
+	if (best > 1.0 && best < 2.0) {
+		int s = path_slot(a_k);
+		if (s >= 0 && p_kind[s] > 0) {
+			best = 0.0;
+		}
+	}
 	vec3 lit;
 	vec3 shd;
 	if (best > 0.0) {
-		ground_at(a_k, slope, h_k, l_k, (fract(h_k * 9.1) - 0.5) * 0.5, lit, shd);
+		ground_at(a_k, slope, h_k, l_k, (fract(h_k * 9.1) - 0.5) * 0.5, px_m, v_wy, lit, shd);
 	} else {
-		ground_at(xz, slope, 0.5, 0.0, 0.0, lit, shd);
+		ground_at(xz, slope, 0.5, 0.0, 0.0, px_m, v_wy, lit, shd);
+	}
+	// A cliff's top edge (the ground convex, toward a steep drop) takes a lit lip, its foot
+	// (concave) a darker one: the mean curvature from the screen derivatives of the normal and
+	// the position, about 2 per metre at a terrace's rim, under 0.3 on rolling ground.
+	if (cliff_edge > 0.0 && !skirt) {
+		vec3 wpos = vec3(v_xz.x, v_wy, v_xz.y);
+		vec3 dpx = dFdx(wpos);
+		vec3 dpy = dFdy(wpos);
+		float curv = (dot(dFdx(n), dpx) + dot(dFdy(n), dpy)) / max(dot(dpx, dpx) + dot(dpy, dpy), 1e-6);
+		float brush = (p_noise(p * 3.1 + 57.0) - 0.5) * 0.6;
+		float lip = smoothstep(0.5, 0.9, curv + brush) * (1.0 - smoothstep(0.45, 0.7, slope));
+		float foot = smoothstep(0.5, 0.9, -curv + brush);
+		lit *= 1.0 + cliff_edge * lip - cliff_edge * 0.6 * foot;
+		shd *= 1.0 + cliff_edge * 0.5 * lip - cliff_edge * 0.6 * foot;
 	}
 	if (skirt) {
 		lit = mix(lit, foot_col, out_k);

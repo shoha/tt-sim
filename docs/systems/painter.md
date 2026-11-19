@@ -190,6 +190,49 @@ the path share, the rock share and wet ground (shore), from the map document's b
 biome slots and surface weights. Real role data is still to come: a `paint_role` per surface in
 the library (and a biome's role read from its ground surface) would replace the word rules.
 
+Path surfaces and cliffs (card painter-ground-surfaces, 2026-11-18; look-pending). Under the path
+role every path surface painted alike, one sand-coloured stroked band, and cliff faces were the stone
+role's shade, which the ground's full violet pull swings to dark purple. `PainterGroundPaths`
+(`painter/painter_ground_paths.gd`):
+
+- **Slots.** Each path-role surface of the map (the base first, then the document's surfaces; at
+  most 8) takes a slot with its own tone and pattern. The tone is the sheet's `path` moved toward the
+  surface's measured colour (the library's `albedo_mean_linear` as OKLCH): lightness by 0.6 of its
+  difference from `PATH_REF` (about packed dirt), chroma by its ratio to 0.8 power (clamped 0.55 to
+  2: at 0.35 the stone paths read cool grey-lilac), hue by half its difference as far as the
+  surface has a hue; the sheet's `path-own` scales it (1). So in summer a cobble is a warm grey
+  L 0.73 C about 0.035, a dirt road a tan L 0.81 C 0.08, a sandstone flag a honey L 0.84 C 0.065,
+  caliche a cream L 0.88; every mood still moves them as the path. The
+  pattern is the surface's kind by its words (`PainterGroundRoles.path_kind`: dirt, cobble, plates,
+  tiles, gravel, planks; dirt for an unknown). The slot map (R8, nearest, the slot whose box-blurred
+  weight is largest, 255 none) exists only when two or more slots are painted; else `path_only`.
+- **Patterns** (`path_pattern` in the shader, the block-in only, each stone one flat colour like a
+  mark): cobbles are round dabs in courses (0.38 by 0.34 m cells; a squarer dab read as brick
+  courses), flagstones plates of a jittered grid
+  (0.95 m, the seam where the second-nearest centre is nearly as near), tiles a 0.7 m grid, gravel
+  pebble dots on a 0.2 m grid, planks 0.3 m boards along x. The courses wander with a slow warp; a
+  seam is `SEAM_DARK` deeper; each stone's hash moves the path's edge, so the edge is whole stones.
+  A stone under three pixels fades to the flat block-in. A path mark over a patterned path is
+  dropped (one slot read for the winning mark only); the dirt kind keeps the stroked band.
+- **Cliffs.** The rock role's tone is `stone` turned `cliff-turn` (-8 degrees, warmer), chroma
+  times `cliff-chroma` (1.5), lifted `cliff-lift`, then moved toward the map's main biome's cliff
+  surface from `CLIFF_REF` (the core grey cliff), so a badlands cliff is a pale sandstone and a
+  basalt one darker. Its shade takes `cliff-pull` (0.25) of the ground's pull and `cliff-shade-lift`
+  (0.12) more depth (`PainterTones.ramp`'s `pull` and `shade_lift`): a warm grey stone in shade
+  (round 1, -16, 1.8 and 0.4, read rosy mauve). Open: under winter a badlands cliff follows the
+  winter stone's blue while the badlands ground keeps its derived orange, a blue band on orange. On a face
+  (slope over 0.3 to 0.6) the tone steps in soft strata bands 0.6 m high by the pixel's height, each
+  band's top 9 % lighter and its foot 7 % darker (`cliff-strata`); no marks are searched on a face
+  (slope over 0.4: laid in XZ they stretched down it as smears). A convex rim (the mean curvature
+  from the screen derivatives of the normal and position over 0.5 to 0.9 per metre, broken by a
+  brush noise) takes a lit lip of `cliff-edge` (0.22) and a concave foot a darker one.
+- Cost: one slot-map fetch on path pixels only (and one for a winning path mark), the pattern's
+  hashes there, the curvature's four derivatives everywhere; the CPU slot map only when two path
+  surfaces are painted (a pass over the weights and one box blur per painted slot). Not yet timed
+  with the pinned procedure (the card's bar is 0.4 ms).
+- Frames: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final47_ground_surfaces/`
+  (`after_r2/sheet_*.png`: before Painted, after Painted, Classic per row).
+
 Shade ramp. `PainterTones.steps` draws a role's shade from `shade-keep` of its own chroma plus a
 pull of `shade-pull` toward `shade-hue` (the ground reads `ground-shade-keep`, grass and flowers
 `grass-shade-keep`; 1, the default, is the spike's ramp). A full keep under a large pull swings a

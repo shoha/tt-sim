@@ -92,6 +92,18 @@ const SURFACE_RULES: Array = [
 	],
 	["meadow", ["grass", "meadow", "glade", "lawn", "snow"]],
 ]
+## The patterns a path surface paints with (index = the ground shader's kind number, path_pattern):
+## dirt the plain stroked band, cobble rounded dabs in courses, plates irregular flagstones, tiles
+## a square grid, gravel a scatter of pebble dots, planks boards. A path surface's kind comes from
+## its words as its role does (PATH_KIND_RULES, first match wins), dirt when none matches.
+const PATH_KINDS: Array[String] = ["dirt", "cobble", "plates", "tiles", "gravel", "planks"]
+const PATH_KIND_RULES: Array = [
+	["cobble", ["cobblestone", "cobble", "cobbles", "setts"]],
+	["plates", ["flagstone", "flagstones", "paving", "slabs"]],
+	["tiles", ["tiles", "plaza", "kerb", "concrete"]],
+	["gravel", ["gravel", "scree", "shingle"]],
+	["planks", ["planks", "boards", "boardwalk", "deck"]],
+]
 const BIOME_RULES: Array = [
 	["ash", ["burnt"]],
 	["earth", ["badlands", "desert"]],
@@ -105,6 +117,13 @@ const BIOME_RULES: Array = [
 ## The ground role of surface `surface_id` (DEFAULT_ROLE when no rule knows it).
 static func surface_role(surface_id: String) -> String:
 	return _role(SURFACE_RULES, surface_id)
+
+
+## The path pattern of surface `surface_id`: its index in PATH_KINDS (0, dirt, when no rule knows
+## it). Meaningful for a path-role surface.
+static func path_kind(surface_id: String) -> int:
+	var at := _rule(PATH_KIND_RULES, surface_id)
+	return 0 if at < 0 else PATH_KINDS.find(str(PATH_KIND_RULES[at][0]))
 
 
 ## The ground role of biome `biome_id` (a biome-def id or a compiled one; DEFAULT_ROLE when no
