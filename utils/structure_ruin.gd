@@ -31,8 +31,9 @@ const BY_WORD: Array[Array] = [
 	["canal", "ruin_townhouse"],
 ]
 const ROUND_ID := "ruin_tower"
-## Set on a ruin's structure node (AuthoredStructures._structure_node): true. The painted look chars
-## the roof pieces left standing over one (PainterBuildings.RUIN_ROOF_BURN, which keeps this name).
+## Set on a ruin's structure node (AuthoredStructures._structure_node): true. (The painted look
+## no longer chars a ruin's roof remnant by it, card painter-roofs-ivy: it is painted as its
+## roof kind.)
 const META := &"tt_ruin"
 
 

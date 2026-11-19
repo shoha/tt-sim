@@ -66,5 +66,73 @@ int tone_of(int pick, vec3 c) {
 	return (pick > 0 && pick < 6) ? roof_tone(c, pick == 2) : 0;
 }
 
+// A roof with no manner record follows its recipe's paint (card painter-roofs-ivy: every round and
+// Taper roof read one blue-grey, where Classic draws red, brown, purple or pale blue). Its paint
+// chooses the nearest role and the role's ramp is turned from the role's reference tone (paint_ref:
+// the middle in the mood a paint is read in) to the paint in OKLab: the hue by their difference, the
+// chroma and the lightness by their ratios (held to PAINT_CHROMA and PAINT_VALUE), so the mood's
+// own moves of the role (grimdark's darker, greyer roofs) carry over and the shade and lit steps
+// keep their relation. A paint under PAINT_GREY of chroma keeps its role and its hue, and takes
+// only the ratios (a cream felt, a charcoal tile).
+const float PAINT_GREY = 0.04;
+const vec2 PAINT_CHROMA = vec2(0.5, 2.6);
+const vec2 PAINT_VALUE = vec2(0.82, 1.22);
+
+// A LINEAR colour in OKLab (L, a, b).
+vec3 paint_lab(vec3 c) {
+	vec3 lms = vec3(
+		0.4122214708 * c.r + 0.5363325363 * c.g + 0.0514459929 * c.b,
+		0.2119034982 * c.r + 0.6806995451 * c.g + 0.1073969566 * c.b,
+		0.0883024619 * c.r + 0.2817188376 * c.g + 0.6299787005 * c.b);
+	lms = pow(max(lms, vec3(0.0)), vec3(1.0 / 3.0));
+	return vec3(
+		0.2104542553 * lms.x + 0.7936177850 * lms.y - 0.0040720468 * lms.z,
+		1.9779984951 * lms.x - 2.4285922050 * lms.y + 0.4505937099 * lms.z,
+		0.0259040371 * lms.x + 0.7827717662 * lms.y - 0.8086757660 * lms.z);
+}
+
+// OKLab back to a LINEAR colour (out of gamut clipped at black).
+vec3 paint_linear(vec3 lab) {
+	vec3 lms = vec3(
+		lab.x + 0.3963377774 * lab.y + 0.2158037573 * lab.z,
+		lab.x - 0.1055613458 * lab.y - 0.0638541728 * lab.z,
+		lab.x - 0.0894841775 * lab.y - 1.2914855480 * lab.z);
+	lms = lms * lms * lms;
+	return max(vec3(
+		4.0767416621 * lms.x - 3.3077115913 * lms.y + 0.2309699292 * lms.z,
+		-1.2684380046 * lms.x + 2.6097574011 * lms.y - 0.3413193965 * lms.z,
+		-0.0041960863 * lms.x - 0.7034186147 * lms.y + 1.7076147010 * lms.z), vec3(0.0));
+}
+
+// The picked roof role (0 clay, 1 slate, 2 shingle, 3 turf) nearest a coloured paint `lab`: red and
+// orange the clay, ochre and brown the shingle, green the turf, the rest (blue, violet) the slate.
+int paint_roof_tone(vec3 lab) {
+	float hue = mod(degrees(atan(lab.z, lab.y)) + 360.0, 360.0);
+	if (hue >= 340.0 || hue < 58.0) {
+		return 0;
+	}
+	if (hue < 100.0) {
+		return 2;
+	}
+	return hue < 200.0 ? 3 : 1;
+}
+
+// The turn from reference tone `ref` (OKLab) to paint `lab`: (cos, sin) of the hue turn (none for a
+// `grey` paint), the chroma ratio and the lightness ratio.
+vec4 paint_turn(vec3 lab, vec3 ref, bool grey) {
+	float c = length(lab.yz);
+	float rc = max(length(ref.yz), 0.005);
+	float turn = grey ? 0.0 : atan(lab.z, lab.y) - atan(ref.z, ref.y);
+	return vec4(cos(turn), sin(turn), clamp(c / rc, PAINT_CHROMA.x, PAINT_CHROMA.y),
+		clamp(lab.x / max(ref.x, 0.05), PAINT_VALUE.x, PAINT_VALUE.y));
+}
+
+// A ramp tone `col` (LINEAR) turned by `t` (paint_turn).
+vec3 paint_turned(vec3 col, vec4 t) {
+	vec3 lab = paint_lab(col);
+	vec2 ab = vec2(lab.y * t.x - lab.z * t.y, lab.y * t.y + lab.z * t.x) * t.z;
+	return paint_linear(vec3(lab.x * t.w, ab));
+}
+
 // (Where a roof lies under snow is painter_snow.gdshaderinc's, shared with the props: card
 // painter-roof-snow 2026-11-18 replaced snow_cover's patches and roof_snow_body here.)

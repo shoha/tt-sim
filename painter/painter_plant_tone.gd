@@ -22,8 +22,9 @@ static func tone(
 		derived = PainterGroundRoles.derived(sheet, mood, tone_role, elevation)
 		tone_role = str(PainterGroundRoles.DERIVED[tone_role][0])
 	var colors := PainterTones.ramp(sheet, mood, tone_role, elevation, prefix, derived)
-	if int(entry["kind"]) == PainterPlantRoles.KIND_CROWN:
-		# A bush takes the crowns' ramp (painter-trees-polish2).
+	if int(entry["kind"]) in [PainterPlantRoles.KIND_CROWN, PainterPlantRoles.KIND_WALL_LEAF]:
+		# A bush takes the crowns' ramp (painter-trees-polish2), and so does a wall's ivy, so it
+		# is the same green as the bushes at its foot (card painter-roofs-ivy).
 		var tones := load(PainterPlantRoles.CROWN_TONES) as GDScript
 		colors.assign(tones.call("bush_ramp", sheet, mood, elevation))
 	var ramp := PainterTones.linear_ramp(colors)

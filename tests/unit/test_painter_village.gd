@@ -322,7 +322,11 @@ func test_the_baked_decor_wears_the_plants_stand_ins_and_release_restores_it() -
 		assert_eq(stand_in.shader.resource_path, PainterSurfaces.PLANT_SHADER)
 		assert_true(stand_in.has_meta(WindFoliage.META_STAND_IN), "the AA swap leaves it alone")
 		assert_eq(stand_in.get_meta(WindFoliage.META_STAND_IN), before[i])
-		assert_eq(int(stand_in.get_shader_parameter(&"kind")), PainterPlantRoles.KIND_SOLID)
+		assert_eq(
+			int(stand_in.get_shader_parameter(&"kind")),
+			int(PainterVillage.decor_entry(before[i])["kind"]),
+			"a wall's leaves, or a solid for bark"
+		)
 		assert_eq(
 			stand_in.get_shader_parameter(&"mesh_height"),
 			(before[i] as ShaderMaterial).get_shader_parameter(&"mesh_height"),
@@ -359,7 +363,27 @@ func test_decor_roles_read_the_material_name() -> void:
 	assert_eq(PainterVillage.decor_entry(bark)["role"], "bark")
 	assert_eq(PainterVillage.decor_entry(leaf)["role"], "leaf")
 	assert_eq(PainterVillage.decor_entry(null)["role"], "leaf")
-	assert_eq(PainterVillage.decor_entry(leaf)["kind"], PainterPlantRoles.KIND_SOLID)
+	# Card painter-roofs-ivy: ivy is leaf dabs on its wall (as a solid it read flat), bark a solid.
+	assert_eq(PainterVillage.decor_entry(leaf)["kind"], PainterPlantRoles.KIND_WALL_LEAF)
+	assert_eq(PainterVillage.decor_entry(bark)["kind"], PainterPlantRoles.KIND_SOLID)
+	var code := FileAccess.get_file_as_string("res://painter/shaders/painter_selector.gdshaderinc")
+	assert_string_contains(code, "vec4 ivy_dab(", "the leaf dabs")
+	assert_string_contains(code, "kind == 5", "the wall leaf's branch")
+
+
+func test_a_walls_leaves_take_the_bushes_green() -> void:
+	# The ivy is the green of the bushes at its foot (the crowns' ramp), in every mood.
+	var sheet := PainterSheet.load_sheet("core")
+	for mood: String in ["summer", "grimdark"]:
+		var ivy := ShaderMaterial.new()
+		var bush := ShaderMaterial.new()
+		var leaf := {"kind": PainterPlantRoles.KIND_WALL_LEAF, "role": "leaf", "ground_cover": false}
+		var crown := {"kind": PainterPlantRoles.KIND_CROWN, "role": "leaf", "ground_cover": false}
+		PainterPlantTone.tone(ivy, leaf, sheet, mood, 40.0)
+		PainterPlantTone.tone(bush, crown, sheet, mood, 40.0)
+		for name: StringName in [&"c_shade0", &"c_mid0", &"c_lit1"]:
+			var want: Variant = bush.get_shader_parameter(name)
+			assert_eq(ivy.get_shader_parameter(name), want, "%s %s" % [mood, name])
 
 
 # --- the field plants ------------------------------------------------------------------------

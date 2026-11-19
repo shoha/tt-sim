@@ -8,7 +8,8 @@
 // kind: 0 leaf mass (lit as one rounded form about the plant's middle), 1 grass (one flat tone,
 // darker at the base, lit or shaded like the ground: no middle step), 2 solid (rock, wood, litter: its own normals, a noise-broken turn),
 // 3 flower (the grass ramp on its green pixels, one of four flat accents on its petals by group),
-// 4 bush (a leaf mass in the painted crowns' hand: see bush_lobe()).
+// 4 bush (a leaf mass in the painted crowns' hand: see bush_lobe()), 5 a wall's leaves (a structure's
+// baked ivy: leaf dabs on the card's plane, see ivy_dab()).
 // PainterSurfaces sets every uniform from the sheet (PainterTones.ramp and the sheet's numbers).
 // Includers call selector_fragment() at the end of fragment() with the world position and
 // normal, the instance origin and scale and the height fraction, and assign its outputs to the
@@ -227,6 +228,40 @@ bool bush_cut(vec3 wp, vec3 origin, float scale, vec3 eye) {
 	return abs(dot(n0, eye)) < BUSH_RIM * smoothstep(0.25, 0.6, off);
 }
 
+// A wall's leaves (kind 5: a structure's baked ivy and window plants, card painter-roofs-ivy; as a
+// solid they read as flat mid-green cut-outs at eye level): leaf dabs about IVY_DAB metres across
+// laid on the card's own plane, each turned as a small dome by IVY_TILT, so its sunward rim takes
+// the lit step and its far rim the middle or the shade, and darker toward its rim by IVY_TUCK where
+// it tucks under its neighbours; each dab its own variant and value. Under IVY_FADE pixels a dab the
+// dabs fade into the plain card (a far view keeps one soft mass).
+const float IVY_DAB = 0.2;
+const float IVY_TILT = 1.4;
+const float IVY_TUCK = 0.38;
+const float IVY_FADE = 6.0;
+
+// The nearest leaf dab of a point at `q` (card-plane metres over IVY_DAB): xy its offset from the
+// dab's centre, z and w two hashes of the dab. The nearest of the four cells round the point (the
+// cell's corner it is nearest), a cheap 2D Voronoi: eight hashes.
+vec4 ivy_dab(vec2 q) {
+	vec2 i = floor(q);
+	vec2 side = step(0.5, q - i) * 2.0 - 1.0;
+	vec2 best = vec2(0.0);
+	float best_d = 1.0e9;
+	vec2 best_h = vec2(0.0);
+	for (int k = 0; k < 4; k++) {
+		vec2 g = i + side * vec2(float(k & 1), float((k >> 1) & 1));
+		vec2 o = vec2(p_hash(vec3(g, 3.1)), p_hash(vec3(g, 17.3)));
+		vec2 d = q - (g + 0.15 + 0.7 * o);
+		float dd = dot(d, d);
+		if (dd < best_d) {
+			best_d = dd;
+			best = d;
+			best_h = o;
+		}
+	}
+	return vec4(best, best_h);
+}
+
 // Whether snow lies on a plant point whose lit normal's up part is `up` (a bush's lobe, a rock's
 // face): the crowns' frost law (painter_tree_blockin's deposit), patchy by a world noise.
 bool frost_up(float up, vec3 wp) {
@@ -277,6 +312,19 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 		}
 		// Snow caps a tuft's top (painter_plant replaces this with tuft_dab()'s caps and bury line).
 		snow = frost > 0.0 && h > 1.0 - 0.3 * frost ? 1.0 : 0.0;
+	} else if (kind == 5) {
+		// A wall's leaves: `wn` is the card's own face (painter_plant turns it to the viewer), the dabs
+		// lie on its plane. Snow only on the dabs' upper rims.
+		vec3 t1 = abs(n.y) > 0.95 ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), n));
+		vec3 t2 = cross(n, t1);
+		vec4 dab = ivy_dab(vec2(dot(wp, t1), dot(wp, t2)) / IVY_DAB);
+		float px = length(fwidth(wp));
+		float near = 1.0 - smoothstep(IVY_DAB / IVY_FADE, IVY_DAB / (IVY_FADE * 0.5), px);
+		n = normalize(n + IVY_TILT * near * (t1 * dab.x + t2 * dab.y));
+		variant = mix(variant, dab.z, 0.6 * near);
+		float rim = smoothstep(0.22, 0.55, length(dab.xy));
+		mul = (1.0 - IVY_TUCK * near * rim) * mix(1.0, mix(0.9, 1.08, dab.w), near);
+		snow = frost > 0.0 && frost_up(n.y, wp) ? 1.0 : 0.0;
 	} else {
 		variant = mix(variant, p_noise(wp * 0.9 + 17.0), 0.5);
 		snow = frost > 0.0 && frost_up(n.y - 0.3, wp) ? 1.0 : 0.0;

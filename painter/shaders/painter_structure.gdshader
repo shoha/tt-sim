@@ -243,8 +243,15 @@ void fragment() {
 	// shade break into brush dabs); elsewhere a crisp step with a small wobble.
 	f_wob = mix(p_noise(wp * 1.7 + 5.0), sp.z, cover);
 	// A point on snow is in cast shadow only under a fuller shadow (the hand-drawn roofs' 0.3), so a
-	// grazing sun's partial self-shadow on the roof draws no hatch of ticks across the layer.
-	f_soft = vec3(mix(0.01, 0.06, cover), mix(0.12, 0.32, cover), mix(0.5, 0.3, cover));
+	// grazing sun's partial self-shadow on the roof draws no hatch of ticks across the layer. A bare
+	// roof too, and its light step barely wobbles: a slope is one plane, so it is lit or not as a
+	// whole (card painter-roofs-ivy: at grimdark's tone-hi 0.66 and a low sun a street roof's slope
+	// sat at the step and the wobble and the partial self-shadow broke it into camouflage patches).
+	float roof = pattern >= 5 ? 1.0 : 0.0;
+	f_soft = vec3(
+		mix(mix(0.01, 0.02, roof), 0.06, cover),
+		mix(mix(0.12, 0.03, roof), 0.32, cover),
+		mix(mix(0.5, 0.3, roof), 0.3, cover));
 }
 
 void light() {

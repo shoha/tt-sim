@@ -50,6 +50,9 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
 uniform int pattern = 0;
 uniform int pick = 0;
 uniform vec3 ramps[30];
+// A roof's: the OKLab of each ramp's middle tone in the mood a recipe's paint is read in
+// (PainterBuildings.paint_refs), what a roof piece with no record turns from to its own paint.
+uniform vec3 paint_ref[5];
 uniform float snow = 0.0;
 uniform vec3 snow_ramp[3];
 // False draws winter's roofs without their blanket meshes: every roof takes the shared layer
@@ -81,6 +84,9 @@ instance uniform vec2 bld = vec2(0.5);
 varying flat vec2 v_bld;
 varying vec2 v_fuv;
 varying vec4 v_rec;
+// A roof piece with no record (a round or Taper roof): the turn of its ramp to its recipe's paint
+// (painter_structure_common's paint_turn); z 0: none.
+varying flat vec4 v_turn;
 
 varying vec3 f_n;
 varying vec3 f_shd;
@@ -126,6 +132,21 @@ void vertex() {
 	}
 	v_fuv = UV2;
 	v_rec = CUSTOM0;
+	v_turn = vec4(1.0, 0.0, 0.0, 1.0);
+	if (pattern >= 5 && pick <= 2 && CUSTOM0.z < 0.5) {
+		// A roof piece with no record (round and Taper roofs: a roundhouse, a wizard tower's spire,
+		// a pagoda; card painter-roofs-ivy, they all read one blue-grey): its colour follows the
+		// recipe's roof paint, as Classic's does. A picked roof takes the role nearest the paint,
+		// and every roof's ramp is turned from that role's tone to the paint (paint_turn); a grey
+		// paint keeps its role's hue and takes only its lightness and greyness (a cream felt yurt,
+		// a charcoal pagoda).
+		vec3 lab = paint_lab(COLOR.rgb);
+		bool grey = length(lab.yz) < PAINT_GREY;
+		if (pick > 0 && !grey) {
+			v_tone = paint_roof_tone(lab);
+		}
+		v_turn = paint_turn(lab, paint_ref[v_tone], grey);
+	}
 }
 
 // (p_n2 and p_wash, the 2D stroke noise and the broad washes, live in painter_noise.gdshaderinc:
@@ -285,9 +306,13 @@ void fragment() {
 		chim_base = (pick == 7 && ul < 0.5) || (pick == 6 && v_bld.x < 0.42) ? 12 : 0;
 	}
 	float dab = (pattern >= 5 ? 1.0 : dab_wall) * dabs;
-	// A roof's dabs are a few subtle brushed patches (blotches read as stains); a slate's fewer.
+	// A roof's dabs are a few subtle brushed patches (blotches read as stains); a slate's fewer. A
+	// roof with no record (a round or Taper roof: one broad mass) takes half its variant patches and
+	// half its dabs as well (card painter-roofs-ivy: they read blotchy).
+	bool loose_roof = code == 0 && pattern >= 5;
+	variant = mix(0.5, variant, loose_roof ? 0.5 : 1.0);
 	float dab_hi = on_slope ? 0.68 : 0.62;
-	float dab_lit = on_slope ? 0.5 : 1.0;
+	float dab_lit = on_slope || loose_roof ? 0.5 : 1.0;
 	// (A roof's dark dabs are halved, card painter-look-houses3: soft dark blotches read as damp stains.)
 	dark += smoothstep(dab_hi, dab_hi + 0.1, bn) * dab * (pattern == 6 ? 0.35 : (on_slope ? 0.5 : 1.0)) * dab_lit;
 	light += (1.0 - smoothstep(0.28, 0.38, bn)) * dab * 0.8 * dab_lit;
@@ -673,6 +698,12 @@ void fragment() {
 	vec3 shd = mix(ramps[base], ramps[base + 3], variant);
 	vec3 mid = mix(ramps[base + 1], ramps[base + 4], variant);
 	vec3 lit = mix(ramps[base + 2], ramps[base + 5], variant);
+	if (v_turn.z > 0.0) {
+		// A round or Taper roof in its recipe's own colour (v_turn, from its paint).
+		shd = paint_turned(shd, v_turn);
+		mid = paint_turned(mid, v_turn);
+		lit = paint_turned(lit, v_turn);
+	}
 	if (pale > 0.0) {
 		// A brick stack's collar is the stone's ramp (slot 0); a stone stack's is lighter.
 		int pb = chim_base == 12 ? 0 : 12;

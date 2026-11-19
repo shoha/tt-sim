@@ -317,5 +317,57 @@ func test_the_shader_loads_with_its_uniforms() -> void:
 		assert_has(names, want)
 
 
+func test_a_dark_roofs_variants_swing_its_light_no_more_than_summers() -> void:
+	# Card painter-roofs-ivy (owner, grimdark street roofs: "why is everything so splotchy?"): the
+	# variant spread is a lightness step, held to a share of a dark roof's lightness, so grimdark's
+	# patches swing the light by about as much as summer's and not a third either way.
+	assert_eq(PainterBuildings.roof_spread(0.6), 1.0)
+	assert_almost_eq(PainterBuildings.roof_spread(0.32), 0.64, 0.001)
+	assert_eq(PainterBuildings.roof_spread(0.1), PainterBuildings.ROOF_SPREAD_MIN)
+	var sheet := PainterSheet.load_sheet("core")
+	var swing := func(mood: String, role: String) -> float:
+		var ramp := PainterBuildings.ramp(sheet, mood, role, 27.0, "roof")
+		var a := ramp[1].dot(Vector3(0.2126, 0.7152, 0.0722))
+		var b := ramp[4].dot(Vector3(0.2126, 0.7152, 0.0722))
+		return maxf(a, b) / maxf(minf(a, b), 0.0001)
+	for role: String in ["roof-shingle", "roof-slate", "roof-clay"]:
+		var summer: float = swing.call("summer", role)
+		var grim: float = swing.call("grimdark", role)
+		assert_lt(grim, summer * 1.1, "%s: grimdark %.3f vs summer %.3f" % [role, grim, summer])
+	# A wall keeps the mood's whole spread.
+	var wall := PainterBuildings.ramp(sheet, "grimdark", "plaster", 27.0, "wall")
+	var lw := (
+		PainterSheet.lch_of_color(_srgb(wall[1])).x - PainterSheet.lch_of_color(_srgb(wall[4])).x
+	)
+	var spread := PainterSheet.number(sheet, "grimdark", "value-spread", 27.0)
+	assert_almost_eq(absf(lw), 2.0 * spread, 0.01)
+
+
+func test_a_roof_with_no_record_turns_its_ramp_to_its_paint() -> void:
+	# Card painter-roofs-ivy: round and Taper roofs (no manner record) read one blue-grey; a manner
+	# roof material carries each ramp's reference tone, and the shader turns the ramp to the paint.
+	var sheet := PainterSheet.load_sheet("core")
+	var buildings := PainterBuildings.new()
+	buildings.applied = {"sheet": "core", "mood": "grimdark", "elevation": 27.0}
+	var material := ShaderMaterial.new()
+	material.shader = load(PainterMannerHost.SHADER) as Shader
+	buildings._tone(material, PainterBuildings.kind_of("roof_tile"), sheet)
+	var refs: PackedVector3Array = material.get_shader_parameter(&"paint_ref")
+	assert_eq(refs.size(), PainterBuildings.MANNER_RAMP_SLOTS / 6)
+	for i in PainterBuildings.PICK_ROLES.size():
+		var role: String = PainterBuildings.PICK_ROLES[i]
+		var want := PainterSheet.oklab_of(
+			PainterSheet.tone_lch(sheet, PainterBuildings.PAINT_REF_MOOD, role, 27.0)
+		)
+		assert_almost_eq(refs[i].distance_to(want), 0.0, 0.0001, "%s's reference" % role)
+	var code := FileAccess.get_file_as_string(PainterMannerHost.SHADER)
+	for want in ["uniform vec3 paint_ref[5]", "paint_turn(", "paint_turned(", "paint_roof_tone("]:
+		assert_string_contains(code, want)
+	var common := FileAccess.get_file_as_string(
+		"res://painter/shaders/painter_structure_common.gdshaderinc"
+	)
+	assert_false(common.contains("texture("), "the turn reads no texture")
+
+
 func _srgb(linear: Vector3) -> Color:
 	return Color(linear.x, linear.y, linear.z).linear_to_srgb()
