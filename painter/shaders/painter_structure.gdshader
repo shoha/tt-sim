@@ -106,7 +106,7 @@ void vertex() {
 		// its paint the same way; a slate roof (a modern row's `Roof_slate`) the nearest of its own
 		// three (paint_slate_tone).
 		vec3 lab = paint_lab(COLOR.rgb);
-		bool grey = length(lab.yz) < paint_grey(pick);
+		bool grey = paint_grey(lab, pick);
 		if (pick > 0 && !grey) {
 			v_tone = paint_roof_tone(lab);
 		} else if (pattern == 6 && !grey) {
@@ -187,13 +187,15 @@ void fragment() {
 			// across the whole slope, each course a touch apart, and the slope a little lighter toward
 			// its ridge (card painter-roof-polish: a tile's own variant read as a patchwork of lighter
 			// and rosier tiles at zoom 16 where Classic is one smooth red, and the broken dashes as busy
-			// ticks on a hip face). The bands fade before a course is under about three pixels.
+			// ticks on a hip face). The bands fade before a course is under about three pixels. Only a
+			// hint of them (card painter-roof-round3, owner: "Banding too strong" at 0.2 of shadow and
+			// 0.14 of variant): a slope reads as one calm mass with its courses suggested.
 			float course = pattern == 5 ? 0.42 : (pattern == 6 ? 0.32 : 0.26);
 			float r = s / course;
 			float banding = (1.0 - smoothstep(0.2, 0.45, fwidth(r))) * tiled;
-			dark += (1.0 - smoothstep(0.0, 0.4, fract(r))) * 0.2 * banding;
+			dark += (1.0 - smoothstep(0.0, 0.5, fract(r))) * 0.08 * banding;
 			float band = p_hash(vec3(floor(r), 4.0, 9.0));
-			variant = clamp(variant + (band - 0.5) * 0.14 * banding, 0.0, 1.0);
+			variant = clamp(variant + (band - 0.5) * 0.05 * banding, 0.0, 1.0);
 			light += 0.16 * smoothstep(0.1, 1.0, h) * tiled;
 		}
 	} else {
@@ -237,9 +239,9 @@ void fragment() {
 	if (pattern >= 5 && snow > 0.0) {
 		vec4 fr = snow_frame(wp, n, h);
 		float broad = 1.0 - smoothstep(0.08, 0.16, length(fwidth(fr.xy)));
-		cover = snow_cover_roof(snow, up, h, fr.xy, broad) * (1.0 - snow_gap(fr.xy, fr.w));
+		cover = snow_cover_roof(snow, up, h, fr.xy) * (1.0 - snow_gap(fr.xy, fr.w));
 		sp = snow_paint(fr.xy, broad);
-		roll = snow_roll(fr.z, fr.w, fr.xy);
+		roll = snow_roll(snow_edge_m(up, h, fr.xy, fr.z), fr.w, fr.xy);
 	}
 	// No roof mark shows through the layer (the course dashes read as a grid of ticks on it).
 	dark = clamp(dark * marks * (1.0 - cover), 0.0, 0.85);

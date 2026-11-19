@@ -75,13 +75,18 @@ int tone_of(int pick, vec3 c) {
 // keep their relation. A paint under PAINT_GREY of chroma keeps its role and its hue, and takes
 // only the ratios (a cream felt, a charcoal tile); a roof of a fixed kind (a slate or shingle
 // roof: its role is its kind's, so the paint's hue is its only colour cue) turns its hue from
-// PAINT_GREY_KIND (an alpine lot's blue-grey shingle, C 0.026, drew brown). The lightness ratio's
+// PAINT_GREY_KIND of saturation, chroma over lightness (an alpine lot's blue-grey shingle, 0.044,
+// drew brown when grey). Saturation, not chroma, since a recipe's paint varies a roof's faces in
+// value only, which scales its chroma with its lightness: the trullo's warm grey (C 0.013 to 0.016,
+// saturation 0.023 on every face) straddled a chroma threshold of 0.015 and drew some faces of its
+// cone brown and the rest blue-grey (card painter-roof-round3); every street lot's fixed-kind paint
+// has 0.034 or more (a headless probe, presets 0 to 12). The lightness ratio's
 // range is wide enough for a pale or a dark paint to land on its own lightness (card
 // painter-roof-polish: at 0.82 to 1.22 the crystal spire's pale aqua, 1.45 times its role's,
 // drew a darker, more saturated azure), and a tone the ratio lifts past PAINT_KNEE rolls off
 // toward white instead of clipping.
 const float PAINT_GREY = 0.04;
-const float PAINT_GREY_KIND = 0.015;
+const float PAINT_GREY_KIND = 0.028;
 const vec2 PAINT_CHROMA = vec2(0.5, 2.6);
 const vec2 PAINT_VALUE = vec2(0.7, 1.5);
 const float PAINT_KNEE = 0.8;
@@ -92,9 +97,11 @@ bool paint_turns(int pattern, int pick) {
 	return pattern >= 5 && (pick == 1 || pick == 2 || (pick == 0 && (pattern == 6 || pattern == 7)));
 }
 
-// The chroma under which a paint is grey to a roof of pick mode `pick` (0 a fixed kind).
-float paint_grey(int pick) {
-	return pick == 0 ? PAINT_GREY_KIND : PAINT_GREY;
+// Whether paint `lab` is grey to a roof of pick mode `pick` (0 a fixed kind: by its saturation; a
+// picked roof by its chroma).
+bool paint_grey(vec3 lab, int pick) {
+	float c = length(lab.yz);
+	return pick == 0 ? c < PAINT_GREY_KIND * max(lab.x, 0.05) : c < PAINT_GREY;
 }
 
 // A LINEAR colour in OKLab (L, a, b).

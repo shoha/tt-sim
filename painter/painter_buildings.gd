@@ -197,6 +197,8 @@ static var paint_yard := true
 var applied: Dictionary = {}
 ## The hand-drawn manner's host, made on the first dress while hand_drawn is set.
 var manner: PainterMannerHost = null
+## The wall layers' roof blankets in a mood with roof snow (card painter-roof-round3).
+var street_snow := PainterStreetSnow.new()
 
 var _map: Node3D = null
 var _structures: Node = null
@@ -240,6 +242,7 @@ func release() -> void:
 		_map.child_entered_tree.disconnect(_on_map_child)
 	_unbind()
 	_unbind_walls()
+	street_snow.clear()
 	if manner != null:
 		manner.restore_all()
 	for id: int in _swapped:
@@ -380,6 +383,18 @@ func _dress_wall(wall: Node) -> void:
 			continue
 		_swapped[mesh_instance.get_instance_id()] = [mesh_instance, mesh_instance.material_override]
 		mesh_instance.material_override = _material(key)
+	_snow_wall(wall)
+
+
+## Lays blankets on a wall's roofs while the mood lays roof snow (PainterStreetSnow), drawn with the
+## hand-drawn manner's snow material, so only while hand_drawn is set (the A3b-only A/B keeps the
+## shader's snow).
+func _snow_wall(wall: Node) -> void:
+	if not hand_drawn or snow_amount() <= 0.0:
+		return
+	if manner == null:
+		manner = PainterMannerHost.new(self)
+	street_snow.dress(wall, manner.snow_material())
 
 
 func _bind(structures: Node) -> void:
@@ -470,6 +485,8 @@ func _retone() -> void:
 		_tone(_materials[key], kind_of(key), sheet)
 	if manner != null:
 		manner.retone(sheet)
+	if snow_amount() <= 0.0:
+		street_snow.clear()
 	if is_instance_valid(_structures):
 		for child in _structures.get_children():
 			_dress(child)

@@ -59,6 +59,7 @@ static func classic() -> void:
 	PainterMannerHost.snow_body = true
 	PainterMannerHost.hand = true
 	PainterMannerSnow.blanket = true
+	PainterStreetSnow.bodied = true
 	PainterMannerBlanket.step_s = PainterMannerBlanket.FIELD_STEP_S_M
 	PainterTreeBush.clump_roots = PainterTreeBush.ROOTS_PAD
 	PainterSheet.clear_cache()
@@ -97,6 +98,7 @@ static func dirty() -> PackedStringArray:
 			)
 				or not (PainterMannerHost.snow_body and PainterMannerHost.hand)
 			or not PainterMannerSnow.blanket
+			or not PainterStreetSnow.bodied
 			or PainterMannerBlanket.step_s != PainterMannerBlanket.FIELD_STEP_S_M
 			or PainterTreeBush.clump_roots != PainterTreeBush.ROOTS_PAD
 			or not PainterFields.enabled
