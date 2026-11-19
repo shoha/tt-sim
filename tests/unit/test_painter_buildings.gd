@@ -433,7 +433,7 @@ func test_a_slate_or_shingle_street_roof_follows_its_paint() -> void:
 	assert_string_contains(common, "int paint_slate_tone(")
 	for path: String in [PainterBuildings.SHADER, PainterMannerHost.SHADER]:
 		var code := FileAccess.get_file_as_string(path)
-		assert_string_contains(code, "paint_grey(pick)", path)
+		assert_string_contains(code, "paint_grey(lab, pick)", path)
 		assert_string_contains(code, "v_tone = paint_slate_tone(lab)", path)
 	assert_string_contains(FileAccess.get_file_as_string(PainterBuildings.SHADER), "paint_turns(")
 	var slate := PainterBuildings.new()
@@ -461,16 +461,20 @@ func test_a_pale_paint_lands_on_its_own_lightness() -> void:
 	assert_string_contains(common, "PAINT_KNEE")
 
 
-func test_a_steep_roof_holds_a_cap_and_ledges() -> void:
+func test_a_steep_roof_holds_one_bodied_cap() -> void:
 	# Card painter-roof-polish: a spire (up 0.25 to 0.35) held no snow, or long streaks that read
-	# as a glossy highlight. Both roof shaders take the roof cover, whose steep part is a cap over
-	# the upper third and ledges along the courses; the props keep the layer by slope.
+	# as a glossy highlight. Card painter-roof-round3 (owner: "streaky and weird"): both roof shaders
+	# take one cover whose lower edge rises up a steeper face, a cap that rolls over its own edge as a
+	# lip; no ledges and no streaks on a roof. The props keep the layer by slope.
 	var snow := FileAccess.get_file_as_string("res://painter/shaders/painter_snow.gdshaderinc")
-	for fn in ["float snow_steep(", "float snow_cover_roof("]:
+	for fn in ["float snow_edge(", "float snow_cover_roof(", "float snow_edge_m("]:
 		assert_string_contains(snow, fn)
+	assert_false(snow.contains("SNOW_LEDGE_M"), "no ledges")
+	assert_false(snow.contains("float snow_steep("), "no separate steep model")
 	for path: String in [PainterBuildings.SHADER, PainterMannerHost.SHADER]:
 		var code := FileAccess.get_file_as_string(path)
 		assert_string_contains(code, "snow_cover_roof(snow, up, h,", path)
+		assert_string_contains(code, "snow_roll(snow_edge_m(up, h, fr.xy, fr.z)", path)
 		assert_false(code.contains("snow_cover_of(snow_hold("), "%s: no bare slope hold" % path)
 	var prop := FileAccess.get_file_as_string(PainterVillage.PROP_SHADER)
 	assert_string_contains(prop, "snow_cover_of(snow_hold(snow, n.y)")

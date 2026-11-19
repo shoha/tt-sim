@@ -398,6 +398,12 @@ static func build(
 			_cut(m, tri, mids, cut_idx, WALL_SEG_M, Vector3.ZERO, true)
 		elif cut and _is_beam(m.rec[tri[0]]) and m.nor[tri[0]].dot(m.rec[tri[0]]["n"]) > -0.5:
 			_cut(m, tri, mids, cut_idx, BEAM_SEG_M, m.rec[tri[0]]["u"])
+		elif hand_walls:
+			# A hand's walls and roof sag in the middle (hand_at), so a long piece along them (a
+			# cornice, a string course, a plinth) is cut as the walls are; left whole, its straight
+			# middle stood out of the sagging roof above the eave as a pale sliver (card
+			# painter-roof-round3, owner: "is some geometry poking out of the roof?").
+			_cut(m, tri, mids, cut_idx, WALL_SEG_M, Vector3.ZERO)
 		else:
 			cut_idx.append_array(PackedInt32Array(tri))
 	if bool(opts.get("fringe", true)):

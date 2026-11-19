@@ -2150,6 +2150,48 @@ The gaps the roofs-ivy, roof-clay and roof-snow cards left. Frames and notes:
   the slate's third ramp is the clay; a pale paint lands; both roof shaders take the roof cover, the
   props the layer by slope; A3b tiles band by course with no per-tile variant or dashes).
 
+## Roof round 3 (card painter-roof-round3, 2026-11-19; look-pending)
+
+Owner verdicts on the roof-polish frames, taken one by one (evidence:
+`docs/research/2026-11-09-prototypes/compare/painter_final60_roof_round3/` in the suite root).
+
+- **Tile banding calmer** (l55_tiles, "Banding too strong"): A3b's course shade is 0.08 (was stronger)
+  over the lower half of each course, and the band's tone variant 0.05; the courses stay as a hint.
+- **Grey by saturation** (l55_flat: the trullo at the right edge went partly brown). `paint_grey(lab,
+  pick)` in `painter_structure_common.gdshaderinc`: a fixed kind (pick 0) is grey when its chroma is
+  under `PAINT_GREY_KIND` (0.028) times its lightness, not under a fixed chroma. The per-face paint
+  jitter is value-only, so a fixed chroma split one roof: its dark faces passed as grey and its light
+  ones turned to the brown ramp; by saturation all of them stay grey (probe: the trullo's paints
+  (0.267,0.251,0.216) and (0.188,0.173,0.149) are grey; every fixed-kind street roof paint measured
+  0.034 or more and still turns, unchanged).
+- **One bodied cap on steep roofs** (l48_round_w, "streaky and weird"): `painter_snow.gdshaderinc` drops
+  the ledges (`SNOW_LEDGE_M`, `snow_steep`); `snow_cover_roof(snow, up, h, f)` lays one cap down from
+  the top to an edge (`snow_edge`: low on a steep face, a slow sway and tongues along it), and
+  `snow_edge_m` gives the lip's roll its distance to that edge, so the cap ends in the same rolled lip
+  an eave has. Both roof shaders (A3b and the manner's no-record branch) call the one pair.
+- **Street roofs wear the blanket** (l45_snow, "More body"): `PainterStreetSnow`
+  (`painter/buildings/street_snow.gd`) reads a wall layer's roof part back into manner roof records
+  (up faces, joined into slopes by shared edges in one plane, the outline's sides named eave, ridge,
+  hip or verge) and builds `PainterMannerSnow.build`'s blanket on a worker, a "StreetSnow" child of the
+  roof part drawn by the manner's snow material, no shadow. Neighbouring lots' verges side by side
+  become hips (`_join_verges`). Built while the mood lays roof snow, freed when it stops.
+  `PainterStreetSnow.bodied = false` is the A/B switch. Measured in the street test level: 4 blankets,
+  20300 triangles; 3.5 to 56 ms a row on a worker.
+- **Hand walls' long trim cut** (l43_cottages, "geometry poking out of the roof"): on a stone house with a
+  mason's hand (`hand_at` sags the eave and ridge), a long piece that is neither wall, roof nor beam (a
+  cornice, a string course) is cut every `WALL_SEG_M` as the walls are (`manner_mesh.gd`); left whole,
+  its straight middle stood out of the sagging roof as a pale lens on the townhouse.
+- **Not done.** A brown slit runs down the street snow under each chimney (the roof shows through the
+  blanket there; `_join_verges` did not close it, so the slope's pieces around a chimney need a probe).
+  A thin pale hairline may remain on the townhouse's eave. Street lots of neighbouring streets overlap
+  when two streets are placed closer than their lots reach (l51: the test jobs put streets 14 m apart and
+  each side's lots reach 5.5 to 7 m); nothing stops it yet.
+- **Cost.** The steep cap is cheaper than the ledges (one noise for the sway against two ledge noises);
+  the street blankets add their triangles above. Not timed on the lane.
+- Tests: `test_painter_street_snow.gd` (a gable's slopes and sides, a hip roof's hips and apex, a narrow
+  board and a flat roof, neighbouring lots' seam, a winter wall layer's blankets, grey by saturation);
+  `test_painter_buildings.gd` (one bodied cap in both roof shaders).
+
 ## The eye backdrop (card painter-eye-backdrop, 2026-11-18; look-pending)
 
 At the eye the painted sky was a flat gradient over a hard ground line where Classic's `EyeSky`

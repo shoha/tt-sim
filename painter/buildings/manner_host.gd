@@ -502,6 +502,12 @@ static func _bytes(arrays: Array, stride: int) -> int:
 	return verts * stride + (0 if index == null else (index as PackedInt32Array).size() * 4)
 
 
+## The material the snow strips and blankets draw with (shared, toned with the rest), which the
+## wall layers' blankets (PainterStreetSnow) take too.
+func snow_material() -> ShaderMaterial:
+	return _surface_material(SNOW_KEY)
+
+
 func _surface_material(key: String) -> ShaderMaterial:
 	if _shared.has(key):
 		return _shared[key]
