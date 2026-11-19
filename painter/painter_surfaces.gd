@@ -53,6 +53,8 @@ const BUILDINGS := "res://painter/painter_buildings.gd"
 const OCCLUSION := "res://painter/painter_occlusion.gd"
 ## The painted water's host (PainterWater), loaded by path on the first painted map.
 const WATER := "res://painter/painter_water.gd"
+## The village furnishings' host (PainterVillage), loaded by path on the first painted map.
+const VILLAGE := "res://painter/painter_village.gd"
 ## Metadata on every material this paints with.
 const META := &"painter_surface"
 ## The map root's name under the map container (MapSourceLoader.install).
@@ -68,7 +70,8 @@ var applied: Dictionary = {}
 var _container: Node3D = null
 var _map: Node3D = null
 var _terrain: AuthoredTerrain = null
-var _scatters: Array[AuthoredScatter] = []
+## The plant sources: AuthoredScatter and AuthoredFieldPlants (answers like a scatter; untyped).
+var _scatters: Array = []
 var _ground: ShaderMaterial = null
 var _skirt: ShaderMaterial = null
 ## Node instance id -> [node, the material_override it had].
@@ -86,6 +89,8 @@ var _buildings: RefCounted = null
 var _occlusion: RefCounted = null
 ## The painted water (a PainterWater), made on the first paint().
 var _water: RefCounted = null
+## The painted village furnishings (a PainterVillage), made on the first paint().
+var _village: RefCounted = null
 
 
 ## Follows `manager`'s painted_look_changed for the map under `map_container`; called again with
@@ -122,6 +127,9 @@ func paint(map: Node3D, state: Dictionary) -> bool:
 	if _buildings == null:
 		_buildings = (load(BUILDINGS) as GDScript).new()
 	_buildings.call("paint", _map, applied)
+	if _village == null:
+		_village = (load(VILLAGE) as GDScript).new()
+	_village.call("paint", _map, applied)
 	_ground_occlusion()
 	if _water == null:
 		_water = (load(WATER) as GDScript).new()
@@ -137,6 +145,8 @@ func release() -> void:
 		_trees.call("release")
 	if _buildings != null:
 		_buildings.call("release")
+	if _village != null:
+		_village.call("release")
 	if _water != null:
 		_water.call("release")
 	_unbind()
@@ -198,13 +208,18 @@ func _bind() -> void:
 		for child in _terrain.get_children():
 			_dress(child)
 	for child in _map.get_children():
-		if child is AuthoredScatter:
-			_bind_scatter(child as AuthoredScatter)
-	# A scatter made later (the eye view's rim, EyeRim) is followed and painted like the first.
+		if _is_plant_source(child):
+			_bind_scatter(child)
+	# A source made later (the eye view's rim, the village's field plants) is followed likewise.
 	_map.child_entered_tree.connect(_on_map_child)
 
 
-func _bind_scatter(scatter: AuthoredScatter) -> void:
+## True for a scatter or the village's field plants.
+static func _is_plant_source(node: Node) -> bool:
+	return node is AuthoredScatter or (node is AuthoredFieldPlants and PainterVillage.field_plants)
+
+
+func _bind_scatter(scatter: Node) -> void:
 	if scatter in _scatters:
 		return
 	scatter.cells_applied.connect(_on_cells_applied)
@@ -214,9 +229,9 @@ func _bind_scatter(scatter: AuthoredScatter) -> void:
 
 
 func _on_map_child(node: Node) -> void:
-	if not node is AuthoredScatter or applied.is_empty():
+	if not _is_plant_source(node) or applied.is_empty():
 		return
-	_bind_scatter(node as AuthoredScatter)
+	_bind_scatter(node)
 	# PainterTrees keeps the same array: it only needs its child watch on the new scatter.
 	_paint_trees()
 
@@ -340,7 +355,8 @@ func solid_meshes() -> Dictionary:
 	return out
 
 
-func scatters() -> Array[AuthoredScatter]:
+## The plant sources painted: the map's scatters and its village field plants.
+func scatters() -> Array:
 	return _scatters
 
 
@@ -782,7 +798,7 @@ func _paint_species() -> Array:
 	for scatter in _scatters:
 		if not is_instance_valid(scatter):
 			continue
-		var species := scatter.resolved_species()
+		var species: Dictionary = scatter.resolved_species()
 		for asset_id: String in species:
 			var record: Dictionary = species[asset_id]
 			var mesh := record["mesh"] as Mesh
@@ -797,7 +813,7 @@ func _paint_species() -> Array:
 			for i in mesh.get_surface_count():
 				var original := mesh.surface_get_material(i)
 				var surface_entry := PainterPlantRoles.for_surface(entry, original)
-				var stand_in := _stand_in(original, surface_entry, float(record["height"]))
+				var stand_in := stand_in_of(original, surface_entry, float(record["height"]))
 				if stand_in == null:
 					continue
 				var extent := mesh.get_aabb().size * 0.5
@@ -816,10 +832,19 @@ func _paint_species() -> Array:
 
 
 ## The painted material standing in for `original` (null when it cannot: no material, or one
-## that is neither a wind material nor an imported one).
-func _stand_in(original: Material, entry: Dictionary, height: float) -> ShaderMaterial:
+## that is neither a wind material nor an imported one). Static: the painted village's baked decor
+## makes its own (PainterVillage). A wind material is a ShaderMaterial that carries the wind
+## category's meta or the vertex wind.
+static func stand_in_of(original: Material, entry: Dictionary, height: float) -> ShaderMaterial:
 	var stand_in: ShaderMaterial = null
-	if original is ShaderMaterial and original.has_meta("wind_category"):
+	var wind := (
+		original is ShaderMaterial
+		and (
+			original.has_meta("wind_category")
+			or original.get_shader_parameter(&"use_vertex_wind") != null
+		)
+	)
+	if wind:
 		stand_in = (original as ShaderMaterial).duplicate() as ShaderMaterial
 		stand_in.shader = load(PLANT_SHADER) as Shader
 	elif original is BaseMaterial3D:
@@ -853,7 +878,7 @@ func _retone() -> void:
 	_tone_ground(sheet, mood, elevation)
 	_bind_wet()
 	for swap: Array in _swapped:
-		_tone_plant(swap[3], swap[4], sheet, mood, elevation)
+		tone_plant(swap[3], swap[4], sheet, mood, elevation)
 
 
 func _tone_new(added: Array) -> void:
@@ -861,7 +886,7 @@ func _tone_new(added: Array) -> void:
 		return
 	var sheet := PainterSheet.load_sheet(applied["sheet"])
 	for swap: Array in added:
-		_tone_plant(swap[3], swap[4], sheet, applied["mood"], applied["elevation"])
+		tone_plant(swap[3], swap[4], sheet, applied["mood"], applied["elevation"])
 
 
 func _tone_ground(sheet: Dictionary, mood: String, elevation: float) -> void:
@@ -903,8 +928,9 @@ func _tone_ground(sheet: Dictionary, mood: String, elevation: float) -> void:
 		)
 
 
-## Sets a stand-in's ramp, accents and numbers for `entry` (PainterPlantRoles.of()).
-static func _tone_plant(
+## Sets a stand-in's ramp, accents and numbers for `entry` (PainterPlantRoles.of()). Static and
+## public: PainterVillage tones its baked decor with it.
+static func tone_plant(
 	material: ShaderMaterial, entry: Dictionary, sheet: Dictionary, mood: String, elevation: float
 ) -> void:
 	var low := int(entry["kind"]) in [PainterPlantRoles.KIND_GRASS, PainterPlantRoles.KIND_FLOWER]
