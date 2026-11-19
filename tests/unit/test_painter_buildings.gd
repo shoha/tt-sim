@@ -369,5 +369,40 @@ func test_a_roof_with_no_record_turns_its_ramp_to_its_paint() -> void:
 	assert_false(common.contains("texture("), "the turn reads no texture")
 
 
+func test_a_street_lot_roof_follows_its_paint() -> void:
+	# Card painter-roof-clay: a street lot's roof (the wall node's `Roof`, procgen's wood kind) was a
+	# wooden roof that never took the clay, so its red tiles read mud-brown and its green ones slate.
+	# It is now a picked tile roof, and the A3b material carries the four roles' reference tones
+	# (summer's, whatever the mood) that the shader turns the chosen ramp from to the paint.
+	var key := PainterBuildings.wall_part_key("Roof")
+	assert_eq(key, "roof_tile")
+	var kind := PainterBuildings.kind_of(key)
+	assert_eq(str(kind[0]), PainterBuildings.PICK, "the tone comes from the paint")
+	assert_eq(int(kind[1]), PainterBuildings.P_TILE, "tile courses, as Classic draws it")
+	var sheet := PainterSheet.load_sheet("core")
+	var buildings := PainterBuildings.new()
+	buildings.applied = {"sheet": "core", "mood": "grimdark", "elevation": 27.0}
+	var material := ShaderMaterial.new()
+	material.shader = load(PainterBuildings.SHADER) as Shader
+	buildings._tone(material, kind, sheet)
+	var refs: PackedVector3Array = material.get_shader_parameter(&"paint_ref")
+	assert_eq(refs.size(), PainterBuildings.PICK_ROLES.size(), "one reference per picked role")
+	for i in PainterBuildings.PICK_ROLES.size():
+		var role: String = PainterBuildings.PICK_ROLES[i]
+		var want := PainterSheet.oklab_of(
+			PainterSheet.tone_lch(sheet, PainterBuildings.PAINT_REF_MOOD, role, 27.0)
+		)
+		assert_almost_eq(refs[i].distance_to(want), 0.0, 0.0001, "%s's reference" % role)
+	var code := FileAccess.get_file_as_string(PainterBuildings.SHADER)
+	for want in ["uniform vec3 paint_ref[4]", "paint_turn(", "paint_turned(", "paint_roof_tone("]:
+		assert_string_contains(code, want)
+	assert_false(code.contains("texture("), "the A3b roof reads no texture")
+	# A wall's material carries no reference: only roofs turn.
+	var wall := ShaderMaterial.new()
+	wall.shader = material.shader
+	buildings._tone(wall, PainterBuildings.kind_of("wall_plaster"), sheet)
+	assert_null(wall.get_shader_parameter(&"paint_ref"))
+
+
 func _srgb(linear: Vector3) -> Color:
 	return Color(linear.x, linear.y, linear.z).linear_to_srgb()

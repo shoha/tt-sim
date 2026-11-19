@@ -1935,6 +1935,38 @@ splotchy?". Frames and notes: `docs/research/2026-11-09-prototypes/compare/paint
   `test_painter_village.gd` (leaf is WALL_LEAF, bark SOLID, the ivy takes the crowns' ramp),
   `test_structure_burn.gd` (a ruin's roof is painted as its kind, burn 0).
 
+## Street roofs follow their paint (card painter-roof-clay, 2026-11-19; look-pending)
+
+The coverage verification (painter_final49, addendum item 3): a street's red tile roofs read
+mud-brown with dark blotches under Painted, its orange roofs brown and its green ones slate. Frames
+and notes: `docs/research/2026-11-09-prototypes/compare/painter_final51_roof_clay/` (`notes.md`;
+`before/`, `r1/`, `r2_full/` the verdict).
+
+- **Cause (a headless probe, `jobs/roof_probe.gd` there).** A street lot's roof is the wall node's
+  `Roof` part (procgen's `wood` kind), which `WALL_PARTS` mapped to `roof_wood`: the A3b shader's
+  wooden roof (pick 2), whose `roof_tone` never takes the clay. Terracotta (OKLab hue 32) and orange
+  (hue 47) paints fell to the shingle (C0.061 against the clay's 0.134), and `roof_tone` sends every
+  hue from 100 to the slate, so a green paint drew blue. The sheet's clay was never the problem (L0.55
+  C0.134 h34 against the terracotta paint's L0.61 C0.148 h32).
+- **The fix.** `Roof` is `roof_tile` (Classic draws it with the structures' tile shader), and the
+  A3b shader's picked roofs (pick 1 and 2) follow their paint the way the manner's round roofs do:
+  the role nearest the paint (`paint_roof_tone`: red and orange clay, ochre and brown shingle, green
+  turf, blue and grey slate) and its ramp turned from the role's summer middle (`paint_ref[4]`, set
+  by `_tone` on every roof material now, not only the manner's) to the paint (`paint_turn`,
+  `paint_turned`). Relative, so grimdark's street is a muted brown-red, not summer's terracotta.
+- **Calmer slopes.** An A3b roof takes half the variant patches, half the lit dabs and a quarter of
+  the dark dabs (the dark dabs pull a tile toward its violet shade and read as damp stains); the
+  hand-drawn slopes are as calm.
+- **Cost.** One OKLab conversion and the turn per vertex, three OKLab round trips a fragment on a
+  picked roof; no texture reads. Not timed on the lane.
+- **Not done:** the A3b tile's per-piece variant still reads as a patchwork of lighter and rosier
+  tiles at zoom 16 where Classic is a smooth red; a hip face's course dashes run down the slope and
+  read busier than a gable's; the street's fixed-kind roofs (`Roof_shingle`, `Roof_slate`, ...)
+  keep their role's colour, not their paint's.
+- Tests: `test_painter_buildings.gd` (a street lot's roof is a picked tile roof, its A3b material
+  carries the four reference tones, a wall's none, the shader turns and reads no texture),
+  `test_painter_coverage.gd` (`Roof` is `roof_tile`).
+
 ## The eye backdrop (card painter-eye-backdrop, 2026-11-18; look-pending)
 
 At the eye the painted sky was a flat gradient over a hard ground line where Classic's `EyeSky`

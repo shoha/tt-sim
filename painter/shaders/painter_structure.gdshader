@@ -20,14 +20,17 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
  * before they are under about two pixels.
  *
  * The colour of a wall, timber or stone is its sheet role's (one ramp, `ramps[0..5]`). A tile or
- * wooden roof's tone is CHOSEN by the hue of the building's own roof paint (StructurePaint's
- * vertex colour), so one material serves every building and street lot: red and orange are clay,
- * a brown or straw paint shingle, a grey, green or blue one slate (a green roof beside the meadow
- * is what this avoids); the colour itself is always the sheet's (`ramps`, four tones of six).
+ * wooden roof follows the building's own roof paint (StructurePaint's vertex colour), as Classic
+ * does, so one material serves every building and street lot: the paint chooses the nearest of
+ * the four roof roles (red and orange clay, ochre and brown shingle, green turf, blue and grey
+ * slate) and that role's ramp is turned from its summer tone (`paint_ref`) to the paint, as the
+ * hand-drawn manner's round roofs are (card painter-roof-clay: a street's red tile roofs read
+ * mud-brown, its green ones slate, when a lot's wooden roof never took the clay and a green paint
+ * took the slate). The turn is relative, so each mood's own moves of the role carry over.
  * COLOR.a is the height up a roof (0 eave, 1 ridge) or above a wall's foot in sixteenths of a metre.
  *
  * Cost: two 3D value noises for the patches, one for the dabs, one for the edge wobble, a few
- * pattern hashes a fragment;
+ * pattern hashes a fragment; on a picked roof three OKLab round trips (the turn, per vertex);
  * no texture reads, no branches on per-fragment data beyond the pattern switch on a uniform.
  *
  * MANAGED BY: PainterBuildings (painter/painter_buildings.gd).
@@ -40,12 +43,15 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
 
 // 0 plaster, 1 stone, 2 log, 3 boards, 4 timber, 5 tile, 6 slate, 7 shingle, 8 thatch, 9 turf.
 uniform int pattern = 0;
-// 0: the material's own ramp; 1: a tile roof's tone by its paint; 2: a wooden roof's (no clay);
-// 3: a door's or shutter's (timber, or the clay, turf or slate accent by its paint).
+// 0: the material's own ramp; 1: a tile roof's tone by its paint; 2: a wooden roof's (both turned
+// to the paint); 3: a door's or shutter's (timber, or the clay, turf or slate accent by its paint).
 uniform int pick = 0;
 // LINEAR [shade0, mid0, lit0, shade1, mid1, lit1] per tone; a picked roof's tones are 0 clay,
 // 1 slate, 2 shingle, 3 turf.
 uniform vec3 ramps[24];
+// A picked roof's reference tones (OKLab, the four roles' middles in the mood a paint is read in:
+// PainterBuildings.paint_refs) that its ramp turns from to its paint.
+uniform vec3 paint_ref[4];
 // The share of a roof under snow (sheet roof-snow) and the snow's LINEAR [shade, mid, lit].
 uniform float snow = 0.0;
 uniform vec3 snow_ramp[3];
@@ -72,6 +78,8 @@ varying vec3 v_wp;
 varying vec3 v_wn;
 varying float v_h;
 varying flat int v_tone;
+// A picked roof's turn of its ramp to its paint (painter_structure_common's paint_turn); z 0: none.
+varying flat vec4 v_turn;
 
 varying vec3 f_n;
 varying vec3 f_shd;
@@ -87,6 +95,18 @@ void vertex() {
 	v_wn = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	v_h = COLOR.a;
 	v_tone = tone_of(pick, COLOR.rgb);
+	v_turn = vec4(1.0, 0.0, 0.0, 1.0);
+	if (pattern >= 5 && (pick == 1 || pick == 2)) {
+		// A tile or wooden roof (a street lot's, a wall row's): the role nearest its paint, its ramp
+		// turned to the paint; a grey paint keeps the slate's hue and takes only its lightness and
+		// greyness.
+		vec3 lab = paint_lab(COLOR.rgb);
+		bool grey = length(lab.yz) < PAINT_GREY;
+		if (!grey) {
+			v_tone = paint_roof_tone(lab);
+		}
+		v_turn = paint_turn(lab, paint_ref[v_tone], grey);
+	}
 }
 
 // A thin line at the start of each unit of `x` (width `w` of a unit), faded out before the
@@ -108,18 +128,24 @@ void fragment() {
 	if (building_break(wp, clamp(v_h, 0.0, 1.0))) {
 		discard;
 	}
-	// The variant: broad soft patches, their edges broken by a finer octave.
+	// The variant: broad soft patches, their edges broken by a finer octave. A roof is one broad
+	// mass and takes half the patches and half the dabs (card painter-roof-clay: on a street's big
+	// roofs the full patches and dark dabs read as camouflage blotches; the hand-drawn manner's
+	// slopes are as calm).
+	float calm = pattern >= 5 ? 0.5 : 1.0;
 	float pn = mix(p_noise(wp * patch_freq + 7.0), p_noise(wp * patch_freq * 3.3 + 21.0), 0.3);
-	float variant = mix(0.5, smoothstep(0.36, 0.64, pn), patch_mix);
+	float variant = mix(0.5, smoothstep(0.36, 0.64, pn), patch_mix * calm);
 	// `dark` pulls toward the variant's shade, `light` toward its lit colour.
 	float dark = 0.0;
 	float light = 0.0;
 	// Dabs: a few soft spots a step darker or lighter, about a metre across, so a slope or a wall
 	// is never one smooth field (the prototype's roofs: blotches over the base colour).
 	float bn = p_noise(wp * dab_freq + 33.0);
-	float dab = (pattern >= 5 ? 1.0 : dab_wall) * dabs;
-	// A slate's dark dabs read as blotches up close: a lighter share of them.
-	dark += smoothstep(0.62, 0.72, bn) * dab * (pattern == 6 ? 0.35 : 1.0);
+	float dab = (pattern >= 5 ? calm : dab_wall) * dabs;
+	// A slate's dark dabs read as blotches up close: a lighter share of them. Every roof's dark dabs
+	// are halved again (a quarter of their old share, as the hand-drawn slopes' 0.5 of 0.5), since
+	// they pull the tile toward its violet shade and read as damp stains on a big street roof.
+	dark += smoothstep(0.62, 0.72, bn) * dab * (pattern == 6 ? 0.35 : calm);
 	light += (1.0 - smoothstep(0.28, 0.38, bn)) * dab * 0.8;
 	// A slope's own axes (roofs) and a wall's horizontal axis, from the face normal.
 	vec2 flat_n = n.xz;
@@ -220,6 +246,12 @@ void fragment() {
 	vec3 shd = mix(ramps[base], ramps[base + 3], variant);
 	vec3 mid = mix(ramps[base + 1], ramps[base + 4], variant);
 	vec3 lit = mix(ramps[base + 2], ramps[base + 5], variant);
+	if (v_turn.z > 0.0) {
+		// A picked roof in its recipe's own colour (v_turn, from its paint).
+		shd = paint_turned(shd, v_turn);
+		mid = paint_turned(mid, v_turn);
+		lit = paint_turned(lit, v_turn);
+	}
 	shd = mix(shd, snow_ramp[0], cover);
 	mid = mix(mid, snow_ramp[1], cover);
 	lit = mix(lit, snow_ramp[2], cover);
