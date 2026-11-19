@@ -223,10 +223,27 @@ flat vec4 varyings a card, cost 0.10 to 0.13 ms at the village's home view even 
 skipped at run time (its presence alone, measured by a run-time switch in one shader), the
 varyings 0.05 more in winter; running it, the early discard and the forced alpha cost nothing.
 The distance field also rounds the rim's points (the per-fragment dabs read as pointed leaves at
-eye level). Flowers keep their texture's petals.
-Thinning is the sheet's: `keep-grass` (0.6) and `keep-flower` (0.4) in groups of a slow world
-noise, both in the colour and the shadow pass (winter 0.45 and 0.25: fewer tufts stand above the
-snow).
+eye level).
+Flowers (card painter-flowers, look-pending): `PainterFlowerHue` reads each surface of a flower
+asset once when its stand-in is made. Core's flowers are `_Bark` (stems), `_Leaf` and `_LeafB` (the
+blooms: small UV 0..1 cards, three crossed per head or many over a mound); stems and leaves take the
+grass ramp, and the bloom surface is drawn whole as dabs, one per card: a blot inscribed in its
+texture's opaque box (round on a head, long on a lavender spike) with a brushed rim, a step darker
+at its foot, in the one of six sheet accents (`flower-gold`, `-rose`, `-violet`, `-white`, `-red`,
+`-blue`) that the texture's own mean colour sorts into by OKLCH hue (poppy red, bluebell blue,
+buttercup gold, daisy white, bloom mound pink or gold, bellflower and lavender violet), never a fixed
+or random colour. Each card grows about its centre (`PainterFlowerHue.centres`: one texel a vertex,
+read by `VERTEX_ID`) so its dab is at least `BLOOM_PX` (8) pixels across at the view, at most 3.5x:
+at the orbit view a head reads as one blot, at the eye a bloom keeps its size. A surface whose name
+says neither (a user library's one-atlas flower) keeps the per-pixel petal test, in the accent of
+its non-green pixels' mean. `flower-mix` is now the slow field that steps a drift of blooms lighter
+or darker. Cost on the meadow (in-run against the old path, 47 flower stand-ins): +0.01 ms at zoom
+16, +0.06 at zoom 30, +0.02 at the eye; Painted stays under Classic there.
+Thinning is the sheet's: `keep-grass` (0.6) and `keep-flower` (0.8; 0.4 before painter-flowers, when
+a flowery meadow read empty) in groups of a slow world noise, both in the colour and the shadow pass
+(winter 0.45 and 0.25: fewer tufts stand above the snow). The hand-placed props' layer
+(`MapSourceLoader.PROPS_NODE`) is never thinned: `PainterPlantTone.mark_placed` sets the instance
+uniform `painter_placed` on its nodes, so what an author places stands.
 
 A crown-kind plant (shrubs, hedges, ferns) is lit as one rounded form broken
 into lobes (`bush_lobe`, a world Voronoi) whose outline breaks between them (`bush_cut`).

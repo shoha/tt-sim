@@ -281,7 +281,7 @@ func _look_multimesh(node: MultiMeshInstance3D) -> void:
 			"swap_surface",
 			mesh,
 			i,
-			PainterPlantRoles.for_surface(entry, mesh.surface_get_material(i)),
+			PainterPlantRoles.for_surface(entry, mesh.surface_get_material(i), mesh, i),
 			mesh.get_aabb().size.y
 		)
 		if not swap.is_empty():

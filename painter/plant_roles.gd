@@ -117,8 +117,14 @@ static func of(asset_id: String, wind_category: String, flower: bool = false) ->
 
 ## The entry for one surface of an asset `entry` (of()) names: a tree the painter does not grow
 ## carries `by_surface`, and its material says what the surface is, bark (a solid in the bark role)
-## or leaf (a leaf mass); any other entry is returned as it is. `material` may be null.
-static func for_surface(entry: Dictionary, material: Material) -> Dictionary:
+## or leaf (a leaf mass); a flower's surface carries its bloom (PainterFlowerHue.for_surface: which
+## of the six flower roles, and its dabs' cards when `mesh` and `surface` are given); any other
+## entry is returned as it is. `material` may be null.
+static func for_surface(
+	entry: Dictionary, material: Material, mesh: Mesh = null, surface: int = -1
+) -> Dictionary:
+	if int(entry.get("kind", -1)) == KIND_FLOWER:
+		return PainterFlowerHue.for_surface(entry, material, mesh, surface)
 	if not bool(entry.get("by_surface", false)):
 		return entry
 	var name := "" if material == null else material.resource_name.to_lower()

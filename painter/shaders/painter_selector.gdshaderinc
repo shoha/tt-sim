@@ -7,7 +7,8 @@
 //
 // kind: 0 leaf mass (lit as one rounded form about the plant's middle), 1 grass (one flat tone,
 // darker at the base, lit or shaded like the ground: no middle step), 2 solid (rock, wood, litter: its own normals, a noise-broken turn),
-// 3 flower (the grass ramp on its green pixels, one of four flat accents on its petals by group),
+// 3 flower (stems and leaves in the grass ramp; its blooms one dab a card in the flower's own
+// accent, see bloom_dab()),
 // 4 bush (a leaf mass in the painted crowns' hand: see bush_lobe()).
 // PainterSurfaces sets every uniform from the sheet (PainterTones.ramp and the sheet's numbers).
 // Includers call selector_fragment() at the end of fragment() with the world position and
@@ -25,8 +26,17 @@ uniform vec3 c_lit0 = vec3(0.6);
 uniform vec3 c_shade1 = vec3(0.1, 0.1, 0.2);
 uniform vec3 c_mid1 = vec3(0.3);
 uniform vec3 c_lit1 = vec3(0.6);
-// Flower petals: gold, rose, violet, white (LINEAR).
-uniform vec3 accent[4];
+// Flower blooms: gold, rose, violet, white, red, blue (LINEAR; PainterFlowerHue.ROLES).
+uniform vec3 accent[6];
+// The surface's bloom (PainterFlowerHue.for_surface): its accent (-1: a stem or leaves), whether
+// the whole surface is bloom cards drawn as dabs (else its petal pixels are found by colour), the
+// dab's box in UV (centre, half extents: the texture's opaque box), and each vertex's card centre
+// and dab size (PainterFlowerHue.centres, one texel per VERTEX_ID) for the growth.
+uniform int petal_role = -1;
+uniform bool petal_dab = false;
+uniform vec4 dab_box = vec4(0.5, 0.5, 0.5, 0.5);
+uniform sampler2D bloom_centres : filter_nearest, repeat_disable;
+uniform bool bloom_grow = false;
 // The N.L where the shade, middle and lit steps meet (sheet tone-lo, tone-hi).
 uniform float tone_lo = -0.08;
 uniform float tone_hi = 0.48;
@@ -34,7 +44,7 @@ uniform float tone_hi = 0.48;
 // 1 - keep, so what stays stands in fewer, larger groups (keep 1 = everything).
 uniform float keep = 1.0;
 uniform float keep_freq = 0.2;
-// The frequency (1/m) of the field that gives a group of flowers its colour.
+// The frequency (1/m) of the slow field that steps a drift of blooms a little lighter or darker.
 uniform float group_freq = 0.1;
 // False for ground cover: grass and flowers receive the shade of trees and buildings but cast
 // none of their own (they collapse in the shadow pass).
@@ -189,6 +199,45 @@ vec4 tuft_dab(vec2 uv, vec2 card) {
 	return vec4(kept, own.x, own.y, snow);
 }
 
+// A flower's bloom in the painted hand (card painter-flowers: the texture's small teardrop petals,
+// coloured by a world field in four accents, read as a few purple dots at the orbit view and next
+// to nothing at the eye). Each bloom card is one dab: a blot inscribed in the texture's opaque box
+// (dab_box: round on a head, long on a spike), its rim brushed by a slow wobble, in the flower's
+// own accent and a step darker toward its foot. Each card grows about its centre so that its dab
+// is at least BLOOM_PX pixels across at the view, never past BLOOM_GROW_MAX times its size: at the
+// orbit view a head of bells or a mound reads as one confident blot of colour, at the eye each
+// bloom keeps its own size. The growth reads one texel a vertex; the dab replaces the texture's
+// fetch, so a bloom costs no more than the petal cut did.
+// (Round one of the card at 5 px and 3x: the colours were right, but at zoom 30 a meadow's blooms
+// read as faint specks.)
+const float BLOOM_PX = 8.0;
+const float BLOOM_GROW_MAX = 3.5;
+
+// The local `vertex` (vertex `id` of a bloom surface) grown about its card's centre, for the view
+// of `inv_view` and `projection` on a viewport `viewport` pixels in size.
+vec3 bloom_grown(vec3 vertex, int id, mat4 model, mat4 inv_view, mat4 projection, vec2 viewport) {
+	vec4 c = texelFetch(bloom_centres, ivec2(id % 256, id / 256), 0);
+	if (c.w <= 0.0) {
+		return vertex;
+	}
+	vec3 wc = (model * vec4(c.xyz, 1.0)).xyz;
+	// One pixel in metres at the card: by its distance under a perspective, flat under the orbit's
+	// orthographic camera.
+	float depth = projection[3][3] == 0.0 ? length(wc - inv_view[3].xyz) : 1.0;
+	float px = 2.0 * depth / (projection[1][1] * viewport.y);
+	float k = clamp(BLOOM_PX * px / max(c.w * length(model[1].xyz), 1.0e-4), 1.0, BLOOM_GROW_MAX);
+	return c.xyz + (vertex - c.xyz) * k;
+}
+
+// The bloom card point at `uv` (`seed` the card's own, 0..1): x 1 inside its dab, 0 outside; y its
+// height in the dab, -1 the foot to 1 the top (UV y runs down the card).
+vec2 bloom_dab(vec2 uv, float seed) {
+	vec2 d = (uv - dab_box.xy) / max(dab_box.zw, vec2(0.05));
+	float a = atan(d.y, d.x);
+	float rim = 0.92 + 0.08 * sin(a * 3.0 + seed * 6.2832) * sin(a * 2.0 + seed * 11.0);
+	return vec2(dot(d, d) < rim * rim ? 1.0 : 0.0, -d.y);
+}
+
 // The bush's form centre for an instance at `origin` of `scale`.
 vec3 bush_mid(vec3 origin, float scale) {
 	return origin + vec3(0.0, 0.5 * selector_height * scale, 0.0);
@@ -268,12 +317,13 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 		float rim = smoothstep(0.2, 0.8, length((wp - origin).xz) / across);
 		float own = mix(1.0 - TUFT_STEP, 1.0 + TUFT_STEP, p_hash(floor(origin * 10.0) + 23.0));
 		mul = mix(0.74, 1.0, smoothstep(0.0, 0.55, h)) * (1.0 - TUFT_RIM * rim) * own;
-		if (kind == 3 && tex.g - max(tex.r, tex.b) < 0.02) {
-			// A petal: white where the texture is pale, else one colour per group of plants.
-			float lo = min(tex.r, min(tex.g, tex.b));
-			float grp = p_noise(vec3(origin.x * group_freq, 6.0, origin.z * group_freq) + 90.0);
-			petal = lo > 0.55 ? 3.0 : (grp < 0.44 ? 0.0 : (grp < 0.58 ? 1.0 : 2.0));
-			mul = 1.0;
+		if (kind == 3 && petal_role >= 0 && (petal_dab || tex.g - max(tex.r, tex.b) < 0.02)) {
+			// A bloom: the flower's own accent (PainterFlowerHue), a drift of them a little lighter
+			// or darker by a slow field and each plant a step its own, so a meadow of one species is
+			// never one flat colour (the plant shader darkens a dab's foot).
+			petal = float(petal_role);
+			float drift = p_noise(vec3(origin.x * group_freq, 6.0, origin.z * group_freq) + 90.0);
+			mul = mix(0.9, 1.06, drift) * mix(0.96, 1.04, p_hash(floor(origin * 10.0) + 23.0));
 		}
 		// Snow caps a tuft's top (painter_plant replaces this with tuft_dab()'s caps and bury line).
 		snow = frost > 0.0 && h > 1.0 - 0.3 * frost ? 1.0 : 0.0;
