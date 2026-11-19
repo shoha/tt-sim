@@ -41,7 +41,18 @@ extends RefCounted
 ## that lies in other water (a confluence) needs none. A river that runs into a lower pond
 ## (WaterGeometry.fed_ponds(): the pond owns its mask) gets one where it enters the pond's
 ## water: the surface falls from the river's level to the pond's at CASCADE_SLOPE (_inflow()),
-## instead of stopping a level above the pond with the bed showing under its edge.
+## instead of stopping a level above the pond with the bed showing under its edge; past the
+## channel it falls away to the sides as a perched surface does (below).
+##
+## Perched water (card painter-fall-round2). A river's flat surface is held by its carved
+## channel; where later digging took the ground away (a pond dug beside or under it), the flat
+## hung in the air as a slab cut square along the river's area. A wet sample the river owns
+## alone is perched when it has lost its bank (more than BANK_MARGIN_M past the half-width and
+## BANK_HOLD_M under the level) or its bed (deeper under the level than hold_depth(): the depth
+## and a margin, with the deepest plunge pool below a fall). It is drawn by a sheet, not the
+## flat: the surface falls
+## from the nearest held water of the river at PERCHED_SLOPE and trickles on over the ground as
+## a film, as a run-out does (_perched()); it is not wet (no collision, no zone).
 ##
 ## Falls (phase 4c, P4c-3). A step that is a waterfall (WaterFalls.is_fall) gets no sheet: a
 ## height field cannot stand forward of a face, so cascades() skips the pair and the curtain
@@ -79,6 +90,16 @@ const TUCKED_KEY := 254
 ## (fall_cells(): a cell straddling a diagonal lip line has a corner up to sqrt(2) samples
 ## past it).
 const LIP_TUCK_SAMPLES := 1.5
+## Perched water (see the header): a wet sample this far past the channel's half-width whose
+## ground lies more than BANK_HOLD_M under the level has lost its bank; HOLD_SLACK_M is the
+## margin past the deepest bed a carve digs (hold_depth()).
+const BANK_MARGIN_M := 0.25
+const BANK_HOLD_M := 0.1
+const HOLD_SLACK_M := 0.3
+## The fall per metre of perched water from the held water: steeper than a dug slope (about 1.2
+## m per m at the test map's ankle fall), so the surface leaves the pool in a short lip and then
+## hugs the ground as a film, instead of riding half a metre over the slope as a slab.
+const PERCHED_SLOPE := 2.4
 ## Side of the square tiles a body's WaterZone footprint is split into (metres).
 const ZONE_TILE_M := 5.0
 
@@ -107,14 +128,21 @@ static func build(doc: MapDocument) -> Dictionary:
 			levels[i] = doc.water_bodies[owner[i]].level_m
 			if heights[i] < levels[i]:
 				wet[i] = 1
+	var buried := {}
+	var perched := {}
+	var sheets := cascades(doc, buried, perched)
+	# Perched samples are drawn by their sheet alone (see the header), also where it has sunk
+	# under the ground, so no flat cell reaches over them.
+	for i: int in perched:
+		wet[i] = 0
+		if not sheets.has(i):
+			sheets[i] = buried[i]
 	var cells := cell_owners(doc, owner, levels, wet)
 	var out := {
 		"arrays": [], "levels": levels, "wet": wet, "bodies": [], "falls": [], "falls_aabb": AABB()
 	}
 	if cells.is_empty():
 		return out
-	var buried := {}
-	var sheets := cascades(doc, buried)
 	var falls := WaterFalls.falls(doc)
 	var tucked := fall_cells(doc, falls, wet)
 	for i: int in tucked:
@@ -134,7 +162,11 @@ static func build(doc: MapDocument) -> Dictionary:
 ## has sunk under the bank past the waterline (CASCADE_EDGE_SLOPE): the mesh's corners there,
 ## so the sheet's edge is where the ground cuts it, not the edge of its samples. A step that
 ## is a waterfall (WaterFalls.is_fall) gets no sheet (P4c-3: the curtain is WaterFallMesh's).
-static func cascades(doc: MapDocument, buried: Dictionary = {}) -> Dictionary:
+## Then the perched water (_perched()); `perched`, when given, receives its samples (index ->
+## true), each in the result or in `buried`.
+static func cascades(
+	doc: MapDocument, buried: Dictionary = {}, perched: Dictionary = {}
+) -> Dictionary:
 	var out := {}
 	if doc.heights.size() != doc.sample_count():
 		return out
@@ -158,6 +190,7 @@ static func cascades(doc: MapDocument, buried: Dictionary = {}) -> Dictionary:
 			_run_out(doc, a, false, out, buried)
 		if joined.y == 0:
 			_run_out(doc, a, true, out, buried)
+	_perched(doc, out, buried, perched)
 	for i: int in out:
 		buried.erase(i)
 	return out
@@ -236,11 +269,15 @@ static func _run_out(
 	# An end in other water is a confluence (WaterEdit.join_line): the water carries on there.
 	if WaterGeometry.is_wet_at(doc, end, body.id):
 		return
+	var level := body.level_m
+	# A perched end (its bed dug away under it): its surface falls from the held water instead
+	# (_perched()), so a run-out from the level here would hang in the air.
+	if WaterGeometry.ground_at(doc, end) < level - hold_depth(doc, body):
+		return
 	var outward := WaterGeometry.end_direction(course, at_end)
 	if not at_end:
 		outward = -outward
 	var half := body.half_widths[-1] if at_end else body.half_widths[0]
-	var level := body.level_m
 	var reach := body.depth_m() / RUN_OUT_SLOPE + RUN_OUT_FILM_M
 	var slope := RUN_OUT_SLOPE
 	var gap := RiverExits.edge_distance(end, doc.extent_m() * 0.5)
@@ -335,7 +372,12 @@ static func _cascade(
 ## (arc length along the course, past the end along its direction), the surface falls from
 ## the river's level to the pond's at CASCADE_SLOPE and stays at the pond's past that, as a
 ## film over a bed that stands higher (a riffle's, _cascade()); where the pond's own flat
-## surface would draw the same, the pond's cells are kept. Merged into `out`.
+## surface would draw the same, the pond's cells are kept. Past the channel (BANK_MARGIN_M
+## beyond its half-width) the surface also falls to the sides at RUN_OUT_SLOPE, so it meets the
+## pond's bank on a curve instead of standing over it to the edge of the river's area (card
+## painter-fall-round2: square shoulders). A pond sample just upstream of where the ramp
+## starts, which the river no longer owns, takes the river's level (it was a hole: a tan notch
+## and a white triangle). Merged into `out`.
 @warning_ignore("integer_division")
 static func _inflow(
 	doc: MapDocument, river: WaterBody, pond: WaterBody, out: Dictionary, buried: Dictionary
@@ -378,9 +420,12 @@ static func _inflow(
 		var s := along[k] - start
 		var i := area[k]
 		var ground := heights[i]
-		if s < -CASCADE_BACK_M or (s < 0.0 and ground < upper):
+		# Upstream of the ramp the river's own flat draws, but not over the pond's mask, which
+		# the river does not own (the tolerance: a sample level with the start is on the ramp).
+		if mask[i] != pond.id and (s < -CASCADE_BACK_M or (s < -0.01 and ground < upper)):
 			continue
-		var ramp := lerpf(upper, lower, clampf(s / run, 0.0, 1.0))
+		var side := maxf(lateral[k] - half - BANK_MARGIN_M, 0.0) * RUN_OUT_SLOPE
+		var ramp := lerpf(upper, lower, clampf(s / run, 0.0, 1.0)) - side
 		var film := clampf(ground + _edge_film(lateral[k] - half), lower, upper)
 		var sheet := maxf(film if ground >= lower else lower, ramp)
 		if mask[i] == pond.id and sheet <= lower + 0.005:
@@ -403,14 +448,137 @@ static func _near(course: PackedVector2Array, at: Vector2, radius: float) -> Pac
 	return course.slice(maxi(first - 1, 0), mini(last + 2, course.size()))
 
 
+## The deepest water column `river`'s carve holds under its level: its depth and HOLD_SLACK_M,
+## plus the deepest plunge pool (WaterFalls.PLUNGE_DEPTH_MAX_M) when it is the reach below a
+## fall. A bed deeper than this was dug away by something else, and the water over it is
+## perched (see the header), unless an end of the river lies in other water (a pond it feeds or
+## leaves, a confluence): that water's own basin may have deepened the channel near it, so
+## there the bed never counts (INF).
+static func hold_depth(doc: MapDocument, river: WaterBody) -> float:
+	if river.points.size() < 2:
+		return INF
+	for end in [river.points[0], river.points[-1]]:
+		if WaterGeometry.is_wet_at(doc, end, river.id):
+			return INF
+	var hold := river.depth_m() + HOLD_SLACK_M
+	for upper in doc.water_bodies:
+		if (
+			upper != river
+			and upper.is_river()
+			and upper.points.size() >= 2
+			and upper.points[-1].distance_squared_to(river.points[0]) < WaterGeometry.JOIN_EPSILON_SQ
+			and WaterFalls.is_fall(doc, upper, river)
+		):
+			return hold + WaterFalls.PLUNGE_DEPTH_MAX_M
+	return hold
+
+
+## The perched water of `doc`'s rivers (see the header), merged into `out` (over the ground) or
+## `buried`, each sample recorded in `perched`. Per river: the wet samples it owns alone (no
+## other body's area holds them) that lost their bank or bed and lie under no sheet already;
+## the surface there falls from the nearest held wet sample (not lost, under no sheet; a
+## chamfer distance over the river's field) at PERCHED_SLOPE, never above the level, and
+## trickles on as a film over the ground, thinning to the waterline past the channel.
+@warning_ignore("integer_division")
+static func _perched(
+	doc: MapDocument, out: Dictionary, buried: Dictionary, perched: Dictionary
+) -> void:
+	if doc.heights.size() != doc.sample_count():
+		return
+	var owned := _owners(doc)
+	var owner: PackedInt32Array = owned[0]
+	var holders: PackedByteArray = owned[1]
+	var columns := doc.samples_x()
+	var heights := doc.heights
+	for b in doc.water_bodies.size():
+		var body := doc.water_bodies[b]
+		if not body.is_river() or body.points.size() < 2:
+			continue
+		var level := body.level_m
+		var floor_level := level - hold_depth(doc, body)
+		var field := WaterGeometry.sample_field(doc, body)
+		var rect: Rect2i = field["rect"]
+		var distance: PackedFloat32Array = field["distance"]
+		var widths: PackedFloat32Array = field["half_width"]
+		var count := rect.size.x * rect.size.y
+		var reach := PackedFloat32Array()
+		reach.resize(count)
+		reach.fill(INF)
+		var lost := PackedInt32Array()
+		for k in count:
+			if not WaterGeometry.in_reach(field, k, WaterGeometry.RIVER_BANK_M):
+				continue
+			var i := (rect.position.y + k / rect.size.x) * columns + rect.position.x
+			i += k % rect.size.x
+			var ground := heights[i]
+			if owner[i] != b or ground >= level or out.has(i):
+				continue
+			var banked := distance[k] <= widths[k] + BANK_MARGIN_M or ground >= level - BANK_HOLD_M
+			if banked and ground >= floor_level:
+				reach[k] = 0.0
+			elif holders[i] == 1:
+				lost.append(k)
+		if lost.is_empty():
+			continue
+		_chamfer(reach, rect.size, doc.sample_step())
+		for k in lost:
+			var i := (rect.position.y + k / rect.size.x) * columns + rect.position.x
+			i += k % rect.size.x
+			var ground := heights[i]
+			var film := ground + _edge_film(distance[k] - widths[k])
+			var sheet := minf(maxf(level - reach[k] * PERCHED_SLOPE, film), level)
+			_put_sheet(i, sheet, ground, out, buried)
+			perched[i] = true
+
+
+## Two-pass chamfer distance over a row-major grid of `size` cells `step` apart, in place:
+## each cell of `d` becomes the least of its own value and a neighbour's plus the step to it.
+static func _chamfer(d: PackedFloat32Array, size: Vector2i, step: Vector2) -> void:
+	var diagonal := step.length()
+	for z in size.y:
+		for x in size.x:
+			var k := z * size.x + x
+			var v := d[k]
+			if x > 0:
+				v = minf(v, d[k - 1] + step.x)
+			if z > 0:
+				v = minf(v, d[k - size.x] + step.y)
+				if x > 0:
+					v = minf(v, d[k - size.x - 1] + diagonal)
+				if x < size.x - 1:
+					v = minf(v, d[k - size.x + 1] + diagonal)
+			d[k] = v
+	for z in range(size.y - 1, -1, -1):
+		for x in range(size.x - 1, -1, -1):
+			var k := z * size.x + x
+			var v := d[k]
+			if x < size.x - 1:
+				v = minf(v, d[k + 1] + step.x)
+			if z < size.y - 1:
+				v = minf(v, d[k + size.x] + step.y)
+				if x < size.x - 1:
+					v = minf(v, d[k + size.x + 1] + diagonal)
+				if x > 0:
+					v = minf(v, d[k + size.x - 1] + diagonal)
+			d[k] = v
+
+
 ## The index into doc.water_bodies of the body owning each sample (the highest level among
 ## the bodies whose area holds it; a river not over the mask of a pond it feeds,
 ## WaterGeometry.fed_ponds()), -1 where none does.
 static func sample_owners(doc: MapDocument) -> PackedInt32Array:
+	return _owners(doc)[0]
+
+
+## [sample_owners(), and per sample how many bodies' areas hold it (PackedByteArray, at most
+## 255, by the same rule)].
+static func _owners(doc: MapDocument) -> Array:
 	var count := doc.sample_count()
 	var owner := PackedInt32Array()
 	owner.resize(count)
 	owner.fill(-1)
+	var holders := PackedByteArray()
+	holders.resize(count)
 	var best := PackedFloat32Array()
 	best.resize(count)
 	best.fill(WaterGeometry.DRY)
@@ -421,10 +589,11 @@ static func sample_owners(doc: MapDocument) -> PackedInt32Array:
 		for i in WaterGeometry.body_area(doc, body):
 			if fed_id != 0 and doc.pond_mask[i] == fed_id:
 				continue
+			holders[i] = mini(holders[i] + 1, 255)
 			if body.level_m > best[i]:
 				best[i] = body.level_m
 				owner[i] = b
-	return owner
+	return [owner, holders]
 
 
 ## Covered cells: {Vector2i(x, z) of the cell's lower corner -> body index} (see the

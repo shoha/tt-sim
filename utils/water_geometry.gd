@@ -634,7 +634,12 @@ static func pond_rim_level(
 
 
 ## nearest_field() of a river body's course over `doc`'s sample grid, flush at an end
-## another river continues from (flush_ends()).
+## another river continues from (flush_ends()): body_area()'s field, for a caller that also
+## needs each sample's distance from the course and half-width there (in_reach()).
+static func sample_field(doc: MapDocument, body: WaterBody) -> Dictionary:
+	return _sample_field(doc, body)
+
+
 static func _sample_field(doc: MapDocument, body: WaterBody) -> Dictionary:
 	var course := river_course(body)
 	var grid := Vector2i(doc.samples_x(), doc.samples_z())

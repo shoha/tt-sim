@@ -87,3 +87,49 @@ func test_the_surface_falls_from_the_river_to_the_pond() -> void:
 		WaterMeshBuilder.cascades(higher).has(_index(higher, Vector2(0, 1.5))),
 		"no sheet into a higher pond"
 	)
+
+
+## Perched water (card painter-fall-round2): an ankle river at level 0 over ground at -0.2 for
+## z < 0 (held: its bed within hold_depth()) and dug away to -2 past it, as a pond dug later took
+## the tall ankle fall's plateau. The held part stays a flat; past it the surface falls at
+## PERCHED_SLOPE to a film over the ground, is not wet, and no flat hangs at the level there.
+func test_water_whose_ground_was_dug_away_falls_to_a_film() -> void:
+	var doc := MapDocument.create_flat(Vector2i(40, 40), "", "", 0)
+	var heights := PackedFloat32Array()
+	heights.resize(doc.sample_count())
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var p := doc.sample_to_world(Vector2(x, z))
+			var bed := -0.2 if p.y < 0.0 else -2.0
+			heights[doc.sample_index(x, z)] = bed if absf(p.x) <= 0.6 or p.y >= 0.0 else 0.3
+	doc.heights = heights
+	var river := WaterBody.new()
+	river.id = 1
+	river.kind = WaterBody.Kind.RIVER
+	river.depth = WaterBody.Depth.ANKLE
+	river.level_m = 0.0
+	river.points = PackedVector2Array([Vector2(0, -8), Vector2(0, 8)])
+	river.half_widths = PackedFloat32Array([0.6, 0.6])
+	doc.water_bodies = [river] as Array[WaterBody]
+	assert_almost_eq(
+		WaterMeshBuilder.hold_depth(doc, river),
+		0.3 + WaterMeshBuilder.HOLD_SLACK_M,
+		1e-5,
+		"an ankle river with free ends holds its depth and the slack"
+	)
+	var perched := {}
+	var sheets := WaterMeshBuilder.cascades(doc, {}, perched)
+	var built := WaterMeshBuilder.build(doc)
+	var up := _index(doc, Vector2(0, -3))
+	assert_false(perched.has(up), "the held reach is not perched")
+	assert_eq(built.wet[up], 1, "and stays wet")
+	var near := _index(doc, Vector2(0, 0.25))
+	var far := _index(doc, Vector2(0, 4))
+	assert_true(perched.has(far) and sheets.has(far), "the dug part is a sheet")
+	assert_eq(built.wet[far], 0, "not wet")
+	assert_almost_eq(sheets[far], -2.0 + WaterMeshBuilder.CASCADE_FILM_M, 1e-4, "a film far off")
+	assert_lt(float(sheets[near]), -0.2, "it has left the level a quarter metre past")
+	var vertices: PackedVector3Array = built.arrays[Mesh.ARRAY_VERTEX]
+	for v in vertices:
+		if v.z > 1.5:
+			assert_lt(v.y, -1.5, "no surface hangs over the dug ground (%s)" % v)
