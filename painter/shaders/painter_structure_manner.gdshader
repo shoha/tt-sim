@@ -692,10 +692,11 @@ void fragment() {
 			// roofs), its frame from the face and h, its body in its rolled shading normal; on a
 			// spire too steep for the whole layer, one cap over its upper part whose lower edge rolls
 			// over like an eave's lip (snow_cover_roof, snow_edge_m).
-			cover = snow_cover_roof(snow, up, h, fr.xy) * (1.0 - snow_gap(fr.xy, fr.w));
+			float seed = v_bld.x * 23.0;
+			cover = snow_cover_roof(snow, up, h, fr.xy, n, seed) * (1.0 - snow_gap(fr.xy, fr.w));
 			hide = 1.0;
 			vec4 sp = snow_paint(fr.xy, fbroad);
-			vec3 roll = snow_roll(snow_edge_m(up, h, fr.xy, fr.z), fr.w, fr.xy);
+			vec3 roll = snow_roll(snow_edge_m(up, h, fr.xy, fr.z, n, seed), fr.w, fr.xy);
 			vec2 sm = snow_marks(cover, sp, roll.y, roll.z);
 			snow_dark = sm.x;
 			snow_light = sm.y;

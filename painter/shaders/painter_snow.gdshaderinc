@@ -10,7 +10,9 @@
  * "much patchier"). A face holds it by its slope (snow_hold); where it holds only part, on a steep
  * run, the layer thins into long soft streaks down the fall line, never a half-mixed veil
  * (snow_cover_of); on a roof the layer instead ends at a soft lower edge that rises up a steeper
- * face, so a spire wears one cap over its upper part (snow_cover_roof). The layer is drawn in
+ * face, so a spire wears a cap of a few uneven drifts over its upper part, heavier on some facets
+ * and nearly bare toward the sun (snow_cover_roof, snow_edge). Upright faces hold none (a street
+ * roof's tile gables keep a drift along their foot, snow_upright, snow_foot). The layer is drawn in
  * the snow's own ramp with a body:
  *   a lit top    broad soft swells (warm white) and hollows (toward the blue shade), wider along
  *                the eave than down the slope, under a few broad brush washes; the light turns
@@ -31,6 +33,10 @@
 // A distance to an edge the surface does not know (a prop's top, a flat roof's middle).
 const float SNOW_FAR = 99.0;
 
+// The direction toward the sun (xyz) and its weight (FoliageLight): a steep cap thins on the side
+// facing it (snow_edge).
+global uniform vec4 foliage_sun;
+
 // How much snow a face holds (0 to 1): `snow` the sheet's roof-snow (winter 0.45), `up` the
 // face's normal Y. All of it from a moderate pitch, none on a spire's steep run.
 float snow_hold(float snow, float up) {
@@ -46,44 +52,65 @@ float snow_cover_of(float hold, vec2 f) {
 }
 
 // Where a roof's cover ends down its face (`h` 0 at the eave to 1 at the tip or ridge, as h runs),
-// by how much of the layer the face holds (`up` its normal's Y), at frame point `f`: past the eave
-// on a face that holds it all, over about the upper half of a spire's run, between the two on a
-// steep pitch, wandering in a few broad soft tongues along the eave.
-float snow_edge(float up, vec2 f) {
+// by how much of the layer the face holds (`up` its normal's Y), at frame point `f`, on a face
+// whose normal is `n`, of a building whose seed is `seed`: past the eave on a face that holds it
+// all, wandering in a few broad soft tongues along the eave; on a steep face (a spire, a Taper
+// roof) a cap of a few uneven drifts (card painter-roof-round5, owner on round 3's one regular cap:
+// "Rework"; chosen over a high cap with long tongues and a cap with a drift band, probe/
+// sheet_caps2): each facet holds its own share (a slow noise of its facing, continuous round a
+// cone and one value per face of a Taper roof), the side facing the sun nearly bare, so the roof's
+// own colour shows below a painted edge broken round the roof and along each facet.
+float snow_edge(float up, vec2 f, vec3 n, float seed) {
 	float hold = smoothstep(0.2, 0.44, up);
 	float tongue = p_n2(vec2(f.x * 1.3, 5.0), 173.0);
 	float sway = p_n2(vec2(f.x * 0.4, 9.0), 174.0);
-	return mix(0.45, -0.3, hold) + (tongue - 0.5) * 0.12 + (sway - 0.5) * 0.1;
+	float edge = mix(0.55, -0.3, hold) + ((tongue - 0.5) * 0.12 + (sway - 0.5) * 0.1) * hold;
+	vec2 face = n.xz / max(length(n.xz), 1e-4);
+	float facet = p_n2(face * 1.2 + vec2(seed, seed * 0.7), 191.0);
+	vec2 sun = foliage_sun.xz;
+	float sunward = length(sun) > 0.01 ? dot(face, normalize(sun)) : 0.0;
+	float e1 = p_n2(face * 3.0 + vec2(f.x * 0.9, seed), 193.0);
+	float e2 = p_n2(face * 7.0 + vec2(f.x * 1.7, seed + 3.0), 194.0);
+	float drifts = (facet - 0.5) * 0.45 + 0.3 * smoothstep(0.0, 0.85, sunward)
+		+ (e1 - 0.5) * 0.28 + (e2 - 0.5) * 0.12;
+	return edge + (1.0 - hold) * drifts;
 }
 
 // A street roof's upright faces (0 to 1): a gable end clad in the roof's own material (the guild
-// and market houses' ends, h running 0 to 1 up the triangle as up a slope) and the slab's edges,
-// plastered over by the drifting snow, so a gable's triangle reads with its slopes as one snowed
-// mass (card painter-roof-round4, owner on the market houses' bare orange ends in winter: "cover them
-// with body, shade side too"; at the game's view a gable end reads as one more slope). An underside
-// keeps none. Only the A3b roofs call it: a hand-drawn house's gables are walls, and its round and
-// Taper roofs keep their upright foot in their own colour (card painter-roof-round3's spires).
-float snow_gable(float up) {
+// and market houses' ends, h running 0 to 1 up the triangle as up a slope) and the slab's edges.
+// Snow does not lie on them (card painter-roof-round5, owner on round 4's snowed gables: "would
+// the gables actually have snow on them? i don't think they would"): they keep their own tile, a
+// touch cooler among the snow, with a little drift caught along their foot (snow_foot). An
+// underside keeps none.
+float snow_upright(float up) {
 	return smoothstep(-0.3, -0.15, up) * (1.0 - smoothstep(0.08, 0.16, up));
+}
+
+// The drift along an upright face's foot (0 to 1) at `above` metres over it (snow_frame's z on an
+// upright face; SNOW_FAR where unknown) and `along` metres along it: 8 to 22 cm deep, its top a
+// soft broken line.
+float snow_foot(float above, float along) {
+	float deep = 0.08 + 0.14 * p_n2(vec2(along * 0.9, 21.0), 181.0);
+	return 1.0 - smoothstep(deep - 0.05, deep + 0.03, above);
 }
 
 // A roof face's cover (the roof shaders'; the props keep snow_cover_of): one soft layer down to its
 // lower edge (snow_edge), whole below a moderate pitch and over the upper part of a steep face, so
-// a spire, a Taper roof's cone, a bell or mansard roof's lower run carries one bodied cap of snow
+// a spire, a Taper roof's cone, a bell or mansard roof's lower run carries a bodied cap of snow
 // (card painter-roof-round3, owner on the round towers in winter: "streaky and weird"; the long
 // streaks of a half hold and the steep cap's thin ledges are gone). A face near vertical (a slab's
-// edge, a finial) or facing down holds none (a street roof adds its upright faces, snow_gable).
-float snow_cover_roof(float snow, float up, float h, vec2 f) {
+// edge, a finial) or facing down holds none (a street roof's upright faces, snow_upright).
+float snow_cover_roof(float snow, float up, float h, vec2 f, vec3 n, float seed) {
 	float amount = clamp(snow * 2.2, 0.0, 1.0) * smoothstep(0.08, 0.16, up);
-	float edge = snow_edge(up, f);
+	float edge = snow_edge(up, f, n, seed);
 	return amount * smoothstep(edge - 0.025, edge + 0.025, h);
 }
 
 // Metres up the face from a roof cover's lower edge (snow_cover_roof), for its lip: snow_roll's
 // `to_eave` where the cover ends above the eave, so a cap rounds over its own edge into the blue
 // shade as a blanket does over an eave. `to_eave` snow_frame's z (SNOW_FAR kept).
-float snow_edge_m(float up, float h, vec2 f, float to_eave) {
-	float edge = max(snow_edge(up, f), 0.0);
+float snow_edge_m(float up, float h, vec2 f, float to_eave, vec3 n, float seed) {
+	float edge = max(snow_edge(up, f, n, seed), 0.0);
 	return to_eave >= SNOW_FAR ? SNOW_FAR : max(h - edge, 0.0) * to_eave / max(h, 0.001);
 }
 
@@ -153,7 +180,7 @@ vec4 snow_frame(vec3 wp, vec3 n, float h) {
 	bool climbs = k > 0.02 && rise > 0.1;
 	float to_eave = climbs ? h / k / rise : SNOW_FAR;
 	float to_ridge = climbs ? (1.0 - h) / k / rise : SNOW_FAR;
-	// On an upright face (a gable end, snow_gable) the metres up it are its height: the slope's
+	// On an upright face (a gable end, snow_foot) the metres up it are its height: the slope's
 	// measure is one value over the whole face, and its washes ran as upright stripes.
 	float upright = 1.0 - smoothstep(0.04, 0.08, n.y);
 	return vec4(dot(wp.xz, across), mix(-dot(wp.xz, down) / up, wp.y, upright), to_eave, to_ridge);

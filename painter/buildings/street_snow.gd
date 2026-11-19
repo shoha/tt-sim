@@ -133,6 +133,9 @@ func _arrive(key: int, id: int, built: Dictionary, generation: int) -> void:
 			_nodes.erase(id)
 		return
 	stats[id] = {"ms": float(built.ms), "tris": int(built.triangles)}
+	# The roof under it keeps no crest gaps either (painter_structure.gdshader's `scour`, card
+	# painter-roof-round5: short bare slashes along the market's ridges by the chimneys).
+	part.set_instance_shader_parameter(&"scour", 0.0)
 	if (built.arrays as Array).is_empty():
 		return
 	var mesh := ArrayMesh.new()

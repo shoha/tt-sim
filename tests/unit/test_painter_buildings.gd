@@ -474,10 +474,34 @@ func test_a_steep_roof_holds_one_bodied_cap() -> void:
 	for path: String in [PainterBuildings.SHADER, PainterMannerHost.SHADER]:
 		var code := FileAccess.get_file_as_string(path)
 		assert_string_contains(code, "snow_cover_roof(snow, up, h,", path)
-		assert_string_contains(code, "snow_roll(snow_edge_m(up, h, fr.xy, fr.z)", path)
+		assert_string_contains(code, "snow_roll(snow_edge_m(up, h, fr.xy, fr.z, n,", path)
 		assert_false(code.contains("snow_cover_of(snow_hold("), "%s: no bare slope hold" % path)
 	var prop := FileAccess.get_file_as_string(PainterVillage.PROP_SHADER)
 	assert_string_contains(prop, "snow_cover_of(snow_hold(snow, n.y)")
+
+
+func test_round5_caps_drift_by_facet_and_gables_stay_bare() -> void:
+	# Card painter-roof-round5. The owner on round 4's snowed street gables: "would the gables
+	# actually have snow on them?": an upright face keeps its tile, cooler, with a drift at its foot.
+	# On round 3's steep cap: "Rework": one shared cap of uneven drifts by facet, thin toward the sun.
+	# The street roofs keep no crest gaps under their blankets (`scour` 0 on the part too).
+	var snow := FileAccess.get_file_as_string("res://painter/shaders/painter_snow.gdshaderinc")
+	assert_false(snow.contains("snow_gable"), "no snow on a gable")
+	assert_false(snow.contains("snow_cap_probe"), "the probe switch is gone")
+	for fn in ["float snow_upright(", "float snow_foot(", "global uniform vec4 foliage_sun"]:
+		assert_string_contains(snow, fn)
+	var a3b := FileAccess.get_file_as_string(PainterBuildings.SHADER)
+	assert_string_contains(a3b, "instance uniform float scour")
+	assert_string_contains(a3b, "snow_gap(fr.xy, fr.w) * scour")
+	assert_string_contains(a3b, "snow_foot(fr.z, fr.x)")
+	var street := FileAccess.get_file_as_string("res://painter/buildings/street_snow.gd")
+	assert_string_contains(street, "part.set_instance_shader_parameter(&\"scour\", 0.0)")
+
+
+func test_a_hand_sinks_its_eave_trim_under_the_roof() -> void:
+	# Card painter-roof-round5, owner on the townhouse: "it's still there a bit through the roof".
+	assert_gt(PainterMannerMesh.HAND_TRIM_SINK_M, 0.05, "deeper than the hairline it hid")
+	assert_lt(PainterMannerMesh.HAND_TRIM_SINK_M, 0.15, "and still hidden under the eave")
 
 
 func test_a3b_tiles_band_by_course_without_a_patchwork() -> void:

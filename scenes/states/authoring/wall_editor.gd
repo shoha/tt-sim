@@ -25,8 +25,12 @@ const REFUSED_POINTS := &"points"
 const REFUSED_INVALID := &"invalid"
 ## A street with no building the library can stand in for (split_street).
 const REFUSED_NOTHING := &"nothing"
-## A street whose houses would stand in another street's (StreetCrowding).
+## A street whose houses would stand in another street's and that cannot be nudged clear: the nudge
+## would meet another street or carry it too far (StreetCrowding), leave the map, or put houses in
+## the water.
 const REFUSED_CROWDED := &"crowded"
+const REFUSED_CROWDED_EDGE := &"crowded_edge"
+const REFUSED_CROWDED_WATER := &"crowded_water"
 ## A drag begins or ends on a wall's free end within this of it (world metres).
 const SNAP_M := 0.6
 ## A row shorter than this has no room for a building (world metres).
@@ -37,6 +41,8 @@ const FOLLOW_REACH_M := 1.0
 
 ## Why the last plan() or add() made nothing, or &"".
 var last_refusal: StringName = &""
+## How far the last plan() nudged a new street clear of another's houses (map metres), or 0.
+var last_nudge_m: float = 0.0
 ## How many lots of the last split_street() made no valid record.
 var last_split_skipped: int = 0
 ## Microseconds of the last change's refresh, for measurement.
@@ -83,6 +89,7 @@ func plan(
 	var e := _editor()
 	var doc := e.document
 	last_refusal = &""
+	last_nudge_m = 0.0
 	var a := e.to_map_xz(from)
 	var b := e.to_map_xz(to)
 	if a.distance_to(b) < Wall.MIN_SEGMENT_M:
@@ -127,10 +134,21 @@ func plan(
 		last_refusal = _refusal_for(wall)
 		return null
 	# A street drawn closer to another than their houses reach would put houses through houses
-	# (card painter-roof-round4): refused while it is drawn, so the readout says so.
-	if wall.is_row() and StreetCrowding.crowded_by(doc, wall) >= 0:
+	# (card painter-roof-round4): a new one is nudged clear (StreetCrowding.nudge, card
+	# painter-roof-round5), or refused with the reason; an extension of a street is refused, since
+	# nudging it would move the part already laid.
+	if wall.is_row() and target != null and StreetCrowding.crowded_by(doc, wall) >= 0:
 		last_refusal = REFUSED_CROWDED
 		return null
+	if wall.is_row() and target == null:
+		var nudged := StreetCrowding.nudge(doc, wall, doc.extent_m())
+		if nudged["wall"] == null:
+			last_refusal = crowded_refusal(nudged["blocked"])
+			return null
+		if float(nudged["moved_m"]) > 0.0:
+			wall = nudged["wall"]
+			wall.style = CrossingPlacement.style_at(doc, StreetCrowding.middle(wall))
+			last_nudge_m = nudged["moved_m"]
 	return wall
 
 
@@ -381,6 +399,16 @@ static func _free_end_near(doc: MapDocument, p: Vector2, kind: Wall.Kind, snap: 
 				best = wall
 				best_distance = distance
 	return best
+
+
+## The refusal for a street StreetCrowding.nudge could not lay (its "blocked"). Pure.
+static func crowded_refusal(blocked: StringName) -> StringName:
+	match blocked:
+		StreetCrowding.BLOCKED_EDGE:
+			return REFUSED_CROWDED_EDGE
+		StreetCrowding.BLOCKED_WATER:
+			return REFUSED_CROWDED_WATER
+	return REFUSED_CROWDED
 
 
 static func _refusal_for(wall: Wall) -> StringName:
