@@ -1162,7 +1162,9 @@ rather than in `ASSET_PIPELINE.md`.
   surfaces (below), optional water (below), and optional `fire.png` (L8 persistent ground
   fire intensity, 0 none, never all zero; drawn by `FireField`, painted by the Fire tool;
   `docs/systems/map_document.md`, and "Persistent fire" below). Unknown entries are ignored, so later
-  phases add entries without a format bump.
+  phases add entries without a format bump. Every entry carries one fixed modification time
+  (`MapDocumentIO.ENTRY_TIME`, a 1980 date) instead of ZIPPacker's wall-clock default, so the
+  same document always packs to the same bytes and an unchanged re-save keeps its `MapFileHash`.
 - **Size (measured 2026-10-09 with JSON rows, 200 ft maps):** a fresh starting-cover map was
   0.2-0.26 MB (about 3.7K scatter rows); a full-density grassland map 1.37-1.48 MB (43K rows),
   93-99% of it `scatter.json` at about 93 B per row. `height.bin` is 100 KB zipped on a

@@ -127,41 +127,68 @@ func test_reduced_scale_feedback_stays_at_rest_with_no_tween() -> void:
 	tween.kill()
 
 
-func test_reduced_stagger_fades_rows_together_with_no_lift() -> void:
-	UiMotion.user_reduce = true
+## [param count] Labels in a VBoxContainer whose processing is off, so the tweens stagger_in
+## binds to it move only when the test steps them (_step). The stagger tests once waited on real
+## frames and raced the machine: one stalled frame let the physics frames a test waited on pass
+## before the two process frames stagger_in waits on, so no tween existed yet (card
+## flaky-gate-tests).
+func _frozen_rows(count: int) -> Array[Control]:
 	var holder := VBoxContainer.new()
+	holder.process_mode = Node.PROCESS_MODE_DISABLED
 	add_child_autofree(holder)
 	var rows: Array[Control] = []
-	for i in 4:
+	for i in count:
 		var row := Label.new()
 		holder.add_child(row)
 		rows.append(row)
-	UiMotion.stagger_in(rows, holder)
+	return rows
+
+
+## Advances every tween of an entrance by [param seconds].
+func _step(tweens: Array[Tween], seconds: float) -> void:
+	for tween in tweens:
+		tween.custom_step(seconds)
+
+
+func test_reduced_stagger_fades_rows_together_with_no_lift() -> void:
+	UiMotion.user_reduce = true
+	var rows := _frozen_rows(4)
+	var tweens: Array[Tween] = await UiMotion.stagger_in(rows, rows[0].get_parent())
+	assert_eq(tweens.size(), rows.size(), "one tween per row")
 	for row in rows:
-		assert_eq(row.modulate.a, 0.0, "hidden before the first frame")
-	await wait_seconds(UiMotion.FADE_ONLY_S + 0.2)
+		assert_eq(row.modulate.a, 0.0, "hidden until the entrance runs")
+	_step(tweens, UiMotion.FADE_ONLY_S * 0.5)
+	assert_between(rows[0].modulate.a, 0.01, 0.99, "halfway through the fade")
+	for row in rows:
+		assert_almost_eq(row.modulate.a, rows[0].modulate.a, 0.0001, "the rows fade together")
+	_step(tweens, UiMotion.FADE_ONLY_S)
 	for row in rows:
 		assert_almost_eq(row.modulate.a, 1.0, 0.01)
 		assert_eq(row.offset_transform_position, Vector2.ZERO, "no lift under Reduce motion")
 
 
 func test_full_motion_stagger_lifts_with_the_offset_transform_not_position() -> void:
-	var holder := VBoxContainer.new()
-	add_child_autofree(holder)
-	var rows: Array[Control] = []
-	for i in 3:
-		var row := Label.new()
-		holder.add_child(row)
-		rows.append(row)
-	UiMotion.stagger_in(rows, holder)
-	await wait_frames(4)
-	assert_gt(rows[2].offset_transform_position.y, 0.0, "the last row has not arrived yet")
+	var rows := _frozen_rows(3)
+	var tweens: Array[Tween] = await UiMotion.stagger_in(rows, rows[0].get_parent())
+	assert_eq(tweens.size(), rows.size(), "one tween per row")
+	var resting: Array[Vector2] = []
 	for row in rows:
-		assert_eq(row.position.x, 0.0)
-	await wait_seconds(UiMotion.STAGGER_CAP_S + 0.2)
-	for row in rows:
-		assert_almost_eq(row.modulate.a, 1.0, 0.01)
-		assert_almost_eq(row.offset_transform_position.y, 0.0, 0.01)
+		assert_eq(row.offset_transform_position.y, UiMotion.ENTRANCE_OFFSET_PX, "starts lifted")
+		resting.append(row.position)
+	_step(tweens, UiMotion.stagger_step(rows.size()))
+	assert_lt(rows[0].offset_transform_position.y, UiMotion.ENTRANCE_OFFSET_PX, "the first rises")
+	assert_eq(
+		rows[2].offset_transform_position.y,
+		UiMotion.ENTRANCE_OFFSET_PX,
+		"the last row is still waiting out its delay"
+	)
+	for i in rows.size():
+		assert_eq(rows[i].position, resting[i], "the lift never moves the row's position")
+	_step(tweens, UiMotion.STAGGER_CAP_S)
+	for i in rows.size():
+		assert_almost_eq(rows[i].modulate.a, 1.0, 0.01)
+		assert_almost_eq(rows[i].offset_transform_position.y, 0.0, 0.01)
+		assert_eq(rows[i].position, resting[i])
 
 
 func test_reduced_panel_enters_with_no_scale() -> void:

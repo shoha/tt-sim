@@ -151,6 +151,49 @@ func test_write_replaces_an_existing_file() -> void:
 	assert_eq(doc.size_cells, Vector2i(30, 30))
 
 
+## A save is reproducible: every entry carries MapDocumentIO.ENTRY_TIME, not the wall clock
+## ZIPPacker stamps by default, so a re-save of an unchanged document is the same file however
+## far apart the saves are (two seconds apart, a clock stamp changed the bytes and the file's
+## hash). Every local header and central record holds the one stamp, dated 1980, which no clock
+## gives today.
+func test_every_entry_carries_the_pinned_time_not_the_clock() -> void:
+	var path := DIR.path_join("stamped.ttmap")
+	var doc := Fixtures.full_doc()
+	assert_eq(MapDocumentIO.write(doc, path), OK)
+	var bytes := FileAccess.get_file_as_bytes(path)
+	var stamps := _entry_stamps(bytes)
+	var reader := ZIPReader.new()
+	assert_eq(reader.open(path), OK)
+	var entry_count := reader.get_files().size()
+	reader.close()
+	assert_gt(entry_count, 5, "the full fixture writes many entries")
+	assert_eq(stamps.size(), 2 * entry_count, "a local header and a central record per entry")
+	for stamp: int in stamps:
+		assert_eq(stamp, stamps[0], "one stamp on every record")
+	assert_eq((stamps[0] >> 25) + 1980, 1980, "the DOS date's year is 1980")
+	assert_eq(MapDocumentIO.write(doc, path + ".b"), OK)
+	assert_eq(FileAccess.get_file_as_bytes(path + ".b"), bytes, "a re-save is the same file")
+
+
+## The DOS date and time (date << 16 | time) of every local file header, then of every
+## central-directory record, of the ZIP in `bytes`, walked by the sizes the records declare.
+## MapDocumentIO's archives have no data descriptors and no archive comment.
+func _entry_stamps(bytes: PackedByteArray) -> Array[int]:
+	var stamps: Array[int] = []
+	var at := 0
+	while at + 30 <= bytes.size() and bytes.decode_u32(at) == 0x04034B50:
+		stamps.append(bytes.decode_u16(at + 12) << 16 | bytes.decode_u16(at + 10))
+		var name_and_extra := bytes.decode_u16(at + 26) + bytes.decode_u16(at + 28)
+		at += 30 + name_and_extra + bytes.decode_u32(at + 18)
+	var end := bytes.size() - 22
+	at = bytes.decode_u32(end + 16)
+	for i in bytes.decode_u16(end + 10):
+		stamps.append(bytes.decode_u16(at + 14) << 16 | bytes.decode_u16(at + 12))
+		var tail := bytes.decode_u16(at + 28) + bytes.decode_u16(at + 30) + bytes.decode_u16(at + 32)
+		at += 46 + tail
+	return stamps
+
+
 ## This is also how an older build treats the water entries (splines.json, ponds.png,
 ## water_flow.png): only KNOWN_ENTRIES are read, so a map with water loads without it.
 func test_unknown_entries_in_a_real_archive_are_ignored() -> void:

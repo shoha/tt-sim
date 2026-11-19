@@ -68,6 +68,12 @@ extends RefCounted
 ## replaces it, so no remove-first window is needed; while another handle holds the target
 ## open, the rename fails with ERR_FAILED and both files are left untouched.
 ##
+## write() is reproducible: the same document packs to the same bytes. ZIPPacker stamps each
+## entry with the wall clock unless given a time (a DOS time, two-second steps), so two saves of
+## one document either side of a step differed in those bytes alone, which changed the file's
+## MapFileHash (a client re-downloaded an unchanged map) and now and then failed a byte-for-byte
+## re-save test in the gate (card flaky-gate-tests). Every entry carries ENTRY_TIME instead.
+##
 ## Writing is two halves (MapDocumentSnapshot): a capture on the main thread (copy-on-write
 ## copies of the packed data, the manifest and the object lists' entries) and an encode that
 ## runs anywhere, so the authoring saves serialize, deflate and write on a worker
@@ -107,6 +113,11 @@ const KNOWN_ENTRIES: Array[String] = [
 	MapAnchorsIO.ENTRY,
 ]
 const TEMP_SUFFIX := ".tmp"
+## The modification time stamped on every entry (Unix seconds; 0 would mean "now" to
+## ZIPPacker): 1980-01-02 00:00 UTC, which ZIPPacker turns into a local DOS date that stays in
+## 1980, the format's first year, in every time zone. ENTRY_PERMISSIONS is ZIPPacker's default.
+const ENTRY_TIME := 315619200
+const ENTRY_PERMISSIONS := 0x1A4
 ## rename_over(): tries and the wait between them (at most about 0.1 s for a held target).
 const RENAME_TRIES := 20
 const RENAME_RETRY_MS := 5
@@ -295,7 +306,7 @@ static func _write_zip(path: String, entries: Dictionary) -> Error:
 	for entry_name in KNOWN_ENTRIES:
 		if not entries.has(entry_name):
 			continue
-		err = packer.start_file(entry_name)
+		err = packer.start_file(entry_name, ENTRY_PERMISSIONS, ENTRY_TIME)
 		if err == OK:
 			err = packer.write_file(entries[entry_name])
 		if err == OK:
