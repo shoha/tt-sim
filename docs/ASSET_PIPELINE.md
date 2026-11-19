@@ -151,7 +151,9 @@ a mesh is, and the statement wins.
 - **Where they sit.** glTF extras on a node, on its mesh or on one of its materials. All
   three arrive as `"extras"` metadata (Godot's importer; the loader keeps it, and a
   collapsed duplicate-prop group keeps its first node's). The most specific wins, per key:
-  material (one surface), then node, then mesh. `tt_ground` is read from the node or the mesh.
+  material (one surface), then node, then mesh. The terrain decision (`tt_ground`, the
+  `ground-*` roles, and `keep` on a mesh that could be ground) reads the node and the mesh
+  only: a material cannot make a whole mesh ground.
 - **Precedence in the reader:** an explicit extra, then the name and material rules, then
   the shape rule (ground) or the colour rule (props). A surface the extras do not name is
   read exactly as before.

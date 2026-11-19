@@ -7,7 +7,8 @@ extends RefCounted
 ## first painted map, so a Classic start-up never compiles it) and calls paint() with every painted
 ## map and look change, retone() with a new mood or sun, and release() when the look leaves Painted.
 ##
-## What it does, by what a node is (the contract names no roles: by name, meta and shape):
+## What it does, by what a node is (an explicit tt_paint_role or tt_ground extra first,
+## ASSET_PIPELINE.md "Painter roles"; else by name, meta and shape):
 ##   * a terrain mesh (wide, shallow, facing up: PainterGlbRoles.is_ground) gets the painted ground
 ##     shader as its material_override, in the map's world frame; its zone (meadow, path, rock,
 ##     shore) is read from its baked albedo's colour, so the artist's layout of paths and rock
@@ -261,7 +262,7 @@ func _look_multimesh(node: MultiMeshInstance3D) -> void:
 	if not node.has_meta(CHUNK_META):
 		# A prop's duplicates (MeshInstancingUtils): painted by surface, as a prop.
 		if _claim(mesh):
-			_swap_props(mesh, stem, mesh.get_aabb().size.y)
+			_swap_props(node, mesh, stem, mesh.get_aabb().size.y)
 		return
 	var category := str(node.get_meta(CHUNK_META))
 	var species := PainterGlbRoles.tree_species(stem) if category == "tree" else ""
@@ -344,10 +345,13 @@ static func wanted(glb: Dictionary, doc: MapDocument) -> Dictionary:
 
 
 ## Stand-ins on the surfaces of a mesh shared by instances (a MultiMesh), the way a prop's are.
-func _swap_props(mesh: Mesh, node_name: String, height: float) -> void:
+func _swap_props(node: Node, mesh: Mesh, node_name: String, height: float) -> void:
 	var added: Array = []
 	for i in mesh.get_surface_count():
-		var entry := _prop_entry(mesh.surface_get_material(i), node_name)
+		var material := mesh.surface_get_material(i)
+		var entry := _prop_entry(
+			material, node_name, PainterGlbRoles.extras_of(node, mesh, material)
+		)
 		if entry.is_empty():
 			_left.append("%s: surface %d keeps its material" % [node_name, i])
 			continue
@@ -370,9 +374,13 @@ func _look_mesh(node: MeshInstance3D) -> void:
 	_dress_prop(node)
 
 
-## Whether `node`'s mesh is wide and shallow enough to be ground (the size test only; the rest reads
-## the mesh's arrays in _dress_ground).
+## Whether `node`'s mesh is ground: as its extras say (tt_ground, a ground-* role: marked or never),
+## else wide and shallow enough (the size test only; the rest reads the mesh's arrays in
+## _dress_ground).
 func _ground_candidate(node: MeshInstance3D) -> bool:
+	var mark := PainterGlbRoles.ground_mark(PainterGlbRoles.extras_of(node, node.mesh))
+	if mark != 0:
+		return mark > 0
 	if node.mesh.get_surface_count() != 1:
 		return false
 	var size := (node.global_transform * node.mesh.get_aabb()).size
@@ -411,7 +419,9 @@ func _dress_ground(node: MeshInstance3D) -> bool:
 		if uvs.size() == vertices.size():
 			sampled_uv.append(uvs[i])
 	var size := (xf * node.mesh.get_aabb()).size
-	if not PainterGlbRoles.is_ground(size, PainterGlbRoles.up_share_of(up)):
+	var extras := PainterGlbRoles.extras_of(node, node.mesh)
+	var marked := PainterGlbRoles.ground_mark(extras) > 0
+	if not marked and not PainterGlbRoles.is_ground(size, PainterGlbRoles.up_share_of(up)):
 		return false
 	var material := original as BaseMaterial3D
 	var ground: ShaderMaterial = _surfaces.call("make_glb_ground")
@@ -419,7 +429,11 @@ func _dress_ground(node: MeshInstance3D) -> bool:
 	ground.set_shader_parameter(&"zone_present", false)
 	var fit := PainterGlbRoles.uv_affine(xz, sampled_uv)
 	var texture := material.albedo_texture
-	if texture != null and bool(fit["ok"]):
+	var zone := PainterGlbRoles.ground_zone(extras)
+	if zone != "":
+		# A ground-* role: the whole mesh is one zone, whatever its baked albedo holds.
+		_force_zone(ground, zone)
+	elif texture != null and bool(fit["ok"]) and node.mesh.get_surface_count() == 1:
 		ground.set_shader_parameter(&"glb_zone", true)
 		ground.set_shader_parameter(&"glb_albedo", texture)
 		ground.set_shader_parameter(&"glb_uv", fit["uv"])
@@ -449,7 +463,10 @@ func _dress_prop(node: MeshInstance3D) -> void:
 	for i in mesh.get_surface_count():
 		if node.get_surface_override_material(i) != null:
 			continue
-		var entry := _prop_entry(mesh.surface_get_material(i), String(node.name))
+		var material := mesh.surface_get_material(i)
+		var entry := _prop_entry(
+			material, String(node.name), PainterGlbRoles.extras_of(node, mesh, material)
+		)
 		if entry.is_empty():
 			_left.append("%s: surface %d keeps its material" % [node.name, i])
 			continue
@@ -473,13 +490,34 @@ func _dress_prop(node: MeshInstance3D) -> void:
 
 
 ## The solid entry of a prop surface (PainterPlantRoles' shape), {} when it keeps its material.
-func _prop_entry(material: Material, node_name: String) -> Dictionary:
+func _prop_entry(material: Material, node_name: String, extras: Dictionary) -> Dictionary:
 	if not material is BaseMaterial3D:
 		return {}
 	var standard := material as BaseMaterial3D
 	var role := PainterGlbRoles.prop_role(
-		standard.resource_name, node_name, standard.albedo_color, standard.albedo_texture != null
+		standard.resource_name,
+		node_name,
+		standard.albedo_color,
+		standard.albedo_texture != null,
+		extras
 	)
 	if role == "":
 		return {}
 	return {"kind": PainterPlantRoles.KIND_SOLID, "role": role, "ground_cover": false}
+
+
+## Makes `ground` paint one zone ("meadow", "path" or "rock") everywhere: the meadow is the shader's
+## base zone, the others read a one-texel albedo of the colour the zone read sorts into that zone
+## (PainterGlbRoles.ZONE_SWATCH), with every UV on that texel.
+func _force_zone(ground: ShaderMaterial, zone: String) -> void:
+	if zone == "meadow":
+		ground.set_shader_parameter(&"base_meadow", 1.0)
+		return
+	var image := Image.create(1, 1, false, Image.FORMAT_RGB8)
+	image.set_pixel(0, 0, PainterGlbRoles.ZONE_SWATCH[zone])
+	ground.set_shader_parameter(&"glb_zone", true)
+	ground.set_shader_parameter(&"glb_albedo", ImageTexture.create_from_image(image))
+	ground.set_shader_parameter(&"glb_uv", Vector4(0.0, 0.0, 0.0, 0.0))
+	ground.set_shader_parameter(&"glb_uv_b", Vector2(0.5, 0.5))
+	ground.set_shader_parameter(&"glb_tint", Vector3.ONE)
+	ground.set_shader_parameter(&"glb_texels_per_m", 1.0)

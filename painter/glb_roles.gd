@@ -2,11 +2,13 @@ class_name PainterGlbRoles
 extends RefCounted
 
 ## How the painted look reads the nodes of a GLB map (docs/systems/painter.md "GLB maps"): the
-## pure functions behind PainterGlbMap. A Blender-made map.glb has no role data
-## (ASSET_PIPELINE.md has no ground, material or asset-class extra), so everything here is read
-## from what the file does carry: node and material names, the mesh's own shape and its
-## materials' colours. Every function is pure and answers "leave it as authored" ("" or false)
-## when it cannot tell.
+## pure functions behind PainterGlbMap. A Blender-made map.glb usually has no role data, so the
+## rules read what every file carries: node and material names, the mesh's own shape and its
+## materials' colours. The optional extras tt_paint_role and tt_ground (ASSET_PIPELINE.md "Painter
+## roles", read here and nowhere else) state a role outright and win over those rules: explicit
+## extra, then name and material, then shape and colour. Every function is pure and answers "leave
+## it as authored" ("" or false) when it cannot tell (the one side effect: a warning line, once, for
+## an unknown extras value).
 
 ## [sheet role, words], first match wins (substrings of the lower-case material name, then node
 ## name). The roles are sheet colour roles (PainterSheet.COLOR_ROLES), toned with
@@ -118,6 +120,26 @@ const GROUND_UP_SHARE := 0.5
 const SAMPLES := 4096
 ## A planar UV fit is accepted when no sampled vertex is off by more than this in UV units.
 const UV_TOLERANCE := 0.02
+## The optional painter-role extras (ASSET_PIPELINE.md "Painter roles"): glTF extras on a node, its
+## mesh or a material, which the loader leaves as "extras" metadata.
+const ROLE_KEY := "tt_paint_role"
+const GROUND_KEY := "tt_ground"
+const EXTRAS_META := &"extras"
+## tt_paint_role value -> the sheet role a prop surface is painted in ("" keeps it as authored).
+const EXTRA_PROP_ROLES := {
+	"roof": "roof-clay", "bark": "bark", "stone": "stone", "leaf": "leaf", "keep": "",
+}
+## tt_paint_role value -> the ground zone a terrain mesh is painted as.
+const EXTRA_GROUND_ZONES := {
+	"ground-meadow": "meadow", "ground-path": "path", "ground-rock": "rock",
+}
+## The colour (sRGB) of a one-texel stand-in albedo that the ground shader's zone read
+## (glb_classify) sorts into a zone: warm is path, neutral grey is rock. Meadow needs none
+## (base_meadow).
+const ZONE_SWATCH := {"path": Color(0.72, 0.56, 0.36), "rock": Color(0.55, 0.55, 0.55)}
+
+## The extras values already warned about this session ("key=value"): one warning line each.
+static var _unknown_logged: Dictionary = {}
 
 
 ## The painted tree species of a GLB tree source named `source_name` ("" when the painted look does
@@ -144,13 +166,83 @@ static func tree_scale(species: String, height: float) -> float:
 	return clampf(height / nominal, TREE_SCALE_RANGE.x, TREE_SCALE_RANGE.y)
 
 
-## The sheet role a prop surface is painted in, from its material's name, then the node's, then the
-## material's own colour when it has no texture; "" leaves the surface as authored (a light, a
-## pane, ironwork, water, or a textured surface whose name says nothing: its colour lives in a
-## picture the painted look does not read).
+## The painter-role extras that apply to a surface of `node` (null for none), `mesh` and `material`
+## (null for none): the keys tt_paint_role and tt_ground from each one's "extras" metadata, the
+## most specific winning per key (material over node over mesh). {} when none is there.
+static func extras_of(node: Object, mesh: Object = null, material: Object = null) -> Dictionary:
+	var out := {}
+	for source: Object in [mesh, node, material]:
+		if source == null or not source.has_meta(EXTRAS_META):
+			continue
+		var extras: Variant = source.get_meta(EXTRAS_META)
+		if not extras is Dictionary:
+			continue
+		for key: String in [ROLE_KEY, GROUND_KEY]:
+			if (extras as Dictionary).has(key):
+				out[key] = (extras as Dictionary)[key]
+	return out
+
+
+## The tt_paint_role of `extras` (extras_of) when it is one of the contract's values (lower-case,
+## trimmed); "" when absent or unknown (an unknown value is ignored, with one warning line).
+static func extra_role(extras: Dictionary) -> String:
+	if not extras.has(ROLE_KEY):
+		return ""
+	var raw: Variant = extras[ROLE_KEY]
+	var value := str(raw).strip_edges().to_lower() if raw is String else ""
+	if EXTRA_PROP_ROLES.has(value) or EXTRA_GROUND_ZONES.has(value):
+		return value
+	_warn_unknown(ROLE_KEY, raw)
+	return ""
+
+
+## Whether `extras` mark a mesh as ground: 1 for tt_ground true or a ground-* role, -1 for tt_ground
+## false or the keep role (never ground), 0 when they say nothing (the shape rule decides).
+static func ground_mark(extras: Dictionary) -> int:
+	var role := extra_role(extras)
+	if EXTRA_GROUND_ZONES.has(role):
+		return 1
+	if role == "keep":
+		return -1
+	if not extras.has(GROUND_KEY):
+		return 0
+	var flag := _flag_of(extras[GROUND_KEY])
+	if flag == 0:
+		_warn_unknown(GROUND_KEY, extras[GROUND_KEY])
+	return flag
+
+
+## The ground zone a ground-* role forces ("meadow", "path" or "rock"), "" when `extras` name none
+## (the zones are then read from the mesh's baked albedo).
+static func ground_zone(extras: Dictionary) -> String:
+	return str(EXTRA_GROUND_ZONES.get(extra_role(extras), ""))
+
+
+## The extras values warned about so far, "key=value" (tests).
+static func unknown_logged() -> Array:
+	return _unknown_logged.keys()
+
+
+## Forgets the warned values, so the next unknown one warns again (tests).
+static func forget_unknown() -> void:
+	_unknown_logged.clear()
+
+
+## The sheet role a prop surface is painted in: the tt_paint_role in `extras` when it names one
+## (keep gives ""), else from its material's name, then the node's, then the material's own colour
+## when it has no texture; "" leaves the surface as authored (a light, a pane, ironwork, water, or a
+## textured surface whose name says nothing: its colour lives in a picture the painted look does not
+## read).
 static func prop_role(
-	material_name: String, node_name: String, color: Color, textured: bool
+	material_name: String,
+	node_name: String,
+	color: Color,
+	textured: bool,
+	extras: Dictionary = {}
 ) -> String:
+	var given := extra_role(extras)
+	if EXTRA_PROP_ROLES.has(given):
+		return str(EXTRA_PROP_ROLES[given])
 	var names := [material_name.to_lower(), node_name.to_lower()]
 	for text: String in names:
 		for word in KEEP_WORDS:
@@ -261,6 +353,30 @@ static func uv_affine(xz: PackedVector2Array, uvs: PackedVector2Array) -> Dictio
 		"b": offset,
 		"scale": maxf(Vector2(m00, m10).length(), Vector2(m01, m11).length()),
 	}
+
+
+## 1 for true, a non-zero number or "true"; -1 for false, zero or "false"; 0 for anything else.
+static func _flag_of(value: Variant) -> int:
+	if value is bool:
+		return 1 if value else -1
+	if value is int or value is float:
+		return 1 if float(value) != 0.0 else -1
+	if value is String:
+		var text := (value as String).strip_edges().to_lower()
+		if text == "true":
+			return 1
+		if text == "false":
+			return -1
+	return 0
+
+
+## Logs one warning line per distinct unknown extras value.
+static func _warn_unknown(key: String, value: Variant) -> void:
+	var tag := "%s=%s" % [key, str(value)]
+	if _unknown_logged.has(tag):
+		return
+	_unknown_logged[tag] = true
+	push_warning("PainterGlbRoles: ignoring the unknown painter extra %s (ASSET_PIPELINE.md)" % tag)
 
 
 ## The lower-case letter runs of `text` ("Tree_Oak.003" gives tree, oak).
