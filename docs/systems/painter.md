@@ -358,20 +358,42 @@ wall, or under a token's feet, and no trunk or stone was darker where it met the
   (a crown's projected disc, centred halfway from the trunk to the crown's middle, radius 0.5 of the
   crown's half width plus 0.5 m, for the trees the painter does not grow too; a bush's own disc grown
   a third; a rock's, log's or stump's oriented box rounded by its narrower half, from the scatter's
-  instance transforms; a structure's own plan, below), g a CORE (the seam at a trunk's foot, 0.55 m +
-  5 % of its height; a rock's base 0.22 m, a wall's 0.3 m). Each footprint
+  instance transforms; a structure's own plan, below), g a CORE (the seam at a trunk's foot, 0.3 m +
+  2.5 % of its height, `trunk_seam`; a rock's base 0.22 m, a wall's 0.45 m; card
+  painter-tree-ground halved the trunk's and widened the wall's). Each footprint
   is a coverage whose 0.5 contour is its nominal edge (`cover`), the texels keep the maximum. The
   painted ground shader reads it with one fetch (a no-op branch when off) and thresholds it through
-  its own brush noise, so a pool is a flat stroke-edged shape, not a blur. The pool is the ground's
+  its own brush noise, so a pool is a flat stroke-edged shape, not a blur. The pool was the ground's
   lit tone darkened (`occ-dark`) and leaned a little toward its shade (`occ-shade`) and cool
   (`occ-cool`): shading toward the shade ramp alone read as a grey-violet smudge on the summer path
-  (the first try); the core leans toward the litter tone (`occ-soil`, 0 in winter: the snow's own
+  (the first try); now it is the shade's own deeper step, in the shade only ("The pool lives in
+  the shade" below). The core leans toward the litter tone (`occ-soil`, 0 in winter: the snow's own
   blue). Tokens are the only moving footprints: their feet discs go in a 32-entry uniform array
   (centre, radius from `TokenGhost.body_bounds`, foot height, so a token on a roof stamps nothing on
   the ground below), refreshed by one pass over the token group when one moved, and are drawn as a
   wider pool plus a deeper disc under the feet. Rebuilt 0.3 s after the painted trees install or
   erase (`PainterTrees.changed`), the scatter applies cells, a structure comes or goes or the
   ground is edited: 17-24 ms for 215-317 footprints (forest, village, taiga maps of 200 ft).
+- **The pool lives in the shade** (card painter-tree-ground, 2026-11-19; owner: the pools "seem
+  to contradict the direction of the light from the shadows"). The pool was mixed toward a tone
+  between the lit and the shade colour wherever its footprint lay, so it was a grey disc centred on
+  each trunk: darker than the sunlit meadow beside the trunk, and PALER than the cast shadow where
+  the two crossed (at sunset each long shadow lightened exactly at its own tree). Now the pool is a
+  step below the shade colour (`SHADE_DEEP` 0.8 of it, `occ-dark`, cooled) and is applied only where
+  the ground is in shade (the cast shadow, or turned from the sun): what stands on the ground shuts
+  out the sky, not the sun, so each shadow is darkest at its root and sunlit ground stays lit.
+  `occ-pool` went from 0.42 to 0.85 since it now only deepens shade. The seam keeps 0.6 of its
+  weight in the sun (`SEAM_LIT`), full in the shade; a trunk's seam was halved (a metre-wide seam in
+  the sun was still a grey plate at zoom 16), a wall's widened to 0.45 m (weak at the walls at zoom
+  16 through the yard's wash), and both shaders read the field 0.3 m toward
+  the sun (`foliage_sun`, `SEAM_LEAN_M`), so a seam sits more on the side its shadow falls; still
+  one fetch. The yard wash reads the seam too (it hid the walls' foot line before). Tokens' wider
+  pool follows the same rule; the disc right under their feet does not. Compared side by side
+  with four other approaches (the pool moved down-sun and stretched along the shadow: a second,
+  rounder shadow, detached from the trunk at a low sun; a litter-tone ring at the ground's own
+  value: dirt circles in summer, pink stains on snow; the seam alone: still a small grey plate;
+  litter in the sun plus this in the shade): `compare/painter_final58_tree_ground/` (notes.md,
+  probe sheets).
 - **Pool shapes** (card painter-pool-shapes, 2026-11-18; the coverage sweep's gap 2). A structure's
   pool was its meshes' bounding box grown 0.9 m, and the box held the yard's skirt and path
   (`dressing_ground`, 10-14 m across, 5 m past the door), so a row of houses read as one hard-edged

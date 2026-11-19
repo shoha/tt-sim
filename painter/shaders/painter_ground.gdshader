@@ -139,6 +139,15 @@ uniform vec4 occ_tint = vec4(0.9, 1.0, 0.96, 0.35);
 uniform vec4 tok[32];
 uniform int tok_n = 0;
 uniform vec2 tok_k = vec2(0.0);
+// The sun (tt-sim's foliage_sun global: the direction toward it and its weight): the seam at a foot
+// leans to the side the shadow falls (card painter-tree-ground).
+global uniform vec4 foliage_sun;
+// How far below the shade colour the pool goes, and the seam's weight on sunlit ground (its full
+// weight is in the shade).
+const float SHADE_DEEP = 0.8;
+const float SEAM_LIT = 0.6;
+// Metres the seam's centre moves away from the sun.
+const float SEAM_LEAN_M = 0.3;
 
 varying vec3 v_n;
 varying float v_wy;
@@ -515,12 +524,17 @@ void vertex() {
 
 // The contact occlusion at `xz`: x the pool, y the seam, each a flat brush-edged shape (the field's
 // 0.5 contour, moved by the ground's own noise), then the tokens' feet: a wider pool joins x, and z
-// is the disc right under the feet (a deeper step on top of the seam).
+// is the disc right under the feet (a deeper step on top of the seam). light() shows the pool only
+// inside the shade.
 vec3 contact_at(vec3 p, vec2 xz) {
 	vec3 occ = vec3(0.0);
 	if (occ_present && (occ_k.x > 0.0 || occ_k.y > 0.0)) {
-		vec2 size = vec2(textureSize(occ_map, 0));
-		vec2 s = textureLod(occ_map, (xz - occ_origin) / (size * occ_step), 0.0).rg;
+		// The field is read SEAM_LEAN_M toward the sun, so its shapes sit that far down-sun: more of
+		// a seam on the side the shadow falls, a thin edge on the sunlit side (one fetch, as before).
+		float sl = length(foliage_sun.xz);
+		vec2 to_sun = sl > 0.01 ? foliage_sun.xz / sl : vec2(0.0);
+		vec2 size = vec2(textureSize(occ_map, 0)) * occ_step;
+		vec2 s = textureLod(occ_map, (xz + to_sun * SEAM_LEAN_M - occ_origin) / size, 0.0).rg;
 		vec2 w = vec2(p_noise(p * 1.3 + 80.0), p_noise(p * 2.7 + 95.0)) - 0.5;
 		occ.xy = vec2(
 			smoothstep(0.4, 0.5, s.r + w.x * 0.3) * occ_k.x,
@@ -724,16 +738,22 @@ void light() {
 		// meadow lit and shade; now only a bank turned past the grazing sun goes into shade.
 		float turn_k = clamp(lw.y / TURN_SUN_FULL, 0.05, 1.0);
 		float turned = 1.0 - smoothstep(0.02 * turn_k, 0.1 * turn_k, dot(normalize(f_n), lw) + (f_edge - 0.5) * 0.1 * turn_k);
-		vec3 col = mix(f_lit, f_shd, max(cast, turned));
-		// Contact occlusion: a deeper shade of the ground's own tone (a little cooler) under what
-		// stands on it, and at its foot a seam that leans toward the soil; a token's feet stand on a
-		// deeper disc still (f_tok).
+		float shade = max(cast, turned);
+		vec3 col = mix(f_lit, f_shd, shade);
+		// Contact occlusion (card painter-tree-ground): what stands on the ground shuts out the sky,
+		// not the sun, so the pool is a step below the shade colour (a little cooler) and only where
+		// the ground is already in shade: each shadow is darkest at its root, and the sunlit ground
+		// beside a trunk stays lit (a pool there read as a second light). The seam at a foot leans
+		// toward the soil, full in the shade and lighter in the sun; a token's feet stand on a deeper
+		// disc still (f_tok).
 		if (f_pool > 0.0 || f_core > 0.0 || f_tok > 0.0) {
 			float lr = lum(f_shd) / max(lum(f_lit), 0.001);
 			vec3 deep = mix(f_lit, f_shd, occ_tint.a) * occ_k.z * occ_tint.rgb;
+			vec3 deeper = f_shd * occ_k.z * SHADE_DEEP * occ_tint.rgb;
 			vec3 soil = mix(deep, litter_col * lr * occ_k.z, occ_k.w);
-			col = mix(col, deep, f_pool);
-			col = mix(col, soil, f_core);
+			vec3 soil_shd = mix(deeper, litter_col * lr * occ_k.z * SHADE_DEEP, occ_k.w * 0.6);
+			col = mix(col, deeper, f_pool * shade);
+			col = mix(col, mix(soil, soil_shd, shade), f_core * mix(SEAM_LIT, 1.0, shade));
 			col *= mix(vec3(1.0), vec3(0.74, 0.84, 0.8), f_tok);
 		}
 		DIFFUSE_LIGHT += col;

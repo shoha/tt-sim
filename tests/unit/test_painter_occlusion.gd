@@ -78,7 +78,17 @@ func test_a_tree_the_painter_does_not_grow_gets_a_round_pool() -> void:
 	var across := _at(host, pool, 0.75, 1.25)
 	assert_gt(along, 0.0)
 	assert_almost_eq(along, across, 0.001, "as far along as across: round, not a box")
-	assert_eq(_at(host, core, 0.25, 0.25), 1.0, "a seam at the trunk's foot")
+	assert_gt(_at(host, core, 0.25, 0.25), 0.5, "a seam at the trunk's foot")
+	assert_eq(_at(host, core, 1.25, 0.25), 0.0, "the seam stays at the foot, under the pool")
+
+
+func test_a_trunk_seam_is_a_small_dab_that_grows_with_the_tree() -> void:
+	# It shows in the sun too, so it stays well under a metre for a common tree (card
+	# painter-tree-ground: a metre-wide seam read as a grey plate beside the trunk).
+	assert_lt(PainterOcclusion.trunk_seam(10.0), 0.6)
+	assert_gt(PainterOcclusion.trunk_seam(20.0), PainterOcclusion.trunk_seam(4.0))
+	var sapling := PainterOcclusion.trunk_seam(2.0)
+	assert_gt(sapling, PainterOcclusion.TEXEL_M * 0.5, "a sapling still has one")
 
 
 func test_a_rectangle_fits_its_own_turned_rectangle_with_soft_corners() -> void:
@@ -195,3 +205,24 @@ func test_every_mood_has_the_grounding_numbers_in_range() -> void:
 			var v := PainterSheet.number(sheet, mood, key, 30.0)
 			assert_between(v, 0.0, 1.0, "%s %s" % [mood, key])
 		assert_eq(PainterSheet.number(sheet, "winter", "occ-soil", 30.0), 0.0, "snow bases take no soil")
+
+
+func test_the_yard_wash_grounds_as_the_ground_does() -> void:
+	# The yard wash repeats the ground's contact rule (the pool in the shade only, the seam leaning
+	# down-sun); its constants must stay the ground's (card painter-tree-ground).
+	var ground := _constants("res://painter/shaders/painter_ground.gdshader")
+	var yard := _constants("res://painter/shaders/painter_yard_ground.gdshader")
+	for key in ["SHADE_DEEP", "SEAM_LIT", "SEAM_LEAN_M"]:
+		assert_true(ground.has(key), "the ground declares %s" % key)
+		assert_eq(yard.get(key, -1.0), ground.get(key, -2.0), "the yard's %s is the ground's" % key)
+	var deep := float(ground.get("SHADE_DEEP", 0.0))
+	assert_between(deep, 0.5, 1.0, "the pool is a step below the shade")
+
+
+## The `const float NAME = value;` lines of a shader's source.
+func _constants(path: String) -> Dictionary:
+	var out := {}
+	var rx := RegEx.create_from_string("(?m)^const float (\\w+) = ([0-9.]+);")
+	for m in rx.search_all(FileAccess.get_file_as_string(path)):
+		out[m.get_string(1)] = float(m.get_string(2))
+	return out

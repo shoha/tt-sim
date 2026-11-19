@@ -12,9 +12,12 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled;
  * world noise move it), lit in the light's three steps; under winter's snow (`snow`, the sheet's
  * roof-snow) it is mostly gone.
  * The contact pool at a building's walls (card painter-pool-shapes) darkens the wash as it does the
- * ground under it: the same field (PainterOcclusion's occ_map, its r) through the same brushed
- * threshold and the same deeper, cooler tone, so the shade at the walls' foot is not hidden by the
- * wash laid over it. Off (one uniform branch) until the field is bound.
+ * ground under it: the same field (PainterOcclusion's occ_map) through the same brushed threshold,
+ * so the shade at the walls' foot is not hidden by the wash laid over it. As on the ground (card
+ * painter-tree-ground) the pool r is a step below the shade colour and only in the shade, and the
+ * seam g at the walls' foot, read the same way down-sun, is a darker line in the sun too (the yard
+ * hid it: the cottages' weak wall contact at zoom 16). Off (one uniform branch) until the field is
+ * bound.
  *
  * MANAGED BY: PainterBuildings (painter/painter_buildings.gd, kind "dressing_ground"); the pool's
  * uniforms by PainterOcclusion (painter/painter_occlusion.gd).
@@ -36,6 +39,11 @@ uniform vec2 occ_origin = vec2(0.0);
 uniform float occ_step = 0.5;
 uniform vec4 occ_k = vec4(0.0, 0.0, 0.8, 0.3);
 uniform vec4 occ_tint = vec4(0.9, 1.0, 0.96, 0.35);
+global uniform vec4 foliage_sun;
+// painter_ground.gdshader's SHADE_DEEP, SEAM_LIT and SEAM_LEAN_M.
+const float SHADE_DEEP = 0.8;
+const float SEAM_LIT = 0.6;
+const float SEAM_LEAN_M = 0.3;
 
 varying vec3 v_wp;
 varying float v_a;
@@ -45,6 +53,7 @@ varying vec3 f_mid;
 varying vec3 f_lit;
 varying float f_wob;
 varying float f_pool;
+varying float f_core;
 
 void vertex() {
 	v_wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -65,10 +74,14 @@ void fragment() {
 	f_lit = mix(ramps[2], ramps[5], variant);
 	f_wob = p_noise(wp * 1.7 + 5.0);
 	f_pool = 0.0;
-	if (occ_present && occ_k.x > 0.0) {
-		vec2 size = vec2(textureSize(occ_map, 0));
-		float s = textureLod(occ_map, (wp.xz - occ_origin) / (size * occ_step), 0.0).r;
-		f_pool = smoothstep(0.4, 0.5, s + (p_noise(wp * 1.3 + 80.0) - 0.5) * 0.3) * occ_k.x;
+	f_core = 0.0;
+	if (occ_present && (occ_k.x > 0.0 || occ_k.y > 0.0)) {
+		float sl = length(foliage_sun.xz);
+		vec2 to_sun = sl > 0.01 ? foliage_sun.xz / sl : vec2(0.0);
+		vec2 size = vec2(textureSize(occ_map, 0)) * occ_step;
+		vec2 s = textureLod(occ_map, (wp.xz + to_sun * SEAM_LEAN_M - occ_origin) / size, 0.0).rg;
+		f_pool = smoothstep(0.4, 0.5, s.r + (p_noise(wp * 1.3 + 80.0) - 0.5) * 0.3) * occ_k.x;
+		f_core = smoothstep(0.4, 0.5, s.g + (p_noise(wp * 2.7 + 95.0) - 0.5) * 0.3) * occ_k.y;
 	}
 }
 
@@ -79,9 +92,14 @@ void light() {
 		vec3 col = mix(f_shd, f_mid, smoothstep(tone_lo - 0.01, tone_lo + 0.01, x));
 		col = mix(col, f_lit, smoothstep(tone_hi - 0.01, tone_hi + 0.01, x));
 		col = mix(col, f_shd, cast * cast_amount);
-		// The contact pool: the wash's lit tone darkened and leaned toward its shade and cool, as
-		// the ground's (painter_ground's deep).
+		// The contact pool and seam, as the ground's (painter_ground's light()): the pool a step
+		// below the shade and only in it, the seam the lit tone darkened in the sun and that step in
+		// the shade.
+		float shade = max(cast * cast_amount, 1.0 - smoothstep(tone_lo - 0.01, tone_lo + 0.01, x));
 		vec3 deep = mix(f_lit, f_shd, occ_tint.a) * occ_k.z * occ_tint.rgb;
-		DIFFUSE_LIGHT += mix(col, deep, f_pool);
+		vec3 deeper = f_shd * occ_k.z * SHADE_DEEP * occ_tint.rgb;
+		col = mix(col, deeper, f_pool * shade);
+		col = mix(col, mix(deep, deeper, shade), f_core * mix(SEAM_LIT, 1.0, shade));
+		DIFFUSE_LIGHT += col;
 	}
 }
