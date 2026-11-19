@@ -98,6 +98,10 @@ var _glb: RefCounted = null
 var _glb_ground: Array[ShaderMaterial] = []
 ## The painted village furnishings (a PainterVillage), made on the first paint().
 var _village: RefCounted = null
+## The map's path surfaces by slot and its cliff surface (PainterGroundPaths), from the last zone
+## rebuild.
+var _path_ids := PackedStringArray()
+var _cliff_surface := ""
 
 
 ## Follows `manager`'s painted_look_changed for the map under `map_container`; called again with
@@ -524,6 +528,14 @@ func _rebuild_zone() -> void:
 		material.set_shader_parameter(
 			&"base_meadow", 1.0 if PainterGroundRoles.surface_role(doc.base_surface) == "meadow" else 0.0
 		)
+	var ids := PainterGroundPaths.bind([_ground_material(), _skirt], doc)
+	var cliff := PainterGroundPaths.cliff_surface(doc)
+	var changed := ids != _path_ids or cliff != _cliff_surface
+	_path_ids = ids
+	_cliff_surface = cliff
+	if changed and not applied.is_empty():
+		var sheet := PainterSheet.load_sheet(applied["sheet"])
+		_tone_ground(sheet, applied["mood"], applied["elevation"])
 	_bind_wet()
 
 
@@ -906,10 +918,24 @@ func _tone_ground(sheet: Dictionary, mood: String, elevation: float) -> void:
 	var shade := PackedVector3Array()
 	for role: String in PainterGroundRoles.ROLES:
 		var base := Vector3(-1.0, 0.0, 0.0)
+		var pull := 1.0
+		var shade_lift := 0.0
 		if PainterGroundRoles.DERIVED.has(role):
 			base = PainterGroundRoles.derived(sheet, mood, role, elevation)
+		elif role == "rock":
+			# The cliff stone (PainterGroundPaths): its own tone and a lighter, less pulled shade.
+			base = PainterGroundPaths.cliff_tone(sheet, mood, elevation, _cliff_surface)
+			pull = PainterSheet.number(sheet, mood, "cliff-pull", elevation)
+			shade_lift = PainterSheet.number(sheet, mood, "cliff-shade-lift", elevation)
 		var ramp := PainterTones.ramp(
-			sheet, mood, PainterGroundRoles.TONE_ROLE[role], elevation, "ground-", base
+			sheet,
+			mood,
+			PainterGroundRoles.TONE_ROLE[role],
+			elevation,
+			"ground-",
+			base,
+			pull,
+			shade_lift
 		)
 		var colors: Array[Vector3] = []
 		for at: int in [2, 5, 0, 3]:
@@ -922,9 +948,15 @@ func _tone_ground(sheet: Dictionary, mood: String, elevation: float) -> void:
 		return PainterTones.linear(PainterSheet.tone(sheet, mood, role, elevation))
 	var grounds: Array[ShaderMaterial] = [_ground_material(), _skirt]
 	grounds.append_array(_glb_ground)
+	var paths := PainterGroundPaths.tones(sheet, mood, elevation, _path_ids)
 	for material: ShaderMaterial in grounds:
 		material.set_shader_parameter(&"g_lit", lit)
 		material.set_shader_parameter(&"g_shd", shade)
+		material.set_shader_parameter(&"p_lit", paths["lit"])
+		material.set_shader_parameter(&"p_shd", paths["shade"])
+		material.set_shader_parameter(&"p_kind", paths["kind"])
+		material.set_shader_parameter(&"cliff_edge", num.call("cliff-edge"))
+		material.set_shader_parameter(&"cliff_strata", num.call("cliff-strata"))
 		material.set_shader_parameter(&"litter_col", tone.call("litter"))
 		material.set_shader_parameter(&"drift_col", tone.call("drift"))
 		material.set_shader_parameter(&"drift", num.call("drift-marks"))

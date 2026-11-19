@@ -34,13 +34,17 @@ const LIT_MAX_L := 0.985
 ## the dark-cool variant first. `prefix` ("ground-", "grass-", "bark-" or "") picks a surface's
 ## own ramp numbers where the sheet defines them. `derived` (lightness 0 or more) is the middle
 ## tone to use in place of the role's own, as PainterGroundRoles.derived() gives for a dry biome.
+## `pull` scales the shade's pull and `shade_lift` adds to its depth (the cliff stone's lighter,
+## less violet shade; PainterGroundPaths).
 static func ramp(
 	sheet: Dictionary,
 	mood: String,
 	role: String,
 	elevation: float,
 	prefix: String = "",
-	derived: Vector3 = Vector3(-1.0, 0.0, 0.0)
+	derived: Vector3 = Vector3(-1.0, 0.0, 0.0),
+	pull: float = 1.0,
+	shade_lift: float = 0.0
 ) -> Array[Color]:
 	var base := derived if derived.x >= 0.0 else PainterSheet.tone_lch(sheet, mood, role, elevation)
 	var num := func(name: String) -> float:
@@ -51,8 +55,8 @@ static func ramp(
 	var value_spread: float = num.call("value-spread")
 	var shape := {
 		"shade-hue": num.call("shade-hue"),
-		"shade-pull": num.call("shade-pull"),
-		"shade-depth": num.call("shade-depth"),
+		"shade-pull": float(num.call("shade-pull")) * pull,
+		"shade-depth": minf(float(num.call("shade-depth")) + shade_lift, 0.95),
 		"shade-keep": num.call("shade-keep"),
 		"lit-hue": num.call("lit-hue"),
 		"lit-pull": num.call("lit-pull"),

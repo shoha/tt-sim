@@ -120,6 +120,12 @@ const DEFAULT_ROLES: Array[String] = [
 ## a dry biome's straw, an ash ground and a baked earth follow the mood and the sun the role they
 ## come from follows: dry- from `ground`, drygrass- from `grass`, ash- from `stone`, earth- from
 ## `path`.
+## The ground's path surfaces and cliff stone (PainterGroundPaths): how far a path surface's own
+## measured colour moves the path tone (path-own, 0 to 1); the cliff stone's hue turn from
+## `stone` (cliff-turn, degrees), chroma factor and lightness shift (cliff-chroma, cliff-lift), the
+## share of the ground's shade pull its shade takes and how much less deep it is (cliff-pull,
+## cliff-shade-lift), the light on a cliff's top edge and the dark at its foot (cliff-edge, a
+## value step) and the faces' bands (cliff-strata, 0 to 1).
 ## The water's (PainterWater, painter_water.gdshader): the share of the stroke lattice's cells that
 ## hold a stroke (water-strokes), a stroke's length in metres (water-stroke-len), its boil's period
 ## in seconds (water-boil), how much of the sun's side glints (water-glints), the wash's deepest
@@ -220,6 +226,14 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"crossing-turn",
 	"crossing-chroma",
 	"crossing-value",
+	"path-own",
+	"cliff-turn",
+	"cliff-chroma",
+	"cliff-lift",
+	"cliff-pull",
+	"cliff-shade-lift",
+	"cliff-edge",
+	"cliff-strata",
 	"water-strokes",
 	"water-stroke-len",
 	"water-boil",

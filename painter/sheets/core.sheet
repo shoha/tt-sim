@@ -134,6 +134,15 @@
      the wall stone a quarter deeper, a little quieter and turned a few degrees toward grey brown,
      so it parts from sand banks and water (painter-edges; the pale cream bleached against sand). */
   crossing-turn: -14;  crossing-chroma: 0.8;  crossing-value: 0.76;
+  /* The ground's path surfaces and cliffs (PainterGroundPaths; painter-ground-surfaces): each path
+     surface's tone is the path role moved toward its own measured colour by path-own, so cobble,
+     flagstone, caliche and planks part (their patterns are the shader's). The cliff stone is the
+     stone turned warmer and richer, its shade a lighter step that keeps its hue (a grey stone under
+     the full ground pull read as dark violet smears on every terrace), a lit lip at a cliff's top
+     edge and a darker foot, and soft strata bands on the faces. */
+  path-own: 1;
+  cliff-turn: -8;  cliff-chroma: 1.5;  cliff-lift: 0;  cliff-pull: 0.25;  cliff-shade-lift: 0.12;
+  cliff-edge: 0.22;  cliff-strata: 1;
 
   /* The water (PainterWater, painter_water.gdshader; card painter-water): one luminous wash in
      three depth bands, shallows lightest and most turquoise, the deep the most saturated blue,
