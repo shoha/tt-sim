@@ -59,6 +59,7 @@ const STRUCTURE := "res://painter/shaders/painter_structure.gdshader"
 const MANNER := "res://painter/shaders/painter_structure_manner.gdshader"
 const YARD := "res://painter/shaders/painter_yard.gdshader"
 const YARD_GROUND := "res://painter/shaders/painter_yard_ground.gdshader"
+const PROP := "res://painter/shaders/painter_prop.gdshader"
 const TREE_STROKE := "res://painter/shaders/painter_tree_stroke.gdshader"
 const TREE_BLOCKIN := "res://painter/shaders/painter_tree_blockin.gdshader"
 const TREE_STROKE_BARE := "res://painter/shaders/painter_tree_stroke_bare.gdshader"
@@ -172,6 +173,7 @@ static func base_shaders() -> PackedStringArray:
 			MANNER,
 			YARD,
 			YARD_GROUND,
+			PROP,
 			TREE_STROKE,
 			TREE_BLOCKIN,
 			TREE_BLOCKIN_FAST,
@@ -308,6 +310,8 @@ static func collect(bare: bool) -> Array[Dictionary]:
 		_add(samples, "tree_blockin_bare_burn", TREE_BLOCKIN_BARE_BURN, LAYOUT_TREE, 0)
 		return samples
 	_add(samples, "ground", GROUND, LAYOUT_GROUND, 0)
+	# A GLB map's terrain (PainterGlbMap) is a Blender mesh: no second UV set.
+	_add(samples, "ground_plain", GROUND, LAYOUT_PLAIN, 0)
 	_add(samples, "plant_lit", PLANT, LAYOUT_LIT, 0)
 	_add(samples, "plant_plain", PLANT, LAYOUT_PLAIN, 0)
 	_add(samples, "solid_lit", SOLID, LAYOUT_LIT, 0)
@@ -320,6 +324,7 @@ static func collect(bare: bool) -> Array[Dictionary]:
 	_add(samples, "structure", STRUCTURE, LAYOUT_LIT, 0)
 	_add(samples, "yard", YARD, LAYOUT_YARD, 0)
 	_add(samples, "yard_ground", YARD_GROUND, LAYOUT_YARD, 0)
+	_add(samples, "prop", PROP, LAYOUT_LIT, 0)
 	_add(samples, "manner", MANNER, LAYOUT_MANNER, MANNER_FLAGS)
 	_add(samples, "water", WATER, LAYOUT_PLAIN, 0)
 	_add(samples, "waterfall", WATERFALL, LAYOUT_FALL, 0)

@@ -27,6 +27,8 @@ const SLOPE_LIMIT := 0.8
 ## Props stand this far into the ground (metres).
 const SINK_M := 0.03
 const META := &"tt_settlement"
+## Set on each cell material: its `<role>:<kind>` key (`prop:wood`, `prop:cloth`).
+const PART_META := &"tt_part"
 ## Set on a cell's standing-surface body: the settlement's id.
 const STAND_META := &"tt_stand"
 const STAND_PREFIX := "Stand_"
@@ -642,5 +644,8 @@ func _free_cell(cell_name: String) -> void:
 func _material(kind: String, role: String) -> Material:
 	var key := "%s:%s" % [role, kind]
 	if not _materials.has(key):
-		_materials[key] = StructureMaterials.make(kind, role, "", _palette_root)
+		var material := StructureMaterials.make(kind, role, "", _palette_root)
+		# Which surface this is, for the Painted look's stand-ins (PainterVillage); Classic ignores it.
+		material.set_meta(PART_META, key)
+		_materials[key] = material
 	return _materials[key]

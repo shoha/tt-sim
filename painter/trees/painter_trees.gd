@@ -89,7 +89,8 @@ var bush_cells: Dictionary = {}
 var fast_material: ShaderMaterial = null
 
 var _map: Node3D = null
-var _scatters: Array[AuthoredScatter] = []
+## The plant sources drawn: AuthoredScatter and AuthoredFieldPlants (same duck-typed API).
+var _scatters: Array = []
 var _doc: MapDocument = null
 var _root: Node3D = null
 ## 0 block ellipsoids, 1 block limbs, 2..4 stroke levels 0..2.
@@ -130,9 +131,7 @@ var _burn_materials: Array[ShaderMaterial] = []
 
 ## Draws the mapped tree rows of `scatters` under `map` in `state` ({"sheet", "mood",
 ## "elevation"}); `doc` (may be null) gives the biome density for each tree's openness.
-func paint(
-	map: Node3D, scatters: Array[AuthoredScatter], doc: MapDocument, state: Dictionary
-) -> void:
+func paint(map: Node3D, scatters: Array, doc: MapDocument, state: Dictionary) -> void:
 	if map != _map:
 		release()
 	if map == null:
@@ -218,7 +217,7 @@ func sync() -> void:
 	if _map == null:
 		return
 	_hide_glb()
-	_want = wanted(_scatters, _doc)
+	_want = wanted(_scatters, _doc, PainterGlbMap.rows_on(_map))
 	var dirty := {}
 	for key: Vector3i in trees.keys():
 		# (An event's tree stays until the event lets go of it: drop() erases it then.)
@@ -354,15 +353,15 @@ func held_count() -> int:
 
 ## Every mapped tree row of `scatters` as key -> {"pos", "species", "asset", "cx", "seed"}, and a
 ## bush's also "box" (PainterTreeBush.box_of; a bush whose asset has not resolved is left out)
-## (pure in the rows, the document and the resolved meshes).
-static func wanted(scatters: Array[AuthoredScatter], doc: MapDocument) -> Dictionary:
-	var out := {}
+## (pure in the rows, the document and the resolved meshes); `glb` adds a GLB map's rows.
+static func wanted(scatters: Array, doc: MapDocument, glb := {}) -> Dictionary:
+	var out := PainterGlbMap.wanted(glb, doc)
 	var stride := MapDocument.ROW_STRIDE
 	for scatter in scatters:
 		# A hidden scatter (the eye view's rim in the orbit view) draws nothing, painted or not.
 		if not is_instance_valid(scatter) or not scatter.visible:
 			continue
-		var by_asset := scatter.rows_by_asset()
+		var by_asset: Dictionary = scatter.rows_by_asset()
 		var resolved := {}
 		for asset_id: String in by_asset:
 			var species := PainterTreeSpecies.species_for(asset_id)

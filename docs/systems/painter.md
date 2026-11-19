@@ -1505,6 +1505,38 @@ calls.
 3. Point the presets it paints at it in `RenderStyle.MOOD_FOR_PRESET`.
 4. Run `test_painter_sheet.gd` and `test_render_style.gd`.
 
+## GLB maps (card painter-glb-parity, 2026-11-18)
+
+A Blender-made `map.glb` loads as plain nodes (MeshInstance3D terrain, props, ScatterGlbUtils
+chunks, MeshInstancingUtils MultiMeshes); the contract (ASSET_PIPELINE.md) names no ground, role
+or asset-class extra, so `PainterGlbMap` (painter/painter_glb_map.gd, made by path by
+PainterSurfaces on the first painted map) reads what is there, and `PainterGlbRoles`
+(painter/glb_roles.gd, pure) holds the rules.
+
+- **Ground.** A single-surface mesh that is wide, shallow and faces up (`is_ground`) gets the
+  painted ground shader as `material_override` in the map's world frame (`world_frame`). Its zone
+  (meadow, path, rock, shore) is classified on the GPU from the baked albedo (`glb_zone`,
+  `glb_classify`: a planar UV fit from `uv_affine`), so the artist's layout stays and the sheet
+  supplies tones, brush marks and shade. No texture or UVs that are not one planar map: one role
+  by the colour.
+- **Trees.** A scatter chunk of a tree (`wind_foliage_category` "tree") whose name resolves to a
+  painted species (`tree_species`: treecube names, then words such as oak, pine) is hidden and its
+  instances become PainterTrees rows (`PainterGlbMap.rows_on(map)`, scaled by mesh height over the
+  species' nominal height, `tree_scale`). Other scatter species get the authored scatter's
+  plant or solid stand-ins through `PainterSurfaces.swap_surface`.
+- **Props.** A MeshInstance3D (or a duplicate MultiMesh) gets a painted solid stand-in per surface
+  in the sheet role its material or node name says (`prop_role`: roof, bark, stone, leaf; else
+  by colour when untextured).
+- **Left as authored** (listed per node by `left_as_authored()`): lights, glass, ironwork, water
+  (PainterWater owns it), textured surfaces whose names say nothing, terrain of several surfaces
+  or non-planar UVs, nodes with a material override, hidden nodes, StaticBody3D, authored layers.
+  No skirt and no contact-occlusion pools on GLB ground (`map_extent` is zero without
+  AuthoredTerrain); tokens' feet discs do reach it.
+- **Cost.** The scan runs `STEP_US` (3 ms) of main thread a frame, never at level entry;
+  `complete()` finishes it for tests. The ground shader's `ground_plain` (GROUND on LAYOUT_PLAIN)
+  is a warm-up sample. Classic never creates the host; `release()` puts every material, override
+  and chunk back exactly (test_painter_glb_map.gd).
+
 ## Coverage (card painter-coverage, 2026-11-15)
 
 The audit of Classic against Painted is `docs/research/2026-11-09-prototypes/compare/
@@ -1600,8 +1632,59 @@ painter_final25_coverage/matrix.md`; the current, code-read class-by-class audit
   first face row) still funnels over its last 0.7 m, but the pool now runs into the curtain. `WaterFallMesh` is unchanged (a first try
   of mesh lead-in rows and a brink edge fade moved the wetted width by under 3 percent and was
   dropped).
-- **Known gaps** are listed in the matrix with their effort: baked settlement furnishings, field
-  plants, round and profile roofs (procgen records).
+- **Known gaps** are listed in the matrix with their effort: round and profile roofs (procgen
+  records). The settlement furnishings and the field plants were filled by painter-village-parity
+  (next section).
+
+## Village furnishings (card painter-village-parity, 2026-11-18)
+
+Three village classes that drew Classic beside painted houses now have a painted form; the frames are
+in `docs/research/2026-11-09-prototypes/compare/painter_final37_village/` (`notes.md`).
+
+- **Settlement props** (`AuthoredSettlements`: one MeshInstance3D per 48 m cell, one surface per
+  `role:kind`, shared materials). `PainterVillage` (`painter/painter_village.gd`, a RefCounted made by
+  `PainterSurfaces` like `PainterBuildings`, event-driven by `child_entered_tree` on the map and the
+  layer, never polled) swaps the material of every `prop:*` surface except `prop:glass` for a
+  stand-in on `painter_prop.gdshader` and puts the original back exactly on release. The layer now
+  stamps each material with its key (`AuthoredSettlements.PART_META`, `tt_part`) so the host can tell
+  the surface from the mesh alone. One stand-in per kind (`free`, `stone`, `thatch`), shared by every
+  cell. Which of the eight sheet ramps a vertex takes is chosen by its procgen paint
+  (`prop_tone`: honey and brown the timber, gold the thatch, red, orange and pink the clay, green the
+  turf, blue, teal and violet the slate, cream the plaster, grey the wall stone; `tone_of` is its GDScript twin
+  for the tests), so a market is still red, blue and gold cloth over honey wood; the ramps are the
+  buildings' (`PainterBuildings.ramp`), so winter, dusk and the elevation tone props as they tone
+  houses, and in winter up faces take the roof snow's ramp in a scalloped cap. How light the paint is
+  picks the sheet's variant, so two barrels are never one brown. The shader is the selector light of
+  the buildings (shade, middle, lit by N.L, the sun's `ATTENUATION` for cast shadow) and never
+  discards (the shadow-twin and TREE_FAST rules hold trivially).
+- **Baked decor** (`decor_baked`: the ivy, planters and flower boxes of a structure baked into one
+  ArrayMesh with shared wind materials). `PainterVillage` swaps each surface for the plants' stand-in
+  (`PainterSurfaces.stand_in_of`, now static) in the SOLID kind (a leaf-mass kind would read the node
+  origin, which is wrong for baked geometry), role bark for a material named `*bark*`, else leaf,
+  toned by `PainterPlantTone.tone` (moved out of `PainterSurfaces` at the glb-parity merge to stay under the file cap); one stand-in per original material, shared across the
+  structures. The non-bakable decor MultiMeshes (`decor_<asset>`) are not covered.
+- **Field plants** (`AuthoredFieldPlants`: orchard trees, garden flowers and shrubs, hedges, crops).
+  The layer now answers like a scatter (`rows_by_asset`, `resolved_species`, signals `cells_applied`
+  and `species_added`; its meshes come from `PaletteLibrary.resolve`, which duplicates per call, so it
+  reports the ones it resolved). `PainterSurfaces` binds it as a plant source
+  (`_is_plant_source`; `_scatters` is now an untyped Array) and `PainterTrees` draws its mapped tree
+  and bush rows as stroke crowns, exactly as for a scatter, hiding the GLB chunk nodes; the rest wear
+  the plants' stand-ins. Seasonal behaviour is the sheet's, like every painted plant.
+- **Left Classic on purpose:** `prop:glass` (lantern glass), glow and water parts (lights). Cloth no
+  longer sways (the Classic cloth wind is on the Classic material). Planter flowers lose their petal
+  accents (the decor stand-in is a solid).
+- **A/B switches** for measurement: `PainterVillage.furnishings`, `decor_plants`, `field_plants`
+  (all in `PainterStateReset`); read at paint time, so release and paint again.
+- **Classic is untouched**: a map never painted never loads `PainterVillage`'s stand-ins, and the
+  Classic-pinned tests compare material identity before and after a paint and release.
+- **Cost** (pinned procedure, home camera, GPU ms, Painted minus Classic, pairs x3): a two-street
+  village with fields, winter -0.57 and summer -0.52 (Painted before the card: -0.30 and -0.32); the
+  12-loose-house village, winter -1.13 and summer -0.93 (unchanged by the card: it has no props or
+  fields). Raw numbers: `compare/painter_final37_village/notes.md`.
+- Tests: `test_painter_village.gd` (the swap and exact restore, Classic lights kept, a cell baked
+  later, the layer made later, the tone rule, mood and sun, decor stand-ins and restore, field
+  plants as a source, orchard trees drawn by `PainterTrees`, the A/B switches, no per-frame hooks);
+  `test_painter_warmup.gd` lists the prop shader.
 
 ## Verification
 
