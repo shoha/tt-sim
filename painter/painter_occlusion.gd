@@ -15,6 +15,11 @@ extends RefCounted
 ## footprint's nominal edge (`cover`), the texels take the maximum. The shader thresholds it
 ## through the ground's own brush noise, so a pool is a flat stroke-edged shape in the ground's
 ## deeper shade, not a blur (the painter's ground is flat shapes with firm wandering edges).
+## The pool shows ONLY where the ground is in shade (card painter-tree-ground): what stands on the
+## ground shuts out the sky, not the sun, so the pool deepens each cast shadow at its root and the
+## sunlit ground beside a trunk stays lit (a pool there, centred on the trunk while the shadow ran
+## away from the sun, read as a second light). The seam stays in the sun too, lighter, and the
+## shader reads the field a little toward the sun so the seam leans to the shadow's side.
 ## Every pool follows its thing's own shape (card painter-pool-shapes): a crown's disc, also for the
 ## trees the painter does not grow (acacia, palm, dead tree: scatter solids by their bark); a rock's
 ## or a log's rounded box; a building's own plan (PainterFootprint: its walls' feet, never its yard
@@ -38,8 +43,14 @@ const MAX_TOKENS := 32
 ## tree (a dead tree carries no leaf surface to tell it by): a crown's disc, not a box.
 const TREE_M := 2.0
 const TREE_SLENDER := 1.6
-## The seam at a building's walls (metres past them).
-const WALL_SEAM_M := 0.3
+## The seam at a building's walls (metres past them): 0.3 read as nothing at zoom 16 through the
+## yard's wash (card painter-tree-ground).
+const WALL_SEAM_M := 0.45
+## A trunk's seam: TRUNK_SEAM_M plus TRUNK_SEAM_K of the tree's height (metres, its nominal
+## radius). It shows in the sun too, so it is a small dab at the foot; at 0.55 m + 5 % it was a
+## metre-wide disc that read as a grey plate beside the trunk (card painter-tree-ground).
+const TRUNK_SEAM_M := 0.3
+const TRUNK_SEAM_K := 0.025
 ## The yard's ground (PainterBuildings' stand-in of `dressing_ground`), which reads the pool too.
 const YARD_KEY := "dressing_ground"
 ## The sheet's numbers read here (all DEFAULT_NUMBERS).
@@ -228,7 +239,7 @@ func _add_trees(pool: PackedFloat32Array, core: PackedFloat32Array) -> void:
 			continue
 		var c := Vector2(p.x + mid.x * 0.5, p.z + mid.z * 0.5)
 		_disc(pool, c.x, c.y, half * 0.5 + 0.5)
-		_disc(core, p.x, p.z, 0.55 + 0.05 * box.size.y)
+		_disc(core, p.x, p.z, trunk_seam(box.size.y))
 
 
 ## Rocks, logs and stumps of the scatter: a box rounded by its narrower half (a stone round, a log a
@@ -276,7 +287,12 @@ func _tree(
 	height: float
 ) -> void:
 	_disc(pool, (foot.x + crown.x) * 0.5, (foot.z + crown.z) * 0.5, half * 0.5 + 0.5)
-	_disc(core, foot.x, foot.z, 0.55 + 0.05 * height)
+	_disc(core, foot.x, foot.z, trunk_seam(height))
+
+
+## The nominal radius (metres) of the seam at the foot of a trunk `height` metres tall.
+static func trunk_seam(height: float) -> float:
+	return TRUNK_SEAM_M + TRUNK_SEAM_K * height
 
 
 ## Structures: each one's own plan (PainterFootprint: its walls' feet, a rounded rectangle), a pool
