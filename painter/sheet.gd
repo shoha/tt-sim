@@ -53,8 +53,8 @@ const COLOR_ROLES: Array[String] = [
 ## Number properties every keyframe sets: the sun's and the ambient light's energy.
 const NUMBER_PROPS: Array[String] = ["sun-energy", "ambient-energy"]
 ## Colour roles a keyframe may leave to a `:world` default (see the header): the ground's forest
-## floor and shore, the grass, the ground's pale drift and fallen-leaf marks, the four flower
-## accents (PainterSurfaces paints with them), the conifers' needles and a bare season's clinging
+## floor and shore, the grass, the ground's pale drift and fallen-leaf marks, the six flower
+## accents (PainterFlowerHue.ROLES), the conifers' needles and a bare season's clinging
 ## dry leaves (PainterTreeTones), and the
 ## buildings' walls and timber (PainterBuildings: plaster, a stone wall, log and board walls, the
 ## beams, frames and doors) and the water's (PainterWater: the three depth bands of the wash, the
@@ -91,7 +91,7 @@ const DEFAULT_ROLES: Array[String] = [
 ## role's shade and lit colours are drawn from it, the ground's own ramp under `ground-`), the
 ## plants' light steps (tone-lo, tone-hi, N.L thresholds), the thinning of grass and flowers in
 ## groups (keep-*: the share kept, keep-freq-*: 1/m of the world noise that groups them), the
-## flowers' colour groups (flower-mix, 1/m), and the ground's brush marks (marks: the share of
+## flowers' value drifts (flower-mix, 1/m), and the ground's brush marks (marks: the share of
 ## cells that hold one, mark-thin: how far a flat area thins them, drift-marks and litter-marks:
 ## how much of the small marks, patches: the block-in's variation, mark-px-*: the pixel footprints
 ## in metres between which a mark fades out, cut: the shadow step's wiggle). The painted trees'
