@@ -16,8 +16,14 @@ const FOLLOW_REACH_M := 1.0
 
 ## Why the last add() made nothing (last_refusal).
 const REFUSED_FULL := &"full"
-const REFUSED_INVALID := &"invalid"
 const REFUSED_UNKNOWN := &"unknown"
+## The writer refused the footprint (MapStructureIO.structure_reason): it reaches off the map,
+## spans more than MapStructureIO.MAX_SPAN_M, or is not a shape the plan rules take. REFUSED_INVALID
+## is any other rule the writer breaks (the id, the recipe reference, the seed, params or style).
+const REFUSED_OFF_MAP := MapStructureIO.REASON_OFF_MAP
+const REFUSED_TOO_WIDE := MapStructureIO.REASON_TOO_WIDE
+const REFUSED_SHAPE := MapStructureIO.REASON_SHAPE
+const REFUSED_INVALID := &"invalid"
 
 ## Why the last add() made nothing, or &"".
 var last_refusal: StringName = &""
@@ -75,10 +81,20 @@ func lot(ref: String, plan: PackedVector2Array, seed_value: int) -> Structure:
 		{},
 		CrossingPlacement.style_at(doc, middle)
 	)
-	if MapStructureIO.structure_problem(structure, doc.extent_m()) != "":
-		last_refusal = REFUSED_INVALID
-		return null
-	return structure
+	last_refusal = refusal_of(structure, doc.extent_m())
+	return structure if last_refusal == &"" else null
+
+
+## Why the writer would refuse `structure` in a map of `extent` metres: one of the REFUSED_ reasons
+## (OFF_MAP, TOO_WIDE, SHAPE, else INVALID), or &"" when it takes it. Pure.
+static func refusal_of(structure: Structure, extent: Vector2) -> StringName:
+	var reason := MapStructureIO.structure_reason(structure, extent)
+	match reason:
+		&"":
+			return &""
+		REFUSED_OFF_MAP, REFUSED_TOO_WIDE, REFUSED_SHAPE:
+			return reason
+	return REFUSED_INVALID
 
 
 ## The id of the structure whose footprint holds world point `point`, or -1.
@@ -122,8 +138,8 @@ func add(structure: Structure) -> int:
 			last_refusal = REFUSED_FULL
 			return -1
 		laid.id = structure_id
-	if MapStructureIO.structure_problem(laid, doc.extent_m()) != "":
-		last_refusal = REFUSED_INVALID
+	last_refusal = refusal_of(laid, doc.extent_m())
+	if last_refusal != &"":
 		return -1
 	var after: Array[Structure] = []
 	for entry in doc.structures:
@@ -148,11 +164,9 @@ func lay_all(laid: Array[Structure], label: String) -> bool:
 		seen[entry.id] = true
 	var after: Array[Structure] = _current()
 	for structure in laid:
-		if (
-			seen.has(structure.id)
-			or (MapStructureIO.structure_problem(structure, doc.extent_m()) != "")
-		):
-			last_refusal = REFUSED_INVALID
+		var reason := refusal_of(structure, doc.extent_m())
+		if seen.has(structure.id) or reason != &"":
+			last_refusal = reason if reason != &"" else REFUSED_INVALID
 			return false
 		seen[structure.id] = true
 		after.append(structure.copy())
@@ -184,8 +198,8 @@ func edit(changed: Structure, label: String, before: Array[Structure] = []) -> b
 	if doc.structure(changed.id) == null:
 		last_refusal = REFUSED_UNKNOWN
 		return false
-	if MapStructureIO.structure_problem(changed, doc.extent_m()) != "":
-		last_refusal = REFUSED_INVALID
+	last_refusal = refusal_of(changed, doc.extent_m())
+	if last_refusal != &"":
 		return false
 	var base: Array[Structure] = before if not before.is_empty() else _current()
 	var after: Array[Structure] = []

@@ -143,12 +143,101 @@ func test_an_unknown_building_and_an_unwritable_plan_say_their_words() -> void:
 		[Vector2(0, 0), Vector2(6, 0), Vector2(6, 0.1), Vector2(0, 0.1)]
 	)
 	assert_null(editor.structures.lot(COTTAGE, sliver, 1))
+	assert_eq(editor.structures.last_refusal, StructureEditor.REFUSED_SHAPE)
+	assert_eq(
+		StructureBrush.refusal_text(editor.structures.last_refusal), StructureBrush.SHAPE_TEXT
+	)
+	var note := StructureNote.live(String(editor.structures.last_refusal), "", false, "")
+	assert_eq(note["text"], StructureBrush.SHAPE_TEXT)
+	assert_eq(note["level"], StructureNote.Level.BLOCKED)
+
+
+func test_a_rule_that_is_not_about_the_footprint_stays_invalid() -> void:
+	var editor := _editor()
+	var two_points := PackedVector2Array([Vector2(0, 0), Vector2(6, 0)])
+	assert_null(editor.structures.lot(COTTAGE, two_points, 1))
+	assert_eq(editor.structures.last_refusal, StructureEditor.REFUSED_INVALID)
 	assert_eq(
 		StructureBrush.refusal_text(editor.structures.last_refusal), StructureBrush.INVALID_TEXT
 	)
-	var note := StructureNote.live(String(editor.structures.last_refusal), "", false, "")
-	assert_eq(note["text"], StructureBrush.INVALID_TEXT)
-	assert_eq(note["level"], StructureNote.Level.BLOCKED)
+	var plan := StructurePlacement.rect_plan(Vector2.ZERO, Vector2(6, 4), 0.0)
+	var bad_id := Structure.make(0, COTTAGE, plan, 1)
+	assert_eq(
+		StructureEditor.refusal_of(bad_id, _doc.extent_m()),
+		StructureEditor.REFUSED_INVALID,
+		"an id outside 1..255 is not a footprint reason"
+	)
+
+
+func test_a_hall_laid_past_the_edge_says_off_the_map_not_invalid() -> void:
+	# The coverage sweep's case: chinese_hall (11 x 7 m) laid at x -25 on a 200 ft map.
+	_doc = MapDocument.create_flat(Vector2i(40, 40), "grass", "v", 9)
+	var editor := _editor()
+	var row := LibraryStructureStore.structure("core:chinese_hall")
+	var size := StructurePlacement.default_size(row)
+	var half := _doc.extent_m() * 0.5
+	assert_almost_eq(half.x, 30.48, 0.01, "a 200 ft map")
+	var edge := Structure.make(
+		0, "core:chinese_hall", StructurePlacement.rect_plan(Vector2(-25.0, -8.0), size, 0.0), 3
+	)
+	assert_eq(editor.structures.add(edge), -1)
+	assert_eq(editor.structures.last_refusal, StructureEditor.REFUSED_OFF_MAP)
+	assert_eq(
+		StructureBrush.refusal_text(editor.structures.last_refusal), StructureBrush.OFF_MAP_TEXT
+	)
+	edge.id = 1
+	assert_eq(MapStructureIO.structure_reason(edge, _doc.extent_m()), MapStructureIO.REASON_OFF_MAP)
+	var inside := Structure.make(
+		0, "core:chinese_hall", StructurePlacement.rect_plan(Vector2.ZERO, size, 0.0), 3
+	)
+	assert_gt(editor.structures.add(inside), 0, "the same hall at the origin stands")
+	assert_eq(editor.structures.last_refusal, &"")
+	gut.p("laid past the edge: %s" % StructureBrush.OFF_MAP_TEXT)
+
+
+func test_a_lot_wider_than_the_writer_takes_says_too_large() -> void:
+	_doc = MapDocument.create_flat(Vector2i(64, 64), "grass", "v", 9)
+	var editor := _editor()
+	assert_gt(_doc.extent_m().x, 75.0, "the map holds the lot")
+	var wide := StructurePlacement.rect_plan(Vector2.ZERO, Vector2(70, 10), 0.0)
+	assert_null(editor.structures.lot(COTTAGE, wide, 1))
+	assert_eq(editor.structures.last_refusal, StructureEditor.REFUSED_TOO_WIDE)
+	assert_eq(
+		StructureBrush.refusal_text(editor.structures.last_refusal), StructureBrush.TOO_WIDE_TEXT
+	)
+
+
+func test_every_reason_has_its_own_words_and_the_off_map_ids_agree() -> void:
+	assert_eq(String(StructureEditor.REFUSED_OFF_MAP), StructurePlacement.OFF_MAP)
+	var reasons: Array = [
+		StructurePlacement.WATER,
+		StructurePlacement.STEEP,
+		StructurePlacement.OFF_MAP,
+		StructurePlacement.OCCUPIED,
+		String(StructureEditor.REFUSED_TOO_WIDE),
+		String(StructureEditor.REFUSED_SHAPE),
+		String(StructureEditor.REFUSED_FULL),
+		String(StructureEditor.REFUSED_UNKNOWN),
+		String(StructureEditor.REFUSED_INVALID),
+	]
+	var seen := {}
+	for reason: String in reasons:
+		var words := StructureBrush.refusal_text(reason)
+		assert_ne(words, "", reason)
+		assert_false(seen.has(words), "%s has words of its own" % reason)
+		seen[words] = true
+		assert_false(words.contains("invalid"), "plain words, not the code: %s" % reason)
+	assert_eq(StructureBrush.refusal_text(""), "")
+
+
+func test_a_release_far_off_the_map_toasts_off_the_map() -> void:
+	var editor := _editor()
+	var brush := _brush()
+	brush.begin(Vector3(400.0, 0.0, 0.0))
+	brush.track(editor, Vector3(403.0, 0.0, 0.0), 0.0)
+	assert_eq(brush.finish(editor), -1)
+	assert_eq(brush.message(), StructureBrush.OFF_MAP_TEXT)
+	assert_eq(StructureBrush.OFF_MAP_TEXT, "Off the map: move it inward.")
 
 
 func test_a_small_or_huge_drag_says_which_size_stop_held_it() -> void:

@@ -74,7 +74,7 @@ from the document's ground when built (the Build card), exactly as a wall's is.
 
 `StructureEditor` (`scenes/states/authoring/structure_editor.gd`, `AuthoringEditor.structures`):
 `list()`, `get_structure()`, `add()` (a new id is taken from `MapDocument.next_structure_id()`; an
-existing id replaces; -1 with `last_refusal` `full` or `invalid`), `remove()` and `apply_list()`.
+existing id replaces; -1 with `last_refusal` `full`, `off_map`, `too_wide`, `shape` or `invalid`), `remove()` and `apply_list()`.
 Every change is one history entry holding the whole list before and after. `apply_list()` is the
 one method the history's undo and redo and a live edit call: it sets the document's list, brings the
 map's `AuthoredStructures` up to it (below) and asks the scatter to regrow over the footprints that
@@ -1005,6 +1005,17 @@ pure (`utils/structure_placement.gd`).
     note stacks under the name and size chip (`StructurePlanView.draw_pills`). The ghost, the hovered
     building and the note are drawn by `StructureGhostView` (`structure_ghost_view.gd`, split from
     the brush on 2026-10-31), the selection by `StructureSelectionView`.
+  - *Refusal words.* Each reason is data and has its own words, "what is wrong: what to do"
+    (`StructureBrush.refusal_text`, pinned one by one in `test_structure_blocked_reasons.gd`):
+    water "Overlaps a river or pond: move it onto dry ground.", steep ground "Too steep here: move
+    it to flatter ground.", off the map "Off the map: move it inward.", a building near "Too close to
+    another building: move it clear.", and the writer's own refusals of a footprint, since
+    2026-11-19 told apart by `MapStructureIO.structure_reason` into `StructureEditor.REFUSED_OFF_MAP`
+    (the same id as `StructurePlacement.OFF_MAP`, so the ground check and the writer share the
+    words), `REFUSED_TOO_WIDE` ("Too large: shrink the lot.", over `MapStructureIO.MAX_SPAN_M`) and
+    `REFUSED_SHAPE` ("Too cramped a shape: ...", a ProcgenPlan rule: a short side, a sharp corner),
+    then the full map, an unknown building and `REFUSED_INVALID` (any rule not about the footprint).
+    A size outside the recipe's range is never a refusal: the lot is held to it and says so.
   - *GM Events pane.* It lists the tool and, since this card, wires the selection bar too
     (`StructureTool.connect_selection(brush, pane, hints_changed)`, called by
     `PlayEvents._wire_structure_bar` once per pane), so a click on a building in play shows the

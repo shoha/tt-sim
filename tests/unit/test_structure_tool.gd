@@ -183,7 +183,7 @@ func test_the_editor_makes_a_lot_and_refuses_what_it_cannot() -> void:
 		[Vector2(0, 0), Vector2(6, 0), Vector2(6, 0.1), Vector2(0, 0.1)]
 	)
 	assert_null(editor.structures.lot(COTTAGE, sliver, 1))
-	assert_eq(editor.structures.last_refusal, StructureEditor.REFUSED_INVALID)
+	assert_eq(editor.structures.last_refusal, StructureEditor.REFUSED_SHAPE)
 	assert_eq(_doc.structures.size(), 0, "planning changes nothing")
 
 

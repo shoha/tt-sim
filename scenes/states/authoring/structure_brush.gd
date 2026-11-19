@@ -77,11 +77,15 @@ const FOOTPRINT_ALPHA := 0.3
 ## The ghost's edges are sampled this far apart along the ground (metres).
 const LINE_STEP_M := 0.5
 const FADE_M := 2.5
-## Plain-words reasons a lot cannot be laid.
-const WATER_TEXT := "Not on the water. Move onto dry ground."
-const STEEP_TEXT := "That ground is too steep to build on."
-const OFF_MAP_TEXT :="Keep the building on the map."
-const OCCUPIED_TEXT := "There is a building here already."
+## Plain-words reasons a lot cannot be laid: what is wrong, then what to do (refusal_text() maps
+## each reason to its words). A size outside the recipe's range is never a refusal: the lot is
+## held to the range and says so (StructureNote.clamp_text).
+const WATER_TEXT := "Overlaps a river or pond: move it onto dry ground."
+const STEEP_TEXT := "Too steep here: move it to flatter ground."
+const OFF_MAP_TEXT := "Off the map: move it inward."
+const OCCUPIED_TEXT := "Too close to another building: move it clear."
+const TOO_WIDE_TEXT := "Too large: shrink the lot."
+const SHAPE_TEXT := "Too cramped a shape: lengthen the short sides and open the sharp corners."
 const FULL_TEXT := "The map holds as many buildings as it can. Remove one to make room."
 const UNKNOWN_TEXT := "That building is not in a library this map has."
 const INVALID_TEXT := "A building cannot stand there."
@@ -173,7 +177,8 @@ func _init() -> void:
 
 
 ## The reason a lot cannot be laid (a StructurePlacement problem, or an editor refusal), in plain
-## words, or "". Pure.
+## words, or "". StructureEditor.REFUSED_OFF_MAP is StructurePlacement.OFF_MAP's id, so the ground
+## check and the writer's refusal say the same words. Pure.
 static func refusal_text(reason: String) -> String:
 	match reason:
 		StructurePlacement.WATER:
@@ -184,6 +189,10 @@ static func refusal_text(reason: String) -> String:
 			return OFF_MAP_TEXT
 		StructurePlacement.OCCUPIED:
 			return OCCUPIED_TEXT
+		String(StructureEditor.REFUSED_TOO_WIDE):
+			return TOO_WIDE_TEXT
+		String(StructureEditor.REFUSED_SHAPE):
+			return SHAPE_TEXT
 		String(StructureEditor.REFUSED_FULL):
 			return FULL_TEXT
 		String(StructureEditor.REFUSED_UNKNOWN):

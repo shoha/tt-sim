@@ -34,6 +34,13 @@ const VERSION := 1
 ## each recipe's own size range is the library's (design.md "Files").
 const MAX_SPAN_M := 64.0
 
+## Which kind of rule a refused structure breaks (structure_reason, footprint_reason).
+const REASON_OFF_MAP := &"off_map"
+const REASON_TOO_WIDE := &"too_wide"
+const REASON_SHAPE := &"shape"
+const REASON_POINTS := &"points"
+const REASON_OTHER := &"invalid"
+
 static var _param_name_re: RegEx = _compile("^[a-z][a-z0-9_]*$")
 
 
@@ -118,18 +125,50 @@ static func recipe_problem(recipe: String) -> String:
 static func footprint_problem(
 	plan: PackedVector2Array, extent: Vector2, kind: String = ""
 ) -> String:
+	return String(_footprint_check(plan, extent, kind)[1])
+
+
+## Which footprint rule `plan` breaks, as a REASON_ code (footprint_problem's rules, in the order
+## it checks them), or &"" when none. What a tool turns into plain words
+## (StructureBrush.refusal_text).
+static func footprint_reason(
+	plan: PackedVector2Array, extent: Vector2, kind: String = ""
+) -> StringName:
+	return _footprint_check(plan, extent, kind)[0] as StringName
+
+
+## Which rule `structure` breaks in a map of `extent` metres: a REASON_ code, REASON_OTHER for a
+## rule that is not about where the footprint lies (id, recipe reference, seed, params, style), or
+## &"" when structure_problem() is "". The editor's refusal reason.
+static func structure_reason(structure: Structure, extent: Vector2) -> StringName:
+	if structure_problem(structure, extent) == "":
+		return &""
+	if structure.id < 1 or structure.id > Structure.MAX_ID or recipe_problem(structure.recipe) != "":
+		return REASON_OTHER
+	var served := LibraryStructureStore.structure(structure.recipe)
+	var kind := ProcgenPlan.KIND_PROP if ProcgenStructureIndex.is_prop(served) else ""
+	var reason := footprint_reason(structure.footprint, extent, kind)
+	return reason if reason != &"" else REASON_OTHER
+
+
+## [reason (a REASON_ code or &""), problem text] for the first footprint rule `plan` breaks.
+static func _footprint_check(plan: PackedVector2Array, extent: Vector2, kind: String) -> Array:
 	var count := plan.size()
 	if count < Structure.MIN_POINTS or count > Structure.MAX_POINTS:
-		return "%d points outside %d..%d" % [count, Structure.MIN_POINTS, Structure.MAX_POINTS]
+		return [
+			REASON_POINTS,
+			"%d points outside %d..%d" % [count, Structure.MIN_POINTS, Structure.MAX_POINTS]
+		]
 	var half := extent * 0.5 + Vector2.ONE * MapWaterIO.EXTENT_TOLERANCE_M
 	var box := Rect2(plan[0], Vector2.ZERO)
 	for p in plan:
 		if not (_finite(p.x) and _finite(p.y)) or absf(p.x) > half.x or absf(p.y) > half.y:
-			return "a point is NaN, Inf or off the map"
+			return [REASON_OFF_MAP, "a point is NaN, Inf or off the map"]
 		box = box.expand(p)
 	if box.size.x > MAX_SPAN_M or box.size.y > MAX_SPAN_M:
-		return "wider than %s m" % MAX_SPAN_M
-	return _plan_problem(plan, kind)
+		return [REASON_TOO_WIDE, "wider than %s m" % MAX_SPAN_M]
+	var shape := _plan_problem(plan, kind)
+	return [REASON_SHAPE if shape != "" else &"", shape]
 
 
 ## What the shared plan rules (procgen's ProcgenPlan, the same ones structgen edits by) say about
