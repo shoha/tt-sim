@@ -38,7 +38,10 @@ extends RefCounted
 ## channel carved lower than its level (a river cut in two by an erase; the terrain stays
 ## carved) gets the same kind of sheet: the surface falls down the channel at RUN_OUT_SLOPE
 ## and trickles on over its bed as a film (_run_out), instead of ending in the air; an end
-## that lies in other water (a confluence) needs none.
+## that lies in other water (a confluence) needs none. A river that runs into a lower pond
+## (WaterGeometry.fed_ponds(): the pond owns its mask) gets one where it enters the pond's
+## water: the surface falls from the river's level to the pond's at CASCADE_SLOPE (_inflow()),
+## instead of stopping a level above the pond with the bed showing under its edge.
 ##
 ## Falls (phase 4c, P4c-3). A step that is a waterfall (WaterFalls.is_fall) gets no sheet: a
 ## height field cannot stand forward of a face, so cascades() skips the pair and the curtain
@@ -135,9 +138,14 @@ static func cascades(doc: MapDocument, buried: Dictionary = {}) -> Dictionary:
 	var out := {}
 	if doc.heights.size() != doc.sample_count():
 		return out
+	var fed := WaterGeometry.fed_ponds(doc)
 	for a in doc.water_bodies:
 		if not a.is_river() or a.points.size() < 2:
 			continue
+		if fed.has(a.id):
+			for pond in doc.water_bodies:
+				if pond.id == fed[a.id] and not pond.is_river():
+					_inflow(doc, a, pond, out, buried)
 		for b in doc.water_bodies:
 			if b == a or not b.is_river() or b.points.size() < 2 or b.level_m >= a.level_m:
 				continue
@@ -320,6 +328,66 @@ static func _cascade(
 			_put_sheet(i, sheet, ground, out, buried)
 
 
+## The sheet where `river` runs into a lower `pond` it feeds (WaterGeometry.fed_ponds(): the
+## pond owns its mask, so the river's flat surface stops at the pond's water a level above
+## it, and the camera saw the bed under its edge as a tan band, card painter-fall-continuity).
+## Over every sample of the river's area from where that area first meets the pond's water
+## (arc length along the course, past the end along its direction), the surface falls from
+## the river's level to the pond's at CASCADE_SLOPE and stays at the pond's past that, as a
+## film over a bed that stands higher (a riffle's, _cascade()); where the pond's own flat
+## surface would draw the same, the pond's cells are kept. Merged into `out`.
+@warning_ignore("integer_division")
+static func _inflow(
+	doc: MapDocument, river: WaterBody, pond: WaterBody, out: Dictionary, buried: Dictionary
+) -> void:
+	var course: PackedVector2Array = WaterGeometry.river_course(river)[0]
+	var outward := WaterGeometry.end_direction(course, true)
+	if course.size() < 2 or outward == Vector2.ZERO:
+		return
+	var arc := PackedFloat32Array([0.0])
+	for k in range(1, course.size()):
+		arc.append(arc[k - 1] + course[k].distance_to(course[k - 1]))
+	var columns := doc.samples_x()
+	var heights := doc.heights
+	var mask := doc.pond_mask
+	var area := WaterGeometry.body_area(doc, river)
+	var along := PackedFloat32Array()
+	along.resize(area.size())
+	var lateral := PackedFloat32Array()
+	lateral.resize(area.size())
+	var start := INF
+	for k in area.size():
+		var i := area[k]
+		var p := doc.sample_to_world(Vector2(i % columns, i / columns))
+		var near := WaterGeometry.nearest_on_polyline(course, p)
+		var segment := maxi(int(near.y), 0)
+		var s := lerpf(arc[segment], arc[mini(segment + 1, arc.size() - 1)], near.z)
+		if segment == course.size() - 2 and near.z >= 1.0:
+			s += maxf((p - course[-1]).dot(outward), 0.0)
+		along[k] = s
+		lateral[k] = near.x
+		if mask[i] == pond.id and heights[i] < pond.level_m:
+			start = minf(start, s)
+	if start == INF:
+		return
+	var upper := river.level_m
+	var lower := pond.level_m
+	var run := maxf((upper - lower) / CASCADE_SLOPE, 0.5)
+	var half := river.half_widths[-1]
+	for k in area.size():
+		var s := along[k] - start
+		var i := area[k]
+		var ground := heights[i]
+		if s < -CASCADE_BACK_M or (s < 0.0 and ground < upper):
+			continue
+		var ramp := lerpf(upper, lower, clampf(s / run, 0.0, 1.0))
+		var film := clampf(ground + _edge_film(lateral[k] - half), lower, upper)
+		var sheet := maxf(film if ground >= lower else lower, ramp)
+		if mask[i] == pond.id and sheet <= lower + 0.005:
+			continue
+		_put_sheet(i, sheet, ground, out, buried)
+
+
 ## The run of `course`'s points within `radius` of `at` (with one more point on each side),
 ## a polyline; the whole course when none is near.
 static func _near(course: PackedVector2Array, at: Vector2, radius: float) -> PackedVector2Array:
@@ -336,7 +404,8 @@ static func _near(course: PackedVector2Array, at: Vector2, radius: float) -> Pac
 
 
 ## The index into doc.water_bodies of the body owning each sample (the highest level among
-## the bodies whose area holds it), -1 where none does.
+## the bodies whose area holds it; a river not over the mask of a pond it feeds,
+## WaterGeometry.fed_ponds()), -1 where none does.
 static func sample_owners(doc: MapDocument) -> PackedInt32Array:
 	var count := doc.sample_count()
 	var owner := PackedInt32Array()
@@ -345,9 +414,13 @@ static func sample_owners(doc: MapDocument) -> PackedInt32Array:
 	var best := PackedFloat32Array()
 	best.resize(count)
 	best.fill(WaterGeometry.DRY)
+	var fed := WaterGeometry.fed_ponds(doc)
 	for b in doc.water_bodies.size():
 		var body := doc.water_bodies[b]
+		var fed_id: int = fed.get(body.id, 0) if body.is_river() else 0
 		for i in WaterGeometry.body_area(doc, body):
+			if fed_id != 0 and doc.pond_mask[i] == fed_id:
+				continue
 			if body.level_m > best[i]:
 				best[i] = body.level_m
 				owner[i] = b

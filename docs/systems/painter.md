@@ -1644,6 +1644,29 @@ painter_final25_coverage/matrix.md`; the current, code-read class-by-class audit
   first face row) still funnels over its last 0.7 m, but the pool now runs into the curtain. `WaterFallMesh` is unchanged (a first try
   of mesh lead-in rows and a brink edge fade moved the wetted width by under 3 percent and was
   dropped).
+- **Fall continuity and the pond's tan band (card painter-fall-continuity, 2026-11-18, look-pending;
+  frames `compare/painter_final46_fall_continuity/`, notes there).** Three causes, each probed. (1)
+  The tan band across a pond: a river drawn first and a pond dug over its end later keeps its level
+  (-0.15) 0.83 m over the pond's (-0.985); the highest level owned every sample the two areas
+  shared, so the river stood over the pond as a slab and the camera saw the bed under its edge (the
+  band narrowed with pitch as a riser does). Now a river whose last point lies on a lower pond's
+  mask feeds it (`WaterGeometry.fed_ponds()`): the pond owns its mask in `levels()`, `level_at()`
+  and `WaterMeshBuilder.sample_owners()` (so tokens float at the pond's level there too), and the
+  surface falls from the river's level to the pond's at `CASCADE_SLOPE` where the river enters
+  (`WaterMeshBuilder._inflow()`, a sheet like a riffle's, no collision). (2) The fall's foot: the
+  painted curtain faded out 0.12 to 0.42 m over the pool and the ring's foam was a point, so the
+  shaded face showed between the curtain and a pool whose head was a crisp dark-blue line; now the
+  curtain runs 3 cm under the pool (`BOTTOM_SINK_M`, a 4 cm tear) into a foam line across its whole
+  width with a solid core (`RING_FOOT_HALF`, `RING_CORE`), and its glass is the river's blue
+  (`GLASS_MID_SHARE` 0.7, `GLASS_ALPHA` 0.78; it was a grey film at 0.25 to 0.5 alpha over the
+  shaded face), the brink's glass 8 cm long in the shallow wash. (3) The short ankle fall's bottle
+  neck: the cross-section's soft toe (`TOE_SOFT_M` 0.25) lifted the middle of a 1.1 m channel to
+  4 cm under the level as the bed rose over the pool tail; `WaterCarve.bed_line()` now returns a crest
+  share (w) and `section()` keeps the crest flat across there (`MAX_SHORE_SLOPE`,
+  `FALL_CREST_TOE_SOFT_M` 0.04; new carves only; hilltop digest re-pinned). Left: a thin light-cyan
+  line at the brink, a small pinch at an ankle fall's brink (the lip-tuck ledge), the plunge pool's
+  pale steep sides, a two-cell notch at the top of the inflow ramp, and a separate dark block in the
+  pond view (the tall ankle fall's upper reach, level 2.89, whose head cap stands over the pond basin).
 - **Known gaps** are listed in the matrix with their effort: round and profile roofs (procgen
   records). The settlement furnishings and the field plants were filled by painter-village-parity
   (next section).

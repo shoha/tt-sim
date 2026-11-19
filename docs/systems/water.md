@@ -63,7 +63,12 @@ Phase 4, P4-1 is data and algorithms only; the surface, carve and tool follow. P
   terrain-paint does). A river's area is within its half-width (at the nearest point of
   the course) plus `RIVER_BANK_M` (1 m) of it; a pond's is its mask samples. A sample is
   wet when it is in a body's area and its ground is below that body's level; overlaps
-  take the highest level (`levels()`, `wet_mask()`, `body_area()`, `wet_samples()`).
+  take the highest level (`levels()`, `wet_mask()`, `body_area()`, `wet_samples()`), except
+  that a river whose last point lies on a LOWER pond's mask feeds it (`fed_ponds()`) and the
+  pond owns its mask (`levels()`, `level_at()`, `WaterMeshBuilder.sample_owners()`); the mesh
+  lays a sheet from the river's level down to the pond's where it enters (`_inflow()`, card
+  painter-fall-continuity: before, the river stood over the pond as a slab and the bed showed
+  under its edge as a tan band).
   `nearest_field()` is the shared per-segment rasteriser (distance, half-width and
   tangent of the nearest segment on any regular grid). Since P4-3 a river's area stops
   flush at an end another river continues from (the next reach of one stroke: its first

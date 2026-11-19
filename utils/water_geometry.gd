@@ -15,7 +15,12 @@ extends RefCounted
 ## the carve leaves there (WaterCarve) and never hangs over the lower reach's riffle. A
 ## pond's area is the samples of MapDocument.pond_mask holding
 ## its id. A sample is wet when it lies in a body's area and its ground is below that
-## body's level; where areas overlap, the highest level wins.
+## body's level; where areas overlap, the highest level wins, with one exception: a river
+## whose last point lies in a LOWER pond (fed_ponds(): the river runs into it, as when a
+## pond is dug over a river's end later) gives that pond the samples of its mask, so the
+## river does not stand over the pond as a raised slab (card painter-fall-continuity: from
+## the camera, the bed showed as a tan band under the slab's edge). The water surface falls
+## from the river's level to the pond's where the river enters it (WaterMeshBuilder).
 ##
 ## Level rules (every body is flat). A river's level is the lowest ground along its
 ## centreline minus FREEBOARD_M (reach_level()), so the surface sits below the banks all
@@ -37,6 +42,8 @@ const REACH_DROP_M := 0.5
 const DRY := -INF
 ## Two river ends closer than this (squared metres) are one shared point (flush_ends()).
 const JOIN_EPSILON_SQ := 1e-6
+## A river ending in a pond at least this much lower feeds it (fed_ponds()).
+const FED_MIN_DROP_M := 0.02
 
 
 ## Chaikin corner cutting, terrain-paint's chaikin_smooth(): each pass replaces every
@@ -221,8 +228,9 @@ static func in_reach(field: Dictionary, k: int, bank: float) -> bool:
 
 
 ## The water level at every sample of `doc`'s grid (row-major like heights): the highest
-## level among the bodies whose area holds the sample, DRY where none does. A sample is
-## wet where its height is below this (wet_mask()).
+## level among the bodies whose area holds the sample (a river not over the mask of a pond it
+## feeds, fed_ponds()), DRY where none does. A sample is wet where its height is below this
+## (wet_mask()).
 static func levels(doc: MapDocument) -> PackedFloat32Array:
 	var count := doc.sample_count()
 	var out := PackedFloat32Array()
@@ -232,6 +240,8 @@ static func levels(doc: MapDocument) -> PackedFloat32Array:
 	pond_levels.resize(WaterBody.MAX_ID + 1)
 	pond_levels.fill(DRY)
 	var has_pond := false
+	var fed := fed_ponds(doc)
+	var mask := doc.pond_mask
 	for body in doc.water_bodies:
 		if not body.is_river():
 			pond_levels[body.id] = body.level_m
@@ -240,18 +250,46 @@ static func levels(doc: MapDocument) -> PackedFloat32Array:
 		var width := doc.samples_x()
 		var field := _sample_field(doc, body)
 		var rect: Rect2i = field["rect"]
+		var fed_id: int = fed.get(body.id, 0)
 		for j in rect.size.y:
 			for i in rect.size.x:
 				var k := j * rect.size.x + i
 				if in_reach(field, k, RIVER_BANK_M):
 					var at := (rect.position.y + j) * width + rect.position.x + i
+					if fed_id != 0 and mask[at] == fed_id:
+						continue
 					out[at] = maxf(out[at], body.level_m)
 	if has_pond and doc.pond_mask.size() == count:
-		var mask := doc.pond_mask
 		for i in count:
 			var id := mask[i]
 			if id != 0 and pond_levels[id] > out[i]:
 				out[i] = pond_levels[id]
+	return out
+
+
+## The ponds the rivers of `doc` feed (see the header): river id -> pond id, for each river
+## whose last point (where no other reach continues it) lies on the mask of a pond at least
+## FED_MIN_DROP_M below the river's level. Cheap: one mask read per river.
+static func fed_ponds(doc: MapDocument) -> Dictionary:
+	var out := {}
+	if doc.pond_mask.size() != doc.sample_count() or doc.sample_count() == 0:
+		return out
+	var pond_levels := {}
+	for body in doc.water_bodies:
+		if not body.is_river():
+			pond_levels[body.id] = body.level_m
+	if pond_levels.is_empty():
+		return out
+	var last := Vector2(doc.samples_x() - 1, doc.samples_z() - 1)
+	for body in doc.water_bodies:
+		if not body.is_river() or body.points.is_empty():
+			continue
+		if flush_ends(doc.water_bodies, body).y != 0:
+			continue
+		var s := doc.world_to_sample(body.points[-1]).round().clamp(Vector2.ZERO, last)
+		var id := doc.pond_mask[doc.sample_index(int(s.x), int(s.y))]
+		if pond_levels.has(id) and float(pond_levels[id]) < body.level_m - FED_MIN_DROP_M:
+			out[body.id] = id
 	return out
 
 
@@ -271,12 +309,15 @@ static func level_at(
 		var x := clampi(int(s.x), 0, doc.samples_x() - 1)
 		var z := clampi(int(s.y), 0, doc.samples_z() - 1)
 		pond = doc.pond_mask[doc.sample_index(x, z)]
+	var fed := fed_ponds(doc) if pond != 0 else {}
 	for body in doc.water_bodies:
 		if body.id == exclude_id or body.level_m <= best:
 			continue
 		if not body.is_river():
 			if pond == body.id:
 				best = body.level_m
+			continue
+		if pond != 0 and fed.get(body.id, 0) == pond:
 			continue
 		var course: Array = courses[body.id] if courses.has(body.id) else river_course(body)
 		if course.is_empty():

@@ -329,8 +329,11 @@ Under the Painted look `AuthoredWater.fall_material()` (the one shared fall mate
 (the sheet, the skirt, the plunge band), chunky white streaks and sheet-coloured shallow and mid
 tones instead of Classic's blurred cards. `PainterWater` swaps the shader and restores Classic's;
 the mesh and its instance uniforms are untouched. The fall's silhouette (the rounded cap on the
-channel above, the tube-shaped plunge pool) is the mesh's, the same under both shaders. Details:
-[painter.md](painter.md) "Water".
+channel above, the tube-shaped plunge pool) is the mesh's, the same under both shaders. The painted
+curtain runs 3 cm under the pool into a foam line across its whole width (the ring's foam, a solid
+core along the foot), its glass is the river's blue, and a fall's crest keeps a flat bed across a
+narrow channel (`WaterCarve.FALL_CREST_TOE_SOFT_M`), so the river joins the fall at both ends (card
+painter-fall-continuity). Details: [painter.md](painter.md) "Water".
 
 ## Open work
 
