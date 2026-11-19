@@ -120,6 +120,13 @@ static func of(asset_id: String, wind_category: String, flower: bool = false) ->
 	return _entry(KIND_SOLID, "stone")
 
 
+## of() for a plant source's species `record` (a resolved_species entry: "wind_category",
+## "flower", "mesh" and, for a village field's crop, "crop"; PainterFields.plant_entry).
+static func of_record(asset_id: String, record: Dictionary) -> Dictionary:
+	var entry := of(asset_id, str(record["wind_category"]), bool(record["flower"]))
+	return PainterFields.plant_entry(entry, record)
+
+
 ## The entry for one surface of an asset `entry` (of()) names: a tree the painter does not grow
 ## carries `by_surface`, and its material says what the surface is, bark (a solid in the bark role)
 ## or leaf (a leaf mass); a flower's surface carries its bloom (PainterFlowerHue.for_surface: which

@@ -56,9 +56,8 @@ const float BOTTOM_WHITE_SHARE = 0.3;
 const float BOTTOM_SINK_M = 0.03;
 const float BOTTOM_FADE_M = 0.025;
 const float BOTTOM_TEAR_M = 0.04;
-// The brink: the glassy tongue over the lip is this long (m) and wears the river's shallow wash,
-// so the river runs into the roll instead of meeting it across a strip of another colour.
-const float BRINK_GLASS_M = 0.08;
+// The brink has no tongue of its own: a light shallow-wash strip there read as a cyan hairline
+// between the river and the roll (card painter-fall-round2), so the curtain's glass runs to the lip.
 // The glass between the streaks: the share of the mid wash in it and its alpha, a luminous body of
 // the river's blue rather than a grey film over the shaded face.
 const float GLASS_MID_SHARE = 0.7;
@@ -237,21 +236,16 @@ void fragment() {
 		float roll_fade = 1.0 - smoothstep(0.1 + waver, LIP_ROLL_M + waver, v);
 		float lip_floor = smoothstep(0.17, 0.2, run) * roll_fade;
 		float lip = max(scallop * roll_fade, lip_floor);
-		float lip_glass = 1.0 - smoothstep(0.0, BRINK_GLASS_M, v);
 		float narrow = 1.0 - smoothstep(NARROW_WIDTH_M, WIDE_WIDTH_M, fall_width);
 		float bottom = smoothstep(height * (1.0 - BOTTOM_WHITE_SHARE), height, v);
 		float entrained = mix(0.06, 0.5, narrow) + smoothstep(0.0, 2.5, v) * mix(0.12, 0.25, narrow);
 		float aeration = clamp(max(lip, bottom * 0.85) + entrained + streak * streak_strength * foam_gain, 0.0, 1.0);
-		float brink_glass = lip_glass * (1.0 - scallop) * (1.0 - lip_floor);
-		aeration *= 1.0 - brink_glass * 0.9;
 		// Two values, not a gradient: the glass and the white, a soft edge between.
 		float white = mix(aeration, smoothstep(0.38, 0.55, aeration), 0.6);
 		vec3 tint = mix(glass, p_lit, 0.35 * streak);
-		tint = mix(tint, mix(p_shallow, p_lit, 0.3), brink_glass);
 		ALBEDO = mix(tint, p_foam, white);
 		float alpha = mix(GLASS_ALPHA * (0.75 + 0.25 * streak), 0.96, white);
 		alpha = max(alpha, max(lip, narrow * 0.85));
-		alpha = mix(alpha, 0.8, brink_glass);
 		// Torn side edges: a broad ragged bite, deeper toward the pool.
 		float rag_e = be_n2(vec2(u * 1.5 + 7.3, (t_fall - t_now) * 5.0));
 		rag_e = smoothstep(0.3, 0.7, rag_e);

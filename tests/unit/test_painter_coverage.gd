@@ -91,7 +91,8 @@ func test_wall_part_keys() -> void:
 	assert_eq(PainterBuildings.wall_part_key("Stone"), "wall_stone")
 	assert_eq(PainterBuildings.wall_part_key("Masonry"), "wall_masonry")
 	assert_eq(PainterBuildings.wall_part_key("Wood"), "lot_wood")
-	assert_eq(PainterBuildings.wall_part_key("Roof"), "roof_wood")
+	# A street lot's roof is a tile roof that follows its paint (card painter-roof-clay).
+	assert_eq(PainterBuildings.wall_part_key("Roof"), "roof_tile")
 	assert_eq(PainterBuildings.wall_part_key("Wall_brick"), "wall_brick")
 	assert_eq(PainterBuildings.wall_part_key("Roof_thatch"), "roof_thatch")
 	assert_eq(PainterBuildings.wall_part_key("Door_wood"), "door_wood")

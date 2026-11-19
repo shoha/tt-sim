@@ -26,8 +26,10 @@ extends RefCounted
 ## wall-shade-lift, roof-pull, roof-shade-lift, timber-shade-turn, timber-pull, building-lit).
 ## Stone takes less of the pull than a lime wash: the same chroma on a darker grey read as a
 ## periwinkle slab (painter-a3b round 1).
-## A tile or wooden roof holds the four roof tones it may choose from by its paint (the shader's
-## roof_tone). A new elevation re-tones the same materials.
+## A tile or wooden roof holds the four roof tones it may choose from by its paint, and their
+## summer middles (paint_refs) the shader turns the chosen one from to the paint itself (card
+## painter-roof-clay: a street keeps its red, orange and green roofs). A new elevation re-tones
+## the same materials.
 
 const SHADER := "res://painter/shaders/painter_structure.gdshader"
 ## Metadata on every material this paints with.
@@ -52,7 +54,10 @@ const WALL_PARTS: Dictionary = {
 	# A plank wall (a street lot's body, a yard fence, a bridge deck), not a beam: the props' honey
 	# (LOT_WOOD_ROLE), so a fence matches the barrels beside it (card painter-roof-snow).
 	"Wood": "lot_wood",
-	"Roof": "roof_wood",
+	# A street lot's roof (procgen's `wood` kind): Classic draws it with the structures' tile shader
+	# in the lot's paint, so it is a tile roof that follows its paint (card painter-roof-clay; as
+	# `roof_wood` it never took the clay and its red tiles read mud-brown).
+	"Roof": "roof_tile",
 	# A crossing's parts (AuthoredCrossings: `Wood` above, and its stone, arch and ford meshes).
 	"Stones": "crossing_stone",
 	"Arch": "crossing_stone",
@@ -510,9 +515,12 @@ func _tone(material: ShaderMaterial, kind: Array, sheet: Dictionary) -> void:
 	)
 	ramps.resize(MANNER_RAMP_SLOTS if manner else PICK_ROLES.size() * 6)
 	material.set_shader_parameter(&"ramps", ramps)
-	if manner and int(kind[1]) >= P_TILE and str(kind[0]) != ACCENT:
-		# A roof: what its pieces with no record turn from to their paint (the manner shader).
-		material.set_shader_parameter(&"paint_ref", paint_refs(sheet, mood, roles, elevation))
+	if int(kind[1]) >= P_TILE and str(kind[0]) != ACCENT:
+		# A roof: what its pieces turn from to their paint (the manner shader's pieces with no
+		# record, the A3b shader's picked roofs: card painter-roof-clay).
+		var refs := paint_refs(sheet, mood, roles, elevation)
+		refs.resize(MANNER_RAMP_SLOTS / 6 if manner else PICK_ROLES.size())
+		material.set_shader_parameter(&"paint_ref", refs)
 	material.set_shader_parameter(
 		&"snow", PainterSheet.number(sheet, mood, SNOW_NUMBER, elevation)
 	)

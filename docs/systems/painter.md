@@ -22,6 +22,7 @@ came from is the local branch `painterspike` (handoff `docs/plans/handoffs/paint
 | `PainterBackdrop` | `painter/painter_backdrop.gd` | The pure eye-backdrop tones: the hill ranges, the tree-line and the clouds from the mood's own tones |
 | `PainterTones` | `painter/painter_tones.gd` | The pure tone ramp: a role's shade, middle and lit colours in two variants |
 | `PainterSurfaces` | `painter/painter_surfaces.gd` | The surface host: swaps the ground's and the scatter's materials for painted ones and back |
+| `PainterFields` | `painter/painter_fields.gd`, `painter/shaders/painter_field.gdshaderinc` | The village fields: the soil bed and crop rows in the ground, the crops' own tone, the hedges' species (see "Fields") |
 | `PainterGroundRoles` | `painter/ground_roles.gd` | The pure surface-id and biome-id to ground-role table (meadow, floor, path, rock, shore) |
 | `PainterPlantRoles` | `painter/plant_roles.gd` | The pure asset-id to plant kind and tone role table; trees get none |
 | `PainterBrushes` | `painter/painter_brushes.gd` | The ground's three brush-mark layers; the generator, loaded baked (below) |
@@ -1748,6 +1749,24 @@ painter_final25_coverage/matrix.md`; the current, code-read class-by-class audit
   line at the brink, a small pinch at an ankle fall's brink (the lip-tuck ledge), the plunge pool's
   pale steep sides, a two-cell notch at the top of the inflow ramp, and a separate dark block in the
   pond view (the tall ankle fall's upper reach, level 2.89, whose head cap stands over the pond basin).
+- **Fall continuity round 2 (card painter-fall-round2, 2026-11-19, look-pending; frames
+  `compare/painter_final52_fall_round2/`, notes there).** Probed per sample. (1) The inflow ramp's
+  notch and white triangle: samples level with the ramp's start (a float tie, s = -1e-6) were left to
+  the river's flat, but the river does not own the pond's mask, so one wet pond sample dropped its
+  sheet corner to the pond's level (the triangle) and a dry one showed the ground (the notch); a pond
+  sample is never left to the river now. (2) The pond view's dark block and the tall ankle fall's wide
+  flat pool were one thing: that fall's upper reach (level 2.889, ankle) was drawn on a plateau the
+  pond was later dug into, so its whole area hung over a slope 0.4 to 3.4 m under it (a flat cut
+  square along its area, with a run-out slab off its head). The mesh now draws such water as
+  perched (`WaterMeshBuilder._perched()`, `hold_depth()`; `docs/systems/water.md`): it falls from the
+  held water at `PERCHED_SLOPE` and runs down the slope as a film. (3) The square shoulders where the
+  river meets the pond: the river's flat stood over the pond's dug rim out to its area's edge; the
+  same perched rule takes the banks it lost, and the inflow ramp falls to the sides past the channel.
+  (4) The brink's cyan hairline was the curtain's 8 cm shallow-wash tongue; it is gone (the curtain's
+  glass runs to the lip). Left: the short ankle fall's pinch (the crest's ground at the lip line
+  stands over the curtain's outer columns: widening the curtain did not show, a carve matter), the
+  plunge pools' pale walls, small steps at the pond's upper shoulders, and two small dark-blue spill
+  faces beside the tall ankle fall's lip pool.
 - **Known gaps** are listed in the matrix with their effort: round and profile roofs (procgen
   records). The settlement furnishings and the field plants were filled by painter-village-parity
   (next section).
@@ -1848,6 +1867,57 @@ flat splotches.
   plants as a source, orchard trees drawn by `PainterTrees`, the A/B switches, no per-frame hooks);
   `test_painter_warmup.gd` lists the prop shader.
 
+## Fields (card painter-fields, 2026-11-19; look-pending)
+
+The coverage verification's top gap: under Painted a crop field's earth (`dirt_opening`) sorted into
+the forest floor's moss green (`opening` is a floor word), its crops were thinned and toned as the
+meadow's grass and drawn as round dab mounds (shrubs at the eye), and its hedge bushes took the light
+bush green, so only a flowering field read. `PainterFields` (`painter/painter_fields.gd`):
+
+- **The ground.** A field map (R8, one texel per height sample, nearest: the index of the crop or
+  garden field whose disc covers it; null and a `field_present` false with no field) and per field
+  two vec4 and an int (`f_geo`, `f_row`, `f_kind`: centre, radius, the rows' angle; the first row's
+  offset, the count and the pitch; style and crop), at most 32 fields. `painter_field.gdshaderinc`
+  paints, in `ground_at` over any role but rock and char: a soil disc (VillageFields.DISC_FACTOR, rim
+  moved by the ground's noise) and over it the crop's rows as long strokes (1.7 m, each its own value
+  and taper, 0.34 m half width, the row line wandering a little), a darker furrow line midway
+  between rows and a headland of bare soil where the rows stop (VillageCrops.ROW_REACH). The rows are
+  exactly the plant rows `VillageCrops.plants_of` plants, so the plants stand on their painted rows.
+  A garden's beds are soil capsules (VillageFields' bed layout) a step darker (peat). Under 2.5 px a
+  row the stripes fade to their mean. The ground's marks are not searched inside a field
+  (`field_inner`): its rows are its strokes; a mark asked at its middle near the rim takes the field
+  there, so the rim is brush marks. Bound with the path slots (`PainterGroundPaths.bind`, `tones`,
+  `set_tones`), so `painter_surfaces.gd` did not grow.
+- **Tones.** The soil is the mood's `path` turned to `soil-hue` (66), chroma times `soil-chroma`
+  (1.25), lightness `soil-lift` (-0.19). A crop is the sheet's `grass` moved by `crop-own` of the way
+  its plant's own colour (`own_of_asset`: the texture mean of the asset's first non-bloom surface,
+  cached) stands from the meadow grass's (hue whole, lightness 0.7, chroma by its ratio to 0.8),
+  then `crop-lift` and `crop-chroma`; barley's own is half way to its gold coat surface
+  (`grass_savanna`). The hue move fades as the mood's grass leaves the meadow green (`GREEN_HUE` 135,
+  `GREEN_SPAN` 55: winter's straw grass is every crop's straw; round 1 turned ripe wheat salmon over
+  snow). `field-snow` (winter 0.75) lays snow over the crop strokes and all of it over the soil; the
+  furrow lines stay soil.
+- **Crop plants.** `AuthoredFieldPlants` marks a crop asset's record `crop`
+  (`VillageCrops.PLANT_ASSETS`); `PainterPlantRoles.of_record` passes it through
+  `PainterFields.plant_entry` (the entry gets `crop` and the measured `own`). `PainterPlantTone`
+  tones a crop grass by `crop_lch`, never thins a crop (`keep` 1) and sets `tuft_blades`, which turns
+  the wide-tuft dab cut off (`painter_selector`'s `tuft_wide`): the texture's blades stand, so at the
+  eye a row reads as a standing crop. A crop flower (the flowering field's daisies) is only unthinned.
+  Barley and young share the meadow grass asset, so their plants are one green; only their bands
+  differ.
+- **Hedges.** `AuthoredFieldPlants.rows_by_asset` and `resolved_species` key a hedge bush
+  (`VillageFields.HEDGE_SHRUBS`, field hedgerows and hedged boundaries) as `hedge:` + its id;
+  species.json maps `hedge:` to the bush species `bush_hedge` (tree_roles.json: the bush's leaf
+  times `bush-value` 0.76, `bush-chroma` 0.92, turned `bush-turn` 10, `dry-share` 0.55), so the ring
+  is a deeper, cooler green than the meadow's bushes and a rust in autumn. The GLB chunk nodes keep
+  their asset names, so PainterTrees hides them as before.
+- **A/B switch.** `PainterFields.enabled` (in `PainterStateReset`): false paints as before the card
+  (no field map, crops as meadow grass, the hedge in the bush tone). Read at paint time.
+- Frames: `docs/research/2026-11-09-prototypes/compare/painter_final50_fields/` (notes.md; round 2
+  is the verdict). Cost not timed with the pinned procedure (one R8 fetch per ground pixel where a
+  map has fields, two in the mark search's gate; crops unthinned add plants).
+- Tests: `test_painter_fields.gd`.
+
 ## One roof snow (card painter-roof-snow, 2026-11-18; look-pending)
 
 Frames: `docs/research/2026-11-09-prototypes/compare/painter_final45_roof_snow/` (`notes.md`, before,
@@ -1934,6 +2004,38 @@ splotchy?". Frames and notes: `docs/research/2026-11-09-prototypes/compare/paint
   shader, a dark roof's variants swing no more than summer's, a wall keeps its spread),
   `test_painter_village.gd` (leaf is WALL_LEAF, bark SOLID, the ivy takes the crowns' ramp),
   `test_structure_burn.gd` (a ruin's roof is painted as its kind, burn 0).
+
+## Street roofs follow their paint (card painter-roof-clay, 2026-11-19; look-pending)
+
+The coverage verification (painter_final49, addendum item 3): a street's red tile roofs read
+mud-brown with dark blotches under Painted, its orange roofs brown and its green ones slate. Frames
+and notes: `docs/research/2026-11-09-prototypes/compare/painter_final51_roof_clay/` (`notes.md`;
+`before/`, `r1/`, `r2_full/` the verdict).
+
+- **Cause (a headless probe, `jobs/roof_probe.gd` there).** A street lot's roof is the wall node's
+  `Roof` part (procgen's `wood` kind), which `WALL_PARTS` mapped to `roof_wood`: the A3b shader's
+  wooden roof (pick 2), whose `roof_tone` never takes the clay. Terracotta (OKLab hue 32) and orange
+  (hue 47) paints fell to the shingle (C0.061 against the clay's 0.134), and `roof_tone` sends every
+  hue from 100 to the slate, so a green paint drew blue. The sheet's clay was never the problem (L0.55
+  C0.134 h34 against the terracotta paint's L0.61 C0.148 h32).
+- **The fix.** `Roof` is `roof_tile` (Classic draws it with the structures' tile shader), and the
+  A3b shader's picked roofs (pick 1 and 2) follow their paint the way the manner's round roofs do:
+  the role nearest the paint (`paint_roof_tone`: red and orange clay, ochre and brown shingle, green
+  turf, blue and grey slate) and its ramp turned from the role's summer middle (`paint_ref[4]`, set
+  by `_tone` on every roof material now, not only the manner's) to the paint (`paint_turn`,
+  `paint_turned`). Relative, so grimdark's street is a muted brown-red, not summer's terracotta.
+- **Calmer slopes.** An A3b roof takes half the variant patches, half the lit dabs and a quarter of
+  the dark dabs (the dark dabs pull a tile toward its violet shade and read as damp stains); the
+  hand-drawn slopes are as calm.
+- **Cost.** One OKLab conversion and the turn per vertex, three OKLab round trips a fragment on a
+  picked roof; no texture reads. Not timed on the lane.
+- **Not done:** the A3b tile's per-piece variant still reads as a patchwork of lighter and rosier
+  tiles at zoom 16 where Classic is a smooth red; a hip face's course dashes run down the slope and
+  read busier than a gable's; the street's fixed-kind roofs (`Roof_shingle`, `Roof_slate`, ...)
+  keep their role's colour, not their paint's.
+- Tests: `test_painter_buildings.gd` (a street lot's roof is a picked tile roof, its A3b material
+  carries the four reference tones, a wall's none, the shader turns and reads no texture),
+  `test_painter_coverage.gd` (`Roof` is `roof_tile`).
 
 ## The eye backdrop (card painter-eye-backdrop, 2026-11-18; look-pending)
 

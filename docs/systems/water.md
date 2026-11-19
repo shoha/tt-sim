@@ -68,7 +68,16 @@ Phase 4, P4-1 is data and algorithms only; the surface, carve and tool follow. P
   pond owns its mask (`levels()`, `level_at()`, `WaterMeshBuilder.sample_owners()`); the mesh
   lays a sheet from the river's level down to the pond's where it enters (`_inflow()`, card
   painter-fall-continuity: before, the river stood over the pond as a slab and the bed showed
-  under its edge as a tan band).
+  under its edge as a tan band; past the channel that sheet falls to the sides at
+  `RUN_OUT_SLOPE`). Perched water (card painter-fall-round2): where later digging took a river's
+  ground away (a pond dug beside or under it), a wet sample the river owns alone that lost its
+  bank (`BANK_MARGIN_M` past the half-width and `BANK_HOLD_M` under the level) or its bed (deeper
+  than `WaterMeshBuilder.hold_depth()`: the depth and `HOLD_SLACK_M`, plus the deepest plunge pool
+  below a fall; never for a river with an end in other water, whose basin may have deepened it)
+  is drawn by a sheet that falls from the held water at `PERCHED_SLOPE` and runs on as a film
+  (`_perched()`), not by the flat, and is not wet (no collision, no zone); a free end that is
+  itself perched gets no run-out. Before, the flat hung over the dug ground cut square along the
+  river's area (the tall ankle fall of the round-2 map: a 3 m wide slab up to 3.4 m in the air).
   `nearest_field()` is the shared per-segment rasteriser (distance, half-width and
   tangent of the nearest segment on any regular grid). Since P4-3 a river's area stops
   flush at an end another river continues from (the next reach of one stroke: its first
