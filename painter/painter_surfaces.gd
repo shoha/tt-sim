@@ -819,9 +819,7 @@ func _paint_species() -> Array:
 			if mesh == null or _seen.has(mesh.get_instance_id()):
 				continue
 			_seen[mesh.get_instance_id()] = true
-			var entry := PainterPlantRoles.of(
-				asset_id, str(record["wind_category"]), bool(record["flower"])
-			)
+			var entry := PainterPlantRoles.of_record(asset_id, record)
 			if entry.is_empty():
 				continue
 			for i in mesh.get_surface_count():
@@ -958,9 +956,7 @@ func _tone_ground(sheet: Dictionary, mood: String, elevation: float) -> void:
 	for material: ShaderMaterial in grounds:
 		material.set_shader_parameter(&"g_lit", lit)
 		material.set_shader_parameter(&"g_shd", shade)
-		material.set_shader_parameter(&"p_lit", paths["lit"])
-		material.set_shader_parameter(&"p_shd", paths["shade"])
-		material.set_shader_parameter(&"p_kind", paths["kind"])
+		PainterGroundPaths.set_tones(material, paths)
 		material.set_shader_parameter(&"cliff_edge", num.call("cliff-edge"))
 		material.set_shader_parameter(&"cliff_strata", num.call("cliff-strata"))
 		material.set_shader_parameter(&"litter_col", tone.call("litter"))

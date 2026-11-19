@@ -138,6 +138,9 @@ varying float f_edge;
 varying vec3 f_n;
 varying float f_cut;
 
+// The village fields' soil and crop rows (PainterFields).
+#include "res://painter/shaders/painter_field.gdshaderinc"
+
 // The painted ground fire's scale on the classic char: the classic colours are linear albedo for a
 // filmic tonemap, and the painted tonemap is linear at exposure 1.
 const float BURN_LIFT = 4.5;
@@ -421,6 +424,10 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float
 	shd *= vstep;
 	lit = mix(lit, lit * vec3(1.45, 0.78, 0.4), scorch_rim * 0.65);
 	shd = mix(shd, shd * vec3(1.35, 0.8, 0.5), scorch_rim * 0.65);
+	// A village field's soil and rows over the role (not a cliff face, not a fire's scar).
+	if (field_present && role != 3 && role != 8) {
+		field_paint(q, px, mk, h, role_col(true, 0, 0.5), role_col(false, 0, 0.5), lit, shd);
+	}
 	// The wet band beside the water (card painter-water): the dressing's wet line (water_weights.a,
 	// 1 under the water and falling to 0 over 0.8 m above it) darkens and cools the ground in a band
 	// with a brush edge: its threshold wanders with a noise, and a mark takes it whole at its middle,
@@ -519,7 +526,8 @@ void fragment() {
 	float l_k = 0.0;
 	// No marks on a steep face: laid in the map's XZ they stretch down it as smears (the face is
 	// the block-in's strata).
-	bool search = brushes_present && marks > 0.0 && px_m <= mark_px.y && slope < 0.4;
+	// Nor inside a village field: its rows are its strokes.
+	bool search = brushes_present && marks > 0.0 && px_m <= mark_px.y && slope < 0.4 && !field_inner(xz);
 	for (int layer = 0; layer < 3 && search; layer++) {
 		// The small marks exist only in a drift or litter zone, and not when they are a pixel or two.
 		if (layer == 2 && (max(sz.x, sz.y) <= 0.0 || px_m > mark_px.x)) {

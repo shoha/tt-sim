@@ -141,6 +141,9 @@ const float TUFT_CAP = 0.8;
 const float TUFT_LAYERS = 16.0;
 const float TUFT_RANGE = 1.5;
 uniform sampler2DArray tuft_atlas : filter_linear_mipmap, repeat_disable;
+// A village field's crop (PainterFields, card painter-fields): its cards keep their texture's
+// blades, so a row reads as a standing crop, not the meadow's round dab mounds.
+uniform bool tuft_blades = false;
 
 // A tuft's half width in tuft heights (at most 2.5), and whether its cards are cut by dabs (a wide
 // grass tuft; a flower keeps its petals).
@@ -149,7 +152,7 @@ float tuft_half_w() {
 }
 
 bool tuft_wide() {
-	return kind == 1 && tuft_half_w() >= TUFT_WIDE;
+	return kind == 1 && !tuft_blades && tuft_half_w() >= TUFT_WIDE;
 }
 
 // The tuft card through the local `vertex` (before the sway) at `uv` (core's tuft card: UV.x

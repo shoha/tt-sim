@@ -97,8 +97,10 @@ static func only_slot(doc: MapDocument, ids: PackedStringArray) -> int:
 	return found
 
 
-## Sets the slot map (or the one slot) of `doc` on `materials`; returns the slot ids.
+## Sets the slot map (or the one slot) of `doc` on `materials`, and the village fields' map
+## (PainterFields.bind); returns the slot ids.
 static func bind(materials: Array, doc: MapDocument) -> PackedStringArray:
+	PainterFields.bind(materials, doc)
 	var ids := slots(doc)
 	var image := slot_image(doc, ids)
 	var texture: ImageTexture = null if image == null else ImageTexture.create_from_image(image)
@@ -129,7 +131,19 @@ static func tones(
 		lit.append_array([PainterTones.linear(ramp[2]), PainterTones.linear(ramp[5])])
 		shade.append_array([PainterTones.linear(ramp[0]), PainterTones.linear(ramp[3])])
 		kinds.append(PainterGroundRoles.path_kind(id) if not id.is_empty() else 0)
-	return {"lit": lit, "shade": shade, "kind": kinds}
+	return {
+		"lit": lit, "shade": shade, "kind": kinds, "fields": PainterFields.tones(sheet, mood, elevation)
+	}
+
+
+## Sets `tones` (tones()) on the ground `material`: the path slots' and the fields'.
+static func set_tones(material: ShaderMaterial, tones: Dictionary) -> void:
+	material.set_shader_parameter(&"p_lit", tones["lit"])
+	material.set_shader_parameter(&"p_shd", tones["shade"])
+	material.set_shader_parameter(&"p_kind", tones["kind"])
+	var fields: Dictionary = tones["fields"]
+	for key: StringName in fields:
+		material.set_shader_parameter(key, fields[key])
 
 
 ## The cliff stone's middle tone (OKLCH) in `mood` at `elevation` for a map whose cliff surface is

@@ -60,6 +60,8 @@ static func classic() -> void:
 	PainterMannerBlanket.step_s = PainterMannerBlanket.FIELD_STEP_S_M
 	PainterTreeBush.clump_roots = PainterTreeBush.ROOTS_PAD
 	PainterSheet.clear_cache()
+	PainterFields.reset()
+	PainterFields.enabled = true
 
 
 ## The items of the inventory that are not at their fresh value, by name (empty when the state is
@@ -89,6 +91,7 @@ static func dirty() -> PackedStringArray:
 			or not PainterMannerSnow.blanket
 			or PainterMannerBlanket.step_s != PainterMannerBlanket.FIELD_STEP_S_M
 			or PainterTreeBush.clump_roots != PainterTreeBush.ROOTS_PAD
+			or not PainterFields.enabled
 		)
 	)
 	return out

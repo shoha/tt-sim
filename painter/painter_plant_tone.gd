@@ -39,6 +39,13 @@ static func tone(
 	if PainterGroundRoles.DERIVED.has(tone_role):
 		derived = PainterGroundRoles.derived(sheet, mood, tone_role, elevation)
 		tone_role = str(PainterGroundRoles.DERIVED[tone_role][0])
+	# A village field's crop (PainterFields): the grass moved to the plant's own colour, so its rows
+	# read as their crop; never thinned, and cut by its texture's blades, not the meadow's dabs.
+	var crop := bool(entry.get("crop", false)) and int(entry["kind"]) == PainterPlantRoles.KIND_GRASS
+	if crop:
+		tone_role = "grass"
+		derived = PainterFields.crop_lch(sheet, mood, elevation, entry.get("own", Vector3(-1, 0, 0)))
+	material.set_shader_parameter(&"tuft_blades", crop)
 	var colors := PainterTones.ramp(sheet, mood, tone_role, elevation, prefix, derived)
 	if int(entry["kind"]) in [PainterPlantRoles.KIND_CROWN, PainterPlantRoles.KIND_WALL_LEAF]:
 		# A bush takes the crowns' ramp (painter-trees-polish2), and so does a wall's ivy, so it
@@ -80,6 +87,8 @@ static func tone(
 		PainterPlantRoles.KIND_FLOWER:
 			keep = PainterSheet.number(sheet, mood, "keep-flower", elevation)
 			freq = PainterSheet.number(sheet, mood, "keep-freq-flower", elevation)
+	if bool(entry.get("crop", false)):
+		keep = 1.0
 	material.set_shader_parameter(&"keep", keep)
 	material.set_shader_parameter(&"keep_freq", freq)
 	# Snow on the plants when the crowns take it (winter), in the snow's own colours (the drift
