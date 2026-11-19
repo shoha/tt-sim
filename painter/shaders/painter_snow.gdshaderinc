@@ -56,12 +56,23 @@ float snow_edge(float up, vec2 f) {
 	return mix(0.45, -0.3, hold) + (tongue - 0.5) * 0.12 + (sway - 0.5) * 0.1;
 }
 
+// A street roof's upright faces (0 to 1): a gable end clad in the roof's own material (the guild
+// and market houses' ends, h running 0 to 1 up the triangle as up a slope) and the slab's edges,
+// plastered over by the drifting snow, so a gable's triangle reads with its slopes as one snowed
+// mass (card painter-roof-round4, owner on the market houses' bare orange ends in winter: "cover them
+// with body, shade side too"; at the game's view a gable end reads as one more slope). An underside
+// keeps none. Only the A3b roofs call it: a hand-drawn house's gables are walls, and its round and
+// Taper roofs keep their upright foot in their own colour (card painter-roof-round3's spires).
+float snow_gable(float up) {
+	return smoothstep(-0.3, -0.15, up) * (1.0 - smoothstep(0.08, 0.16, up));
+}
+
 // A roof face's cover (the roof shaders'; the props keep snow_cover_of): one soft layer down to its
 // lower edge (snow_edge), whole below a moderate pitch and over the upper part of a steep face, so
 // a spire, a Taper roof's cone, a bell or mansard roof's lower run carries one bodied cap of snow
 // (card painter-roof-round3, owner on the round towers in winter: "streaky and weird"; the long
 // streaks of a half hold and the steep cap's thin ledges are gone). A face near vertical (a slab's
-// edge, a finial) or facing down holds none.
+// edge, a finial) or facing down holds none (a street roof adds its upright faces, snow_gable).
 float snow_cover_roof(float snow, float up, float h, vec2 f) {
 	float amount = clamp(snow * 2.2, 0.0, 1.0) * smoothstep(0.08, 0.16, up);
 	float edge = snow_edge(up, f);
@@ -142,7 +153,10 @@ vec4 snow_frame(vec3 wp, vec3 n, float h) {
 	bool climbs = k > 0.02 && rise > 0.1;
 	float to_eave = climbs ? h / k / rise : SNOW_FAR;
 	float to_ridge = climbs ? (1.0 - h) / k / rise : SNOW_FAR;
-	return vec4(dot(wp.xz, across), -dot(wp.xz, down) / up, to_eave, to_ridge);
+	// On an upright face (a gable end, snow_gable) the metres up it are its height: the slope's
+	// measure is one value over the whole face, and its washes ran as upright stripes.
+	float upright = 1.0 - smoothstep(0.04, 0.08, n.y);
+	return vec4(dot(wp.xz, across), mix(-dot(wp.xz, down) / up, wp.y, upright), to_eave, to_ridge);
 }
 
 // The dark and light (shares of a surface's composed tones) the layer lays where it lies

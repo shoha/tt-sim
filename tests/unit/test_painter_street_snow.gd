@@ -54,6 +54,46 @@ func _gable() -> Array:
 	)
 
 
+## A gable with a flat ridge band `band` metres wide between its two slopes (a street lot's ridge
+## board).
+func _banded_gable(band: float) -> Array:
+	var h := band * 0.5
+	return _mesh(
+		[
+			[Vector3(-3, 3, -2), Vector3(3, 3, -2), Vector3(3, 4.5, -h), Vector3(-3, 4.5, -h)],
+			[Vector3(-3, 3, 2), Vector3(3, 3, 2), Vector3(3, 4.5, h), Vector3(-3, 4.5, h)],
+			[Vector3(-3, 4.5, -h), Vector3(3, 4.5, -h), Vector3(3, 4.5, h), Vector3(-3, 4.5, h)],
+		]
+	)
+
+
+func test_a_ridge_band_closes_between_the_two_crests() -> void:
+	# Card painter-roof-round4: each blanket crested over its own ridge line, and the 6 to 10 cm
+	# ridge board between them showed as a brown slit along the ridge, under the chimneys.
+	var recs := PainterStreetSnow.records_of(_banded_gable(0.08), 1, "p")
+	var ridges: Array = []
+	for rec: Dictionary in recs:
+		for e: Dictionary in rec["edges"]:
+			if str(e["kind"]) == "ridge":
+				ridges.append(e)
+	assert_eq(recs.size(), 2, "the two slopes (the band is too narrow for snow of its own)")
+	assert_eq(ridges.size(), 2, "a ridge on each slope")
+	if ridges.size() == 2:
+		var a := ((ridges[0]["a"] as Vector3) + (ridges[0]["b"] as Vector3)) * 0.5
+		var b := ((ridges[1]["a"] as Vector3) + (ridges[1]["b"] as Vector3)) * 0.5
+		assert_almost_eq(a.z, 0.0, 0.005, "the first ridge carried to the band's middle")
+		assert_almost_eq(b.z, 0.0, 0.005, "the second too")
+		assert_almost_eq(a.y, b.y, 0.01, "at one height")
+	for rec: Dictionary in recs:
+		assert_false(PainterMannerBlanket.layout(rec).is_empty(), "still a blanket's frame")
+	var wide := PainterStreetSnow.records_of(_banded_gable(0.6), 1, "p")
+	for rec: Dictionary in wide:
+		for e: Dictionary in rec["edges"]:
+			if str(e["kind"]) == "ridge":
+				var m := ((e["a"] as Vector3) + (e["b"] as Vector3)) * 0.5
+				assert_almost_eq(absf(m.z), 0.3, 0.005, "a wide flat top is not a ridge band")
+
+
 func _kinds(rec: Dictionary) -> Array:
 	var out: Array = []
 	for e: Dictionary in rec["edges"]:

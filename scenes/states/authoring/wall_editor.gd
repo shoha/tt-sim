@@ -25,6 +25,8 @@ const REFUSED_POINTS := &"points"
 const REFUSED_INVALID := &"invalid"
 ## A street with no building the library can stand in for (split_street).
 const REFUSED_NOTHING := &"nothing"
+## A street whose houses would stand in another street's (StreetCrowding).
+const REFUSED_CROWDED := &"crowded"
 ## A drag begins or ends on a wall's free end within this of it (world metres).
 const SNAP_M := 0.6
 ## A row shorter than this has no room for a building (world metres).
@@ -123,6 +125,11 @@ func plan(
 	var problem := MapWallIO.wall_problem(wall, doc.extent_m())
 	if problem != "":
 		last_refusal = _refusal_for(wall)
+		return null
+	# A street drawn closer to another than their houses reach would put houses through houses
+	# (card painter-roof-round4): refused while it is drawn, so the readout says so.
+	if wall.is_row() and StreetCrowding.crowded_by(doc, wall) >= 0:
+		last_refusal = REFUSED_CROWDED
 		return null
 	return wall
 

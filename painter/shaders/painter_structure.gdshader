@@ -254,6 +254,8 @@ void fragment() {
 		vec4 fr = snow_frame(wp, n, h);
 		float broad = 1.0 - smoothstep(0.08, 0.16, length(fwidth(fr.xy)));
 		cover = snow_cover_roof(snow, up, h, fr.xy) * (1.0 - snow_gap(fr.xy, fr.w));
+		// A gable end clad in the roof's material, and the slab's edges (snow_gable).
+		cover = max(cover, clamp(snow * 2.2, 0.0, 1.0) * snow_gable(up));
 		sp = snow_paint(fr.xy, broad);
 		roll = snow_roll(snow_edge_m(up, h, fr.xy, fr.z), fr.w, fr.xy);
 	}

@@ -45,6 +45,9 @@ const SLOPE_MIN_M := 0.3
 ## Two slopes' verges this close side by side (metres, each one's middle to the other) are one seam
 ## (_join_verges).
 const JOIN_M := 0.25
+## Two slopes' ridges this far apart across a flat band (a street gable's ridge board, 6 to 10 cm
+## measured) meet on the band's middle line (_join_ridges), metres.
+const RIDGE_JOIN_M := 0.2
 ## The hold name of each roof kind number (PainterMannerSnow.ROOF_MESH_KINDS, its HOLD's keys).
 const MATERIALS: Dictionary = {
 	1: "tile", 2: "wood", 3: "thatch", 4: "slate", 5: "shingle", 6: "turf"
@@ -192,7 +195,92 @@ static func records_of(arrays: Array, kind: int, prefix: String) -> Array:
 		rec["tone"] = Color(tone.r, tone.g, tone.b, float(kind) / PainterMannerSnow.KIND_SCALE)
 		out.append(rec)
 	_join_verges(out)
+	_join_ridges(out)
 	return out
+
+
+## A street gable's two slopes end at their own ridge lines with a flat band between them (a ridge
+## board 6 to 10 cm wide; card painter-roof-round4, a headless probe of a village row), and each
+## blanket crested over its own line, so the band showed through between the two crests as a brown
+## slit along the ridge, under each chimney that stands astride it (owner, final60 st_win_z9_p and
+## st_win_z30_p). Such a pair of ridges (level, parallel, at one height, each slope rising toward
+## the other, under RIDGE_JOIN_M apart) is carried on up each slope's plane to the band's middle
+## line, where the two crests meet as one. Changes `records` in place.
+static func _join_ridges(records: Array) -> void:
+	var tops: Array = []
+	for i in records.size():
+		for e: Dictionary in records[i]["edges"]:
+			if str(e["kind"]) == "ridge":
+				tops.append([i, e])
+	var joined := {}
+	for x in tops.size():
+		for y in range(x + 1, tops.size()):
+			var i: int = tops[x][0]
+			var j: int = tops[y][0]
+			if i == j or joined.has(x) or joined.has(y):
+				continue
+			var ea: Dictionary = tops[x][1]
+			var eb: Dictionary = tops[y][1]
+			var off := _ridge_gap(ea, eb)
+			if off == Vector3.ZERO:
+				continue
+			var ra: Dictionary = records[i]
+			var rb: Dictionary = records[j]
+			if _rise_to(ra, off * 0.5) <= 0.0 or _rise_to(rb, -off * 0.5) <= 0.0:
+				continue
+			_raise(ra, ea, _rise_to(ra, off * 0.5))
+			_raise(rb, eb, _rise_to(rb, -off * 0.5))
+			joined[x] = true
+			joined[y] = true
+
+
+## The level offset across from ridge `ea` to ridge `eb` when they are a pair _join_ridges joins
+## (parallel, one height, each middle within RIDGE_JOIN_M of the other line, not already one
+## line), else Vector3.ZERO. Pure.
+static func _ridge_gap(ea: Dictionary, eb: Dictionary) -> Vector3:
+	var a0: Vector3 = ea["a"]
+	var a1: Vector3 = ea["b"]
+	var b0: Vector3 = eb["a"]
+	var b1: Vector3 = eb["b"]
+	var dir := (a1 - a0).normalized()
+	if absf(dir.dot((b1 - b0).normalized())) < 0.99:
+		return Vector3.ZERO
+	var ma := (a0 + a1) * 0.5
+	var mb := (b0 + b1) * 0.5
+	if absf(ma.y - mb.y) > LEVEL_M:
+		return Vector3.ZERO
+	var near_a := Geometry3D.get_closest_point_to_segment(ma, b0, b1)
+	var near_b := Geometry3D.get_closest_point_to_segment(mb, a0, a1)
+	if ma.distance_to(near_a) > RIDGE_JOIN_M or mb.distance_to(near_b) > RIDGE_JOIN_M:
+		return Vector3.ZERO
+	var off := mb - ma
+	off -= dir * off.dot(dir)
+	off.y = 0.0
+	return off if off.length() > 0.005 else Vector3.ZERO
+
+
+## How far up slope `rec`'s plane its top must run for its ridge to move `toward` (a level offset);
+## 0 when the slope does not rise that way. Pure.
+static func _rise_to(rec: Dictionary, toward: Vector3) -> float:
+	var v: Vector3 = rec["v"]
+	var level := Vector3(v.x, 0.0, v.z)
+	if level.length() < 0.05 or level.normalized().dot(toward.normalized()) < 0.9:
+		return 0.0
+	return toward.length() / level.length()
+
+
+## Moves slope `rec`'s ridge `edge` `run` metres on up its plane: the ridge, the sides' ends on it
+## and the frame's length up the slope.
+static func _raise(rec: Dictionary, edge: Dictionary, run: float) -> void:
+	var shift: Vector3 = (rec["v"] as Vector3) * run
+	var old_a: Vector3 = edge["a"]
+	var old_b: Vector3 = edge["b"]
+	for e: Dictionary in rec["edges"]:
+		for end: String in ["a", "b"]:
+			var p: Vector3 = e[end]
+			if p.distance_to(old_a) < WELD_M * 5.0 or p.distance_to(old_b) < WELD_M * 5.0:
+				e[end] = p + shift
+	rec["v_len"] = float(rec["v_len"]) + run
 
 
 ## Two neighbouring lots' slopes that meet side by side (a party wall, a chimney between them) each

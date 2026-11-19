@@ -50,6 +50,7 @@ const FULL := "The map holds as many walls as it can. Remove one to make room."
 const LONG := "That wall is too long. End it and start another."
 const POINTS := "That wall has as many corners as it can. End it and start another."
 const INVALID := "A wall cannot stand there."
+const CROWDED := "Too close to another street's houses: draw it further away."
 const NOTHING := "There is no wall here to remove."
 const SPLIT_NOTHING := "No building of the library stands in for this street."
 const SPLIT_FULL := "The map cannot hold that many more buildings."
@@ -108,6 +109,8 @@ static func refusal_text(reason: StringName) -> String:
 			return POINTS
 		WallEditor.REFUSED_INVALID:
 			return INVALID
+		WallEditor.REFUSED_CROWDED:
+			return CROWDED
 	return ""
 
 
