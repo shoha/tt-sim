@@ -6503,7 +6503,8 @@ medians scatter by +-0.3 ms and more (taiga Classic 5.09, 5.01, 3.21 in one run)
 from the exe is meaningful. The cause was not found (not vsync, `Engine.max_fps` 0, not focus, not the display mode);
 it is a harness blocker for exported GPU numbers, and it also means the exe never ran uncapped, so whether the
 shipped game itself is capped to the refresh rate with vsync disabled in Settings is a question for the owner (the
-exe reported mode 0 and presented at 60 Hz).
+exe reported mode 0 and presented at 60 Hz). Cause found 2026-11-19: the executable's NAME, a driver setting on this
+machine, not the game; see "Exported build timing" below.
 
 #### The second-level hitch and the editor segfault (round 2)
 
@@ -6542,6 +6543,73 @@ script error and no pipeline error: the only `ERROR` lines are ALSA's "no sound 
 hitching on a real Linux GPU, the water, fire-burn and building shaders at draw time (the taiga level has none of
 them; `PainterWarmup` compiles them in its groups and printed no error), Linux native scatter (no `.so` built, the
 GDScript generator ran). macOS cannot be checked here.
+
+## Exported build timing (card export-60fps-probe, 2026-11-19)
+
+The exported exe's exact 60 fps (above) is pinned by the executable's NAME: a driver setting on this machine, not
+the game, the engine, the template or any project or export setting. The same exported binary runs uncapped when it
+is named like the editor binary.
+
+A stock Godot 4.7.2 export of an empty scratch project (a camera, a box, a sun; the Windows preset's options, built
+outside the suite) reproduces it: one process per run steps through vsync modes, `Engine.max_fps` and window modes
+(2.5 s each, windowed 1152x648 unless named), RTX 3080, lane held.
+
+| Exe (empty project) | Template, API | vsync off, windowed | Other phases |
+|---------------------|---------------|---------------------|--------------|
+| editor binary, `Godot_v4.7.2-stable_win64.exe` | editor, Vulkan | 2621 fps | mailbox 2650, `max_fps` 1000 -> 1000, borderless and exclusive fullscreen 2100 |
+| `Empty60.exe` | release, Vulkan | 59 | 59 with mailbox, adaptive, `max_fps` 0 or 1000, borderless and exclusive fullscreen, either monitor; `max_fps` 30 -> 30 |
+| `Empty60.exe` | debug, Vulkan | 59 | 59 in every phase |
+| `Empty60.exe --rendering-driver d3d12` | release, D3D12 | 59 | 59 fullscreen; mailbox 118 |
+| the same release exe as `Godot_v4.7.2-stable_win64.exe` | release, Vulkan | 2656, 2727 | mailbox 2745; vsync on 59 |
+| as `godot.exe` | release, Vulkan | 2722 | borderless fullscreen on the 144 Hz monitor 2121; vsync on there 59 |
+| as `TTSim.exe` (the shipped name) | release, Vulkan | 59 (one 980 ms frame) | |
+| as `Godot_v4.6.1-stable_win64.exe` | release, Vulkan | 59 | |
+
+- Only an application profile keys on an exe's name, so this is the NVIDIA driver's program profiles: no RTSS or other
+  limiter runs, and Windows' per-app graphics settings key on the full path (the uncapped copies sat in a scratch
+  folder). The match is exact (`Godot_v4.6.1-stable_win64.exe` is capped). Which setting was not read (the profile
+  database needs NVIDIA Profile Inspector; the card did not touch the driver). Likely the Global profile forces Vertical
+  sync or a 60 Max Frame Rate and `godot.exe` and `Godot_v4.7.2-stable_win64.exe` have Program Settings entries that do
+  not. Owner check: NVIDIA Control Panel > Manage 3D settings, Global and Program Settings.
+- The capped frames are vsync frames: they alternate 13.8 and 20.9 ms (median 13.9, mean 16.95), exactly as vsync-on
+  frames do, and vsync on gives 59 fps here on every screen and mode, the 143.91 Hz portrait monitor in borderless
+  fullscreen included (the primary, 2560x1440, reports 59.95 Hz). Forced vsync and a 60 limiter cannot be told apart
+  on this machine. `TIME_PROCESS` holds the wait (21 ms): Godot's process time includes `RenderingServer.draw`.
+- For players: a machine without that driver setting should run the exported game uncapped with vsync off in Settings
+  (not checked on another machine). The cold-cache first-frame question (owner, 2026-11-18) is unaffected.
+
+The lever on a tt-sim export (main 55a81284, debug template since the worktree had only the debug `libttscatter`; one
+process per row, the same job, lane held, 1920x1080 window, `aspect="keep"`): a new map (boreal_taiga_summer_s1,
+200 ft, seed 1234, `place_seed` 1234), Home, wind frozen, UI hidden, the default look (Painted, fresh user folder), no
+tokens, then the job's `vsync_off` and three 2.5 s `gpu` medians. Not the gate tables' cell (no token lineup, default
+sun): compare within this table only.
+
+| Run | fps, vsync off | World viewport GPU ms (three medians) | Frames per 2.5 s |
+|-----|----------------|----------------------------------------|------------------|
+| export as `TTSim.exe` | 59 | 5.537 / 5.508 / 5.500 | 149 |
+| the same export as `godot.exe` | 359-370 | 2.275 / 2.299 / 2.335 | 922 / 909 / 897 |
+| editor binary, render job in the worktree | 340-368 | 2.293 / 2.374 / 2.434 | 912 / 885 / 861 |
+
+The frame is the same in all three (1015 draw calls, 1,143,605 primitives). Capped at 59 the GPU clocks down and
+the same frame reads 5.5 ms, so every exported GPU figure taken under a capped name (the 2026-11-16 tables) measured
+the downclocked GPU. Uncapped, the exported frame matches the editor's within the run-to-run drift.
+
+How to time an exported build on this machine:
+
+1. Export to a scratch folder, never over a release folder: `godot --headless --path <worktree> --export-release
+   "Windows Desktop" <scratch>/TTSim/TTSim.exe` (a release export needs the release `libttscatter` built in the
+   worktree, `scons target=template_release`; `--export-debug` uses the debug one), with `tools/*` dropped from the
+   preset's exclude filter (uncommitted) so the render-job driver and the probes are in the pack.
+2. Copy the folder's files with the exe and its console wrapper renamed `godot.exe` and `godot.console.exe` (the DLLs
+   stay beside them).
+3. Beside the exe, an `override.cfg` with the runner autoload and the pinned display: `[autoload]`
+   `RJExport="*res://tools/render_jobs/local/<topic>/export_runner.gd"` (a copy of
+   `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final30_default_gate/jobs/export_runner.gd`),
+   and the `[display]` block from "How to measure without fooling yourself".
+4. Take the lane and run `<scratch>/godot/godot.console.exe -- --rj-job=<absolute job path> --rj-out=<absolute
+   dir>`. The job's `vsync_off` op works as in the editor. Log the fps (a `diag` call) before trusting a GPU number:
+   59 means the name is capped. The exe uses the project's user folder, the worktree's own when its `project.godot`
+   names one.
 
 ## Shadow quality tiers (topic shadowtier, 2026-11-08)
 
