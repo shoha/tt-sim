@@ -40,9 +40,12 @@ extends RefCounted
 ##
 ## Falls (phase 4c, P4c-2). A step WaterFalls.fall_flags() marks (the upper reach stands
 ## FALL_MIN_DROP_M or more over the lower) is a waterfall, not a riffle: the pool tail still
-## rises to a full crest (CREST_M under the upper level, whatever the depth: a fall is never
-## the small step's low bar), and below the lip the bed follows fall_profile() (fall_shape()):
-## the tier profile upside down (HeightBrush.soft_tier_offset, the tier face angle and its
+## rises to a full crest (fall_crest_depth() under the upper level, whatever the step: a fall
+## is never the small step's low bar; the channel's own depth up to FALL_CREST_DEPTH_M, so
+## the wetted width at the lip is the channel's and the curtain meets the pool above with no
+## notch: a crest only 5 cm deep eased out to the plateau ground beside it), and below the lip
+## the bed follows fall_profile() (fall_shape()): the tier profile upside down
+## (HeightBrush.soft_tier_offset, the tier face angle and its
 ## TIER_SOFTEN_M tent, so the face reads as rock at the default spacing and does not saw on a
 ## diagonal) with a harder lip (FALL_LIP_M over FALL_LIP_WIDTH_M), from the crest down to the
 ## plunge bed, WaterFalls.plunge_depth() under the lower reach's bed, then back up to that
@@ -58,10 +61,10 @@ extends RefCounted
 ## pins the channel's width at fall_foot() and widens the point half a plunge length past it),
 ## so the face is as wide as the stroke. Over a Tier cliff the lip stands at the brink
 ## (WaterFallPlan), the profile lies along the tier's own face and the carve cuts a notch
-## CREST_M under the upper pool across the channel, the face itself a hand's breadth deeper,
-## then the plunge pool at its foot; outside the channel and its banks the face is left as it
-## was. The riffle sheet the mesh still drapes over a fall's face is replaced by a curtain in
-## P4c-3.
+## fall_crest_depth() under the upper pool across the channel, the face itself a hand's
+## breadth deeper, then the plunge pool at its foot; outside the channel and its banks the
+## face is left as it was. The riffle sheet the mesh still drapes over a fall's face is
+## replaced by a curtain in P4c-3.
 ##
 ## Ponds. A basin in the painted area (pond_goals()): the cross-section on the signed
 ## distance to the edge of the area (DistanceField), with a gently shelving beach at the
@@ -89,6 +92,12 @@ const BANK_FADE_M := 2.0
 ## the riffle's mean slope.
 const CREST_M := -0.05
 const RIFFLE_SLOPE := 0.3
+## A fall's crest sits this far under the upper level at the most (fall_crest_depth(): the
+## channel's own depth when that is less). A crest only CREST_M deep let the top-of-bank
+## easing (blend_with_ground) leave the sill at the ground's height, so the wetted width at the
+## lip was 50 to 80 percent of the channel's and the pool above ended a few decimetres short of
+## it in a notch (card painter-fall-lip).
+const FALL_CREST_DEPTH_M := 0.12
 ## A fall's lip (fall_profile()): how far below the crest the face begins and over what
 ## width the brink rounds, harder than a tier's (HeightBrush.TIER_LIP_M 0.25 over 0.5).
 const FALL_LIP_M := 0.1
@@ -202,7 +211,9 @@ static func pond_section(e: float, level: float, bed: float, depth: int) -> floa
 ## crest is always the full one.
 static func step_shape(upper: float, lower: float, depth: float, full: bool = false) -> Vector3:
 	var below := -CREST_M
-	if not full:
+	if full:
+		below = fall_crest_depth(depth)
+	else:
 		below = maxf(-CREST_M, depth - CREST_RISE_PER_DROP * maxf(upper - lower, 0.0))
 	var crest := upper - below
 	var tail := clampf(
@@ -215,6 +226,12 @@ static func step_shape(upper: float, lower: float, depth: float, full: bool = fa
 ## The riffle length below a reach step from level `upper` to `lower` at `depth`.
 static func riffle_length(upper: float, lower: float, depth: float) -> float:
 	return step_shape(upper, lower, depth).z
+
+
+## How far under the upper level a fall's crest sits over a channel `depth` metres deep: that
+## depth, at least CREST_M's 5 cm and at most FALL_CREST_DEPTH_M. Pure.
+static func fall_crest_depth(depth: float) -> float:
+	return clampf(depth, -CREST_M, maxf(FALL_CREST_DEPTH_M, -CREST_M))
 
 
 ## The horizontal run of a fall's face profile (fall_profile()) losing `drop` metres: the
@@ -242,12 +259,13 @@ static func fall_profile(x: float, drop: float) -> float:
 
 
 ## How far past its lip the carved face of a fall of `drop` metres into water `depth` deep
-## runs before the plunge bed (fall_shape()): fall_run() of the rise from the crest (CREST_M
-## over the upper level) to the plunge bed (WaterFalls.plunge_depth() under the lower bed).
+## runs before the plunge bed (fall_shape()): fall_run() of the rise from the crest
+## (fall_crest_depth() under the upper level) to the plunge bed (WaterFalls.plunge_depth()
+## under the lower bed).
 ## The plunge pool's widening (WaterFallPlan.shape_line) and the side-wall rule (fall_gorge())
 ## start here.
 static func fall_foot(drop: float, depth: float) -> float:
-	return fall_run(drop + CREST_M + depth + WaterFalls.plunge_depth(drop))
+	return fall_run(drop - fall_crest_depth(depth) + depth + WaterFalls.plunge_depth(drop))
 
 
 ## How much of a fall's side-wall rule (FALL_BANK_SLOPE, FALL_BANK_REACH_M; see the header)
@@ -262,25 +280,27 @@ static func fall_gorge(x: float, drop: float, depth: float) -> float:
 
 ## Vector2(bank level, bed height) `x` metres past the lip of a fall from level `upper` into
 ## level `lower` at `depth` (see the header). The bed follows fall_profile() from the crest
-## (upper + CREST_M) down to the plunge bed (the lower bed less WaterFalls.plunge_depth()) at
-## the profile's foot (fall_foot()), then rises back to the lower bed over
-## WaterFalls.plunge_length(): the plunge pool is deepest at the foot of the face. The bank
-## level follows the same profile a crest's height above the bed, from the upper level down
-## to the lower, where it stays: so the face runs straight across the whole cut (section()
-## shelves only the crest's height at the waterline; a bank following a shorter profile of
-## the drop alone left a V down the face), its side walls are the face raised by the gorge's
-## bank slope (fall_gorge(): rock, a tight notch), and under the lower level the face runs
-## on down to the plunge bed through the channel's steepened shore.
+## (upper less fall_crest_depth()) down to the plunge bed (the lower bed less
+## WaterFalls.plunge_depth()) at the profile's foot (fall_foot()), then rises back to the
+## lower bed over WaterFalls.plunge_length(): the plunge pool is deepest at the foot of the
+## face. The bank level follows the same profile a crest's height above the bed, from the
+## upper level down to the lower, where it stays: so the face runs straight across the whole
+## cut (section() shelves only the crest's height at the waterline; a bank following a
+## shorter profile of the drop alone left a V down the face), its side walls are the face
+## raised by the gorge's bank slope (fall_gorge(): rock, a tight notch), and under the
+## lower level the face runs on down to the plunge bed through the channel's steepened
+## shore.
 static func fall_shape(x: float, upper: float, lower: float, depth: float) -> Vector2:
 	var drop := upper - lower
-	var crest := upper + CREST_M
+	var sill := fall_crest_depth(depth)
+	var crest := upper - sill
 	var plunge := WaterFalls.plunge_depth(drop)
-	var rise := drop + CREST_M + depth + plunge
+	var rise := drop - sill + depth + plunge
 	var foot := fall_run(rise)
 	var face := crest - fall_profile(x, rise)
 	var basin := plunge * (1.0 - smoothstep(foot, foot + WaterFalls.plunge_length(drop), x))
 	var bed := maxf(face, lower - depth - basin)
-	var bank := maxf(lower, face - CREST_M)
+	var bank := maxf(lower, face + sill)
 	return Vector2(bank, bed)
 
 

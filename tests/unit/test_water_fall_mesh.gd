@@ -345,6 +345,27 @@ func test_rows_and_columns() -> void:
 		assert_true(columns[i + 1] - columns[i] <= WaterFallMesh.COLUMN_M + 1e-6)
 
 
+## Card painter-fall-lip: the wetted width at the lip line is the channel's (to the carve's own
+## easing at the waterline), and within 0.15 m of the width a metre upstream, so the pool above
+## runs into the curtain with no notch (it was 74 to 80 percent of the channel, 0.3 m under the
+## pool a metre up, before the fall's crest was deepened, WaterCarve.fall_crest_depth).
+func test_the_wetted_width_at_the_lip_is_the_channels() -> void:
+	for half in [0.55, 1.0, 1.5, 2.0]:
+		var doc := _doc()
+		Fixtures.tier_fall(doc, half)
+		var fall: Dictionary = WaterFalls.falls(doc)[0]
+		var lip: Vector2 = fall.lip
+		var dir: Vector2 = fall.dir
+		var hw: float = fall.half_width
+		var at_lip := WaterFallMesh.crest_widths(doc, lip, dir, hw, fall.top)
+		var up := WaterFallMesh.crest_widths(doc, lip - dir * 1.0, dir, hw, fall.top)
+		var label := "half-width %.2f: lip %s, a metre up %s" % [hw, at_lip, up]
+		assert_gt(at_lip.x, 0.85 * hw, "the left width is the channel's (%s)" % label)
+		assert_gt(at_lip.y, 0.85 * hw, "the right width is the channel's (%s)" % label)
+		assert_lt(up.x - at_lip.x, 0.15, "no pinch on the left (%s)" % label)
+		assert_lt(up.y - at_lip.y, 0.15, "no pinch on the right (%s)" % label)
+
+
 # --- the ring and the mist -------------------------------------------------------------------
 
 
@@ -478,9 +499,12 @@ func test_mist_stands_at_the_pool_with_one_high_puff_at_the_lip() -> void:
 		var centre := vertices[first]
 		var half := absf(uv2s[first].x)
 		var along := (Vector2(centre.x, centre.z) - lip).dot(dir)
-		if centre.y + half > top:
+		# The high puff is the one set back near the lip (a wider crest makes bigger puffs, big
+		# enough for a low one's top to pass the brink on a 1.5 m drop, so the height alone
+		# cannot tell them apart).
+		if along < foot * 0.3:
 			high += 1
-			assert_lt(along, foot * 0.5, "the high puff stands near the lip")
+			assert_gt(centre.y + half, top, "the high puff's top clears the brink")
 			assert_almost_eq(
 				(Vector2(centre.x, centre.z) - lip).dot(dir.orthogonal()), 0.0, 1e-3, "centred"
 			)

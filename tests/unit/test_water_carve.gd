@@ -353,7 +353,10 @@ func test_fall_profile_is_the_tier_face_with_a_harder_lip() -> void:
 	assert_between(rad_to_deg(atan(steepest)), 62.0, 70.0, "a steep face")
 	# The step shape of a fall is the full crest whatever the depth; a small step keeps its bar.
 	var full := WaterCarve.step_shape(0.0, -0.8, 2.0, true)
-	assert_almost_eq(full.x, WaterCarve.CREST_M, 1e-6, "a fall's crest is the full one")
+	assert_almost_eq(
+		full.x, -WaterCarve.fall_crest_depth(2.0), 1e-6, "a fall's crest is the full one"
+	)
+	assert_almost_eq(full.x, -WaterCarve.FALL_CREST_DEPTH_M, 1e-6, "FALL_CREST_DEPTH_M under it")
 	var small := WaterCarve.step_shape(0.0, -0.1, 2.0)
 	assert_lt(small.x, -0.5, "a small step in deep water is a low bar")
 
@@ -542,7 +545,7 @@ func test_plunge_pool_sits_plunge_depth_below_the_bed() -> void:
 	var depth := lower.depth_m()
 	var drop := upper.level_m - lower.level_m
 	var plunge := WaterFalls.plunge_depth(drop)
-	var crest := upper.level_m + WaterCarve.CREST_M
+	var crest := upper.level_m - WaterCarve.fall_crest_depth(depth)
 	assert_almost_eq(_height(_doc, lip), crest, 0.05, "the crest at the lip")
 	var deepest := INF
 	var deepest_at := 0.0
@@ -603,7 +606,7 @@ func test_a_tier_crossing_changes_the_face_only_in_the_notch() -> void:
 	for across in [-0.8, 0.0, 0.8]:
 		assert_almost_eq(
 			_height(_doc, lip + Vector2(across, 0)),
-			bodies[0].level_m + WaterCarve.CREST_M,
+			bodies[0].level_m - WaterCarve.fall_crest_depth(bodies[1].depth_m()),
 			0.05,
 			"the notch's crest across the channel at %.1f" % across
 		)
@@ -710,7 +713,9 @@ func test_diagonal_fall_faces_do_not_saw() -> void:
 					measured += 0.05
 				offset += 0.05
 		assert_gt(measured, 1.5, "face measured at %s deg: %.2f m in all" % [degrees, measured])
-		assert_lt(worst, 0.08, "fall at %s deg: teeth %.3f m" % [degrees, worst])
+		# 0.08 before the card painter-fall-lip; the 7 cm deeper crest moves the measured worst
+		# to 0.080 to 0.088 m (a few centimetres of tooth on a face 1.5 to 3 m long: no saw).
+		assert_lt(worst, 0.1, "fall at %s deg: teeth %.3f m" % [degrees, worst])
 
 
 # --- ponds -----------------------------------------------------------------------------------

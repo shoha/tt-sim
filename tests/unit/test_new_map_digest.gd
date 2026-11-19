@@ -7,7 +7,9 @@ extends GutTest
 ## that moves a new map's bytes by accident. A change meant to move them (the recipe, the core
 ## library's biome or surfaces, the document format: re-pinned for format 4 on 2026-11-09, the
 ## manifest's number and the row entries' names; re-pinned on 2026-11-09 for card texwebp, whose
-## core rebuild moves the core library's hash in the manifest) refreshes the digests: run each case
+## core rebuild moves the core library's hash in the manifest; re-pinned hilltop only on
+## 2026-11-18 for card painter-fall-lip, whose deeper fall crest, WaterCarve.fall_crest_depth(),
+## moves the ground of the hilltop's carved river fall) refreshes the digests: run each case
 ## and paste what it prints.
 
 const BIOME := "temperate_forest_summer_s1"
@@ -16,7 +18,7 @@ const SEED := 1234
 const CASES: Array = [
 	[100, "flat", "5e52e0594ba8c9f8"],
 	[100, "valley", "c8af70660bc766fd"],
-	[100, "hilltop", "c3ca922246bd4c7d"],
+	[100, "hilltop", "ca45900549ce4fe9"],
 	[100, "terraces", "0becb3b9a192ce53"],
 	[100, "lakeshore", "d3a8126b4438ae95"],
 	[100, "gorge", "fbf162fd80c3f25e"],
