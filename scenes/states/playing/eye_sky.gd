@@ -23,8 +23,28 @@ extends RefCounted
 ## The biome look is StreetSkyLook (per-biome table); MapViewFit tells this object the map's
 ## dominant biome and seed. The ground skirt and the water backdrop read the shader's foot_on
 ## and foot_color (SkirtBackdrop), so they fade to the same colour as the fog and the ridge foot.
+##
+## Under the painted look (card painter-eye-backdrop) the Environment's sky is the painter's
+## (a ShaderMaterial with the `painter_sky` meta, PainterScene's) and this object installs nothing:
+## it switches that sky's own eye backdrop on (eye_on) and gives it the map's skyline (the biome's
+## silhouette numbers from StreetSkyLook and the map's seed), and switches it off on leaving. The
+## backdrop's colours are the mood's, which PainterScene sets. The fog stays the preset's, but its
+## hold on the sky is capped at PAINTER_SKY_FOG while the eye looks: a preset fog with the default
+## fog_sky_affect of 1 paints the whole sky the haze colour (round 2: winter, dusk, grimdark and
+## autumn showed a flat sky), and at the cap the hills and clouds stand in the mist as pale shapes.
+## The manager never writes fog_sky_affect, so it is read once on entering and put back on leaving.
+## No painter script is named here: this file is in the start-up graph (test_boot_graph.gd).
 
 const SHADER_PATH := "res://shaders/street_sky.gdshader"
+## The meta PainterScene marks its sky material with.
+const PAINTER_SKY_META := &"painter_sky"
+## Fields of the Classic eye sky's saved set that the painted look owns: when Painted takes the
+## Environment while the Classic eye sky is installed, these are left as Painted wrote them.
+const PAINTER_OWNS: Array[String] = ["background_mode", "sky", "fog_light_color"]
+## The painted sky's hills scale the biome's ridge height by this.
+const PAINTER_HILL_SCALE := 1.0
+## The most the fog may cover the painted sky at the eye (Environment.fog_sky_affect).
+const PAINTER_SKY_FOG := 0.5
 
 ## Probes switch the painted sky off to take a before still; the product never does.
 static var enabled: bool = true
@@ -52,6 +72,13 @@ var _last_sun: Vector3 = Vector3.ZERO
 var _foot_color_cache: Color = Color.BLACK
 var _foot_biome: String = ""
 var _foot_known: bool = false
+## The painted look's sky material while its eye backdrop is on (null otherwise), and the skyline
+## key (biome and seed) last written to it.
+var _painter: ShaderMaterial = null
+var _painter_key: String = ""
+## The Environment whose fog_sky_affect the painted branch capped, and the value it had.
+var _painter_env: Environment = null
+var _painter_sky_fog: float = 1.0
 
 
 func is_active() -> bool:
@@ -86,6 +113,11 @@ static func can_paint(env: Environment) -> bool:
 func sync(env: Environment, to_sun: Vector3) -> void:
 	if not enabled or env == null:
 		return
+	var painter := painter_sky(env)
+	if painter != null:
+		_sync_painter(env, painter)
+		return
+	_leave_painter()
 	if _active and env != _env:
 		leave()
 	if _active and _still_ours(env, to_sun):
@@ -112,8 +144,74 @@ func sync(env: Environment, to_sun: Vector3) -> void:
 	_apply_fog_depth(env)
 
 
-## Puts every field back as it was before the sky was installed. Safe to call when not active.
+## Puts every field back as it was before the sky was installed, and switches the painted sky's
+## eye backdrop off. Safe to call when not active.
 func leave() -> void:
+	_leave_painter()
+	_restore([])
+
+
+## The painted look's sky material on `env` (PainterScene's, marked `painter_sky`), or null.
+static func painter_sky(env: Environment) -> ShaderMaterial:
+	if env == null or env.background_mode != Environment.BG_SKY or env.sky == null:
+		return null
+	var material := env.sky.sky_material as ShaderMaterial
+	return material if material != null and material.has_meta(PAINTER_SKY_META) else null
+
+
+## The painted sky's skyline uniforms for a map of `biome_id` and `seed_value`: the biome's
+## silhouette (StreetSkyLook: ridge height, lattice, angularity, the tree-line's crowns) and a
+## lattice seed shifted by the map's seed, so two maps of one biome have skylines of their own.
+static func painter_params(biome_id: String, seed_value: int) -> Dictionary:
+	var look := StreetSkyLook.shader_params(biome_id, seed_value, Vector2.ZERO)
+	return {
+		&"eye_seed": float(look["noise_seed"]),
+		&"hill_height_deg": float(look["height_deg"]) * PAINTER_HILL_SCALE,
+		&"hill_period": float(look["noise_period"]),
+		&"hill_angular": float(look["angular"]),
+		&"crown_deg": float(look["teeth_deg"]),
+		&"crown_freq": float(look["teeth_freq"]),
+		&"crown_shape": float(look["tree_shape"]),
+	}
+
+
+## The painted look holds the Environment: drop a Classic eye sky installed before it took over
+## (the fog fields this object set go back; the sky and the fog colour stay Painted's), then switch
+## the painted sky's backdrop on and cap the fog's hold on the sky, writing the skyline only when
+## the map or the material changed.
+func _sync_painter(env: Environment, painter: ShaderMaterial) -> void:
+	if _active:
+		_restore(PAINTER_OWNS)
+	if painter != _painter or env != _painter_env:
+		_leave_painter()
+		_painter = painter
+		_painter_env = env
+		_painter_sky_fog = env.fog_sky_affect
+		env.fog_sky_affect = minf(_painter_sky_fog, PAINTER_SKY_FOG)
+	var key := "%s|%d" % [biome, map_seed]
+	if key == _painter_key:
+		return
+	_painter_key = key
+	var params := painter_params(biome, map_seed)
+	for name: StringName in params:
+		painter.set_shader_parameter(name, params[name])
+	painter.set_shader_parameter(&"eye_on", 1.0)
+
+
+## Switches the painted sky's eye backdrop off (the table view draws none) and gives the fog its
+## hold on the sky back. Safe when off.
+func _leave_painter() -> void:
+	if _painter != null:
+		_painter.set_shader_parameter(&"eye_on", 0.0)
+	if _painter_env != null:
+		_painter_env.fog_sky_affect = _painter_sky_fog
+	_painter = null
+	_painter_env = null
+	_painter_key = ""
+
+
+## Puts the fields back as they were before the Classic eye sky was installed, all but `keep`.
+func _restore(keep: Array[String]) -> void:
 	if not _active:
 		return
 	_active = false
@@ -125,8 +223,9 @@ func leave() -> void:
 	# The fog mode first: Godot 4.7 resets fog_density when fog_mode is assigned.
 	for key in _saved_fog_mode:
 		env.set(key, _saved_fog_mode[key])
-	for key in _saved:
-		env.set(key, _saved[key])
+	for key: String in _saved:
+		if not keep.has(key):
+			env.set(key, _saved[key])
 	_material = null
 	_sky = null
 	_saved = {}

@@ -18,7 +18,8 @@ came from is the local branch `painterspike` (handoff `docs/plans/handoffs/paint
 | `PainterSheet` | `painter/sheet.gd` | Parses, lints and compiles a `.sheet`; the pure resolver `tone(sheet, mood, role, elevation)`, `number(...)`, `tones(...)`; OKLCH helpers |
 | `core.sheet` | `painter/sheets/core.sheet` | The shipped tones: moods summer, dusk, grimdark, winter, autumn |
 | `PainterScene` | `painter/painter_scene.gd` | The scene host: takes the level's Environment and sun under Painted, restores them exactly when it lets go |
-| painted sky | `painter/shaders/painter_sky.gdshader` | A sky shader: horizon to zenith, a glow toward the level's sun, the far ground below the horizon |
+| painted sky | `painter/shaders/painter_sky.gdshader` | A sky shader: horizon to zenith, a glow toward the level's sun, the far ground below the horizon; at the eye, cloud banks and a far hill band (see "The eye backdrop") |
+| `PainterBackdrop` | `painter/painter_backdrop.gd` | The pure eye-backdrop tones: the hill ranges, the tree-line and the clouds from the mood's own tones |
 | `PainterTones` | `painter/painter_tones.gd` | The pure tone ramp: a role's shade, middle and lit colours in two variants |
 | `PainterSurfaces` | `painter/painter_surfaces.gd` | The surface host: swaps the ground's and the scatter's materials for painted ones and back |
 | `PainterGroundRoles` | `painter/ground_roles.gd` | The pure surface-id and biome-id to ground-role table (meadow, floor, path, rock, shore) |
@@ -1742,6 +1743,45 @@ flat splotches.
   later, the layer made later, the tone rule, mood and sun, decor stand-ins and restore, field
   plants as a source, orchard trees drawn by `PainterTrees`, the A/B switches, no per-frame hooks);
   `test_painter_warmup.gd` lists the prop shader.
+
+## The eye backdrop (card painter-eye-backdrop, 2026-11-18; look-pending)
+
+At the eye the painted sky was a flat gradient over a hard ground line where Classic's `EyeSky`
+draws clouds and ridges (`docs/painter-coverage-sweep.md` gap 1). The painted sky now carries its own
+backdrop, drawn only at the eye:
+
+- **Shader** (`painter_sky.gdshader`, uniform group `eye`): three hill ranges far to near (two broad
+  octaves each, the far ones softer and misting into the horizon toward their feet; the near one cut
+  crisp, with a tree-line of round or conical crowns and a wandering canopy in the crown tone, rising
+  out of the far-ground tone `foot_color` over 1.6 degrees so the skirt meets it without a line), and
+  one layer of cloud banks (six cells per turn, bases 3 to 13 degrees, five lobes plus a body and a
+  flat base; lit where a step up and toward the sun leaves every bank, so the lit band follows the
+  outline with no seams; three soft-stepped values: underside, body, lit top). `eye_on` 0 skips all of
+  it, so the table view draws the old maths; the cubemap pass never draws it, so reflections are the
+  gradient's. No TIME, no per-frame uniform writes.
+- **Colours** (`PainterBackdrop.uniforms`, set by `PainterScene` at every take): aerial perspective in
+  the mood's air, mixed in OKLab from existing tones only (no new sheet roles or numbers): near range
+  the ground 15 % into the haze at 0.9 of its lightness, middle 45 % into the haze and 20 % on toward
+  the sky, far the haze 50 % toward the sky and 0.14 deeper, tree-line the leaf 12 % into the haze at
+  0.78 lightness, sunlit tops the near range 40 % toward the sun; a cloud's lit top the horizon pulled
+  toward the sun by 0.6 times the sun's energy, its underside the sky lifted 0.02, at 0.6 of its chroma
+  plus 0.01, its hue turned 60 % toward the mood's `shade-hue`. Cloud cover follows the sky's chroma
+  (0.85 at chroma 0.02 or less, 0.5 at 0.08 or more): grimdark's and winter's grey skies cloud over.
+- **Shapes** (`EyeSky`, under Painted): the map's skyline from `StreetSkyLook` (the biome's ridge
+  height, lattice period, angularity and crowns; its seed plus the map's), so maps differ
+  (`EyeSky.painter_params`). `EyeSky` installs nothing under Painted: it sets `eye_on` and the skyline on
+  the painter's material (found by its `painter_sky` meta; it names no painter script, being in the
+  start-up graph), and caps `fog_sky_affect` at `PAINTER_SKY_FOG` 0.5 while the eye looks (a preset fog
+  at the default 1 painted the whole eye sky flat haze: winter, dusk, grimdark, autumn), putting it
+  back on leaving. If Painted takes the Environment while the Classic eye sky is installed (a Settings
+  Apply in the eye), the Classic eye's fog fields go back and Painted's sky and haze stay
+  (`PAINTER_OWNS`); before this the Classic restore overwrote the painted sky.
+- **Frames**: `docs/research/2026-11-09-prototypes/compare/painter_final42_eye_backdrop/`
+  (`sheet_eye_moods.png`: summer, winter, dusk, grimdark, autumn, Painted left and Classic right, a
+  late-sun turned view and the orbit view). Open: the summer far range at yaw 0 reads as a pale grey-blue
+  strip rather than a defined range; no GLB-map seed (a map without a document shares the default
+  skyline); cost not timed (the backdrop runs only on sky pixels at the eye; two cloud-field
+  evaluations of 18 circles each where clouds can be, three ranges below about 15 degrees).
 
 ## Verification
 

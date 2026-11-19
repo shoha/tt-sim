@@ -139,3 +139,38 @@ func test_the_maps_look_applies_under_maps_choice() -> void:
 	assert_true(sun.light_color.is_equal_approx(PainterSheet.tone(sheet, "winter", "sun", 50.0)))
 	manager.set_look({})
 	assert_eq(sun.shadow_blur, 2.0, "a Classic look lets go")
+
+
+func test_the_sky_carries_the_moods_eye_backdrop_but_the_table_view_draws_none() -> void:
+	var manager := _manager()
+	RenderStyle.choice = RenderStyle.CHOICE_PAINTED
+	manager.apply_render_style()
+	var material := manager.get_world_environment().environment.sky.sky_material as ShaderMaterial
+	var sheet := PainterSheet.load_sheet("core")
+	var wanted := PainterBackdrop.uniforms(sheet, "summer", 50.0)
+	for key: StringName in wanted:
+		var got: Variant = material.get_shader_parameter(key)
+		if got is Color:
+			assert_true((got as Color).is_equal_approx(wanted[key]), str(key))
+		else:
+			assert_almost_eq(float(got), float(wanted[key]), 1e-5, str(key))
+	assert_ne(material.get_shader_parameter("eye_on"), 1.0, "only EyeSky switches the backdrop on")
+
+
+func test_the_backdrop_follows_the_mood() -> void:
+	var sheet := PainterSheet.load_sheet("core")
+	var summer := PainterBackdrop.uniforms(sheet, "summer", 50.0)
+	var grim := PainterBackdrop.uniforms(sheet, "grimdark", 27.0)
+	var dusk := PainterBackdrop.uniforms(sheet, "dusk", 24.0)
+	assert_gt(float(grim[&"cloud_cover"]), float(summer[&"cloud_cover"]), "a grey sky is clouded")
+	for mood: Dictionary in [summer, grim, dusk]:
+		var far := PainterSheet.lch_of_color(mood[&"hill_far_color"])
+		var near := PainterSheet.lch_of_color(mood[&"hill_near_color"])
+		assert_lt(far.x, 0.99, "the far range is not white")
+		assert_ne(far, near, "the ranges differ")
+	var dusk_far := PainterSheet.lch_of_color(dusk[&"hill_far_color"])
+	assert_between(dusk_far.z, 250.0, 340.0, "a dusk range is violet")
+	var light := PainterSheet.lch_of_color(summer[&"cloud_light_color"])
+	var shade := PainterSheet.lch_of_color(summer[&"cloud_shade_color"])
+	assert_gt(light.x, shade.x, "a cloud's top is lighter than its underside")
+	assert_gt(shade.y, 0.02, "the underside is coloured, never grey")
