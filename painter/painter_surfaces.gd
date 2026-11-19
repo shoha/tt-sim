@@ -53,6 +53,9 @@ const BUILDINGS := "res://painter/painter_buildings.gd"
 const OCCLUSION := "res://painter/painter_occlusion.gd"
 ## The painted water's host (PainterWater), loaded by path on the first painted map.
 const WATER := "res://painter/painter_water.gd"
+## The GLB map's host (PainterGlbMap: the ground, scatter, trees and props of a Blender-made
+## map.glb), loaded by path on the first painted map.
+const GLB_MAP := "res://painter/painter_glb_map.gd"
 ## Metadata on every material this paints with.
 const META := &"painter_surface"
 ## The map root's name under the map container (MapSourceLoader.install).
@@ -86,6 +89,10 @@ var _buildings: RefCounted = null
 var _occlusion: RefCounted = null
 ## The painted water (a PainterWater), made on the first paint().
 var _water: RefCounted = null
+## The GLB map's host (a PainterGlbMap), made on the first paint().
+var _glb: RefCounted = null
+## The ground materials the GLB host made for a map.glb's own terrain meshes (toned with the rest).
+var _glb_ground: Array[ShaderMaterial] = []
 
 
 ## Follows `manager`'s painted_look_changed for the map under `map_container`; called again with
@@ -119,6 +126,9 @@ func paint(map: Node3D, state: Dictionary) -> bool:
 	_paint_species()
 	_retone()
 	_paint_trees()
+	if _glb == null:
+		_glb = (load(GLB_MAP) as GDScript).new()
+	_glb.call("paint", _map, applied, self)
 	if _buildings == null:
 		_buildings = (load(BUILDINGS) as GDScript).new()
 	_buildings.call("paint", _map, applied)
@@ -139,6 +149,9 @@ func release() -> void:
 		_buildings.call("release")
 	if _water != null:
 		_water.call("release")
+	if _glb != null:
+		_glb.call("release")
+	_glb_ground.clear()
 	_unbind()
 	if _ground != null:
 		FireLook.unmirror_glow(_ground)
@@ -310,7 +323,33 @@ func ground_materials() -> Array[ShaderMaterial]:
 	var out: Array[ShaderMaterial] = [_ground_material()]
 	if _skirt != null:
 		out.append(_skirt)
+	out.append_array(_glb_ground)
 	return out
+
+
+## The ground a GLB map's terrain mesh is dressed in (PainterGlbMap): a copy of the authored
+## ground's material, so it takes the same sheet numbers; the host sets what is the mesh's own.
+func make_glb_ground() -> ShaderMaterial:
+	var material := _ground_material().duplicate() as ShaderMaterial
+	material.set_meta(META, true)
+	_glb_ground.append(material)
+	return material
+
+
+## A painted solid for a prop surface of `original` (a GLB map's own mesh; PainterGlbMap), null when
+## `original` is not a standard material. Not toned (the host tones it).
+func prop_stand_in(
+	mesh: Mesh, original: Material, entry: Dictionary, height: float
+) -> ShaderMaterial:
+	var stand_in := _stand_in(original, entry, height)
+	if stand_in != null:
+		stand_in.set_shader_parameter(&"selector_extent", mesh.get_aabb().size * 0.5)
+	return stand_in
+
+
+## Tones the plants `added` (swap_surface's records) now, when something is painted.
+func tone_added(added: Array) -> void:
+	_tone_new(added)
 
 
 ## The materials that darken at their base: the rocks' and logs' stand-ins and the trees' own.
@@ -319,6 +358,8 @@ func base_materials() -> Array[ShaderMaterial]:
 	for entry: Array in _swapped:
 		if int(entry[4]["kind"]) == PainterPlantRoles.KIND_SOLID:
 			out.append(entry[3])
+	if _glb != null:
+		out.append_array(_glb.call("base_materials"))
 	if _trees != null:
 		out.append_array(_trees.call("materials"))
 		var fast: Variant = _trees.get("fast_material")
@@ -372,6 +413,11 @@ func buildings() -> RefCounted:
 ## The painted water (a PainterWater), null before the first paint().
 func water() -> RefCounted:
 	return _water
+
+
+## The GLB map's host (a PainterGlbMap), null before the first paint().
+func glb_map() -> RefCounted:
+	return _glb
 
 
 # ---------------------------------------------------------------- the ground
@@ -509,7 +555,7 @@ static func char_image(doc: MapDocument) -> Image:
 				if w > 0.0 and at < surface_char.size() and surface_char[at] == 1:
 					v = maxf(v, w)
 		plane[i] = v
-	var blurred := _box(plane, sx, sz, ZONE_BLUR)
+	var blurred := PainterFieldBlur.box(plane, sx, sz, ZONE_BLUR)
 	var bytes := PackedByteArray()
 	bytes.resize(n)
 	for i in n:
@@ -593,7 +639,7 @@ static func zone_image(doc: MapDocument) -> Image:
 			for i in n:
 				bytes[i * 4 + c] = flat
 			continue
-		var plane := _box(planes[c], sx, sz, ZONE_BLUR)
+		var plane := PainterFieldBlur.box(planes[c], sx, sz, ZONE_BLUR)
 		for i in n:
 			bytes[i * 4 + c] = clampi(roundi(plane[i] * 255.0), 0, 255)
 	return Image.create_from_data(sx, sz, false, Image.FORMAT_RGBA8, bytes)
@@ -637,7 +683,7 @@ static func biome_zone_image(doc: MapDocument) -> Image:
 	var bytes := PackedByteArray()
 	bytes.resize(n * 4)
 	for c in 3:
-		var plane := _box(planes[c], sx, sz, ZONE_BLUR)
+		var plane := PainterFieldBlur.box(planes[c], sx, sz, ZONE_BLUR)
 		for i in n:
 			bytes[i * 4 + c] = clampi(roundi(plane[i] * 255.0), 0, 255)
 	return Image.create_from_data(sx, sz, false, Image.FORMAT_RGBA8, bytes)
@@ -722,56 +768,6 @@ static func _mix_role(v: Vector4, role: String, w: float) -> Vector4:
 	return v
 
 
-## A separable box blur of a w x h field, radius r samples (edges clamp). Radius 1, the zone map's,
-## takes a three-tap pass with the edges outside the loop.
-static func _box(a: PackedFloat32Array, w: int, h: int, r: int) -> PackedFloat32Array:
-	if r != 1 or w < 2 or h < 2:
-		return _box_generic(a, w, h, r)
-	var tmp := PackedFloat32Array()
-	tmp.resize(w * h)
-	var out := PackedFloat32Array()
-	out.resize(w * h)
-	for y in h:
-		var row := y * w
-		tmp[row] = (a[row] * 2.0 + a[row + 1]) / 3.0
-		for i in range(row + 1, row + w - 1):
-			tmp[i] = (a[i - 1] + a[i] + a[i + 1]) / 3.0
-		tmp[row + w - 1] = (a[row + w - 2] + a[row + w - 1] * 2.0) / 3.0
-	for y in h:
-		var above := maxi(y - 1, 0) * w
-		var here := y * w
-		var below := mini(y + 1, h - 1) * w
-		for x in w:
-			out[here + x] = (tmp[above + x] + tmp[here + x] + tmp[below + x]) / 3.0
-	return out
-
-
-## The general blur (any radius).
-static func _box_generic(a: PackedFloat32Array, w: int, h: int, r: int) -> PackedFloat32Array:
-	if r <= 0:
-		return a
-	var tmp := PackedFloat32Array()
-	tmp.resize(w * h)
-	var out := PackedFloat32Array()
-	out.resize(w * h)
-	var span := float(2 * r + 1)
-	for y in h:
-		var acc := 0.0
-		for x in range(-r, r + 1):
-			acc += a[y * w + clampi(x, 0, w - 1)]
-		for x in w:
-			tmp[y * w + x] = acc / span
-			acc += a[y * w + mini(x + r + 1, w - 1)] - a[y * w + maxi(x - r, 0)]
-	for x in w:
-		var acc := 0.0
-		for y in range(-r, r + 1):
-			acc += tmp[clampi(y, 0, h - 1) * w + x]
-		for y in h:
-			out[y * w + x] = acc / span
-			acc += tmp[mini(y + r + 1, h - 1) * w + x] - tmp[maxi(y - r, 0) * w + x]
-	return out
-
-
 # ---------------------------------------------------------------- the scatter
 
 
@@ -795,24 +791,38 @@ func _paint_species() -> Array:
 			if entry.is_empty():
 				continue
 			for i in mesh.get_surface_count():
-				var original := mesh.surface_get_material(i)
-				var surface_entry := PainterPlantRoles.for_surface(entry, original)
-				var stand_in := _stand_in(original, surface_entry, float(record["height"]))
-				if stand_in == null:
-					continue
-				var extent := mesh.get_aabb().size * 0.5
-				stand_in.set_shader_parameter(&"selector_extent", extent)
-				if int(surface_entry["kind"]) == PainterPlantRoles.KIND_GRASS:
-					# A wide tuft is cut by painted dabs from the layouts' array (PainterTuftAtlas).
-					stand_in.set_shader_parameter(
-						&"tuft_atlas",
-						PainterTuftAtlas.for_tuft(extent, maxf(float(record["height"]), 0.05))
-					)
-				mesh.surface_set_material(i, stand_in)
-				var swap := [mesh, i, original, stand_in, surface_entry]
-				_swapped.append(swap)
-				added.append(swap)
+				var swap := swap_surface(
+					mesh,
+					i,
+					PainterPlantRoles.for_surface(entry, mesh.surface_get_material(i)),
+					float(record["height"])
+				)
+				if not swap.is_empty():
+					added.append(swap)
 	return added
+
+
+## Puts a painted stand-in of `surface_entry` (PainterPlantRoles.of's shape) on surface `i` of
+## `mesh`, remembering the original (released with the rest); the new [mesh, i, original, stand-in,
+## entry] record, or [] when the surface's material cannot be stood in for. Not toned: the caller
+## tones what it adds (_tone_new). Shared by the authored scatter's species and a GLB map's
+## (PainterGlbMap).
+func swap_surface(mesh: Mesh, i: int, surface_entry: Dictionary, height: float) -> Array:
+	var original := mesh.surface_get_material(i)
+	var stand_in := _stand_in(original, surface_entry, height)
+	if stand_in == null:
+		return []
+	var extent := mesh.get_aabb().size * 0.5
+	stand_in.set_shader_parameter(&"selector_extent", extent)
+	if int(surface_entry["kind"]) == PainterPlantRoles.KIND_GRASS:
+		# A wide tuft is cut by painted dabs from the layouts' array (PainterTuftAtlas).
+		stand_in.set_shader_parameter(
+			&"tuft_atlas", PainterTuftAtlas.for_tuft(extent, maxf(height, 0.05))
+		)
+	mesh.surface_set_material(i, stand_in)
+	var swap := [mesh, i, original, stand_in, surface_entry]
+	_swapped.append(swap)
+	return swap
 
 
 ## The painted material standing in for `original` (null when it cannot: no material, or one
@@ -854,6 +864,8 @@ func _retone() -> void:
 	_bind_wet()
 	for swap: Array in _swapped:
 		_tone_plant(swap[3], swap[4], sheet, mood, elevation)
+	if _glb != null:
+		_glb.call("retone", sheet, mood, elevation)
 
 
 func _tone_new(added: Array) -> void:
@@ -883,7 +895,9 @@ func _tone_ground(sheet: Dictionary, mood: String, elevation: float) -> void:
 	var num := func(prop: String) -> float: return PainterSheet.number(sheet, mood, prop, elevation)
 	var tone := func(role: String) -> Vector3:
 		return PainterTones.linear(PainterSheet.tone(sheet, mood, role, elevation))
-	for material: ShaderMaterial in [_ground_material(), _skirt]:
+	var grounds: Array[ShaderMaterial] = [_ground_material(), _skirt]
+	grounds.append_array(_glb_ground)
+	for material: ShaderMaterial in grounds:
 		material.set_shader_parameter(&"g_lit", lit)
 		material.set_shader_parameter(&"g_shd", shade)
 		material.set_shader_parameter(&"litter_col", tone.call("litter"))

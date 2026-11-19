@@ -218,7 +218,7 @@ func sync() -> void:
 	if _map == null:
 		return
 	_hide_glb()
-	_want = wanted(_scatters, _doc)
+	_want = wanted(_scatters, _doc, PainterGlbMap.rows_on(_map))
 	var dirty := {}
 	for key: Vector3i in trees.keys():
 		# (An event's tree stays until the event lets go of it: drop() erases it then.)
@@ -354,9 +354,9 @@ func held_count() -> int:
 
 ## Every mapped tree row of `scatters` as key -> {"pos", "species", "asset", "cx", "seed"}, and a
 ## bush's also "box" (PainterTreeBush.box_of; a bush whose asset has not resolved is left out)
-## (pure in the rows, the document and the resolved meshes).
-static func wanted(scatters: Array[AuthoredScatter], doc: MapDocument) -> Dictionary:
-	var out := {}
+## (pure in the rows, the document and the resolved meshes); `glb` adds a GLB map's rows.
+static func wanted(scatters: Array[AuthoredScatter], doc: MapDocument, glb := {}) -> Dictionary:
+	var out := PainterGlbMap.wanted(glb, doc)
 	var stride := MapDocument.ROW_STRIDE
 	for scatter in scatters:
 		# A hidden scatter (the eye view's rim in the orbit view) draws nothing, painted or not.

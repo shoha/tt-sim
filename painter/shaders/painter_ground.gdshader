@@ -68,6 +68,17 @@ uniform vec2 half_extent = vec2(30.0);
 uniform sampler2D zone_map : hint_default_black, filter_linear, repeat_disable;
 uniform bool zone_present = false;
 uniform float base_meadow = 1.0;
+// A GLB map's own ground (card painter-glb-parity; PainterGlbMap): the map frame is the world's XZ
+// (the mesh's UV is its texture's), and the zone is read from the mesh's baked albedo by its colour
+// (glb_zone): uv = glb_uv * xz + glb_uv_b, the planar mapping fitted from the mesh's vertices.
+uniform bool world_frame = false;
+uniform bool glb_zone = false;
+uniform sampler2D glb_albedo : source_color, filter_linear_mipmap, repeat_enable, hint_default_white;
+uniform vec4 glb_uv = vec4(1.0, 0.0, 0.0, 1.0);
+uniform vec2 glb_uv_b = vec2(0.0);
+uniform vec3 glb_tint = vec3(1.0);
+// The texels per metre of the baked albedo (for the colour read's mip level).
+uniform float glb_texels_per_m = 8.0;
 // The scorched ground's share (role 8, `char`: the scar a fire event leaves, the ash surface it
 // stamps), present only when the document names one (PainterSurfaces.char_image). A different thing
 // from role 6, `ash`, a burnt biome's own ground (zone2_map).
@@ -98,6 +109,8 @@ uniform vec2 tok_k = vec2(0.0);
 
 varying vec3 v_n;
 varying float v_wy;
+varying vec2 v_xz;
+varying float f_glb_lod;
 varying float f_pool;
 varying float f_core;
 varying float f_tok;
@@ -150,8 +163,28 @@ vec3 burn_ground(vec2 xz, vec3 p, float clock, inout vec3 lit, inout vec3 shd) {
 	return g / max(peak, 0.001) * band * BURN_GLOW;
 }
 
+// The zone of a baked ground colour `c` (LINEAR): soft shares of the roles, so the shader's brush
+// noise bites at their edges as it does on the authored zone map: r meadow (green, and snow or pale
+// stone), g path (warm earth), b rock (grey), a shore (blue); a dark ground is none of them (the
+// forest floor).
+vec4 glb_classify(vec3 c) {
+	float mx = max(c.r, max(c.g, c.b));
+	float mn = min(c.r, min(c.g, c.b));
+	float sat = (mx - mn) / max(mx, 0.0001);
+	float colored = smoothstep(0.08, 0.2, sat);
+	float green = colored * smoothstep(0.85, 1.05, c.g / max(c.r, 0.0001)) * smoothstep(1.05, 1.3, c.g / max(c.b, 0.0001));
+	float blue = colored * smoothstep(1.0, 1.25, c.b / max(c.g, 0.0001)) * step(c.r, c.b);
+	float warm = colored * (1.0 - green) * (1.0 - blue) * smoothstep(0.1, 0.2, mx);
+	float pale = (1.0 - colored) * smoothstep(0.5, 0.7, mx);
+	float grey = (1.0 - colored) * (1.0 - smoothstep(0.5, 0.7, mx)) * smoothstep(0.03, 0.08, mx);
+	return vec4(max(green, pale), warm, grey, blue);
+}
+
 // The zone map at a map-frame point (texel i's middle lies at origin + i * step).
 vec4 zone(vec2 xz) {
+	if (glb_zone) {
+		return glb_classify(textureLod(glb_albedo, mat2(glb_uv.xy, glb_uv.zw) * xz + glb_uv_b, f_glb_lod).rgb * glb_tint);
+	}
 	if (!zone_present) {
 		return vec4(base_meadow, 0.0, 0.0, 0.0);
 	}
@@ -273,8 +306,10 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, out vec3 lit, o
 }
 
 void vertex() {
-	v_n = NORMAL;
-	v_wy = (MODEL_MATRIX * vec4(VERTEX, 1.0)).y;
+	v_n = world_frame ? normalize(mat3(MODEL_MATRIX) * NORMAL) : NORMAL;
+	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	v_wy = wp.y;
+	v_xz = wp.xz;
 }
 
 // The contact occlusion at `xz`: x the pool, y the seam, each a flat brush-edged shape (the field's
@@ -306,8 +341,12 @@ void fragment() {
 	ROUGHNESS = 1.0;
 	SPECULAR = 0.0;
 	METALLIC = 0.0;
-	vec2 xz = UV;
+	vec2 xz = world_frame ? v_xz : UV;
 	vec3 p = vec3(xz.x, 0.0, xz.y);
+	if (glb_zone) {
+		// The mip level of the baked albedo that one pixel covers.
+		f_glb_lod = clamp(log2(max(length(fwidth(xz)) * glb_texels_per_m, 1.0)), 0.0, 6.0);
+	}
 	vec3 n = normalize(v_n);
 	f_n = n;
 	float slope = 1.0 - n.y;
@@ -323,7 +362,7 @@ void fragment() {
 	vec2 e1 = normalize(stroke_dir + vec2(0.0001, 0.0));
 	vec2 e2 = vec2(-e1.y, e1.x);
 	vec2 st = vec2(dot(xz, e1), dot(xz, e2));
-	float px_m = length(fwidth(UV)) * 0.7;
+	float px_m = length(fwidth(xz)) * 0.7;
 	vec2 sz = small_zones(xz) * vec2(drift * 0.8, litter * 0.6);
 	float path_here = zone(xz).g;
 	float best = 0.0;

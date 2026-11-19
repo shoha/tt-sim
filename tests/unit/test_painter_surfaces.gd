@@ -504,7 +504,7 @@ func _zone_plain(doc: MapDocument) -> Image:
 	var bytes := PackedByteArray()
 	bytes.resize(n * 4)
 	for c in 4:
-		var plane := PainterSurfaces._box_generic(channels[c], sx, sz, PainterSurfaces.ZONE_BLUR)
+		var plane := PainterFieldBlur.box_generic(channels[c], sx, sz, PainterSurfaces.ZONE_BLUR)
 		for i in n:
 			bytes[i * 4 + c] = clampi(roundi(plane[i] * 255.0), 0, 255)
 	return Image.create_from_data(sx, sz, false, Image.FORMAT_RGBA8, bytes)

@@ -73,6 +73,7 @@ func test_the_copied_constants_are_the_owners() -> void:
 
 func test_the_layouts_make_the_measured_formats() -> void:
 	assert_eq(_format_of(_sample_named("ground")), MEASURED_GROUND)
+	assert_eq(_format_of(_sample_named("ground_plain")), _format_of(_sample_named("solid_plain")))
 	assert_eq(_format_of(_sample_named("plant_lit")), MEASURED_LIT)
 	assert_eq(_format_of(_sample_named("solid_lit")), MEASURED_LIT)
 	assert_eq(_format_of(_sample_named("structure")), MEASURED_LIT)

@@ -308,6 +308,8 @@ static func collect(bare: bool) -> Array[Dictionary]:
 		_add(samples, "tree_blockin_bare_burn", TREE_BLOCKIN_BARE_BURN, LAYOUT_TREE, 0)
 		return samples
 	_add(samples, "ground", GROUND, LAYOUT_GROUND, 0)
+	# A GLB map's terrain (PainterGlbMap) is a Blender mesh: no second UV set.
+	_add(samples, "ground_plain", GROUND, LAYOUT_PLAIN, 0)
 	_add(samples, "plant_lit", PLANT, LAYOUT_LIT, 0)
 	_add(samples, "plant_plain", PLANT, LAYOUT_PLAIN, 0)
 	_add(samples, "solid_lit", SOLID, LAYOUT_LIT, 0)
