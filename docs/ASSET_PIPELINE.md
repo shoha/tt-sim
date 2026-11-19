@@ -123,11 +123,54 @@ Scatter instances contract in full:
   original node so it does not also render once at its Blender transform.
 - Every instance terrain-paint writes is built. Thinning happens at runtime through
   `MultiMesh.visible_instance_count` (see budgets below), never at import.
-- Node-level extras are not part of the contract. A registered PropertyGroup's fields
-  do survive into node extras when `export_extras` is on (confirmed by probe), which is
-  why it stays off.
+- Node-level extras are part of the contract only for the optional painter roles below
+  (`tt_paint_role`, `tt_ground`). A registered PropertyGroup's fields do survive into node
+  extras when `export_extras` is on (confirmed by probe), which is why terrain-paint kept it
+  off; any other key in a node's extras is ignored.
 - JSON extras are fine at current sizes. If instance counts grow by an order of
   magnitude, the agreed change is a binary buffer, not a different upstream format.
+
+### Painter roles (optional)
+
+Consumer: `PainterGlbRoles` (`painter/glb_roles.gd`, the one reader; its host is
+`painter/painter_glb_map.gd`; `docs/systems/painter.md` "GLB maps"). Decided 2026-11-19 (owner,
+"Approve the extras"). Without them the painted look reads a map GLB by names, materials and
+shape, which is the behaviour of every GLB that exists today; with them an author states what
+a mesh is, and the statement wins.
+
+| Extra | Value | Meaning under the Painted look |
+|-------|-------|-------------------------------|
+| `tt_paint_role` | `ground-meadow`, `ground-path`, `ground-rock` | The mesh is terrain (as `tt_ground`) and is painted as one ground zone, ignoring its baked albedo's zones. |
+| | `roof` | The surface wears the painted roof (clay; `roof-slate`, `-thatch`, `-shingle` and `-turf` stay name-driven). |
+| | `bark` | Painted wood: the trunk and timber dress. |
+| | `stone` | Painted stone: the rock and wall dress. |
+| | `leaf` | Painted foliage: the leaf mass colour. |
+| | `keep` | Left exactly as authored, whatever its name or colour says (a window, a metal band, a mesh with its own look). |
+| `tt_ground` | `true` | The mesh is the ground: it gets the painted ground shader without the wide, shallow, faces-up test. A mesh of several surfaces is then one role by colour (no zone texture read). `false`: never ground, whatever its shape. |
+
+- **Where they sit.** glTF extras on a node, on its mesh or on one of its materials. All
+  three arrive as `"extras"` metadata (Godot's importer; the loader keeps it, and a
+  collapsed duplicate-prop group keeps its first node's). The most specific wins, per key:
+  material (one surface), then node, then mesh. `tt_ground` is read from the node or the mesh.
+- **Precedence in the reader:** an explicit extra, then the name and material rules, then
+  the shape rule (ground) or the colour rule (props). A surface the extras do not name is
+  read exactly as before.
+- **Absent:** the current rules, unchanged: no extras means byte-identical Painted output.
+- **Unknown value** (`tt_paint_role: "wall"`, a non-string, `tt_ground` that is neither a
+  boolean, a number nor `"true"`/`"false"`): ignored as if absent, and one warning line is
+  logged per distinct value per session. Case and surrounding spaces do not matter.
+- **Scope:** terrain meshes and props (a MeshInstance3D, or a MultiMesh of its duplicates).
+  Scatter sources named in `tt_scatter_instances` are painted by species from the name, and
+  trees by `tree_species`; the roles do not apply to them. Water is PainterWater's.
+- **Classic ignores them**: the host is never made under Classic, and nothing else reads the
+  keys. The extras never reach collision, water, wind or scatter.
+- **Producers:** none writes them yet (terrain-paint is archived; plantgen and the core
+  library ship libraries, not maps; their assets are painted through the species and role
+  tables, and these extras are not read on them). A Blender exporter
+  snippet is left to the owner. The recipe: add a custom property to the object (or to its
+  material or mesh data) named `tt_paint_role` with a string value from the table (or
+  `tt_ground` as a boolean), and export with the glTF exporter's "Custom Properties" option
+  (`export_extras`) on; custom properties become glTF extras on the node, mesh or material.
 
 ## 5. Mesh attributes
 
