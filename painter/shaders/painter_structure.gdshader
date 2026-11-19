@@ -14,8 +14,8 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
  *
  * What is painted is SUGGESTED in a few broad shapes, never drawn literally: soft patches of the
  * role's two variants at about the size of a tree clump, a deeper eave and a paler ridge on a
- * roof, a darker foot on a wall, a few sparse marks in each material's manner (broken course
- * dashes on tiles and slates, straw strands on thatch, blocks on stone, seams on logs and
+ * roof, a darker foot on a wall, a few sparse marks in each material's manner (soft course
+ * bands on tiles, slates and shingles, straw strands on thatch, blocks on stone, seams on logs and
  * boards), and a dark line where the surface folds (a corner, an eave lip). Marks fade out
  * before they are under about two pixels.
  *
@@ -26,7 +26,10 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
  * slate) and that role's ramp is turned from its summer tone (`paint_ref`) to the paint, as the
  * hand-drawn manner's round roofs are (card painter-roof-clay: a street's red tile roofs read
  * mud-brown, its green ones slate, when a lot's wooden roof never took the clay and a green paint
- * took the slate). The turn is relative, so each mood's own moves of the role carry over.
+ * took the slate). The turn is relative, so each mood's own moves of the role carry over. A slate
+ * or shingle roof keeps its kind's ramp and turns it to its paint the same way (card
+ * painter-roof-polish: an alpine lot's blue-grey shingle drew brown, a modern row's peach and teal
+ * slates blue-grey).
  * COLOR.a is the height up a roof (0 eave, 1 ridge) or above a wall's foot in sixteenths of a metre.
  *
  * Cost: two 3D value noises for the patches, one for the dabs, one for the edge wobble, a few
@@ -96,14 +99,18 @@ void vertex() {
 	v_h = COLOR.a;
 	v_tone = tone_of(pick, COLOR.rgb);
 	v_turn = vec4(1.0, 0.0, 0.0, 1.0);
-	if (pattern >= 5 && (pick == 1 || pick == 2)) {
+	if (paint_turns(pattern, pick)) {
 		// A tile or wooden roof (a street lot's, a wall row's): the role nearest its paint, its ramp
 		// turned to the paint; a grey paint keeps the slate's hue and takes only its lightness and
-		// greyness.
+		// greyness. A shingle roof (an alpine lot's `Roof_shingle`) keeps its kind's ramp, turned to
+		// its paint the same way; a slate roof (a modern row's `Roof_slate`) the nearest of its own
+		// three (paint_slate_tone).
 		vec3 lab = paint_lab(COLOR.rgb);
-		bool grey = length(lab.yz) < PAINT_GREY;
-		if (!grey) {
+		bool grey = length(lab.yz) < paint_grey(pick);
+		if (pick > 0 && !grey) {
 			v_tone = paint_roof_tone(lab);
+		} else if (pattern == 6 && !grey) {
+			v_tone = paint_slate_tone(lab);
 		}
 		v_turn = paint_turn(lab, paint_ref[v_tone], grey);
 	}
@@ -176,14 +183,18 @@ void fragment() {
 			float tuft = step(0.86, p_hash(floor(wp * 2.2))) * tiled;
 			light += tuft * 0.4;
 		} else {
-			// Tiles, slates, shingles: broken dashes under each course's lip.
+			// Tiles, slates, shingles: soft course banding, a shadow under each course's lip run
+			// across the whole slope, each course a touch apart, and the slope a little lighter toward
+			// its ridge (card painter-roof-polish: a tile's own variant read as a patchwork of lighter
+			// and rosier tiles at zoom 16 where Classic is one smooth red, and the broken dashes as busy
+			// ticks on a hip face). The bands fade before a course is under about three pixels.
 			float course = pattern == 5 ? 0.42 : (pattern == 6 ? 0.32 : 0.26);
 			float r = s / course;
-			float row = floor(r);
-			float dash = step(0.72, p_hash(vec3(row, floor(t / 1.1 + row * 0.37), 9.0)));
-			dark += p_line(r, 0.16) * dash * 0.5 * tiled;
-			float piece = p_hash(vec3(row, floor(t / (course * 1.6) + 0.5 * row), 4.0));
-			variant = clamp(variant + (piece - 0.5) * 0.5 * tiled, 0.0, 1.0);
+			float banding = (1.0 - smoothstep(0.2, 0.45, fwidth(r))) * tiled;
+			dark += (1.0 - smoothstep(0.0, 0.4, fract(r))) * 0.2 * banding;
+			float band = p_hash(vec3(floor(r), 4.0, 9.0));
+			variant = clamp(variant + (band - 0.5) * 0.14 * banding, 0.0, 1.0);
+			light += 0.16 * smoothstep(0.1, 1.0, h) * tiled;
 		}
 	} else {
 		float hm = h * 16.0;
@@ -226,7 +237,7 @@ void fragment() {
 	if (pattern >= 5 && snow > 0.0) {
 		vec4 fr = snow_frame(wp, n, h);
 		float broad = 1.0 - smoothstep(0.08, 0.16, length(fwidth(fr.xy)));
-		cover = snow_cover_of(snow_hold(snow, up), fr.xy) * (1.0 - snow_gap(fr.xy, fr.w));
+		cover = snow_cover_roof(snow, up, h, fr.xy, broad) * (1.0 - snow_gap(fr.xy, fr.w));
 		sp = snow_paint(fr.xy, broad);
 		roll = snow_roll(fr.z, fr.w, fr.xy);
 	}

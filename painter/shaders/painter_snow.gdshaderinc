@@ -9,7 +9,9 @@
  * The model. Snow lies as one soft, thick layer, never as patches (owner: "flat splotches",
  * "much patchier"). A face holds it by its slope (snow_hold); where it holds only part, on a steep
  * run, the layer thins into long soft streaks down the fall line, never a half-mixed veil
- * (snow_cover_of). The layer is drawn in the snow's own ramp with a body:
+ * (snow_cover_of). A roof face too steep for the layer (a spire) takes a cap over its upper third
+ * and thin ledges along its courses instead (snow_steep, snow_cover_roof). The layer is drawn in
+ * the snow's own ramp with a body:
  *   a lit top    broad soft swells (warm white) and hollows (toward the blue shade), wider along
  *                the eave than down the slope, under a few broad brush washes; the light turns
  *                over a soft step that broad dabs push about, so light and shade break into brush
@@ -40,6 +42,39 @@ float snow_hold(float snow, float up) {
 float snow_cover_of(float hold, vec2 f) {
 	float streak = p_n2(vec2(f.x * 1.6, f.y * 0.3), 141.0);
 	return smoothstep(0.4, 0.62, hold + (streak - 0.5) * 0.6);
+}
+
+// The spacing of the ledges snow catches on down a steep face (about a course and a half).
+const float SNOW_LEDGE_M = 0.6;
+
+// Snow on a face too steep to hold the layer (card painter-roof-polish, 2026-11-19: the wizard
+// tower's and the crystal spire's spires held none and read glossy blue-grey in winter). It gathers
+// over the upper third (`h` 0 at the eave to 1 at the tip or ridge) into a cap whose lower edge
+// hangs in a few soft tongues, and below it catches on the courses' lips as thin broken ledges,
+// sparse near the eave and closer toward the cap: a dusting, never nothing, and never the long
+// streaks, which on a dark spire read as a glossy highlight (round 1 of the card: ledges on every
+// course read as a hatch). Where a ledge is under a few pixels (`broad` toward 0) the ledges even
+// out into their light share. A face near vertical (a slab's edge, a finial) or facing down holds
+// none.
+float snow_steep(float snow, float up, float h, vec2 f, float broad) {
+	float amount = clamp(snow * 2.2, 0.0, 1.0) * smoothstep(0.08, 0.16, up);
+	float tongue = p_n2(vec2(f.x * 1.3, 5.0), 173.0);
+	float cap = smoothstep(0.52, 0.62, h + (tongue - 0.5) * 0.24);
+	float r = f.y / SNOW_LEDGE_M;
+	float lip = 1.0 - smoothstep(0.04, 0.22, fract(r));
+	float near = 0.2 * smoothstep(0.0, 0.55, h);
+	float broken = smoothstep(0.56 - near, 0.72 - near, p_n2(vec2(f.x * 1.2, floor(r) * 2.7), 171.0));
+	float ledge = mix(0.14, lip * broken * 0.8, broad);
+	return amount * max(cap, ledge);
+}
+
+// A roof face's cover (the roof shaders'; the props keep snow_cover_of): the layer by its slope
+// where the face holds it, and on a face too steep for it (up under about 0.4: a spire, a Taper
+// roof's cone, a bell or mansard roof's lower run) snow_steep's cap and ledges in place of the
+// layer's streaks. `broad` as snow_paint's.
+float snow_cover_roof(float snow, float up, float h, vec2 f, float broad) {
+	float layer = snow_cover_of(snow_hold(snow, up), f);
+	return mix(snow_steep(snow, up, h, f, broad), layer, smoothstep(0.38, 0.44, up));
 }
 
 // Where the wind scoured the crest (1 bare): a few short soft gaps along the ridge, in about a
