@@ -21,6 +21,11 @@ const KIND_FLOWER := 3
 ## quarter of its own normal and read as splayed streaky shards with hard edges, grey-lilac in
 ## winter.
 const KIND_CROWN := 4
+## A structure's baked wall plant (ivy, a window box's leaves; PainterVillage's decor): leaf dabs
+## laid on the card's own plane, each turned as a small dome so its sunward rim takes the lit step
+## and it tucks darker under its neighbours, in the crowns' ramp (card painter-roofs-ivy: as a
+## solid the ivy read as flat mid-green cut-outs at eye level).
+const KIND_WALL_LEAF := 5
 ## The script whose bush_ramp() tones a KIND_CROWN plant (loaded by path, as PainterSurfaces loads
 ## the painted trees, so a Classic start-up never compiles the trees' code).
 const CROWN_TONES := "res://painter/trees/tree_tones.gd"

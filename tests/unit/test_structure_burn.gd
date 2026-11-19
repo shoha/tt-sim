@@ -177,30 +177,33 @@ func test_the_dust_is_a_rich_ochre_ring_outside_the_footprint() -> void:
 	assert_eq(puffs._brush[1], 0, "the plain one is not")
 
 
-func test_a_ruins_roof_pieces_are_drawn_charred_under_painted() -> void:
-	_doc.structures.append(Structure.make(4, "core:ruin_cottage", _plan(Vector2.ZERO), 5))
+func test_a_ruins_roof_remnant_is_painted_as_its_roof_kind_not_charred() -> void:
+	# Card painter-roofs-ivy: held charred (painter-structure-fire), a placed ruin's remnant read as a
+	# flat black plane where Classic draws it blue or brown; it is painted as the roof kind it is.
+	var refs: Array[String] = ["core:ruin_cottage", "core:ruin_barn"]
+	for i in refs.size():
+		_doc.structures.append(Structure.make(4 + i, refs[i], _plan(Vector2(i * 12.0, 0)), 5))
 	var structures := AuthoredStructures.create(_doc)
 	_map.add_child(structures)
-	var node := structures.get_structure_node(4)
-	if node == null:
-		return
-	assert_true(bool(node.get_meta(StructureRuin.META, false)), "marked a ruin")
-	assert_eq(PainterBuildings.RUIN_META, StructureRuin.META, "the painter reads the same meta")
 	var buildings := _painted(structures)
-	var roofs := 0
-	for found: Node in node.find_children("*", "MeshInstance3D", true, false):
-		var mi := found as MeshInstance3D
-		var is_roof := PainterBuildings.kind_of(String(mi.name)).size() > 2 and String(
-			PainterBuildings.kind_of(String(mi.name))[2]
-		) == "roof"
-		var raw: Variant = mi.get_instance_shader_parameter(&"burn")
-		var burn := 0.0 if raw == null else float(raw)
-		if is_roof:
-			roofs += 1
-			assert_eq(burn, PainterBuildings.RUIN_ROOF_BURN, "%s is charred" % mi.name)
-		else:
-			assert_eq(burn, 0.0, "%s is not" % mi.name)
-	assert_gt(roofs, 0, "the ruin has roof pieces")
+	for i in refs.size():
+		var node := structures.get_structure_node(4 + i)
+		if node == null:
+			continue
+		assert_true(bool(node.get_meta(StructureRuin.META, false)), "%s marked a ruin" % refs[i])
+		var roofs := 0
+		for found: Node in node.find_children("*", "MeshInstance3D", true, false):
+			var mi := found as MeshInstance3D
+			var kind := PainterBuildings.kind_of(String(mi.name))
+			var raw: Variant = mi.get_instance_shader_parameter(&"burn")
+			assert_eq(0.0 if raw == null else float(raw), 0.0, "%s is not charred" % mi.name)
+			if kind.size() > 2 and String(kind[2]) == "roof":
+				roofs += 1
+				var stand_in := mi.material_override as ShaderMaterial
+				assert_not_null(stand_in, "%s %s is painted" % [refs[i], mi.name])
+				if stand_in != null:
+					assert_true(stand_in.has_meta(PainterBuildings.META), "%s stand-in" % mi.name)
+		assert_gt(roofs, 0, "%s has roof pieces" % refs[i])
 	buildings.release()
 
 

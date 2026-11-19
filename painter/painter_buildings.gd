@@ -34,11 +34,9 @@ const SHADER := "res://painter/shaders/painter_structure.gdshader"
 const META := &"painter_building"
 ## The structures' node under a map root (AuthoredStructures.NODE_NAME).
 const STRUCTURES := "AuthoredStructures"
-## A ruin's node carries this meta (StructureRuin.META): the roof pieces still standing over it
-## (slabs and the bare rafters, whose slate or tile read as pale blue-grey sticks in the air) are
-## drawn charred, the building burn shader held at RUIN_ROOF_BURN (fully charred).
-const RUIN_META := &"tt_ruin"
-const RUIN_ROOF_BURN := 1.7
+## (A ruin's roof remnant, its slabs and bare rafters, is painted as the roof kind it is, as
+## Classic draws it; card painter-roofs-ivy: held charred, as painter-structure-fire had it, every
+## placed ruin's remnant read as a flat black plane.)
 ## The structures node's meta that holds a WeakRef to this host (StructureBurn.HOST_META).
 const HOST_META := &"painter_buildings_host"
 ## The map's other wall layers (card painter-coverage): drawn walls, wall rows and the streets' lots
@@ -106,6 +104,14 @@ const PICK_CAP := 7
 const PICK_SNOW := 8
 ## The ramp slots a manner material holds (PICK_ROLES' four, the thatch's, one spare).
 const MANNER_RAMP_SLOTS := 30
+## A roof's variant spread on a dark roof (roof_spread): the lightness from which a roof takes the
+## mood's whole value-spread, and the least share it keeps.
+const ROOF_SPREAD_L := 0.5
+const ROOF_SPREAD_MIN := 0.4
+## The mood a recipe's roof paint is read in (paint_refs): a round or Taper roof with no manner
+## record turns its role's ramp by the difference between its paint and this mood's tone of the
+## role, so its colour follows Classic's and every other mood moves it as it moves the role.
+const PAINT_REF_MOOD := "summer"
 ## The role a chimney's brick and pots, and a slate roof's ridge cap, take (the third ramp).
 const BRICK_ROLE := "roof-clay"
 ## The role the roofs' snow takes its colour from (winter's is the snow's white, under the
@@ -407,7 +413,6 @@ func _on_structure(node: Node) -> void:
 func _dress(structure: Node) -> void:
 	if applied.is_empty():
 		return
-	var ruin: bool = structure.get_meta(RUIN_META, false)
 	for node: Node in structure.find_children("*", "MeshInstance3D", true, false):
 		var mesh_instance := node as MeshInstance3D
 		var key := part_key(str(node.name))
@@ -415,8 +420,6 @@ func _dress(structure: Node) -> void:
 			continue
 		_swapped[mesh_instance.get_instance_id()] = [mesh_instance, mesh_instance.material_override]
 		mesh_instance.material_override = _material(key)
-		if ruin and str(kind_of(key)[2]) == "roof" and _burnable(mesh_instance.material_override.shader):
-			mesh_instance.set_instance_shader_parameter(&"burn", RUIN_ROOF_BURN)
 	if hand_drawn:
 		if manner == null:
 			manner = PainterMannerHost.new(self)
@@ -507,6 +510,9 @@ func _tone(material: ShaderMaterial, kind: Array, sheet: Dictionary) -> void:
 	)
 	ramps.resize(MANNER_RAMP_SLOTS if manner else PICK_ROLES.size() * 6)
 	material.set_shader_parameter(&"ramps", ramps)
+	if manner and int(kind[1]) >= P_TILE and str(kind[0]) != ACCENT:
+		# A roof: what its pieces with no record turn from to their paint (the manner shader).
+		material.set_shader_parameter(&"paint_ref", paint_refs(sheet, mood, roles, elevation))
 	material.set_shader_parameter(
 		&"snow", PainterSheet.number(sheet, mood, SNOW_NUMBER, elevation)
 	)
@@ -564,6 +570,8 @@ static func ramp(
 	var shape := shape_of(sheet, mood, elevation, family)
 	var hue_spread := PainterSheet.number(sheet, mood, "hue-spread", elevation)
 	var value_spread := PainterSheet.number(sheet, mood, "value-spread", elevation)
+	if family == "roof":
+		value_spread *= roof_spread(base.x)
 	var out := PackedVector3Array()
 	for variant in 2:
 		var side := float(variant) * 2.0 - 1.0
@@ -572,6 +580,32 @@ static func ramp(
 		steps[2] = lit_step(lch, shape)
 		for step: Vector3 in steps:
 			out.append(PainterTones.linear(PainterSheet.color_of_lch(step)))
+	return out
+
+
+## The share of the mood's value-spread a roof of middle lightness `lightness` takes between its two
+## variants: all of it from ROOF_SPREAD_L up, less on a darker roof, never under ROOF_SPREAD_MIN.
+## The spread is a lightness step, so on grimdark's dark roofs (about 0.32) the same 0.035 swung the
+## light a third either way and the variant patches read as camouflage (owner, 2026-11-18: "why is
+## everything so splotchy?"); held to a share of the lightness it swings it as much as summer's.
+## Pure.
+static func roof_spread(lightness: float) -> float:
+	return clampf(lightness / ROOF_SPREAD_L, ROOF_SPREAD_MIN, 1.0)
+
+
+## The reference a roof with no manner record turns from to its recipe's own paint (card
+## painter-roofs-ivy): the OKLab (L, a, b) of each of `roles`' middle tones in PAINT_REF_MOOD (the
+## mood a paint is read in; the applied mood when the sheet has none), five slots for the manner
+## shader's `paint_ref`. A tone the mood moves (grimdark's darker, cooler slate) keeps that move,
+## turned to the paint. Pure.
+static func paint_refs(
+	sheet: Dictionary, mood: String, roles: Array[String], elevation: float
+) -> PackedVector3Array:
+	var at := PAINT_REF_MOOD if sheet.has(PAINT_REF_MOOD) else mood
+	var out := PackedVector3Array()
+	for role in roles:
+		out.append(PainterSheet.oklab_of(PainterSheet.tone_lch(sheet, at, role, elevation)))
+	out.resize(MANNER_RAMP_SLOTS / 6)
 	return out
 
 

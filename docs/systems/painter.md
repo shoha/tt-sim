@@ -1389,11 +1389,10 @@ by event (findings: `docs/research/2026-11-09-prototypes/compare/painter_final25
   is not a rectangle and outside the ruin's sizes). It travels to peers as the ordinary
   `structures` op, a save keeps it, and an undo of the entry (one step) brings the buildings back.
   The ruin recipes are procgen's own (stone, ragged skyline, standing gables, rubble, moss), so the
-  walls are not charred: the `char` ash scar the fire lays over the ground round it is. Their roof
-  pieces are: a ruin's node carries the meta `StructureRuin.META`, and under Painted
-  `PainterBuildings._dress` holds the roof meshes of such a node at `burn` 1.7 (`RUIN_ROOF_BURN`,
-  fully charred), so the bare rafters that stand over the walls read dark charred timber, not pale
-  slate-blue sticks (any ruin, burnt or placed). A late joiner
+  walls are not charred: the `char` ash scar the fire lays over the ground round it is. A ruin's
+  node carries the meta `StructureRuin.META`. Its roof remnant and bare rafters are painted as the
+  recipe's roof kind, as Classic draws them (card painter-roofs-ivy reversed the earlier
+  `RUIN_ROOF_BURN` hold at `burn` 1.7: it drew every ruin's roof slab as a black plane). A late joiner
   gets only the ops, as for burnt trees. Cost (2026-11-18, pinned 1920x1080, vsync off, in-run
   interleaved x3, GPU median ms, zoom 8, a village of three houses, the fire frozen at 3.3 s with
   two houses slumping in dust): burning Classic 2.522 / 2.598 / 2.602 (plays no house burn), Painted
@@ -1671,8 +1670,9 @@ in `docs/research/2026-11-09-prototypes/compare/painter_final37_village/` (`note
   discards (the shadow-twin and TREE_FAST rules hold trivially).
 - **Baked decor** (`decor_baked`: the ivy, planters and flower boxes of a structure baked into one
   ArrayMesh with shared wind materials). `PainterVillage` swaps each surface for the plants' stand-in
-  (`PainterSurfaces.stand_in_of`, now static) in the SOLID kind (a leaf-mass kind would read the node
-  origin, which is wrong for baked geometry), role bark for a material named `*bark*`, else leaf,
+  (`PainterSurfaces.stand_in_of`, now static): bark (a material named `*bark*`) in the SOLID kind,
+  leaf in the WALL_LEAF kind since card painter-roofs-ivy (below; a leaf-mass kind would read the
+  node origin, which is wrong for baked geometry),
   toned by `PainterPlantTone.tone` (moved out of `PainterSurfaces` at the glb-parity merge to stay under the file cap); one stand-in per original material, shared across the
   structures. The non-bakable decor MultiMeshes (`decor_<asset>`) are not covered.
 - **Field plants** (`AuthoredFieldPlants`: orchard trees, garden flowers and shrubs, hedges, crops).
@@ -1787,6 +1787,48 @@ with more body", "why don't these share an implementation for snow coverage?", t
 - Tests: `test_painter_buildings.gd` (every roof and prop shader includes the layer, no old
   coverage left), `test_painter_manner.gd` (no veil, grain or bare strokes), `test_painter_coverage.gd`
   (`Wood` is `lot_wood`, its middle the props' honey at 0.85 chroma in three moods).
+
+## Round roofs, ruin roofs, ivy (card painter-roofs-ivy, 2026-11-18; look-pending)
+
+Owner, 2026-11-18: "Fix ivy and roofs next", and of the grimdark streets "why is everything so
+splotchy?". Frames and notes: `docs/research/2026-11-09-prototypes/compare/painter_final48_roofs_ivy/`
+(`notes.md`; `before/`, `r1/`, `r2_full/` the verdict).
+
+- **A roof with no manner record follows its paint.** Round and Taper roofs (round hut, roundhouse,
+  yurt, dome hall, tulou, trullo, windmill caps, the towers' spires, pagoda) carry no record (CUSTOM0.z
+  0), and `roof_tone` sent every paint that was not red or brown to slate, so they read one blotchy
+  blue-grey. In `painter_structure_manner.gdshader` such a roof piece (pattern 5 or more, pick 0 to 2)
+  reads its recipe paint (the vertex colour) once per vertex: a picked roof takes the role nearest the
+  paint's hue (`paint_roof_tone`: red and orange clay, ochre and brown shingle, green turf, blue and
+  violet slate), and the role's ramp is turned in OKLab from the role's reference tone to the paint
+  (`paint_turn`, `paint_turned` in `painter_structure_common.gdshaderinc`): the hue by their
+  difference, the chroma by their ratio (0.5 to 2.6), the lightness by theirs (0.82 to 1.22). The
+  reference is the role's middle in summer (`PainterBuildings.paint_refs`, uniform `paint_ref`, set on
+  manner roof materials only), so the turn is relative and each mood's own moves of the role carry
+  over (grimdark's round roofs are a muted brown-red, not summer's terracotta). A grey paint (chroma
+  under `PAINT_GREY` 0.04) keeps its role and hue and takes only the ratios (a cream felt yurt). The
+  turn is per vertex (a flat varying) plus three OKLab round trips in the fragment; no texture reads.
+  These roofs also take half the variant patches and the lit dabs at half (`loose_roof`).
+- **Ruin roofs** are their roof kind (Fire, above); nothing new is needed, the hold is gone.
+- **Calm street roofs.** The camouflage patches on grimdark's street roofs (A3b, the wall layers) were
+  the light step, not the variants: grimdark's `tone-hi` 0.66 under a 25 degree sun sets a slope's N.L
+  right at the step, and the step's 0.12 wobble and the 0.5 cast threshold (partial self-shadow) broke
+  each slope into lit and mid patches. A bare A3b roof now steps with 0.03 of wobble, 0.02 of
+  softness and the snow's 0.3 cast threshold, so a slope is lit or not as one plane. The roof family's
+  variant spread is also held to a share of a dark roof's lightness (`PainterBuildings.roof_spread`:
+  lightness over `ROOF_SPREAD_L` 0.5, at least 0.4), which alone did not calm them (`r1`).
+- **Ivy has leaves.** Plant kind 5 (`PainterPlantRoles.KIND_WALL_LEAF`, the decor's leaf surfaces) is
+  drawn on the card's face normal (`cross(dFdx, dFdy)` turned toward the eye, since the baked normals
+  are the wall's) as a 0.2 m Voronoi of leaf dabs (`ivy_dab`): each dab's normal tilts toward its
+  edge, takes its own variant and value, and its rim tucks darker; under 6 pixels per dab the dabs
+  fade to the plain face, so the game camera sees a calm mass. It takes the crowns' ramp (the bushes'
+  green) and the plants' frost on up faces, so winter ivy is green with snow on top, not white.
+- **Not done:** the tulou reads a lighter grey than Classic's dark grey-brown; the crystal spire is a
+  more saturated azure than Classic's pale aqua; steep spires still hold no snow.
+- Tests: `test_painter_buildings.gd` (the reference tones on a manner roof, the turn's functions in the
+  shader, a dark roof's variants swing no more than summer's, a wall keeps its spread),
+  `test_painter_village.gd` (leaf is WALL_LEAF, bark SOLID, the ivy takes the crowns' ramp),
+  `test_structure_burn.gd` (a ruin's roof is painted as its kind, burn 0).
 
 ## Verification
 

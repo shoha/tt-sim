@@ -100,7 +100,16 @@ void fragment() {
 	float wob;
 	float petal;
 	float snow;
-	selector_fragment(v_wp, v_wn, v_o, v_scale, v_h, tex, n, variant, mul, wob, petal, snow);
+	vec3 wn = v_wn;
+	if (kind == 5) {
+		// A wall's leaves (baked ivy): the card's own face turned to the viewer, not its foliage
+		// normals, so the leaf dabs lie on the wall (painter_selector's ivy_dab).
+		vec3 face = normalize(cross(dFdx(v_wp), dFdy(v_wp)));
+		vec3 to_eye = PROJECTION_MATRIX[3][3] == 0.0 ? INV_VIEW_MATRIX[3].xyz - v_wp
+			: INV_VIEW_MATRIX[2].xyz;
+		wn = dot(face, to_eye) < 0.0 ? -face : face;
+	}
+	selector_fragment(v_wp, wn, v_o, v_scale, v_h, tex, n, variant, mul, wob, petal, snow);
 	if (kind == 1 || kind == 3) {
 		if (dab.x > 1.5) {
 			// Each dab its own value and variant (russet or straw in winter), darker at its foot

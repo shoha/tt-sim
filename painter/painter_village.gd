@@ -21,9 +21,10 @@ extends RefCounted
 ## (lights; the water is no terrain water); a lantern's halo gets painter_glow.gdshader (a painted
 ## halo of three torn steps, one shared material). A structure's `decor_baked` mesh
 ## has a surface per wind material: each gets the plants' stand-in (painter_plant.gdshader, kind
-## solid: the baked mesh has no per-plant origin for a leaf mass's form) in the leaf role, or the
-## bark role for a material named `*bark*`; the plants' own wind, fade and cutout uniforms are
-## kept. Decor plants too big to bake keep their MultiMesh and their Classic material.
+## wall leaf: leaf dabs on the card's plane, since the baked mesh has no per-plant origin for a leaf
+## mass's form) in the crowns' leaf ramp, or a solid in the bark role for a material named
+## `*bark*`; the plants' own wind, fade and cutout uniforms are kept. Decor plants too big to bake
+## keep their MultiMesh and their Classic material.
 ##
 ## Tones. The props' eight ramps are the buildings' (PainterBuildings.ramp: timber, wall stone,
 ## thatch, clay, turf, slate, plaster), their snow the roofs'; the shader picks one by each part's
@@ -357,14 +358,15 @@ func _dress_decor(structure: Node) -> void:
 		mesh.surface_set_material(i, stand_in)
 
 
-## The plants' entry for a baked decor surface of `material`: a solid in the leaf role, or in the
-## bark role when the material is named for bark (the form's lighting needs a plant's origin that
-## a baked mesh does not have, so no leaf mass).
+## The plants' entry for a baked decor surface of `material`: a wall's leaves (KIND_WALL_LEAF, leaf
+## dabs on the card's own plane: a leaf mass's form needs a plant's origin that a baked mesh does
+## not have), or a solid in the bark role when the material is named for bark.
 static func decor_entry(material: Material) -> Dictionary:
 	var named := "" if material == null else material.resource_name.to_lower()
+	var bark := named.contains("bark")
 	return {
-		"kind": PainterPlantRoles.KIND_SOLID,
-		"role": "bark" if named.contains("bark") else "leaf",
+		"kind": PainterPlantRoles.KIND_SOLID if bark else PainterPlantRoles.KIND_WALL_LEAF,
+		"role": "bark" if bark else "leaf",
 		"ground_cover": false,
 	}
 
