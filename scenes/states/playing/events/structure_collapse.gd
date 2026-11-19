@@ -9,7 +9,8 @@ extends RefCounted
 ## level at STUMP of its height, one down the ridge, and SEGMENT_M apart across it, each cut leaning
 ## a little off square (seeded), so the pieces are broken slabs rather than tidy tiles. Below the
 ## level is the stump, which stays standing. Above it, a roof triangle goes to a roof slab (its
-## side of the ridge, its segment), anything else to a wall piece (the long walls by side and
+## side of the ridge, its segment), and so does anything over the eave clear of the end walls (a
+## ridge trim, a dormer); anything else to a wall piece (the long walls by side and
 ## segment, the end walls by end and side of the ridge): every part on one stretch of wall
 ## (plaster, timber, glass) falls as one. Each piece is drawn from both faces (the cut opens the
 ## parts' closed solids, and a slab turns over as it falls), so nothing shows through it. The cut
@@ -33,15 +34,23 @@ const CUT_TILT := 0.24
 ## Where in the collapse the sag ends, and where every piece is down.
 const SAG_END := 0.3
 const FALL_END := 0.8
-## A roof slab's sag (radians, at the ends of the ridge and in its middle) and how far past its
-## pitch it may turn as it lands (a share of the pitch).
+## A roof slab's sag (radians, at the ends of the ridge and in its middle) and how far it turns as
+## it lands (a share of its pitch, slab_pitch: about 1 lies flat, a slump on the heap).
 const SAG_ROOF := Vector2(0.14, 0.32)
-const LAND_TURN := Vector2(0.85, 1.3)
-## How far a wall piece bows before it goes, and how far it topples (radians); the share that falls
-## outward.
+const LAND_TURN := Vector2(0.9, 1.12)
+## The cosine within which a triangle counts as a slab's broad face (slab_pitch): about 37 degrees.
+const SLAB_FACE := 0.8
+## How far a wall piece bows before it goes, and the least and most it topples (radians); the share
+## that falls outward. It topples until its top end comes down: outward to REST_M over the ground
+## (a gable end and its chimney lie out on the grass), inward onto the stump. A fixed topple left a
+## tall end wall standing 5 m into the air at 60 degrees (card painter-fire-polish2).
 const BOW := Vector2(0.03, 0.07)
-const TOPPLE := Vector2(1.05, 1.5)
+const TOPPLE := Vector2(1.0, 1.95)
 const OUTWARD := 0.7
+const REST_M := Vector2(0.1, 0.35)
+## How far in from each end a part above the eave still falls with its end wall (a gable, a chimney
+## on the end), metres; further in it rides a roof slab (piece_of).
+const END_BAND_M := 1.0
 ## The settle's bounce (a share of the building's height, held between the two metres) and rock.
 const BOUNCE := 0.035
 const BOUNCE_M := Vector2(0.06, 0.22)
@@ -171,12 +180,15 @@ static func piece_of(c: Vector3, roof: bool, planes: Array[Plane], frame: Dictio
 		if planes[i].is_point_over(c):
 			segment += 1
 	var side := 1 if planes[1].is_point_over(c) else 0
-	if roof:
-		return 1 + side * count + segment
 	var axis: Vector3 = frame.axis
 	var half: Vector2 = frame.half
 	var rel := c - (frame.centre as Vector3)
 	var u := rel.dot(axis)
+	# Over the eave and clear of the end walls (a ridge trim, a dormer, a chimney in the middle): it
+	# rides the roof slab under it. On a wall piece it stood up as tall as it was deep when the wall
+	# toppled (card painter-fire-polish2).
+	if roof or (c.y > float(frame.get("eave", INF)) and absf(u) < half.x - END_BAND_M):
+		return 1 + side * count + segment
 	var w := rel.dot(Vector3.UP.cross(axis))
 	if absf(u) / maxf(half.x, 0.1) > absf(w) / maxf(half.y, 0.1):
 		return 1 + 2 * count + (2 if u > 0.0 else 0) + side
@@ -187,8 +199,10 @@ static func piece_of(c: Vector3, roof: bool, planes: Array[Plane], frame: Dictio
 ## building in `frame` (planes_of's) into its pieces: [{"key", "roof", "stump", "surfaces":
 ## [{"part": the index in `parts`, "arrays"}], and the motion: "pivot", "tip", "sag", "angle",
 ## "drop", "slide", "twist", "delay", "bounce", "rock"}], the stump first. Pure (runs on a worker).
-static func split(parts: Array, frame: Dictionary) -> Array[Dictionary]:
-	var planes := planes_of(frame)
+static func split(parts: Array, frame_in: Dictionary) -> Array[Dictionary]:
+	var planes := planes_of(frame_in)
+	var frame := frame_in.duplicate()
+	frame["eave"] = eave_of(parts)
 	var soups: Dictionary = {}
 	for index in parts.size():
 		var part: Dictionary = parts[index]
@@ -218,6 +232,19 @@ static func split(parts: Array, frame: Dictionary) -> Array[Dictionary]:
 	return out
 
 
+## The eave of `parts` (split's): the lowest point of its roof parts in the node's frame; INF with
+## none. Pure.
+static func eave_of(parts: Array) -> float:
+	var low := INF
+	for part: Dictionary in parts:
+		if not bool(part.roof):
+			continue
+		var to_node: Transform3D = part.to_node
+		for p: Vector3 in (part.arrays as Array)[Mesh.ARRAY_VERTEX]:
+			low = minf(low, (to_node * p).y)
+	return low
+
+
 ## The transform piece `piece` (split's) takes `x` (0..1) into the collapse, in its node's frame:
 ## identity before it and for the stump, a rigid turn about its pivot (no scale). Pure.
 static func pose(piece: Dictionary, x: float) -> Transform3D:
@@ -242,11 +269,16 @@ static func pose(piece: Dictionary, x: float) -> Transform3D:
 
 ## Makes `pieces` (split's) as Node3Ds under `node` (the pose moves them), parked out of sight
 ## (PARKED) until the collapse, each holding a MeshInstance3D a surface, in surface order, wearing
-## `materials[part]` (the part's stand-in, or its own) as its material_override, as the part it
-## came from does. Shown and burning from the start, like the parts: made hidden, a piece drew
-## uncharred in the render jobs although its `burn` was set (rounds 1 and 2). Returns them.
+## `materials[part]` (the part's stand-in, or its own) as its material_override and casting as
+## `casts[part]` says (a GeometryInstance3D.ShadowCastingSetting; ON when it is short), as the part
+## it came from does. That matters: a hand-drawn part's shadow caster (PainterMannerHost's
+## MannerShadow child, its Classic material, shadows only) is cut too, and drawn it hid the charred
+## pieces under an uncharred Classic copy (card painter-fire-polish2). Returns them.
 static func install(
-	node: Node3D, pieces: Array[Dictionary], materials: Array[Material]
+	node: Node3D,
+	pieces: Array[Dictionary],
+	materials: Array[Material],
+	casts: PackedByteArray = PackedByteArray()
 ) -> Array[Node3D]:
 	var made: Array[Node3D] = []
 	for piece in pieces:
@@ -258,7 +290,10 @@ static func install(
 			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface.arrays)
 			var part := MeshInstance3D.new()
 			part.mesh = mesh
-			part.material_override = materials[int(surface.part)]
+			var at := int(surface.part)
+			part.material_override = materials[at]
+			if at < casts.size():
+				part.cast_shadow = casts[at] as GeometryInstance3D.ShadowCastingSetting
 			holder.add_child(part)
 		node.add_child(holder)
 		made.append(holder)
@@ -380,8 +415,9 @@ static func _motion(piece: Dictionary, frame: Dictionary, count: int) -> void:
 		# The eave is the slab's outer, lowest edge; the ridge drops about it, into the footprint.
 		var side := signf(mean.z) if mean.z != 0.0 else 1.0
 		var outer := hi.z if side > 0.0 else lo.z
-		var reach := maxf(absf(hi.z - lo.z), 0.1)
-		var pitch := atan2(hi.y - lo.y, reach)
+		var pitch := slab_pitch(piece)
+		if pitch < 0.0:
+			pitch = atan2(hi.y - lo.y, maxf(absf(hi.z - lo.z), 0.1))
 		var middle := 1.0 - clampf(absf(mean.x) / maxf(half.x, 0.1), 0.0, 1.0)
 		var hinge := centre + axis * mean.x + across * outer
 		piece.pivot = Vector3(hinge.x, lo.y, hinge.z)
@@ -397,15 +433,50 @@ static func _motion(piece: Dictionary, frame: Dictionary, count: int) -> void:
 	var out := axis * signf(mean.x) if end_wall else across * signf(mean.z)
 	if out == Vector3.ZERO:
 		out = across
-	var tip := out if rng.randf() < OUTWARD else -out
+	var outward := rng.randf() < OUTWARD
+	var tip := out if outward else -out
 	var foot := centre + axis * mean.x + across * mean.z
 	piece.pivot = Vector3(foot.x, lo.y, foot.z)
 	piece.tip = tip
 	piece.sag = rng.randf_range(BOW.x, BOW.y)
-	piece.angle = rng.randf_range(TOPPLE.x, TOPPLE.y)
-	piece.drop = maxf(minf((hi.y - lo.y) * rng.randf_range(0.3, 0.6), lo.y - heap), 0.0)
+	var tall := maxf(hi.y - lo.y, 0.1)
+	piece.drop = maxf(minf(tall * rng.randf_range(0.3, 0.6), lo.y - heap), 0.0)
+	var rest := centre.y + (
+		rng.randf_range(REST_M.x, REST_M.y)
+		if outward
+		else STUMP * height * rng.randf_range(0.8, 1.0)
+	)
+	var reach := clampf((rest - (lo.y - float(piece.drop))) / tall, -1.0, 1.0)
+	piece.angle = clampf(acos(reach), TOPPLE.x, TOPPLE.y)
 	piece.slide = tip * rng.randf_range(0.0, 0.4)
 	piece.delay = rng.randf_range(0.04, 0.2)
+
+
+## The pitch of roof slab `piece` (radians from flat), from its broad faces: its triangles' normals
+## by area, each turned to face up (so the slab's two faces agree), summed once for a rough
+## direction and again over only the triangles within SLAB_FACE of it, so a thick eave's edge and
+## the ends do not tip it (they would make a 0.9 rad slab 0.5 m thick read 0.73). The extents (rise
+## over reach) misjudge a thick thatch (card painter-fire-polish2: the cottage's slabs landed
+## standing). -1 for a piece with no area. Pure.
+static func slab_pitch(piece: Dictionary) -> float:
+	var normals := PackedVector3Array()
+	var rough := Vector3.ZERO
+	for surface: Dictionary in piece.surfaces:
+		var v: PackedVector3Array = (surface.arrays as Array)[Mesh.ARRAY_VERTEX]
+		for i in range(0, v.size() - 2, 3):
+			var n := (v[i + 1] - v[i]).cross(v[i + 2] - v[i])
+			n = n if n.y >= 0.0 else -n
+			normals.append(n)
+			rough += n
+	if rough.length_squared() < 1e-12:
+		return -1.0
+	var toward := rough.normalized()
+	var sum := Vector3.ZERO
+	for n in normals:
+		if n.dot(toward) >= SLAB_FACE * n.length():
+			sum += n
+	var face := sum.normalized() if sum.length_squared() > 1e-12 else toward
+	return acos(clampf(face.y, -1.0, 1.0))
 
 
 static func _still(piece: Dictionary, centre: Vector3) -> void:

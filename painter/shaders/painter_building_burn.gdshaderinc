@@ -15,12 +15,14 @@ const float BURN_EMBER_BAND = 0.34;
 
 // A burnt building's collapse (StructureBurn, StructureCollapse): the burn value runs on past
 // BURN_CHARRED (FireSweep.BURN_RATE, where it is fully charred) toward BURN_CHARRED + 1.0 while the
-// building comes down in rigid charred pieces. Embers glow in seams through the charcoal as it breaks
+// building comes down in rigid charred pieces (each piece carries the burn as its part does, so it
+// starts at the building's char), and the charcoal deepens. Embers glow in seams through it as it breaks
 // (two flat bands, a hot orange core in a deep red, along a brush noise), brightest as the slabs fall
 // and dying to a low smoulder once they rest (EMBER_SMOULDER of it).
 const float BURN_CHARRED = 1.7;
-const float EMBER_SEAM = 0.07;
+const float EMBER_SEAM = 0.05;
 const float EMBER_SMOULDER = 0.3;
+const float BURN_DEEPEN = 0.3;
 
 // Whether the collapse cuts the point at world `wp`, part height `h` away: never (card
 // painter-fire-polish). A cut chunk showed the sky through the roof; the building breaks into pieces
@@ -52,7 +54,9 @@ vec3 building_burn(vec3 wp, float h, inout vec3 shd, inout vec3 mid, inout vec3 
 		return vec3(0.0);
 	}
 	if (since >= BURN_EMBER_BAND) {
-		float tone = mix(0.8, 1.2, p_noise(wp * 3.1 + 5.0));
+		// A collapsing building's charcoal darkens on as it comes down (to BURN_DEEPEN less).
+		float tone = mix(0.8, 1.2, p_noise(wp * 3.1 + 5.0))
+			* (1.0 - BURN_DEEPEN * clamp(burn - BURN_CHARRED, 0.0, 1.0));
 		shd = vec3(0.022, 0.017, 0.016) * tone;
 		mid = vec3(0.042, 0.032, 0.028) * tone;
 		lit = vec3(0.075, 0.056, 0.046) * tone;

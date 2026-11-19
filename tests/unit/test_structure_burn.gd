@@ -491,6 +491,94 @@ func test_pieces_made_early_are_hidden_and_follow_the_burn() -> void:
 	buildings.release()
 
 
+func test_a_piece_casts_as_its_part_so_a_shadow_caster_stays_unseen() -> void:
+	# The hand-drawn manner gives a painted part a shadows-only child (PainterMannerHost.SHADOW)
+	# wearing the part's Classic material; cut and drawn, its pieces hid the charred ones under an
+	# uncharred copy (card painter-fire-polish2).
+	var structures := _built()
+	var buildings := _painted(structures)
+	var node := structures.get_structure_node(2)
+	var part: MeshInstance3D = null
+	for found: Node in node.get_children():
+		if found is MeshInstance3D and (found as MeshInstance3D).material_override is ShaderMaterial:
+			part = found
+			break
+	assert_not_null(part, "a painted part")
+	part.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var shadow := MeshInstance3D.new()
+	shadow.name = PainterMannerHost.SHADOW
+	shadow.mesh = part.mesh
+	shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	part.add_child(shadow)
+	var burn := _burn_middle(structures)
+	var entry: Dictionary = burn.entries[0]
+	burn.step(burn.end_at() - 0.3)
+	var sources: Array = entry.sources
+	var made: Array = entry.piece_nodes
+	var seen := {"shadow": 0, "part": 0}
+	for i in made.size():
+		var surfaces: Array = (entry.pieces as Array)[i].surfaces
+		for k in surfaces.size():
+			var mi := (made[i] as Node).get_child(k) as MeshInstance3D
+			var src: MeshInstance3D = sources[int(surfaces[k].part)]
+			assert_eq(mi.cast_shadow, src.cast_shadow, "%s casts as its part" % src.name)
+			if src == shadow:
+				seen.shadow += 1
+			elif src == part:
+				seen.part += 1
+				assert_true((entry.actor.nodes as Array).has(mi), "the part's pieces burn")
+	assert_gt(int(seen.shadow), 0, "the shadow caster is cut too, and stays shadows only")
+	assert_gt(int(seen.part), 0)
+	burn.release()
+	buildings.release()
+
+
+func test_a_part_over_the_eave_rides_a_slab_unless_it_is_on_an_end() -> void:
+	# A ridge trim on a wall piece stood up as tall as it was deep when the wall toppled.
+	var frame := {
+		"centre": Vector3.ZERO,
+		"axis": Vector3.RIGHT,
+		"half": Vector2(4.0, 2.5),
+		"height": 8.0,
+		"seed": 3,
+		"eave": 4.0,
+	}
+	var planes := StructureCollapse.planes_of(frame)
+	var count := planes.size() - 1
+	var ridge := StructureCollapse.piece_of(Vector3(0.5, 6.5, 0.1), false, planes, frame)
+	assert_between(ridge, 1, 2 * count, "a ridge trim rides a roof slab")
+	var gable := StructureCollapse.piece_of(Vector3(3.8, 6.0, 0.1), false, planes, frame)
+	assert_between(gable, 1 + 2 * count, 2 * count + 4, "a gable stays with its end wall")
+	var wall := StructureCollapse.piece_of(Vector3(0.5, 3.0, 2.5), false, planes, frame)
+	assert_gt(wall, 2 * count + 4, "under the eave a long wall is a wall")
+
+
+func test_a_slab_lands_by_its_faces_pitch_not_its_extents() -> void:
+	# A thatch slab 4 m along, 3 m up the slope and 0.5 m thick at 0.9 rad: its two big faces set
+	# the pitch; the thick eave and the ends count for little.
+	var box := BoxMesh.new()
+	box.size = Vector3(4.0, 0.5, 3.0)
+	var arrays := box.get_mesh_arrays()
+	var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var order: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var turn := Basis(Vector3.RIGHT, 0.9)
+	var soup := PackedVector3Array()
+	for i in order:
+		soup.append(turn * points[i])
+	var flat: Array = []
+	flat.resize(Mesh.ARRAY_MAX)
+	flat[Mesh.ARRAY_VERTEX] = soup
+	var slab := {"surfaces": [{"part": 0, "arrays": flat}]}
+	assert_almost_eq(StructureCollapse.slab_pitch(slab), 0.9, 0.01, "the slab's own pitch")
+	var lo := Vector3(INF, INF, INF)
+	var hi := -lo
+	for p in soup:
+		lo = lo.min(p)
+		hi = hi.max(p)
+	assert_gt(absf(atan2(hi.y - lo.y, hi.z - lo.z) - 0.9), 0.02, "the extents misjudge it")
+	assert_eq(StructureCollapse.slab_pitch({"surfaces": []}), -1.0, "none for no area")
+
+
 func test_the_stand_in_is_landed_when_its_node_goes() -> void:
 	var structures := _built()
 	var buildings := _painted(structures)

@@ -329,6 +329,7 @@ func _start_split(
 	var parts: Array = []
 	var sources: Array[MeshInstance3D] = []
 	var materials: Array[Material] = []
+	var casts := PackedByteArray()
 	var burnable := PackedByteArray()
 	var hide: Array[Node3D] = []
 	var taken: Array = (entry.actor as Dictionary).get("nodes", [])
@@ -363,6 +364,7 @@ func _start_split(
 				)
 				sources.append(mi)
 				materials.append(mi.get_active_material(k))
+				casts.append(mi.cast_shadow)
 				burnable.append(1 if taken.has(mi) else 0)
 	var middle: Vector2 = item.centre
 	var frame_of: Dictionary = item.get("frame", {})
@@ -381,6 +383,7 @@ func _start_split(
 	entry.split = split
 	entry.sources = sources
 	entry.materials = materials
+	entry.casts = casts
 	entry.burnable = burnable
 	entry.hide = hide
 	entry.task = WorkerThreadPool.add_task(
@@ -398,7 +401,7 @@ func _collect(entry: Dictionary, wait: bool) -> void:
 	if not is_instance_valid(entry.node):
 		return
 	var pieces: Array[Dictionary] = (entry.split as Dictionary).get("pieces", [] as Array[Dictionary])
-	var made := StructureCollapse.install(entry.node, pieces, entry.materials)
+	var made := StructureCollapse.install(entry.node, pieces, entry.materials, entry.casts)
 	var burnable: PackedByteArray = entry.burnable
 	var nodes: Array = (entry.actor as Dictionary).get("nodes", [])
 	for i in made.size():
