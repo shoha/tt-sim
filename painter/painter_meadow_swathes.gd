@@ -74,15 +74,19 @@ static func tones(sheet: Dictionary, mood: String, elevation: float) -> Dictiona
 
 ## The middle tone (OKLCH) of swathe `kind` ("gold" or "moss"): the mood's ground turned
 ## `<kind>-turn` degrees, its chroma times `<kind>-chroma`, its lightness moved by `<kind>-lift`.
-## Pure.
+## Gold's hue is never redder than `gold-hue-min`: a dusk or autumn ground is already a yellow
+## green, and the same turn took it to salmon (painter-ground-fire-round3). Pure.
 static func tone_lch(sheet: Dictionary, mood: String, elevation: float, kind: String) -> Vector3:
 	var ground := PainterSheet.tone_lch(sheet, mood, "ground", elevation)
 	var num := func(suffix: String) -> float:
 		return PainterSheet.number(sheet, mood, "%s-%s" % [kind, suffix], elevation)
+	var hue := ground.z + float(num.call("turn"))
+	if kind == "gold":
+		hue = maxf(hue, float(num.call("hue-min")))
 	return Vector3(
 		clampf(ground.x + float(num.call("lift")), 0.05, 0.95),
 		ground.y * float(num.call("chroma")),
-		fposmod(ground.z + float(num.call("turn")), 360.0)
+		fposmod(hue, 360.0)
 	)
 
 

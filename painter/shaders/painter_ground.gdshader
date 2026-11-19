@@ -425,9 +425,12 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float
 		float t = wy / STRATA_H + (p_noise(p * 0.5 + 15.0) - 0.5) * 0.9 + (p_noise(p * 2.2 + 25.0) - 0.5) * 0.15;
 		float band = floor(t);
 		float f = fract(t);
-		float bv = mix(p_hash(vec3(band, 81.0, 3.0)), p_hash(vec3(band + 1.0, 81.0, 3.0)), smoothstep(0.85, 1.0, f));
-		variant = mix(variant, bv, face);
-		vstep = mix(1.0, 1.0 + 0.09 * smoothstep(0.55, 0.85, f) - 0.07 * (1.0 - smoothstep(0.0, 0.18, f)), face);
+		// Each band's tone runs into the next over its upper half and the ledge's light and seam are
+		// soft (painter-ground-fire-round3, owner: the seams between the face's strokes showed; they
+		// were a sixth of a band wide).
+		float bv = mix(p_hash(vec3(band, 81.0, 3.0)), p_hash(vec3(band + 1.0, 81.0, 3.0)), smoothstep(0.5, 1.0, f));
+		variant = mix(variant, 0.5 + (bv - 0.5) * 0.75, face);
+		vstep = mix(1.0, 1.0 + 0.05 * smoothstep(0.4, 0.9, f) - 0.035 * (1.0 - smoothstep(0.0, 0.35, f)), face);
 	}
 	if (role == 2 && pslot >= 0) {
 		float v = clamp(variant, 0.0, 1.0);
@@ -679,8 +682,14 @@ void fragment() {
 		float slope_grad = (abs(dFdx(slope)) + abs(dFdy(slope))) / max(length(dpx) + length(dpy), 1e-4);
 		float near = smoothstep(0.12, 0.3, slope + slope_grad * 0.5);
 		float brush = (p_noise(p * 3.1 + 57.0) - 0.5) * 0.6;
-		float lip = smoothstep(0.5, 0.9, curv + brush) * (1.0 - smoothstep(0.45, 0.7, slope)) * near;
-		float foot = smoothstep(0.4, 0.8, -curv + brush) * near;
+		// The curvature is one value a terrain triangle (the derivative of an interpolated normal), so
+		// a band cut on it alone had a hard, triangle-stepped inner edge, a seam between the lip and
+		// the top (painter-ground-fire-round3). It only says which side is convex; the band's own
+		// edges are feathered on the slope, which runs smoothly over the rim, wobbled by a slow brush.
+		float wob = (p_noise(p * 1.3 + 91.0) - 0.5) * 0.08;
+		float rim = smoothstep(0.02, 0.2, slope + wob);
+		float lip = smoothstep(0.3, 0.8, curv + brush) * rim * (1.0 - smoothstep(0.42, 0.72, slope + wob)) * near;
+		float foot = smoothstep(0.3, 0.8, -curv + brush) * rim * near;
 		vec3 warm = vec3(1.0 + cliff_warm * 0.5, 1.0, 1.0 - cliff_warm * 0.5);
 		lit *= 1.0 + cliff_edge * lip * warm;
 		shd *= 1.0 + cliff_edge * 0.5 * lip * warm;

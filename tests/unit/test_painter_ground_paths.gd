@@ -156,6 +156,18 @@ func test_the_meadow_takes_gold_and_moss_swathes_but_not_under_snow() -> void:
 	assert_ne(seed.call(7), seed.call(8), "and differs per map")
 
 
+func test_the_gold_swathe_stays_gold_at_dusk_and_in_autumn() -> void:
+	var sheet := PainterSheet.load_sheet("core")
+	var floor_hue := PainterSheet.number(sheet, "summer", "gold-hue-min", 60.0)
+	assert_gt(floor_hue, 80.0, "a warm gold, not an orange")
+	for key: Array in [["dusk", 24.0], ["dusk", 10.0], ["dusk", 4.0], ["autumn", 5.0]]:
+		var gold := PainterMeadowSwathes.tone_lch(sheet, key[0], key[1], "gold")
+		assert_gte(gold.z, floor_hue - 0.01, "%s at %s: no salmon gold" % key)
+	var summer := PainterMeadowSwathes.tone_lch(sheet, "summer", 60.0, "gold")
+	var ground := PainterSheet.tone_lch(sheet, "summer", "ground", 60.0)
+	assert_lt(summer.y, ground.y, "a softer gold than the meadow's own chroma")
+
+
 func test_a_cliff_shade_keeps_its_hue_instead_of_swinging_violet() -> void:
 	var sheet := PainterSheet.load_sheet("core")
 	var base := PainterGroundPaths.cliff_tone(sheet, "summer", 60.0, "cliff")

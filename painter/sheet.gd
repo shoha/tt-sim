@@ -135,7 +135,8 @@ const DEFAULT_ROLES: Array[String] = [
 ## dusted at its edge (path-dust, 0 to 1). The meadow's swathes (PainterMeadowSwathes): the share
 ## of the meadow under gold and under moss (gold-share, moss-share) and each one's hue turn from
 ## `ground` (degrees), chroma factor and lightness shift (gold-turn, gold-chroma, gold-lift,
-## moss-turn, ...).
+## moss-turn, ...), and the reddest hue the gold may take (gold-hue-min: a yellow-green dusk or
+## autumn ground turned by gold-turn read salmon).
 ## The village fields (PainterFields): the tilled soil's hue, chroma factor and lightness shift
 ## from `path` (soil-hue, soil-chroma, soil-lift); how far a crop's own measured colour moves the
 ## grass (crop-own, 0 to 1), a crop's lightness shift and chroma factor (crop-lift, crop-chroma);
@@ -258,6 +259,7 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"gold-turn",
 	"gold-chroma",
 	"gold-lift",
+	"gold-hue-min",
 	"moss-share",
 	"moss-turn",
 	"moss-chroma",
