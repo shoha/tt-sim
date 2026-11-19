@@ -30,7 +30,7 @@ classes marked no or partial below are still Classic. The look is nonetheless th
 | EyeRim (eye-view hedges and copses) | yes | yes | the rim is an `AuthoredScatter`, bound by `_on_map_child` and `_on_scatter_shown` |
 | Library asset whose surface is neither a wind ShaderMaterial nor a BaseMaterial3D | no | no | `_stand_in` returns null: the surface keeps its own material (low: core has none known) |
 | Library asset whose name matches no rule | stone fallback | partial | `PainterPlantRoles.of` ends `still -> stone`, `swaying -> leaf mass`: a user-library prop or plant gets a stone or leaf tone whatever it is |
-| Legacy GLB maps (a `map.glb` with no `AuthoredTerrain` or `AuthoredScatter`) | sky, light, water only | partial | `_bind` finds only `AuthoredTerrain` and `AuthoredScatter` under `LevelMap`; ground, scatter and meshes of an imported GLB keep their own materials under the painted light (not verified by render) |
+| Legacy GLB maps (a `map.glb` with no `AuthoredTerrain` or `AuthoredScatter`) | sky, light, water, ground, trees, scatter and named props (PainterGlbMap, 2026-11-18) | yes, with listed limits | `_bind` finds only the authoring nodes; `PainterGlbMap` scans the rest of `LevelMap` over frames (docs/systems/painter.md "GLB maps"); verified on a fixture world |
 | Field plants: village orchard trees, garden flowers and shrubs, hedged boundaries (`AuthoredFieldPlants`) | no | no | its own MultiMeshes built by `ScatterGlbUtils.build_scatter`; nothing in `painter/` mentions the layer, and `PainterSurfaces` binds only `AuthoredScatter` (whether it shares meshes with the scatter's painted ones is not verified) |
 | Clipmap ground bake | not checked | open | `painter_surfaces.gd` header still says "the clipmap keeps baking the Classic ground underneath"; `ground_clipmap*` and `authored_ground_*_looked` shaders exist; not verified what shows beyond the chunks |
 
@@ -72,9 +72,13 @@ classes marked no or partial below are still Classic. The look is nonetheless th
    tavern, hell, underwater, ethereal) never get a mood, so every such level draws Classic, and
    Classic cannot be retired while they exist. Not an asset class but the largest single
    Classic surface. Needs a mood design per preset (a look decision), not an asset card.
-2. **Legacy GLB maps (H for Blender-path maps, none for authored ones).** The painter binds only the
-   authoring nodes; an imported `map.glb` gets painted light, sky and water over Classic ground
-   and props. Not verified by render. Either a material-swap pass for GLB maps or a stated limit.
+2. **Legacy GLB maps: CLOSED 2026-11-18 (card painter-glb-parity, `PainterGlbMap`; docs/systems/painter.md
+   "GLB maps").** An imported `map.glb` now gets painted ground (zone read from the baked albedo),
+   painted trees (scatter chunks become PainterTrees rows), plant and solid stand-ins for the other
+   scatter species and painted props by material or node name. What it leaves as authored (lights,
+   glass, ironwork, unnamed textured surfaces, multi-surface terrain, no skirt and no contact pools
+   on GLB ground) is listed there. Verified by render on a test-only fixture world, not a real
+   Blender map.
 3. **Settlement furnishings and `decor_baked` (M to H in any street village, high at eye level).**
    Props at human scale sit beside painted houses and paving: crates, barrels, carts, wells, lamp
    posts. A painted material for the baked cells (like the yard's props shader) is the fix; M effort.

@@ -1505,6 +1505,38 @@ calls.
 3. Point the presets it paints at it in `RenderStyle.MOOD_FOR_PRESET`.
 4. Run `test_painter_sheet.gd` and `test_render_style.gd`.
 
+## GLB maps (card painter-glb-parity, 2026-11-18)
+
+A Blender-made `map.glb` loads as plain nodes (MeshInstance3D terrain, props, ScatterGlbUtils
+chunks, MeshInstancingUtils MultiMeshes); the contract (ASSET_PIPELINE.md) names no ground, role
+or asset-class extra, so `PainterGlbMap` (painter/painter_glb_map.gd, made by path by
+PainterSurfaces on the first painted map) reads what is there, and `PainterGlbRoles`
+(painter/glb_roles.gd, pure) holds the rules.
+
+- **Ground.** A single-surface mesh that is wide, shallow and faces up (`is_ground`) gets the
+  painted ground shader as `material_override` in the map's world frame (`world_frame`). Its zone
+  (meadow, path, rock, shore) is classified on the GPU from the baked albedo (`glb_zone`,
+  `glb_classify`: a planar UV fit from `uv_affine`), so the artist's layout stays and the sheet
+  supplies tones, brush marks and shade. No texture or UVs that are not one planar map: one role
+  by the colour.
+- **Trees.** A scatter chunk of a tree (`wind_foliage_category` "tree") whose name resolves to a
+  painted species (`tree_species`: treecube names, then words such as oak, pine) is hidden and its
+  instances become PainterTrees rows (`PainterGlbMap.rows_on(map)`, scaled by mesh height over the
+  species' nominal height, `tree_scale`). Other scatter species get the authored scatter's
+  plant or solid stand-ins through `PainterSurfaces.swap_surface`.
+- **Props.** A MeshInstance3D (or a duplicate MultiMesh) gets a painted solid stand-in per surface
+  in the sheet role its material or node name says (`prop_role`: roof, bark, stone, leaf; else
+  by colour when untextured).
+- **Left as authored** (listed per node by `left_as_authored()`): lights, glass, ironwork, water
+  (PainterWater owns it), textured surfaces whose names say nothing, terrain of several surfaces
+  or non-planar UVs, nodes with a material override, hidden nodes, StaticBody3D, authored layers.
+  No skirt and no contact-occlusion pools on GLB ground (`map_extent` is zero without
+  AuthoredTerrain); tokens' feet discs do reach it.
+- **Cost.** The scan runs `STEP_US` (3 ms) of main thread a frame, never at level entry;
+  `complete()` finishes it for tests. The ground shader's `ground_plain` (GROUND on LAYOUT_PLAIN)
+  is a warm-up sample. Classic never creates the host; `release()` puts every material, override
+  and chunk back exactly (test_painter_glb_map.gd).
+
 ## Coverage (card painter-coverage, 2026-11-15)
 
 The audit of Classic against Painted is `docs/research/2026-11-09-prototypes/compare/
