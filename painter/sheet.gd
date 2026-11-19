@@ -128,6 +128,10 @@ const DEFAULT_ROLES: Array[String] = [
 ## share of the ground's shade pull its shade takes and how much less deep it is (cliff-pull,
 ## cliff-shade-lift), the light on a cliff's top edge and the dark at its foot (cliff-edge, a
 ## value step) and the faces' bands (cliff-strata, 0 to 1).
+## The village fields (PainterFields): the tilled soil's hue, chroma factor and lightness shift
+## from `path` (soil-hue, soil-chroma, soil-lift); how far a crop's own measured colour moves the
+## grass (crop-own, 0 to 1), a crop's lightness shift and chroma factor (crop-lift, crop-chroma);
+## the share of snow over the rows (field-snow, 0 to 1: winter's).
 ## The water's (PainterWater, painter_water.gdshader): the share of the stroke lattice's cells that
 ## hold a stroke (water-strokes), a stroke's length in metres (water-stroke-len), its boil's period
 ## in seconds (water-boil), how much of the sun's side glints (water-glints), the wash's deepest
@@ -236,6 +240,13 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"cliff-shade-lift",
 	"cliff-edge",
 	"cliff-strata",
+	"soil-hue",
+	"soil-chroma",
+	"soil-lift",
+	"crop-own",
+	"crop-lift",
+	"crop-chroma",
+	"field-snow",
 	"water-strokes",
 	"water-stroke-len",
 	"water-boil",

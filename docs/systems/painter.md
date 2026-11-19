@@ -22,6 +22,7 @@ came from is the local branch `painterspike` (handoff `docs/plans/handoffs/paint
 | `PainterBackdrop` | `painter/painter_backdrop.gd` | The pure eye-backdrop tones: the hill ranges, the tree-line and the clouds from the mood's own tones |
 | `PainterTones` | `painter/painter_tones.gd` | The pure tone ramp: a role's shade, middle and lit colours in two variants |
 | `PainterSurfaces` | `painter/painter_surfaces.gd` | The surface host: swaps the ground's and the scatter's materials for painted ones and back |
+| `PainterFields` | `painter/painter_fields.gd`, `painter/shaders/painter_field.gdshaderinc` | The village fields: the soil bed and crop rows in the ground, the crops' own tone, the hedges' species (see "Fields") |
 | `PainterGroundRoles` | `painter/ground_roles.gd` | The pure surface-id and biome-id to ground-role table (meadow, floor, path, rock, shore) |
 | `PainterPlantRoles` | `painter/plant_roles.gd` | The pure asset-id to plant kind and tone role table; trees get none |
 | `PainterBrushes` | `painter/painter_brushes.gd` | The ground's three brush-mark layers; the generator, loaded baked (below) |
@@ -1847,6 +1848,57 @@ flat splotches.
   later, the layer made later, the tone rule, mood and sun, decor stand-ins and restore, field
   plants as a source, orchard trees drawn by `PainterTrees`, the A/B switches, no per-frame hooks);
   `test_painter_warmup.gd` lists the prop shader.
+
+## Fields (card painter-fields, 2026-11-19; look-pending)
+
+The coverage verification's top gap: under Painted a crop field's earth (`dirt_opening`) sorted into
+the forest floor's moss green (`opening` is a floor word), its crops were thinned and toned as the
+meadow's grass and drawn as round dab mounds (shrubs at the eye), and its hedge bushes took the light
+bush green, so only a flowering field read. `PainterFields` (`painter/painter_fields.gd`):
+
+- **The ground.** A field map (R8, one texel per height sample, nearest: the index of the crop or
+  garden field whose disc covers it; null and a `field_present` false with no field) and per field
+  two vec4 and an int (`f_geo`, `f_row`, `f_kind`: centre, radius, the rows' angle; the first row's
+  offset, the count and the pitch; style and crop), at most 32 fields. `painter_field.gdshaderinc`
+  paints, in `ground_at` over any role but rock and char: a soil disc (VillageFields.DISC_FACTOR, rim
+  moved by the ground's noise) and over it the crop's rows as long strokes (1.7 m, each its own value
+  and taper, 0.34 m half width, the row line wandering a little), a darker furrow line midway
+  between rows and a headland of bare soil where the rows stop (VillageCrops.ROW_REACH). The rows are
+  exactly the plant rows `VillageCrops.plants_of` plants, so the plants stand on their painted rows.
+  A garden's beds are soil capsules (VillageFields' bed layout) a step darker (peat). Under 2.5 px a
+  row the stripes fade to their mean. The ground's marks are not searched inside a field
+  (`field_inner`): its rows are its strokes; a mark asked at its middle near the rim takes the field
+  there, so the rim is brush marks. Bound with the path slots (`PainterGroundPaths.bind`, `tones`,
+  `set_tones`), so `painter_surfaces.gd` did not grow.
+- **Tones.** The soil is the mood's `path` turned to `soil-hue` (66), chroma times `soil-chroma`
+  (1.25), lightness `soil-lift` (-0.19). A crop is the sheet's `grass` moved by `crop-own` of the way
+  its plant's own colour (`own_of_asset`: the texture mean of the asset's first non-bloom surface,
+  cached) stands from the meadow grass's (hue whole, lightness 0.7, chroma by its ratio to 0.8),
+  then `crop-lift` and `crop-chroma`; barley's own is half way to its gold coat surface
+  (`grass_savanna`). The hue move fades as the mood's grass leaves the meadow green (`GREEN_HUE` 135,
+  `GREEN_SPAN` 55: winter's straw grass is every crop's straw; round 1 turned ripe wheat salmon over
+  snow). `field-snow` (winter 0.75) lays snow over the crop strokes and all of it over the soil; the
+  furrow lines stay soil.
+- **Crop plants.** `AuthoredFieldPlants` marks a crop asset's record `crop`
+  (`VillageCrops.PLANT_ASSETS`); `PainterPlantRoles.of_record` passes it through
+  `PainterFields.plant_entry` (the entry gets `crop` and the measured `own`). `PainterPlantTone`
+  tones a crop grass by `crop_lch`, never thins a crop (`keep` 1) and sets `tuft_blades`, which turns
+  the wide-tuft dab cut off (`painter_selector`'s `tuft_wide`): the texture's blades stand, so at the
+  eye a row reads as a standing crop. A crop flower (the flowering field's daisies) is only unthinned.
+  Barley and young share the meadow grass asset, so their plants are one green; only their bands
+  differ.
+- **Hedges.** `AuthoredFieldPlants.rows_by_asset` and `resolved_species` key a hedge bush
+  (`VillageFields.HEDGE_SHRUBS`, field hedgerows and hedged boundaries) as `hedge:` + its id;
+  species.json maps `hedge:` to the bush species `bush_hedge` (tree_roles.json: the bush's leaf
+  times `bush-value` 0.76, `bush-chroma` 0.92, turned `bush-turn` 10, `dry-share` 0.55), so the ring
+  is a deeper, cooler green than the meadow's bushes and a rust in autumn. The GLB chunk nodes keep
+  their asset names, so PainterTrees hides them as before.
+- **A/B switch.** `PainterFields.enabled` (in `PainterStateReset`): false paints as before the card
+  (no field map, crops as meadow grass, the hedge in the bush tone). Read at paint time.
+- Frames: `docs/research/2026-11-09-prototypes/compare/painter_final50_fields/` (notes.md; round 2
+  is the verdict). Cost not timed with the pinned procedure (one R8 fetch per ground pixel where a
+  map has fields, two in the mark search's gate; crops unthinned add plants).
+- Tests: `test_painter_fields.gd`.
 
 ## One roof snow (card painter-roof-snow, 2026-11-18; look-pending)
 

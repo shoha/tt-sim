@@ -22,6 +22,8 @@ signal cells_applied(cells: Array[Vector2i])
 signal species_added(materials: Array[ShaderMaterial])
 
 const NODE_NAME := "AuthoredFieldPlants"
+## The prefix of a hedge bush's key for the painted look (PainterTreeSpecies: species bush_hedge).
+const HEDGE_KEY := "hedge:"
 
 ## Plants standing after the last build.
 var placed: int = 0
@@ -104,22 +106,32 @@ func refresh(_doc: MapDocument, plants: Dictionary) -> void:
 
 
 ## The plants as a scatter lists its rows: asset id -> flat rows of MapDocument.ROW_STRIDE floats
-## (x, y, z, rotation quaternion, scale x y z).
+## (x, y, z, rotation quaternion, scale x y z). A hedge bush is listed under paint_key (HEDGE_KEY
+## before its id), so the painted look draws it as a hedge.
 func rows_by_asset() -> Dictionary:
 	var out := {}
 	for asset: String in _plants:
 		var flat := PackedFloat32Array()
 		for row: Array in _plants[asset]:
 			flat.append_array(PackedFloat32Array(row))
-		out[asset] = flat
+		out[paint_key(asset)] = flat
 	return out
 
 
-## Every resolved species as a scatter lists them (asset id -> {"mesh", "wind_category", "height",
-## "flower"}); the meshes are the ones the chunk nodes draw, so a material set on a surface shows
-## on every plant of the asset.
+## Every resolved species as a scatter lists them (paint_key -> {"mesh", "wind_category", "height",
+## "flower", "crop"}); the meshes are the ones the chunk nodes draw, so a material set on a surface
+## shows on every plant of the asset.
 func resolved_species() -> Dictionary:
-	return _species
+	var out := {}
+	for asset: String in _species:
+		out[paint_key(asset)] = _species[asset]
+	return out
+
+
+## The painted look's key of `asset_id`: HEDGE_KEY + the id for a hedge bush (VillageFields'
+## hedgerows and a hedged boundary use only HEDGE_SHRUBS), the id itself otherwise.
+static func paint_key(asset_id: String) -> String:
+	return HEDGE_KEY + asset_id if VillageFields.HEDGE_SHRUBS.has(asset_id) else asset_id
 
 
 ## PaletteLibrary.resolve for build_scatter, keeping the species it hands out (resolved_species).
@@ -132,5 +144,14 @@ func _resolve(asset_id: String) -> Dictionary:
 			"wind_category": template.get("wind_category", ""),
 			"height": maxf(mesh.get_aabb().end.y, 0.0),
 			"flower": template.get("flower", false) == true,
+			"crop": is_crop(asset_id),
 		}
 	return template
+
+
+## True for a crop plant (VillageCrops.PLANT_ASSETS): the painted look tones it as its crop.
+static func is_crop(asset_id: String) -> bool:
+	for assets: Array in VillageCrops.PLANT_ASSETS.values():
+		if assets.has(asset_id):
+			return true
+	return false

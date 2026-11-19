@@ -183,6 +183,15 @@ static func bake(sheet: Dictionary, mood: String, elevation: float) -> Dictionar
 				# A bush's leaf is the sheet's bush (bush_ramp's colour: the leaf a step deeper and
 				# quieter), so it sits under the crowns in their family in every mood.
 				lch = _bush_lch(sheet, mood, elevation)
+				# A species' own step off the sheet's bush (a field's hedge: deeper and cooler; none
+				# while PainterFields' A/B switch is off).
+				var step_k := 1.0 if PainterFields.enabled else 0.0
+				var stepped := Vector3(
+					lch.x * _num(props, "bush-value", 1.0),
+					lch.y * _num(props, "bush-chroma", 1.0),
+					lch.z + _num(props, "bush-turn", 0.0)
+				)
+				lch = lch.lerp(stepped, step_k)
 				lch = _bush_dried(lch, props, sheet, mood, elevation)
 			elif tag == "leaf":
 				var turn := clampf(PainterSheet.number(sheet, mood, "leaf-turn", elevation), 0.0, 1.0)

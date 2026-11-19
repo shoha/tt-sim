@@ -25,8 +25,9 @@ const DATA := "res://painter/trees/species.json"
 ## The asset table's value for a bush drawn as a crown-only tree (PainterTreeBush).
 const BUSH := "bush"
 ## Every bush species, BUSH first (painter-plants-fix3: berry and flowering bushes carry trim
-## marks).
-const BUSHES: Array[String] = [BUSH, "bush_berry", "bush_flower"]
+## marks). bush_hedge is a village field's hedgerow (AuthoredFieldPlants.HEDGE_KEY rows; card
+## painter-fields): a deeper, cooler green, so the ring reads as a hedge against the meadow.
+const BUSHES: Array[String] = [BUSH, "bush_berry", "bush_flower", "bush_hedge"]
 ## The row's scale is at index SCALE_AT of its MapDocument row (ScatterGenerator.ROW_STRIDE).
 const SCALE_AT := 7
 ## Age at the nominal scale, its slope per unit of scale, and its range (the spike's).
