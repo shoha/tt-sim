@@ -1447,20 +1447,32 @@ by event (findings: `docs/research/2026-11-09-prototypes/compare/painter_final25
   and a house beside each other char on one curve), the painter's building burn shader laying char
   from the foot of each part, an ember band at its edge, roofs darkening with the walls (flat
   steps); flames stand in its footprint as the burn climbs (the last is out before the slump, so
-  none stands over a lowered roof) and a smoke billow rises over it. At 0.8 of its burn it slumps
-  over 1.3 s: the structure node itself (its parts are nodes already) falls under its own weight (the
-  drop eases in) to 14 percent of its height about its foot by 0.72 of the way, bounces up 9 percent
-  and settles, spreads 12 percent, leans up to 9 degrees (held) and sinks 16 percent of its
-  height, while the `burn` value runs on from 1.7 to 2.7 and the building burn shader drops chunks
-  of the charred parts (`building_break`: a brush noise of about 1.5 m patches mixed with height up
-  the part, so the roof breaks up first and a few low stumps stay; `discard` in both structure
-  shaders, a compare when `burn` is 0), and two rounds of eight ochre dust puffs ring the footprint
-  (1.3 radii out, the second round with the thud: `StructureBurn.collapse_pose`, `dust_color`, held
-  in 10 Hz steps like the other painted event variants). The dust is `EventPuffs.emit_brush`: a
-  blob whose kind carries a 0.3 marker, which only the Painted event-puff variant reads to draw a
-  firm brush-wobbled edge (`FireVariants.EDITS`); tree-fall and every other event's dust is
-  unchanged. The charred, broken, lowered building is the stand-in for its ruin
-  until the change lands. The painted `burn` comes from the buildings host
+  none stands over a lowered roof) and a smoke billow rises over it. At 0.8 of its burn it comes
+  down over 1.8 s in rigid charred pieces (card painter-fire-polish; `StructureCollapse`, nothing is
+  cut away in a shader any more, so no sky shows through the roof: `building_break` returns false).
+  When it catches, a worker cuts its parts (AuthoredStructures' built arrays) by planes in its own
+  frame: a stump at 0.24 of its height that stays standing, the ridge, and cuts across about every
+  3.2 m (at most three segments, each leaning up to 0.24 rad). Roof triangles, and anything over the
+  eave clear of the end walls (a ridge trim, a dormer: `END_BAND_M` 1 m), go to roof slabs (side of
+  the ridge, segment); the rest to wall stretches and end walls; every bit is drawn from both faces.
+  Each piece is a MeshInstance3D a part surface, wearing that part's material and **its cast_shadow**
+  (a hand-drawn part's `MannerShadow` child, the Classic-material shadow caster, is cut too and must
+  stay shadows only: drawn, its pieces hid the charred ones under an uncharred copy, card
+  painter-fire-polish2), and the burnable pieces join the actor's nodes, so `set_burn` reaches them
+  and they start at the building's char. The motion (`StructureCollapse.pose`, pure): the roof sags
+  to x 0.3 (slabs hinge at their eave, the middle of the ridge most), then the pieces fall to 0.8
+  (gathering speed): a slab turns by its own pitch (`slab_pitch`, from its broad faces' normals) times
+  0.9..1.12 and lies low on the heap, a wall topples until its top end is down (outward onto the
+  grass, inward onto the stump), then one bounce and rock to rest. The node only shudders and sinks
+  4 percent. The `burn` value runs on from 1.7 to 2.7: the charcoal deepens 30 percent and ember
+  seams (two flat bands along a brush noise's contour) glow through it, dying to a 0.3 smoulder as
+  the pieces rest. Two rounds of layered dust puffs ring the footprint (x 0.3 and 0.78, 1.3 radii
+  out: `dust_color`, held in 10 Hz steps like the other painted event variants). The dust is
+  `EventPuffs.emit_brush`: a blob whose kind carries a 0.3 marker, which only the Painted
+  event-puff variant reads to draw a lit cap, a body and a cool shaded underside with a
+  brush-wobbled edge (`FireVariants.EDITS`); tree-fall and every other event's dust is unchanged.
+  The charred heap is the stand-in for its ruin until the change lands; a ruin at 0.85 keeps no
+  bare rafter (procgen `ProcgenRuin.RAFTERS_GONE_AT` 0.8). The painted `burn` comes from the buildings host
   (`PainterBuildings.HOST_META` on the `AuthoredStructures` node, a WeakRef: `StructureBurn` never
   names a painter class); **under Classic there is no host and nothing of the building plays** (the
   owner's call, 2026-11-18: no more work on Classic): it stands through the fire, the fire's
