@@ -73,11 +73,11 @@ uniform float cliff_face = 0.0;
 uniform float cliff_warm = 0.0;
 uniform float path_dust = 0.0;
 // The meadow's gold and moss swathes (PainterMeadowSwathes): gold's two variants then moss's, lit
-// and shade; the field's gold and moss thresholds and whether any is drawn; the map's seed (the
-// field's offset, the gold and the moss edge's shift).
+// and shade; the field's gold and moss thresholds, whether any is drawn and the most of its tone a
+// swathe takes (swathe-mix); the map's seed (the field's offset, the gold and the moss edge's shift).
 uniform vec3 sw_lit[4];
 uniform vec3 sw_shd[4];
-uniform vec3 sw_k = vec3(1.0, 0.0, 0.0);
+uniform vec4 sw_k = vec4(1.0, 0.0, 0.0, 1.0);
 uniform vec4 sw_seed = vec4(0.0);
 // A stone's seam: how much darker the gap between cobbles, plates, tiles and boards is.
 const float SEAM_DARK = 0.38;
@@ -457,17 +457,21 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float
 		lit = mix(lit, shd, smoothstep(0.3, 0.6, slope) * cliff_face);
 	}
 	// The meadow's broad gold and moss swathes (PainterMeadowSwathes): one slow field through the
-	// meadow's warp, its highs gold and its lows moss. The block-in takes a swathe in two steps and a
-	// mark takes it at its middle, so the edge is brushed, not a gradient.
+	// meadow's warp, its highs gold and its lows moss. The block-in takes a swathe in three steps over
+	// a wide rim and a mark takes it at its middle, so the edge is brushed, not a gradient; a swathe
+	// takes at most sw_k.w of its tone, a gentle shift in the meadow rather than a patch on it
+	// (painter-ground-fire-round4, owner twice: "too strong").
 	if (role == 0 && sw_k.z > 0.0) {
 		vec2 sq = (q + w * 1.5) * 0.045 + sw_seed.xy;
 		float f = p_n2(sq, 7.0) * 0.72 + p_n2(sq * 2.6 + 3.1, 9.0) * 0.28 + j * 0.06;
-		float gold = smoothstep(sw_k.x + sw_seed.z, sw_k.x + sw_seed.z + 0.05, f);
-		float moss = 1.0 - smoothstep(sw_k.y - sw_seed.w - 0.05, sw_k.y - sw_seed.w, f);
+		float gold = smoothstep(sw_k.x + sw_seed.z, sw_k.x + sw_seed.z + 0.1, f);
+		float moss = 1.0 - smoothstep(sw_k.y - sw_seed.w - 0.1, sw_k.y - sw_seed.w, f);
 		if (mk < 0.5) {
-			gold = floor(gold * 2.0 + 0.5) * 0.5;
-			moss = floor(moss * 2.0 + 0.5) * 0.5;
+			gold = floor(gold * 3.0 + 0.5) / 3.0;
+			moss = floor(moss * 3.0 + 0.5) / 3.0;
 		}
+		gold *= sw_k.w;
+		moss *= sw_k.w;
 		float v = clamp(variant, 0.0, 1.0);
 		lit = mix(mix(lit, mix(sw_lit[0], sw_lit[1], v), gold), mix(sw_lit[2], sw_lit[3], v), moss);
 		shd = mix(mix(shd, mix(sw_shd[0], sw_shd[1], v), gold), mix(sw_shd[2], sw_shd[3], v), moss);

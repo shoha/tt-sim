@@ -137,16 +137,17 @@ func test_the_meadow_takes_gold_and_moss_swathes_but_not_under_snow() -> void:
 	var sheet := PainterSheet.load_sheet("core")
 	var summer := PainterMeadowSwathes.tones(sheet, "summer", 60.0)
 	assert_eq((summer[&"sw_lit"] as PackedVector3Array).size(), 4, "two variants each, gold then moss")
-	var k: Vector3 = summer[&"sw_k"]
+	var k: Vector4 = summer[&"sw_k"]
 	assert_eq(k.z, 1.0, "summer draws them")
 	assert_gt(k.x, 0.5, "gold is the field's highs")
 	assert_lt(k.y, 0.5, "moss its lows")
+	assert_between(k.w, 0.2, 0.8, "a swathe takes part of its tone, not a patch on the meadow")
 	var ground := PainterSheet.tone_lch(sheet, "summer", "ground", 60.0)
 	var gold := PainterMeadowSwathes.tone_lch(sheet, "summer", 60.0, "gold")
 	var moss := PainterMeadowSwathes.tone_lch(sheet, "summer", 60.0, "moss")
 	assert_lt(gold.z, ground.z - 20.0, "gold is turned well toward yellow")
 	assert_lt(moss.x, ground.x, "moss is deeper than the meadow")
-	var winter: Vector3 = PainterMeadowSwathes.tones(sheet, "winter", 24.0)[&"sw_k"]
+	var winter: Vector4 = PainterMeadowSwathes.tones(sheet, "winter", 24.0)[&"sw_k"]
 	assert_eq(winter.z, 0.0, "no swathes on the snow")
 	var edge := func(share: float) -> float: return PainterMeadowSwathes.threshold(share)
 	assert_lt(edge.call(0.3), edge.call(0.1), "more share, lower edge")
