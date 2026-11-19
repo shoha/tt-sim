@@ -309,9 +309,18 @@ texture's opaque box (round on a head, long on a lavender spike) with a brushed 
 at its foot, in the one of six sheet accents (`flower-gold`, `-rose`, `-violet`, `-white`, `-red`,
 `-blue`) that the texture's own mean colour sorts into by OKLCH hue (poppy red, bluebell blue,
 buttercup gold, daisy white, bloom mound pink or gold, bellflower and lavender violet), never a fixed
-or random colour. Each card grows about its centre (`PainterFlowerHue.centres`: one texel a vertex,
-read by `VERTEX_ID`) so its dab is at least `BLOOM_PX` (8) pixels across at the view, at most 3.5x:
-at the orbit view a head reads as one blot, at the eye a bloom keeps its size. A surface whose name
+or random colour. A single flower's cards stay as they are (the growth to `BLOOM_PX` that
+painter-flowers wrote never ran: the pixel size took `PROJECTION_MATRIX[1][1]` as positive, and the
+world's viewport is y-flipped, so it came out negative; the approved look is the ungrown one). A
+bloom mound is a carpet (`PainterFlowerHue.carpet_of`, the last row of the centres texture: at
+least 12 cards whose top centre is under 0.2 m; core's bloom and lavender mounds): under the orbit's
+orthographic camera each card is turned to face the view, drawn 0.3 of the way to the mound's
+middle and 0.8 up to its top card, brought 0.25 mesh units toward the eye so it lies over the
+leaves (which stand twice as high as the blooms), and grown to at least `BLOOM_PX` and 1.7x more,
+so the mound reads as one solid blot of bloom (owner, board l44_mound "One solid blot";
+painter-flower-carpet). Each carpet card takes the flower's own accent (60 %) or one of two more
+the plant draws from the six, a step darker low on the mound. No measurable GPU cost (in-run
+on/off, zoom 16 and 45). A surface whose name
 says neither (a user library's one-atlas flower) keeps the per-pixel petal test, in the accent of
 its non-green pixels' mean. `flower-mix` is now the slow field that steps a drift of blooms lighter
 or darker. Cost on the meadow (in-run against the old path, 47 flower stand-ins): +0.01 ms at zoom

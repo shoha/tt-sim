@@ -207,30 +207,98 @@ vec4 tuft_dab(vec2 uv, vec2 card) {
 // coloured by a world field in four accents, read as a few purple dots at the orbit view and next
 // to nothing at the eye). Each bloom card is one dab: a blot inscribed in the texture's opaque box
 // (dab_box: round on a head, long on a spike), its rim brushed by a slow wobble, in the flower's
-// own accent and a step darker toward its foot. Each card grows about its centre so that its dab
-// is at least BLOOM_PX pixels across at the view, never past BLOOM_GROW_MAX times its size: at the
-// orbit view a head of bells or a mound reads as one confident blot of colour, at the eye each
-// bloom keeps its own size. The growth reads one texel a vertex; the dab replaces the texture's
-// fetch, so a bloom costs no more than the petal cut did.
-// (Round one of the card at 5 px and 3x: the colours were right, but at zoom 30 a meadow's blooms
-// read as faint specks.)
+// own accent and a step darker toward its foot. A single flower's cards stay as they are; the dab
+// replaces the texture's fetch, so a bloom costs no more than the petal cut did.
+//
+// A carpet of blooms (a bloom mound: PainterFlowerHue.carpet_of) reads as one solid mound of
+// flowers at the orbit view (owner, board l44_mound: "One solid blot"; card painter-flower-carpet).
+// Its cards run every way over the mound, so from above many were slivers, and the mound's leaves,
+// which stand twice as high as its blooms, covered the middle: a ring of small dabs with green
+// between. So under the orbit's orthographic camera each card is turned to face the view (a whole
+// dab wherever the card points), drawn CARPET_PULL of the way in toward the mound's middle and
+// CARPET_LIFT up to its top card's height, brought CARPET_FRONT toward the eye so it lies over the
+// leaves, and grown to at least BLOOM_PX pixels (at most BLOOM_GROW_MAX times) and CARPET_SWELL
+// more, so the dabs overlap into one blot whose rim is the outer dabs' lobes, with the leaves'
+// green showing only at its foot. Faded in by the view's pixel size; the eye's perspective keeps
+// each card where it is.
+//
+// Why two earlier tries showed nothing (painter-flowers' growth, painter-ground-fire-round3's pull):
+// the pixel size was taken as 2 / (projection[1][1] * height), but the world is drawn into a
+// viewport whose projection is flipped in y, so [1][1] is negative there: the size came out
+// negative, the growth clamped to 1 and the carpet's fade to 0 (a probe that coloured the carpets
+// by the size's decade painted every one in the lowest; measured 2026-11-19). abs() fixes it. The
+// single flowers' growth that never ran stays off, so their approved look is unchanged.
 const float BLOOM_PX = 8.0;
 const float BLOOM_GROW_MAX = 3.5;
+const float CARPET_PULL = 0.3;
+const float CARPET_LIFT = 0.8;
+const float CARPET_SWELL = 0.7;
+// Mesh units: core's mound leaves stand to 0.20 to 0.26, their blooms' centres only to 0.10 to 0.13
+// (measured 2026-11-19). Under the orthographic camera this moves nothing on screen; it only wins
+// the depth test over the leaves.
+const float CARPET_FRONT = 0.25;
+// The pixel size (m at the card) over which the carpet fades in: whole from about zoom 8 (8 m over
+// 1080 px), none closer than about zoom 3.
+const vec2 CARPET_PX = vec2(0.003, 0.007);
+// A carpet's hues: each card takes the flower's own accent under CARPET_MIX.x of its hash, else one
+// of two more the plant draws from the six (to CARPET_MIX.y the first), so a meadow's mounds read
+// as mixed wildflower cushions, each led by its own colour (round two of the card split a mound
+// into three sectors, which read as two-tone balls with a straight seam). In every view, so a
+// mound keeps its colours when the view changes.
+const vec2 CARPET_MIX = vec2(0.6, 0.85);
+// A carpet's dab a step darker low on the mound than at its top, so the blot reads as a dome.
+const vec2 CARPET_SHADE = vec2(0.8, 1.04);
 
-// The local `vertex` (vertex `id` of a bloom surface) grown about its card's centre, for the view
-// of `inv_view` and `projection` on a viewport `viewport` pixels in size.
-vec3 bloom_grown(vec3 vertex, int id, mat4 model, mat4 inv_view, mat4 projection, vec2 viewport) {
+// The accent (a ROLES index, x) and value (y, a factor) of the carpet card centred at `c` (mesh
+// units; `top` the carpet's top card's height) on the plant at `origin`.
+vec2 carpet_card(vec3 c, float top, vec3 origin) {
+	vec3 plant = floor(origin * 10.0);
+	float h = p_hash(floor(c * 1000.0) + plant);
+	float role = float(petal_role);
+	if (h >= CARPET_MIX.x) {
+		vec3 salt = h < CARPET_MIX.y ? vec3(7.0, 13.0, 29.0) : vec3(31.0, 3.0, 17.0);
+		role = floor(p_hash(plant + salt) * 5.999);
+	}
+	return vec2(role, mix(CARPET_SHADE.x, CARPET_SHADE.y, smoothstep(0.0, 1.0, c.y / max(top, 0.01))));
+}
+
+// The local `vertex` (vertex `id` of a bloom surface, at `uv`) for the view of `inv_view` and
+// `projection` on a viewport `viewport` pixels in size: a carpet's card turned to the view and drawn
+// in (see CARPET_PULL), any other bloom's as it is. `card` is the card's accent (x, a ROLES index)
+// and value (y, a factor).
+vec3 bloom_grown(
+	vec3 vertex, vec2 uv, int id, mat4 model, mat4 inv_view, mat4 projection, vec2 viewport,
+	out vec2 card
+) {
+	card = vec2(float(petal_role), 1.0);
+	vec4 carpet = texelFetch(bloom_centres, ivec2(0, textureSize(bloom_centres, 0).y - 1), 0);
 	vec4 c = texelFetch(bloom_centres, ivec2(id % 256, id / 256), 0);
-	if (c.w <= 0.0) {
+	if (carpet.w < 0.5 || c.w <= 0.0) {
 		return vertex;
 	}
-	vec3 wc = (model * vec4(c.xyz, 1.0)).xyz;
-	// One pixel in metres at the card: by its distance under a perspective, flat under the orbit's
-	// orthographic camera.
-	float depth = projection[3][3] == 0.0 ? length(wc - inv_view[3].xyz) : 1.0;
-	float px = 2.0 * depth / (projection[1][1] * viewport.y);
+	card = carpet_card(c.xyz, carpet.y, model[3].xyz);
+	if (projection[3][3] == 0.0) {
+		return vertex;
+	}
+	// One pixel in metres under the orthographic camera ([1][1] is negative in a y-flipped viewport).
+	float px = 2.0 / (abs(projection[1][1]) * viewport.y);
+	float g = smoothstep(CARPET_PX.x, CARPET_PX.y, px);
+	if (g <= 0.0) {
+		return vertex;
+	}
 	float k = clamp(BLOOM_PX * px / max(c.w * length(model[1].xyz), 1.0e-4), 1.0, BLOOM_GROW_MAX);
-	return c.xyz + (vertex - c.xyz) * k;
+	mat3 to_local = inverse(mat3(model));
+	vec3 right = normalize(to_local * inv_view[0].xyz);
+	vec3 up = normalize(to_local * inv_view[1].xyz);
+	vec3 front = normalize(to_local * inv_view[2].xyz);
+	vec3 at = vec3(
+		mix(c.x, carpet.x, CARPET_PULL), mix(c.y, carpet.y, CARPET_LIFT), mix(c.z, carpet.z, CARPET_PULL)
+	) + front * CARPET_FRONT;
+	// The dab inscribed in the box drawn round, the card's own dab grown (a spike's long dab too:
+	// a lavender mound read as a stack of tall ellipses).
+	vec2 d = (uv - dab_box.xy) / max(dab_box.zw, vec2(0.05));
+	vec3 faced = at + (d.x * right - d.y * up) * (0.5 * c.w * k * (1.0 + CARPET_SWELL));
+	return mix(vertex, faced, g);
 }
 
 // The bloom card point at `uv` (`seed` the card's own, 0..1): x 1 inside its dab, 0 outside; y its
