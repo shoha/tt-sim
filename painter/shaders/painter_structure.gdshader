@@ -63,6 +63,9 @@ uniform bool house_planks = false;
 // The share of a roof under snow (sheet roof-snow) and the snow's LINEAR [shade, mid, lit].
 uniform float snow = 0.0;
 uniform vec3 snow_ramp[3];
+// How far the wind scoured a roof's crest (snow_gap): 1, and 0 on a street roof, whose blanket
+// keeps none either (PainterStreetSnow).
+instance uniform float scour = 1.0;
 // The N.L where the shade, middle and lit steps meet (sheet tone-lo, tone-hi).
 uniform float tone_lo = -0.08;
 uniform float tone_hi = 0.48;
@@ -211,6 +214,12 @@ void fragment() {
 			float band = p_hash(vec3(floor(r), 4.0, 9.0));
 			variant = clamp(variant + (band - 0.5) * 0.05 * banding, 0.0, 1.0);
 			light += 0.16 * smoothstep(0.1, 1.0, h) * tiled;
+			// An upright face clad in the roof's material (a gable end) courses up its height, so
+			// it reads as tile and not as a flat board (card painter-roof-round5).
+			float ru = wp.y / course;
+			float rising = (1.0 - smoothstep(0.2, 0.45, fwidth(ru))) * (1.0 - smoothstep(0.1, 0.25, abs(up)));
+			dark += (1.0 - smoothstep(0.0, 0.5, fract(ru))) * 0.3 * rising;
+			variant = clamp(variant + (p_hash(vec3(floor(ru), 4.0, 9.0)) - 0.5) * 0.1 * rising, 0.0, 1.0);
 		}
 	} else {
 		float hm = h * 16.0;
@@ -248,16 +257,22 @@ void fragment() {
 	// blue underside, a crest at the ridge, a few soft gaps along it). No record here: its frame
 	// comes from the face and h.
 	float cover = 0.0;
+	float cool = 0.0;
 	vec4 sp = vec4(0.0, 0.0, 0.5, 0.0);
 	vec3 roll = vec3(0.0);
 	if (pattern >= 5 && snow > 0.0) {
 		vec4 fr = snow_frame(wp, n, h);
 		float broad = 1.0 - smoothstep(0.08, 0.16, length(fwidth(fr.xy)));
-		cover = snow_cover_roof(snow, up, h, fr.xy) * (1.0 - snow_gap(fr.xy, fr.w));
-		// A gable end clad in the roof's material, and the slab's edges (snow_gable).
-		cover = max(cover, clamp(snow * 2.2, 0.0, 1.0) * snow_gable(up));
+		// A street roof under a blanket keeps no crest gaps (`scour` 0, as its blanket: card
+		// painter-roof-round5, the short bare slashes along the market's ridges by the chimneys).
+		cover = snow_cover_roof(snow, up, h, fr.xy, n, 0.0) * (1.0 - snow_gap(fr.xy, fr.w) * scour);
+		// A gable end clad in the roof's material and the slab's edges stand upright: no snow on
+		// them but a little drift along their foot, and a touch of the snow's cool light
+		// (snow_upright, snow_foot).
+		cool = clamp(snow * 2.2, 0.0, 1.0) * snow_upright(up);
+		cover = max(cover, cool * snow_foot(fr.z, fr.x));
 		sp = snow_paint(fr.xy, broad);
-		roll = snow_roll(snow_edge_m(up, h, fr.xy, fr.z), fr.w, fr.xy);
+		roll = snow_roll(snow_edge_m(up, h, fr.xy, fr.z, n, 0.0), fr.w, fr.xy);
 	}
 	// No roof mark shows through the layer (the course dashes read as a grid of ticks on it).
 	dark = clamp(dark * marks * (1.0 - cover), 0.0, 0.85);
@@ -281,6 +296,10 @@ void fragment() {
 		mid = paint_turned(mid, v_turn);
 		lit = paint_turned(lit, v_turn);
 	}
+	// An upright tile face among the snow takes a touch of its cool shade (snow_upright).
+	shd = mix(shd, snow_ramp[0], 0.4 * cool);
+	mid = mix(mid, snow_ramp[0], 0.25 * cool);
+	lit = mix(lit, snow_ramp[1], 0.15 * cool);
 	shd = mix(shd, snow_ramp[0], cover);
 	mid = mix(mid, snow_ramp[1], cover);
 	lit = mix(lit, snow_ramp[2], cover);

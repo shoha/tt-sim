@@ -2237,7 +2237,8 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final68_roof_roun
   to the board's middle (a pair parallel, level within `LEVEL_M`, `RIDGE_JOIN_M` 0.2 apart at most).
 - **The market's bare orange ends.** Not slopes: the guild and market species clad their gable ends in
   roof tile, upright triangles inside the Roof part (up 0, h 0 to 1), and `snow_cover_roof` gave an
-  upright face nothing. `snow_gable(up)` in `painter_snow.gdshaderinc` covers a roof's upright faces;
+  upright face nothing. `snow_gable(up)` in `painter_snow.gdshaderinc` covered a roof's upright faces
+  (removed in roof round 5: a gable holds no snow);
   only the A3b roof shader calls it (a hand-drawn house's gables are walls, and its round roofs keep
   their upright foot). `snow_frame`'s second coordinate is the height on an upright face, so the
   washes do not run as stripes there.
@@ -2248,6 +2249,39 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final68_roof_roun
   smoothsteps in the A3b fragment; crowding plans nearby rows' lots on each replan of a street drag.
 - Tests: `test_painter_street_snow.gd` (a ridge board closes between the crests; a street blanket's
   `scour` is 0), `test_street_crowding.gd`.
+
+## Roof round 5 (card painter-roof-round5, 2026-11-19; look-pending)
+
+Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final71_roof_round5/` (notes.md, jobs/,
+before/, probe/, after/).
+
+- **Bare gables.** Owner on round 4's snowed market gables: "would the gables actually have snow on
+  them? i don't think they would". `snow_gable` is gone. A3b's tile gables keep their own tile, a cool
+  cast (`snow_upright(up)` times the snow: shade 0.4, middle 0.25 and lit 0.15 toward `snow_ramp`),
+  faint horizontal courses on the upright face (from world height, faded where a course is under half a
+  pixel), the blanket's verge lip along the slope and a little uneven drift at the foot
+  (`snow_foot(above, along)`, 8 to 22 cm). `snow_frame`'s height on an upright face feeds the foot.
+- **Street roofs keep no crest gaps.** The A3b roof shader also has `instance uniform float scour`;
+  `PainterStreetSnow` sets 0 on the street roof part as on its blanket, so the short red slashes beside
+  the market's chimneys (the roof's own `snow_gap` where the blanket left it showing) are gone.
+- **Steep caps of uneven drifts.** Owner on round 3's cap: "Rework". `snow_edge(up, f, n, seed)` (both
+  structure shaders; one implementation) lowers or raises a steep face's edge per facet: a slow noise of
+  the facet's facing (continuous round a cone, one value per face of a Taper roof), plus up to 0.3 of the
+  run on the side facing the sun (`foliage_sun`), plus two broken edge noises by facing and metres
+  along. Lit and shade facets now differ, and the roof's colour shows below a painted edge with its
+  lip. Chosen from three in one probe (`probe/sheet_caps2.png`): a high cap with long tongues down the
+  shade side read too close to the old one, a small cap with a drift band read as a stripe.
+- **The townhouse's eave trim.** The hand's sag moves a roof's eave 1 to 2 cm more than the cornice
+  trim under it, so the trim showed through as pale lens slivers on both slopes
+  (`before/s1_townhouse_z5`). `PainterMannerMesh._sink_trim` lowers a hand-drawn house's trim and
+  cornice vertices by `HAND_TRIM_SINK_M` (8 cm) in a band from 1 m below the eave to 0.6 m above it,
+  chimneys excepted. The manner mesh does not build headless, so the fix is checked by frames only.
+- **Crowded streets** are nudged: walls.md "Streets".
+- Open: the steep cap's edge peaks at each facet seam and reads a little like icing at zoom 10; the
+  tile courses on a gable are faint at the table zoom. Not timed: the cap adds three noise reads on a
+  steep face, the gable term two smoothsteps and a noise.
+- Tests: `test_painter_buildings.gd` (no `snow_gable`, the foot and cool terms, `scour` on the street
+  roof, the trim sink), `test_street_crowding.gd`.
 
 ## The eye backdrop (card painter-eye-backdrop, 2026-11-18; look-pending)
 

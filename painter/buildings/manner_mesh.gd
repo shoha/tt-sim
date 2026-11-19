@@ -112,6 +112,9 @@ const HAND_EAVE_SAG_M := 0.09
 const HAND_SAG_M := 0.15
 const HAND_BULGE_M := 0.06
 const HAND_LEAN_M := 0.12
+## A hand's eave trim sinks this far under its roof (_sink_trim), within this of the eave.
+const HAND_TRIM_SINK_M := 0.08
+const TRIM_SINK_BAND_M := 1.0
 ## The shadow caster of a cut piece (the recipe's uncut triangles, wandered) moved this far in
 ## along its normals: between its vertices the drawn, cut surface strays a few centimetres from
 ## the caster's chords, and where it fell behind them the piece shadowed itself (card
@@ -412,6 +415,8 @@ static func build(
 		_hand(m, opts)
 	for k in m.pos.size():
 		m.pos[k] += wander_at(m.pos[k], opts)
+	if hand_walls:
+		_sink_trim(m, opts)
 	if not hand_walls:
 		m.pos = _close_ts(m.pos, ts)
 	var moved := src.duplicate()
@@ -616,6 +621,31 @@ static func door_dir(records: Dictionary) -> Vector3:
 			continue
 		return u.normalized() * (1.0 if str(rec["hinge_side"]) == "u0" else -1.0)
 	return Vector3.ZERO
+
+
+## A hand's pieces at its eave other than its walls, roof, gables, ridges and chimneys (a cornice,
+## the trim under the eave) sunk up to HAND_TRIM_SINK_M, in a band from TRIM_SINK_BAND_M below the
+## eave to as far above it (card painter-roof-round5, owner on the townhouse's slate roof: "it's
+## still there a bit through the roof"). The recipe sets the cornice snug under the roof, and the
+## roof moves a centimetre or two more than the cornice below it (the wander's bow grows above the
+## eave; the probable cause, read from the frames: a painted mesh does not build headless), so the
+## cornice's middle showed through the roof near the eave as a pale hairline on both slopes.
+## Sunk, it stays under the roof, where it is hidden.
+static func _sink_trim(m: Grow, field: Dictionary) -> void:
+	var eave := float(field.get("eave", 0.0))
+	for k in m.pos.size():
+		var code := m.code(k)
+		if code == CODE_NONE or code == CODE_WALL or code == CODE_FRINGE or CUT_CODES.has(code):
+			continue
+		var rec: Variant = m.rec[k]
+		if rec == null or str(rec["kind"]) == "chimney":
+			continue
+		var y := m.pos[k].y
+		var band := (
+			smoothstep(eave - TRIM_SINK_BAND_M, eave - 0.2, y)
+			* (1.0 - smoothstep(eave + 0.6, eave + TRIM_SINK_BAND_M, y))
+		)
+		m.pos[k].y = y - HAND_TRIM_SINK_M * band
 
 
 ## Every vertex of a wall's trim (a record with `side` and `proud` >= 0) moved out along its
