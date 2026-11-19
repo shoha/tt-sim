@@ -119,42 +119,104 @@ func test_motion_is_held_in_ten_hertz_steps() -> void:
 	assert_eq(StructureBurn.stepped(0.0), 0.0)
 
 
-func test_the_slump_squashes_about_the_foot_to_the_ruin_height() -> void:
-	var pivot := Vector3(4.0, 1.5, -2.0)
-	var axis := Vector3.RIGHT
-	assert_eq(StructureBurn.collapse_pose(0.0, pivot, axis, 1.0), Transform3D.IDENTITY)
-	var done := StructureBurn.collapse_pose(1.0, pivot, axis, 1.0)
-	assert_almost_eq(done.basis.get_scale().y, StructureBurn.RUIN_HEIGHT, 0.001, "to its height")
-	assert_gt(done.basis.get_scale().x, 1.0, "spread a little")
-	assert_true((done * pivot).is_equal_approx(pivot), "the foot stays where it stood")
-	var top := pivot + Vector3(0.0, 4.0, 0.0)
-	assert_lt((done * top).y - pivot.y, 4.0 * 0.4, "the roof came down")
-	var mid := StructureBurn.collapse_pose(0.5, pivot, axis, 1.0)
-	assert_gt(mid.basis.get_scale().y, StructureBurn.RUIN_HEIGHT)
-	assert_lt(mid.basis.get_scale().y, 1.0, "part way down")
-	assert_true(
-		StructureBurn.collapse_pose(0.5, pivot, axis, 1.0).is_equal_approx(mid), "no randomness"
-	)
-	# It leans (held, not swinging back), sinks and is a strong squash from the game camera.
-	var leaning := (done.basis * Vector3.UP).normalized()
-	assert_almost_eq(
-		leaning.angle_to(Vector3.UP), deg_to_rad(StructureBurn.LEAN_DEG), 0.01, "leaning at the end"
-	)
-	var sunk := StructureBurn.collapse_pose(1.0, pivot, axis, 1.0, 0.4)
-	assert_almost_eq((sunk * pivot).y, pivot.y - 0.4, 0.001, "sunk into the ground")
-	assert_lt(StructureBurn.RUIN_HEIGHT, 0.2, "a low heap, not a lowered house")
+func test_the_node_only_shudders_and_sinks_never_squashes() -> void:
+	assert_eq(StructureBurn.node_pose(0.0, 0.4), Transform3D.IDENTITY)
+	for x: float in [0.05, 0.2, 0.5, 1.0]:
+		var pose := StructureBurn.node_pose(x, 0.4)
+		assert_true(pose.basis.is_equal_approx(Basis.IDENTITY), "no scale or turn at %.2f" % x)
+	assert_almost_eq(StructureBurn.node_pose(1.0, 0.4).origin.y, -0.4, 0.001, "sunk at the end")
+	var still := StructureBurn.node_pose(1.0, 0.4).origin
+	assert_almost_eq(Vector2(still.x, still.z).length(), 0.0, 0.001, "the shudder is over")
 
 
-func test_the_fall_gathers_speed_and_the_heap_bounces_once_to_rest() -> void:
-	var pivot := Vector3.ZERO
-	var half := StructureBurn.collapse_pose(0.36, pivot, Vector3.RIGHT, 0.0).basis.get_scale().y
-	var quarter := StructureBurn.collapse_pose(0.18, pivot, Vector3.RIGHT, 0.0).basis.get_scale().y
-	assert_gt(1.0 - half, (1.0 - quarter) * 2.0, "the second stretch of the fall is the longer drop")
-	var low := StructureBurn.collapse_pose(StructureBurn.SETTLE_FROM, pivot, Vector3.RIGHT, 0.0)
-	var up := StructureBurn.collapse_pose(0.86, pivot, Vector3.RIGHT, 0.0)
-	var rest := StructureBurn.collapse_pose(1.0, pivot, Vector3.RIGHT, 0.0)
-	assert_gt(up.basis.get_scale().y, low.basis.get_scale().y, "it bounces up")
-	assert_almost_eq(rest.basis.get_scale().y, StructureBurn.RUIN_HEIGHT, 0.001, "and rests")
+## A roof slab of a gable building 8 by 5 m with its ridge along X, eaves at 3 m, ridge at 5 m.
+func _slab() -> Dictionary:
+	return {
+		"key": 1,
+		"stump": false,
+		"roof": true,
+		"pivot": Vector3(0.0, 3.0, 2.5),
+		"tip": Vector3(0.0, 0.0, -1.0),
+		"sag": 0.25,
+		"angle": 0.9,
+		"drop": 2.6,
+		"slide": Vector3(0.0, 0.0, -0.5),
+		"twist": 0.1,
+		"delay": 0.05,
+		"bounce": 0.15,
+		"rock": 0.06,
+	}
+
+
+func test_a_roof_slab_sags_then_falls_in_with_gathering_speed_and_settles() -> void:
+	var slab := _slab()
+	var ridge := Vector3(0.0, 5.0, 0.0)
+	assert_eq(StructureCollapse.pose(slab, 0.0), Transform3D.IDENTITY)
+	var sagged := StructureCollapse.pose(slab, StructureCollapse.SAG_END)
+	assert_lt((sagged * ridge).y, ridge.y - 0.3, "the ridge sags")
+	assert_almost_eq((sagged * (slab.pivot as Vector3)).y, 3.0, 0.001, "about its eave")
+	for x: float in [0.3, 0.5, 0.7, 0.9, 1.0]:
+		var scale := StructureCollapse.pose(slab, x).basis.get_scale()
+		assert_true(scale.is_equal_approx(Vector3.ONE), "rigid, never shrunk, at %.1f" % x)
+	var start := StructureCollapse.SAG_END + float(slab.delay)
+	var span := StructureCollapse.FALL_END - start
+	var eave := slab.pivot as Vector3
+	var first := 3.0 - (StructureCollapse.pose(slab, start + span * 0.5) * eave).y
+	var down := 3.0 - (StructureCollapse.pose(slab, StructureCollapse.FALL_END) * eave).y
+	assert_gt(down - first, first * 2.0, "the second half of the fall is the longer drop")
+	assert_almost_eq(down, 2.6, 0.001, "down to the heap")
+	var landed := StructureCollapse.pose(slab, StructureCollapse.FALL_END)
+	var bounce := StructureCollapse.pose(slab, 0.9)
+	var rest := StructureCollapse.pose(slab, 1.0)
+	assert_gt((bounce * eave).y, (landed * eave).y, "one small bounce")
+	assert_true(rest.is_equal_approx(landed), "and it rests where it landed")
+	assert_lt((rest * ridge).z, eave.z, "the slab fell in, toward the middle")
+
+
+func test_a_building_is_cut_into_rigid_pieces_that_cover_every_face_from_both_sides() -> void:
+	# A box 8 x 4 x 5 m (walls) as two triangles a face, the top face a "roof".
+	var frame := {
+		"centre": Vector3.ZERO,
+		"axis": Vector3.RIGHT,
+		"half": Vector2(4.0, 2.5),
+		"height": 4.0,
+		"seed": 3,
+	}
+	var box := BoxMesh.new()
+	box.size = Vector3(8.0, 4.0, 5.0)
+	var walls := box.get_mesh_arrays()
+	var lift := Transform3D(Basis.IDENTITY, Vector3(0.0, 2.0, 0.0))
+	var parts: Array = [
+		{"arrays": walls, "to_node": lift, "roof": false},
+		{"arrays": walls, "to_node": lift.translated(Vector3(0.0, 4.0, 0.0)), "roof": true},
+	]
+	var pieces := StructureCollapse.split(parts, frame)
+	assert_eq(int(pieces[0].key), 0, "the stump first")
+	assert_true(bool(pieces[0].stump))
+	var count := StructureCollapse.segments(4.0)
+	assert_eq(count, 3, "an 8 m building in three segments")
+	var roofs := 0
+	var area := 0.0
+	for piece in pieces:
+		assert_true(
+			StructureCollapse.pose(piece, 1.0).basis.get_scale().is_equal_approx(Vector3.ONE),
+			"rigid"
+		)
+		if bool(piece.roof):
+			roofs += 1
+		for surface: Dictionary in piece.surfaces:
+			var points: PackedVector3Array = (surface.arrays as Array)[Mesh.ARRAY_VERTEX]
+			assert_eq(points.size() % 6, 0, "every triangle twice, once a face")
+			for t in range(0, points.size(), 6):
+				area += (points[t + 1] - points[t]).cross(points[t + 2] - points[t]).length() * 0.5
+	assert_eq(roofs, 2 * count, "the roof in slabs, both sides of the ridge")
+	var faces := 2.0 * (8.0 * 4.0 + 8.0 * 5.0 + 4.0 * 5.0)
+	# Two boxes (the front copies counted; the vertex count holds the backs): nothing lost (no hole
+	# to see through) and nothing doubled.
+	assert_almost_eq(area, faces * 2.0, 0.05, "every face kept")
+	for piece in pieces:
+		if not bool(piece.stump):
+			assert_gt((piece.pivot as Vector3).y, 0.9, "every falling piece is above the stump")
 
 
 func test_the_dust_is_a_rich_ochre_ring_outside_the_footprint() -> void:
@@ -227,6 +289,9 @@ func test_the_burn_runs_on_into_the_break_up_and_the_flames_are_out_first() -> v
 		shader.contains("const float BURN_CHARRED = %.1f;" % StructureBurn.BURN_RATE),
 		"the shader's charred value is the burn's"
 	)
+	# The owner's "weird hole in the ceiling" (look23): the collapse never cuts a part open.
+	var cut := shader.get_slice("bool building_break(vec3 wp, float h) {", 1).get_slice("}", 0)
+	assert_eq(cut.strip_edges(), "return false;", "no chunk of a roof is cut away")
 
 
 # --- which buildings --------------------------------------------------------------------------
@@ -362,20 +427,67 @@ func test_a_painted_building_burns_collapses_and_is_let_go() -> void:
 		float(part.get_instance_shader_parameter(&"burn")), mid, "held within a step: no new work"
 	)
 	assert_eq(node.transform, Transform3D.IDENTITY, "standing before its collapse")
+	var tall := StructureBurn.bounds_of(node)
 	burn.step(burn.end_at() + 0.2)
 	assert_eq(
 		float(part.get_instance_shader_parameter(&"burn")),
 		StructureBurn.BURN_RATE + StructureBurn.BREAK_SPAN,
 		"charred and broken up"
 	)
-	assert_almost_eq(node.transform.basis.get_scale().y, StructureBurn.RUIN_HEIGHT, 0.01)
+	assert_true(node.transform.basis.is_equal_approx(Basis.IDENTITY), "never squashed")
 	assert_lt(node.transform.origin.y, 0.0, "sunk a little")
+	assert_false(part.visible, "its parts give way to the pieces")
+	var pieces: Array = entry.piece_nodes
+	assert_gt(pieces.size(), 6, "broken into many pieces")
+	var top := -INF
+	for piece: Node3D in pieces:
+		assert_true(piece.visible)
+		assert_true(piece.transform.basis.get_scale().is_equal_approx(Vector3.ONE), "rigid")
+		for found: Node in piece.get_children():
+			var mi := found as MeshInstance3D
+			assert_not_null(mi.material_override, "worn as its part wears it (the burn follows)")
+			var box := piece.transform * mi.mesh.get_aabb()
+			top = maxf(top, box.end.y)
+	var charred := 0
+	for found: Node in node.find_children("Collapse_*", "Node3D", false, false):
+		for mi: Node in found.get_children():
+			if (entry.actor.nodes as Array).has(mi):
+				charred += 1
+				assert_eq(
+					float((mi as MeshInstance3D).get_instance_shader_parameter(&"burn")),
+					StructureBurn.BURN_RATE + StructureBurn.BREAK_SPAN,
+					"%s charred" % found.name
+				)
+	assert_gt(charred, 6, "the pieces burn with it")
+	assert_lt(top - tall.position.y, tall.size.y * 0.6, "come down to a low heap")
 	assert_true(burn.is_done(burn.end_at()))
 	assert_false(burn.landed(), "the stand-in waits for the change")
 	burn.release()
 	assert_eq(node.transform, Transform3D.IDENTITY, "let go: standing as it was")
 	assert_eq(float(part.get_instance_shader_parameter(&"burn")), 0.0, "unburnt")
+	assert_true(part.visible, "its parts shown again")
+	assert_eq(node.find_children("Collapse_*", "", true, false).size(), 0, "the pieces are gone")
 	assert_true(burn.landed(), "nothing held")
+	buildings.release()
+
+
+func test_pieces_made_early_are_hidden_and_follow_the_burn() -> void:
+	var structures := _built()
+	var buildings := _painted(structures)
+	var burn := _burn_middle(structures)
+	var entry: Dictionary = burn.entries[0]
+	while not WorkerThreadPool.is_task_completed(int(entry.task)):
+		OS.delay_msec(2)
+	burn.step(0.5)
+	var made: Array = entry.piece_nodes
+	assert_gt(made.size(), 6, "made the step its worker was done")
+	var part := (made[1] as Node).get_child(0) as MeshInstance3D
+	assert_eq((made[1] as Node3D).transform, StructureCollapse.PARKED, "out of sight while it stands")
+	assert_true((entry.actor.nodes as Array).has(part), "taken with the building's parts")
+	burn.step(burn.end_at() - 0.3)
+	assert_gt((made[1] as Node3D).transform.origin.y, -50.0, "in place as it falls")
+	assert_eq(float(part.get_instance_shader_parameter(&"burn")), float(entry.value), "following")
+	burn.release()
 	buildings.release()
 
 

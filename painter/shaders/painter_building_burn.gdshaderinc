@@ -13,23 +13,31 @@ instance uniform float burn : hint_range(0.0, 3.0) = 0.0;
 // How far past catching a point is when the burn has reached it (the ember bands' depth, then char).
 const float BURN_EMBER_BAND = 0.34;
 
-// A burnt building's collapse (card painter-structure-fire; StructureBurn): the burn value runs on past
+// A burnt building's collapse (StructureBurn, StructureCollapse): the burn value runs on past
 // BURN_CHARRED (FireSweep.BURN_RATE, where it is fully charred) toward BURN_CHARRED + 1.0 while the
-// node squashes and sinks, and chunks of its charred parts drop away: a point goes when a brush noise
-// (about 1.5 m patches) mixed with its height up the part falls under the share of the way through,
-// so the roof's top breaks up first and a few low stumps stay to the end. Only a burning building
-// (burn above BURN_CHARRED) takes the branch.
+// building comes down in rigid charred pieces. Embers glow in seams through the charcoal as it breaks
+// (two flat bands, a hot orange core in a deep red, along a brush noise), brightest as the slabs fall
+// and dying to a low smoulder once they rest (EMBER_SMOULDER of it).
 const float BURN_CHARRED = 1.7;
-const float BURN_BREAK_CUT = 0.88;
+const float EMBER_SEAM = 0.07;
+const float EMBER_SMOULDER = 0.3;
 
-// True where the collapse has dropped the point at world `wp`, part height `h` (0 foot .. 1 top).
+// Whether the collapse cuts the point at world `wp`, part height `h` away: never (card
+// painter-fire-polish). A cut chunk showed the sky through the roof; the building breaks into pieces
+// instead (StructureCollapse). Kept for the structure shaders' call.
 bool building_break(vec3 wp, float h) {
-	if (burn <= BURN_CHARRED) {
-		return false;
+	return false;
+}
+
+// The ember seams' emission at world `wp` of a collapsing building (burn past BURN_CHARRED).
+vec3 building_embers(vec3 wp) {
+	float k = clamp(burn - BURN_CHARRED, 0.0, 1.0);
+	float glow = smoothstep(0.0, 0.12, k) * (1.0 - (1.0 - EMBER_SMOULDER) * smoothstep(0.5, 1.0, k));
+	float seam = abs(p_noise(wp * 0.55 + 23.0) - 0.5);
+	if (seam < EMBER_SEAM * 0.45) {
+		return vec3(1.0, 0.36, 0.05) * glow;
 	}
-	float cut = clamp(burn - BURN_CHARRED, 0.0, 1.0) * BURN_BREAK_CUT;
-	float keep = 0.6 * p_noise(wp * 0.65 + 17.0) + 0.4 * (1.0 - h);
-	return keep < cut;
+	return seam < EMBER_SEAM ? vec3(0.42, 0.06, 0.018) * glow : vec3(0.0);
 }
 
 // Lays the burn on the three tones (shade, mid, lit: linear) of the surface at world point `wp`,
@@ -48,7 +56,7 @@ vec3 building_burn(vec3 wp, float h, inout vec3 shd, inout vec3 mid, inout vec3 
 		shd = vec3(0.022, 0.017, 0.016) * tone;
 		mid = vec3(0.042, 0.032, 0.028) * tone;
 		lit = vec3(0.075, 0.056, 0.046) * tone;
-		return vec3(0.0);
+		return burn > BURN_CHARRED ? building_embers(wp) : vec3(0.0);
 	}
 	shd = vec3(0.05, 0.02, 0.014);
 	mid = vec3(0.11, 0.036, 0.016);

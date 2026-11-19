@@ -149,14 +149,18 @@ func test_a_fire_burns_the_house_down_on_every_board_and_the_change_keeps_it() -
 		var effect := copy.edits.events.effects()[0] as FireSweep
 		assert_eq(effect._structures.entries.size(), 1, "the house is in the fire")
 		assert_gt(effect.hold_s(), fire.duration_s - 0.01, "the change waits for the collapse")
-	# Run to the end of the collapse: slumped, still the old node, and no change yet.
+	# Run to the end of the collapse: come down in pieces (never squashed), still the old node, and
+	# no change yet.
 	var wait: float = (gm.edits.events.effects()[0] as FireSweep).hold_s()
 	for copy: Copy in [gm, client]:
 		copy.edits.events.advance(wait - 0.2)
 	for copy: Copy in [gm, client]:
 		var node := _house(copy)
 		assert_not_null(node, "the stand-in stands")
-		assert_lt(node.transform.basis.get_scale().y, 0.5, "slumped")
+		assert_true(node.transform.basis.is_equal_approx(Basis.IDENTITY), "not squashed")
+		var pieces := node.find_children("Collapse_*", "Node3D", false, false)
+		assert_gt(pieces.size(), 0, "fallen in pieces")
+		assert_true(pieces.all(func(piece: Node) -> bool: return (piece as Node3D).visible))
 		assert_eq(copy.doc.structures[0].recipe, HOUSE, "the record is unchanged until the change")
 	assert_eq(entries.size(), 0, "no change before the collapse is over")
 	for copy: Copy in [gm, client]:
