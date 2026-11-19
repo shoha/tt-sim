@@ -147,6 +147,17 @@
   path-own: 1;
   cliff-turn: -8;  cliff-chroma: 1.5;  cliff-lift: 0;  cliff-pull: 0.25;  cliff-shade-lift: 0.12;
   cliff-edge: 0.22;  cliff-strata: 1;
+  /* The polish (painter-ground-polish): the lip a little gold, the foot two thirds and a lit face a
+     third of the way to its shade colour, so a pale sandstone step reads against the orange badlands
+     as lit top, middle face, dark foot (lip and foot alone left a cream band); no bare-rock pull, snow
+     cap or path dust but in winter. */
+  cliff-own: 0;  cliff-snow: 0;  cliff-foot: 0.65;  cliff-face: 0.35;  cliff-warm: 0.5;
+  path-dust: 0;
+  /* The meadow's broad swathes (PainterMeadowSwathes): about a fifth of a meadow gold and a sixth a
+     deeper moss, Classic's patches as a few bold soft shapes in the ground's own tone (round 1 at
+     -48 read ochre-orange in summer and salmon at dusk and in autumn; moss at -14 olive-khaki). */
+  gold-share: 0.2;  gold-turn: -40;  gold-chroma: 1.05;  gold-lift: 0.06;
+  moss-share: 0.17;  moss-turn: -6;  moss-chroma: 1.1;  moss-lift: -0.08;
   /* The village fields (PainterFields; painter-fields): the tilled soil is the path turned to a
      warm earth, richer and deeper; a crop is the grass moved to its plant's own colour (ripe wheat
      gold, a young crop fresh green), a step lighter and richer than the meadow, so a field reads
@@ -464,6 +475,12 @@
     plaster: oklch(0.84 0.032 72);  wall-stone: oklch(0.66 0.020 75);
     wall-log: oklch(0.55 0.060 55);  wall-boards: oklch(0.62 0.042 70);  timber: oklch(0.42 0.055 50);
     roof-snow: 0.45;
+    /* The ground under snow (painter-ground-polish): a cliff face is bare warm rock (its own hue,
+       not the blue stone: a badlands tier read as a blue band on orange ground) under a snow cap on
+       its lip; a stone path is lifted toward the snow and dusted at its edges (it read heavy grey);
+       no gold or moss swathes on the snow. */
+    cliff-own: 0.85;  cliff-snow: 0.85;  cliff-warm: 0;  path-dust: 0.6;
+    gold-share: 0;  moss-share: 0;
     /* Open water a slate teal, the still ponds frozen to a pale periwinkle (ice-over), a silver
        low glint; the shallows stay a clear pale teal. */
     water-shallow: oklch(0.84 0.085 196);  water-mid: oklch(0.67 0.100 212);

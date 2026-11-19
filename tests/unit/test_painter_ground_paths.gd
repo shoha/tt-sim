@@ -102,6 +102,60 @@ func test_the_cliff_stone_is_warmer_than_the_stone_and_follows_its_own_surface()
 	assert_lt(night.x, cliff.x, "and the night darkens it")
 
 
+func test_a_winter_cliff_is_bare_warm_rock_not_the_blue_stone() -> void:
+	var sheet := PainterSheet.load_sheet("core")
+	var stone := PainterSheet.tone_lch(sheet, "winter", "stone", 24.0)
+	assert_gt(stone.z, 200.0, "winter's stone is blue (the reason for cliff-own)")
+	var warm := func(h: float) -> bool: return h > 20.0 and h < 110.0
+	for surface: String in ["cliff", "cliff_sandstone"]:
+		var tone := PainterGroundPaths.cliff_tone(sheet, "winter", 24.0, surface)
+		assert_true(warm.call(tone.z), "%s under winter is a warm rock (hue %.0f)" % [surface, tone.z])
+	var summer := PainterGroundPaths.cliff_tone(sheet, "summer", 60.0, "cliff_sandstone")
+	assert_eq(PainterSheet.number(sheet, "summer", "cliff-own", 60.0), 0.0, "summer keeps its tone")
+	assert_true(warm.call(summer.z))
+	var grey := PainterGroundPaths.ab_mix(Vector3(0.6, 0.04, 250.0), Vector3(0.7, 0.04, 70.0), 0.5)
+	assert_almost_eq(grey.x, 0.6, 0.0001, "ab_mix keeps the first tone's lightness")
+	assert_lt(grey.y, 0.01, "opposite hues meet at a grey, not through a third hue")
+
+
+func test_under_snow_a_path_is_lifted_toward_the_snow() -> void:
+	var sheet := PainterSheet.load_sheet("core")
+	var ids := PackedStringArray(["cobblestone"])
+	var winter := PainterGroundPaths.tones(sheet, "winter", 24.0, ids)
+	var uniforms: Dictionary = winter["uniforms"]
+	assert_gt(float(uniforms[&"path_dust"]), 0.0, "winter dusts its paths")
+	assert_true(uniforms.has(&"cliff_snow") and uniforms.has(&"sw_k"), "the shader numbers ride")
+	var cobble := Vector3(0.6, 0.02, 250.0)
+	var dusted := PainterGroundPaths.dusted(cobble, 0.9, 0.6)
+	assert_gt(dusted.x, cobble.x + 0.05, "lifted toward the snow")
+	assert_eq(PainterGroundPaths.dusted(cobble, 0.9, 0.0), cobble, "no dust, no change")
+	var summer: Dictionary = PainterGroundPaths.tones(sheet, "summer", 60.0, ids)["uniforms"]
+	assert_eq(float(summer[&"path_dust"]), 0.0, "summer paths are not dusted")
+
+
+func test_the_meadow_takes_gold_and_moss_swathes_but_not_under_snow() -> void:
+	var sheet := PainterSheet.load_sheet("core")
+	var summer := PainterMeadowSwathes.tones(sheet, "summer", 60.0)
+	assert_eq((summer[&"sw_lit"] as PackedVector3Array).size(), 4, "two variants each, gold then moss")
+	var k: Vector3 = summer[&"sw_k"]
+	assert_eq(k.z, 1.0, "summer draws them")
+	assert_gt(k.x, 0.5, "gold is the field's highs")
+	assert_lt(k.y, 0.5, "moss its lows")
+	var ground := PainterSheet.tone_lch(sheet, "summer", "ground", 60.0)
+	var gold := PainterMeadowSwathes.tone_lch(sheet, "summer", 60.0, "gold")
+	var moss := PainterMeadowSwathes.tone_lch(sheet, "summer", 60.0, "moss")
+	assert_lt(gold.z, ground.z - 20.0, "gold is turned well toward yellow")
+	assert_lt(moss.x, ground.x, "moss is deeper than the meadow")
+	var winter: Vector3 = PainterMeadowSwathes.tones(sheet, "winter", 24.0)[&"sw_k"]
+	assert_eq(winter.z, 0.0, "no swathes on the snow")
+	var edge := func(share: float) -> float: return PainterMeadowSwathes.threshold(share)
+	assert_lt(edge.call(0.3), edge.call(0.1), "more share, lower edge")
+	assert_almost_eq(edge.call(0.5), 0.5, 0.001)
+	var seed := func(n: int) -> Vector4: return PainterMeadowSwathes.seed_of(n)
+	assert_eq(seed.call(7), seed.call(7), "a map's seed is stable")
+	assert_ne(seed.call(7), seed.call(8), "and differs per map")
+
+
 func test_a_cliff_shade_keeps_its_hue_instead_of_swinging_violet() -> void:
 	var sheet := PainterSheet.load_sheet("core")
 	var base := PainterGroundPaths.cliff_tone(sheet, "summer", 60.0, "cliff")

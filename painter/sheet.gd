@@ -127,7 +127,15 @@ const DEFAULT_ROLES: Array[String] = [
 ## `stone` (cliff-turn, degrees), chroma factor and lightness shift (cliff-chroma, cliff-lift), the
 ## share of the ground's shade pull its shade takes and how much less deep it is (cliff-pull,
 ## cliff-shade-lift), the light on a cliff's top edge and the dark at its foot (cliff-edge, a
-## value step) and the faces' bands (cliff-strata, 0 to 1).
+## value step) and the faces' bands (cliff-strata, 0 to 1). The polish (painter-ground-polish):
+## the share of the bare rock's own chroma and hue a mood's cliff takes over its stone's (cliff-own,
+## 0 to 1: winter's, whose blue stone painted a badlands tier blue), the snow cap on a cliff's lip
+## (cliff-snow, 0 to 1), how far its foot and its lit face go to its shade colour (cliff-foot,
+## cliff-face) and the lip's gold tint (cliff-warm); a path under snow lifted toward the snow and
+## dusted at its edge (path-dust, 0 to 1). The meadow's swathes (PainterMeadowSwathes): the share
+## of the meadow under gold and under moss (gold-share, moss-share) and each one's hue turn from
+## `ground` (degrees), chroma factor and lightness shift (gold-turn, gold-chroma, gold-lift,
+## moss-turn, ...).
 ## The village fields (PainterFields): the tilled soil's hue, chroma factor and lightness shift
 ## from `path` (soil-hue, soil-chroma, soil-lift); how far a crop's own measured colour moves the
 ## grass (crop-own, 0 to 1), a crop's lightness shift and chroma factor (crop-lift, crop-chroma);
@@ -240,6 +248,20 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"cliff-shade-lift",
 	"cliff-edge",
 	"cliff-strata",
+	"cliff-own",
+	"cliff-snow",
+	"cliff-foot",
+	"cliff-face",
+	"cliff-warm",
+	"path-dust",
+	"gold-share",
+	"gold-turn",
+	"gold-chroma",
+	"gold-lift",
+	"moss-share",
+	"moss-turn",
+	"moss-chroma",
+	"moss-lift",
 	"soil-hue",
 	"soil-chroma",
 	"soil-lift",

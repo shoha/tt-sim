@@ -20,7 +20,15 @@ extends RefCounted
 ## chroma times `cliff-chroma`, its lightness moved by `cliff-lift`, then moved toward the map's own
 ## cliff surface (its main biome's) the same way from CLIFF_REF; its shade takes `cliff-pull` of
 ## the ground's pull and `cliff-shade-lift` more lightness (PainterSurfaces._tone_ground), so a face
-## turned from the sun reads as stone in a warm shade, not the violet a grey role swings to.
+## turned from the sun reads as stone in a warm shade, not the violet a grey role swings to. A mood
+## whose stone is far from any rock's hue (winter's blue) takes `cliff-own` of the way to the bare
+## rock's own chroma and hue in OKLab (the surface's colour as the summer cliff paints it, at the
+## mood's lightness), so a badlands tier under snow light is warm sandstone, not a blue band.
+##
+## Polish (card painter-ground-polish): the shader's cliff lip takes `cliff-warm` of a gold tint
+## and, under snow, `cliff-snow` of the meadow's snow as a cap; its foot takes `cliff-foot` of the
+## way to its shade colour. Under snow (`path-dust`) a path's tone is lifted toward the snow's
+## lightness, its seams are shallower and the stones at its edge beside the snow are dusted white.
 
 ## The path slots the shader has (p_lit, p_shd: two variants a slot; p_kind).
 const MAX_SLOTS := 8
@@ -38,6 +46,8 @@ const OWN_L := 0.6
 const OWN_C_POW := 0.8
 const OWN_C := Vector2(0.55, 2.0)
 const OWN_H := 0.5
+## The share of the gap to the snow's lightness a path is lifted at `path-dust` 1 (dusted()).
+const DUST_LIFT := 0.5
 
 
 ## The path-role surfaces of `doc` that take a slot, in slot order: the base surface first when it
@@ -97,10 +107,12 @@ static func only_slot(doc: MapDocument, ids: PackedStringArray) -> int:
 	return found
 
 
-## Sets the slot map (or the one slot) of `doc` on `materials`, and the village fields' map
-## (PainterFields.bind); returns the slot ids.
+## Sets the slot map (or the one slot) of `doc` on `materials`, the village fields' map
+## (PainterFields.bind) and the meadow swathes' seed (PainterMeadowSwathes.bind); returns the slot
+## ids.
 static func bind(materials: Array, doc: MapDocument) -> PackedStringArray:
 	PainterFields.bind(materials, doc)
+	PainterMeadowSwathes.bind(materials, doc)
 	var ids := slots(doc)
 	var image := slot_image(doc, ids)
 	var texture: ImageTexture = null if image == null else ImageTexture.create_from_image(image)
@@ -113,7 +125,9 @@ static func bind(materials: Array, doc: MapDocument) -> PackedStringArray:
 
 
 ## The shader's path tones for slots `ids` in `mood` at `elevation`: {"lit", "shade"} (two linear
-## variants a slot, MAX_SLOTS * 2 entries) and "kind" (a pattern a slot).
+## variants a slot, MAX_SLOTS * 2 entries) and "kind" (a pattern a slot); "fields" (PainterFields)
+## and "uniforms": the meadow swathes' (PainterMeadowSwathes) and the cliff and snow numbers, by
+## the ground shader's names.
 static func tones(
 	sheet: Dictionary, mood: String, elevation: float, ids: PackedStringArray
 ) -> Dictionary:
@@ -121,29 +135,50 @@ static func tones(
 	var shade := PackedVector3Array()
 	var kinds := PackedInt32Array()
 	var surfaces := PaletteLibrary.surfaces()
-	var share := PainterSheet.number(sheet, mood, "path-own", elevation)
+	var num := func(prop: String) -> float: return PainterSheet.number(sheet, mood, prop, elevation)
+	var share: float = num.call("path-own")
+	var dust: float = num.call("path-dust")
 	var base := PainterSheet.tone_lch(sheet, mood, "path", elevation)
+	var snow_l := PainterSheet.tone_lch(sheet, mood, "ground", elevation).x
 	for k in MAX_SLOTS:
 		var id := ids[k] if k < ids.size() else ""
 		var own := own_lch(surfaces.get(id, {}))
-		var mid := base if own.x < 0.0 else moved(base, own, PATH_REF, share)
+		var mid := dusted(base if own.x < 0.0 else moved(base, own, PATH_REF, share), snow_l, dust)
 		var ramp := PainterTones.ramp(sheet, mood, "path", elevation, "ground-", mid)
 		lit.append_array([PainterTones.linear(ramp[2]), PainterTones.linear(ramp[5])])
 		shade.append_array([PainterTones.linear(ramp[0]), PainterTones.linear(ramp[3])])
 		kinds.append(PainterGroundRoles.path_kind(id) if not id.is_empty() else 0)
+	var uniforms := PainterMeadowSwathes.tones(sheet, mood, elevation)
+	uniforms[&"path_dust"] = dust
+	uniforms[&"cliff_snow"] = num.call("cliff-snow")
+	uniforms[&"cliff_foot"] = num.call("cliff-foot")
+	uniforms[&"cliff_face"] = num.call("cliff-face")
+	uniforms[&"cliff_warm"] = num.call("cliff-warm")
 	return {
-		"lit": lit, "shade": shade, "kind": kinds, "fields": PainterFields.tones(sheet, mood, elevation)
+		"lit": lit,
+		"shade": shade,
+		"kind": kinds,
+		"fields": PainterFields.tones(sheet, mood, elevation),
+		"uniforms": uniforms,
 	}
 
 
-## Sets `tones` (tones()) on the ground `material`: the path slots' and the fields'.
+## Sets `tones` (tones()) on the ground `material`: the path slots', the fields' and the rest.
 static func set_tones(material: ShaderMaterial, tones: Dictionary) -> void:
 	material.set_shader_parameter(&"p_lit", tones["lit"])
 	material.set_shader_parameter(&"p_shd", tones["shade"])
 	material.set_shader_parameter(&"p_kind", tones["kind"])
-	var fields: Dictionary = tones["fields"]
-	for key: StringName in fields:
-		material.set_shader_parameter(key, fields[key])
+	for group: String in ["fields", "uniforms"]:
+		var values: Dictionary = tones[group]
+		for key: StringName in values:
+			material.set_shader_parameter(key, values[key])
+
+
+## A path's middle tone `lch` (OKLCH) under snow: lifted `dust` * DUST_LIFT of the way to the snow's
+## lightness `snow_l`, so a stone path on snow reads light, not a heavy grey strip. Pure; `dust` 0
+## returns it as it is.
+static func dusted(lch: Vector3, snow_l: float, dust: float) -> Vector3:
+	return Vector3(lch.x + maxf(snow_l - lch.x, 0.0) * dust * DUST_LIFT, lch.y, lch.z)
 
 
 ## The cliff stone's middle tone (OKLCH) in `mood` at `elevation` for a map whose cliff surface is
@@ -153,15 +188,36 @@ static func cliff_tone(
 ) -> Vector3:
 	var stone := PainterSheet.tone_lch(sheet, mood, "stone", elevation)
 	var num := func(prop: String) -> float: return PainterSheet.number(sheet, mood, prop, elevation)
+	var chroma: float = num.call("cliff-chroma")
+	var turn: float = num.call("cliff-turn")
 	var tone := Vector3(
 		clampf(stone.x + float(num.call("cliff-lift")), 0.05, 0.98),
-		stone.y * float(num.call("cliff-chroma")),
-		fposmod(stone.z + float(num.call("cliff-turn")), 360.0)
+		stone.y * chroma,
+		fposmod(stone.z + turn, 360.0)
 	)
-	if cliff_surface.is_empty():
+	var own := CLIFF_REF
+	if not cliff_surface.is_empty():
+		var measured := own_lch(PaletteLibrary.surfaces().get(cliff_surface, {}))
+		own = CLIFF_REF if measured.x < 0.0 else measured
+	tone = moved(tone, own, CLIFF_REF, 1.0)
+	var bare: float = num.call("cliff-own")
+	if bare <= 0.0:
 		return tone
-	var own := own_lch(PaletteLibrary.surfaces().get(cliff_surface, {}))
-	return tone if own.x < 0.0 else moved(tone, own, CLIFF_REF, 1.0)
+	# The bare rock's own colour as the summer cliff paints it (the reference stone turned and
+	# enriched, moved to the surface), at this mood's lightness.
+	var rock := moved(
+		Vector3(tone.x, CLIFF_REF.y * chroma, fposmod(CLIFF_REF.z + turn, 360.0)), own, CLIFF_REF, 1.0
+	)
+	return ab_mix(tone, rock, bare)
+
+
+## `a` (OKLCH) moved `t` of the way to `b`'s chroma and hue in OKLab's a-b plane (a's lightness
+## kept): a blue and a warm grey meet at a quiet warm grey, never through a third hue. Pure.
+static func ab_mix(a: Vector3, b: Vector3, t: float) -> Vector3:
+	var pa := Vector2.from_angle(deg_to_rad(a.z)) * a.y
+	var pb := Vector2.from_angle(deg_to_rad(b.z)) * b.y
+	var m := pa.lerp(pb, clampf(t, 0.0, 1.0))
+	return Vector3(a.x, m.length(), fposmod(rad_to_deg(m.angle()), 360.0))
 
 
 ## The cliff surface of `doc`'s main biome (the one with the most cells, else its first), "" when
