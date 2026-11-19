@@ -106,8 +106,9 @@ func test_the_quad_is_one_plain_quad_and_its_bounds_hold_the_largest_mark() -> v
 	var uv := arrays[Mesh.ARRAY_TEX_UV] as PackedVector2Array
 	assert_eq(uv[0], Vector2(0, 1), "UV.y 1 at the foot")
 	assert_null(arrays[Mesh.ARRAY_COLOR], "LAYOUT_PLAIN: no colour")
-	# The largest mark: a reach of 1.4 x 1.22 x 1.06 half widths, lifted toward the eye by about one
-	# reach more, its top 1.22 x 1.42 heights over the root plus a reach.
+	# The largest mark: a footprint of 0.9 half widths plus 0.6 of a reach (at most 1.22 heights),
+	# lifted toward the eye by about as much again, its top 1.22 x 1.42 heights over the root plus
+	# that; the points below hold the first marks' larger reach (1.4 x 1.22 x 1.06 half widths).
 	var box := PainterGrassMarks.bounds(extent, 0.4)
 	assert_true(box.has_point(Vector3(3.5 * 0.3, 0.0, 0.0)), "reach and lift across")
 	assert_true(box.has_point(Vector3(0.0, 1.75 * 0.4 + 3.5 * 0.3, 0.0)), "top and lift up")

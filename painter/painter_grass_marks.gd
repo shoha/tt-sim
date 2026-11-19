@@ -172,8 +172,9 @@ static func quad(extent: Vector3, height: float) -> Array:
 
 
 ## The box culling sees for a mark of a tuft of half size `extent` and `height`: a cube round the
-## root that holds the largest quad the shader can draw (its reach up to about 1.8 times the half
-## size, its top about 1.8 times the height, the whole lifted toward the eye by up to its reach).
+## root that holds the largest quad the shader can draw (its footprint 0.9 half widths plus 0.6 of a
+## reach of at most 1.22 heights across, its top about 1.8 times the height, the whole lifted toward
+## the eye by up to its half width; the first marks reached 1.8 half widths, so the box has room).
 ## Pure.
 static func bounds(extent: Vector3, height: float) -> AABB:
 	var r := maxf(extent.x, extent.z) * 3.6 + height * 1.8 + 0.1
