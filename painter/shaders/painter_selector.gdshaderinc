@@ -86,6 +86,22 @@ float selector_keep(vec3 origin, bool shadow_pass) {
 	return g < 1.0 - keep ? 0.0 : 1.0;
 }
 
+// A wide grass tuft's pitch crossfade (card painter-grass-mark; the sheet's grass-mark-pitch,
+// PainterGrassMarks): below mark_pitch degrees of camera pitch the tuft draws its cards
+// (painter_plant), above it its painted mark (painter_grass_mark); 0 marks at every pitch. Each tuft
+// swaps at its own pitch within MARK_BAND degrees of it, so the change runs across the field rather
+// than in one frame. `back` points from the tuft toward the eye.
+uniform float mark_pitch = 0.0;
+const float MARK_BAND = 5.0;
+
+bool grass_mark_on(vec3 origin, vec3 back) {
+	if (mark_pitch <= 0.0) {
+		return true;
+	}
+	float band = (p_hash(floor(origin * 10.0) + vec3(7.0, 1.0, 3.0)) - 0.5) * 2.0 * MARK_BAND;
+	return degrees(asin(clamp(back.y, 0.0, 1.0))) >= mark_pitch + band;
+}
+
 vec3 selector_pal(float tone, float variant) {
 	float v = clamp(variant, 0.0, 1.0);
 	float t = clamp(tone, 0.02, 0.98);
@@ -455,6 +471,8 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 	wob = p_noise(wp * 1.7 + 5.0);
 }
 
+// (A grass mark lights its own form: painter_grass_mark defines SELECTOR_OWN_LIGHT and its light().)
+#ifndef SELECTOR_OWN_LIGHT
 void light() {
 	if (LIGHT_IS_DIRECTIONAL) {
 		vec3 lw = normalize((INV_VIEW_MATRIX * vec4(LIGHT, 0.0)).xyz);
@@ -490,3 +508,4 @@ void light() {
 		DIFFUSE_LIGHT += mix(col, shd, cast * 0.94) * mul;
 	}
 }
+#endif

@@ -98,6 +98,8 @@ var _glb: RefCounted = null
 var _glb_ground: Array[ShaderMaterial] = []
 ## The painted village furnishings (a PainterVillage), made on the first paint().
 var _village: RefCounted = null
+## The meadow grass drawn as painted marks (PainterGrassMarks).
+var _marks := PainterGrassMarks.new()
 ## The map's path surfaces by slot and its cliff surface (PainterGroundPaths), from the last zone
 ## rebuild.
 var _path_ids := PackedStringArray()
@@ -135,6 +137,7 @@ func paint(map: Node3D, state: Dictionary) -> bool:
 	_paint_species()
 	_retone()
 	_paint_trees()
+	_marks.sync(self)
 	if _glb == null:
 		_glb = (load(GLB_MAP) as GDScript).new()
 	_glb.call("paint", _map, applied, self)
@@ -166,6 +169,7 @@ func release() -> void:
 	if _glb != null:
 		_glb.call("release")
 	_glb_ground.clear()
+	_marks.release()
 	_unbind()
 	if _ground != null:
 		FireLook.unmirror_glow(_ground)
@@ -292,6 +296,7 @@ func _on_ground_edited(_rect: Rect2i) -> void:
 
 func _on_cells_applied(_cells: Array[Vector2i]) -> void:
 	_tone_new(_paint_species())
+	_marks.sync(self)
 	if _trees != null:
 		_trees.call("sync")
 	_queue_occlusion()
@@ -299,6 +304,7 @@ func _on_cells_applied(_cells: Array[Vector2i]) -> void:
 
 func _on_species_added(_materials: Array[ShaderMaterial]) -> void:
 	_tone_new(_paint_species())
+	_marks.sync(self)
 	if _trees != null:
 		_trees.call("sync")
 	_queue_occlusion()

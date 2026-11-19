@@ -91,6 +91,8 @@ const DEFAULT_ROLES: Array[String] = [
 ## role's shade and lit colours are drawn from it, the ground's own ramp under `ground-`), the
 ## plants' light steps (tone-lo, tone-hi, N.L thresholds), the thinning of grass and flowers in
 ## groups (keep-*: the share kept, keep-freq-*: 1/m of the world noise that groups them), the
+## camera pitch in degrees below which a meadow tuft keeps its cards rather than its painted mark
+## (grass-mark-pitch, PainterGrassMarks: 0 marks at every pitch), the
 ## flowers' value drifts (flower-mix, 1/m), and the ground's brush marks (marks: the share of
 ## cells that hold one, mark-thin: how far a flat area thins them, drift-marks and litter-marks:
 ## how much of the small marks, patches: the block-in's variation, mark-px-*: the pixel footprints
@@ -175,6 +177,7 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"keep-flower",
 	"keep-freq-grass",
 	"keep-freq-flower",
+	"grass-mark-pitch",
 	"flower-mix",
 	"marks",
 	"occ-pool",

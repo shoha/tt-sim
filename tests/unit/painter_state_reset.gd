@@ -24,7 +24,8 @@ extends RefCounted
 ##   - FoliageDensityController.fraction (the ground-cover thinning a zoomed-out level camera sets,
 ##     found by the reverse 2-shard run: test_authored_scatter saw 14 of 20 drawn): 1.0;
 ##   - the painter's A/B flags (PainterBuildings, PainterVillage, PainterMannerHost,
-##     PainterMannerSnow, PainterMannerBlanket, PainterTreeBush): their declared defaults;
+##     PainterMannerSnow, PainterMannerBlanket, PainterTreeBush, PainterGrassMarks): their declared
+##     defaults;
 ##   - PainterSheet's parsed-sheet cache: emptied;
 ##   - SunShadowQuality's last tier (it skips a set to the same tier, which would race the warm-up):
 ##     forgotten, so it reads the project setting again.
@@ -63,6 +64,7 @@ static func classic() -> void:
 	PainterStreetSnow.bodied = true
 	PainterMannerBlanket.step_s = PainterMannerBlanket.FIELD_STEP_S_M
 	PainterTreeBush.clump_roots = PainterTreeBush.ROOTS_PAD
+	PainterGrassMarks.enabled = true
 	PainterSheet.clear_cache()
 	PainterFields.reset()
 	PainterFields.enabled = true
@@ -104,6 +106,7 @@ static func dirty() -> PackedStringArray:
 			or PainterMannerBlanket.step_s != PainterMannerBlanket.FIELD_STEP_S_M
 			or PainterTreeBush.clump_roots != PainterTreeBush.ROOTS_PAD
 			or not PainterFields.enabled
+			or not PainterGrassMarks.enabled
 		)
 	)
 	return out

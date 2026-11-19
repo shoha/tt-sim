@@ -310,6 +310,40 @@ skipped at run time (its presence alone, measured by a run-time switch in one sh
 varyings 0.05 more in winter; running it, the early discard and the forced alpha cost nothing.
 The distance field also rounds the rim's points (the per-fragment dabs read as pointed leaves at
 eye level).
+Grass marks (card painter-grass-mark, 2026-11-19, look-pending; evidence
+`docs/research/2026-11-09-prototypes/compare/painter_final74_grass_mark/`). Seen from above, the
+three crossed cards collapse to thin spikes (the owner's "sad and spindly"), so under Painted every
+wide grass tuft is drawn as ONE MARK instead: `PainterGrassMarks` (`painter/painter_grass_marks.gd`,
+owned by PainterSurfaces, synced after each paint, cells event and new species) makes one mark mesh
+per species (a quad, `PainterGrassMarks.quad`, culled by `bounds`) carrying a mark material (the
+stand-in duplicated onto `painter_grass_mark.gdshader`, with the stand-in's tones, keep and frost
+copied at every sync) and points each cell's `multimesh.mesh` at it; release puts the very same
+card mesh back, and the shared card mesh is never edited. Classic, crops (`tuft_blades`) and
+narrow tufts (reeds) keep their cards; `PainterGrassMarks.enabled` is the A/B switch. The
+shader turns the quad to the view, lifts it toward the eye so no part cuts the ground, and paints
+the tuft COMBED: 5 to 8 strokes rooted close together upwind, splayed like a fountain leaning
+downwind along a world lean field (the wind's way turned by a slow noise, so a meadow is combed in
+drifts), each from a dark root to a lit tip, toned by a world field the neighbours share (so
+overlapping tufts merge into one mass), with no outline and no ring. From the side (below about
+45 degrees) the strokes stand up, droop at their tips and stand over a darker lumpy body at the
+foot. It lights itself (`SELECTOR_OWN_LIGHT` guards painter_selector's `light()`): the ramp's lit
+colour darkened from root to tip (`mark_value`) as the cards darken theirs, a cast shadow read at
+the ground under the fragment. Snow is a tint on the upper strokes, never a disc. Seen from above
+the marks keep more tufts than the cards (`mark_keep`, 1.2 times keep-grass); tufts within about a metre of a token shrink (the ground's `tok`, copied each frame it changes).
+Three ways were probed (a radial fan of blades read as maple leaves from above, a soft mass with
+blade tips as moss; the combed strokes were the only one that read as grass from above and at
+the eye). The sheet number `grass-mark-pitch` (0 draws the mark at every pitch) is a crossfade:
+a pitch P > 0 puts the card surfaces into the mark mesh beside the quad, and each tuft draws its
+cards below about P degrees of camera pitch and its mark above (`grass_mark_on` in
+painter_selector, read by both shaders, with a per-tuft band of 5 degrees so the change ripples
+instead of popping). Core sets 45: the marks from above (where the cards are thin spikes), the
+cards at the oblique home view and the eye, where their leafy patches, dark feet and snow caps
+read more grounded than the standing marks (hazier and wispier there, and cardboard-pale in
+winter) and cost less. Cost (indicative: in-run A/B, two cycles, median GPU ms at 1920x1080 on the
+dev machine, the verdict run): the home view at zoom 16 main 2.61/2.64, full mark 2.85/2.86, core's
+45 2.67/2.68; at zoom 30 main 2.86/3.05, full mark 3.06/3.23, 45 3.02/3.14; from above at zoom 16
+main 2.31/2.31, marks 2.49/2.52 (the marks draw more there than the cards' spikes). The old atlas
+and tuft paths stay (stage 3 of the spike's plan removes them).
 Flowers (card painter-flowers, look-pending): `PainterFlowerHue` reads each surface of a flower
 asset once when its stand-in is made. Core's flowers are `_Bark` (stems), `_Leaf` and `_LeafB` (the
 blooms: small UV 0..1 cards, three crossed per head or many over a mound); stems and leaves take the

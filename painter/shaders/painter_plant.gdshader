@@ -66,6 +66,13 @@ void vertex() {
 	if (painter_placed > 0.5 && !IN_SHADOW_PASS) {
 		kept = 1.0;
 	}
+	if (kind == 1 && mark_pitch > 0.0) {
+		// A meadow tuft above the grass marks' pitch is drawn by its mark instead (painter_selector's
+		// grass_mark_on; PainterGrassMarks).
+		vec3 back = PROJECTION_MATRIX[3][3] == 0.0
+			? normalize(INV_VIEW_MATRIX[3].xyz - MODEL_MATRIX[3].xyz) : normalize(INV_VIEW_MATRIX[2].xyz);
+		kept *= grass_mark_on(MODEL_MATRIX[3].xyz, back) ? 0.0 : 1.0;
+	}
 	VERTEX *= grow_scale(MODEL_MATRIX[3].xyz) * kept;
 	v_os = vec4(MODEL_MATRIX[3].xyz, length(MODEL_MATRIX[1].xyz));
 	v_wn = normalize(mat3(MODEL_MATRIX) * NORMAL);

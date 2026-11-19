@@ -58,6 +58,12 @@
   tone-lo: -0.08;  tone-hi: 0.48;
   keep-grass: 0.6;  keep-flower: 0.8;  keep-freq-grass: 0.12;  keep-freq-flower: 0.15;
   flower-mix: 0.09;
+  /* The meadow grass's painted marks (PainterGrassMarks): the camera pitch in degrees below which
+     a tuft keeps its three cards; 0 draws the mark at every pitch. 45 (painter-grass-mark's
+     verdict): the marks from above, where the cards are thin spikes; the cards' leafy patches and
+     snow caps at the oblique home view and the eye, which read more grounded than the standing
+     marks there and cost about 0.2 ms less at the home view. */
+  grass-mark-pitch: 45;
 
   /* The ground's brush marks: the share of cells that hold one at a zone's edge and how far a
      flat area thins them, the small drift and fallen-leaf marks, the block-in's patches, the

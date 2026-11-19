@@ -54,6 +54,8 @@ const SCRIPTS: PackedStringArray = [
 ]
 const GROUND := "res://painter/shaders/painter_ground.gdshader"
 const PLANT := "res://painter/shaders/painter_plant.gdshader"
+## The meadow tufts' painted marks (PainterGrassMarks): one quad, LAYOUT_PLAIN.
+const GRASS_MARK := "res://painter/shaders/painter_grass_mark.gdshader"
 const SOLID := "res://painter/shaders/painter_solid.gdshader"
 const STRUCTURE := "res://painter/shaders/painter_structure.gdshader"
 const MANNER := "res://painter/shaders/painter_structure_manner.gdshader"
@@ -196,6 +198,7 @@ static func base_shaders() -> PackedStringArray:
 		[
 			GROUND,
 			PLANT,
+			GRASS_MARK,
 			SOLID,
 			STRUCTURE,
 			MANNER,
@@ -344,6 +347,7 @@ static func collect(bare: bool) -> Array[Dictionary]:
 	_add(samples, "ground_plain", GROUND, LAYOUT_PLAIN, 0)
 	_add(samples, "plant_lit", PLANT, LAYOUT_LIT, 0)
 	_add(samples, "plant_plain", PLANT, LAYOUT_PLAIN, 0)
+	_add(samples, "grass_mark", GRASS_MARK, LAYOUT_PLAIN, 0)
 	_add(samples, "solid_lit", SOLID, LAYOUT_LIT, 0)
 	_add(samples, "solid_plain", SOLID, LAYOUT_PLAIN, 0)
 	_add(samples, "tree_stroke", TREE_STROKE, LAYOUT_TREE, 0)
