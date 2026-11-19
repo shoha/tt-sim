@@ -119,7 +119,7 @@ static func write(config: ConfigFile, preset: int) -> void:
 ## open GameMap, or null at the title) its sun, its world render and its environment's
 ## occlusion. [param config] supplies the reflection and GI rows the environment call also takes.
 static func apply_rows(rows: Dictionary, game_map: Node3D, config: ConfigFile) -> void:
-	RenderingServer.directional_soft_shadow_filter_set_quality(int(rows.shadow_quality))
+	SunShadowQuality.set_quality(int(rows.shadow_quality))
 	ShadowCascades.current = ShadowCascades.sanitize(int(rows.shadow_cascades))
 	RenderScale.current = RenderScale.sanitize(int(rows.render_scale))
 	if game_map == null:

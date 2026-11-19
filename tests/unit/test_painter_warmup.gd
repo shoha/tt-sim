@@ -113,3 +113,48 @@ func test_the_title_run_is_lite_by_default() -> void:
 	# Measured (header): a full run at the title left a level's first draws compiling on the main
 	# thread; the title makes no samples, the level's world gets the one full run.
 	assert_true(PainterWarmup.lite_title)
+
+
+## painter-errors-fix: the engine's sun shadow tier setter clears every 3D shader's pipelines even
+## for the tier already set, and each map load re-applied it while the warm-up's workers built the
+## new world's pipelines ("Invalid Task ID" at the workers' mesh_create_from_surfaces). The tier is
+## set only when it changes (SunShadowQuality.set_quality).
+func test_the_sun_shadow_tier_is_set_only_when_it_changes() -> void:
+	SunShadowQuality.reset()
+	var fresh := SunShadowQuality.current()
+	assert_eq(fresh, int(ProjectSettings.get_setting(SunShadowQuality.SETTING)), "the project's")
+	assert_false(SunShadowQuality.set_quality(fresh), "the tier in force: no engine call")
+	var other := RenderingServer.SHADOW_QUALITY_HARD
+	assert_ne(other, fresh)
+	assert_true(SunShadowQuality.set_quality(other), "a new tier is set")
+	assert_eq(SunShadowQuality.current(), other)
+	assert_false(SunShadowQuality.set_quality(other), "and not again")
+	assert_true(SunShadowQuality.set_quality(fresh))
+	SunShadowQuality.reset()
+
+
+## Every script of the game sets the tier through SunShadowQuality, so a map load never calls the
+## engine's setter with the tier in force (DebugRenderToggles.refresh did, at every map load).
+func test_nothing_calls_the_engine_tier_setter_directly() -> void:
+	var direct := "RenderingServer.directional_soft_shadow_filter_set_quality("
+	var callers: Array[String] = []
+	var roots := ["res://autoloads", "res://scenes", "res://utils", "res://painter", "res://tools"]
+	for root: String in roots:
+		_scripts_calling(root, direct, callers)
+	assert_eq(callers, ["res://utils/sun_shadow_quality.gd"], "only SunShadowQuality calls it")
+
+
+## The scripts under `dir` with a code line holding `text`; a render job's gitignored `local`
+## folder (one card's probes) is left out.
+func _scripts_calling(dir: String, text: String, out: Array[String]) -> void:
+	for sub: String in DirAccess.get_directories_at(dir):
+		if sub != "local":
+			_scripts_calling(dir.path_join(sub), text, out)
+	for file: String in DirAccess.get_files_at(dir):
+		if not file.ends_with(".gd"):
+			continue
+		var path := dir.path_join(file)
+		for line: String in FileAccess.get_file_as_string(path).split("\n"):
+			if line.contains(text) and not line.strip_edges().begins_with("#"):
+				out.append(path)
+				break

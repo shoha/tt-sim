@@ -269,7 +269,9 @@ func refresh() -> void:
 	# player's persisted choice fresh via _get_configured_shadow_quality() rather than
 	# a value snapshotted once at startup.
 	_hard_sun_shadows = false
-	RenderingServer.directional_soft_shadow_filter_set_quality(_get_configured_shadow_quality())
+	# Only when it differs: the engine's setter clears every 3D shader's pipelines even for the
+	# same tier, which raced the painter warm-up's workers at each map load (SunShadowQuality).
+	SunShadowQuality.set_quality(_get_configured_shadow_quality())
 	# Not restored via _original_foliage_shaders: the previous map's materials are
 	# already queue_freed by the time this runs (see this function's own docstring),
 	# so there is nothing left to restore -- just drop the stale references.
@@ -393,7 +395,7 @@ func _on_hard_sun_shadows_toggled(pressed: bool) -> void:
 	var quality := (
 		RenderingServer.SHADOW_QUALITY_HARD if pressed else _get_configured_shadow_quality()
 	)
-	RenderingServer.directional_soft_shadow_filter_set_quality(quality)
+	SunShadowQuality.set_quality(quality)
 
 
 ## Writes DEBUG_BAKED_AO_STRENGTH (checked) or WindFoliage.BAKED_AO_STRENGTH (unchecked)

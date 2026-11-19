@@ -25,7 +25,9 @@ extends RefCounted
 ##     found by the reverse 2-shard run: test_authored_scatter saw 14 of 20 drawn): 1.0;
 ##   - the painter's A/B flags (PainterBuildings, PainterVillage, PainterMannerHost,
 ##     PainterMannerSnow, PainterMannerBlanket, PainterTreeBush): their declared defaults;
-##   - PainterSheet's parsed-sheet cache: emptied.
+##   - PainterSheet's parsed-sheet cache: emptied;
+##   - SunShadowQuality's last tier (it skips a set to the same tier, which would race the warm-up):
+##     forgotten, so it reads the project setting again.
 ## Not here: PainterWarmup (a no-op while headless, `available()`), PainterSurfaces and
 ## PainterScene (instances a level environment manager owns, freed with it), RenderingServer's
 ## global shader parameters (no test reads them back) and the settings statics a test pins and
@@ -62,6 +64,7 @@ static func classic() -> void:
 	PainterSheet.clear_cache()
 	PainterFields.reset()
 	PainterFields.enabled = true
+	SunShadowQuality.reset()
 
 
 ## The items of the inventory that are not at their fresh value, by name (empty when the state is
@@ -77,6 +80,11 @@ static func dirty() -> PackedStringArray:
 	_note(out, "RenderStyle.choice", RenderStyle.choice != RenderStyle.DEFAULT_CHOICE)
 	_note(out, "FoliageLight.last_sun", FoliageLight.last_sun != LAST_SUN_FRESH)
 	_note(out, "FoliageDensityController.fraction", FoliageDensityController.fraction != 1.0)
+	_note(
+		out,
+		"SunShadowQuality",
+		SunShadowQuality.current() != int(ProjectSettings.get_setting(SunShadowQuality.SETTING))
+	)
 	_note(
 		out,
 		"painter A/B flags",

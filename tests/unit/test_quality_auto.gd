@@ -23,7 +23,7 @@ func before_each() -> void:
 func after_each() -> void:
 	ShadowCascades.current = _saved_cascades
 	RenderScale.current = _saved_scale
-	RenderingServer.directional_soft_shadow_filter_set_quality(SettingsMenu.DEFAULT_SHADOW_QUALITY)
+	SunShadowQuality.set_quality(SettingsMenu.DEFAULT_SHADOW_QUALITY)
 	if FileAccess.file_exists(TMP_SETTINGS):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(TMP_SETTINGS))
 
