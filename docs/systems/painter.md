@@ -1749,6 +1749,24 @@ painter_final25_coverage/matrix.md`; the current, code-read class-by-class audit
   line at the brink, a small pinch at an ankle fall's brink (the lip-tuck ledge), the plunge pool's
   pale steep sides, a two-cell notch at the top of the inflow ramp, and a separate dark block in the
   pond view (the tall ankle fall's upper reach, level 2.89, whose head cap stands over the pond basin).
+- **Fall continuity round 2 (card painter-fall-round2, 2026-11-19, look-pending; frames
+  `compare/painter_final52_fall_round2/`, notes there).** Probed per sample. (1) The inflow ramp's
+  notch and white triangle: samples level with the ramp's start (a float tie, s = -1e-6) were left to
+  the river's flat, but the river does not own the pond's mask, so one wet pond sample dropped its
+  sheet corner to the pond's level (the triangle) and a dry one showed the ground (the notch); a pond
+  sample is never left to the river now. (2) The pond view's dark block and the tall ankle fall's wide
+  flat pool were one thing: that fall's upper reach (level 2.889, ankle) was drawn on a plateau the
+  pond was later dug into, so its whole area hung over a slope 0.4 to 3.4 m under it (a flat cut
+  square along its area, with a run-out slab off its head). The mesh now draws such water as
+  perched (`WaterMeshBuilder._perched()`, `hold_depth()`; `docs/systems/water.md`): it falls from the
+  held water at `PERCHED_SLOPE` and runs down the slope as a film. (3) The square shoulders where the
+  river meets the pond: the river's flat stood over the pond's dug rim out to its area's edge; the
+  same perched rule takes the banks it lost, and the inflow ramp falls to the sides past the channel.
+  (4) The brink's cyan hairline was the curtain's 8 cm shallow-wash tongue; it is gone (the curtain's
+  glass runs to the lip). Left: the short ankle fall's pinch (the crest's ground at the lip line
+  stands over the curtain's outer columns: widening the curtain did not show, a carve matter), the
+  plunge pools' pale walls, small steps at the pond's upper shoulders, and two small dark-blue spill
+  faces beside the tall ankle fall's lip pool.
 - **Known gaps** are listed in the matrix with their effort: round and profile roofs (procgen
   records). The settlement furnishings and the field plants were filled by painter-village-parity
   (next section).
