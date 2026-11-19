@@ -49,8 +49,20 @@ const float WIDE_WIDTH_M = 3.0;
 const float LIP_ROLL_M = 0.4;
 const float LIP_SCALLOP_ACROSS = 1.3;
 const float BOTTOM_WHITE_SHARE = 0.3;
-const float BOTTOM_FADE_M = 0.12;
-const float BOTTOM_TEAR_M = 0.3;
+// The curtain runs into the pool (card painter-fall-continuity): its white foot ends in the 3 cm
+// the mesh reaches under the pool level, torn by a few centimetres only, where the plunge foam
+// takes over. (It used to fade out up to 0.42 m over the pool, which left the face showing as a
+// dark gap between the curtain and the water.)
+const float BOTTOM_SINK_M = 0.03;
+const float BOTTOM_FADE_M = 0.025;
+const float BOTTOM_TEAR_M = 0.04;
+// The brink: the glassy tongue over the lip is this long (m) and wears the river's shallow wash,
+// so the river runs into the roll instead of meeting it across a strip of another colour.
+const float BRINK_GLASS_M = 0.08;
+// The glass between the streaks: the share of the mid wash in it and its alpha, a luminous body of
+// the river's blue rather than a grey film over the shaded face.
+const float GLASS_MID_SHARE = 0.7;
+const float GLASS_ALPHA = 0.78;
 const float EDGE_SOFT = 0.12;
 const float EDGE_BITE = 0.5;
 const float NARROW_EDGE_BITE = 0.3;
@@ -66,6 +78,10 @@ const float STREAK_RATE = 0.5;
 // The ring: where its foot lies in radii upstream of the centre, the reach, the arcs per radius
 // and the steps a second the arcs spread at.
 const float RING_FOOT = 0.3;
+// The foot is a line across the curtain's width, not a point: its half-length in radii (the crest
+// is 0.91 radii either side, RING_WIDTH_FACTOR), and the solid white core round it.
+const float RING_FOOT_HALF = 0.78;
+const float RING_CORE = 0.22;
 const float RING_REACH = 0.9;
 const float RING_STRETCH = 1.25;
 const float RING_ARCS = 2.5;
@@ -133,7 +149,7 @@ void vertex() {
 
 void fragment() {
 	float foam_gain = clamp(foam_strength, 0.5, 1.5);
-	vec3 glass = mix(p_shallow, p_mid, 0.45);
+	vec3 glass = mix(p_shallow, p_mid, GLASS_MID_SHARE);
 	if (kind > 0.75) {
 		// ---- Mist: three broad round lobes, a firm soft rim, the core white, the rim sky ---------
 		if (water_quality_skip_fine_detail) {
@@ -165,13 +181,20 @@ void fragment() {
 		// ---- Foam ring: broken arcs spreading from the foot in steps ------------------------------
 		float radius = max(uv2.x, 1e-3);
 		vec2 q = uv / radius;
-		vec2 from_foot = (q - vec2(0.0, -RING_FOOT)) * vec2(RING_STRETCH, 1.0);
+		// Distance from the foot LINE across the curtain's width (its rounded ends stretched).
+		vec2 from_foot = vec2(
+			max(abs(q.x) - RING_FOOT_HALF, 0.0) * RING_STRETCH, q.y + RING_FOOT
+		);
 		float d = length(from_foot);
 		float density = 1.0 - smoothstep(0.1, RING_REACH, d);
 		float tick = floor(TIME * RING_STEP_HZ * max(wave_speed, 0.2));
 		float arcs = 0.5 + 0.5 * sin((d * RING_ARCS - tick * 0.28) * TAU);
 		float churn = be_n2(uv * 2.6 + vec2(tick * 1.7, tick * 0.9));
 		float foam = smoothstep(0.38, 0.52, density * (0.45 + 0.55 * arcs) + (churn - 0.5) * 0.6);
+		// The plunge itself: solid white along the foot, a churned edge, where the curtain's white
+		// foot lands, so the curtain and the pool join in one mass of foam.
+		float core = 1.0 - smoothstep(RING_CORE * 0.6, RING_CORE + 0.12 * churn, d);
+		foam = max(foam, core);
 		foam *= smoothstep(0.0, 0.25, edge);
 		ALBEDO = mix(p_foam, p_lit, 0.2 * (1.0 - density));
 		ALPHA = foam * foam_gain;
@@ -214,7 +237,7 @@ void fragment() {
 		float roll_fade = 1.0 - smoothstep(0.1 + waver, LIP_ROLL_M + waver, v);
 		float lip_floor = smoothstep(0.17, 0.2, run) * roll_fade;
 		float lip = max(scallop * roll_fade, lip_floor);
-		float lip_glass = 1.0 - smoothstep(0.03, 0.2, v);
+		float lip_glass = 1.0 - smoothstep(0.0, BRINK_GLASS_M, v);
 		float narrow = 1.0 - smoothstep(NARROW_WIDTH_M, WIDE_WIDTH_M, fall_width);
 		float bottom = smoothstep(height * (1.0 - BOTTOM_WHITE_SHARE), height, v);
 		float entrained = mix(0.06, 0.5, narrow) + smoothstep(0.0, 2.5, v) * mix(0.12, 0.25, narrow);
@@ -224,10 +247,11 @@ void fragment() {
 		// Two values, not a gradient: the glass and the white, a soft edge between.
 		float white = mix(aeration, smoothstep(0.38, 0.55, aeration), 0.6);
 		vec3 tint = mix(glass, p_lit, 0.35 * streak);
+		tint = mix(tint, mix(p_shallow, p_lit, 0.3), brink_glass);
 		ALBEDO = mix(tint, p_foam, white);
-		float alpha = mix(glass_alpha * (0.5 + 0.5 * streak), 0.96, white);
+		float alpha = mix(GLASS_ALPHA * (0.75 + 0.25 * streak), 0.96, white);
 		alpha = max(alpha, max(lip, narrow * 0.85));
-		alpha = mix(alpha, 0.55, brink_glass);
+		alpha = mix(alpha, 0.8, brink_glass);
 		// Torn side edges: a broad ragged bite, deeper toward the pool.
 		float rag_e = be_n2(vec2(u * 1.5 + 7.3, (t_fall - t_now) * 5.0));
 		rag_e = smoothstep(0.3, 0.7, rag_e);
@@ -236,7 +260,7 @@ void fragment() {
 			* smoothstep(height * (1.0 - BOTTOM_TAPER_SHARE), height, v);
 		float edge_mask = smoothstep(0.0, EDGE_SOFT, edge - bite * rag_e - taper);
 		float tear = be_n2(vec2(u * 1.5 + 2.0, floor(TIME * 0.6)));
-		float tear_level = pool + BOTTOM_TEAR_M * tear;
+		float tear_level = pool - BOTTOM_SINK_M + BOTTOM_TEAR_M * tear;
 		float pool_fade = smoothstep(tear_level, tear_level + BOTTOM_FADE_M, world_pos.y);
 		ALPHA = clamp(alpha, 0.0, 1.0) * edge_mask * pool_fade;
 	}

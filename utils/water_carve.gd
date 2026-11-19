@@ -109,6 +109,13 @@ const FALL_LIP_WIDTH_M := 0.25
 ## about a channel width and a half of rock either side at the foot, none at the lip.
 const FALL_BANK_SLOPE := 1.4
 const FALL_BANK_REACH_M := 4.0
+## A fall's crest across a narrow channel (section(), card painter-fall-continuity): where the
+## gorge share is up and the water over the bed is a crest's (under 2 x FALL_CREST_DEPTH_M),
+## the shore steepens to MAX_SHORE_SLOPE and the toe's rounding shrinks to this, so the bed
+## stays flat across the channel up to the lip. With TOE_SOFT_M the rounding lifted the middle
+## of a 1.1 m ankle channel to 4 cm under the level, and the water funnelled over its last
+## 0.7 m to 56 percent of the channel at the lip.
+const FALL_CREST_TOE_SOFT_M := 0.04
 ## How high a small step's crest rises over the bed per metre of drop (step_shape()), the
 ## pool tail's mean slope up to the crest, and the taper at a river's ends per metre of depth;
 ## lengths clamped.
@@ -307,17 +314,30 @@ static func fall_shape(x: float, upper: float, lower: float, depth: float) -> Ve
 ## The cross-section's goal at edge offset `e` (see the header) for water at `level` over a
 ## bed at `bed`, `depth` class Depth, half-width `half_width` (0 for a pond: no narrowing).
 ## `gorge` (0..1, fall_gorge()) moves the bank slope from the class's to FALL_BANK_SLOPE
-## across a fall's face; at 0 the section is exactly the ordinary one.
+## across a fall's face; at 0 the section is exactly the ordinary one. `crest_share` (0..1,
+## bed_line()'s w: the pool tail rising to a fall's lip) keeps the crest's bed flat across
+## (FALL_CREST_TOE_SOFT_M); at 0 nothing changes.
 static func section(
-	e: float, level: float, bed: float, depth: int, half_width: float, gorge: float = 0.0
+	e: float,
+	level: float,
+	bed: float,
+	depth: int,
+	half_width: float,
+	gorge: float = 0.0,
+	crest_share: float = 0.0
 ) -> float:
 	var shore := SHORE_SLOPE[depth]
 	var full := level - bed
 	if half_width > 0.0 and full > 0.0:
 		shore = clampf(full / (half_width * (1.0 - BED_SHARE)), shore, MAX_SHORE_SLOPE)
+	# A fall's crest keeps a flat bed across (FALL_CREST_TOE_SOFT_M).
+	var crest := 0.0
+	if crest_share > 0.0 and full > 0.0:
+		crest = crest_share * (1.0 - smoothstep(FALL_CREST_DEPTH_M, 2.0 * FALL_CREST_DEPTH_M, full))
+	shore = lerpf(shore, MAX_SHORE_SLOPE, crest)
 	var bank := lerpf(BANK_SLOPE[depth], FALL_BANK_SLOPE, gorge)
 	var line := level + e * (shore if e < 0.0 else bank)
-	return smooth_max(bed, line, TOE_SOFT_M)
+	return smooth_max(bed, line, lerpf(TOE_SOFT_M, FALL_CREST_TOE_SOFT_M, crest))
 
 
 ## The final goal of a sample whose ground is `start`: the cross-section goal `goal` met
@@ -345,13 +365,14 @@ static func min_half_width(depth: int) -> float:
 	return WaterBody.depth_for(depth) / (MAX_SHORE_SLOPE * (1.0 - BED_SHARE))
 
 
-## Vector3(bank level, bed height, gorge share) at arc length `s` of a carved course (see the
-## header): `bounds` holds the arc lengths of the n - 1 shared points between its n reaches,
-## `levels` the reaches' levels, `total` the course length; `taper` Vector2i(start, end) says
-## which ends taper (inside the map); `falls` (WaterFalls.fall_flags, one byte per shared
-## point) marks the steps that are waterfalls (fall_shape()) rather than riffles. The gorge
-## share (section() and blend_with_ground()) is fall_gorge() below a fall's lip, rises over
-## the pool tail above one (with the bed, to 1 at the lip) and is 0 everywhere else.
+## Vector4(bank level, bed height, gorge share, crest share) at arc length `s` of a carved
+## course (see the header): `bounds` holds the arc lengths of the n - 1 shared points between
+## its n reaches, `levels` the reaches' levels, `total` the course length; `taper`
+## Vector2i(start, end) says which ends taper (inside the map); `falls` (WaterFalls.fall_flags,
+## one byte per shared point) marks the steps that are waterfalls (fall_shape()) rather than
+## riffles. The gorge share (section() and blend_with_ground()) is fall_gorge() below a fall's
+## lip, rises over the pool tail above one (with the bed, to 1 at the lip) and is 0 everywhere
+## else; the crest share is that rise above a fall alone (section()'s flat crest).
 static func bed_line(
 	s: float,
 	bounds: PackedFloat32Array,
@@ -360,7 +381,7 @@ static func bed_line(
 	total: float,
 	taper: Vector2i,
 	falls: PackedByteArray
-) -> Vector3:
+) -> Vector4:
 	var n := levels.size()
 	var k := 0
 	while k < n - 1 and s > bounds[k]:
@@ -369,6 +390,7 @@ static func bed_line(
 	var bed := level - depth
 	var bank := level
 	var gorge := 0.0
+	var crest := 0.0
 	var tail := pool_tail(depth)
 	var fall_above := k > 0 and k - 1 < falls.size() and falls[k - 1] != 0
 	if fall_above:
@@ -385,6 +407,7 @@ static func bed_line(
 		bed = lerpf(bed, next.x, rising)
 		if full:
 			gorge = maxf(gorge, rising)
+			crest = rising
 	if k > 0 and not fall_above:
 		var upper := levels[k - 1]
 		var step := step_shape(upper, level, depth)
@@ -405,7 +428,7 @@ static func bed_line(
 		var left := _end_depth(depth, tail, total - s)
 		bed = maxf(bed, level - left)
 		plunge *= left / depth
-	return Vector3(bank, bed - plunge, gorge)
+	return Vector4(bank, bed - plunge, gorge, crest)
 
 
 ## The depth left `s` metres from a tapered end: the depth tapered from zero over the pool
@@ -544,7 +567,7 @@ static func river_goals(
 				continue
 			var line := bed_line(along[k], bounds, levels, depth, total, taper, falls)
 			var ground := start[(rect.position.y + j) * columns + rect.position.x + i]
-			var goal := section(e, line.x, line.y, depth_class, hw, line.z)
+			var goal := section(e, line.x, line.y, depth_class, hw, line.z, line.w)
 			goal = blend_with_ground(goal, ground, e, line.z)
 			if goal < ground:
 				goals[k] = goal

@@ -105,10 +105,17 @@ func test_bottom_row_ends_three_centimetres_under_the_pool() -> void:
 		var fall := _fall_at(falls, bottom)
 		var drop := float(fall.top) - float(fall.bottom)
 		assert_almost_eq(float(deepest_v[bottom]), drop + WaterFallMesh.END_BELOW_M, EPSILON)
-		# Every vertex of the last row is at the end: the whole row reaches the pool.
+		# The last row reaches the pool, but for the outermost pair of columns: since the crest's
+		# bed stays flat across a narrow channel (WaterCarve.FALL_CREST_TOE_SOFT_M, card
+		# painter-fall-continuity) the curtain is the channel's width, and on a hillside ankle
+		# stream its edge columns land on the plunge pool's bank, held over it, never under the end.
+		var held := 0
 		for i in _of_kind(arrays, WaterFallMesh.KIND_CURTAIN):
 			if absf(uv2s[i].y - bottom) < 1e-4 and absf(uvs[i].y - float(deepest_v[bottom])) < 1e-5:
-				assert_almost_eq(vertices[i].y, end, EPSILON, "a last-row vertex at the end")
+				assert_true(vertices[i].y >= end - EPSILON, "a last-row vertex never under the end")
+				if absf(vertices[i].y - end) > EPSILON:
+					held += 1
+		assert_lte(held, 2, "only the edge columns rest on the bank")
 
 
 func test_curtain_covers_the_wetted_crest() -> void:
