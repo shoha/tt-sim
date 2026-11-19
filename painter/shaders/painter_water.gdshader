@@ -26,7 +26,11 @@ render_mode blend_mix, depth_draw_opaque, cull_back, specular_disabled, ambient_
  *   dashes outside it (in the iso-depth frame of the depth buffer), dashes on fast shallow water
  *   (riffles), a wrap round rocks and wading tokens (Classic's depth-slope detector, thresholded),
  *   and for a wading token two or three broken arcs that step outward in visible steps and a
- *   teardrop of dashes downstream.
+ *   teardrop of dashes downstream. Near a waterfall the fall white (painter_fall_white.gdshaderinc,
+ *   card painter-fall-frame-foam): the roll over the brink and the foam at the foot, from the fall
+ *   frame in CUSTOM0 and CUSTOM1 (WaterFallFrames; zero on a Blender plane and the river ribbon,
+ *   so none there), the same function the curtain (painter_waterfall.gdshader) draws its share
+ *   with, so the white is one shape over the lip and over the foot.
  *   The glints. A third lattice of short bright ticks, kept only where a stroke's own small tilt
  *   would reflect the sun toward the camera (the sun is the foliage_sun global): a ragged column
  *   toward the sun, gold at dusk, silver under the moon. Placed, not computed from a normal.
@@ -51,6 +55,7 @@ render_mode blend_mix, depth_draw_opaque, cull_back, specular_disabled, ambient_
 #include "res://painter/shaders/painter_noise.gdshaderinc"
 #include "res://shaders/skirt_fade.gdshaderinc"
 #include "res://shaders/wind_global.gdshaderinc"
+#include "res://painter/shaders/painter_fall_white.gdshaderinc"
 
 // ---- Classic's names (Motion keys, the network, the level's water settings) ----------------
 uniform float wave_speed : hint_range(0.0, 5.0) = 0.6;
@@ -99,6 +104,11 @@ uniform vec2 p_px = vec2(0.045, 0.12);
 varying vec3 world_pos;
 varying vec3 f_lit;
 varying vec3 f_shd;
+// The fall frame (WaterFallFrames; flat: a triangle takes one vertex's frame whole) and the map XZ
+// it is read at (the authored surface's model space is the map's).
+varying flat vec4 fall_a;
+varying flat vec4 fall_b;
+varying vec2 fall_xz;
 
 // The wash: the column thresholds (m) between the bands, how hard the bands are posterised (the
 // rest is a soft ramp), the share of the deepest alpha the shallow and mid bands keep.
@@ -254,6 +264,9 @@ vec2 stroke_layer(
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	fall_a = CUSTOM0;
+	fall_b = CUSTOM1;
+	fall_xz = VERTEX.xz;
 }
 
 
@@ -462,6 +475,9 @@ void fragment() {
 	edge_foam *= edge_band;
 	shore_foam *= edge_band;
 	float foam = clamp(max(max(shore_foam, edge_foam), max(ring_cov, wake_cov)) * foam_k, 0.0, 1.0);
+	// The fall white: the river's share of the brink's gradient, the pool's of the foot foam and its
+	// halo, which fades from the white to this wash (painter_fall_white.gdshaderinc).
+	foam = max(foam, fall_white_water(fall_a, fall_b, fall_xz));
 	foam *= 1.0 - ice_k * 0.85 * (1.0 - open_water);
 	a = max(a, foam * 0.96);
 

@@ -69,6 +69,7 @@ func test_the_copied_constants_are_the_owners() -> void:
 	assert_eq(PainterWarmup.WATERFALL, PainterWater.FALL_SHADER)
 	assert_eq(PainterWarmup.SKY, PainterScene.SKY_SHADER)
 	assert_eq(PainterWarmup.MANNER_FLAGS, PainterMannerMesh.FORMAT)
+	assert_eq(PainterWarmup.FRAME_FLAGS, WaterFallFrames.FORMAT)
 	assert_eq(PainterWarmup.DEFAULT_SHEET, RenderStyle.DEFAULT_SHEET)
 
 
@@ -98,6 +99,10 @@ func test_the_layouts_match_the_real_producers() -> void:
 	)
 	var chunk: Dictionary = TerrainMeshBuilder.warmup_samples()[0]
 	assert_eq(_format_of(_sample_named("ground")), _format_of(chunk), "ground chunk")
+	# The authored water surface and the falls carry the fall frames (WaterFallFrames).
+	var water := AuthoredWater.warmup_samples()
+	assert_eq(_format_of(_sample_named("water_framed")), _format_of(water[0]), "water surface")
+	assert_eq(_format_of(_sample_named("waterfall")), _format_of(water[1]), "falls")
 
 
 func test_headless_is_ready_and_starts_nothing() -> void:

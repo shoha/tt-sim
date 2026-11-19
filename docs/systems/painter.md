@@ -309,9 +309,18 @@ texture's opaque box (round on a head, long on a lavender spike) with a brushed 
 at its foot, in the one of six sheet accents (`flower-gold`, `-rose`, `-violet`, `-white`, `-red`,
 `-blue`) that the texture's own mean colour sorts into by OKLCH hue (poppy red, bluebell blue,
 buttercup gold, daisy white, bloom mound pink or gold, bellflower and lavender violet), never a fixed
-or random colour. Each card grows about its centre (`PainterFlowerHue.centres`: one texel a vertex,
-read by `VERTEX_ID`) so its dab is at least `BLOOM_PX` (8) pixels across at the view, at most 3.5x:
-at the orbit view a head reads as one blot, at the eye a bloom keeps its size. A surface whose name
+or random colour. A single flower's cards stay as they are (the growth to `BLOOM_PX` that
+painter-flowers wrote never ran: the pixel size took `PROJECTION_MATRIX[1][1]` as positive, and the
+world's viewport is y-flipped, so it came out negative; the approved look is the ungrown one). A
+bloom mound is a carpet (`PainterFlowerHue.carpet_of`, the last row of the centres texture: at
+least 12 cards whose top centre is under 0.2 m; core's bloom and lavender mounds): under the orbit's
+orthographic camera each card is turned to face the view, drawn 0.3 of the way to the mound's
+middle and 0.8 up to its top card, brought 0.25 mesh units toward the eye so it lies over the
+leaves (which stand twice as high as the blooms), and grown to at least `BLOOM_PX` and 1.7x more,
+so the mound reads as one solid blot of bloom (owner, board l44_mound "One solid blot";
+painter-flower-carpet). Each carpet card takes the flower's own accent (60 %) or one of two more
+the plant draws from the six, a step darker low on the mound. No measurable GPU cost (in-run
+on/off, zoom 16 and 45). A surface whose name
 says neither (a user library's one-atlas flower) keeps the per-pixel petal test, in the accent of
 its non-green pixels' mean. `flower-mix` is now the slow field that steps a drift of blooms lighter
 or darker. Cost on the meadow (in-run against the old path, 47 flower stand-ins): +0.01 ms at zoom
@@ -1609,7 +1618,10 @@ The look (`painter_water.gdshader`, no screen texture):
   ground already binds.
 
 `painter_waterfall.gdshader` is the fall: unshaded, the same vertex contract as Classic's, chunky
-white streaks over the shallow and mid tones, with the sheet's foam.
+white streaks over the shallow and mid tones, with the sheet's foam. The white over the brink and at
+the foot is shared with the water (`painter_fall_white.gdshaderinc`, from the fall frame in
+CUSTOM0/CUSTOM1; card painter-fall-frame-foam below), so it has no lip roll and no foam ring of its
+own: the ring is Classic's only.
 
 Full-size verdicts (card painter-loose-ends, 2026-11-16, frames in
 `compare/painter_final29_loose_ends/`): summer, dusk, night and winter read as the sheet's moods
@@ -1837,6 +1849,23 @@ painter_final25_coverage/matrix.md`; the current, code-read class-by-class audit
   stands over the curtain's outer columns: widening the curtain did not show, a carve matter), the
   plunge pools' pale walls, small steps at the pond's upper shoulders, and two small dark-blue spill
   faces beside the tall ankle fall's lip pool.
+- **One fall white (card painter-fall-frame-foam, 2026-11-19, look-pending; frames, metrics and
+  notes in `compare/painter_final64_fall_frame_foam/`).** Stage 1 of the fall spike's plan
+  (`compare/painter_final63_fall_spike/`, approach 1 made production). Each fall's frame
+  (`WaterFallFrames`, `docs/systems/waterfalls.md` "Fall frames") rides in CUSTOM0/CUSTOM1 of the
+  water surface and the curtain, read through flat varyings, and
+  `painter/shaders/painter_fall_white.gdshaderinc` draws one white from it: over the brink a
+  gradient (the river whitens over its last 0.7 m to full white at the lip, the curtain's streaks
+  return by 0.8 m down), at the foot a two-valued churned white whose reach grows with the drop,
+  and past it a halo of the same foam fading to the pool's wash over about a metre. The curtain's
+  own lip roll and the painted foam ring (its shader branch and constants) are gone; the ring's
+  vertices stay in the mesh for Classic and collapse in the painter shader. Round 2 had a white band
+  starting 0.55 m up the river and a separate pale turquoise halo shape: the band raised the lip's
+  step (dL 9.9 -> 12.3) and the halo read as a stripe with a dark sliver under the white; round 3
+  made both gradients. Continuity probe, 27 captures per look (9 cases x 3 time samples, half size,
+  round 3): lip dL 6.8 -> 5.8, foot dL 25.4 -> 3.4, foot bands 1.11 -> 0.11. The fades read soft,
+  a little airbrushed, against the painted wash. Left: the classes this does not touch (C1, C2
+  pinch, C5 pale walls, C6, C7 head slab; stages 2 to 4 of the plan).
 - **Known gaps** are listed in the matrix with their effort: round and profile roofs (procgen
   records). The settlement furnishings and the field plants were filled by painter-village-parity
   (next section).

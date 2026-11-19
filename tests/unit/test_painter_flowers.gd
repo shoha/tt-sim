@@ -66,6 +66,31 @@ func test_core_blooms_take_their_own_accent() -> void:
 		root.free()
 
 
+func test_a_bloom_mound_is_a_carpet_and_a_single_head_is_not() -> void:
+	var carpets := {}
+	for stem: String in EXPECTED:
+		var root := GlbUtils.load_glb(DIR + stem + ".glb")
+		if root == null:
+			continue
+		var mesh := (root.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D).mesh
+		for i in mesh.get_surface_count():
+			if mesh.surface_get_material(i).resource_name.ends_with("_LeafB"):
+				var image := PainterFlowerHue.centres(mesh, i, Vector4(0.5, 0.5, 0.5, 0.5)).get_image()
+				var carpet := image.get_pixel(0, image.get_height() - 1)
+				carpets[stem] = carpet.a
+				var verts: PackedVector3Array = mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]
+				gut.p("%s: %d vertices, carpet %.0f, top %.3f" % [stem, verts.size(), carpet.a, carpet.g])
+		root.free()
+	var mound := "Flower_BloomMound_v0_grassland_meadow"
+	assert_eq(carpets.get(mound), 1.0, "the bloom mound is one carpet")
+	assert_eq(carpets.get("Flower_BloomMound_v1_alpine_meadow"), 1.0, "both of them")
+	assert_eq(carpets.get("Flower_Poppy_v0_grassland_meadow"), 0.0, "a poppy keeps its heads")
+	assert_eq(carpets.get("Flower_BellCluster_v2"), 0.0, "and a cluster of bells on stems")
+	var pair := PainterFlowerHue.carpet_of([Vector4(2, 1, 0, 2), Vector4(0, 3, 4, 1)])
+	assert_almost_eq(Vector3(pair.r, pair.g, pair.b), Vector3(0.5, 3.0, 2.0), Vector3.ONE * 1e-5)
+	assert_eq(pair.a, 0.0, "two cards are no carpet")
+
+
 ## Every vertex of a card shares one centre, inside the card's box, with a dab size above zero.
 func _assert_centres(texture: ImageTexture, mesh: Mesh, surface: int, stem: String) -> void:
 	assert_not_null(texture, stem + " centres")

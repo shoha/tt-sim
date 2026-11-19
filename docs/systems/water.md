@@ -70,7 +70,9 @@ Phase 4, P4-1 is data and algorithms only; the surface, carve and tool follow. P
   painter-fall-continuity: before, the river stood over the pond as a slab and the bed showed
   under its edge as a tan band; past the channel that sheet falls to the sides at
   `RUN_OUT_SLOPE`). Perched water (card painter-fall-round2): where later digging took a river's
-  ground away (a pond dug beside or under it), a wet sample the river owns alone that lost its
+  ground away (a sculpt dig, or a pond painted under it; a pond dug beside it no longer does,
+  since its banks yield to the river's since card painter-river-profile, "Ponds" under
+  Authoring), a wet sample the river owns alone that lost its
   bank (`BANK_MARGIN_M` past the half-width and `BANK_HOLD_M` under the level) or its bed (deeper
   than `WaterMeshBuilder.hold_depth()`: the depth and `HOLD_SLACK_M`, plus the deepest plunge pool
   below a fall; never for a river with an end in other water, whose basin may have deepened it)
@@ -336,9 +338,21 @@ editor API the Water tool (P4-4) calls.
   back to the ground. The carve only lowers (`min(start, goal)`). The steepest bank (31
   degrees) and shore (42) stay below the cliff rule's 44, so a channel is never a rock
   trench unless the ground was rock.
+- **The river profile** (card painter-river-profile, `RiverProfile`, `utils/river_profile.gd`,
+  pure): one profile per stroke, the one description of a carved river the carve reads. It
+  holds the joined course (`WaterCarve.joined_course`), the reaches' levels and the steps' fall
+  flags, gives along the arc length the bank level, the bed, the gorge share and the sill share
+  (`at()`), the rounded heads (`head()`) and the course rasterised on the sample grid
+  (`field()`), and lists every fall as an entry of its own (`falls`: lip, carved foot and plunge
+  pool end as arcs, with the two levels). `stations(doc, spacing)` samples it over a document's
+  ground with an undermined flag per station (a bank point `WaterMeshBuilder.BANK_MARGIN_M` past
+  the half-width more than `BANK_HOLD_M` under the level, or the centre more than `HOLD_SLACK_M`
+  under the bed: the perched rule's tests per station; never on a fall's face or near an end
+  in other water). `RiverProfile.strokes(bodies)` groups a document's river reaches into
+  ordered strokes.
 - **Reach steps:** the stroke's reaches are carved as one course (their courses joined,
   exactly the lines their areas come from) with a bed line along its arc length
-  (`bed_line`): each reach flat at level - depth; toward a shared point the bed rises over a
+  (`RiverProfile.at`): each reach flat at level - depth; toward a shared point the bed rises over a
   pool tail to a crest (`step_shape`: just under the upper level for a full step,
   `CREST_RISE_PER_DROP` x the drop over the bed for a small one, so a 10 cm step in a deep
   river is a low bar, not a weir), and below it a riffle falls at `RIFFLE_SLOPE` 0.3 to the
@@ -358,12 +372,13 @@ editor API the Water tool (P4-4) calls.
   where it stands over the ground. River ends inside the map taper their depth
   from zero over a few metres (a spring, a sink), and (P4-4) their width to a rounded head
   (`WaterCarve.head_width`: a quarter ellipse over the longer of the depth taper and 2.2
-  half-widths, with at least a 14 cm film of water toward the tip, `_end_depth`), so the
+  half-widths, with at least a 14 cm film of water toward the tip, `RiverProfile._end_depth`), so the
   water closes round the end instead of stopping in a straight shallow line across the
   channel.
 - **Falls:** a step `WaterFalls.fall_flags()` marks (the upper reach 0.75 m or more over the
-  lower) is carved as a waterfall, not a riffle (`bed_line(..., falls)`): the fall profile,
-  the plunge pool and the gorge walls are in [waterfalls.md](waterfalls.md) (Authoring).
+  lower) is carved as a waterfall, not a riffle (the profile's fall entries): the fall
+  profile, the sill through the lip, the plunge pool and the gorge walls are in
+  [waterfalls.md](waterfalls.md) (Authoring).
 - **Erase** (P4-4, `WaterEdit.touch_rivers`, `erased_bodies`): a river whose water the
   eraser touches (its course within the eraser's radius plus the half-width) goes whole: every
   reach of its stroke (`river_chain`: the reaches joined end to end). A reach is never cut
@@ -384,7 +399,25 @@ editor API the Water tool (P4-4) calls.
   the signed distance to the painted area (`DistanceField`, an exact Euclidean transform)
   box-smoothed over 0.5 m twice (the shoreline follows the outline, not the samples'
   staircase), deepens toward the middle by up to 25 % of the depth, and never lowers ground
-  outside the painted area below the level (water there would not be the pond's). P4-4: the
+  outside the painted area below the level (water there would not be the pond's). Its banks
+  yield to existing rivers (card painter-river-profile, `WaterCarve._yield_to_rivers`, seam
+  class C7): every body keeps the level its plan gave it and is wet only where the ground under
+  that level lies in its area, so a river's water is only as real as the ground that holds it,
+  while a pond's banks outside its mask are only ground eased back from its basin. Outside the
+  pond's mask its goal stays at least a river's own cross-section (the profile's bed and banks)
+  and its crown (the level plus `BANK_HOLD_M` over the river's whole area, `RIVER_BANK_M` past
+  the half-width, then falling at the pond's bank slope but never over a rock slope,
+  `FALL_BANK_SLOPE`, off the pond's waterline, so the pond keeps a shore everywhere but right
+  under the river's area: falling at the pond's slope alone the ridge stood 3 m over the water
+  along 15 m of the shore, cut straight like a dam), for every stroke with no end on the
+  pond's mask (one that feeds or leaves the pond yields to it instead). Inside the mask the pond
+  digs as painted. Before, a deep pond painted 1.5 m from the head of an ankle stream on a tier
+  cut the stream's bed and banks up to 3.5 m deep (its 31 degree bank reached 6 m into the
+  plateau) and the stream above the lip was a 3-5 cm film nobody saw; now its upper reach
+  holds 8 of 9 stations (the ninth the rounded head's dry tip) and its head stands on a narrow
+  spur into the pond's shore (its waterline there steps with the 0.25 m grid on the steep rock).
+  A pond painted under a river's middle, or a sculpt dig, still leaves
+  perched water for the mesh's perched rule. P4-4: the
   shore is a beach (`WaterCarve.pond_section`): the ground runs at `BEACH_SLOPE` (0.12) for
   a metre above the waterline and 0.6 m below it, then the class's shore slope through a
   rounded brink (`smooth_min` over 0.12 m). P4-3's shore met the water at a 15 cm cut bank

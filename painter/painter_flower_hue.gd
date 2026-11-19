@@ -53,6 +53,12 @@ const PETAL_SHARE := 0.05
 ## vertices a bloom surface may have for its cards to be grown (core's have 160 to 260).
 const CENTRE_WIDTH := 256
 const MAX_VERTICES := 16384
+## A bloom surface is drawn as one carpet at the orbit view (carpet_of) when it has at least
+## CARPET_CARDS cards and its highest card's middle is under CARPET_TOP (mesh units, metres): core's
+## bloom and lavender mounds top out at 0.10 to 0.13, its poppies, daisies and bells on their stems
+## at 0.29 to 0.41, every one 40 to 65 cards (measured 2026-11-19).
+const CARPET_CARDS := 12
+const CARPET_TOP := 0.2
 
 
 ## The sheet role index (ROLES) a bloom of sRGB colour `c` takes.
@@ -133,8 +139,9 @@ static func opaque_box(image: Image) -> Vector4:
 ## MAX_VERTICES): a float texture CENTRE_WIDTH texels wide, one texel per vertex in vertex order
 ## (the shader's VERTEX_ID), holding its card's centre (xyz, mesh units) and the size of the dab
 ## drawn on it (w: the smaller of the card's UV-mapped width and height times the opaque box's,
-## `box` opaque_box's). A card is a set of triangles joined by shared vertices; the plant shader
-## grows each about its centre, so no card frame is assumed (core's bloom cards run every way).
+## `box` opaque_box's), and one row more whose first texel is carpet_of() the cards. A card is a
+## set of triangles joined by shared vertices; the plant shader grows each about its centre, so no
+## card frame is assumed (core's bloom cards run every way).
 static func centres(mesh: Mesh, surface: int, box: Vector4) -> ImageTexture:
 	if mesh == null or surface < 0 or surface >= mesh.get_surface_count():
 		return null
@@ -166,7 +173,7 @@ static func centres(mesh: Mesh, surface: int, box: Vector4) -> ImageTexture:
 		var s: Vector4 = sums.get(root, Vector4.ZERO)
 		sums[root] = s + Vector4(verts[i].x, verts[i].y, verts[i].z, 1.0)
 	var rows := ceili(float(verts.size()) / CENTRE_WIDTH)
-	var image := Image.create_empty(CENTRE_WIDTH, rows, false, Image.FORMAT_RGBAF)
+	var image := Image.create_empty(CENTRE_WIDTH, rows + 1, false, Image.FORMAT_RGBAF)
 	for i in verts.size():
 		var root := _root(parent, i)
 		var s: Vector4 = sums[root]
@@ -176,7 +183,27 @@ static func centres(mesh: Mesh, surface: int, box: Vector4) -> ImageTexture:
 			i / CENTRE_WIDTH,
 			Color(s.x / s.w, s.y / s.w, s.z / s.w, minf(size.x, size.y))
 		)
+	image.set_pixel(0, rows, carpet_of(sums.values()))
 	return ImageTexture.create_from_image(image)
+
+
+## The texel the shader reads last in the centres texture, from each card's vertex sum (xyz) and
+## count (w): the cards' middle across (x, z), the top card's height (y), and 1 in alpha when the
+## surface is a low carpet of blooms (CARPET_CARDS, CARPET_TOP: a bloom mound), else 0. At the
+## orbit view the plant shader turns a carpet's cards to the view, draws them in toward that middle
+## and up to that top over the leaves, and grows them, so the mound reads as one solid blot of bloom
+## in a few hues instead of a ring of small dabs with the green between (owner, board l44_mound:
+## "One solid blot"; painter_selector's bloom_grown). Pure.
+static func carpet_of(cards: Array) -> Color:
+	var mid := Vector3.ZERO
+	var top := -INF
+	for s: Vector4 in cards:
+		var c := Vector3(s.x, s.y, s.z) / maxf(s.w, 1.0)
+		mid += c
+		top = maxf(top, c.y)
+	mid /= maxf(float(cards.size()), 1.0)
+	var carpet := cards.size() >= CARPET_CARDS and top < CARPET_TOP
+	return Color(mid.x, top if cards.size() > 0 else 0.0, mid.z, 1.0 if carpet else 0.0)
 
 
 ## Mesh units per UV unit across and down the triangle a, b, c (zero when its UVs are degenerate).
