@@ -22,6 +22,17 @@ extends RefCounted
 ## level, a strip the foam ring covers (P4c-0 probe a). The rows are shared across the
 ## columns (a regular grid), so the ribbon is one strip of quads.
 ##
+## Lead-in (card painter-fall-lip). The carve pinches the channel over the last metre or so
+## above a fall (the gorge's steeper bank, WaterCarve.FALL_BANK_SLOPE, reaches back over the
+## pool tail), so the wetted width at the lip line is about a quarter narrower than the pool a
+## metre upstream, and the pool's visible water ends a few decimetres before the lip over the
+## shallow sill. The curtain alone began at the lip line with the narrow width, which stepped
+## the white shoulders in there. The ribbon therefore starts LEAD_M upstream of the lip, with
+## lead_backs() flat rows at the upper level, each as wide as the wetted channel at its own
+## place (lead_widths(), never narrower than the lip's), so the outline follows the pool's
+## pinch into the curtain. The lead-in rows have UV.y 0 (the brink glass of the shaders) and
+## the same columns, so the streaks and the edge fade carry on unchanged.
+##
 ## Vertex layout (the contract with shaders/waterfall.gdshader, P4c-4; the model matrix is
 ## the identity, so VERTEX is map space):
 ##   NORMAL  outward (the lower course's direction at the lip); the curtain's are its
@@ -69,6 +80,10 @@ const ROW_FALL_M := 0.12
 const ROLL_ROW_FALL_M := 0.03
 ## The water runs level over the brink this far before it falls.
 const LIP_ROLL_M := 0.3
+## The lead-in above the lip (see the header): how far upstream the ribbon starts and the
+## spacing of its rows.
+const LEAD_M := 0.6
+const LEAD_ROW_M := 0.15
 ## The curtain ends this far under the lower level.
 const END_BELOW_M := 0.03
 ## How far past the carved face's foot (WaterCarve.fall_foot) a column is traced: the pool
@@ -95,6 +110,11 @@ const WIDTH_SCAN_M := 0.05
 const DRY_CREST_SHARE := 0.5
 ## COLOR.r on the curtain: 0 at a side edge, 1 this far in.
 const EDGE_FADE_M := 0.35
+## The same at the lip: the fade is this short over the brink rows (the lead-in and the roll),
+## so the white roll reaches the pool's outline instead of standing a hand's breadth in from it,
+## and lengthens to EDGE_FADE_M by EDGE_FADE_LIP_RUN_M metres fallen.
+const EDGE_FADE_LIP_M := 0.08
+const EDGE_FADE_LIP_RUN_M := 0.6
 ## COLOR.a on the curtain: the wetted crest width over this (waterfall.gdshader decodes it
 ## with the same constant).
 const WIDTH_ENCODE_M := 8.0
@@ -204,6 +224,40 @@ static func crest_widths(
 	if out.x < WIDTH_SCAN_M or out.y < WIDTH_SCAN_M:
 		return Vector2.ONE * (half_width * DRY_CREST_SHARE)
 	return out
+
+
+## How far upstream of the lip each lead-in row stands, farthest first: LEAD_M, then every
+## LEAD_ROW_M nearer, the last LEAD_ROW_M short of the lip (the lip row is the curtain's first).
+static func lead_backs() -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for k in roundi(LEAD_M / LEAD_ROW_M):
+		out.append(LEAD_M - LEAD_ROW_M * float(k))
+	return out
+
+
+## The wetted half-widths of the lead-in row `back` metres upstream of the lip: crest_widths()
+## of the lip line moved upstream, never narrower than the lip's own `lip_widths`, so the
+## outline only ever widens upstream (and never past `half_width`, the channel's waterline).
+static func lead_widths(
+	doc: MapDocument,
+	lip: Vector2,
+	dir: Vector2,
+	half_width: float,
+	top: float,
+	back: float,
+	lip_widths: Vector2
+) -> Vector2:
+	var found := crest_widths(doc, lip - dir * back, dir, half_width, top)
+	return Vector2(maxf(found.x, lip_widths.x), maxf(found.y, lip_widths.y))
+
+
+## The place across of a lead-in vertex for the column at offset `offset` of the lip's
+## `widths`, on a row whose widths are `row`: each side's offsets scaled by its width ratio,
+## so the course keeps its place and the edge columns stay the edges.
+static func lead_offset(offset: float, widths: Vector2, row: Vector2) -> float:
+	if offset < 0.0:
+		return offset * row.x / maxf(widths.x, 1e-6)
+	return offset * row.y / maxf(widths.y, 1e-6)
 
 
 ## The rows of a curtain over a fall of `drop` metres: the metres fallen at each, ascending:
@@ -363,7 +417,22 @@ static func _fall(doc: MapDocument, fall: Dictionary, buffers: _Buffers) -> floa
 	var columns: Array[PackedVector3Array] = []
 	for w in offsets:
 		columns.append(trajectory(doc, lip + across * w, dir, top, bottom, depth, v0, rows, x_max))
-	_curtain(buffers, columns, offsets, widths, rows, outward, drop, bottom)
+	var backs := lead_backs()
+	var lead_rows: Array[Vector2] = []
+	for back in backs:
+		lead_rows.append(lead_widths(doc, lip, dir, fall.half_width, top, back, widths))
+	var ribbons: Array[PackedVector3Array] = []
+	for i in offsets.size():
+		var ribbon := PackedVector3Array()
+		for r in backs.size():
+			var place := across * lead_offset(offsets[i], widths, lead_rows[r])
+			ribbon.append(_point(lip - dir * backs[r] + place, top))
+		ribbon.append_array(columns[i])
+		ribbons.append(ribbon)
+	var ribbon_rows := PackedFloat32Array()
+	ribbon_rows.resize(backs.size())
+	ribbon_rows.append_array(rows)
+	_curtain(buffers, ribbons, offsets, widths, ribbon_rows, backs, outward, drop, bottom)
 	# Where the middle of the curtain meets the pool: the pool-level row of the column
 	# nearest the course.
 	var middle := 0
@@ -378,18 +447,29 @@ static func _fall(doc: MapDocument, fall: Dictionary, buffers: _Buffers) -> floa
 	return _mist(buffers, fall, lip, dir, across, pool_x, width, drop, top, bottom)
 
 
+## COLOR.r of a curtain vertex `distance` metres in from a side edge on a row `fallen` metres
+## below the lip: 0 at the edge, 1 from EDGE_FADE_LIP_M in at the lip and from EDGE_FADE_M in
+## from EDGE_FADE_LIP_RUN_M fallen on, the ramp length easing between. Pure.
+static func edge_fade(distance: float, fallen: float) -> float:
+	var ramp := lerpf(EDGE_FADE_LIP_M, EDGE_FADE_M, smoothstep(0.0, EDGE_FADE_LIP_RUN_M, fallen))
+	return clampf(distance / ramp, 0.0, 1.0)
+
+
 ## COLOR.a of a curtain `width` metres wide at the crest (see the header).
 static func width_code(width: float) -> float:
 	return clampf(width / WIDTH_ENCODE_M, 0.0, 1.0)
 
 
-## The curtain's grid: `columns` (one trajectory each, at offsets `offsets` across).
+## The curtain's grid: `columns` (one trajectory each, at offsets `offsets` across); the first
+## `backs.size()` rows are the lead-in, whose edge fade (COLOR.r) ramps from 0 at the farthest
+## (`backs`[0] = LEAD_M) to the column's own at the lip, so the ribbon fades in from the pool.
 static func _curtain(
 	buffers: _Buffers,
 	columns: Array[PackedVector3Array],
 	offsets: PackedFloat32Array,
 	widths: Vector2,
 	rows: PackedFloat32Array,
+	backs: PackedFloat32Array,
 	outward: Vector3,
 	drop: float,
 	bottom: float
@@ -399,8 +479,10 @@ static func _curtain(
 	var code := width_code(widths.x + widths.y)
 	for i in count:
 		var w := offsets[i]
-		var fade := clampf(minf(w + widths.x, widths.y - w) / EDGE_FADE_M, 0.0, 1.0)
+		var inset := minf(w + widths.x, widths.y - w)
 		for k in rows.size():
+			var row_fade := 1.0 - backs[k] / LEAD_M if k < backs.size() else 1.0
+			var fade := edge_fade(inset, rows[k])
 			var p := columns[i][k]
 			var left := columns[maxi(i - 1, 0)][k]
 			var right := columns[mini(i + 1, count - 1)][k]
@@ -416,7 +498,7 @@ static func _curtain(
 				normal.normalized(),
 				Vector2(w + widths.x, rows[k]),
 				Vector2(drop, bottom),
-				Color(fade, KIND_CURTAIN, 0.0, code)
+				Color(fade * row_fade, KIND_CURTAIN, 0.0, code)
 			)
 	for i in count - 1:
 		for k in rows.size() - 1:

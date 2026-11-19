@@ -128,7 +128,10 @@ geometry with its own shader and one shared material.
   and covered on load by `AuthoredLoadPrep`'s WATER part). Layout, in brief: one ribbon per
   fall across the wetted width at the crest (`crest_widths()`: the ground read outward along
   the lip line every 5 cm until it stands at the upper level, each side its own; a dry,
-  uncarved crest takes half the half-width), a column every 0.2 m and shared rows at 0, 0.03,
+  uncarved crest takes half the half-width), four lead-in rows above the lip (`lead_backs()`,
+  every 0.15 m back to `LEAD_M` 0.6 m, flat at the upper level, each as wide as the wetted
+  channel at its place and never narrower than the lip's, fading in toward the lip: card
+  painter-fall-lip), a column every 0.2 m and shared rows at 0, 0.03,
   0.06 and 0.09 m of fall, then every 0.12 m, plus the pool level and 3 cm below it (a strip
   the foam ring covers). Each column (`trajectory()`) runs level over the brink for
   `LIP_ROLL_M` 0.3 m, then falls ballistically with a horizontal speed of 0.8 + 0.6 x the

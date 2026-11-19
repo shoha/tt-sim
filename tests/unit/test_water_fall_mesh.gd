@@ -146,6 +146,8 @@ func test_curtain_covers_the_wetted_crest() -> void:
 		if uvs[i].y > 1e-6:
 			continue
 		var p := vertices[i]
+		if (Vector2(p.x, p.z) - lip).dot(dir) < -1e-3:
+			continue  # a lead-in row, above the lip (its own tests below)
 		var w := (Vector2(p.x, p.z) - lip).dot(across)
 		left = minf(left, w)
 		right = maxf(right, w)
@@ -301,6 +303,8 @@ func test_normals_face_outward_and_triangles_wind_clockwise_from_the_front() -> 
 		var front := (vertices[c] - vertices[a]).cross(vertices[b] - vertices[a])
 		if front.length_squared() < 1e-10:
 			continue
+		if absf(front.normalized().y) > 0.9999:
+			continue  # a flat lead-in quad: no downstream side (the shaders draw both faces)
 		curtain_triangles += 1
 		var fall := _fall_at(falls, uv2s[a].y)
 		assert_gt(front.dot(_dir3(fall)), 0.0, "triangle %d is clockwise from downstream" % t)
@@ -343,6 +347,96 @@ func test_rows_and_columns() -> void:
 	assert_almost_eq(columns[-1], 0.7, 1e-6)
 	for i in columns.size() - 1:
 		assert_true(columns[i + 1] - columns[i] <= WaterFallMesh.COLUMN_M + 1e-6)
+
+
+# --- the lead-in (card painter-fall-lip) --------------------------------------------------------
+
+
+func test_lead_rows_and_offsets_are_pure() -> void:
+	var backs := WaterFallMesh.lead_backs()
+	assert_eq(backs.size(), 4, "LEAD_M over LEAD_ROW_M rows")
+	assert_almost_eq(backs[0], WaterFallMesh.LEAD_M, 1e-6, "the farthest is LEAD_M")
+	assert_almost_eq(backs[-1], WaterFallMesh.LEAD_ROW_M, 1e-6, "one row short of the lip")
+	for k in backs.size() - 1:
+		assert_almost_eq(backs[k] - backs[k + 1], WaterFallMesh.LEAD_ROW_M, 1e-6, "even spacing")
+	var widths := Vector2(1.0, 0.8)
+	var row := Vector2(1.3, 1.2)
+	assert_almost_eq(WaterFallMesh.lead_offset(-1.0, widths, row), -1.3, 1e-6, "the left edge")
+	assert_almost_eq(WaterFallMesh.lead_offset(0.8, widths, row), 1.2, 1e-6, "the right edge")
+	assert_almost_eq(WaterFallMesh.lead_offset(0.0, widths, row), 0.0, 1e-6, "the course stays")
+	assert_almost_eq(WaterFallMesh.lead_offset(-0.5, widths, row), -0.65, 1e-6, "scaled")
+	assert_almost_eq(WaterFallMesh.lead_offset(0.4, widths, widths), 0.4, 1e-6, "same widths")
+
+
+## The outline of the water above a fall steps nowhere: the lead-in rows are as wide as the
+## wetted channel at their place (never narrower than the lip's, never wider than the channel),
+## so the outline widens upstream in steps no bigger than the channel itself changes by.
+func test_lead_in_follows_the_channel_width_at_the_lip() -> void:
+	for half in [0.55, 1.0, 1.5, 2.0]:
+		var doc := _doc()
+		Fixtures.tier_fall(doc, half)
+		var falls := WaterFalls.falls(doc)
+		assert_eq(falls.size(), 1, "a tier fall at half-width %.2f" % half)
+		var fall: Dictionary = falls[0]
+		var lip: Vector2 = fall.lip
+		var dir: Vector2 = fall.dir
+		var across := dir.orthogonal()
+		var top: float = fall.top
+		var hw: float = fall.half_width
+		var at_lip := WaterFallMesh.crest_widths(doc, lip, dir, hw, top)
+		var arrays: Array = _falls_of(doc).arrays
+		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var backs := WaterFallMesh.lead_backs()
+		# Each lead-in row's extent across, by its distance upstream (to a millimetre).
+		var left := {}
+		var right := {}
+		for i in _of_kind(arrays, WaterFallMesh.KIND_CURTAIN):
+			var p := vertices[i]
+			var along := (Vector2(p.x, p.z) - lip).dot(dir)
+			if along > -1e-3:
+				continue
+			var key := snappedf(-along, 1e-3)
+			var w := (Vector2(p.x, p.z) - lip).dot(across)
+			assert_almost_eq(p.y, top, EPSILON, "a lead-in row rides the upper level")
+			left[key] = minf(float(left.get(key, INF)), w)
+			right[key] = maxf(float(right.get(key, -INF)), w)
+		assert_eq(left.size(), backs.size(), "one row per lead_backs() entry")
+		var previous := at_lip.x + at_lip.y
+		for k in range(backs.size() - 1, -1, -1):
+			var key := snappedf(backs[k], 1e-3)
+			var expected := WaterFallMesh.lead_widths(doc, lip, dir, hw, top, backs[k], at_lip)
+			assert_almost_eq(-float(left[key]), expected.x, 1e-3, "left width at %.2f m" % backs[k])
+			assert_almost_eq(float(right[key]), expected.y, 1e-3, "right width at %.2f m" % backs[k])
+			assert_true(
+				expected.x >= at_lip.x - 1e-6 and expected.y >= at_lip.y - 1e-6,
+				"never narrower than the lip"
+			)
+			assert_true(expected.x <= hw + 1e-6 and expected.y <= hw + 1e-6, "never past the channel")
+			var width := float(right[key]) - float(left[key])
+			assert_true(width >= previous - 1e-3, "the outline only widens upstream")
+			assert_true(width - previous <= 0.2, "no step of %.2f m between rows" % (width - previous))
+			previous = width
+		# The nearest lead-in row meets the lip row within the channel's own change over its spacing.
+		var nearest := float(right[snappedf(backs[-1], 1e-3)]) - float(left[snappedf(backs[-1], 1e-3)])
+		assert_almost_eq(nearest, at_lip.x + at_lip.y, 0.2, "the outline meets the lip's width")
+
+
+func test_edge_fade_is_short_at_the_lip_and_long_down_the_curtain() -> void:
+	assert_almost_eq(WaterFallMesh.edge_fade(0.0, 0.0), 0.0, 1e-6, "the edge itself is 0")
+	var at_lip := WaterFallMesh.edge_fade(WaterFallMesh.EDGE_FADE_LIP_M, 0.0)
+	assert_almost_eq(at_lip, 1.0, 1e-6, "full at the lip")
+	var lip := WaterFallMesh.edge_fade(0.1, 0.0)
+	var low := WaterFallMesh.edge_fade(0.1, WaterFallMesh.EDGE_FADE_LIP_RUN_M)
+	assert_gt(lip, low, "the same inset is more opaque at the lip than lower down")
+	assert_almost_eq(
+		WaterFallMesh.edge_fade(WaterFallMesh.EDGE_FADE_M, WaterFallMesh.EDGE_FADE_LIP_RUN_M),
+		1.0,
+		1e-6,
+		"the full ramp from the run on"
+	)
+	assert_almost_eq(
+		WaterFallMesh.edge_fade(0.5 * WaterFallMesh.EDGE_FADE_M, 5.0), 0.5, 1e-6, "half-way down the ramp"
+	)
 
 
 # --- the ring and the mist -------------------------------------------------------------------
