@@ -135,15 +135,19 @@ static func visible_children(parent: Node) -> Array[Control]:
 ## that makes the parent visible (AnimatedCanvasLayerPanel does this through
 ## _stagger_targets()) — never after a fade that already showed the targets, or
 ## they will flash at full alpha and then snap back to zero.
-static func stagger_in(targets: Array[Control], owner: Node) -> void:
+## Returns the tweens it started, one per target still alive (empty when [param owner] went
+## first), to a caller that awaits it: a test steps them with custom_step instead of waiting on
+## real frames, whose pace a loaded machine sets.
+static func stagger_in(targets: Array[Control], owner: Node) -> Array[Tween]:
+	var tweens: Array[Tween] = []
 	for control in targets:
 		control.modulate.a = 0.0
 	await owner.get_tree().process_frame
 	if not is_instance_valid(owner):
-		return
+		return tweens
 	await owner.get_tree().process_frame
 	if not is_instance_valid(owner):
-		return
+		return tweens
 	var reduce := reduced()
 	var step := stagger_step(targets.size())
 	for i in range(targets.size()):
@@ -164,3 +168,5 @@ static func stagger_in(targets: Array[Control], owner: Node) -> void:
 			tween.tween_property(control, "offset_transform_position", Vector2.ZERO, duration).set_delay(
 				delay
 			)
+		tweens.append(tween)
+	return tweens
