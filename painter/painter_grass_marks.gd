@@ -2,24 +2,26 @@ class_name PainterGrassMarks
 extends RefCounted
 
 ## The painted look's meadow grass as MARKS (card painter-grass-mark; docs/systems/painter.md "Plant
-## roles"): every wide grass tuft of the authored scatter is drawn as one quad turned to the view,
-## on which painter_grass_mark.gdshader paints the tuft with blade strokes, in place of core's three
-## crossed cards (which collapse to thin spikes seen from above). Painted only: Classic keeps the
-## cards, and so does a crop (PainterFields) or a narrow tuft (reeds, rushes).
+## roles"): every wide grass tuft of the authored scatter is drawn as broad blade strokes made of
+## GEOMETRY (card painter-grass-mark-geo: tapered ribbons placed by painter_grass_mark.gdshader's
+## vertex stage, no discard, so the depth test and prepass see opaque triangles), in place of core's
+## three crossed cards (which collapse to thin spikes seen from above). Painted only: Classic keeps
+## the cards, and so does a crop (PainterFields) or a narrow tuft (reeds, rushes).
 ##
 ## How it swaps. A tuft species' card mesh is shared by every cell; its painted stand-in (the
 ## painter_plant material PainterSurfaces put on it) stays where it is. This host makes, once per
-## species, a MARK MESH (quad()) carrying a MARK MATERIAL (the stand-in duplicated onto the mark's
-## shader, so every wind, grow-in and fade uniform keeps its value) and points each cell's
+## species, a MARK MESH (strokes()) carrying a MARK MATERIAL (the stand-in duplicated onto the
+## mark's shader, so every wind, grow-in and fade uniform keeps its value) and points each cell's
 ## MultiMesh at it (multimesh.mesh), remembering nothing per node: a rebuilt node keeps its
 ## MultiMesh's mesh (AuthoredScatter._place_settled), a new one is caught as the scatter's child,
 ## and release() turns every node whose mesh is a mark mesh back to its card mesh. The shared
 ## card mesh is never edited.
 ##
 ## The pitch crossfade (the sheet's grass-mark-pitch, PITCH_NUMBER): 0 draws the mark at every
-## pitch; a pitch P > 0 puts the card surfaces into the mark mesh beside the quad, and each tuft
-## draws its cards below about P degrees of camera pitch and its mark above (painter_selector's
-## grass_mark_on, in both shaders), so the oblique orbit can keep the cards' leafy patches.
+## pitch (core's default); a pitch P > 0 puts the card surfaces into the mark mesh beside the
+## strokes, and each tuft draws its cards below about P degrees of camera pitch and its mark above
+## (painter_selector's grass_mark_on, in both shaders), so the oblique orbit can keep the cards'
+## leafy patches.
 ##
 ## Tones: sync() copies the stand-in's tone and thinning uniforms (TONED) onto its mark, so the
 ## sheet's grass ramp, keep and frost reach the marks whenever PainterSurfaces re-tones. Tokens:
@@ -32,6 +34,12 @@ const PITCH_NUMBER := "grass-mark-pitch"
 ## A tuft is drawn as a mark when its half width is at least this share of its height
 ## (painter_selector's TUFT_WIDE: meadow grass, not reeds).
 const WIDE := 0.7
+## The mesh's tufts and strokes (painter_grass_mark's MAX_TUFTS and STROKES: keep in step), the
+## places along a stroke its ribbon has vertex pairs at (then a tip), and the sides of a body.
+const TUFTS := 8
+const STROKES := 5
+const STATIONS: Array[float] = [0.0, 0.4, 0.75]
+const BODY_SIDES := 8
 ## The uniforms copied from a tuft's stand-in onto its mark at every sync.
 const TONED: Array[StringName] = [
 	&"c_shade0",
@@ -150,24 +158,51 @@ static func is_mark_tuft(stand_in: Material, extent: Vector3, height: float) -> 
 	return maxf(extent.x, extent.z) >= WIDE * maxf(height, 0.01)
 
 
-## The mark mesh's arrays: one quad (UV.x across, UV.y 1 at the foot) for a tuft of half size
-## `extent` and `height`; its corners only bound what culling sees (the shader places the quad
-## toward the view). Pure.
-static func quad(extent: Vector3, height: float) -> Array:
-	var w := maxf(extent.x, extent.z) * 2.0
-	var top := height * 2.5
+## The mark mesh's arrays: the strokes of the largest tuft patch an instance can have (TUFTS tufts
+## of STROKES strokes and a body each), shared by every instance. A stroke is a tapered ribbon: its
+## `stations` (places along it, 0 the root, ascending, below 1) each a pair of vertices (UV.x the
+## place, UV.y -1 and 1 the side) and a tip vertex (UV.x 1, UV.y 0), two triangles between stations
+## and one at the tip. `tufts` and `sides` (a body's triangles) are the render-job probes' knobs.
+## A body is a fan of `sides` triangles over the unit disc (UV the point,
+## UV2.y -1). UV2 is (tuft, stroke): the shader (painter_grass_mark) places every vertex from them,
+## so the positions are all zero (the mesh's custom_aabb, bounds(), is what culling sees). Pure.
+static func strokes(
+	stations: Array[float] = STATIONS, tufts: int = TUFTS, sides: int = BODY_SIDES
+) -> Array:
+	var verts := PackedVector3Array()
+	var uv := PackedVector2Array()
+	var uv2 := PackedVector2Array()
+	var index := PackedInt32Array()
+	for tuft in tufts:
+		for stroke in STROKES:
+			var at := uv.size()
+			var id := Vector2(tuft, stroke)
+			for place in stations:
+				uv.append(Vector2(place, -1.0))
+				uv.append(Vector2(place, 1.0))
+			uv.append(Vector2(1.0, 0.0))
+			for i in stations.size() - 1:
+				var q := at + i * 2
+				index.append_array([q, q + 1, q + 2, q + 1, q + 3, q + 2])
+			var last := at + (stations.size() - 1) * 2
+			index.append_array([last, last + 1, last + 2])
+			for _i in uv.size() - uv2.size():
+				uv2.append(id)
+		var centre := uv.size()
+		uv.append(Vector2.ZERO)
+		for i in sides:
+			var angle := TAU * float(i) / float(sides)
+			uv.append(Vector2(cos(angle), sin(angle)))
+			index.append_array([centre, centre + 1 + i, centre + 1 + (i + 1) % sides])
+		for _i in uv.size() - uv2.size():
+			uv2.append(Vector2(tuft, -1.0))
+	verts.resize(uv.size())
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array(
-		[Vector3(-w, 0.0, -w), Vector3(w, 0.0, -w), Vector3(-w, top, w), Vector3(w, top, w)]
-	)
-	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array(
-		[Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP]
-	)
-	arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array(
-		[Vector2(0, 1), Vector2(1, 1), Vector2(0, 0), Vector2(1, 0)]
-	)
-	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 1, 3, 2])
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_TEX_UV] = uv
+	arrays[Mesh.ARRAY_TEX_UV2] = uv2
+	arrays[Mesh.ARRAY_INDEX] = index
 	return arrays
 
 
@@ -217,8 +252,8 @@ func _add_species(scatter: Object) -> bool:
 	return added
 
 
-## Builds `entry`'s mark mesh for the current pitch: the quad alone, or the card surfaces (their
-## stand-ins) and the quad; true when it was (re)built.
+## Builds `entry`'s mark mesh for the current pitch: the strokes alone, or the card surfaces (their
+## stand-ins) and the strokes; true when it was (re)built.
 func _lay_out(entry: Dictionary) -> bool:
 	var with_cards := _pitch > 0.0
 	if entry["cards"] == with_cards:
@@ -232,7 +267,7 @@ func _lay_out(entry: Dictionary) -> bool:
 			mark.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, card.surface_get_arrays(i))
 			mark.surface_set_material(i, card.surface_get_material(i))
 	mark.add_surface_from_arrays(
-		Mesh.PRIMITIVE_TRIANGLES, quad(entry["extent"], float(entry["height"]))
+		Mesh.PRIMITIVE_TRIANGLES, strokes()
 	)
 	mark.surface_set_material(mark.get_surface_count() - 1, entry["material"])
 	return true
