@@ -167,6 +167,8 @@ const TEST_PREFIXES: Array[String] = [
 	"_painter-water-cost-spike_",
 	"_painter-water-foot2_",
 	"_painter-water-foot3_",
+	"_painter-water-condition_",
+	"_painter-water-field-v2_",
 	"_clipmap3_",
 	"_clipmap4_",
 ]

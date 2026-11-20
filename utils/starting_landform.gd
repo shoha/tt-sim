@@ -359,7 +359,9 @@ static func carve_river(
 	var widths := PackedFloat32Array()
 	widths.resize(line.size())
 	widths.fill(half_width)
-	var bodies := WaterEdit.plan_river(doc, line, widths, depth, speed)
+	# Unconditioned: the recipes draw their own lines and their digests are frozen; conditioning
+	# the generated streams is its own look card.
+	var bodies := WaterEdit.plan_river(doc, line, widths, depth, speed, false)
 	if bodies.is_empty():
 		return bodies
 	var before := doc.heights.duplicate()

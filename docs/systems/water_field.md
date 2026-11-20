@@ -100,7 +100,7 @@ what a validation card should offer the author to fix:
 `spill` and `calm` stay readable per sample. A later card adds the plan-time hydrology graph and the
 authoring markers; the renderer never guesses.
 
-## Drawing it (card painter-water-field-painted, look-pending, unmerged)
+## Drawing it (cards painter-water-field-painted, look-pending, unmerged)
 
 `WaterFieldMesh` (`utils/water_field_mesh.gd`) turns a field into one indexed grid mesh (one vertex
 per sample, shared by every cell, a ring of buried cells at the edge); `PainterWaterField`
@@ -162,6 +162,31 @@ one still drives the wash, fade and floor. Known: the dL guardrail at the foot i
 edge in a stream's pool (st_o, stpool_z3) is the terrain's (the tier sculpt's rectilinear cliff, the dry
 capture shows it), not the field's or the shader's.
 
+## Conditioning
+
+The events above are what a stroke can leave behind; conditioning (card painter-water-condition,
+spike painter-water-condition-spike) removes the ones plan time can fix and turns the rest into
+hints. Parts, all pure: `WaterCourseFit` (Douglas-Peucker, loop trim, penalised least squares,
+displacement capped at 0.5 half-widths after thinning, width slope limit), `WaterConditioner`
+(`fit_levels`: lattice 0.05 m, cummin so water is only lowered, dead band 0.25 m swept from the
+outlet upstream, min reach 2 m, falls kept; `solve_tree` for the river and pond tree, ponds pinned),
+`WaterPorts` (`end_decision`, `graph`, `audit`, the dig-aware `refit_stroke`), `WaterRefit`
+(`refit`: reverse climbing runs, solve, re-carve), `WaterHints` (the records and their text).
+Parameters: dead band 0.25 m is the knee of the sweep (0.10: 24 reaches, 0.76 m largest lowering;
+0.25: 21, 0.86 m; 0.50: 20, 1.21 m on the canonical map). Measured on the canonical fixture by the
+spike: rises 9 to 0, film runs 3 to 0, falls 8 to 5, field_rise 4.53 to 0.09 m, wet cells 5019 to
+4087; plan_river 8.95 to 10.47 ms (the end join plans a second time when an end joins), tree solve
+0.65 ms. Rules to keep: condition BEFORE the carve (a doc-level solve on a carved map raised perched
+edges 33 to 45, so `refit` carves again); conditioning runs once on the authoring peer and the
+bodies are stored; a plan that would cut a gorge is kept as drawn and said (`over_hill`,
+`blocked_cut`), a head above a lower pond is said (`perched_head`), never forced. Known limits: a
+re-drawn stroke's levels barely stabilise (spread 0.37 to 0.35 m, only the reach count settles);
+a hump of one reach is lowered, not reversed (`WaterRefit.ascending_runs` wants two reaches);
+fuzz seed 12 keeps a 2.92 m climb in stored data; the dig refit trades film for drained stretch.
+Tests: `test_water_conditioner.gd` (the units, the fuzzer, the tables), `test_water_condition_
+pipeline.gd` (plan_river on and off, the report, hints, the editor's undo and redo and worker,
+`refit_document` and `refit_water`).
+
 ## Debug
 
 `WaterField.debug_image()` is a false-colour image (ground, depth, steepness, energy, shore) for a
@@ -186,4 +211,6 @@ canonical map rebuilt by its build job on main's code; 163 KB), `tests/fixtures/
    (CUSTOM0/1) of `WaterMeshBuilder` and `WaterFallMesh`, `WaterFallMesh`'s curtain and ring (the
    mist stays or moves), the legacy branch of `painter_water.gdshader` (depth-buffer shore, lap and
    white, kept for Blender maps' water planes), and `painter_waterfall.gdshader`'s curtain code.
-5. water-hydrology-validation: the plan-time check over `events`.
+5. water-hydrology-validation: the plan-time check over `events`. Done as water-condition: the
+   plan-time conditioner, hints and re-fit above; the markers drawn on the map for the hints are not
+   built (the toast says them).

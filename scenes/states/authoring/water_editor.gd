@@ -37,6 +37,11 @@ const REFUSED_IN_WATER := &"in_water"
 
 ## Why the last carve_river() or paint_pond_begin() made nothing (REFUSED_*), or &"".
 var last_refusal: StringName = &""
+## What the last carve_river() or refit_water() said about its conditioning: WaterHints records
+## ({"kind", "pos" (map XZ), "fixes", "detail"}; they are said, never blocking), and the plan's
+## report (WaterEdit.plan_river: "max_disp", "max_cut", "level_moved", "blocked").
+var last_hints: Array = []
+var last_report: Dictionary = {}
 ## True: compute() runs on a worker (the Water tool). False: on this thread (tests, probes).
 var use_worker: bool = false
 ## Microseconds of the last water edit's parts (main thread, and the worker's "compute"),
@@ -103,6 +108,8 @@ func carve_river(
 	var e := _editor()
 	_prepare()
 	last_refusal = &""
+	last_hints = []
+	last_report = {}
 	if not can_carve():
 		last_refusal = REFUSED_NO_CARVE
 		return -1
@@ -130,7 +137,10 @@ func carve_river(
 	if line.size() < 2:
 		last_refusal = REFUSED_SHORT
 		return -1
-	var bodies := WaterEdit.plan_river(doc, line, widths, depth_class, speed)
+	var report := {}
+	var bodies := WaterEdit.plan_river(doc, line, widths, depth_class, speed, true, report)
+	last_report = report
+	last_hints = report.get("hints", [])
 	if bodies.is_empty():
 		var joined: PackedVector2Array = WaterEdit.join_line(doc, line, widths)[0]
 		last_refusal = REFUSED_IN_WATER if joined.size() < 2 else REFUSED_FULL
@@ -138,6 +148,28 @@ func carve_river(
 	RiverExits.attach(bodies, split)
 	_start({"kind": "river", "label": "Carve river", "bodies": bodies}, WaterEdit.model_of(doc))
 	return bodies[0].id
+
+
+## Re-fits the map's stored water (WaterRefit: strokes that climb downstream reversed, the river
+## and pond tree solved, the strokes carved again at their new levels), one history entry like any
+## water edit; last_hints says what was reversed. The plan-time conditioning of carve_river()
+## reaches a stored map only through this. False when the map cannot be carved or has no rivers.
+func refit_water() -> bool:
+	var e := _editor()
+	_prepare()
+	last_refusal = &""
+	last_hints = []
+	last_report = {}
+	if not can_carve():
+		last_refusal = REFUSED_NO_CARVE
+		return false
+	var has_river := false
+	for body in e.document.water_bodies:
+		has_river = has_river or body.is_river()
+	if not has_river:
+		return false
+	_start({"kind": "refit", "label": "Re-fit water"}, WaterEdit.model_of(e.document))
+	return true
 
 
 ## Starts painting a pond of depth class `depth_class`, pressed at world point `at`: a press
@@ -449,6 +481,18 @@ static func compute(snapshot: MapDocument, spec: Dictionary, out: Dictionary) ->
 			var bodies := WaterEdit.erased_bodies(snapshot, spec.touched, spec.shrunk)
 			out["bodies"] = bodies
 			snapshot.water_bodies = bodies
+		"refit":
+			var before := snapshot.heights
+			var fit := WaterEdit.refit_document(snapshot)
+			var bodies: Array[WaterBody] = []
+			bodies.assign(fit.bodies)
+			out["bodies"] = bodies
+			out["hints"] = fit.hints
+			out["goals"] = (
+				load(WaterEdit.REFIT_PATH).goals_between(before, fit.heights, snapshot.samples_x())
+			)
+			snapshot.water_bodies = bodies
+			snapshot.heights = fit.heights
 	out["dressing"] = WaterDressing.refresh(snapshot)
 	if String(spec.kind) != "dressing":
 		out["owners"] = WaterMeshBuilder.sample_owners(snapshot)
@@ -589,6 +633,13 @@ func _land() -> void:
 		"erase":
 			doc.water_bodies = result.bodies
 			region = _sample_rect_of(spec.area)
+		"refit":
+			doc.water_bodies = result.bodies
+			last_hints = result.hints
+			stroke = HeightStroke.begin(doc, HeightBrush.LOWER)
+			var goals: Dictionary = result.goals
+			stroke.lower_to(goals.rect, goals.goals)
+			region = _sample_rect_of(WaterEdit.rivers_bounds(result.bodies, WaterCarve.BANK_REACH_M))
 	timings["lower"] = Time.get_ticks_usec() - t0
 	t0 = Time.get_ticks_usec()
 	var diff := {}
