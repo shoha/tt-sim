@@ -415,23 +415,41 @@ and tuft paths stay (stage 3 of the spike's plan removes them).
 Flowers (card painter-flowers, look-pending): `PainterFlowerHue` reads each surface of a flower
 asset once when its stand-in is made. Core's flowers are `_Bark` (stems), `_Leaf` and `_LeafB` (the
 blooms: small UV 0..1 cards, three crossed per head or many over a mound); stems and leaves take the
-grass ramp, and the bloom surface is drawn whole as dabs, one per card: a blot inscribed in its
-texture's opaque box (round on a head, long on a lavender spike) with a brushed rim, a step darker
-at its foot, in the one of six sheet accents (`flower-gold`, `-rose`, `-violet`, `-white`, `-red`,
-`-blue`) that the texture's own mean colour sorts into by OKLCH hue (poppy red, bluebell blue,
-buttercup gold, daisy white, bloom mound pink or gold, bellflower and lavender violet), never a fixed
-or random colour. A single flower's cards stay as they are (the growth to `BLOOM_PX` that
-painter-flowers wrote never ran: the pixel size took `PROJECTION_MATRIX[1][1]` as positive, and the
-world's viewport is y-flipped, so it came out negative; the approved look is the ungrown one). A
-bloom mound is a carpet (`PainterFlowerHue.carpet_of`, the last row of the centres texture: at
-least 12 cards whose top centre is under 0.2 m; core's bloom and lavender mounds): under the orbit's
-orthographic camera each card is turned to face the view, drawn 0.3 of the way to the mound's
-middle and 0.8 up to its top card, brought 0.25 mesh units toward the eye so it lies over the
-leaves (which stand twice as high as the blooms), and grown to at least `BLOOM_PX` and 1.7x more,
-so the mound reads as one solid blot of bloom (owner, board l44_mound "One solid blot";
-painter-flower-carpet). Each carpet card takes the flower's own accent (60 %) or one of two more
-the plant draws from the six, a step darker low on the mound. No measurable GPU cost (in-run
-on/off, zoom 16 and 45). A surface whose name
+grass ramp, and the bloom surface is drawn whole as painted marks
+(`painter/shaders/painter_flower_marks.gdshaderinc`, card painter-flower-marks, look-pending; the
+spike painter-flower-spike's option BC, owner's pick 2026-11-20): every head is ONE view-facing
+six-petal rosette `flower-head` (0.11 m, times 0.8 to 1.25 and a little of its card's own size) wide,
+never under `flower-floor` (5) pixels, its petals two flat planes (a darker and a lit half) round a
+centre disc (the mood's `flower-gold`, or an orange between gold and red on a gold bloom, so it
+follows every mood; `f_centre`), the card billboarded in every view (orbit and eye). The crossed twin
+cards of a single head are collapsed (`PainterFlowerHue.twins_of`: a card whose centre is within
+0.35 of its size of an earlier card's; flagged in the second block of rows of the centres texture,
+one flag row per vertex row, then the carpet texel in the last row). A clump behaves like one: a
+share `flower-thin` (0.2) of the cards left out so the leaves show between, `flower-bud` (0.12) small
+(half size) darker buds, the rest at 0.7 to 1.2 of the head, a card in the plant's own colour with
+`flower-own` (0.85) or else the plant's one other of the six, never random. The colour is still the one
+of six sheet accents (`flower-gold`, `-rose`, `-violet`, `-white`, `-red`, `-blue`) that the texture's
+own mean colour sorts into by OKLCH hue (poppy red, bluebell blue, buttercup gold, daisy white, bloom
+mound pink or gold, bellflower and lavender violet). A spike (lavender, bells: a long dab box) is a
+chain of five florets narrowing to the tip, 0.55 of a head wide and as tall as its box (to 4.5
+heads). The earlier look this replaces (card painter-flower-carpet): each mound card turned to the
+view and grown to 8 px and 1.7x into one banded dome of up to seven random hues, "pom-poms"; it
+read as candy balls and the eye saw them as such. Far zoom: small marks lose colour mass (the
+spike's measurement: speckle, smaller and paler than the balls at zoom 16 and 30). Compared in the
+look round on the meadow at t16, t30, h16, h30: a raised pixel floor alone (8 px) still speckled,
+since a third of the heads are left out; a blend to a cushion won. A bloom mound is a carpet
+(`PainterFlowerHue.carpet_of`: at least 12 cards whose top centre is under 0.2 m; core's bloom and
+lavender mounds); under the orbit's orthographic camera its marks blend from `flower-far-lo` (0.007
+m a pixel, about zoom 7.5) to `flower-far-hi` (0.013, about zoom 14) into one cushion: each mark grows
+to 8 px and 1.7x, is drawn 0.3 of the way to the mound's middle and 0.8 up to its top card, brought
+0.25 mesh units toward the eye so it lies over the leaves, every card present at full size, shaded
+low to high as a dome and cut as a rosette (a spike mound's too). The pixel size is
+`2 / (abs(PROJECTION_MATRIX[1][1]) * height)`: the world's viewport is y-flipped, so the unsigned
+form came out negative (measured 2026-11-19). Single heads (poppy, daisy) are never pulled. The
+eye's perspective keeps marks at their own place. Cost (in-run GPU medians, indicative on the shared
+GPU, across runs against the old look): home zoom 16 2.47 and 2.58 ms against 2.45 and 2.50, above
+zoom 16 2.55 and 2.59 against 2.46 and 2.49, dense clump (zoom 6) 1.91 against 1.87: the same vertex
+count, three more centre fetches and one 3x3 inverse a vertex, within about 0.1 ms. A surface whose name
 says neither (a user library's one-atlas flower) keeps the per-pixel petal test, in the accent of
 its non-green pixels' mean. `flower-mix` is now the slow field that steps a drift of blooms lighter
 or darker. Cost on the meadow (in-run against the old path, 47 flower stand-ins): +0.01 ms at zoom

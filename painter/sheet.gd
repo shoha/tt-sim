@@ -93,7 +93,12 @@ const DEFAULT_ROLES: Array[String] = [
 ## groups (keep-*: the share kept, keep-freq-*: 1/m of the world noise that groups them), the
 ## camera pitch in degrees below which a meadow tuft keeps its cards rather than its painted mark
 ## (grass-mark-pitch, PainterGrassMarks: 0 marks at every pitch), the
-## flowers' value drifts (flower-mix, 1/m), and the ground's brush marks (marks: the share of
+## flowers' value drifts (flower-mix, 1/m), the flowers' painted marks
+## (painter_flower_marks.gdshaderinc: flower-head, a head's width in metres; flower-floor, its least
+## width in pixels; flower-thin and flower-bud, the shares of a clump's heads left out and drawn as
+## small buds; flower-own, the share of a plant's heads in its own colour; flower-far-lo and
+## flower-far-hi, the pixel footprints in metres between which a mound's heads blend into one
+## cushion), and the ground's brush marks (marks: the share of
 ## cells that hold one, mark-thin: how far a flat area thins them, drift-marks and litter-marks:
 ## how much of the small marks, patches: the block-in's variation, mark-px-*: the pixel footprints
 ## in metres between which a mark fades out, cut: the shadow step's wiggle). The painted trees'
@@ -179,6 +184,13 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"keep-freq-flower",
 	"grass-mark-pitch",
 	"flower-mix",
+	"flower-head",
+	"flower-floor",
+	"flower-thin",
+	"flower-bud",
+	"flower-own",
+	"flower-far-lo",
+	"flower-far-hi",
 	"marks",
 	"occ-pool",
 	"occ-core",

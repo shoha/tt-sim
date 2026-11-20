@@ -56,5 +56,6 @@ void fragment() {
 	f_mul = mul;
 	f_wob = wob;
 	f_accent = petal;
+	f_centre = 0.0;
 	f_frost = snow;
 }

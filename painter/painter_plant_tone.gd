@@ -25,6 +25,23 @@ static func mark_placed(scatters: Array) -> void:
 				geometry.set_instance_shader_parameter(PLACED, 1.0)
 
 
+## Sets the flower marks' numbers (painter_flower_marks.gdshaderinc: the sheet's flower-* numbers).
+static func _tone_marks(
+	material: ShaderMaterial, sheet: Dictionary, mood: String, elevation: float
+) -> void:
+	var number := func(prop: String) -> float:
+		return PainterSheet.number(sheet, mood, prop, elevation)
+	material.set_shader_parameter(&"fl_head", number.call("flower-head"))
+	material.set_shader_parameter(&"fl_floor", number.call("flower-floor"))
+	material.set_shader_parameter(
+		&"fl_clump",
+		Vector3(number.call("flower-thin"), number.call("flower-bud"), number.call("flower-own"))
+	)
+	material.set_shader_parameter(
+		&"fl_far", Vector2(number.call("flower-far-lo"), number.call("flower-far-hi"))
+	)
+
+
 ## Sets a stand-in's ramp, accents and numbers for `entry` (PainterPlantRoles.of()).
 static func tone(
 	material: ShaderMaterial, entry: Dictionary, sheet: Dictionary, mood: String, elevation: float
@@ -61,13 +78,12 @@ static func tone(
 		accents.append(PainterTones.linear(PainterSheet.tone(sheet, mood, role, elevation)))
 	material.set_shader_parameter(&"accent", accents)
 	# A flower's bloom (PainterFlowerHue.for_surface): its role, whether the surface is dabs, the
-	# dab's box and the cards the shader grows (none: no growth).
+	# dab's box and the cards' centres (none: the cards stay as they are).
 	material.set_shader_parameter(&"petal_role", int(entry.get("petal", -1)))
 	material.set_shader_parameter(&"petal_dab", bool(entry.get("dab", false)))
 	material.set_shader_parameter(&"dab_box", entry.get("dab_box", Vector4(0.5, 0.5, 0.5, 0.5)))
-	var centres: Variant = entry.get("centres")
-	material.set_shader_parameter(&"bloom_centres", centres)
-	material.set_shader_parameter(&"bloom_grow", centres != null)
+	material.set_shader_parameter(&"bloom_centres", entry.get("centres"))
+	_tone_marks(material, sheet, mood, elevation)
 	material.set_shader_parameter(
 		&"tone_lo", PainterSheet.number(sheet, mood, "tone-lo", elevation)
 	)
