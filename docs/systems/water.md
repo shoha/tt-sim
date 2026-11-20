@@ -767,6 +767,32 @@ single increases, the largest bridged_run 3 -> 9), the test bounds the total wit
 off's. A stroke noisier than its own cap can hold (hairpins and jitter at half-widths under 1 m)
 is kept as drawn, planned as with conditioning off.
 
+**The pond tool (card painter-water-pond).** A pond is dug after the streams beside it as often as
+before them, so `WaterEditor.compute` ("pond", `spec.condition` = `WaterEdit.conditioning_enabled`,
+off is the pond as dug) calls `WaterPondFit` (`utils/water_pond_fit.gd`, loaded by path) once, on
+the authoring peer, and stores the result in the same WaterBody list (no format change, one history
+entry; the stroke's `last_hints` carry what was only said). Rules, each bounded: (1) the pond never
+rises, and sinks by at most `WaterPondFit.LEVEL_BAND_M` (0.6 m) to the level of a stream tail
+standing beside it below it (the stream would have to climb); (2) a stream end within
+`WaterPorts.SEARCH_M` (2 m) of the pond and within its snap reach (1.5 half-widths, at least 1 m),
+whose levels differ by less than a fall (`WaterFalls.FALL_MIN_DROP_M`: a tail at or above the pond,
+a head at or below it), gains one straight connector reach to a point `JOIN_INSET_M` inside the
+pond (at most about 3 m long), starting at the end's own point so the two chain as one stroke, at
+the pond's level (a tail) or the head's own (a head), its channel cut through the bank; the stream's
+points and levels and the pond's outline (mask) never move; (3) a head above the pond (water does
+not climb: `perched_head`) and an end a fall or more above it or out of reach
+(`end_near_water_below`) are only said. The joins are all-or-nothing per pond: the field's events
+(film_run, bridged_run, end_near_water) are counted before and after (two `WaterField` builds on
+the worker's snapshot) and the joins are dropped when any kind got worse, so a pond's own joins
+never add an event. Idempotent (an end inside the pond's water has nothing to decide) and
+deterministic (no randomness, no time). Measured in `test_water_pond.gd` (cases from
+`water_pond_cases.gd`, which run the very `compute()` the worker runs; a fuzz of random ground,
+free runs and tributaries with one to three ponds dug a little beyond stroke ends): over 40 maps
+(20 seeds, both pond orders) end_near_water 26 -> 18, bridged_run 60 -> 62 (one seed, a later pond
+meeting an earlier pond's connector), film_run 70 -> 70, audit rises 0 -> 0, joined wet samples
+over 0.3 m deep on a waterline ("perched" in the metrics) 300 -> 338: a riffle into the pond is a
+step, and a fall into it is not planned here (said, not joined).
+
 ## Open work
 
 The list is [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work"; this doc does not repeat it.
