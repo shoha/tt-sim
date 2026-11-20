@@ -52,6 +52,10 @@ const BANK_SPILL_SLOPE := 1.2
 ## A bank sample (beyond the channel) standing more than this over its own ground is not water
 ## the bank holds (beside a lip, over the face): it stays dry, so no ledge stands out sideways.
 const BANK_HOLD_M := 0.3
+## The share of its white a river keeps on its ramp into a lower pond (main's ponds are calmer).
+const RAMP_KEEP := 0.2
+## Water thinner than this beside a spill sample is a wet slope, not a curtain.
+const RAMP_FLAT_M := 0.3
 ## The surface slope that starts and fills the curtain share: a fall's face, not a riffle step.
 const STEEP := Vector2(1.2, 2.8)
 ## The surface slope that makes white water on its own (inflow ramps, spills).
@@ -560,6 +564,15 @@ func _derive(inner: Rect2i) -> void:
 			steep[i] = smoothstep(STEEP.x, STEEP.y, sl)
 			if calm[i] == 0:
 				energy[i] = maxf(energy[i], smoothstep(SLOPE_WHITE.x, SLOPE_WHITE.y, sl) * 0.6)
+			if _spill_near(x, z, 2, SPILL_POND):
+				# A river's ramp into a lower pond is a slope of the pond, not a fall: a fifth of the
+				# white on it and on the two samples round it, so the edge of the ramp is not a ring
+				# of white pills round its calm middle (round 1: whole-cell white rectangles).
+				energy[i] *= RAMP_KEEP
+			if spill[i] != 0 or (depth[i] < RAMP_FLAT_M and _spill_near(x, z, 1, 0)):
+				# Thin water on a ramp or beside a bank's drain is a wet slope, never a curtain: a
+				# face of the carve is a stroke's own sample (spill 0) away from any spill.
+				steep[i] = 0.0
 
 
 ## The part of the grid-sized `src` inside `r`, row-major over `r`.
@@ -607,6 +620,23 @@ func _ring(src: PackedFloat32Array, src_rect: Rect2i, dst_rect: Rect2i) -> Packe
 		var gi := (li / dw + dst_rect.position.y) * size.x + li % dw + dst_rect.position.x
 		out[li] = minf(out[li], ground[gi] - TUCK_M)
 	return out
+
+
+## Whether sample (x, z) or any sample within `reach` of it (a square window) is a spill sample
+## of `kind` (any kind when 0).
+func _spill_near(x: int, z: int, reach: int, kind: int) -> bool:
+	for dz in range(-reach, reach + 1):
+		var zz := z + dz
+		if zz < 0 or zz >= size.y:
+			continue
+		for dx in range(-reach, reach + 1):
+			var xx := x + dx
+			if xx < 0 or xx >= size.x:
+				continue
+			var s := spill[zz * size.x + xx]
+			if s != 0 and (kind == 0 or s == kind):
+				return true
+	return false
 
 
 ## Half the central difference of w along one axis among wet neighbours (one-sided at an edge).

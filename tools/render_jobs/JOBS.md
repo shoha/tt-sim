@@ -8,6 +8,15 @@ and which test levels it keeps. How to run one, the flags and the build / look l
 
 ## Jobs
 
+- `jobs/water_field_falls.json` (about 105 s, keeps no level: its cleanup step removes the
+  `_painter-water-field-painted_` levels): the Painted look's single water surface at five falls
+  (a waist river down a tier at three views, an ankle fall, a diagonal fall into a stream), each a
+  field capture plus a dry capture, then `measure` per view into `metrics.jsonl`: `dW` is the
+  surface's height step across the lip and the foot (the continuity metric; 0.00 to 0.05 m is
+  seamless, a seam shows as 0.1 or more), `holes` the fall path's see-through pixels (0 expected),
+  `dL` and `bands` the luminance step and banding at lip and foot (the foot's dL is 8 to 27 against
+  main's 1 to 4: the known cost of the field's foot). Run it on any change to `WaterField`,
+  `WaterFieldMesh` or the field branch of `painter_water.gdshader`. `docs/systems/water_field.md`.
 - `jobs/core_nine_biomes.json` (about 90 s, keeps no level): all nine biomes of the shipped core
   library (`res://libraries/core`), each a new 150 ft terraces map (seed 1234, never saved): a home
   view and a size 14 view, fades off, wind frozen (18 captures). The evidence of step S10 (treecube

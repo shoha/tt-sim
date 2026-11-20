@@ -2,9 +2,10 @@
 
 `WaterField` (`utils/water_field.gd`, with `utils/water_field_stroke.gd`) is the production form of
 the painter-water-field-spike's recommended architecture: the water of a document as ONE set of
-per-sample fields, from which one surface mesh and one shader will draw rivers, ponds, riffles and
-falls alike. Stage 1 of 5 (the data model, rules mode only): nothing draws from it and nothing reads
-it yet. The old path (`WaterMeshBuilder`, the fall meshes, `WaterSurface`) still does everything.
+per-sample fields, from which one surface mesh and one shader draw rivers, ponds, riffles and
+falls alike. Stage 1 (the data model, rules mode only) is in main; stage 2 (this branch, look-pending,
+unmerged: "Drawing it" below) makes the Painted look draw from it. Gameplay (`WaterSurface`, zones,
+walkability, ripples) and Classic still read the old path (`WaterMeshBuilder`, the fall meshes).
 Why the field: eight of the old path's ten seam classes (painter-fall-spike C1-C10) come from
 composing separately derived parts; one surface has none of those joins. Evidence and the
 alternatives that lost: `docs/plans/handoffs/painter-water-field-spike.md`.
@@ -77,6 +78,38 @@ what a validation card should offer the author to fix:
 `spill` and `calm` stay readable per sample. A later card adds the plan-time hydrology graph and the
 authoring markers; the renderer never guesses.
 
+## Drawing it (card painter-water-field-painted, look-pending, unmerged)
+
+`WaterFieldMesh` (`utils/water_field_mesh.gd`) turns a field into one indexed grid mesh (one vertex
+per sample, shared by every cell, a ring of buried cells at the edge); `PainterWaterField`
+(`painter/painter_water_field.gd`, owned by `PainterWater`) hosts it per painted map and redoes a
+dirty rect per edit (`ground_edited`, `AuthoredWater.refreshed`, `rect_of_bodies`; the mesh is
+rebuilt whole, about 50 ms). Vertex contract: CUSTOM0 = (depth, energy, shore distance, steep),
+CUSTOM1 = (river share, FIELD_FLAG -7, ground height, spill mark: 1 a ramp into a pond, 0.5 a bank's
+thin spill, 0.125 a film). The shader (`painter_water.gdshader`, field branch) reads those instead of
+the depth buffer, so the wash, the shoreline, the lap and the white are the model's.
+
+White water is one shape language over the surface: bold flow-carried blobs on the flat
+(energy thresholds a stretched noise: cover x smoothstep(0.08, 0.2, energy), the noise only read
+where energy is above the floor), and on a fall's face (steep share above 0.05) tongues in the
+flow's frame: about 0.28 m columns, each its own width and length, blue glass between. Round 2
+compared three face treatments by eye: the spike's noise streaks (a white block with blobs), threads
+along the surface's downhill direction, and tongues; tongues read as a falling curtain. A
+direction taken per fragment from the surface normal made `dot(p, d)` a maze: the frame is the flow
+map's. WaterField rules added in round 2: the ramp of a river into a lower pond keeps
+`RAMP_KEEP` (0.2) of its white (on it and within two samples), and has no curtain share (steep is
+0 on spill samples and on thin water, under `RAMP_FLAT_M`, beside them): a face of the carve is a
+stroke's own sample. Films (undermined water the bridge does not span) draw as mid-depth water
+(`FILM_COLUMN_M`), not as the 3 cm they are. The old curtain, `painter_fall_white.gdshaderinc` and
+the painted fall mesh's white are deleted; the falls mesh keeps its mist.
+
+Known against main (verdict frames and `metrics.jsonl` in
+`docs/research/2026-11-09-prototypes/compare/painter_final83_water_field_painted2/`): seams solved
+(lip and foot dW 0.00 to 0.05), ponds calmer; the foot's luminance step (dL) is larger than main's,
+f1_t and f1_z show a few holes on the face glass, st_o's lower pool is shallow water (0.15 to
+0.5 m) so it reads pale teal where main reads deep blue, and the GPU cost is +0.09 ms at the fall
+close view and +0.06 ms wide.
+
 ## Debug
 
 `WaterField.debug_image()` is a false-colour image (ground, depth, steepness, energy, shore) for a
@@ -96,5 +129,9 @@ canonical map rebuilt by its build job on main's code; 163 KB), `tests/fixtures/
 2. water-field-painted: `WaterFieldMesh` and the field shader replace the painted water and curtain.
 3. water-field-white: the foam look.
 4. water-field-gameplay: `WaterSurface`, walkability, zones and ripples read `w`; Classic gets the
-   mesh; the old cells, cascades, fall meshes and frames go.
+   mesh; the old cells, cascades, fall meshes and frames go. Deletable once stage 4 lands (the
+   Painted path no longer reads them after stage 2): `WaterFallFrames` and the frame channels
+   (CUSTOM0/1) of `WaterMeshBuilder` and `WaterFallMesh`, `WaterFallMesh`'s curtain and ring (the
+   mist stays or moves), the legacy branch of `painter_water.gdshader` (depth-buffer shore, lap and
+   white, kept for Blender maps' water planes), and `painter_waterfall.gdshader`'s curtain code.
 5. water-hydrology-validation: the plan-time check over `events`.

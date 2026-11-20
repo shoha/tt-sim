@@ -11,10 +11,10 @@ extends RefCounted
 ##
 ## Vertex contract (painter_water.gdshader): VERTEX in map space (an identity transform at the map
 ## origin), UV map-normalised (the flow map's frame), CUSTOM0 = (depth, energy, shore distance,
-## steep share), CUSTOM1 = (river share, FIELD_FLAG, ground height, the spill mark: a ramp's
-## slope white is not a fall's, and a bank's thin spill is not drawn as a shelf). The mesh is a
-## function of the field alone, so a field refreshed over a dirty rect draws exactly what a fresh
-## build would.
+## steep share), CUSTOM1 = (river share, FIELD_FLAG, ground height, the spill mark: 1 a river's
+## ramp into a pond, 0.5 a bank's thin spill that is not drawn as a shelf, 0.125 a film). The mesh
+## is a function of the field alone, so a field refreshed over a dirty rect draws exactly what a
+## fresh build would.
 
 const MESH_NAME := "PaintedWaterField"
 const FORMAT := (
@@ -27,6 +27,9 @@ const FIELD_FLAG := -7.0
 ## not hold (WaterField.spill), 0 elsewhere.
 const SPILL_POND_MARK := 1.0
 const SPILL_BANK_MARK := 0.5
+## CUSTOM1.w on a stroke's film (undermined water the bridge does not span): the shader reads it
+## as mid-depth water, not as the few centimetres it is.
+const FILM_MARK := 0.125
 
 const _CORNERS: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]
 
@@ -93,6 +96,8 @@ static func build(f: WaterField) -> Dictionary:
 						spill = SPILL_POND_MARK
 					elif f.spill[s] == WaterField.SPILL_BANK:
 						spill = SPILL_BANK_MARK
+					elif f.calm[s] != 0:
+						spill = FILM_MARK
 					c1.append_array([f.river[s], FIELD_FLAG, f.ground[s], spill])
 				corner.append(index_of[s])
 			indices.append_array([corner[0], corner[1], corner[2], corner[1], corner[3], corner[2]])

@@ -118,15 +118,20 @@ const float FIELD_FLAG = -7.0;
 // The least vertical share of the view ray the water column is divided by (an eye-level view
 // reads three times the plumb depth, not more).
 const float VIEW_SHARE_MIN = 0.3;
-// The white water's energy is raised to this power; the share a ramp into a pond keeps; the widest
-// pixel footprint (m) its edge softens over (an eye-level view must not haze the whole pool).
+// The white water's energy is raised to this power; the widest pixel footprint (m) its edge softens
+// over (an eye-level view must not haze the whole pool). A river's ramp into a lower pond keeps a
+// fifth of its white in the field itself (WaterField.RAMP_KEEP).
 const float ENERGY_POWER = 1.3;
-const float RAMP_KEEP = 0.2;
 const float COVER_PX_MAX = 0.04;
+// The half width of the white's edge in pattern units, on the flat and on a fall's face: crisp
+// enough that a foot's blobs read as shapes, not ghost rings.
+const float FOAM_EDGE = 0.05;
+const float FACE_EDGE = 0.035;
 // The field's shore ribbon wobble (m), and the alpha a film of a few centimetres keeps (a film is
 // water over the dug bed, not a ghost of it: the share of the deepest alpha).
 const float LAP_WOBBLE_M = 0.16;
 const float FILM_ALPHA = 0.8;
+const float FILM_COLUMN_M = 0.5;
 
 // The wash: the column thresholds (m) between the bands, how hard the bands are posterised (the
 // rest is a soft ramp), the share of the deepest alpha the shallow and mid bands keep.
@@ -297,7 +302,9 @@ float flow_blobs(vec2 p, vec2 flow, float scale, float seed) {
 	float na = p_noise(vec3(qa.x, seed + floor(TIME / period) * 3.1, qa.y));
 	float nb = p_noise(vec3(qb.x, seed + 1.7 + floor(TIME / period + 0.5) * 3.1, qb.y));
 	float wa = 1.0 - abs(2.0 * ta - 1.0);
-	return mix(nb, na, wa);
+	// The phases hand over by shrinking and growing, the larger of the two (a linear mix of two
+	// fields read as translucent discs wherever the thresholded white crossed the handover).
+	return max(na * (0.65 + 0.35 * wa), nb * (0.65 + 0.35 * (1.0 - wa)));
 }
 
 
@@ -340,6 +347,11 @@ void fragment() {
 		curtain = smoothstep(0.05, 0.9, v_f0.w);
 		vec3 view_world = (INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz;
 		path_k = 1.0 / clamp(abs(view_world.y), VIEW_SHARE_MIN, 1.0);
+		// A film (CUSTOM1.w 0.125: water the dug bed no longer holds, a map error WaterField reports
+		// as an event) draws as mid-depth water, not as the few centimetres it is: the shallow band
+		// drew a pale teal glaze across a plunge pool.
+		float film = smoothstep(0.02, 0.11, v_f1.w) * (1.0 - smoothstep(0.16, 0.22, v_f1.w));
+		column_raw = mix(column_raw, max(column_raw, FILM_COLUMN_M / path_k), film);
 	}
 	// Anything that is not ground under the water (a reed blade, a token's leg) reads as deep.
 	float column = mix(1.0, column_raw * path_k, ground_like);
@@ -517,6 +529,11 @@ void fragment() {
 	float dash_gate = 1.0 - smoothstep(0.35, 0.9, slope);
 	float dashes = (1.0 - smoothstep(0.02, 0.08 + world_units_per_pixel, abs(d_h - outer))) * smoothstep(0.6, 0.76, dash_n) * dash_gate;
 	float shore_foam = max(lap, dashes) * ground_like * smoothstep(0.0, 0.01, column_raw + 0.004);
+	if (fieldv) {
+		// The thin water a bank sheds and a river's ramp into a pond (CUSTOM1.w 0.5 and 1) is a wet
+		// slope: no lap on it (a white arm stood out from each side of a pond's inflow).
+		shore_foam *= 1.0 - 0.9 * smoothstep(0.2, 0.45, v_f1.w);
+	}
 	// Riffles: dense short dashes along the flow on fast, shallow water.
 	// The field draws its riffles from its own energy: the baked flow map's swirls in a pool would draw
 	// contour lines here.
@@ -551,7 +568,11 @@ void fragment() {
 		// near the fall and thins quickly, and a plunge pool is calm a metre or two away. A river's
 		// ramp into a lower pond (CUSTOM1.w) is a slope, not a fall: it keeps a fifth of its white.
 		float en = pow(clamp(v_f0.y * p_white, 0.0, 1.0), ENERGY_POWER);
-		en *= mix(1.0, RAMP_KEEP, step(0.75, v_f1.w));
+		// On the face the white thins to streaks over glass; the brink and the foot keep it full.
+		float en_c = mix(en, en * 0.62, curtain);
+		// Under the floor (the cover below) nothing is white: the noises are not read there, which is
+		// most of a pond and a river.
+		if (en_c > 0.08) {
 		float blob = flow_blobs(p, flow_ws, p_blob_m, 11.0) * 0.7 + flow_blobs(p, flow_ws, p_blob_m * 0.45, 23.0) * 0.3;
 		// Stretched linearly about its mean, so the energy's threshold cuts organic shapes, not its
 		// own isolines (the raw noise sits near 0.5 and drew straight bands across the channel). A
@@ -562,13 +583,30 @@ void fragment() {
 		float streak = p_noise(vec3(st.x, st.y, 5.0)) * 0.75 + p_noise(vec3(st.x * 2.3, st.y * 1.7, 9.0)) * 0.25;
 		streak = clamp((streak - 0.5) * 1.7 + 0.5, 0.0, 1.0);
 		float pattern = mix(blob, streak, curtain);
-		// On the face the white thins to streaks over glass; the brink and the foot keep it full.
-		float en_c = mix(en, en * 0.62, curtain);
+		float edge_w = mix(FOAM_EDGE, FACE_EDGE, curtain);
+		if (curtain > 0.01) {
+			// Tongues, in the flow's frame (the baked flow map's direction is smooth over the map: a
+			// direction taken per fragment from the surface turned dot(p, d) into a maze of lines).
+			// About 0.28 m columns, each its own width and white for its own length, blue between;
+			// the columns bend gently so the sheet is not a comb.
+			float u_f = dot(p, across_dir);
+			float v_f = dot(p, dir);
+			u_f += (p_noise(vec3(u_f * 0.5, v_f * 0.45, 4.0)) - 0.5) * 0.6;
+			float c_u = u_f * 3.6;
+			float id = floor(c_u);
+			float f_u = fract(c_u);
+			vec2 hh = vec2(be_hash(vec2(id, 3.7)), be_hash(vec2(id, 8.3)));
+			float gap = 0.03 + 0.4 * hh.y;
+			float across = smoothstep(gap, gap + 0.14, f_u) * (1.0 - smoothstep(1.0 - gap - 0.14, 1.0 - gap, f_u));
+			float run = p_noise(vec3(id * 1.7, 2.0, v_f * 0.35 - TIME * 0.5));
+			pattern = mix(pattern, across * (0.35 + 0.65 * hh.x) * (0.5 + 1.0 * run), curtain);
+		}
 		// White where the pattern stands over 1 - energy: all of it at 1, rare bold blobs at 0.3,
 		// none under a floor.
-		float cover = smoothstep(1.0 - en_c - 0.07, 1.0 - en_c + 0.07 + min(px, COVER_PX_MAX) * 2.0, pattern);
+		float cover = smoothstep(1.0 - en_c - edge_w, 1.0 - en_c + edge_w + min(px, COVER_PX_MAX) * 2.0, pattern);
 		cover *= smoothstep(0.08, 0.2, en_c);
 		foam = max(foam, cover * smoothstep(0.0, 0.02, column_raw + curtain));
+		}
 	}
 	foam *= 1.0 - ice_k * 0.85 * (1.0 - open_water);
 	a = max(a, foam * 0.96);
