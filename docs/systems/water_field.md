@@ -3,9 +3,13 @@
 `WaterField` (`utils/water_field.gd`, with `utils/water_field_stroke.gd`) is the production form of
 the painter-water-field-spike's recommended architecture: the water of a document as ONE set of
 per-sample fields, from which one surface mesh and one shader draw rivers, ponds, riffles and
-falls alike. Stage 1 (the data model, rules mode only) is in main; stage 2 (this branch, look-pending,
-unmerged: "Drawing it" below) makes the Painted look draw from it. Gameplay (`WaterSurface`, zones,
-walkability, ripples) and Classic still read the old path (`WaterMeshBuilder`, the fall meshes).
+falls alike. Stage 1 (the data model, rules mode only) is in main. The combined branch
+`painter-water-field-v2` (look-pending, unmerged; it joins the painted-field line to foot3, the native
+ports and the conditioner) is stages 1 and 2 plus the native edit path and plan-time conditioning:
+the Painted look draws from the field ("Drawing it" below), the field's per-edit passes are native
+("Edit latency and the native path"), and a drawn river is conditioned before it is stored
+("Conditioning"). Gameplay (`WaterSurface`, zones, walkability, ripples) and Classic still read the
+old path (`WaterMeshBuilder`, the fall meshes).
 Why the field: eight of the old path's ten seam classes (painter-fall-spike C1-C10) come from
 composing separately derived parts; one surface has none of those joins. Evidence and the
 alternatives that lost: `docs/plans/handoffs/painter-water-field-spike.md`.
@@ -62,7 +66,7 @@ build about 200 ms (bodies 75, spill 25, derive 45, shore 55); update 16 to 50 m
 stroke or a ground edit and 25 to 85 ms for a whole long stroke (the biggest stroke's rect is 55 x 138
 samples; about 40 percent of the time is the shore transform).
 
-### Edit latency (card painter-water-latency, spike, unmerged)
+### Edit latency and the native path
 
 Headless, same map, debug DLL, shared machine (medians, 9 runs): GDScript only, a full build 275 ms and
 a 60 x 40 update 52 ms; with the library (`ScatterNative.CAPABILITY_WFIELD`) a full build 43 ms,
@@ -85,6 +89,19 @@ and native equals GDScript (`tests/unit/test_water_field_native.gd`) all hold bi
 - What is left in a 60 x 40 update (native, about 6 ms): the strokes' profile, stations and per-sample
   write (`_put_stroke`, `stations`), all GDScript. A full build: `_put_stroke` 19 ms, stations 8,
   table 4.5, profiles 4, ponds 2, native passes 5.
+- In a real window (combined branch, debug DLL, f1 fall, `PainterWaterField.update_rect` as the edit
+  signals call it; medians of 11): 16 x 16 samples 5.8 ms, 60 x 40 8.4 ms, 87 x 87 12.7 ms of CPU
+  (field 4.4 / 7.0 / 11.3, mesh 1.0, both texture uploads queued 0.4), and the next frame ends 0.9 ms
+  after the call returns (idle frame 2.2 ms, GPU 1.70 to 1.72 ms before and after: no hitch shows in
+  the viewport's GPU time; the upload itself is not isolated). The foot3 shader's cost against main
+  (docs/PERFORMANCE.md in-run A/B, 7 kept rounds): +0.066 ms at the fall close view (main 2.22 ms),
+  +0.042 ms wide (main 3.46 ms).
+- Rules for the native path: nothing in a native pass may differ from its GDScript twin by a bit
+  (`tests/unit/test_water_field_native.gd` is the arbiter and covers the foot, `ew` and exact
+  waterline arrays); a pass that gains an array adds it to the packed dictionary in
+  `utils/water_field_native.gd` and to the test; `RiverProfile.field` calls `ScatterNative` directly
+  and must not name `WaterFieldNative` (`test_boot_graph` stays at 349). The foot coordinate is
+  computed in GDScript (`WaterFieldStroke.table`, with the drop scale); native only copies it.
 
 ## Events: inconsistencies as data
 
@@ -100,13 +117,13 @@ what a validation card should offer the author to fix:
 `spill` and `calm` stay readable per sample. A later card adds the plan-time hydrology graph and the
 authoring markers; the renderer never guesses.
 
-## Drawing it (cards painter-water-field-painted, look-pending, unmerged)
+## Drawing it
 
 `WaterFieldMesh` (`utils/water_field_mesh.gd`) turns a field into one indexed grid mesh (one vertex
 per sample, shared by every cell, a ring of buried cells at the edge); `PainterWaterField`
 (`painter/painter_water_field.gd`, owned by `PainterWater`) hosts it per painted map and redoes a
 dirty rect per edit (`ground_edited`, `AuthoredWater.refreshed`, `rect_of_bodies`; the mesh is
-rebuilt whole, about 50 ms). Vertex contract: CUSTOM0 = (depth, energy, shore distance, steep),
+rebuilt whole: 48 ms in GDScript, 0.4 ms native). Vertex contract: CUSTOM0 = (depth, energy, shore distance, steep),
 CUSTOM1 = (river share, FIELD_FLAG -7, foot flag: 1 within `WaterFieldStroke.FOOT_RANGE_M` of a
 fall's foot (the shader fetches the foot coordinate only there), spill mark: 1 a ramp into a pond,
 0.5 a bank's thin spill, 0.125 a film). The shader (`painter_water.gdshader`, field branch) reads those instead of
@@ -133,7 +150,7 @@ f1_t and f1_z show a few holes on the face glass, st_o's lower pool is shallow w
 0.5 m) so it reads pale teal where main reads deep blue, and the GPU cost is +0.09 ms at the fall
 close view and +0.06 ms wide.
 
-## The exact waterline and the foot rules (cards painter-water-foot2 and -foot3, look-pending, unmerged)
+## The exact waterline and the foot rules
 
 The exact waterline: `WaterField.ew` is the surface height per sample as the mesh draws it, and with
 `WaterField.exact_shore` (a static switch, on) `shore` is the signed distance to the zero contour of
@@ -164,8 +181,7 @@ capture shows it), not the field's or the shader's.
 
 ## Conditioning
 
-The events above are what a stroke can leave behind; conditioning (card painter-water-condition,
-spike painter-water-condition-spike) removes the ones plan time can fix and turns the rest into
+The events above are what a stroke can leave behind; conditioning removes the ones plan time can fix and turns the rest into
 hints. Parts, all pure: `WaterCourseFit` (Douglas-Peucker, loop trim, penalised least squares,
 displacement capped at 0.5 half-widths after thinning, width slope limit), `WaterConditioner`
 (`fit_levels`: lattice 0.05 m, cummin so water is only lowered, dead band 0.25 m swept from the

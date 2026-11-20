@@ -698,12 +698,17 @@ keeps its names and its meaning: the painted shader declares the same uniforms, 
 material keeps its parameters across the swap. Classic's shader is unchanged. Details and cost:
 [painter.md](painter.md) "Water".
 
-## The water field (in progress)
+## The water field (combined branch painter-water-field-v2, look-pending, unmerged)
 
 `WaterField` ([water_field.md](water_field.md)) derives one water height per sample from the
-document and is the planned single source for the water surface, the falls and the gameplay
-queries. Stage 1 (the data model) is in; nothing draws from it or reads it yet, so everything
-above still describes how water is built and drawn today.
+document. On the combined branch the Painted look draws rivers, ponds, riffles and falls from it as
+ONE surface (`PainterWaterField`, `WaterFieldMesh`, the field branch of `painter_water.gdshader`):
+the shore is the exact waterline of the field (marching triangles over the depth), a fall's foot has
+its own coordinate and shader rules (blue glass, white columns, drifting tongues, a calm pool), the
+field's per-edit passes run in the native library (`wfield`, with the GDScript twin as the fallback,
+bit for bit) and a river stroke is conditioned at plan time (next section). Gameplay (`WaterSurface`,
+zones, walkability, ripples) and Classic still read the path described above, unchanged; they move to
+the field in stage 4 of the staged plan in water_field.md. Main has only stage 1 (the data model).
 
 ## Conditioning a drawn river
 
