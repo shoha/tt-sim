@@ -124,7 +124,7 @@ per sample, shared by every cell, a ring of buried cells at the edge); `PainterW
 (`painter/painter_water_field.gd`, owned by `PainterWater`) hosts it per painted map and redoes a
 dirty rect per edit (`ground_edited`, `AuthoredWater.refreshed`, `rect_of_bodies`; the mesh is
 rebuilt whole: 48 ms in GDScript, 0.4 ms native). Vertex contract: CUSTOM0 = (depth, energy, shore distance, steep),
-CUSTOM1 = (river share, FIELD_FLAG -7, foot flag: 1 within `WaterFieldStroke.FOOT_RANGE_M` of a
+CUSTOM1 = (lateral coordinate, FIELD_FLAG -7, foot flag: 1 within `WaterFieldStroke.FOOT_RANGE_M` of a
 fall's foot (the shader fetches the foot coordinate only there), spill mark: 1 a ramp into a pond,
 0.5 a bank's thin spill, 0.125 a film). The shader (`painter_water.gdshader`, field branch) reads those instead of
 the depth buffer, so the wash, the shoreline, the lap and the white are the model's.
@@ -178,6 +178,23 @@ one still drives the wash, fade and floor. Known: the dL guardrail at the foot i
 (the white-to-pool transition is a shape, not a plateau), the lip's is 1.2 to 2 times; a straight pit
 edge in a stream's pool (st_o, stpool_z3) is the terrain's (the tier sculpt's rectilinear cliff, the dry
 capture shows it), not the field's or the shader's.
+
+## The lateral coordinate (card painter-water-curl)
+
+`WaterField.lateral` is the signed distance across the owning stroke's course (`_lateral_of`: the
+distance `d` with the sign of cross(segment, sample - segment start), so one side is positive along
+the whole stroke and the value is continuous through a bend), written beside `flow_u` where the
+stroke owns the sample and 0 elsewhere. It rides CUSTOM1.x (the slot the unread "river share" held;
+the native mesh builder copies its "river" array unchanged, `WaterFieldNative` passes `lateral`
+under that key, so no DLL change). The shader's `across_u` is that coordinate blended in by the arc
+coordinate's weight (`smoothstep(0.2, 0.9, fld_b.g)`, the same ownership as `uf`), and the world
+projection `dot(p, across_dir)` elsewhere (ponds, the flat). The tongue columns, the blob and streak
+lateral coordinate, the foot tongues and `fd_in`'s noise read it. Why: `across_dir` is the baked flow
+map's perpendicular per fragment, which at a stepped stream stands about 43 degrees off the stroke;
+`dot(p, a(p))` multiplies a slow drift of `a` by |p| (the fall's distance from the world origin), so
+the columns and the lap drew as arches (the sideways curl at st_o). No per-fragment direction (the
+flow map's, the surface normal, a screen-derivative gradient of the arc) avoids it; a stored
+coordinate does.
 
 The soft brink (card painter-water-lip, look-pending): a fall's white is built down the face, not
 stamped at the lip. `WaterFieldStroke.table` writes the `core` as a thin brink line (`BRINK_M` 0.5 m

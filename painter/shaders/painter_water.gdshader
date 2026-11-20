@@ -423,6 +423,12 @@ void fragment() {
 	float flow_k = smoothstep(FLOW_DEAD_ZONE, 0.1, flow_speed);
 	vec2 dir = normalize(mix(wind_flat, flow_speed > 0.0 ? flow_ws / flow_speed : wind_flat, flow_k));
 	vec2 across_dir = vec2(-dir.y, dir.x);
+	// The white's coordinate across the stream. Over a field stroke it is the stroke's own signed
+	// lateral coordinate (CUSTOM1.x), blended in by the arc coordinate's weight; elsewhere the world
+	// projection on the flow map's frame. That frame varies from fragment to fragment, and
+	// dot(p, across_dir) multiplies the variation by |p| (the fall's distance from the world origin),
+	// so on a stepped stream it drew the columns and the lap as arches across the face.
+	float across_u = dot(p, across_dir);
 
 	// ---- The bed under the water --------------------------------------------------------------
 #ifdef ABL_NODEPTH
@@ -498,13 +504,14 @@ if (fieldv) {
 		vec4 fbf = texture(fld_b, ((v_mp - fld_origin) * fld_inv_step + 0.5) / fld_dim);
 		fb_held = fbf;
 		fb_have = true;
+		across_u = mix(across_u, v_f1.x, smoothstep(0.2, 0.9, fbf.g));
 		float foot_v = smoothstep(0.2, 0.9, fbf.a);
 		fd = fbf.b / max(fbf.a, 0.001);
 		// The white floor is whole 0.3 m above the foot (a lower face of broken water, not a glass
 		// window with columns reaching the foot): the foot's last stretch holds no column edge to step
 		// across. The line it starts on is broken by a slow noise across the flow (a straight band
 		// reads as a slab).
-		float fd_in = fd + (p_noise(vec3(dot(p, across_dir) * 1.3, 3.0, 8.0)) - 0.5) * 0.5;
+		float fd_in = fd + (p_noise(vec3(across_u * 1.3, 3.0, 8.0)) - 0.5) * 0.5;
 		foot_in = smoothstep(-FOOT_FACE_M, -0.2, fd_in) * foot_v;
 		// The veil reaches FOOT_VEIL_M below the foot and fades over all of it (the squared smoothstep:
 		// a soft tail, no edge to cross).
@@ -848,7 +855,7 @@ if (fieldv && (shade_opt & 4) != 0) {
 		// in place. The edge is wide: the white thins into the veil, it does not end on a line.
 		float fill = 0.0;
 		if (foot_in > 0.0) {
-			float cu = dot(p, across_dir);
+			float cu = across_u;
 			cu += (p_noise(vec3(cu * 0.5, uf * 0.45, 4.0)) - 0.5) * 0.6;
 			float hn = p_noise(vec3(cu * FOOT_TONGUE_FREQ, wt() / FOOT_DRIFT_S, 7.0));
 			float hk = clamp((hn - 0.5) * 1.9 + 0.5, 0.0, 1.0);
@@ -878,7 +885,8 @@ if (fieldv && (shade_opt & 4) != 0) {
 				uf = mix(uf, fb.r / max(fb.g, 0.001), has_u);
 			}
 #endif
-			vec2 bq = one_clock ? vec2(uf, dot(p, across_dir)) : p;
+			across_u = mix(dot(p, across_dir), v_f1.x, has_u);
+			vec2 bq = one_clock ? vec2(uf, across_u) : p;
 			vec2 bf = one_clock ? vec2(FLOW_C * has_u, 0.0) : flow_ws;
 			float c_face = (shade_opt & 4) != 0 ? smoothstep(0.1, 0.5, curtain) : curtain;
 			// The pattern is mix(blob, streak, c_face) then mixed with the tongues by the curtain: a
@@ -902,7 +910,7 @@ if (fieldv && (shade_opt & 4) != 0) {
 #ifdef ABL_NOBLOB
 		blob = 0.5;
 #endif
-		vec2 st = vec2(dot(p, across_dir) * 3.2, world_pos.y * 0.45 + wt() * 1.6);
+		vec2 st = vec2(across_u * 3.2, world_pos.y * 0.45 + wt() * 1.6);
 			if (one_clock) {
 				st.y = uf * 0.45 - wt() * 0.64;
 			}
@@ -927,7 +935,7 @@ if (fieldv && (shade_opt & 4) != 0) {
 			// direction taken per fragment from the surface turned dot(p, d) into a maze of lines).
 			// About 0.28 m columns, each its own width and white for its own length, blue between;
 			// the columns bend gently so the sheet is not a comb.
-			float u_f = dot(p, across_dir);
+			float u_f = across_u;
 			float v_f = one_clock ? uf : dot(p, dir);
 			u_f += (p_noise(vec3(u_f * 0.5, v_f * 0.45, 4.0)) - 0.5) * 0.6;
 			float c_u = u_f * 3.6;

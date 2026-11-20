@@ -11,10 +11,10 @@ extends RefCounted
 ##
 ## Vertex contract (painter_water.gdshader): VERTEX in map space (an identity transform at the map
 ## origin), UV map-normalised (the flow map's frame), CUSTOM0 = (depth, energy, shore distance,
-## steep share), CUSTOM1 = (river share, FIELD_FLAG, 1 where the sample is within the foot
-## coordinate's range of a fall's foot (WaterField.foot; the shader fetches the coordinate only
-## there), the spill mark: 1 a river's
-## ramp into a pond, 0.5 a bank's thin spill that is not drawn as a shelf, 0.125 a film). The mesh
+## steep share), CUSTOM1 = (lateral coordinate (WaterField.lateral), FIELD_FLAG, 1 where the sample
+## is within the foot coordinate's range of a fall's foot (WaterField.foot; the shader fetches the
+## coordinate only there), the spill mark: 1 a river's ramp into a pond,
+## 0.5 a bank's thin spill that is not drawn as a shelf, 0.125 a film). The mesh
 ## is a function of the field alone, so a field refreshed over a dirty rect draws exactly what a
 ## fresh build would.
 
@@ -109,7 +109,7 @@ static func build(f: WaterField) -> Dictionary:
 					elif f.calm[s] != 0:
 						spill = FILM_MARK
 					var near_foot := 1.0 if f.foot[s] < WaterFieldStroke.NO_FOOT * 0.5 else 0.0
-					c1.append_array([f.river[s], FIELD_FLAG, near_foot, spill])
+					c1.append_array([f.lateral[s], FIELD_FLAG, near_foot, spill])
 				corner.append(index_of[s])
 			indices.append_array([corner[0], corner[1], corner[2], corner[1], corner[3], corner[2]])
 	if verts.is_empty():

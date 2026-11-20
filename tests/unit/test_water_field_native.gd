@@ -15,7 +15,7 @@ const _ARRAYS := [
 	"energy",
 	"steep",
 	"shore",
-	"river",
+	"lateral",
 	"spill",
 	"calm",
 	"owner",

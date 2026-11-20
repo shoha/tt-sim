@@ -117,7 +117,7 @@ static func mesh(native: Object, f: WaterField) -> Dictionary:
 			"energy": f.energy,
 			"shore": f.shore,
 			"steep": f.steep,
-			"river": f.river,
+			"river": f.lateral,
 			"foot": f.foot,
 			"spill": f.spill,
 			"calm": f.calm,

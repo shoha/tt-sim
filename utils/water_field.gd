@@ -127,8 +127,14 @@ var energy := PackedFloat32Array()
 var steep := PackedFloat32Array()
 ## The signed distance to the waterline in metres, positive in the water, at most SHORE_FAR.
 var shore := PackedFloat32Array()
-## 1 where a river's area holds the sample (flow), fading across its bank; 0 for still water.
-var river := PackedFloat32Array()
+## The signed lateral coordinate of a river sample: the distance across the owning stroke's course
+## in metres, the same side positive along the whole stroke (cross(tangent, sample - centre)), 0 on
+## any sample no stroke wrote. It rides CUSTOM1.x of the mesh (the slot the old river share held,
+## which the shader never read; the native mesh builder still names its array "river"). With the
+## arc `flow_u` it is the stroke's own frame, so the white's columns run along the stream: a
+## direction taken per fragment (the flow map's) turned dot(p, across) into arches (card
+## painter-water-curl).
+var lateral := PackedFloat32Array()
 ## SPILL_BANK or SPILL_POND where a river's water is not held by its own carve.
 var spill := PackedByteArray()
 ## 1 where a slope of the surface is not white water (a bank's drain, an undermined film).
@@ -337,7 +343,7 @@ func _fit(doc: MapDocument) -> bool:
 	energy = _zeros(n)
 	steep = _zeros(n)
 	shore = _zeros(n)
-	river = _zeros(n)
+	lateral = _zeros(n)
 	_raw = _zeros(n)
 	_stroke_energy = _zeros(n)
 	_base = _zeros(n)
@@ -365,7 +371,7 @@ func _reset(doc: MapDocument, rect: Rect2i) -> void:
 		ground = heights.duplicate() if has_heights else _zeros(n)
 		_raw.fill(WaterGeometry.DRY)
 		_stroke_energy.fill(0.0)
-		river.fill(0.0)
+		lateral.fill(0.0)
 		spill.fill(0)
 		calm.fill(0)
 		owner.fill(0)
@@ -378,7 +384,7 @@ func _reset(doc: MapDocument, rect: Rect2i) -> void:
 			ground[i] = heights[i] if has_heights else 0.0
 			_raw[i] = WaterGeometry.DRY
 			_stroke_energy[i] = 0.0
-			river[i] = 0.0
+			lateral[i] = 0.0
 			spill[i] = 0
 			calm[i] = 0
 			owner[i] = 0
@@ -528,8 +534,8 @@ func _put_stroke(
 			var flow_coord := s + FLOW_DROP_K * (lev[0] - level)
 			# The foot foam and the riffle white gather mid-channel (a tongue), the brink and the
 			# curtain span it.
-			var lateral := 1.0 - LATERAL_FADE * smoothstep(0.2, 1.0, d / maxf(hw, 0.1))
-			var e := maxf(core[ti], en[ti] * lateral)
+			var mid := 1.0 - LATERAL_FADE * smoothstep(0.2, 1.0, d / maxf(hw, 0.1))
+			var e := maxf(core[ti], en[ti] * mid)
 			var si := clampi(
 				int(round(s / WaterFieldStroke.STATION_STEP)), 0, lost.size() - 1
 			)
@@ -553,6 +559,9 @@ func _put_stroke(
 				calm[at] = 1 if undermined or (d > hw and not over_pond) else 0
 				_raw[at] = level
 				flow_u[at] = flow_coord
+				lateral[at] = _lateral_of(
+					profile, s, d, origin + Vector2(rect.position.x + i, rect.position.y + j) * step
+				)
 				foot[at] = foot_t[ti]
 				owner[at] = id
 				_stroke_energy[at] = maxf(_stroke_energy[at], 0.0 if undermined else e)
@@ -566,8 +575,17 @@ func _put_stroke(
 				# sample), but the foot coordinate runs on across its cells, so the plunge's rules
 				# (the veil, the pool's floor) reach the pond as they reach a pool of the stream.
 				foot[at] = foot_t[ti]
-			# Flow share: the channel and its bank fade (the shader reads the flow map too).
-			river[at] = maxf(river[at], 1.0 - smoothstep(hw, hw + bank, d))
+
+
+## The signed lateral coordinate of the sample at `p`, `d` from the course and `s` along it: `d`
+## with the sign of cross(segment, p - segment start) on the segment `s` falls on, so the same
+## side is positive along the whole stroke and the coordinate is continuous through a bend (it
+## only changes sign across the centre line).
+func _lateral_of(profile: RiverProfile, s: float, d: float, p: Vector2) -> float:
+	var points := profile.points
+	var k := clampi(profile.arc.bsearch(s) - 1, 0, points.size() - 2)
+	var a := points[k]
+	return -d if (points[k + 1] - a).cross(p - a) < 0.0 else d
 
 
 ## The spill rule. Resets the surface to the raw levels over `rect` and the spill samples

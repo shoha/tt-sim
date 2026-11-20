@@ -32,7 +32,7 @@ const _ARRAYS := [
 	"energy",
 	"steep",
 	"shore",
-	"river",
+	"lateral",
 	"spill",
 	"calm",
 	"owner",
@@ -164,6 +164,39 @@ func test_a_fall_is_one_steep_surface() -> void:
 		bottom = minf(bottom, level)
 	assert_gt(top - bottom, 1.0, "f1 drops over a metre")
 	assert_eq(gaps, 0, "the water along f1 is one unbroken surface")
+
+
+func test_the_lateral_coordinate_is_signed_across_the_stroke() -> void:
+	# Card painter-water-curl: along f1 (a straight course) the stroke's lateral coordinate is the
+	# distance across it, positive on one side along the whole course, zero on the centre line, and
+	# 0 on a sample no stroke wrote.
+	var from: Vector2 = TRANSECTS.f1[0]
+	var to: Vector2 = TRANSECTS.f1[1]
+	var dir := (to - from).normalized()
+	var side := dir.orthogonal()
+	var checked := 0
+	var first_side := 0.0
+	var t := 1.0
+	while t <= from.distance_to(to) - 1.0:
+		var centre := from + dir * t
+		var i_in := _full.index_of(centre + side * 0.5)
+		var i_out := _full.index_of(centre - side * 0.5)
+		var held := (
+			_full.flow_u[i_in] > WaterField.NO_FLOW_U * 0.5
+			and _full.flow_u[i_out] > WaterField.NO_FLOW_U * 0.5
+		)
+		if held:
+			var a := _full.lateral[i_in]
+			var b := _full.lateral[i_out]
+			if first_side == 0.0:
+				first_side = signf(a)
+			assert_eq(signf(a), first_side, "the same side is positive along the whole course")
+			assert_lt(a * b, 0.0, "the two sides of the course have opposite signs at %.1f" % t)
+			assert_almost_eq(absf(a), 0.5, 0.3, "its size is the distance across")
+			assert_almost_eq(absf(b), 0.5, 0.3, "on both sides")
+			checked += 1
+		t += 0.5
+	assert_gt(checked, 4, "the samples beside f1 carry a lateral coordinate")
 
 
 func test_the_foot_coordinate_runs_through_the_fall() -> void:
