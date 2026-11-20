@@ -116,12 +116,48 @@ static func condition(
 	# The ends are the drawn ends (a join into other water), exactly.
 	stations[0] = points[0]
 	stations[stations.size() - 1] = points[points.size() - 1]
-	out.points = stations
+	# The cap is on the TOTAL displacement from the drawn line (the author must feel the course as
+	# their own gesture), not on the smoothing step alone: thinning, loop trimming and the final
+	# resample each move the line too. A station further than the cap from the drawn polyline is
+	# pulled back onto the cap.
 	out.widths = line[1]
+	_clamp_to_drawn(stations, points, out.widths, disp_k)
+	out.points = stations
 	out.changed = true
 	out.bends_after = _bends(out.points, out.widths, bend)
-	out.max_disp = hausdorff(points, out.points)
+	out.max_disp = deviation(out.points, points)
 	return out
+
+
+## The largest distance from the polyline `a` (sampled every 0.25 m) to the polyline `b`: how far
+## `a` strays from `b`. One-sided: the jitter of `b` that `a` smooths away does not count, only
+## how far the clean line leaves the drawn one.
+static func deviation(a: PackedVector2Array, b: PackedVector2Array) -> float:
+	var worst := 0.0
+	for i in a.size() - 1:
+		var count := maxi(1, ceili(a[i].distance_to(a[i + 1]) / 0.25))
+		for s in count + 1:
+			var p := a[i].lerp(a[i + 1], float(s) / count)
+			worst = maxf(worst, WaterGeometry.nearest_on_polyline(b, p).x)
+	return worst
+
+
+## Moves each station of `stations` that is more than `per_width` x its half-width from the
+## polyline `drawn` back to that distance, on the line from its nearest drawn point.
+static func _clamp_to_drawn(
+	stations: PackedVector2Array,
+	drawn: PackedVector2Array,
+	widths: PackedFloat32Array,
+	per_width: float
+) -> void:
+	for i in stations.size():
+		var near := WaterGeometry.nearest_on_polyline(drawn, stations[i])
+		var cap := per_width * widths[i]
+		if near.y < 0.0 or near.x <= cap:
+			continue
+		var segment := int(near.y)
+		var foot := drawn[segment].lerp(drawn[segment + 1], near.z)
+		stations[i] = foot + (stations[i] - foot).normalized() * cap
 
 
 ## Indices of the points Douglas-Peucker keeps of `points` at tolerance `eps` (both ends always).

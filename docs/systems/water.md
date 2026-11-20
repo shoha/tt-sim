@@ -708,7 +708,8 @@ A committed river stroke is cleaned once, at plan time, before the carve, so the
 legal river and Painted, Classic and every peer draw the same one (water_field.md "Conditioning"
 has the rules and numbers). `WaterEdit.plan_river` (switch `WaterEdit.conditioning_enabled`,
 default true; `condition` false plans as drawn) smooths the course within half a half-width
-(`WaterCourseFit`), fits the reach levels so the water never climbs and steps only by whole
+of the drawn line (`WaterCourseFit`: a total cap, each station pulled back to it after thinning; the
+report's `max_disp` is the stored course against the drawn polyline), fits the reach levels so the water never climbs and steps only by whole
 falls (`WaterConditioner`: 5 cm lattice, water only lowered, dead band 0.25 m, reaches of at least
 2 m), joins an end that stops near other water (`WaterPorts.end_decision`: join, inflow, fall
 into, outlet), and keeps the stroke as drawn when conditioning would cut deeper than 1.5 m. The

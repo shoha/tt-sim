@@ -98,14 +98,20 @@ func test_plan_river_conditions_by_default_and_the_switch_turns_it_off() -> void
 
 func test_the_gesture_stays_the_users() -> void:
 	# The jitter line zigzags 0.9 m either side of its trend (sigma 0.3 m at 0.3 m spacing, a
-	# half-width of 1 m): the smoothed course moves less than one half-width from it, and the
-	# numbers are printed (the spike's cap is half a half-width after thinning).
+	# half-width of 1 m). The conditioned course never strays further than half a half-width from
+	# the DRAWN line (the cap is on the total displacement, WaterCourseFit.deviation), however
+	# much jitter it smooths away.
 	var doc := Cases.world(Cases._rolling)
 	var line := _jitter_line()
 	var report := {}
-	WaterEdit.plan_river(doc, line, _widths(line, 1.0), WAIST, 1.0, true, report)
+	var bodies := WaterEdit.plan_river(doc, line, _widths(line, 1.0), WAIST, 1.0, true, report)
 	assert_gt(float(report.max_disp), 0.0, "the course was smoothed")
-	assert_lt(float(report.max_disp), 1.0, "by less than a half-width")
+	assert_lte(float(report.max_disp), 0.5 + 0.02, "by at most half a half-width")
+	var course := PackedVector2Array()
+	for body in bodies:
+		course.append_array(body.points)
+	var stray := WaterCourseFit.deviation(course, line)
+	assert_lte(stray, 0.5 + 0.1, "and the stored course stays near it")
 	assert_gte(float(report.level_moved), 0.0)
 	gut.p(
 		"GESTURE max displacement %.2f m, max level change %.2f m, max cut %.2f m"
