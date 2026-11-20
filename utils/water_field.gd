@@ -123,6 +123,10 @@ var owner := PackedInt32Array()
 ## sample plus FLOW_DROP_K times the drop of its level since the stroke's head, so a pattern that
 ## travels in this coordinate stretches down a fall with no seam at the lip (NO_FLOW_U elsewhere).
 var flow_u := PackedFloat32Array()
+## The foot coordinate of a river sample (foot spike): the signed arc distance to the nearest
+## fall's foot (negative on the face, positive in the plunge pool; WaterFieldStroke.NO_FOOT
+## beyond 4 m and on any sample no stroke wrote).
+var foot := PackedFloat32Array()
 ## What the map shows that its author should decide, sorted by (kind, body, position):
 ## {"kind": &"film_run", "body", "pos", "length"} a stretch of a stroke longer than the bridge
 ## whose ground no longer holds its water; {"kind": &"bridged_run", ...} the same, short enough
@@ -324,6 +328,8 @@ func _fit(doc: MapDocument) -> bool:
 	owner.fill(0)
 	flow_u = _zeros(n)
 	flow_u.fill(NO_FLOW_U)
+	foot = _zeros(n)
+	foot.fill(WaterFieldStroke.NO_FOOT)
 	events = []
 	return true
 
@@ -344,6 +350,7 @@ func _reset(doc: MapDocument, rect: Rect2i) -> void:
 			calm[i] = 0
 			owner[i] = 0
 			flow_u[i] = NO_FLOW_U
+			foot[i] = WaterFieldStroke.NO_FOOT
 
 
 ## Ponds: each sample of a pond's mask in `rect` holds its level.
@@ -406,6 +413,7 @@ func _put_stroke(
 	var lev: PackedFloat32Array = table.level
 	var en: PackedFloat32Array = table.energy
 	var core: PackedFloat32Array = table.core
+	var foot_t: PackedFloat32Array = table.foot
 	var rect: Rect2i = field.rect
 	var dist: PackedFloat32Array = field.distance
 	var along: PackedFloat32Array = field.along
@@ -454,6 +462,7 @@ func _put_stroke(
 				calm[at] = 1 if undermined or (d > hw and not over_pond) else 0
 				_raw[at] = level
 				flow_u[at] = flow_coord
+				foot[at] = foot_t[ti]
 				owner[at] = id
 				_stroke_energy[at] = maxf(_stroke_energy[at], 0.0 if undermined else e)
 			# Flow share: the channel and its bank fade (the shader reads the flow map too).

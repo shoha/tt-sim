@@ -205,6 +205,11 @@ func _upload_textures() -> void:
 		if u > WaterField.NO_FLOW_U * 0.5:
 			b[i * 4] = u
 			b[i * 4 + 1] = 1.0
+			var ft: float = field.foot[i]
+			if ft < WaterFieldStroke.NO_FOOT * 0.5:
+				# The foot coordinate rides the same weight (fld_b.g) and is divided by it in the shader.
+				b[i * 4 + 2] = ft
+				b[i * 4 + 3] = 1.0
 	_tex_a = _fill_texture(_tex_a, nx, nz, a)
 	_tex_b = _fill_texture(_tex_b, nx, nz, b)
 	sm.set_shader_parameter(&"fld_a", _tex_a)

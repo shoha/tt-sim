@@ -159,6 +159,15 @@ vec4 fld_cubic(sampler2D t, vec2 tc) {
 }
 
 const float FLOW_DROP_K = 0.5;
+// The foot rule: the metres of face above the foot and of plunge pool below it the rules reach.
+const float FOOT_FACE_M = 1.5;
+const float FOOT_POOL_M = 1.6;
+// R3: the longest tongue of white below the foot (m).
+const float FOOT_TONGUE_M = 0.7;
+// R1: the energy the foot holds.
+const float FOOT_ENERGY = 0.95;
+// R2: the wash column (m) the face and the foot's pool share at the foot (the deep band).
+const float FOOT_COLUMN_M = 1.1;
 // Under option 2: the speed (u per second) the whites travel along the flow coordinate.
 const float FLOW_C = 1.1;
 // Under option 4: pool tint floor (a column, m) where the shore is far and the water has body.
@@ -466,6 +475,22 @@ if (fieldv) {
 #endif
 }
 #endif
+	// ---- Foot rule (card painter-water-foot-spike) -----------------------------------------------
+	// fd: the signed arc distance to the fall's foot (negative on the face, positive in the plunge
+	// pool), foot_v 1 where the field holds one. ONE coordinate shared by the face and the pool, so
+	// no rule ends on a line: the rules below are smooth functions of it.
+	float fd = 9.0;
+	float foot_v = 0.0;
+#ifdef FOOT_ANY
+	if (fieldv && (fa.w > 0.02 || fa.y > 0.04)) {
+		vec4 fbf = texture(fld_b, ((v_mp - fld_origin) * fld_inv_step + 0.5) / fld_dim);
+		foot_v = smoothstep(0.2, 0.9, fbf.a);
+		fd = fbf.b / max(fbf.a, 0.001);
+	}
+#endif
+	float foot_in = smoothstep(-FOOT_FACE_M, 0.0, fd) * foot_v;
+	float foot_out = (1.0 - smoothstep(0.0, FOOT_POOL_M, fd)) * foot_v;
+	float foot_w = foot_in * (1.0 - smoothstep(0.0, FOOT_POOL_M, fd));
 	float curtain = 0.0;
 	float path_k = 1.0;
 	if (fieldv) {
@@ -490,9 +515,24 @@ if (fieldv) {
 if (fieldv && (shade_opt & 4) != 0) {
 	// A pool (water with body, far from every bank) reads deep like main's: the pale shallow band
 	// belongs to the rim, not to the middle of a 0.3 m pool.
+#ifdef FOOT_FIX
+	// A narrow pool (a stream's lower pool, a metre across) has no middle 0.5 m from every bank: the
+	// floor engages from a rim of 0.15 m, so it reads deep like the wide ones.
+	float pool_k = smoothstep(0.08, 0.4, fa.z) * smoothstep(0.02, 0.08, fa.x) * (1.0 - curtain);
+#else
 	float pool_k = smoothstep(0.5, 1.4, fa.z) * smoothstep(0.08, 0.25, fa.x) * (1.0 - curtain);
+#endif
 	column = max(column, POOL_COLUMN_M * pool_k);
 }
+#ifdef FOOT_R2
+{
+	// Colour continuity: the face's glass takes the pool's deep colour towards the foot and the pool
+	// keeps it for a metre below (the bicubic depth dips where the face's thin sheet meets the plunge
+	// pool: a pale band), then lets its own depth decide. Energy only lightens it.
+	float hold = foot_in * (1.0 - smoothstep(0.6, FOOT_POOL_M + 0.8, fd));
+	column = mix(column, max(column, FOOT_COLUMN_M), hold);
+}
+#endif
 	// Where a river leaves the map the terrain's bed and the channel patch's meet in a crease: the low
 	// column there drew a row of white dabs (the depth-slope wrap), a vertical strip of ice rim and a
 	// dip in the wash's alpha across the river (painter-edges2). The shore effects keyed to a shallow
@@ -653,6 +693,14 @@ if (fieldv && (shade_opt & 4) != 0) {
 		a = max(a, lb.x * live * 0.95);
 	}
 	x = mix(x, p_shade, crack * 0.7);
+#ifdef FOOT_R3
+	{
+		// The plunge's wash: aerated water, a milky veil over the lower face and the pool below the
+		// foot, strongest at the foot and gone by FOOT_POOL_M, the same coordinate the glass colour uses.
+		x = mix(x, mix(p_lit, p_foam, 0.4), foot_w * 0.5);
+		a = max(a, foot_w * 0.85);
+	}
+#endif
 
 	// ---- Whites -----------------------------------------------------------------------------
 	float foam_k = clamp(foam_strength, 0.5, 1.5);
@@ -692,7 +740,14 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// On a steep bank the gradient (and so d_h) jumps from one mesh triangle to the next: the lap's
 	// edge softens there, so it reads as a brushed edge and not a row of crisp triangles.
 	float steep = smoothstep(0.5, 1.3, slope);
+#ifdef FOOT_FIX
+	// The foam's width and softness follow the bank's slope smoothly (it came from a steep/flat
+	// switch): a steep bank's grid-wide steps of waterline are brushed out, not drawn as blocks.
+	float lap_soft = 0.03 + 0.2 * steep;
+	d_h += (p_noise(vec3(p.x * 1.7, 9.0, p.y * 1.7)) - 0.5) * 0.3 * steep;
+#else
 	float lap_soft = 0.1 * steep;
+#endif
 	float lap = (1.0 - smoothstep(thr - 0.03 - lap_soft, thr + 0.02 + lap_soft, d_h)) * smoothstep(0.0, 0.03, d_h + 0.02);
 	float dash_n = p_noise(vec3(p.x * 3.1, 4.0 + floor(wt() * 0.4), p.y * 3.1));
 	float outer = lap_w * 1.5;
@@ -755,9 +810,32 @@ if (fieldv && (shade_opt & 4) != 0) {
 		// The energy's middle is pulled down (a power): a fall's foot foam keeps its bold patches
 		// near the fall and thins quickly, and a plunge pool is calm a metre or two away. A river's
 		// ramp into a lower pond (CUSTOM1.w) is a slope, not a fall: it keeps a fifth of its white.
-		float en = pow(clamp(fa.y * p_white, 0.0, 1.0), ENERGY_POWER);
+		float e_raw = fa.y;
+#ifdef FOOT_R1
+		// Energy as one smooth function of the arc from the foot: the face's white holds to the foot
+		// and the plunge's decays from it over FOOT_POOL_M (the stroke's own table splits face and
+		// foot at the fall's landing, short of the foot on a tall fall).
+		e_raw = max(e_raw, foot_v * FOOT_ENERGY * smoothstep(-0.6, 0.0, fd) * (1.0 - smoothstep(0.0, FOOT_POOL_M, fd)));
+#endif
+		float en = pow(clamp(e_raw * p_white, 0.0, 1.0), ENERGY_POWER);
 		// On the face the white thins to streaks over glass; the brink and the foot keep it full.
 		float en_c = mix(en, en * 0.62, curtain);
+#ifdef FOOT_R3
+		// A white floor on the lower face: the sheet breaks into foam towards the foot.
+		// Its reach below the foot is each column's own length (the same columns as the face's
+		// tongues), so the white ends in rounded tongues of different lengths, not a line.
+		float fill = 0.0;
+		if (foot_in > 0.0) {
+			float cu = dot(p, across_dir);
+			cu += (p_noise(vec3(cu * 0.5, uf * 0.45, 4.0)) - 0.5) * 0.6;
+			cu *= 3.6;
+			float edge_r = abs(fract(cu) - 0.5) * 2.0;
+			// Round tips: a column ends shorter at its sides than in its middle.
+			float tip = (0.1 + FOOT_TONGUE_M * be_hash(vec2(floor(cu), 3.7))) * (1.0 - 0.55 * edge_r * edge_r);
+			fill = foot_in * (1.0 - smoothstep(tip - 0.4, tip + 0.05, fd));
+		}
+		en_c = max(en_c, fill * 0.9);
+#endif
 		// Under the floor (the cover below) nothing is white: the noises are not read there, which is
 		// most of a pond and a river.
 #ifdef ABL_NOWHITE
@@ -777,6 +855,10 @@ if (fieldv && (shade_opt & 4) != 0) {
 			}
 #endif
 			vec2 bq = one_clock ? vec2(uf, dot(p, across_dir)) : p;
+#ifdef FOOT_R1
+			// Below the foot the blobs stretch along the flow into tongues.
+			bq.x /= 1.0 + 1.2 * foot_out;
+#endif
 			vec2 bf = one_clock ? vec2(FLOW_C * has_u, 0.0) : flow_ws;
 			float c_face = (shade_opt & 4) != 0 ? smoothstep(0.1, 0.5, curtain) : curtain;
 			// The pattern is mix(blob, streak, c_face) then mixed with the tongues by the curtain: a
@@ -837,16 +919,22 @@ if (fieldv && (shade_opt & 4) != 0) {
 			float run = p_noise(vec3(id * 1.7, 2.0, v_f * 0.35 - wt() * 0.5));
 			pattern = mix(pattern, across * (0.35 + 0.65 * hh.x) * (0.5 + 1.0 * run), curtain);
 		}
+#ifdef FOOT_R3
+		// The columns' gaps fill with white as they near the foot.
+		pattern = mix(pattern, 1.0, fill * 0.85);
+#endif
 		// White where the pattern stands over 1 - energy: all of it at 1, rare bold blobs at 0.3,
 		// none under a floor.
 		float cover = smoothstep(1.0 - en_c - edge_w, 1.0 - en_c + edge_w + min(px, COVER_PX_MAX) * 2.0, pattern);
 		cover *= smoothstep(0.08, 0.2, en_c);
+#ifndef FOOT_R1
 			if ((shade_opt & 4) != 0) {
 				// The plunge's white is graded by the field's own smooth energy (bicubic: no grid, no
 				// blob edge to cross): full white at the foot, fading to blue with the energy, so the
 				// pool's luminance does not step where a blob edge happens to fall.
 				cover = max(cover, smoothstep(0.5, 0.95, en) * 0.9 * (1.0 - smoothstep(0.6, 1.0, curtain)));
 			}
+#endif
 		foam = max(foam, cover * smoothstep(0.0, 0.02, column_raw + curtain));
 		}
 	}

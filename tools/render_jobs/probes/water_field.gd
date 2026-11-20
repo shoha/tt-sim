@@ -16,13 +16,13 @@ extends RefCounted
 ## a tributary and a stream into pools), saved as `_painter-water-field-painted_water`.
 
 const WATER := preload("res://tools/render_jobs/probes/water.gd")
-const PREFIX := "_painter-water-cost-spike_"
+const PREFIX := "_painter-water-foot-spike_"
 ## WaterFieldMesh.MESH_NAME, spelled out so the probe also runs on a tree without the field (the
 ## baseline the captures compare with).
 const FIELD_MESH := "PaintedWaterField"
 ## The painted water and fall shaders as they were before the field (a card's local copies, kept
 ## out of the tree), for the A/B "main" mode.
-const LEGACY_DIR := "res://tools/render_jobs/local/painter-water-cost-spike/"
+const LEGACY_DIR := "res://tools/render_jobs/local/painter-water-foot-spike/"
 const LEGACY_WATER := LEGACY_DIR + "legacy_water.gdshader"
 const LEGACY_FALL := LEGACY_DIR + "legacy_waterfall.gdshader"
 const STEP_M := 0.05
@@ -83,6 +83,8 @@ static func run(base: Node, step: Dictionary) -> String:
 				return "not painted"
 			pw.set("clock_t", float(step.get("t", 10.0)))
 			return "clock_t %.2f" % float(step.get("t", 10.0))
+		"defs":
+			return _defs(base, String(step.get("defs", "")))
 		"tokens":
 			return _tokens(base, step.get("items", []))
 		"cleanup":
@@ -102,6 +104,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _measure(base, step)
 		"perf":
 			return _perf(base)
+		"dump":
+			return _dump(base, step)
 	return "unknown action %s" % step.get("action", "")
 
 
@@ -150,6 +154,65 @@ static func _opt(base: Node, bits: int) -> String:
 		var path: String = LEGACY_FALL if (bits & 8) != 0 and legacy else PainterWater.FALL_SHADER
 		fm.shader = load(path) as Shader
 	return "shade_opt %d" % bits
+
+
+## Foot spike: the field shader's own text with `#define`s (space separated, e.g. "FOOT_R1") put at
+## its //ABL_DEFS marker, on the shared water material ("" puts the shipped shader back).
+static func _defs(base: Node, defs: String) -> String:
+	var water := painter_water(base)
+	if water == null:
+		return "not painted"
+	var wm := water.call("water_material") as ShaderMaterial
+	if defs.strip_edges() == "":
+		wm.shader = load(PainterWater.SHADER) as Shader
+		return "shader shipped"
+	var sh := Shader.new()
+	var text := FileAccess.get_file_as_string(PainterWater.SHADER)
+	var lines := PackedStringArray()
+	for d in defs.split(" ", false):
+		lines.append("#define " + d)
+	sh.code = text.replace("//ABL_DEFS", "\n".join(lines))
+	wm.shader = sh
+	return "shader defs %s" % defs
+
+
+## Foot spike: the field's samples along the open case's centreline (every `every`-th station):
+## arc, depth, energy, steep, shore, w, for a metrics-style look at what the shader is fed.
+static func _dump(base: Node, step: Dictionary) -> String:
+	var pw := painter_water(base)
+	if pw == null or _case.is_empty():
+		return "no case"
+	var host: Variant = pw.call("field")
+	if host == null or host.field == null:
+		return "no field"
+	var f: WaterField = host.field
+	var every := int(step.get("every", 4))
+	var across: Vector2 = (_case.dir as Vector2).orthogonal()
+	var off := float(step.get("across", 0.0))
+	var out := PackedStringArray()
+	var stations: Array = _case.path
+	for k in range(0, stations.size(), every):
+		var st: Dictionary = stations[k]
+		var p3: Vector3 = st.p
+		var p := Vector2(p3.x, p3.z) + across * off
+		var i := f.index_of(p)
+		if i < 0:
+			continue
+		out.append(
+			(
+				"arc %.2f y %.2f depth %.2f en %.2f steep %.2f shore %.2f w %.2f"
+				% [st.arc, p3.y, f.depth[i], f.energy[i], f.steep[i], f.shore[i], f.w[i]]
+			)
+		)
+	var path := String(step.get("dir", "user://")).path_join(
+		"dump_%s_%s.txt" % [_case.label, String(step.get("tag", "mid"))]
+	)
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file != null:
+		file.store_line("pool_arc %.2f" % _case.pool_arc)
+		for l in out:
+			file.store_line(l)
+	return "dump %d rows to %s" % [out.size(), path]
 
 
 static func _setup(base: Node, doc: MapDocument, name: String) -> String:
@@ -368,7 +431,43 @@ static func _measure(base: Node, step: Dictionary) -> String:
 		var shown := not bool(stations[st_i].get("off", false))
 		if shown and arc > -1.0 and arc < pool_arc + 1.0:
 			all_holes += holes[st_i]
+	# Foot spike: what the field holds under each hole station (the one-pixel probe).
+	var hole_info: Array = []
+	var pw := painter_water(base)
+	var host: Variant = pw.call("field") if pw != null and pw.has_method("field") else null
+	if host != null and host.field != null and all_holes > 0:
+		var f: WaterField = host.field
+		for st_i in stations.size():
+			var st: Dictionary = stations[st_i]
+			var arc: float = st.arc
+			if holes[st_i] == 0 or bool(st.get("off", false)) or arc < -1.0 or arc > pool_arc + 1.0:
+				continue
+			var p3: Vector3 = st.p
+			var i := f.index_of(Vector2(p3.x, p3.z))
+			if i < 0:
+				continue
+			var min_d := INF
+			for o in [-1, 0, 1, -f.size.x, f.size.x, -f.size.x - 1, f.size.x + 1]:
+				if i + o >= 0 and i + o < f.depth.size():
+					min_d = minf(min_d, f.depth[i + o])
+			hole_info.append(
+				{
+					"arc": snappedf(arc, 0.01),
+					"holes": holes[st_i],
+					"y": snappedf(p3.y, 0.01),
+					"depth": snappedf(f.depth[i], 0.001),
+					"min_nb_depth": snappedf(min_d, 0.001),
+					"w": snappedf(f.w[i], 0.01),
+					"en": snappedf(f.energy[i], 0.01),
+					"steep": snappedf(f.steep[i], 0.01),
+					"shore": snappedf(f.shore[i], 0.01),
+					"spill": f.spill[i],
+					"calm": f.calm[i],
+					"owner": f.owner[i],
+				}
+			)
 	var record := {
+		"hole_info": hole_info,
 		"case": _case.label,
 		"label": String(step.get("label", "")),
 		"capture": String(step.name),

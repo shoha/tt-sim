@@ -26,6 +26,10 @@ const G := 9.81
 ## Undermined water: a run of undermined stations no longer than BRIDGE_M between held ones is a
 ## dip the water bridges at its level; any other run is a film (a map error to validate).
 const BRIDGE_M := 2.1
+## The foot coordinate (see table()): how far either side of a fall's foot it is written, and the
+## value outside it.
+const FOOT_RANGE_M := 4.0
+const NO_FOOT := 99.0
 
 
 ## The stroke's level, white-water `energy` and brink-and-face `core` white every TABLE_STEP
@@ -59,6 +63,19 @@ static func table(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
 				core[t] = maxf(core[t], strength)
 			else:
 				en[t] = maxf(en[t], exp(-(x - land) / decay) * strength)
+	# The foot coordinate: the signed arc distance to the nearest fall's foot (the face's end, where
+	# the surface reaches the lower level), negative on the face, positive in the plunge pool;
+	# NO_FOOT beyond FOOT_RANGE_M. One smooth function of the arc, so the shader's face and pool
+	# rules can meet on it (card painter-water-foot-spike).
+	var foot := PackedFloat32Array()
+	foot.resize(count)
+	foot.fill(NO_FOOT)
+	for fall in profile.falls:
+		var foot_s := float(fall.foot)
+		for t in count:
+			var d := t * TABLE_STEP - foot_s
+			if absf(d) < FOOT_RANGE_M and (foot[t] > NO_FOOT * 0.5 or absf(d) < absf(foot[t])):
+				foot[t] = d
 	# Riffles: the level's own slope, carried downstream.
 	var carry := int(RIFFLE_CARRY_M / TABLE_STEP)
 	var slope_e := PackedFloat32Array()
@@ -71,7 +88,7 @@ static func table(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
 		for c in mini(carry, t) + 1:
 			best = maxf(best, slope_e[t - c] * (1.0 - float(c) / float(carry + 1)))
 		en[t] = maxf(en[t], best)
-	return {"level": lev, "energy": en, "core": core}
+	return {"level": lev, "energy": en, "core": core, "foot": foot}
 
 
 ## The runs of set stations in `lost` as Vector3i(first, end, bridged): `end` is exclusive and

@@ -18,7 +18,7 @@ render_mode blend_mix, depth_draw_opaque, cull_disabled, unshaded;
 
 #include "res://painter/shaders/painter_noise.gdshaderinc"
 
-uniform float mist_alpha : hint_range(0.0, 1.0) = 0.6;
+uniform float mist_alpha : hint_range(0.0, 1.0) = 0.5;
 uniform sampler2D depth_tex : hint_depth_texture, repeat_disable, filter_nearest;
 global uniform bool water_quality_skip_fine_detail;
 
@@ -90,7 +90,10 @@ void fragment() {
 	float l1 = 1.0 - smoothstep(inner.y, MIST_LOBE_RADII.y, length(w - c1));
 	float l2 = 1.0 - smoothstep(inner.z, MIST_LOBE_RADII.z, length(w - c2));
 	float cloud = min(l0 + l1 + l2, 1.0);
-	float body = smoothstep(0.25, 0.55, cloud);
+	// A soft cloud with no rim: a firm edge read as a translucent disc laid over the face's glass
+	// (card painter-water-foot-spike).
+	float body = smoothstep(0.02, 0.95, cloud);
+	body *= body;
 	float core = smoothstep(0.7, 0.95, cloud);
 	float life = sin(mist_phase * PI);
 	float soft = smoothstep(

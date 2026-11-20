@@ -25,7 +25,7 @@ const GOLDEN_TOLERANCE := 0.002
 const FULL_BUDGET_MS := 3000.0
 const UPDATE_BUDGET_MS := 1500.0
 const _ARRAYS := [
-	"ground", "w", "depth", "energy", "steep", "shore", "river", "spill", "calm", "owner"
+	"ground", "w", "depth", "energy", "steep", "shore", "river", "spill", "calm", "owner", "foot"
 ]
 
 var _doc: MapDocument = null
@@ -153,6 +153,31 @@ func test_a_fall_is_one_steep_surface() -> void:
 		bottom = minf(bottom, level)
 	assert_gt(top - bottom, 1.0, "f1 drops over a metre")
 	assert_eq(gaps, 0, "the water along f1 is one unbroken surface")
+
+
+func test_the_foot_coordinate_runs_through_the_fall() -> void:
+	# Foot spike: along the f1 line the signed arc distance to the fall's foot only grows (face
+	# negative, plunge pool positive) and crosses zero once; no sample is written far from a fall.
+	var from: Vector2 = TRANSECTS.f1[0]
+	var to: Vector2 = TRANSECTS.f1[1]
+	var dir := (to - from).normalized()
+	var last := -INF
+	var neg := 0
+	var pos := 0
+	var t := 0.0
+	while t <= from.distance_to(to):
+		var i := _full.index_of(from + dir * t)
+		var ft := _full.foot[i]
+		if ft < WaterFieldStroke.NO_FOOT * 0.5:
+			assert_gte(ft, last - 0.3, "the foot coordinate does not run back along the fall")
+			last = maxf(last, ft)
+			if ft < -0.2:
+				neg += 1
+			elif ft > 0.2:
+				pos += 1
+		t += 0.25
+	assert_gt(neg, 2, "the face lies before the foot")
+	assert_gt(pos, 2, "the plunge pool lies after it")
 
 
 func test_full_build_time_is_bounded() -> void:
