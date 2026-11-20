@@ -23,7 +23,7 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled;
  * 2.4 times so the cores overlap into one mound) is filled with MORE such tufts, not bigger ones:
  * about (footprint / L)^2 tufts (mark_fill), at most MAX_TUFTS, their roots spread over it on a
  * sunflower spiral, the nearest drawn over the others. A rim tuft is one small tuft; a core is a
- * patch of several. Each is 7 to 9 thin strokes (mark_count, mark_width) from above, fanned only
+ * patch of several. Each is 4 or 5 broad strokes (mark_count, mark_width) from above, fanned only
  * a little (mark_comb): a wide fan of small strokes reads as a rosette, not grass.
  *
  * Tone: no outline and no ring. Each stroke runs from a darker root to a lit tip, strokes that lean
@@ -57,14 +57,19 @@ instance uniform float painter_placed = 0.0;
 // longest reach in metres.
 uniform float mark_reach = 1.0;
 uniform float mark_reach_max = 0.4;
+// The tallest a tuft stands in metres (a clump core grows its instances to twice the card's height:
+// standing blades that tall read as reeds beside a token).
+uniform float mark_height_max = 0.4;
 // The footprint's radius against the card's half width (times the instance's width scale), and how
 // many tufts fill it per (footprint / reach)^2.
 uniform float mark_spread = 0.9;
-uniform float mark_fill = 1.5;
+uniform float mark_fill = 1.0;
 // A stroke's half width at its root, in reaches (the thinnest and the broadest; 1.2 times from the
-// side), and how many strokes a tuft has seen from above (the fewest and the most).
-uniform vec2 mark_width = vec2(0.07, 0.1);
-uniform vec2 mark_count = vec2(7.0, 9.0);
+// side), and how many strokes a tuft has seen from above (the fewest and the most). Few broad
+// strokes are the painted manner (a few bold soft shapes, never fine hatching) and the cheap one:
+// the mark's cost is the pixels it covers (card painter-grass-mark-perf).
+uniform vec2 mark_width = vec2(0.13, 0.18);
+uniform vec2 mark_count = vec2(4.0, 5.0);
 // The comb: how far a tuft's strokes fan out (radians of turn across its width) and how wide the
 // band they root along is (in reaches). A small fan reads as combed grass; a wide one as a rosette.
 uniform vec2 mark_comb = vec2(0.6, 0.9);
@@ -80,7 +85,7 @@ uniform vec4 mark_value = vec4(0.74, 1.18, 0.86, 1.0);
 // How far the marks' colour is warmed toward the ground's yellow-green (the grass role's hue is
 // cooler than the floor's; the cards' thin spikes show little of it from above, a field of marks
 // much more).
-uniform float mark_warm = 0.1;
+uniform float mark_warm = 0.16;
 // How far snow tints the upper strokes toward the drift's colour at full frost.
 uniform float mark_frost = 0.85;
 // The tokens' feet (PainterOcclusion's tok: x, z, radius, feet height): a tuft within about a metre
@@ -158,7 +163,7 @@ void vertex() {
 	for (int i = 0; i < tok_n; i++) {
 		room = min(room, smoothstep(0.0, 1.0, length(o.xz - tok[i].xy) - tok[i].z));
 	}
-	float H = selector_height * s * own * mix(0.45, 1.0, room);
+	float H = min(selector_height * s, mark_height_max) * own * mix(0.45, 1.0, room);
 	// A tuft's blades are about as long as it is tall, and never longer than a real meadow tuft's
 	// (a clump core grows its instances wide and tall: it holds more tufts, not bigger ones).
 	float L = min(H * mark_reach, mark_reach_max * own) * mix(0.7, 1.0, room);
@@ -213,7 +218,7 @@ void vertex() {
 }
 
 // The tuft COMBED (the card's third way, chosen over a radial fan of blades, which read as maple
-// leaves from above, and a soft mass with blade tips, which read as moss): mark_count thin strokes
+// leaves from above, and a soft mass with blade tips, which read as moss): mark_count broad strokes
 // rooted close together on the tuft's upwind side, all leaning downwind along the world lean and
 // splayed like a fountain, the outer ones shorter and curling out, laid from the far side to the
 // near one. From the side the strokes stand up and droop at their tips over a darker body at the

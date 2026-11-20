@@ -321,8 +321,8 @@ copied at every sync) and points each cell's `multimesh.mesh` at it; release put
 card mesh back, and the shared card mesh is never edited. Classic, crops (`tuft_blades`) and
 narrow tufts (reeds) keep their cards; `PainterGrassMarks.enabled` is the A/B switch. The
 shader turns the quad to the view, lifts it toward the eye so no part cuts the ground, and paints
-the tuft COMBED: 7 to 9 thin strokes (`mark_count`, half width 0.07-0.10 of the reach,
-`mark_width`) rooted along a band across the tuft's upwind side and fanned only a little
+the tuft COMBED: 4 or 5 broad strokes (`mark_count`, half width 0.13-0.18 of the reach,
+`mark_width`; 7 to 9 thin ones before card painter-grass-mark-perf) rooted along a band across the tuft's upwind side and fanned only a little
 (`mark_comb`; a wide fan read as a rosette or clover once the tufts were small), all leaning
 downwind along a world lean field (the wind's way turned by a slow noise, so a meadow is combed in
 drifts), each from a dark root to a lit tip, toned by a world field the neighbours share (so
@@ -338,12 +338,12 @@ scale, which the scatter's mass clumps grow to 2.4 times wide and 0.8 m tall in 
 strokes 0.4-0.7 m wide, the size of the bushes. Now a tuft's REACH (its blades' length) is its own
 height (`mark_reach` 1) and at most `mark_reach_max` (0.4 m) times its own size step, and the
 instance's FOOTPRINT (the card's half width times the instance's WIDTH scale, which carries the core
-growth, times `mark_spread` 0.9) holds about (footprint / reach)^2 times `mark_fill` (1.5) tufts, at
+growth, times `mark_spread` 0.9) holds about (footprint / reach)^2 times `mark_fill` (1.0) tufts, at
 most 8, their roots on a sunflower spiral to half a reach inside its rim, each its own size, turn
 and strokes, the nearest on top. A rim tuft is one or two small tufts; a core a patch of up to
 eight. A fragment tests a tuft's strokes only inside that tuft's box, nearest first, and stops at
 the first hit. The tone was lifted and warmed with the smaller marks (root value 0.74, tip 1.18,
-`mark_warm` 0.1: the grass role is cooler than the floor, which a field of marks shows far more than
+`mark_warm` 0.16: the grass role is cooler than the floor, which a field of marks shows far more than
 the cards' spikes). From above the marks keep 1.6 times keep-grass (`mark_keep`), falling back to
 1.2 under snow so winter keeps its sparse straw. It lights itself (`SELECTOR_OWN_LIGHT` guards painter_selector's `light()`): the ramp's lit
 colour darkened from root to tip (`mark_value`) as the cards darken theirs, a cast shadow read at
@@ -364,6 +364,27 @@ home view at zoom 16 cards 2.68/2.69, first 2.69/2.70, now at core's 45 2.71/2.7
 3.33/3.36; at zoom 30 cards 2.87/3.12, first 2.93/3.15, now at 45 3.07/3.18, now at pitch 0
 3.69/3.79; from above at zoom 16 cards 2.33/2.33, first 2.57/2.58, now 2.97/2.97 (the tufts per
 instance are the cost: mark_fill 2.5 measured 3.15, mark_keep 1.2 against 1.6 saves only 0.03).
+MARK COST AND HEIGHT (card painter-grass-mark-perf, 2026-11-19, look-pending; the owner's "the
+performance difference seems big" and "still read too big" at zoom 16): the camera is orthographic
+(zoom 16 or 30 is the view's height in metres), so a mark's size against a flower or a token is
+the same at every zoom; zoom 16 only shows the tall standing strokes of a core, whose height
+followed the instance's height scale (up to 0.8 m times 1.3 for a standing stroke). `mark_height_max`
+(0.4 m, times the tuft's own step) now caps it. What the cost is, measured with one-uniform probes
+at pitch 0 (in-run A/B, two cycles, median GPU ms; cards = marks off): the stroke loops cost
+nothing (a probe that ran every loop and discarded at the end measured the same as no grass),
+nor do the three noises (cutting them to one 2D noise measured 0.00), nor does the light (an
+unshaded copy saved 0.04 to 0.10 of the 0.2 to 0.3), nor a series for cos and sin, nor
+`depth_prepass_alpha`. The cost is the number of pixels the strokes cover counting overdraw: it falls
+with fewer and broader strokes, with `mark_fill`, and steeply with `mark_keep` from above (keep 1.0
+against 1.6 left +0.05 but a sparse field); the likely cause (not measured directly) is that a
+discard shader gets no early depth rejection, so the heavy overlap of cores is paid in full. Defaults now: 4 or 5 strokes of
+half width 0.13-0.18, fill 1.0 (these are also the fewer, bolder, painterly marks). Over the cards
+(marks at pitch 0 at the home view; from above at the default 45), before then now: home zoom 16
++0.48 then +0.30, zoom 30 +0.61 then +0.33, from above zoom 16 +0.72 then +0.28 (cards 2.62, 3.17
+and 2.36 ms; evidence `.../compare/painter_final77_grass_perf/`, probe logs in probe/). That is
+above the +0.2 ms bar for making pitch 0 the default, so core keeps 45. The structural fix, not built, is strokes as
+GEOMETRY (a few triangles per stroke from the vertex stage): no discard, so early depth rejection and
+the engine's depth prepass shade each visible pixel once.
 The old atlas
 and tuft paths stay (stage 3 of the spike's plan removes them).
 Flowers (card painter-flowers, look-pending): `PainterFlowerHue` reads each surface of a flower
