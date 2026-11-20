@@ -91,6 +91,49 @@ func test_a_bloom_mound_is_a_carpet_and_a_single_head_is_not() -> void:
 	assert_eq(pair.a, 0.0, "two cards are no carpet")
 
 
+## A head's crossed cards are flagged twins of its first, a mound's overlapping cards never are, and
+## the centres texture holds the flags in the rows after the centres (card painter-flower-marks).
+func test_crossed_twins_are_flagged_and_a_carpet_has_none() -> void:
+	var sums := {
+		0: Vector4(0.0, 4.0, 0.0, 4.0),
+		4: Vector4(0.04, 4.0, 0.0, 4.0),
+		8: Vector4(2.0, 4.0, 0.0, 4.0),
+	}
+	var sized := {0: 0.1, 4: 0.1, 8: 0.1}
+	var twins := PainterFlowerHue.twins_of(sums, sized)
+	assert_false(twins.has(0), "the first card of a head is kept")
+	assert_true(twins.has(4), "a card on the first's centre is its twin")
+	assert_false(twins.has(8), "a card of another head is kept")
+	var mound := {}
+	var mound_sized := {}
+	for i in PainterFlowerHue.CARPET_CARDS:
+		mound[i * 4] = Vector4(0.01 * i, 0.4, 0.0, 4.0)
+		mound_sized[i * 4] = 0.1
+	var mound_twins := PainterFlowerHue.twins_of(mound, mound_sized)
+	assert_true(mound_twins.is_empty(), "a carpet's cards overlap by design")
+	var counts := {}
+	for stem: String in ["Flower_Poppy_v0_grassland_meadow", "Flower_BloomMound_v0_grassland_meadow"]:
+		var root := GlbUtils.load_glb(DIR + stem + ".glb")
+		var mesh := (root.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D).mesh
+		for i in mesh.get_surface_count():
+			if not mesh.surface_get_material(i).resource_name.ends_with("_LeafB"):
+				continue
+			var image := PainterFlowerHue.centres(mesh, i, Vector4(0.5, 0.5, 0.5, 0.5)).get_image()
+			var verts: PackedVector3Array = mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]
+			var rows := ceili(float(verts.size()) / PainterFlowerHue.CENTRE_WIDTH)
+			assert_eq(image.get_height(), 2 * rows + 1, stem + ": centres, flags, carpet")
+			var flagged := 0
+			for k in verts.size():
+				var w := PainterFlowerHue.CENTRE_WIDTH
+				assert_gt(image.get_pixel(k % w, k / w).a, 0.0, "the size is never negative")
+				if image.get_pixel(k % w, k / w + rows).r > 0.5:
+					flagged += 1
+			counts[stem] = flagged
+		root.free()
+	assert_gt(counts["Flower_Poppy_v0_grassland_meadow"], 0, "a poppy's crossed cards are twins")
+	assert_eq(counts["Flower_BloomMound_v0_grassland_meadow"], 0, "a bloom mound has none")
+
+
 ## Every vertex of a card shares one centre, inside the card's box, with a dab size above zero.
 func _assert_centres(texture: ImageTexture, mesh: Mesh, surface: int, stem: String) -> void:
 	assert_not_null(texture, stem + " centres")
@@ -139,6 +182,23 @@ func test_sheet_tones_six_accents_in_every_mood() -> void:
 			for elevation in [-8.0, 5.0, 45.0]:
 				var c := PainterSheet.tone(sheet, mood, role, elevation)
 				assert_true(c.a > 0.0, "%s %s at %s" % [mood, role, elevation])
+
+
+## The marks' numbers come from the sheet (core: head 0.11 m, floor 5 px, a fifth thinned, an eighth
+## buds, 85 percent own colour, the cushion between 0.007 and 0.013 m a pixel) in every mood.
+func test_the_sheet_sets_the_marks_numbers() -> void:
+	var sheet := PainterSheet.load_sheet(RenderStyle.DEFAULT_SHEET)
+	var entry := PainterPlantRoles.of("x/Flower_Poppy", "grass", true)
+	for mood: String in PainterSheet.MOODS:
+		var material := ShaderMaterial.new()
+		PainterPlantTone.tone(material, entry, sheet, mood, 45.0)
+		assert_almost_eq(float(material.get_shader_parameter(&"fl_head")), 0.11, 1e-4, mood)
+		assert_almost_eq(float(material.get_shader_parameter(&"fl_floor")), 5.0, 1e-4, mood)
+		var clump: Vector3 = material.get_shader_parameter(&"fl_clump")
+		assert_almost_eq(clump, Vector3(0.2, 0.12, 0.85), Vector3.ONE * 1e-4, mood)
+		var far: Vector2 = material.get_shader_parameter(&"fl_far")
+		assert_almost_eq(far, Vector2(0.007, 0.013), Vector2.ONE * 1e-4, mood)
+		assert_lt(far.x, far.y, "the cushion blend runs from near to far")
 
 
 func test_placed_layer_is_marked() -> void:

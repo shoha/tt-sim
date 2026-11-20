@@ -11,9 +11,10 @@ extends RefCounted
 ## The model. Core's flowers (plantgen) are three surfaces: `_Bark` (the stems), `_Leaf` (the
 ## leaves) and `_LeafB` (the blooms: small cards, UV 0..1 each, three crossed per head or many
 ## tilted over a mound), whose texture holds the bloom's own colour on a teardrop or spike cut.
-## A bloom surface is drawn whole as dabs: each card a soft-edged blot the shape of its texture's
-## opaque box, in the role its texture's mean colour sorts into (class_of), grown by the shader to
-## a floor in pixels so it reads at the orbit view. A stem or leaf surface is the grass ramp. A
+## A bloom surface is drawn whole as marks (painter_flower_marks.gdshaderinc): each head a
+## view-facing rosette, in the role its texture's mean colour sorts into (class_of), never under a
+## floor in pixels so it reads at the orbit view; a bloom mound's marks draw together into a cushion
+## at far zoom. A stem or leaf surface is the grass ramp. A
 ## surface whose name says neither (a user library's flower in one atlas) keeps the old per-pixel
 ## petal test, coloured by the mean of its non-green pixels. Pure functions; no state.
 
@@ -59,6 +60,10 @@ const MAX_VERTICES := 16384
 ## at 0.29 to 0.41, every one 40 to 65 cards (measured 2026-11-19).
 const CARPET_CARDS := 12
 const CARPET_TOP := 0.2
+## A card is a crossed twin (twins_of) of an earlier card when their centres are within TWIN_NEAR
+## times the larger dab size; a surface of more than TWIN_MAX_CARDS cards is never searched.
+const TWIN_NEAR := 0.35
+const TWIN_MAX_CARDS := 400
 
 
 ## The sheet role index (ROLES) a bloom of sRGB colour `c` takes.
@@ -82,8 +87,8 @@ static func class_of(c: Color) -> int:
 ## material is `material` (null allowed) and, when given, whose mesh surface is `surface` of `mesh`:
 ## a copy with `petal` (a ROLES index, or NONE), `dab` (true when the whole surface is blooms drawn
 ## as dabs), and for a dab surface `dab_box` (the texture's opaque box in UV: centre x, y and half
-## extents) and `centres` (centres(): each vertex's card, null without a mesh, which turns the
-## growth off).
+## extents) and `centres` (centres(): each vertex's card, null without a mesh, which leaves the
+## cards as they are).
 static func for_surface(
 	entry: Dictionary, material: Material, mesh: Mesh = null, surface: int = -1
 ) -> Dictionary:
@@ -139,9 +144,12 @@ static func opaque_box(image: Image) -> Vector4:
 ## MAX_VERTICES): a float texture CENTRE_WIDTH texels wide, one texel per vertex in vertex order
 ## (the shader's VERTEX_ID), holding its card's centre (xyz, mesh units) and the size of the dab
 ## drawn on it (w: the smaller of the card's UV-mapped width and height times the opaque box's,
-## `box` opaque_box's), and one row more whose first texel is carpet_of() the cards. A card is a
-## set of triangles joined by shared vertices; the plant shader grows each about its centre, so no
-## card frame is assumed (core's bloom cards run every way).
+## `box` opaque_box's); then as many rows again of card flags in the same order (r: 1 for a crossed
+## twin, twins_of; g, b, a spare); and a last row whose first texel is carpet_of() the cards. So
+## the shader, with `rows` = (height - 1) / 2, reads a vertex id's centre at (id % CENTRE_WIDTH,
+## id / CENTRE_WIDTH) and its flags `rows` lower. A card is a set of triangles joined by shared
+## vertices; the plant shader draws each about its centre, so no card frame is assumed (core's bloom
+## cards run every way).
 static func centres(mesh: Mesh, surface: int, box: Vector4) -> ImageTexture:
 	if mesh == null or surface < 0 or surface >= mesh.get_surface_count():
 		return null
@@ -173,27 +181,54 @@ static func centres(mesh: Mesh, surface: int, box: Vector4) -> ImageTexture:
 		var s: Vector4 = sums.get(root, Vector4.ZERO)
 		sums[root] = s + Vector4(verts[i].x, verts[i].y, verts[i].z, 1.0)
 	var rows := ceili(float(verts.size()) / CENTRE_WIDTH)
-	var image := Image.create_empty(CENTRE_WIDTH, rows + 1, false, Image.FORMAT_RGBAF)
+	var image := Image.create_empty(CENTRE_WIDTH, 2 * rows + 1, false, Image.FORMAT_RGBAF)
+	var sized := {}
+	for root: int in sums:
+		var size: Vector2 = sizes.get(root, Vector2.ZERO) * Vector2(box.z, box.w) * 2.0
+		sized[root] = minf(size.x, size.y)
+	var twins := twins_of(sums, sized)
 	for i in verts.size():
 		var root := _root(parent, i)
 		var s: Vector4 = sums[root]
-		var size: Vector2 = sizes.get(root, Vector2.ZERO) * Vector2(box.z, box.w) * 2.0
-		image.set_pixel(
-			i % CENTRE_WIDTH,
-			i / CENTRE_WIDTH,
-			Color(s.x / s.w, s.y / s.w, s.z / s.w, minf(size.x, size.y))
-		)
-	image.set_pixel(0, rows, carpet_of(sums.values()))
+		var at := Vector2i(i % CENTRE_WIDTH, i / CENTRE_WIDTH)
+		image.set_pixelv(at, Color(s.x / s.w, s.y / s.w, s.z / s.w, sized[root]))
+		image.set_pixelv(at + Vector2i(0, rows), Color(1.0 if twins.has(root) else 0.0, 0.0, 0.0, 0.0))
+	image.set_pixel(0, 2 * rows, carpet_of(sums.values()))
 	return ImageTexture.create_from_image(image)
+
+
+## The cards (roots) that are crossed twins of an earlier card of the same head, from each card's
+## vertex sum (xyz) and count (w) `sums` and its dab size `sized` (metres): a card whose centre lies
+## within TWIN_NEAR of its size of an earlier kept card's is one (core's single heads are three
+## crossed cards; the painted marks draw one card a head). None on a carpet (a bloom mound's cards
+## overlap by design) nor on a surface of more than TWIN_MAX_CARDS cards. Pure.
+static func twins_of(sums: Dictionary, sized: Dictionary) -> Dictionary:
+	var twins := {}
+	if sums.size() > TWIN_MAX_CARDS or carpet_of(sums.values()).a > 0.5:
+		return twins
+	var kept: Array = []
+	var roots := sums.keys()
+	roots.sort()
+	for root: int in roots:
+		var s: Vector4 = sums[root]
+		var at := Vector3(s.x, s.y, s.z) / maxf(s.w, 1.0)
+		var size: float = sized[root]
+		for other: Array in kept:
+			if at.distance_to(other[0] as Vector3) < TWIN_NEAR * maxf(size, other[1] as float):
+				twins[root] = true
+				break
+		if not twins.has(root):
+			kept.append([at, size])
+	return twins
 
 
 ## The texel the shader reads last in the centres texture, from each card's vertex sum (xyz) and
 ## count (w): the cards' middle across (x, z), the top card's height (y), and 1 in alpha when the
-## surface is a low carpet of blooms (CARPET_CARDS, CARPET_TOP: a bloom mound), else 0. At the
-## orbit view the plant shader turns a carpet's cards to the view, draws them in toward that middle
-## and up to that top over the leaves, and grows them, so the mound reads as one solid blot of bloom
-## in a few hues instead of a ring of small dabs with the green between (owner, board l44_mound:
-## "One solid blot"; painter_selector's bloom_grown). Pure.
+## surface is a low carpet of blooms (CARPET_CARDS, CARPET_TOP: a bloom mound), else 0. At far zoom
+## the plant shader draws a carpet's marks in toward that middle and up to that top over the leaves,
+## and grows them into one cushion, so a meadow keeps its colour mass instead of reading as speckle
+## (painter_flower_marks' flower_card; the earlier carpet's growth was the owner's "one solid blot",
+## board l44_mound). Pure.
 static func carpet_of(cards: Array) -> Color:
 	var mid := Vector3.ZERO
 	var top := -INF

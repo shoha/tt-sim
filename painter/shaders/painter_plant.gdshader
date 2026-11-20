@@ -14,9 +14,9 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled;
  * uniform keeps its value. A plain alpha-scissor cutout, and the foliage AA swap leaves it alone
  * (WindFoliage.META_STAND_IN); a wide grass tuft's card is cut into round dabs instead of its
  * texture's teeth, with winter snow on the dabs and over its foot (painter_selector's tuft_dab,
- * painter-plants-fix3); a flower's bloom cards are one dab each in the flower's own accent
- * (bloom_dab; painter-flowers), and a bloom mound's are turned to the orbit view and drawn together
- * into one carpet of a few hues (bloom_grown; painter-flower-carpet). Known fault (painter-a1c): in the eye view (4x MSAA, where the
+ * painter-plants-fix3); a flower's blooms are painted marks, one view-facing rosette a head in the
+ * flower's own accent, a mound's drawn together into a cushion at far zoom
+ * (painter_flower_marks.gdshaderinc; painter-flowers, painter-flower-marks). Known fault (painter-a1c): in the eye view (4x MSAA, where the
  * Classic foliage swaps to its alpha-to-coverage twin) thin grass blades alias into fine broken
  * light lines where they cross a dark bush; an alpha-to-coverage twin swapped like the Classic's
  * is the planned fix.
@@ -28,6 +28,7 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled;
 #include "res://shaders/wind_foliage_include.gdshaderinc"
 #include "res://shaders/wind_foliage_grow.gdshaderinc"
 #include "res://painter/shaders/painter_selector.gdshaderinc"
+#include "res://painter/shaders/painter_flower_marks.gdshaderinc"
 
 varying vec3 v_wp;
 varying vec3 v_wn;
@@ -40,8 +41,8 @@ varying vec3 v_hk;
 // places stands under Painted (painter-flowers: a placed bell cluster and a carpet were thinned
 // away at the eye). Ground cover still casts nothing.
 instance uniform float painter_placed = 0.0;
-// A bloom card's accent and value (bloom_grown: a carpet's cards lie in a few hues, darker low on
-// the mound; any other's the surface's accent at 1).
+// A bloom card's accent and value (flower_card: the plant's own colour or its one other, a bud or a
+// cushion's dome a step darker; any other surface's the surface's accent at 1).
 varying flat vec2 v_card;
 
 void vertex() {
@@ -52,14 +53,16 @@ void vertex() {
 	}
 	v_hk = hk;
 	vec2 card = vec2(float(petal_role), 1.0);
-	if (kind == 3 && petal_dab && bloom_grow && !IN_SHADOW_PASS) {
-		// A bloom mound's card turned to the orbit view and drawn into one carpet, in its own hue
-		// (painter_selector's bloom_grown).
-		VERTEX = bloom_grown(
+	vec2 fl = vec2(0.0);
+	if (kind == 3 && petal_dab && !IN_SHADOW_PASS) {
+		// A bloom card is one view-facing mark of a head, left out, a bud or a head, or in the
+		// cushion of a mound at far zoom (painter_flower_marks' flower_card).
+		VERTEX = flower_card(
 			VERTEX, UV, VERTEX_ID, MODEL_MATRIX, INV_VIEW_MATRIX, PROJECTION_MATRIX, VIEWPORT_SIZE,
-			card
+			card, fl
 		);
 	}
+	v_fl = fl;
 	v_card = card;
 	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
 	float kept = selector_keep(MODEL_MATRIX[3].xyz, IN_SHADOW_PASS);
@@ -103,12 +106,15 @@ void fragment() {
 			discard;
 		}
 	}
-	// A bloom card is one dab (painter_selector's bloom_dab), cut in place of its texture (never
-	// fetched).
+	// A bloom card is cut as a mark (painter_flower_marks' flower_mark) in place of its texture
+	// (never fetched).
 	bool bloom = kind == 3 && petal_dab && petal_role >= 0;
 	vec2 blot = vec2(1.0, 0.0);
+	float centre = 0.0;
 	if (bloom) {
-		blot = bloom_dab(UV, fract(v_hk.y * 0.37 + v_hk.z));
+		vec3 mark = flower_mark(UV, v_fl);
+		blot = mark.xy;
+		centre = mark.z;
 		if (blot.x < 0.5) {
 			discard;
 		}
@@ -161,8 +167,9 @@ void fragment() {
 		snow = dab.w;
 	}
 	if (bloom) {
-		// A dab turns from a darker foot to a lit top, so a head of them reads as a rounded form.
-		mul *= mix(0.84, 1.04, smoothstep(-0.9, 0.6, blot.y)) * v_card.y;
+		// A mark's petals lie in two planes, a darker half and a lit half, so a head reads as a
+		// flower and not a flat disc.
+		mul *= mix(0.78, 1.1, blot.y * 0.5 + 0.5) * v_card.y;
 		petal = v_card.x;
 	}
 	f_n = n;
@@ -170,6 +177,7 @@ void fragment() {
 	f_mul = mul;
 	f_wob = wob;
 	f_accent = petal;
+	f_centre = centre;
 	f_frost = snow;
 	if (kind == 1 || kind == 3) {
 		// Ground cover takes the cast shade of the ground at its foot: light and shadow are read

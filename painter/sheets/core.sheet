@@ -58,6 +58,15 @@
   tone-lo: -0.08;  tone-hi: 0.48;
   keep-grass: 0.6;  keep-flower: 0.8;  keep-freq-grass: 0.12;  keep-freq-flower: 0.15;
   flower-mix: 0.09;
+  /* The flowers' painted marks (painter_flower_marks.gdshaderinc, card painter-flower-marks): each
+     head one view-facing six-petal rosette flower-head metres wide (never under flower-floor
+     pixels), in a clump a share flower-thin of the heads left out and flower-bud drawn as small
+     dark buds, flower-own of them in the plant's own colour (the rest in the plant's one other).
+     Beyond flower-far-lo metres a pixel (about zoom 7.5) a mound's heads grow and draw together
+     into one cushion, whole by flower-far-hi (about zoom 14), so a meadow keeps its colour (at
+     0.012 to 0.02 the marks read as speckle at zoom 16 and 30: the look round's pick). */
+  flower-head: 0.11;  flower-floor: 5;  flower-thin: 0.2;  flower-bud: 0.12;  flower-own: 0.85;
+  flower-far-lo: 0.007;  flower-far-hi: 0.013;
   /* The meadow grass's painted marks (PainterGrassMarks): the camera pitch in degrees below which
      a tuft keeps its three cards; 0 draws the mark at every pitch. 45 (painter-grass-mark's
      verdict): the marks from above, where the cards are thin spikes; the cards' leafy patches and

@@ -7,14 +7,14 @@
 //
 // kind: 0 leaf mass (lit as one rounded form about the plant's middle), 1 grass (one flat tone,
 // darker at the base, lit or shaded like the ground: no middle step), 2 solid (rock, wood, litter: its own normals, a noise-broken turn),
-// 3 flower (stems and leaves in the grass ramp; its blooms one dab a card in the flower's own
-// accent, see bloom_dab()),
+// 3 flower (stems and leaves in the grass ramp; its blooms one painted mark a head in the flower's
+// own accent, see painter_flower_marks.gdshaderinc),
 // 4 bush (a leaf mass in the painted crowns' hand: see bush_lobe()), 5 a wall's leaves (a structure's
 // baked ivy: leaf dabs on the card's plane, see ivy_dab()).
 // PainterSurfaces sets every uniform from the sheet (PainterTones.ramp and the sheet's numbers).
 // Includers call selector_fragment() at the end of fragment() with the world position and
 // normal, the instance origin and scale and the height fraction, and assign its outputs to the
-// varyings f_n, f_variant, f_mul, f_wob and f_accent (a function other than fragment() may not
+// varyings f_n, f_variant, f_mul, f_wob, f_accent and f_centre (a function other than fragment() may not
 // write a varying).
 
 #include "res://painter/shaders/painter_noise.gdshaderinc"
@@ -32,12 +32,12 @@ uniform vec3 accent[6];
 // The surface's bloom (PainterFlowerHue.for_surface): its accent (-1: a stem or leaves), whether
 // the whole surface is bloom cards drawn as dabs (else its petal pixels are found by colour), the
 // dab's box in UV (centre, half extents: the texture's opaque box), and each vertex's card centre
-// and dab size (PainterFlowerHue.centres, one texel per VERTEX_ID) for the growth.
+// and dab size, their crossed-twin flags and the carpet texel (PainterFlowerHue.centres, one texel
+// per VERTEX_ID) for the marks.
 uniform int petal_role = -1;
 uniform bool petal_dab = false;
 uniform vec4 dab_box = vec4(0.5, 0.5, 0.5, 0.5);
 uniform sampler2D bloom_centres : filter_nearest, repeat_disable;
-uniform bool bloom_grow = false;
 // The N.L where the shade, middle and lit steps meet (sheet tone-lo, tone-hi).
 uniform float tone_lo = -0.08;
 uniform float tone_hi = 0.48;
@@ -69,6 +69,8 @@ varying float f_variant;
 varying float f_mul;
 varying float f_wob;
 varying float f_accent;
+// The share of a bloom mark's middle disc (the flower's centre), 0 elsewhere.
+varying float f_centre;
 varying float f_frost;
 
 // The scale an instance at `origin` keeps: 0 when thinned away, else 1; 0 too in the shadow pass
@@ -219,112 +221,7 @@ vec4 tuft_dab(vec2 uv, vec2 card) {
 	return vec4(kept, own.x, own.y, snow);
 }
 
-// A flower's bloom in the painted hand (card painter-flowers: the texture's small teardrop petals,
-// coloured by a world field in four accents, read as a few purple dots at the orbit view and next
-// to nothing at the eye). Each bloom card is one dab: a blot inscribed in the texture's opaque box
-// (dab_box: round on a head, long on a spike), its rim brushed by a slow wobble, in the flower's
-// own accent and a step darker toward its foot. A single flower's cards stay as they are; the dab
-// replaces the texture's fetch, so a bloom costs no more than the petal cut did.
-//
-// A carpet of blooms (a bloom mound: PainterFlowerHue.carpet_of) reads as one solid mound of
-// flowers at the orbit view (owner, board l44_mound: "One solid blot"; card painter-flower-carpet).
-// Its cards run every way over the mound, so from above many were slivers, and the mound's leaves,
-// which stand twice as high as its blooms, covered the middle: a ring of small dabs with green
-// between. So under the orbit's orthographic camera each card is turned to face the view (a whole
-// dab wherever the card points), drawn CARPET_PULL of the way in toward the mound's middle and
-// CARPET_LIFT up to its top card's height, brought CARPET_FRONT toward the eye so it lies over the
-// leaves, and grown to at least BLOOM_PX pixels (at most BLOOM_GROW_MAX times) and CARPET_SWELL
-// more, so the dabs overlap into one blot whose rim is the outer dabs' lobes, with the leaves'
-// green showing only at its foot. Faded in by the view's pixel size; the eye's perspective keeps
-// each card where it is.
-//
-// Why two earlier tries showed nothing (painter-flowers' growth, painter-ground-fire-round3's pull):
-// the pixel size was taken as 2 / (projection[1][1] * height), but the world is drawn into a
-// viewport whose projection is flipped in y, so [1][1] is negative there: the size came out
-// negative, the growth clamped to 1 and the carpet's fade to 0 (a probe that coloured the carpets
-// by the size's decade painted every one in the lowest; measured 2026-11-19). abs() fixes it. The
-// single flowers' growth that never ran stays off, so their approved look is unchanged.
-const float BLOOM_PX = 8.0;
-const float BLOOM_GROW_MAX = 3.5;
-const float CARPET_PULL = 0.3;
-const float CARPET_LIFT = 0.8;
-const float CARPET_SWELL = 0.7;
-// Mesh units: core's mound leaves stand to 0.20 to 0.26, their blooms' centres only to 0.10 to 0.13
-// (measured 2026-11-19). Under the orthographic camera this moves nothing on screen; it only wins
-// the depth test over the leaves.
-const float CARPET_FRONT = 0.25;
-// The pixel size (m at the card) over which the carpet fades in: whole from about zoom 8 (8 m over
-// 1080 px), none closer than about zoom 3.
-const vec2 CARPET_PX = vec2(0.003, 0.007);
-// A carpet's hues: each card takes the flower's own accent under CARPET_MIX.x of its hash, else one
-// of two more the plant draws from the six (to CARPET_MIX.y the first), so a meadow's mounds read
-// as mixed wildflower cushions, each led by its own colour (round two of the card split a mound
-// into three sectors, which read as two-tone balls with a straight seam). In every view, so a
-// mound keeps its colours when the view changes.
-const vec2 CARPET_MIX = vec2(0.6, 0.85);
-// A carpet's dab a step darker low on the mound than at its top, so the blot reads as a dome.
-const vec2 CARPET_SHADE = vec2(0.8, 1.04);
-
-// The accent (a ROLES index, x) and value (y, a factor) of the carpet card centred at `c` (mesh
-// units; `top` the carpet's top card's height) on the plant at `origin`.
-vec2 carpet_card(vec3 c, float top, vec3 origin) {
-	vec3 plant = floor(origin * 10.0);
-	float h = p_hash(floor(c * 1000.0) + plant);
-	float role = float(petal_role);
-	if (h >= CARPET_MIX.x) {
-		vec3 salt = h < CARPET_MIX.y ? vec3(7.0, 13.0, 29.0) : vec3(31.0, 3.0, 17.0);
-		role = floor(p_hash(plant + salt) * 5.999);
-	}
-	return vec2(role, mix(CARPET_SHADE.x, CARPET_SHADE.y, smoothstep(0.0, 1.0, c.y / max(top, 0.01))));
-}
-
-// The local `vertex` (vertex `id` of a bloom surface, at `uv`) for the view of `inv_view` and
-// `projection` on a viewport `viewport` pixels in size: a carpet's card turned to the view and drawn
-// in (see CARPET_PULL), any other bloom's as it is. `card` is the card's accent (x, a ROLES index)
-// and value (y, a factor).
-vec3 bloom_grown(
-	vec3 vertex, vec2 uv, int id, mat4 model, mat4 inv_view, mat4 projection, vec2 viewport,
-	out vec2 card
-) {
-	card = vec2(float(petal_role), 1.0);
-	vec4 carpet = texelFetch(bloom_centres, ivec2(0, textureSize(bloom_centres, 0).y - 1), 0);
-	vec4 c = texelFetch(bloom_centres, ivec2(id % 256, id / 256), 0);
-	if (carpet.w < 0.5 || c.w <= 0.0) {
-		return vertex;
-	}
-	card = carpet_card(c.xyz, carpet.y, model[3].xyz);
-	if (projection[3][3] == 0.0) {
-		return vertex;
-	}
-	// One pixel in metres under the orthographic camera ([1][1] is negative in a y-flipped viewport).
-	float px = 2.0 / (abs(projection[1][1]) * viewport.y);
-	float g = smoothstep(CARPET_PX.x, CARPET_PX.y, px);
-	if (g <= 0.0) {
-		return vertex;
-	}
-	float k = clamp(BLOOM_PX * px / max(c.w * length(model[1].xyz), 1.0e-4), 1.0, BLOOM_GROW_MAX);
-	mat3 to_local = inverse(mat3(model));
-	vec3 right = normalize(to_local * inv_view[0].xyz);
-	vec3 up = normalize(to_local * inv_view[1].xyz);
-	vec3 front = normalize(to_local * inv_view[2].xyz);
-	vec3 at = vec3(
-		mix(c.x, carpet.x, CARPET_PULL), mix(c.y, carpet.y, CARPET_LIFT), mix(c.z, carpet.z, CARPET_PULL)
-	) + front * CARPET_FRONT;
-	// The dab inscribed in the box drawn round, the card's own dab grown (a spike's long dab too:
-	// a lavender mound read as a stack of tall ellipses).
-	vec2 d = (uv - dab_box.xy) / max(dab_box.zw, vec2(0.05));
-	vec3 faced = at + (d.x * right - d.y * up) * (0.5 * c.w * k * (1.0 + CARPET_SWELL));
-	return mix(vertex, faced, g);
-}
-
-// The bloom card point at `uv` (`seed` the card's own, 0..1): x 1 inside its dab, 0 outside; y its
-// height in the dab, -1 the foot to 1 the top (UV y runs down the card).
-vec2 bloom_dab(vec2 uv, float seed) {
-	vec2 d = (uv - dab_box.xy) / max(dab_box.zw, vec2(0.05));
-	float a = atan(d.y, d.x);
-	float rim = 0.92 + 0.08 * sin(a * 3.0 + seed * 6.2832) * sin(a * 2.0 + seed * 11.0);
-	return vec2(dot(d, d) < rim * rim ? 1.0 : 0.0, -d.y);
-}
+// (A flower's bloom is painted by painter_flower_marks.gdshaderinc, included by painter_plant.)
 
 // The bush's form centre for an instance at `origin` of `scale`.
 vec3 bush_mid(vec3 origin, float scale) {
@@ -496,6 +393,13 @@ void light() {
 				/ max(dot(selector_pal(0.9, f_variant), vec3(0.3, 0.59, 0.11)), 0.001);
 			col = a;
 			shd = mix(a * lr, shd, 0.4);
+			if (f_centre > 0.0) {
+				// A flower's middle: the mood's gold, or an orange between its gold and red on a gold
+				// bloom, so it follows the sheet's tones through every mood.
+				vec3 cc = f_accent < 0.5 ? mix(accent[0], accent[4], 0.65) : accent[0];
+				col = mix(col, cc, f_centre);
+				shd = mix(shd, cc * lr, f_centre);
+			}
 		}
 		float mul = f_mul;
 		if (f_frost > 0.5) {
