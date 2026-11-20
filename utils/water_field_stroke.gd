@@ -50,7 +50,7 @@ static func table(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
 	en.resize(count)
 	core.resize(count)
 	for t in count:
-		lev[t] = profile.at(t * TABLE_STEP).x
+		lev[t] = profile.level_at(t * TABLE_STEP)
 	for fall in profile.falls:
 		var lip := float(fall.lip)
 		var drop := float(fall.drop)
@@ -93,11 +93,14 @@ static func table(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
 	for t in range(1, count - 1):
 		var sl := absf(lev[t + 1] - lev[t - 1]) / (2.0 * TABLE_STEP)
 		slope_e[t] = smoothstep(RIFFLE_SLOPE.x, RIFFLE_SLOPE.y, sl) * RIFFLE_WHITE
-	for t in count:
-		var best := 0.0
-		for c in mini(carry, t) + 1:
-			best = maxf(best, slope_e[t - c] * (1.0 - float(c) / float(carry + 1)))
-		en[t] = maxf(en[t], best)
+	# Each sloped entry carries its white `carry` entries on, fading linearly; the max of what
+	# reaches an entry (only sloped entries reach any: most are none), written from the source.
+	for from in count:
+		var e := slope_e[from]
+		if e <= 0.0:
+			continue
+		for c in mini(carry, count - 1 - from) + 1:
+			en[from + c] = maxf(en[from + c], e * (1.0 - float(c) / float(carry + 1)))
 	return {"level": lev, "energy": en, "core": core, "foot": foot}
 
 

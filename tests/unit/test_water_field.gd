@@ -340,3 +340,37 @@ func test_runs_bridge_only_short_runs_between_held_stations() -> void:
 func test_debug_image_is_the_grid_sized() -> void:
 	var img := _full.debug_image()
 	assert_eq(Vector2i(img.get_width(), img.get_height()), _full.size, "one pixel per sample")
+
+
+## RiverProfile.level_at, the table's cheap level, is at(s).x exactly, along every stroke.
+func test_level_at_is_the_profiles_bank_level() -> void:
+	var checked := 0
+	for chain in RiverProfile.strokes(_doc.water_bodies):
+		var typed: Array[WaterBody] = []
+		typed.assign(chain)
+		var profile := RiverProfile.for_doc(_doc, typed)
+		var s := 0.0
+		while s <= profile.total:
+			assert_eq(profile.level_at(s), profile.at(s).x, "stroke %d at %.2f" % [typed[0].id, s])
+			s += 0.07
+			checked += 1
+	assert_gt(checked, 1000, "every stroke checked along its length")
+
+
+## A stroke's table is kept between updates and redone when its inputs change: raising a reach
+## changes its stroke's level table (test_update_after_a_level_change: the update equals a build).
+func test_a_stroke_table_is_kept_while_its_inputs_stand() -> void:
+	var doc := _read()
+	var field := WaterField.build(doc)
+	var kept: Dictionary = field._tables.duplicate()
+	assert_gt(kept.size(), 5, "every stroke's table is kept")
+	field.update(doc, Rect2i(Vector2i.ZERO, field.size))
+	for id: Variant in kept:
+		assert_same(field._tables[id].table, kept[id].table, "stroke %s keeps its table" % id)
+	doc.water_bodies[2].level_m += 0.4
+	field.update(doc, Rect2i(Vector2i.ZERO, field.size))
+	var changed := 0
+	for id: Variant in kept:
+		if field._tables[id].table != kept[id].table:
+			changed += 1
+	assert_eq(changed, 1, "only the raised reach's stroke redoes its table")

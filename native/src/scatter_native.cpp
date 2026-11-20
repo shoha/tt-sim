@@ -7,10 +7,17 @@
 
 #include "scatter_gen.h"
 #include "terrain_fields.h"
+#include "water_field.h"
 
 using namespace godot;
 
 void TTScatterNative::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("water_spill", "args"), &TTScatterNative::water_spill);
+	ClassDB::bind_method(D_METHOD("water_derive", "args"), &TTScatterNative::water_derive);
+	ClassDB::bind_method(D_METHOD("water_shore", "args"), &TTScatterNative::water_shore);
+	ClassDB::bind_method(D_METHOD("water_raster", "args"), &TTScatterNative::water_raster);
+	ClassDB::bind_method(D_METHOD("water_mesh", "args"), &TTScatterNative::water_mesh);
+	ClassDB::bind_method(D_METHOD("water_textures", "args"), &TTScatterNative::water_textures);
 	ClassDB::bind_method(D_METHOD("version"), &TTScatterNative::version);
 	ClassDB::bind_method(D_METHOD("ping", "value"), &TTScatterNative::ping);
 	ClassDB::bind_method(D_METHOD("generate", "job"), &TTScatterNative::generate);
@@ -22,7 +29,31 @@ void TTScatterNative::_bind_methods() {
 }
 
 String TTScatterNative::version() const {
-	return String("ttscatter 8 curves water chunk fields");
+	return String("ttscatter 9 curves water chunk fields wfield");
+}
+
+Dictionary TTScatterNative::water_spill(const Dictionary &args) const {
+	return ttscatter::water_spill(args);
+}
+
+Dictionary TTScatterNative::water_derive(const Dictionary &args) const {
+	return ttscatter::water_derive(args);
+}
+
+Dictionary TTScatterNative::water_shore(const Dictionary &args) const {
+	return ttscatter::water_shore(args);
+}
+
+Dictionary TTScatterNative::water_raster(const Dictionary &args) const {
+	return ttscatter::water_raster(args);
+}
+
+Dictionary TTScatterNative::water_mesh(const Dictionary &args) const {
+	return ttscatter::water_mesh(args);
+}
+
+Dictionary TTScatterNative::water_textures(const Dictionary &args) const {
+	return ttscatter::water_textures(args);
 }
 
 int64_t TTScatterNative::ping(int64_t value) const {
