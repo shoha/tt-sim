@@ -77,6 +77,19 @@ var field_enabled: bool = true:
 		if _field != null:
 			_field.set_enabled(value)
 
+## Shade spike (S2): the ONE water clock (seconds, advanced by the engine's scaled frame time, so
+## Engine.time_scale 0 freezes it as it freezes TIME) the field branch of the shader runs every
+## motion on, and the option bits the shader reads (SHADE_* in painter_water.gdshader: 1 per-
+## fragment field textures, 2 one clock and the drop-aware flow coordinate, 4 the depth-aware tint
+## floor and the soft foot).
+var clock_t: float = 0.0
+var shade_opt: int = 7:
+	set(value):
+		shade_opt = value
+		if _water != null:
+			_water.set_shader_parameter(&"shade_opt", value)
+
+var _clock_us: int = 0
 var _water: ShaderMaterial = null
 var _fall: ShaderMaterial = null
 var _field: PainterWaterField = null
@@ -109,6 +122,9 @@ func release() -> void:
 	if _field != null:
 		_field.detach()
 		_field_map = null
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and tree.process_frame.is_connected(_tick):
+		tree.process_frame.disconnect(_tick)
 	if _water != null and _water_classic != null:
 		_restore(_water, _water_classic)
 	if _fall != null and _fall_classic != null:
@@ -176,12 +192,27 @@ static func tones(sheet: Dictionary, mood: String, elevation: float) -> Dictiona
 	return out
 
 
+## Advances the one water clock by the scaled frame time and hands it to the water material.
+func _tick() -> void:
+	var now := Time.get_ticks_usec()
+	var dt := clampf((now - _clock_us) / 1.0e6, 0.0, 0.1) * Engine.time_scale
+	_clock_us = now
+	clock_t += dt
+	if _water != null:
+		_water.set_shader_parameter(&"p_clock", clock_t)
+
+
 func _swap() -> void:
 	if _water == null:
 		_water = WaterGlbUtils.water_material()
 		_water_classic = _water.shader
 		_water.shader = load(SHADER) as Shader
 		_water.set_meta(META, true)
+		_water.set_shader_parameter(&"shade_opt", shade_opt)
+		var tree := Engine.get_main_loop() as SceneTree
+		if tree != null and not tree.process_frame.is_connected(_tick):
+			_clock_us = Time.get_ticks_usec()
+			tree.process_frame.connect(_tick)
 	if _fall == null:
 		_fall = AuthoredWater.fall_material()
 		_fall_classic = _fall.shader

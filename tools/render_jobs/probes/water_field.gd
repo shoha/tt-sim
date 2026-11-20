@@ -16,13 +16,13 @@ extends RefCounted
 ## a tributary and a stream into pools), saved as `_painter-water-field-painted_water`.
 
 const WATER := preload("res://tools/render_jobs/probes/water.gd")
-const PREFIX := "_painter-water-field-painted_"
+const PREFIX := "_painter-water-shade-spike_"
 ## WaterFieldMesh.MESH_NAME, spelled out so the probe also runs on a tree without the field (the
 ## baseline the captures compare with).
 const FIELD_MESH := "PaintedWaterField"
 ## The painted water and fall shaders as they were before the field (a card's local copies, kept
 ## out of the tree), for the A/B "main" mode.
-const LEGACY_DIR := "res://tools/render_jobs/local/painter-water-field-painted/"
+const LEGACY_DIR := "res://tools/render_jobs/local/painter-water-shade-spike/"
 const LEGACY_WATER := LEGACY_DIR + "legacy_water.gdshader"
 const LEGACY_FALL := LEGACY_DIR + "legacy_waterfall.gdshader"
 const STEP_M := 0.05
@@ -74,6 +74,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _mood(base, step)
 		"hud":
 			return _hud(base)
+		"opt":
+			return _opt(base, int(step.get("bits", 0)))
 		"tokens":
 			return _tokens(base, step.get("items", []))
 		"cleanup":
@@ -125,6 +127,22 @@ static func set_mode(base: Node, mode: String) -> String:
 		wm.shader = load(LEGACY_WATER if old and legacy else PainterWater.SHADER) as Shader
 		fm.shader = load(LEGACY_FALL if old and legacy else PainterWater.FALL_SHADER) as Shader
 	return "mode %s%s" % [mode, " (legacy shaders)" if old and legacy else ""]
+
+
+## Shade spike: sets the field shader's option bits (1 textures, 2 one clock, 4 tint floor and soft
+## foot, 8 the hybrid: main's curtain under the legacy fall shader over the steep faces). Call after
+## `mode field` (which puts the shipped fall shader back).
+static func _opt(base: Node, bits: int) -> String:
+	var water := painter_water(base)
+	if water == null:
+		return "not painted"
+	water.set("shade_opt", bits)
+	var fm := water.call("fall_material") as ShaderMaterial
+	if fm != null:
+		var legacy := ResourceLoader.exists(LEGACY_FALL)
+		var path: String = LEGACY_FALL if (bits & 8) != 0 and legacy else PainterWater.FALL_SHADER
+		fm.shader = load(path) as Shader
+	return "shade_opt %d" % bits
 
 
 static func _setup(base: Node, doc: MapDocument, name: String) -> String:

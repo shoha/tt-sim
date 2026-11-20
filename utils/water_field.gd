@@ -79,6 +79,11 @@ const INFLUENCE_M := 3.0
 const END_NEAR_M := 2.0
 const LEVEL_GAP_M := 0.3
 
+## Shade spike: how much a metre of drop counts in the flow coordinate (below 1 a fall's patterns
+## stretch and run faster than the reach's), and the marker of a sample no stroke wrote.
+const FLOW_DROP_K := 0.5
+const NO_FLOW_U := -1.0e6
+
 const _NEIGHBOURS: Array[Vector2i] = [
 	Vector2i(-1, -1),
 	Vector2i(0, -1),
@@ -114,6 +119,10 @@ var spill := PackedByteArray()
 var calm := PackedByteArray()
 ## The id of the body whose level the sample holds (a pond's, or a stroke's first reach's), 0 dry.
 var owner := PackedInt32Array()
+## The drop-aware flow coordinate of a river sample (shade spike): the stroke's arc length to the
+## sample plus FLOW_DROP_K times the drop of its level since the stroke's head, so a pattern that
+## travels in this coordinate stretches down a fall with no seam at the lip (NO_FLOW_U elsewhere).
+var flow_u := PackedFloat32Array()
 ## What the map shows that its author should decide, sorted by (kind, body, position):
 ## {"kind": &"film_run", "body", "pos", "length"} a stretch of a stroke longer than the bridge
 ## whose ground no longer holds its water; {"kind": &"bridged_run", ...} the same, short enough
@@ -313,6 +322,8 @@ func _fit(doc: MapDocument) -> bool:
 	calm.fill(0)
 	owner.resize(n)
 	owner.fill(0)
+	flow_u = _zeros(n)
+	flow_u.fill(NO_FLOW_U)
 	events = []
 	return true
 
@@ -332,6 +343,7 @@ func _reset(doc: MapDocument, rect: Rect2i) -> void:
 			spill[i] = 0
 			calm[i] = 0
 			owner[i] = 0
+			flow_u[i] = NO_FLOW_U
 
 
 ## Ponds: each sample of a pond's mask in `rect` holds its level.
@@ -414,6 +426,7 @@ func _put_stroke(
 			var at := (rect.position.y + j) * size.x + rect.position.x + i
 			var ti := clampi(int(round(s / WaterFieldStroke.TABLE_STEP)), 0, lev.size() - 1)
 			var level := lev[ti]
+			var flow_coord := s + FLOW_DROP_K * (lev[0] - level)
 			# The foot foam and the riffle white gather mid-channel (a tongue), the brink and the
 			# curtain span it.
 			var lateral := 1.0 - LATERAL_FADE * smoothstep(0.2, 1.0, d / maxf(hw, 0.1))
@@ -440,6 +453,7 @@ func _put_stroke(
 				spill[at] = SPILL_POND if over_pond else (SPILL_BANK if d > hw else 0)
 				calm[at] = 1 if undermined or (d > hw and not over_pond) else 0
 				_raw[at] = level
+				flow_u[at] = flow_coord
 				owner[at] = id
 				_stroke_energy[at] = maxf(_stroke_energy[at], 0.0 if undermined else e)
 			# Flow share: the channel and its bank fade (the shader reads the flow map too).

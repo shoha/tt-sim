@@ -105,7 +105,52 @@ uniform float p_ice_amt = 0.0;
 // The pixel footprints (metres) between which the strokes fade out: the wash carries a far view.
 uniform vec2 p_px = vec2(0.045, 0.12);
 
+// ---- Shade spike (card painter-water-shade-spike) ------------------------------------------------
+// shade_opt bits: 1 the field's depth/energy/shore/steep read per fragment from textures (bicubic),
+// 2 ONE clock (p_clock, integrated by PainterWater) and the drop-aware flow coordinate drive every
+// motion, 4 a depth-aware tint floor for pools and a softer foot.
+uniform int shade_opt = 7;
+uniform float p_clock = 0.0;
+uniform sampler2D fld_a : filter_linear, repeat_disable, hint_default_black;
+uniform sampler2D fld_b : filter_linear, repeat_disable, hint_default_black;
+uniform vec2 fld_origin = vec2(0.0);
+uniform vec2 fld_inv_step = vec2(4.0);
+uniform vec2 fld_dim = vec2(1.0);
+// The water's one clock: the engine's TIME for the old look, p_clock under option 2.
+float wt() {
+	return (shade_opt & 2) != 0 ? p_clock : TIME;
+}
+
+
+// B-spline bicubic of `t` at texel-space point `tc` (texel i's centre at i + 0.5): four bilinear
+// fetches. Smooth (C2) through the field's kinks, so a contour of it has no grid stairs.
+vec4 fld_cubic(sampler2D t, vec2 tc) {
+	vec2 c = tc - 0.5;
+	vec2 b = floor(c);
+	vec2 f = c - b;
+	vec2 f2 = f * f;
+	vec2 f3 = f2 * f;
+	vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
+	vec2 w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
+	vec2 w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) / 6.0;
+	vec2 w3 = f3 / 6.0;
+	vec2 s0 = w0 + w1;
+	vec2 s1 = w2 + w3;
+	vec2 p0 = (b - 0.5 + w1 / s0) / fld_dim;
+	vec2 p1 = (b + 1.5 + w3 / s1) / fld_dim;
+	return s0.y * (s0.x * texture(t, vec2(p0.x, p0.y)) + s1.x * texture(t, vec2(p1.x, p0.y)))
+		+ s1.y * (s0.x * texture(t, vec2(p0.x, p1.y)) + s1.x * texture(t, vec2(p1.x, p1.y)));
+}
+
+const float FLOW_DROP_K = 0.5;
+// Under option 2: the speed (u per second) the whites travel along the flow coordinate.
+const float FLOW_C = 1.1;
+// Under option 4: pool tint floor (a column, m) where the shore is far and the water has body.
+const float POOL_COLUMN_M = 1.0;
+const float FOAM_EDGE_SOFT = 0.1;
+
 varying vec3 world_pos;
+varying vec2 v_mp;
 varying vec3 f_lit;
 varying vec3 f_shd;
 // The field channels (WaterFieldMesh): depth, energy, shore distance, steep; river share, flag.
@@ -228,7 +273,7 @@ vec2 stroke_layer(
 		for (int i = 0; i < 2; i++) {
 			vec2 c = b + o + vec2(float(i), float(j));
 			vec4 hc = cell_rand(c, seed);
-			float cyc = TIME / boil + hc.x;
+			float cyc = wt() / boil + hc.x;
 			float idx = floor(cyc);
 			float ph = cyc - idx;
 			vec4 hr = cell_rand(c + vec2(idx * 13.7, idx * 5.3), seed + 3.0);
@@ -287,6 +332,7 @@ vec2 stroke_layer(
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	v_mp = VERTEX.xz;
 	v_f0 = CUSTOM0;
 	v_f1 = CUSTOM1;
 }
@@ -295,12 +341,12 @@ void vertex() {
 // Two-phase flow advection of a value-noise blob field (no stretching, no endless scroll).
 float flow_blobs(vec2 p, vec2 flow, float scale, float seed) {
 	float period = 2.4;
-	float ta = fract(TIME / period);
-	float tb = fract(TIME / period + 0.5);
+	float ta = fract(wt() / period);
+	float tb = fract(wt() / period + 0.5);
 	vec2 qa = (p - flow * ta * period * 1.3) / scale;
 	vec2 qb = (p - flow * tb * period * 1.3) / scale;
-	float na = p_noise(vec3(qa.x, seed + floor(TIME / period) * 3.1, qa.y));
-	float nb = p_noise(vec3(qb.x, seed + 1.7 + floor(TIME / period + 0.5) * 3.1, qb.y));
+	float na = p_noise(vec3(qa.x, seed + floor(wt() / period) * 3.1, qa.y));
+	float nb = p_noise(vec3(qb.x, seed + 1.7 + floor(wt() / period + 0.5) * 3.1, qb.y));
 	float wa = 1.0 - abs(2.0 * ta - 1.0);
 	// The phases hand over by shrinking and growing, the larger of the two (a linear mix of two
 	// fields read as translucent discs wherever the thresholded white crossed the handover).
@@ -336,15 +382,32 @@ void fragment() {
 	vec3 bed_world = (INV_VIEW_MATRIX * vec4(scene_view, 1.0)).xyz;
 	float column_raw = max(world_pos.y - bed_world.y, 0.0);
 	bool fieldv = v_f1.y < FIELD_FLAG + 0.5;
+// The field's channels at this fragment: per vertex (the old way) or bicubic from the textures (S1).
+vec4 fa = v_f0;
+// The drop-aware flow coordinate (S2): the stroke's arc plus half the drop; a pond has none and
+// takes the downstream distance of the flow map's direction and the height (has_u 0).
+float uf = dot(p, dir) - FLOW_DROP_K * world_pos.y;
+float has_u = 0.0;
+if (fieldv) {
+	vec2 tc = (v_mp - fld_origin) * fld_inv_step + 0.5;
+	if ((shade_opt & 1) != 0) {
+		fa = fld_cubic(fld_a, tc);
+	}
+	if ((shade_opt & 2) != 0) {
+		vec4 fb = texture(fld_b, tc / fld_dim);
+		has_u = smoothstep(0.2, 0.9, fb.g);
+		uf = mix(uf, fb.r / max(fb.g, 0.001), has_u);
+	}
+}
 	float curtain = 0.0;
 	float path_k = 1.0;
 	if (fieldv) {
 		// The model's own plumb column at this point of the surface, whatever the camera sees; the
 		// wash reads it along the view ray (the path through the water): a plumb column of a
 		// pond's metre is a metre of water from above and several from the side.
-		column_raw = max(v_f0.x, 0.0);
+		column_raw = max(fa.x, 0.0);
 		ground_like = 1.0;
-		curtain = smoothstep(0.05, 0.9, v_f0.w);
+		curtain = smoothstep(0.05, 0.9, fa.w);
 		vec3 view_world = (INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz;
 		path_k = 1.0 / clamp(abs(view_world.y), VIEW_SHARE_MIN, 1.0);
 		// A film (CUSTOM1.w 0.125: water the dug bed no longer holds, a map error WaterField reports
@@ -357,6 +420,12 @@ void fragment() {
 	float column = mix(1.0, column_raw * path_k, ground_like);
 	// A curtain's column is the drop under it: it reads as the river's mid glass, not the deep.
 	column = mix(column, 0.55, curtain);
+if (fieldv && (shade_opt & 4) != 0) {
+	// A pool (water with body, far from every bank) reads deep like main's: the pale shallow band
+	// belongs to the rim, not to the middle of a 0.3 m pool.
+	float pool_k = smoothstep(0.5, 1.4, fa.z) * smoothstep(0.08, 0.25, fa.x) * (1.0 - curtain);
+	column = max(column, POOL_COLUMN_M * pool_k);
+}
 	// Where a river leaves the map the terrain's bed and the channel patch's meet in a crease: the low
 	// column there drew a row of white dabs (the depth-slope wrap), a vertical strip of ice rim and a
 	// dip in the wash's alpha across the river (painter-edges2). The shore effects keyed to a shallow
@@ -370,7 +439,7 @@ void fragment() {
 	}
 
 	// ---- The wash -----------------------------------------------------------------------------
-	float wob = 0.7 + 0.6 * p_noise(vec3(p.x * 0.16, TIME * 0.03, p.y * 0.16));
+	float wob = 0.7 + 0.6 * p_noise(vec3(p.x * 0.16, wt() * 0.03, p.y * 0.16));
 	float s = column / wob;
 	float m1 = mix(smoothstep(BAND_1 - 0.04, BAND_1 + 0.04, s), smoothstep(BAND_1 - 0.3, BAND_1 + 0.3, s), 1.0 - POSTERISE);
 	float m2 = mix(smoothstep(BAND_2 - 0.06, BAND_2 + 0.06, s), smoothstep(BAND_2 - 0.5, BAND_2 + 0.5, s), 1.0 - POSTERISE);
@@ -385,12 +454,12 @@ void fragment() {
 	if (fieldv) {
 		// The waterline is the depth's zero contour: fade over its first centimetres of horizontal
 		// distance too, so a steep bank does not end the wash on a hard line.
-		shoreline = min(smoothstep(0.0, 0.035, v_f0.x), smoothstep(0.0, 0.1, v_f0.z));
-		wash_a = max(wash_a, p_opacity * FILM_ALPHA * (1.0 - smoothstep(0.045, 0.1, v_f0.x)));
+		shoreline = min(smoothstep(0.0, 0.035, fa.x), smoothstep(0.0, 0.1, fa.z));
+		wash_a = max(wash_a, p_opacity * FILM_ALPHA * (1.0 - smoothstep(0.045, 0.1, fa.x)));
 		// The thin water a bank sheds (CUSTOM1.w 0.5, WaterField's spill beyond the channel) draws
 		// from a few centimetres' depth: it read as a pale shelf standing out from the bank.
 		float bank_spill = step(0.25, v_f1.w) * (1.0 - step(0.75, v_f1.w));
-		shoreline = min(shoreline, mix(1.0, smoothstep(0.05, 0.22, v_f0.x), bank_spill));
+		shoreline = min(shoreline, mix(1.0, smoothstep(0.05, 0.22, fa.x), bank_spill));
 		shoreline = max(shoreline, curtain);
 	}
 	wash_a *= mix(1.0, shoreline, ground_like * edge_band);
@@ -420,7 +489,7 @@ void fragment() {
 		}
 		float ang = atan(to_point.y, to_point.x);
 		for (int k = 0; k < RING_COUNT; k++) {
-			float cyc = TIME / RING_CYCLE_S + float(k) / float(RING_COUNT);
+			float cyc = wt() / RING_CYCLE_S + float(k) / float(RING_COUNT);
 			float ph = fract(cyc);
 			float stepped = floor(ph * RING_STEPS) / RING_STEPS;
 			float rr = mix(0.3, ring_r, stepped);
@@ -433,7 +502,7 @@ void fragment() {
 		if (flow_speed > 0.0 && along > 0.0) {
 			// A teardrop of dashes downstream, in the flow's frame.
 			float lobe = (1.0 - smoothstep(0.0, ring_r, sdist)) * smoothstep(0.0, 0.3, along * flow_speed);
-			float pulse = 0.5 + 0.5 * sin(TIME * 2.3 + be_n2(vec2(floor(across * 5.0), 3.0)) * 6.28);
+			float pulse = 0.5 + 0.5 * sin(wt() * 2.3 + be_n2(vec2(floor(across * 5.0), 3.0)) * 6.28);
 			float dash = smoothstep(0.55, 0.7, be_n2(vec2(across * 6.0, along * 1.4)) * pulse + 0.15);
 			wake_cov = max(wake_cov, lobe * dash);
 		}
@@ -510,18 +579,18 @@ void fragment() {
 		// jumps from one to the next).
 		// The contour follows the 0.25 m grid: a slow wobble in it breaks the straight, square runs
 		// of the ribbon into brush-edged ones.
-		d_h = max(v_f0.z + (p_noise(vec3(p.x * 3.0, 6.0, p.y * 3.0)) - 0.5) * LAP_WOBBLE_M, 0.0);
-		slope = clamp(max(v_f0.x, 0.0) / max(v_f0.z, 0.03), 0.06, 3.0);
+		d_h = max(fa.z + (p_noise(vec3(p.x * 3.0, 6.0, p.y * 3.0)) - 0.5) * LAP_WOBBLE_M, 0.0);
+		slope = clamp(max(fa.x, 0.0) / max(fa.z, 0.03), 0.06, 3.0);
 	}
-	float lap_w = p_foam_w * (0.8 + 0.25 * sin(TIME * 1.1 + p_noise(vec3(p.x * 0.3, 2.0, p.y * 0.3)) * 6.28));
-	float bite_n = p_noise(vec3(p.x * 2.6, floor(TIME * 0.5), p.y * 2.6));
+	float lap_w = p_foam_w * (0.8 + 0.25 * sin(wt() * 1.1 + p_noise(vec3(p.x * 0.3, 2.0, p.y * 0.3)) * 6.28));
+	float bite_n = p_noise(vec3(p.x * 2.6, floor(wt() * 0.5), p.y * 2.6));
 	float thr = lap_w * (0.4 + 0.75 * bite_n);
 	// On a steep bank the gradient (and so d_h) jumps from one mesh triangle to the next: the lap's
 	// edge softens there, so it reads as a brushed edge and not a row of crisp triangles.
 	float steep = smoothstep(0.5, 1.3, slope);
 	float lap_soft = 0.1 * steep;
 	float lap = (1.0 - smoothstep(thr - 0.03 - lap_soft, thr + 0.02 + lap_soft, d_h)) * smoothstep(0.0, 0.03, d_h + 0.02);
-	float dash_n = p_noise(vec3(p.x * 3.1, 4.0 + floor(TIME * 0.4), p.y * 3.1));
+	float dash_n = p_noise(vec3(p.x * 3.1, 4.0 + floor(wt() * 0.4), p.y * 3.1));
 	float outer = lap_w * 1.5;
 	// The outer dashes sit on a gently sloped shore only: on a steep bank they broke into small
 	// glitter triangles (cards painter-edges, painter-water-edge3), so they are cut off from a
@@ -540,7 +609,7 @@ void fragment() {
 	float rapid = fieldv ? 0.0 : smoothstep(0.18, 0.4, flow_speed) * (1.0 - smoothstep(0.25, 0.7, column));
 	if (rapid > 0.0) {
 		vec2 st = vec2(dot(p, dir) * 1.1, dot(p, across_dir) * 6.5);
-		float pulse = 0.5 + 0.5 * sin(TIME * 1.7 + be_n2(st * 0.6 + 7.0) * 6.28);
+		float pulse = 0.5 + 0.5 * sin(wt() * 1.7 + be_n2(st * 0.6 + 7.0) * 6.28);
 		float dash = smoothstep(0.58, 0.68, be_n2(st) * (0.55 + 0.45 * pulse) + 0.18);
 		shore_foam = max(shore_foam, dash * rapid);
 	}
@@ -555,7 +624,7 @@ void fragment() {
 		min(bed_depth + side_x * dFdx(bed_depth), bed_depth + side_y * dFdy(bed_depth))
 	);
 	edge_foam *= 1.0 - smoothstep(EDGE_FOAM_REACH * 0.5, EDGE_FOAM_REACH, max(near_side, 0.0));
-	float wrap_n = p_noise(vec3(p.x * 5.0, 8.0 + floor(TIME * 0.6), p.y * 5.0));
+	float wrap_n = p_noise(vec3(p.x * 5.0, 8.0 + floor(wt() * 0.6), p.y * 5.0));
 	edge_foam = smoothstep(0.3, 0.5, edge_foam * (0.45 + wrap_n));
 	edge_foam *= edge_band;
 	shore_foam *= edge_band;
@@ -567,30 +636,41 @@ void fragment() {
 		// The energy's middle is pulled down (a power): a fall's foot foam keeps its bold patches
 		// near the fall and thins quickly, and a plunge pool is calm a metre or two away. A river's
 		// ramp into a lower pond (CUSTOM1.w) is a slope, not a fall: it keeps a fifth of its white.
-		float en = pow(clamp(v_f0.y * p_white, 0.0, 1.0), ENERGY_POWER);
+		float en = pow(clamp(fa.y * p_white, 0.0, 1.0), ENERGY_POWER);
 		// On the face the white thins to streaks over glass; the brink and the foot keep it full.
 		float en_c = mix(en, en * 0.62, curtain);
 		// Under the floor (the cover below) nothing is white: the noises are not read there, which is
 		// most of a pond and a river.
 		if (en_c > 0.08) {
-		float blob = flow_blobs(p, flow_ws, p_blob_m, 11.0) * 0.7 + flow_blobs(p, flow_ws, p_blob_m * 0.45, 23.0) * 0.3;
+		// One clock (S2): the blobs travel along the flow coordinate at one speed (still where the
+			// field has no stroke: a pond's white boils in place), as the streaks and tongues do.
+			bool one_clock = (shade_opt & 2) != 0;
+			vec2 bq = one_clock ? vec2(uf, dot(p, across_dir)) : p;
+			vec2 bf = one_clock ? vec2(FLOW_C * has_u, 0.0) : flow_ws;
+			float blob = flow_blobs(bq, bf, p_blob_m, 11.0) * 0.7 + flow_blobs(bq, bf, p_blob_m * 0.45, 23.0) * 0.3;
 		// Stretched linearly about its mean, so the energy's threshold cuts organic shapes, not its
 		// own isolines (the raw noise sits near 0.5 and drew straight bands across the channel). A
 		// smoothstep stretch saturated a third of it at 1, and any trace of energy lit those plateaus
 		// whole (ponds plastered with blobs).
 		blob = clamp((blob - 0.5) * 1.7 + 0.5, 0.0, 1.0);
-		vec2 st = vec2(dot(p, across_dir) * 3.2, world_pos.y * 0.45 + TIME * 1.6);
+		vec2 st = vec2(dot(p, across_dir) * 3.2, world_pos.y * 0.45 + wt() * 1.6);
+			if (one_clock) {
+				st.y = uf * 0.45 - wt() * 0.64;
+			}
 		float streak = p_noise(vec3(st.x, st.y, 5.0)) * 0.75 + p_noise(vec3(st.x * 2.3, st.y * 1.7, 9.0)) * 0.25;
 		streak = clamp((streak - 0.5) * 1.7 + 0.5, 0.0, 1.0);
-		float pattern = mix(blob, streak, curtain);
-		float edge_w = mix(FOAM_EDGE, FACE_EDGE, curtain);
+		// Option 4: the flat's blobs give way to the face's streaks early (a face's cloud discs read as
+			// translucent bubbles on the glass).
+			float c_face = (shade_opt & 4) != 0 ? smoothstep(0.1, 0.5, curtain) : curtain;
+			float pattern = mix(blob, streak, c_face);
+		float edge_w = mix((shade_opt & 4) != 0 ? FOAM_EDGE_SOFT : FOAM_EDGE, FACE_EDGE, curtain);
 		if (curtain > 0.01) {
 			// Tongues, in the flow's frame (the baked flow map's direction is smooth over the map: a
 			// direction taken per fragment from the surface turned dot(p, d) into a maze of lines).
 			// About 0.28 m columns, each its own width and white for its own length, blue between;
 			// the columns bend gently so the sheet is not a comb.
 			float u_f = dot(p, across_dir);
-			float v_f = dot(p, dir);
+			float v_f = one_clock ? uf : dot(p, dir);
 			u_f += (p_noise(vec3(u_f * 0.5, v_f * 0.45, 4.0)) - 0.5) * 0.6;
 			float c_u = u_f * 3.6;
 			float id = floor(c_u);
@@ -598,13 +678,19 @@ void fragment() {
 			vec2 hh = vec2(be_hash(vec2(id, 3.7)), be_hash(vec2(id, 8.3)));
 			float gap = 0.03 + 0.4 * hh.y;
 			float across = smoothstep(gap, gap + 0.14, f_u) * (1.0 - smoothstep(1.0 - gap - 0.14, 1.0 - gap, f_u));
-			float run = p_noise(vec3(id * 1.7, 2.0, v_f * 0.35 - TIME * 0.5));
+			float run = p_noise(vec3(id * 1.7, 2.0, v_f * 0.35 - wt() * 0.5));
 			pattern = mix(pattern, across * (0.35 + 0.65 * hh.x) * (0.5 + 1.0 * run), curtain);
 		}
 		// White where the pattern stands over 1 - energy: all of it at 1, rare bold blobs at 0.3,
 		// none under a floor.
 		float cover = smoothstep(1.0 - en_c - edge_w, 1.0 - en_c + edge_w + min(px, COVER_PX_MAX) * 2.0, pattern);
 		cover *= smoothstep(0.08, 0.2, en_c);
+			if ((shade_opt & 4) != 0) {
+				// The plunge's white is graded by the field's own smooth energy (bicubic: no grid, no
+				// blob edge to cross): full white at the foot, fading to blue with the energy, so the
+				// pool's luminance does not step where a blob edge happens to fall.
+				cover = max(cover, smoothstep(0.5, 0.95, en) * 0.9 * (1.0 - smoothstep(0.6, 1.0, curtain)));
+			}
 		foam = max(foam, cover * smoothstep(0.0, 0.02, column_raw + curtain));
 		}
 	}
@@ -623,6 +709,13 @@ void fragment() {
 	}
 
 	// Cast shadows step the wash (and its strokes) into its shade colour; foam and glints are lit.
+	if (fieldv && (shade_opt & 8) != 0) {
+		// S4, the hybrid: main's curtain (the fall mesh, legacy shader) draws the steep faces.
+		float hide = smoothstep(0.45, 0.65, fa.w);
+		a *= 1.0 - hide;
+		foam *= 1.0 - hide;
+		glint *= 1.0 - hide;
+	}
 	float emit_k = clamp(max(foam, glint), 0.0, 1.0);
 	vec3 emit_col = mix(p_foam, p_glint, glint * step(foam, glint));
 	f_lit = x;

@@ -27,6 +27,9 @@ const MARGIN_M := 0.5
 ## A ground edit within this many samples of water redoes the field there (the bank hold and the
 ## buried rings read the ground up to a few samples out).
 const GROUND_REACH := 8
+## The lowest depth the textures hold: a buried or dry sample must not drag a bicubic fetch of the
+## waterline down by metres.
+const DEPTH_FLOOR := -0.3
 
 ## The field, null until a map is attached.
 var field: WaterField = null
@@ -47,6 +50,8 @@ var _rects: Dictionary = {}
 var _pond_mask: PackedByteArray = PackedByteArray()
 var _dirty: Rect2i = Rect2i()
 var _flush_queued: bool = false
+var _tex_a: ImageTexture = null
+var _tex_b: ImageTexture = null
 
 
 ## Draws the water of `map` (a map root with an AuthoredTerrain and an AuthoredWater) with
@@ -169,6 +174,52 @@ func _build_mesh() -> void:
 	node.mesh = mesh
 	node.visible = _enabled
 	timings["mesh"] = (Time.get_ticks_usec() - t0) / 1000.0
+	var t1 := Time.get_ticks_usec()
+	_upload_textures()
+	timings["textures"] = (Time.get_ticks_usec() - t1) / 1000.0
+
+
+## Shade spike (S1): the field's channels as two RGBAF textures over the sample grid, sampled per
+## fragment (bicubic) so the shore, the depth tint and the white read smooth fields instead of
+## per-vertex attributes on the 0.25 m grid. `fld_a` = (depth, energy, shore, steep) with the
+## buried and dry samples' depth held at DEPTH_FLOOR; `fld_b` = (flow coordinate premultiplied by
+## its weight, weight, 0, 0), filtered bilinear and divided back in the shader. The whole texture
+## is rebuilt after an update (ImageTexture has no partial update in Godot 4.7).
+func _upload_textures() -> void:
+	if _material == null or not (_material is ShaderMaterial):
+		return
+	var sm := _material as ShaderMaterial
+	var nx := field.size.x
+	var nz := field.size.y
+	var n := nx * nz
+	var a := PackedFloat32Array()
+	var b := PackedFloat32Array()
+	a.resize(n * 4)
+	b.resize(n * 4)
+	for i in n:
+		a[i * 4] = maxf(field.depth[i], DEPTH_FLOOR)
+		a[i * 4 + 1] = field.energy[i]
+		a[i * 4 + 2] = field.shore[i]
+		a[i * 4 + 3] = field.steep[i]
+		var u: float = field.flow_u[i]
+		if u > WaterField.NO_FLOW_U * 0.5:
+			b[i * 4] = u
+			b[i * 4 + 1] = 1.0
+	_tex_a = _fill_texture(_tex_a, nx, nz, a)
+	_tex_b = _fill_texture(_tex_b, nx, nz, b)
+	sm.set_shader_parameter(&"fld_a", _tex_a)
+	sm.set_shader_parameter(&"fld_b", _tex_b)
+	sm.set_shader_parameter(&"fld_origin", field.origin)
+	sm.set_shader_parameter(&"fld_inv_step", Vector2.ONE / field.step)
+	sm.set_shader_parameter(&"fld_dim", Vector2(nx, nz))
+
+
+func _fill_texture(tex: ImageTexture, nx: int, nz: int, data: PackedFloat32Array) -> ImageTexture:
+	var img := Image.create_from_data(nx, nz, false, Image.FORMAT_RGBAF, data.to_byte_array())
+	if tex != null and tex.get_width() == nx and tex.get_height() == nz:
+		tex.update(img)
+		return tex
+	return ImageTexture.create_from_image(img)
 
 
 func _free_node() -> void:
