@@ -10,6 +10,13 @@ shader_type spatial;
 #define RED_F
 #define RED_G
 #define RED_I
+// Card painter-water-perf: RED_J value noises with an integer coordinate on one axis drawn from the
+// lower-dimension lattice, no stroke layer past the footprint limit, no glint layer where no cell can
+// reflect the sun, no slope gradient on the field (all pixel-identical); RED_K the wash's slow noise
+// per vertex on the field (within 1/255).
+#define RED_J
+#define RED_K
+#define RED_M
 //ABL_DEFS
 render_mode blend_mix, depth_draw_opaque, cull_back, specular_disabled, ambient_light_disabled;
 
@@ -138,6 +145,51 @@ float wt() {
 }
 
 
+// p_noise at a point with one integer coordinate is a lower-dimension noise: the third axis's mix has
+// weight 0 and returns its first layer. These return the same values (the same hashes, the same
+// arithmetic) with half or a quarter of the hashes. wn_xy: z an integer; wn_xz: y an integer;
+// wn_x: y and z integers.
+#ifdef RED_J
+float wn_xy(vec2 q, float z) {
+	return p_n2(q, z);
+}
+
+
+float wn_xz(vec2 q, float y) {
+	vec2 i = floor(q);
+	vec2 f = fract(q);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(
+		mix(p_hash(vec3(i.x, y, i.y)), p_hash(vec3(i.x + 1.0, y, i.y)), f.x),
+		mix(p_hash(vec3(i.x, y, i.y + 1.0)), p_hash(vec3(i.x + 1.0, y, i.y + 1.0)), f.x),
+		f.y
+	);
+}
+
+
+float wn_x(float x, float y, float z) {
+	float i = floor(x);
+	float f = fract(x);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(p_hash(vec3(i, y, z)), p_hash(vec3(i + 1.0, y, z)), f);
+}
+#else
+float wn_xy(vec2 q, float z) {
+	return p_noise(vec3(q, z));
+}
+
+
+float wn_xz(vec2 q, float y) {
+	return p_noise(vec3(q.x, y, q.y));
+}
+
+
+float wn_x(float x, float y, float z) {
+	return p_noise(vec3(x, y, z));
+}
+#endif
+
+
 // B-spline bicubic of `t` at texel-space point `tc` (texel i's centre at i + 0.5): four bilinear
 // fetches. Smooth (C2) through the field's kinks, so a contour of it has no grid stairs.
 vec4 fld_cubic(sampler2D t, vec2 tc) {
@@ -186,6 +238,7 @@ varying vec3 f_shd;
 varying vec4 v_f0;
 varying vec4 v_f1;
 varying flat float v_rings;
+varying float v_wob;
 // The white water: how much the energy whitens, the blob size (m).
 uniform float p_white = 1.0;
 uniform float p_blob_m = 0.9;
@@ -294,6 +347,12 @@ vec2 stroke_layer(
 	vec2 p, vec2 dir, float jitter, vec2 flow, float seed, float cell, float density,
 	float len, float half_thick, float boil, float px, vec3 tilt_gate
 ) {
+#ifdef RED_J
+	// Past the footprint limit the result is multiplied by 0 below: no cell is looked at.
+	if (px >= p_px.y) {
+		return vec2(0.0);
+	}
+#endif
 	vec2 l = rot2(p, LATTICE_C, -LATTICE_S) / cell;
 	vec2 b = floor(l);
 	vec2 f = l - b;
@@ -383,6 +442,12 @@ void vertex() {
 	v_mp = VERTEX.xz;
 	v_f0 = CUSTOM0;
 	v_f1 = CUSTOM1;
+#ifdef RED_K
+	v_wob = 1.0;
+	if (CUSTOM1.y < FIELD_FLAG + 0.5) {
+		v_wob = 0.7 + 0.6 * p_noise(vec3(world_pos.x * 0.16, wt() * 0.03, world_pos.z * 0.16));
+	}
+#endif
 #ifdef RED_I
 	// Any token disturbance active (a uniform array: read per vertex, not per fragment).
 	float any_pt = 0.0;
@@ -511,7 +576,7 @@ if (fieldv) {
 		// window with columns reaching the foot): the foot's last stretch holds no column edge to step
 		// across. The line it starts on is broken by a slow noise across the flow (a straight band
 		// reads as a slab).
-		float fd_in = fd + (p_noise(vec3(across_u * 1.3, 3.0, 8.0)) - 0.5) * 0.5;
+		float fd_in = fd + (wn_x(across_u * 1.3, 3.0, 8.0) - 0.5) * 0.5;
 		foot_in = smoothstep(-FOOT_FACE_M, -0.2, fd_in) * foot_v;
 		// The veil reaches FOOT_VEIL_M below the foot and fades over all of it (the squared smoothstep:
 		// a soft tail, no edge to cross).
@@ -566,7 +631,13 @@ if (fieldv && (shade_opt & 4) != 0) {
 #ifdef ABL_NOWOB
 	float wob = 1.0;
 #else
+#ifdef RED_K
+	// The field's mesh carries it per vertex (a 6 m noise on a 0.25 m grid: the interpolation is
+	// within 1e-3 of the noise); every other surface takes it per fragment.
+	float wob = fieldv ? v_wob : 0.7 + 0.6 * p_noise(vec3(p.x * 0.16, wt() * 0.03, p.y * 0.16));
+#else
 	float wob = 0.7 + 0.6 * p_noise(vec3(p.x * 0.16, wt() * 0.03, p.y * 0.16));
+#endif
 #endif
 	float s = column / wob;
 	float m1 = mix(smoothstep(BAND_1 - 0.04, BAND_1 + 0.04, s), smoothstep(BAND_1 - 0.3, BAND_1 + 0.3, s), 1.0 - POSTERISE);
@@ -653,7 +724,7 @@ if (fieldv && (shade_opt & 4) != 0) {
 		float still = 1.0 - smoothstep(0.03, 0.12, flow_speed);
 		float rim = (1.0 - smoothstep(0.12, 0.5, column)) * edge_band;
 		float want = p_ice_amt * max(still, rim * 0.9);
-		float edge_noise = (p_noise(vec3(p.x * 0.7, 1.0, p.y * 0.7)) - 0.5) * 0.3;
+		float edge_noise = (wn_xz(p * 0.7, 1.0) - 0.5) * 0.3;
 		ice_k = smoothstep(0.35, 0.55, want + edge_noise) * open_water;
 		if (fine && ice_k > 0.01) {
 			vec2 q = p / 1.9;
@@ -673,7 +744,7 @@ if (fieldv && (shade_opt & 4) != 0) {
 					}
 				}
 			}
-			float local = smoothstep(0.45, 0.62, p_noise(vec3(p.x * 0.4, 5.0, p.y * 0.4)));
+			float local = smoothstep(0.45, 0.62, wn_xz(p * 0.4, 5.0));
 			crack = (1.0 - smoothstep(0.0, 0.035 + world_units_per_pixel * 0.7, (f2 - f1) * 1.9)) * local;
 		}
 	}
@@ -724,7 +795,12 @@ if (fieldv && (shade_opt & 4) != 0) {
 	vec2 dpy = dFdy(p);
 	float det = dpx.x * dpy.y - dpx.y * dpy.x;
 	vec2 grad = vec2(0.0);
+#ifdef RED_J
+	// The field takes its slope and distance from its textures below: no gradient of the column.
+	if (!fieldv && abs(det) > 1e-9) {
+#else
 	if (abs(det) > 1e-9) {
+#endif
 		float dcx = dFdx(column_raw);
 		float dcy = dFdy(column_raw);
 		grad = vec2(dcx * dpy.y - dcy * dpx.y, dcy * dpx.x - dcx * dpy.x) / det;
@@ -745,11 +821,11 @@ if (fieldv && (shade_opt & 4) != 0) {
 		// jumps from one to the next).
 		// The contour follows the 0.25 m grid: a slow wobble in it breaks the straight, square runs
 		// of the ribbon into brush-edged ones.
-		d_h = max(fa.z + (p_noise(vec3(p.x * 3.0, 6.0, p.y * 3.0)) - 0.5) * LAP_WOBBLE_M, 0.0);
+		d_h = max(fa.z + (wn_xz(p * 3.0, 6.0) - 0.5) * LAP_WOBBLE_M, 0.0);
 		slope = clamp(max(fa.x, 0.0) / max(fa.z, 0.03), 0.06, 3.0);
 	}
-	float lap_w = p_foam_w * (0.8 + 0.25 * sin(wt() * 1.1 + p_noise(vec3(p.x * 0.3, 2.0, p.y * 0.3)) * 6.28));
-	float bite_n = p_noise(vec3(p.x * 2.6, floor(wt() * 0.5), p.y * 2.6));
+	float lap_w = p_foam_w * (0.8 + 0.25 * sin(wt() * 1.1 + wn_xz(p * 0.3, 2.0) * 6.28));
+	float bite_n = wn_xz(p * 2.6, floor(wt() * 0.5));
 	float thr = lap_w * (0.4 + 0.75 * bite_n);
 	// On a steep bank the gradient (and so d_h) jumps from one mesh triangle to the next: the lap's
 	// edge softens there, so it reads as a brushed edge and not a row of crisp triangles.
@@ -775,9 +851,9 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// With the exact waterline a steep bank's lap follows the terrain's triangles: a wider soft edge
 	// and a larger, slower break of the distance, so the lap is a brushed band, not a zigzag line.
 	float lap_soft = 0.03 + 0.32 * steep;
-	d_h += (p_noise(vec3(p.x * 1.3, 9.0, p.y * 1.3)) - 0.5) * 0.5 * steep;
+	d_h += (wn_xz(p * 1.3, 9.0) - 0.5) * 0.5 * steep;
 	float lap = (1.0 - smoothstep(thr - 0.03 - lap_soft, thr + 0.02 + lap_soft, d_h)) * smoothstep(0.0, 0.03, d_h + 0.02);
-	float dash_n = p_noise(vec3(p.x * 3.1, 4.0 + floor(wt() * 0.4), p.y * 3.1));
+	float dash_n = wn_xz(p * 3.1, 4.0 + floor(wt() * 0.4));
 	float outer = lap_w * 1.5;
 	// The outer dashes sit on a gently sloped shore only: on a steep bank they broke into small
 	// glitter triangles (cards painter-edges, painter-water-edge3), so they are cut off from a
@@ -821,11 +897,11 @@ if (fieldv && (shade_opt & 4) != 0) {
 #ifdef RED_C
 	// No depth jump, no wrap: the noise only breaks an edge that is there.
 	if (edge_foam > 0.0) {
-		float wrap_n = p_noise(vec3(p.x * 5.0, 8.0 + floor(wt() * 0.6), p.y * 5.0));
+		float wrap_n = wn_xz(p * 5.0, 8.0 + floor(wt() * 0.6));
 		edge_foam = smoothstep(0.3, 0.5, edge_foam * (0.45 + wrap_n));
 	}
 #else
-	float wrap_n = p_noise(vec3(p.x * 5.0, 8.0 + floor(wt() * 0.6), p.y * 5.0));
+	float wrap_n = wn_xz(p * 5.0, 8.0 + floor(wt() * 0.6));
 	edge_foam = smoothstep(0.3, 0.5, edge_foam * (0.45 + wrap_n));
 #endif
 #ifdef ABL_NOEDGE
@@ -856,8 +932,8 @@ if (fieldv && (shade_opt & 4) != 0) {
 		float fill = 0.0;
 		if (foot_in > 0.0) {
 			float cu = across_u;
-			cu += (p_noise(vec3(cu * 0.5, uf * 0.45, 4.0)) - 0.5) * 0.6;
-			float hn = p_noise(vec3(cu * FOOT_TONGUE_FREQ, wt() / FOOT_DRIFT_S, 7.0));
+			cu += (wn_xy(vec2(cu * 0.5, uf * 0.45), 4.0) - 0.5) * 0.6;
+			float hn = wn_xy(vec2(cu * FOOT_TONGUE_FREQ, wt() / FOOT_DRIFT_S), 7.0);
 			float hk = clamp((hn - 0.5) * 1.9 + 0.5, 0.0, 1.0);
 			float tip = 0.05 + FOOT_TONGUE_M * hk;
 			fill = foot_in * (1.0 - smoothstep(tip - 0.3, tip + 0.35 + 0.3 * hk, fd));
@@ -916,7 +992,7 @@ if (fieldv && (shade_opt & 4) != 0) {
 			}
 		float streak = 0.0;
 		if (need_streak) {
-			streak = p_noise(vec3(st.x, st.y, 5.0)) * 0.75 + p_noise(vec3(st.x * 2.3, st.y * 1.7, 9.0)) * 0.25;
+			streak = wn_xy(st, 5.0) * 0.75 + wn_xy(st * vec2(2.3, 1.7), 9.0) * 0.25;
 		}
 		streak = clamp((streak - 0.5) * 1.7 + 0.5, 0.0, 1.0);
 #ifdef ABL_NOSTREAK
@@ -937,14 +1013,14 @@ if (fieldv && (shade_opt & 4) != 0) {
 			// the columns bend gently so the sheet is not a comb.
 			float u_f = across_u;
 			float v_f = one_clock ? uf : dot(p, dir);
-			u_f += (p_noise(vec3(u_f * 0.5, v_f * 0.45, 4.0)) - 0.5) * 0.6;
+			u_f += (wn_xy(vec2(u_f * 0.5, v_f * 0.45), 4.0) - 0.5) * 0.6;
 			float c_u = u_f * 3.6;
 			float id = floor(c_u);
 			float f_u = fract(c_u);
 			vec2 hh = vec2(be_hash(vec2(id, 3.7)), be_hash(vec2(id, 8.3)));
 			float gap = 0.03 + 0.4 * hh.y;
 			float across = smoothstep(gap, gap + 0.14, f_u) * (1.0 - smoothstep(1.0 - gap - 0.14, 1.0 - gap, f_u));
-			float run = p_noise(vec3(id * 1.7, 2.0, v_f * 0.35 - wt() * 0.5));
+			float run = wn_xz(vec2(id * 1.7, v_f * 0.35 - wt() * 0.5), 2.0);
 			pattern = mix(pattern, across * (0.35 + 0.65 * hh.x) * (0.5 + 1.0 * run), curtain);
 		}
 		// The columns' gaps fill with white as they near the foot.
@@ -982,7 +1058,16 @@ if (fieldv && (shade_opt & 4) != 0) {
 		vec3 view_dir = -(INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz;
 		vec3 reflected = normalize(vec3(view_dir.x, -view_dir.y, view_dir.z));
 		vec2 perp = normalize(vec2(-reflected.z, reflected.x) + vec2(1e-4, 0.0));
-		vec2 lg = stroke_layer(p, perp, 0.4, flow_ws, 21.0, GLINT_CELL, p_glints, 0.34, 0.035, 1.4, px, reflected);
+		vec2 lg = vec2(0.0);
+#ifdef RED_M
+		// A cell's tilt turns the reflected direction by at most asin(0.7071) = 45 degrees and the sun's
+		// cone ends at acos(0.82) = 34.9 degrees: past 80 degrees from the sun no cell draws.
+		if (dot(reflected, normalize(foliage_sun.xyz)) >= 0.17) {
+			lg = stroke_layer(p, perp, 0.4, flow_ws, 21.0, GLINT_CELL, p_glints, 0.34, 0.035, 1.4, px, reflected);
+		}
+#else
+		lg = stroke_layer(p, perp, 0.4, flow_ws, 21.0, GLINT_CELL, p_glints, 0.34, 0.035, 1.4, px, reflected);
+#endif
 		glint = lg.x * live;
 		a = max(a, glint);
 	}
