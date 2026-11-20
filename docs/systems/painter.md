@@ -315,13 +315,13 @@ Grass marks (card painter-grass-mark, 2026-11-19, look-pending; evidence
 three crossed cards collapse to thin spikes (the owner's "sad and spindly"), so under Painted every
 wide grass tuft is drawn as ONE MARK instead: `PainterGrassMarks` (`painter/painter_grass_marks.gd`,
 owned by PainterSurfaces, synced after each paint, cells event and new species) makes one mark mesh
-per species (a quad, `PainterGrassMarks.quad`, culled by `bounds`) carrying a mark material (the
+per species (stroke geometry, `PainterGrassMarks.strokes`, culled by `bounds`) carrying a mark material (the
 stand-in duplicated onto `painter_grass_mark.gdshader`, with the stand-in's tones, keep and frost
 copied at every sync) and points each cell's `multimesh.mesh` at it; release puts the very same
 card mesh back, and the shared card mesh is never edited. Classic, crops (`tuft_blades`) and
 narrow tufts (reeds) keep their cards; `PainterGrassMarks.enabled` is the A/B switch. The
-shader turns the quad to the view, lifts it toward the eye so no part cuts the ground, and paints
-the tuft COMBED: 4 or 5 broad strokes (`mark_count`, half width 0.13-0.18 of the reach,
+shader's vertex stage turns the mark to the view, lifts it toward the eye so no part cuts the
+ground, and places the tuft COMBED (the first marks painted it in the fragment stage, see below): 4 or 5 broad strokes (`mark_count`, half width 0.13-0.18 of the reach,
 `mark_width`; 7 to 9 thin ones before card painter-grass-mark-perf) rooted along a band across the tuft's upwind side and fanned only a little
 (`mark_comb`; a wide fan read as a rosette or clover once the tufts were small), all leaning
 downwind along a world lean field (the wind's way turned by a slow noise, so a meadow is combed in
@@ -341,8 +341,8 @@ instance's FOOTPRINT (the card's half width times the instance's WIDTH scale, wh
 growth, times `mark_spread` 0.9) holds about (footprint / reach)^2 times `mark_fill` (1.0) tufts, at
 most 8, their roots on a sunflower spiral to half a reach inside its rim, each its own size, turn
 and strokes, the nearest on top. A rim tuft is one or two small tufts; a core a patch of up to
-eight. A fragment tests a tuft's strokes only inside that tuft's box, nearest first, and stops at
-the first hit. The tone was lifted and warmed with the smaller marks (root value 0.74, tip 1.18,
+eight (the first marks' fragment stage tested a tuft's strokes inside its box, nearest first; the
+geometry below orders them by a depth bias). The tone was lifted and warmed with the smaller marks (root value 0.74, tip 1.18,
 `mark_warm` 0.16: the grass role is cooler than the floor, which a field of marks shows far more than
 the cards' spikes). From above the marks keep 1.6 times keep-grass (`mark_keep`), falling back to
 1.2 under snow so winter keeps its sparse straw. It lights itself (`SELECTOR_OWN_LIGHT` guards painter_selector's `light()`): the ramp's lit
@@ -352,13 +352,12 @@ the marks keep more tufts than the cards (`mark_keep`, above); tufts within abou
 Three ways were probed (a radial fan of blades read as maple leaves from above, a soft mass with
 blade tips as moss; the combed strokes were the only one that read as grass from above and at
 the eye). The sheet number `grass-mark-pitch` (0 draws the mark at every pitch) is a crossfade:
-a pitch P > 0 puts the card surfaces into the mark mesh beside the quad, and each tuft draws its
+a pitch P > 0 puts the card surfaces into the mark mesh beside the strokes, and each tuft draws its
 cards below about P degrees of camera pitch and its mark above (`grass_mark_on` in
 painter_selector, read by both shaders, with a per-tuft band of 5 degrees so the change ripples
-instead of popping). Core sets 45: the marks from above (where the cards are thin spikes), the
-cards at the oblique home view and the eye, where their leafy patches, dark feet and snow caps
-read more grounded than the standing marks (hazier and wispier there, and cardboard-pale in
-winter) and cost less. Cost after the size model (indicative: in-run A/B, two cycles, median GPU ms
+instead of popping). Core sets 0 since card painter-grass-mark-geo (the owner's "use the marks
+everywhere"); it set 45 before, the cards' leafy patches at the oblique view costing less than the
+discard marks did. Cost after the size model (indicative: in-run A/B, two cycles, median GPU ms
 at 1920x1080 on the dev machine; cards = marks off, first = the first marks, now = this model): the
 home view at zoom 16 cards 2.68/2.69, first 2.69/2.70, now at core's 45 2.71/2.71, now at pitch 0
 3.33/3.36; at zoom 30 cards 2.87/3.12, first 2.93/3.15, now at 45 3.07/3.18, now at pitch 0
@@ -382,9 +381,35 @@ half width 0.13-0.18, fill 1.0 (these are also the fewer, bolder, painterly mark
 (marks at pitch 0 at the home view; from above at the default 45), before then now: home zoom 16
 +0.48 then +0.30, zoom 30 +0.61 then +0.33, from above zoom 16 +0.72 then +0.28 (cards 2.62, 3.17
 and 2.36 ms; evidence `.../compare/painter_final77_grass_perf/`, probe logs in probe/). That is
-above the +0.2 ms bar for making pitch 0 the default, so core keeps 45. The structural fix, not built, is strokes as
-GEOMETRY (a few triangles per stroke from the vertex stage): no discard, so early depth rejection and
-the engine's depth prepass shade each visible pixel once.
+above the +0.2 ms bar for making pitch 0 the default, so core kept 45 until the geometry below.
+STROKES AS GEOMETRY (card painter-grass-mark-geo, 2026-11-19, look-pending; the owner's "use the
+marks everywhere (pitch 0)" and "we need to address the performance"; evidence
+`.../compare/painter_final79_grass_geo/`). `PainterGrassMarks.strokes` builds ONE mesh shared by every
+instance: `TUFTS` (8) tufts of `STROKES` (5) strokes plus a body fan each, a stroke a tapered ribbon
+(`STATIONS` 0, 0.4, 0.75 and a tip: 7 vertices, 5 triangles; UV the place along it and the side, UV2
+the tuft and stroke slot, all positions zero) and a body 8 triangles; 8 x (5 x 5 + 8) = 264 triangles an
+instance, 352 vertices. The shader (`world_vertex_coords`) is the whole model in `vertex()`: the same
+tuft and stroke maths as the fragment version (the sunflower spiral, the comb, the curl and taper),
+now per vertex, and every vertex of a slot the instance does not use (a rim tuft has 1 tuft, a core
+up to 8; the sheet's keep thins whole instances) is collapsed to the instance's origin; the shadow
+pass collapses all of them. The fragment stage only lights (`light()` unchanged), with NO discard, so
+the depth test and the depth prepass see opaque triangles and each visible pixel is shaded about once.
+The strokes of a mark are coplanar, so their order is a depth bias toward the eye (`TUFT_BIAS` 0.08
+m across a patch's tufts, nearest the camera on top, the first tuft on top from straight above;
+`STROKE_BIAS` 0.004 m per stroke laid later; a body under its strokes). Tones and the world fields
+(`field`, `f_wob`, snow) are read at the vertices (ribbons are small against their 0.6 to 1.1 m
+wavelengths). The probes (one job, `dead` = every vertex collapsed): the geometry costs the same as
+submitting the collapsed vertices, so stations, tufts, body sides and slot count do not move the cost
+(a triangle per stroke, 4 tufts, no bodies all within 0.05 ms); the whole mark cost is the
+submission of about 1.1 M vertices, not the pixels. Median GPU ms over the cards (marks at pitch 0 vs
+cards, two cycles; the old discard marks at pitch 0 in brackets): home zoom 16 +0.14 to +0.15
+(+0.2 to +0.24), home zoom 30 +0.06 to +0.09 (+0.35), from above zoom 16 +0.01 to +0.02 (+0.27)
+(cards 2.43/2.62, 3.17/3.19, 2.35/2.36), so pitch 0 is the default. Oblique density and colour
+(`mark_side`, the view's `side` weight, 1 at the eye and 0 from above): the pitch-0 marks were
+sparse and pale at the home view and the eye, so at the side the sheet's keep is raised 1.45 times,
+the footprint is filled 1.5 times (`mark_fill` x), a stroke is 1.35 times broader, the colour
+0.78 times as bright and the body a darker, wider mass; from above nothing changes. The size
+(`mark_height_max`, reach, fill) is as before.
 The old atlas
 and tuft paths stay (stage 3 of the spike's plan removes them).
 Flowers (card painter-flowers, look-pending): `PainterFlowerHue` reads each surface of a flower

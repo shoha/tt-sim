@@ -68,11 +68,11 @@
   flower-head: 0.11;  flower-floor: 5;  flower-thin: 0.2;  flower-bud: 0.12;  flower-own: 0.85;
   flower-far-lo: 0.007;  flower-far-hi: 0.013;
   /* The meadow grass's painted marks (PainterGrassMarks): the camera pitch in degrees below which
-     a tuft keeps its three cards; 0 draws the mark at every pitch. 45 (painter-grass-mark's
-     verdict): the marks from above, where the cards are thin spikes; the cards' leafy patches and
-     snow caps at the oblique home view and the eye, which read more grounded than the standing
-     marks there and cost about 0.2 ms less at the home view. */
-  grass-mark-pitch: 45;
+     a tuft keeps its three cards; 0 draws the mark at every pitch. 0 (the owner's verdict on
+     look40/look77, 2026-11-20: "use the marks everywhere"): since the strokes are geometry (card
+     painter-grass-mark-geo) the marks cost about as much as the cards at every pitch, so the swap
+     is no longer a cost lever; a sheet can still set a pitch to keep the cards at the oblique view. */
+  grass-mark-pitch: 0;
 
   /* The ground's brush marks: the share of cells that hold one at a zone's edge and how far a
      flat area thins them, the small drift and fallen-leaf marks, the block-in's patches, the

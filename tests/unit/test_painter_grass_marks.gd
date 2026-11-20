@@ -2,10 +2,11 @@ extends GutTest
 
 ## The painted meadow grass as marks (PainterGrassMarks, painter_grass_mark.gdshader;
 ## docs/systems/painter.md "Plant roles"): painting points every wide grass cell's MultiMesh at its
-## species' one-quad mark mesh and release puts the very same card mesh back, the shared card mesh
-## is never edited, the A/B switch keeps the cards, a cell built later is caught, the marks take
-## their stand-in's tones, and the sheet's grass-mark-pitch (core: 45) puts the cards beside the
-## mark with the pitch on both materials, 0 the quad alone. Uses the built-in palette's temperate
+## species' stroke-geometry mark mesh (PainterGrassMarks.strokes: counts, ranges and determinism are
+## tested here) and release puts the very same card mesh back, the shared card mesh is never edited,
+## the A/B switch keeps the cards, a cell built later is caught, the marks take their stand-in's
+## tones, and the sheet's grass-mark-pitch (core: 0, marks at every pitch) puts the cards beside the
+## mark when a pitch is set, with the pitch on both materials. Uses the built-in palette's temperate
 ## forest grass.
 
 const BIOME := "temperate_forest_summer_s1"
@@ -98,14 +99,45 @@ func test_a_wide_painted_grass_tuft_is_a_mark_and_a_narrow_or_unpainted_one_is_n
 	surfaces.release()
 
 
-func test_the_quad_is_one_plain_quad_and_its_bounds_hold_the_largest_mark() -> void:
-	var extent := Vector3(0.3, 0.2, 0.25)
-	var arrays := PainterGrassMarks.quad(extent, 0.4)
-	assert_eq((arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size(), 4)
-	assert_eq((arrays[Mesh.ARRAY_INDEX] as PackedInt32Array).size(), 6, "two triangles")
+func test_the_strokes_mesh_counts_deterministic_and_in_range() -> void:
+	var arrays := PainterGrassMarks.strokes()
+	var stations := PainterGrassMarks.STATIONS.size()
+	var per_stroke_verts := stations * 2 + 1
+	var per_stroke_tris := (stations - 1) * 2 + 1
+	var tufts := PainterGrassMarks.TUFTS
+	var strokes := PainterGrassMarks.STROKES
+	var sides := PainterGrassMarks.BODY_SIDES
+	var verts := tufts * (strokes * per_stroke_verts + sides + 1)
+	var tris := tufts * (strokes * per_stroke_tris + sides)
+	assert_eq((arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size(), verts, "vertices")
+	var index := arrays[Mesh.ARRAY_INDEX] as PackedInt32Array
+	assert_eq(index.size(), tris * 3, "triangles")
+	assert_lt(tris, 400, "a few hundred triangles an instance at most")
 	var uv := arrays[Mesh.ARRAY_TEX_UV] as PackedVector2Array
-	assert_eq(uv[0], Vector2(0, 1), "UV.y 1 at the foot")
-	assert_null(arrays[Mesh.ARRAY_COLOR], "LAYOUT_PLAIN: no colour")
+	var uv2 := arrays[Mesh.ARRAY_TEX_UV2] as PackedVector2Array
+	assert_eq(uv.size(), verts)
+	assert_eq(uv2.size(), verts)
+	for i in index:
+		assert_true(i >= 0 and i < verts, "index in range")
+	var bodies := 0
+	for p in uv2:
+		assert_true(p.x >= 0.0 and p.x < tufts, "tuft id")
+		assert_true(p.y >= -1.0 and p.y < strokes, "stroke id or -1 for a body")
+		bodies += 1 if p.y < 0.0 else 0
+	assert_eq(bodies, tufts * (sides + 1), "a body per tuft")
+	for p in uv:
+		assert_true(absf(p.x) <= 1.0 and absf(p.y) <= 1.0, "UV on the ribbon or the unit disc")
+	# A stroke's triangles stay inside its own vertices (no index reaches another stroke).
+	for t in tris:
+		assert_eq(uv2[index[t * 3]], uv2[index[t * 3 + 1]], "one stroke or body a triangle")
+		assert_eq(uv2[index[t * 3]], uv2[index[t * 3 + 2]], "one stroke or body a triangle")
+	var again := PainterGrassMarks.strokes()
+	assert_eq(again[Mesh.ARRAY_TEX_UV], uv, "deterministic")
+	assert_eq(again[Mesh.ARRAY_INDEX], index, "deterministic")
+
+
+func test_the_bounds_hold_the_largest_mark() -> void:
+	var extent := Vector3(0.3, 0.2, 0.25)
 	# The largest mark: a footprint of 0.9 half widths plus 0.6 of a reach (at most 1.22 heights),
 	# lifted toward the eye by about as much again, its top 1.22 x 1.42 heights over the root plus
 	# that; the points below hold the first marks' larger reach (1.4 x 1.22 x 1.06 half widths).
@@ -128,7 +160,7 @@ func test_painting_draws_the_grass_as_marks_and_release_puts_the_same_cards_back
 	assert_gt(drawn.size(), 0, "grass cells")
 	for mesh in drawn:
 		assert_ne(mesh, card, "a cell draws the mark")
-		assert_eq(mesh.get_surface_count(), 1, "the quad alone at pitch 0")
+		assert_eq(mesh.get_surface_count(), 1, "the strokes alone at pitch 0")
 		assert_eq(_mark_material(mesh).shader.resource_path, PainterGrassMarks.SHADER)
 		assert_true(_mark_material(mesh).has_meta(PainterSurfaces.META), "a painted material")
 		assert_eq(
@@ -198,6 +230,17 @@ func test_the_marks_take_their_stand_ins_tones_and_thinning() -> void:
 	surfaces.release()
 
 
+func test_the_core_sheet_draws_the_marks_at_every_pitch() -> void:
+	var sheet := PainterSheet.load_sheet("core")
+	for mood: String in ["summer", "winter"]:
+		for elevation in [10.0, 45.0, 90.0]:
+			assert_eq(
+				PainterSheet.number(sheet, mood, PainterGrassMarks.PITCH_NUMBER, elevation),
+				0.0,
+				"%s at %s degrees: no card crossfade" % [mood, elevation]
+			)
+
+
 func test_the_sheets_pitch_puts_the_cards_beside_the_mark_and_release_clears_it() -> void:
 	var scatter := _grass_scatter()
 	var card := _card(scatter)
@@ -208,7 +251,7 @@ func test_the_sheets_pitch_puts_the_cards_beside_the_mark_and_release_clears_it(
 
 	var stand_in := card.surface_get_material(0) as ShaderMaterial
 	for mesh in _drawn(scatter):
-		assert_eq(mesh.get_surface_count(), card.get_surface_count() + 1, "the cards and the quad")
+		assert_eq(mesh.get_surface_count(), card.get_surface_count() + 1, "the cards and the strokes")
 		assert_eq(mesh.surface_get_material(0), stand_in, "the cards keep their stand-in")
 		assert_eq(float(_mark_material(mesh).get_shader_parameter(&"mark_pitch")), 40.0)
 	assert_eq(float(stand_in.get_shader_parameter(&"mark_pitch")), 40.0, "the cards fade below it")
