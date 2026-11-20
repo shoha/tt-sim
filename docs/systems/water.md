@@ -695,6 +695,13 @@ keeps its names and its meaning: the painted shader declares the same uniforms, 
 material keeps its parameters across the swap. Classic's shader is unchanged. Details and cost:
 [painter.md](painter.md) "Water".
 
+## The water field (in progress)
+
+`WaterField` ([water_field.md](water_field.md)) derives one water height per sample from the
+document and is the planned single source for the water surface, the falls and the gameplay
+queries. Stage 1 (the data model) is in; nothing draws from it or reads it yet, so everything
+above still describes how water is built and drawn today.
+
 ## Open work
 
 The list is [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work"; this doc does not repeat it.
