@@ -16,13 +16,13 @@ extends RefCounted
 ## a tributary and a stream into pools), saved as `_painter-water-field-painted_water`.
 
 const WATER := preload("res://tools/render_jobs/probes/water.gd")
-const PREFIX := "_painter-water-field-v2_"
+const PREFIX := "_painter-water-lip_"
 ## WaterFieldMesh.MESH_NAME, spelled out so the probe also runs on a tree without the field (the
 ## baseline the captures compare with).
 const FIELD_MESH := "PaintedWaterField"
 ## The painted water and fall shaders as they were before the field (a card's local copies, kept
 ## out of the tree), for the A/B "main" mode.
-const LEGACY_DIR := "res://tools/render_jobs/local/painter-water-field-v2/"
+const LEGACY_DIR := "res://tools/render_jobs/local/painter-water-lip/"
 const LEGACY_WATER := LEGACY_DIR + "legacy_water.gdshader"
 const LEGACY_FALL := LEGACY_DIR + "legacy_waterfall.gdshader"
 const STEP_M := 0.05

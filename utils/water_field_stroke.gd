@@ -14,11 +14,16 @@ const STATION_STEP := 0.25
 const RIFFLE_SLOPE := Vector2(0.05, 0.3)
 const RIFFLE_CARRY_M := 1.4
 const RIFFLE_WHITE := 0.6
-## Fall white: how far above the lip the brink white starts, and the foot foam's decay length
-## (base plus per metre of drop).
-const BRINK_M := 0.6
-const FOOT_DECAY_M := 0.5
-const FOOT_DECAY_PER_DROP := 0.25
+## Fall white (card painter-water-lip): how far above the lip the brink line starts and how white it
+## is (a thin soft line at the edge: the water above it is still glass), the white the face's top
+## holds (a few bright columns) and the share of the face over which it builds to the full white of
+## the face's lower part, and the foot foam's decay length (base plus per metre of drop).
+const BRINK_M := 0.5
+const BRINK_PEAK := 0.4
+const FACE_TOP := 0.3
+const FACE_RAMP := 0.65
+const FOOT_DECAY_M := 0.4
+const FOOT_DECAY_PER_DROP := 0.2
 ## The lip speed of a fall's water (WaterFallMesh.V0_BASE plus V0_PER_SPEED times the upper
 ## reach's speed) sets where the white of the face ends and the foot foam begins (the distance
 ## it would travel in the fall's time): the field keeps that split, though no arc is drawn.
@@ -59,12 +64,15 @@ static func table(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
 		var land := v0 * sqrt(2.0 * drop / G)
 		var decay := FOOT_DECAY_M + FOOT_DECAY_PER_DROP * drop
 		var strength := clampf(drop / 1.0, 0.6, 1.0)
+		var face_m := maxf(float(fall.foot) - lip, 0.5)
 		for t in count:
 			var x := t * TABLE_STEP - lip
 			if x <= 0.0:
-				core[t] = maxf(core[t], smoothstep(-BRINK_M, 0.0, x) * 0.9 * strength)
+				core[t] = maxf(core[t], smoothstep(-BRINK_M, 0.0, x) * BRINK_PEAK * strength)
 			elif x <= land:
-				core[t] = maxf(core[t], strength)
+				# The face's white builds from a few columns at the lip to the full sheet low down.
+				var build := smoothstep(0.0, FACE_RAMP * face_m, x)
+				core[t] = maxf(core[t], strength * lerpf(FACE_TOP, 1.0, build))
 			else:
 				en[t] = maxf(en[t], exp(-(x - land) / decay) * strength)
 	# The foot coordinate: the signed arc distance to the nearest fall's foot (the face's end, where

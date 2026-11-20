@@ -95,7 +95,7 @@ and native equals GDScript (`tests/unit/test_water_field_native.gd`) all hold bi
   after the call returns (idle frame 2.2 ms, GPU 1.70 to 1.72 ms before and after: no hitch shows in
   the viewport's GPU time; the upload itself is not isolated). The foot3 shader's cost against main
   (docs/PERFORMANCE.md in-run A/B, 7 kept rounds): +0.066 ms at the fall close view (main 2.22 ms),
-  +0.042 ms wide (main 3.46 ms).
+  +0.042 ms wide (main 3.46 ms); with the lip card's single flow-map fetch +0.058 and +0.033 (same run: field-v2 +0.077 and +0.032).
 - Rules for the native path: nothing in a native pass may differ from its GDScript twin by a bit
   (`tests/unit/test_water_field_native.gd` is the arbiter and covers the foot, `ew` and exact
   waterline arrays); a pass that gains an array adds it to the packed dictionary in
@@ -178,6 +178,18 @@ one still drives the wash, fade and floor. Known: the dL guardrail at the foot i
 (the white-to-pool transition is a shape, not a plateau), the lip's is 1.2 to 2 times; a straight pit
 edge in a stream's pool (st_o, stpool_z3) is the terrain's (the tier sculpt's rectilinear cliff, the dry
 capture shows it), not the field's or the shader's.
+
+The soft brink (card painter-water-lip, look-pending): a fall's white is built down the face, not
+stamped at the lip. `WaterFieldStroke.table` writes the `core` as a thin brink line (`BRINK_M` 0.5 m
+ramp to `BRINK_PEAK` 0.4 at the lip) and a face that starts at `FACE_TOP` (0.3: a few bright columns
+over glass) and builds to the full sheet over `FACE_RAMP` (0.65) of the face's length; the foot foam
+decays faster (`FOOT_DECAY_M` 0.4 + 0.2 per metre of drop). The old 0.9 plateau for 0.6 m above the lip
+drew an opaque white block under the lip at close zoom. The shader gives the brink's white a wide
+gradient edge (above the face where `fd` is under -1 and the steep share is low), the face floor starts
+1.4 m above the foot, tongues reach 0.35 m and the veil 1.5 m (glaze 0.24, alpha 0.48), so the pool
+keeps more calm blue in a tight frame. The flow-map texel (`fld_b`) is fetched once per fragment (the
+foot and the white's flow coordinate share it). Changing these constants moves the energy goldens
+(`water_field_transects.json`, regenerated); native is unaffected (the table stays GDScript).
 
 ## Conditioning
 

@@ -163,9 +163,9 @@ const float FLOW_DROP_K = 0.5;
 // the rules reach, the veil's reach below the foot (m: short, so a calm pool of blue shows at the foot
 // at every zoom), the longest tongue of white below it (m), the seconds a tongue's length takes to
 // drift, and the depth the pool floor follows (column per metre of depth).
-const float FOOT_FACE_M = 1.6;
-const float FOOT_VEIL_M = 1.9;
-const float FOOT_TONGUE_M = 0.45;
+const float FOOT_FACE_M = 1.4;
+const float FOOT_VEIL_M = 1.5;
+const float FOOT_TONGUE_M = 0.35;
 const float FOOT_DRIFT_S = 9.0;
 // The tongues' noise frequency across the flow (per metre) and the most white the floor holds: under
 // one, so the blobs' pattern mottles it and the pool's blue shows between the tongues.
@@ -485,6 +485,10 @@ if (fieldv) {
 	// fd: the signed arc distance to the fall's foot (negative on the face, positive in the plunge
 	// pool), foot_v 1 where the field holds one. ONE coordinate shared by the face and the pool, so
 	// no rule ends on a line: the rules below are smooth functions of it.
+	// The flow map texel (fld_b) is fetched once: here for the foot, and the white's flow coordinate
+	// below reuses it.
+	vec4 fb_held = vec4(0.0);
+	bool fb_have = false;
 	float fd = 9.0;
 	float foot_in = 0.0;
 	float foot_w = 0.0;
@@ -492,6 +496,8 @@ if (fieldv) {
 	// whatever the energy, so the plunge pool of a fall into a pond (no energy of its own) has a foot.
 	if (fieldv && v_f1.z > 0.02) {
 		vec4 fbf = texture(fld_b, ((v_mp - fld_origin) * fld_inv_step + 0.5) / fld_dim);
+		fb_held = fbf;
+		fb_have = true;
 		float foot_v = smoothstep(0.2, 0.9, fbf.a);
 		fd = fbf.b / max(fbf.a, 0.001);
 		// The white floor is whole 0.3 m above the foot (a lower face of broken water, not a glass
@@ -700,8 +706,8 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// The plunge's wash: aerated water, a milky glaze over the lower face and the pool below the foot,
 	// strongest at the foot and gone by FOOT_VEIL_M, the same coordinate the glass colour uses. It
 	// tints and thickens the water but never covers it: the pool's blue stays under it.
-	x = mix(x, mix(p_lit, p_foam, 0.4), foot_w * 0.3);
-	a = max(a, foot_w * 0.6);
+	x = mix(x, mix(p_lit, p_foam, 0.4), foot_w * 0.24);
+	a = max(a, foot_w * 0.48);
 
 	// ---- Whites -----------------------------------------------------------------------------
 	float foam_k = clamp(foam_strength, 0.5, 1.5);
@@ -864,7 +870,10 @@ if (fieldv && (shade_opt & 4) != 0) {
 #ifdef RED_G
 			// The flow coordinate's texture is read only where a white is drawn.
 			if (one_clock) {
-				vec4 fb = texture(fld_b, ((v_mp - fld_origin) * fld_inv_step + 0.5) / fld_dim);
+				vec4 fb = fb_held;
+				if (!fb_have) {
+					fb = texture(fld_b, ((v_mp - fld_origin) * fld_inv_step + 0.5) / fld_dim);
+				}
 				has_u = smoothstep(0.2, 0.9, fb.g);
 				uf = mix(uf, fb.r / max(fb.g, 0.001), has_u);
 			}
@@ -938,6 +947,9 @@ if (fieldv && (shade_opt & 4) != 0) {
 		// The veil's reach keeps it soft too: the foot's last blobs melt into the pool, they do not end
 		// on a crisp edge.
 		edge_w = max(edge_w, 0.3 * smoothstep(0.0, 0.5, max(fill, foot_w * 0.8)));
+			// The brink's white (the flat water above a fall's face, still glass: a soft line at the edge)
+			// has a wide gradient edge too, so it reads as mist on the glass, not as a drawn shape.
+			edge_w = max(edge_w, 0.3 * (1.0 - smoothstep(-2.0, -1.0, fd)) * (1.0 - smoothstep(0.05, 0.6, curtain)));
 		float cover = smoothstep(1.0 - en_c - edge_w, 1.0 - en_c + edge_w + min(px, COVER_PX_MAX) * 2.0, pattern);
 		// The floor of the energy under which nothing is white; the foot's fade is read down to a few
 		// percent (a gradual thinning into mottled mist, not a cut).

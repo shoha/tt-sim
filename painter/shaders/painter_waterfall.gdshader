@@ -102,5 +102,5 @@ void fragment() {
 		0.0, MIST_SOFT_M, fall_scene_depth(SCREEN_UV, INV_PROJECTION_MATRIX) + VERTEX.z
 	);
 	ALBEDO = mix(mix(p_foam, p_sky, 0.2), p_foam, core);
-	ALPHA = body * mix(0.5, 1.0, core) * life * soft * mist_alpha;
+	ALPHA = body * mix(0.4, 0.85, core) * life * soft * mist_alpha;
 }
