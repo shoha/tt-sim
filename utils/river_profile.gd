@@ -239,8 +239,9 @@ func fall_at(s: float) -> Dictionary:
 ## the samples reached), "distance" (to the nearest point of the course), "along" (its arc
 ## length), "half_width" (the course's there, before head()), row-major over the rect; distance
 ## INF where no segment is near}. An end that runs off the map carries the end segment on past
-## its point.
-func field(doc: MapDocument, reach_m: float) -> Dictionary:
+## its point. A `clip` with an area limits the rect to it (WaterField's dirty-rect rebuild): each
+## sample's values are the same with or without it, only the samples outside are not made.
+func field(doc: MapDocument, reach_m: float, clip: Rect2i = Rect2i()) -> Dictionary:
 	var widest := 0.0
 	for w in widths:
 		widest = maxf(widest, w)
@@ -249,6 +250,8 @@ func field(doc: MapDocument, reach_m: float) -> Dictionary:
 	var step := doc.sample_step()
 	var grid := Vector2i(doc.samples_x(), doc.samples_z())
 	var rect := _cells_in(WaterGeometry.bounds(points, reach), origin, step, grid)
+	if clip.has_area():
+		rect = rect.intersection(clip)
 	var count := rect.size.x * rect.size.y
 	var distance := PackedFloat32Array()
 	var along := PackedFloat32Array()

@@ -27,6 +27,9 @@ Documents here:
 
 - [water.md](water.md): the water model and flow bake, authored water at runtime, carving and
   wet dressing, rivers and ponds past the map edge.
+- [water_field.md](water_field.md): the water field, one water height per 0.25 m sample derived
+  from the document (rules mode), its dirty-rect rebuild, its events for validation; the data
+  model of the staged replacement of the water geometry stack (nothing draws from it yet).
 - [wind.md](wind.md): the global wind design (design only): the WindState model, shader globals,
   weather and structure consumers, play-together sync, phases.
 - [waterfalls.md](waterfalls.md): the fall-or-riffle rule, the plan-time lips and set-back, the
