@@ -26,11 +26,16 @@ render_mode blend_mix, depth_draw_opaque, cull_back, specular_disabled, ambient_
  *   dashes outside it (in the iso-depth frame of the depth buffer), dashes on fast shallow water
  *   (riffles), a wrap round rocks and wading tokens (Classic's depth-slope detector, thresholded),
  *   and for a wading token two or three broken arcs that step outward in visible steps and a
- *   teardrop of dashes downstream. Near a waterfall the fall white (painter_fall_white.gdshaderinc,
- *   card painter-fall-frame-foam): the roll over the brink and the foam at the foot, from the fall
- *   frame in CUSTOM0 and CUSTOM1 (WaterFallFrames; zero on a Blender plane and the river ribbon,
- *   so none there), the same function the curtain (painter_waterfall.gdshader) draws its share
- *   with, so the white is one shape over the lip and over the foot.
+ *   teardrop of dashes downstream.
+ *   The field surface (card painter-water-field-painted, WaterFieldMesh): a vertex with
+ *   CUSTOM1.y == FIELD_FLAG belongs to the ONE surface of a WaterField and carries its own depth,
+ *   white-water energy, signed shore distance and steep share (CUSTOM0), so the wash, the shoreline
+ *   and the lap read the model's fields instead of the depth buffer, and a fall is drawn by the same
+ *   code as the river: steep surface turns the white into streaks running down, energy whitens the
+ *   brink, the face and the foot as one shape. The water column is divided by the view ray's
+ *   vertical share (the path through the water, not the plumb depth under it), so a pond reads as
+ *   deep at an oblique view as it does from above. Any other vertex (a Blender plane, the exit
+ *   ribbon) takes the depth-buffer path unchanged.
  *   The glints. A third lattice of short bright ticks, kept only where a stroke's own small tilt
  *   would reflect the sun toward the camera (the sun is the foliage_sun global): a ragged column
  *   toward the sun, gold at dusk, silver under the moon. Placed, not computed from a normal.
@@ -55,7 +60,6 @@ render_mode blend_mix, depth_draw_opaque, cull_back, specular_disabled, ambient_
 #include "res://painter/shaders/painter_noise.gdshaderinc"
 #include "res://shaders/skirt_fade.gdshaderinc"
 #include "res://shaders/wind_global.gdshaderinc"
-#include "res://painter/shaders/painter_fall_white.gdshaderinc"
 
 // ---- Classic's names (Motion keys, the network, the level's water settings) ----------------
 uniform float wave_speed : hint_range(0.0, 5.0) = 0.6;
@@ -104,11 +108,25 @@ uniform vec2 p_px = vec2(0.045, 0.12);
 varying vec3 world_pos;
 varying vec3 f_lit;
 varying vec3 f_shd;
-// The fall frame (WaterFallFrames; flat: a triangle takes one vertex's frame whole) and the map XZ
-// it is read at (the authored surface's model space is the map's).
-varying flat vec4 fall_a;
-varying flat vec4 fall_b;
-varying vec2 fall_xz;
+// The field channels (WaterFieldMesh): depth, energy, shore distance, steep; river share, flag.
+varying vec4 v_f0;
+varying vec4 v_f1;
+// The white water: how much the energy whitens, the blob size (m).
+uniform float p_white = 1.0;
+uniform float p_blob_m = 0.9;
+const float FIELD_FLAG = -7.0;
+// The least vertical share of the view ray the water column is divided by (an eye-level view
+// reads three times the plumb depth, not more).
+const float VIEW_SHARE_MIN = 0.3;
+// The white water's energy is raised to this power; the share a ramp into a pond keeps; the widest
+// pixel footprint (m) its edge softens over (an eye-level view must not haze the whole pool).
+const float ENERGY_POWER = 1.3;
+const float RAMP_KEEP = 0.2;
+const float COVER_PX_MAX = 0.04;
+// The field's shore ribbon wobble (m), and the alpha a film of a few centimetres keeps (a film is
+// water over the dug bed, not a ghost of it: the share of the deepest alpha).
+const float LAP_WOBBLE_M = 0.16;
+const float FILM_ALPHA = 0.8;
 
 // The wash: the column thresholds (m) between the bands, how hard the bands are posterised (the
 // rest is a soft ramp), the share of the deepest alpha the shallow and mid bands keep.
@@ -264,9 +282,22 @@ vec2 stroke_layer(
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	fall_a = CUSTOM0;
-	fall_b = CUSTOM1;
-	fall_xz = VERTEX.xz;
+	v_f0 = CUSTOM0;
+	v_f1 = CUSTOM1;
+}
+
+
+// Two-phase flow advection of a value-noise blob field (no stretching, no endless scroll).
+float flow_blobs(vec2 p, vec2 flow, float scale, float seed) {
+	float period = 2.4;
+	float ta = fract(TIME / period);
+	float tb = fract(TIME / period + 0.5);
+	vec2 qa = (p - flow * ta * period * 1.3) / scale;
+	vec2 qb = (p - flow * tb * period * 1.3) / scale;
+	float na = p_noise(vec3(qa.x, seed + floor(TIME / period) * 3.1, qa.y));
+	float nb = p_noise(vec3(qb.x, seed + 1.7 + floor(TIME / period + 0.5) * 3.1, qb.y));
+	float wa = 1.0 - abs(2.0 * ta - 1.0);
+	return mix(nb, na, wa);
 }
 
 
@@ -297,8 +328,23 @@ void fragment() {
 	}
 	vec3 bed_world = (INV_VIEW_MATRIX * vec4(scene_view, 1.0)).xyz;
 	float column_raw = max(world_pos.y - bed_world.y, 0.0);
+	bool fieldv = v_f1.y < FIELD_FLAG + 0.5;
+	float curtain = 0.0;
+	float path_k = 1.0;
+	if (fieldv) {
+		// The model's own plumb column at this point of the surface, whatever the camera sees; the
+		// wash reads it along the view ray (the path through the water): a plumb column of a
+		// pond's metre is a metre of water from above and several from the side.
+		column_raw = max(v_f0.x, 0.0);
+		ground_like = 1.0;
+		curtain = smoothstep(0.05, 0.9, v_f0.w);
+		vec3 view_world = (INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz;
+		path_k = 1.0 / clamp(abs(view_world.y), VIEW_SHARE_MIN, 1.0);
+	}
 	// Anything that is not ground under the water (a reed blade, a token's leg) reads as deep.
-	float column = mix(1.0, column_raw, ground_like);
+	float column = mix(1.0, column_raw * path_k, ground_like);
+	// A curtain's column is the drop under it: it reads as the river's mid glass, not the deep.
+	column = mix(column, 0.55, curtain);
 	// Where a river leaves the map the terrain's bed and the channel patch's meet in a crease: the low
 	// column there drew a row of white dabs (the depth-slope wrap), a vertical strip of ice rim and a
 	// dip in the wash's alpha across the river (painter-edges2). The shore effects keyed to a shallow
@@ -324,6 +370,17 @@ void fragment() {
 	wash = mix(wash, p_sky, graze * 0.55);
 	// The wash fades in over the first centimetres: a wet edge, not a plane ending on the shore.
 	float shoreline = shore_fade_depth > 0.0 ? smoothstep(0.0, shore_fade_depth * 0.8, column) : 1.0;
+	if (fieldv) {
+		// The waterline is the depth's zero contour: fade over its first centimetres of horizontal
+		// distance too, so a steep bank does not end the wash on a hard line.
+		shoreline = min(smoothstep(0.0, 0.035, v_f0.x), smoothstep(0.0, 0.1, v_f0.z));
+		wash_a = max(wash_a, p_opacity * FILM_ALPHA * (1.0 - smoothstep(0.045, 0.1, v_f0.x)));
+		// The thin water a bank sheds (CUSTOM1.w 0.5, WaterField's spill beyond the channel) draws
+		// from a few centimetres' depth: it read as a pale shelf standing out from the bank.
+		float bank_spill = step(0.25, v_f1.w) * (1.0 - step(0.75, v_f1.w));
+		shoreline = min(shoreline, mix(1.0, smoothstep(0.05, 0.22, v_f0.x), bank_spill));
+		shoreline = max(shoreline, curtain);
+	}
 	wash_a *= mix(1.0, shoreline, ground_like * edge_band);
 
 	// ---- Tokens: arcs, the wake and the open water they punch in ice -------------------------------
@@ -405,7 +462,7 @@ void fragment() {
 	// ---- Strokes ----------------------------------------------------------------------------
 	vec3 x = mix(wash, p_ice, ice_k);
 	float a = mix(wash_a, 0.96, ice_k);
-	float live = (1.0 - ice_k) * smoothstep(0.08, 0.4, column);
+	float live = (1.0 - ice_k) * smoothstep(0.08, 0.4, column) * (1.0 - curtain);
 	float px = world_units_per_pixel;
 	float jitter = mix(1.1, 0.4, flow_k);
 	// Still water (a pond) takes more strokes than a river: its wash has no flow to carry the eye.
@@ -435,6 +492,15 @@ void fragment() {
 	}
 	float slope = max(length(grad), 0.06);
 	float d_h = column_raw / slope;
+	if (fieldv) {
+		// The true horizontal distance to the contour, smooth across triangles, and the bank's mean
+		// slope from it (depth over that distance: smooth too, where the triangle's own gradient
+		// jumps from one to the next).
+		// The contour follows the 0.25 m grid: a slow wobble in it breaks the straight, square runs
+		// of the ribbon into brush-edged ones.
+		d_h = max(v_f0.z + (p_noise(vec3(p.x * 3.0, 6.0, p.y * 3.0)) - 0.5) * LAP_WOBBLE_M, 0.0);
+		slope = clamp(max(v_f0.x, 0.0) / max(v_f0.z, 0.03), 0.06, 3.0);
+	}
 	float lap_w = p_foam_w * (0.8 + 0.25 * sin(TIME * 1.1 + p_noise(vec3(p.x * 0.3, 2.0, p.y * 0.3)) * 6.28));
 	float bite_n = p_noise(vec3(p.x * 2.6, floor(TIME * 0.5), p.y * 2.6));
 	float thr = lap_w * (0.4 + 0.75 * bite_n);
@@ -452,7 +518,9 @@ void fragment() {
 	float dashes = (1.0 - smoothstep(0.02, 0.08 + world_units_per_pixel, abs(d_h - outer))) * smoothstep(0.6, 0.76, dash_n) * dash_gate;
 	float shore_foam = max(lap, dashes) * ground_like * smoothstep(0.0, 0.01, column_raw + 0.004);
 	// Riffles: dense short dashes along the flow on fast, shallow water.
-	float rapid = smoothstep(0.18, 0.4, flow_speed) * (1.0 - smoothstep(0.25, 0.7, column));
+	// The field draws its riffles from its own energy: the baked flow map's swirls in a pool would draw
+	// contour lines here.
+	float rapid = fieldv ? 0.0 : smoothstep(0.18, 0.4, flow_speed) * (1.0 - smoothstep(0.25, 0.7, column));
 	if (rapid > 0.0) {
 		vec2 st = vec2(dot(p, dir) * 1.1, dot(p, across_dir) * 6.5);
 		float pulse = 0.5 + 0.5 * sin(TIME * 1.7 + be_n2(st * 0.6 + 7.0) * 6.28);
@@ -475,9 +543,33 @@ void fragment() {
 	edge_foam *= edge_band;
 	shore_foam *= edge_band;
 	float foam = clamp(max(max(shore_foam, edge_foam), max(ring_cov, wake_cov)) * foam_k, 0.0, 1.0);
-	// The fall white: the river's share of the brink's gradient, the pool's of the foot foam and its
-	// halo, which fades from the white to this wash (painter_fall_white.gdshaderinc).
-	foam = max(foam, fall_white_water(fall_a, fall_b, fall_xz));
+	if (fieldv) {
+		// White water from the field's energy, ONE shape over a riffle, an inflow, a brink, a face
+		// and a foot: bold soft blobs carried by the flow on the flat, long streaks running down a
+		// steep surface, thresholded by the energy (full white where it is 1).
+		// The energy's middle is pulled down (a power): a fall's foot foam keeps its bold patches
+		// near the fall and thins quickly, and a plunge pool is calm a metre or two away. A river's
+		// ramp into a lower pond (CUSTOM1.w) is a slope, not a fall: it keeps a fifth of its white.
+		float en = pow(clamp(v_f0.y * p_white, 0.0, 1.0), ENERGY_POWER);
+		en *= mix(1.0, RAMP_KEEP, step(0.75, v_f1.w));
+		float blob = flow_blobs(p, flow_ws, p_blob_m, 11.0) * 0.7 + flow_blobs(p, flow_ws, p_blob_m * 0.45, 23.0) * 0.3;
+		// Stretched linearly about its mean, so the energy's threshold cuts organic shapes, not its
+		// own isolines (the raw noise sits near 0.5 and drew straight bands across the channel). A
+		// smoothstep stretch saturated a third of it at 1, and any trace of energy lit those plateaus
+		// whole (ponds plastered with blobs).
+		blob = clamp((blob - 0.5) * 1.7 + 0.5, 0.0, 1.0);
+		vec2 st = vec2(dot(p, across_dir) * 3.2, world_pos.y * 0.45 + TIME * 1.6);
+		float streak = p_noise(vec3(st.x, st.y, 5.0)) * 0.75 + p_noise(vec3(st.x * 2.3, st.y * 1.7, 9.0)) * 0.25;
+		streak = clamp((streak - 0.5) * 1.7 + 0.5, 0.0, 1.0);
+		float pattern = mix(blob, streak, curtain);
+		// On the face the white thins to streaks over glass; the brink and the foot keep it full.
+		float en_c = mix(en, en * 0.62, curtain);
+		// White where the pattern stands over 1 - energy: all of it at 1, rare bold blobs at 0.3,
+		// none under a floor.
+		float cover = smoothstep(1.0 - en_c - 0.07, 1.0 - en_c + 0.07 + min(px, COVER_PX_MAX) * 2.0, pattern);
+		cover *= smoothstep(0.08, 0.2, en_c);
+		foam = max(foam, cover * smoothstep(0.0, 0.02, column_raw + curtain));
+	}
 	foam *= 1.0 - ice_k * 0.85 * (1.0 - open_water);
 	a = max(a, foam * 0.96);
 
