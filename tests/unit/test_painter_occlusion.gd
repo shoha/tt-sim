@@ -33,6 +33,30 @@ func test_disc_covers_its_middle_and_stops_past_its_reach() -> void:
 	assert_eq(_at(host, field, 3.25, 0.25), 0.0)
 
 
+func test_a_footprint_at_the_maps_edge_leaves_the_fields_rim_empty() -> void:
+	# The ground reads the field with a clamped edge: a footprint that reached the last row was
+	# repeated outward as a streak down the screen (card painter-trunk-streak).
+	var host := PainterOcclusion.new()
+	var extent := Vector2(49.0, 49.0)
+	var layout := PainterOcclusion.field_layout(extent)
+	host._origin = layout.position
+	host._size = Vector2i(roundi(layout.size.x), roundi(layout.size.y))
+	var field := PackedFloat32Array()
+	field.resize(host._size.x * host._size.y)
+	# A big crown's pool (nominal radius 4 m) standing on the map's far edge.
+	host._disc(field, 0.0, extent.y * 0.5, 4.0)
+	assert_gt(_at(host, field, 0.0, extent.y * 0.5), 0.9, "the disc is drawn at the edge")
+	assert_gt(_at(host, field, 0.0, extent.y * 0.5 + 4.0), 0.3, "and carries on past it")
+	var worst := 0.0
+	for i in host._size.x:
+		worst = maxf(worst, field[(host._size.y - 1) * host._size.x + i])
+		worst = maxf(worst, field[i])
+	for j in host._size.y:
+		worst = maxf(worst, field[j * host._size.x])
+		worst = maxf(worst, field[j * host._size.x + host._size.x - 1])
+	assert_eq(worst, 0.0, "no footprint reaches the rim the clamped edge would repeat")
+
+
 func test_disc_keeps_the_maximum_of_two() -> void:
 	var host := PainterOcclusion.new()
 	var field := _field(host, 16, 16)

@@ -39,6 +39,11 @@ const TEXEL_M := 0.5
 ## Seconds of quiet before a changed map's field is rebuilt (growth installs trees every frame).
 const REBUILD_DELAY_S := 0.3
 const MAX_TOKENS := 32
+## Metres of empty field kept round the map's extent. The shader samples the field with a clamped
+## edge, so a footprint cut by the field's last row (a tree near the map's edge) would be repeated
+## outward as a thin dark streak running off the map (card painter-trunk-streak); the margin holds
+## every footprint whole (a big crown's disc reaches about 4 m) and leaves the edge row empty.
+const EDGE_PAD_M := 8.0
 ## A scatter solid taller than this (metres) and than TREE_SLENDER of its crown's half width is a
 ## tree (a dead tree carries no leaf surface to tell it by): a crown's disc, not a box.
 const TREE_M := 2.0
@@ -186,8 +191,9 @@ func rebuild() -> void:
 	var extent: Vector2 = _surfaces.call("map_extent")
 	if extent.x <= 0.0 or extent.y <= 0.0:
 		return
-	_origin = -extent * 0.5
-	_size = Vector2i(ceili(extent.x / TEXEL_M), ceili(extent.y / TEXEL_M))
+	var layout := field_layout(extent)
+	_origin = layout.position
+	_size = Vector2i(roundi(layout.size.x), roundi(layout.size.y))
 	var pool := PackedFloat32Array()
 	var core := PackedFloat32Array()
 	pool.resize(_size.x * _size.y)
@@ -216,6 +222,14 @@ func rebuild() -> void:
 		material.set_shader_parameter(&"occ_step", TEXEL_M)
 		material.set_shader_parameter(&"occ_present", true)
 	_apply()
+
+
+## The field's layout for a map `extent` metres across: position the world (x, z) of its first
+## texel's corner, size its width and height in texels (the extent plus EDGE_PAD_M on every side).
+static func field_layout(extent: Vector2) -> Rect2:
+	var pad := Vector2(EDGE_PAD_M, EDGE_PAD_M)
+	var cells := ((extent + pad * 2.0) / TEXEL_M).ceil()
+	return Rect2(-extent * 0.5 - pad, cells)
 
 
 ## The painted trees and bushes: a pool under the crown's projection (centre halfway from the

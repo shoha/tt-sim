@@ -474,7 +474,10 @@ engine's ambient off, so nothing darkened the ground right under a crown, round 
 wall, or under a token's feet, and no trunk or stone was darker where it met the ground. Two parts
 (`PainterOcclusion`, `painter/painter_occlusion.gd`, owned by `PainterSurfaces`):
 
-- **The ground's contact field.** A CPU raster at 0.5 m a texel over the map's extent, RG8: r a POOL
+- **The ground's contact field.** A CPU raster at 0.5 m a texel over the map's extent plus
+  `EDGE_PAD_M` (8 m) of empty margin on every side (`field_layout`: the ground reads the field
+  with a clamped edge, so a footprint cut by the last row was repeated outward as a thin dark
+  streak running off the map below a tree near the edge; card painter-trunk-streak), RG8: r a POOL
   (a crown's projected disc, centred halfway from the trunk to the crown's middle, radius 0.5 of the
   crown's half width plus 0.5 m, for the trees the painter does not grow too; a bush's own disc grown
   a third; a rock's, log's or stump's oriented box rounded by its narrower half, from the scatter's
