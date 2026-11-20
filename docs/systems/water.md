@@ -716,8 +716,7 @@ A committed river stroke is cleaned once, at plan time, before the carve, so the
 legal river and Painted, Classic and every peer draw the same one (water_field.md "Conditioning"
 has the rules and numbers). `WaterEdit.plan_river` (switch `WaterEdit.conditioning_enabled`,
 default true; `condition` false plans as drawn) smooths the course within half a half-width
-of the drawn line (`WaterCourseFit`: a total cap, each station pulled back to it after thinning; the
-report's `max_disp` is the stored course against the drawn polyline), fits the reach levels so the water never climbs and steps only by whole
+of the drawn line (`WaterCourseFit`, the cap below), fits the reach levels so the water never climbs and steps only by whole
 falls (`WaterConditioner`: 5 cm lattice, water only lowered, dead band 0.25 m, reaches of at least
 2 m), joins an end that stops near other water (`WaterPorts.end_decision`: join, inflow, fall
 into, outlet), and keeps the stroke as drawn when conditioning would cut deeper than 1.5 m. The
@@ -730,6 +729,43 @@ a stroke. Documents load as drawn; `WaterEdit.refit_document` (`WaterRefit`: str
 downstream reversed by slope sign, the river and pond tree solved, the strokes carved again) and
 `WaterEditor.refit_water()` (one undoable history entry) clean a stored map. Starting landforms
 plan unconditioned (their digests are frozen).
+
+**The cap is a guarantee.** The stored course never strays further than half the stroke's
+half-width (`WaterCourseFit.MAX_DISP_PER_HALF_WIDTH`) from the line the Water tool handed
+`carve_river` (the pointer path after decimation and two Chaikin passes), measured one-sided as
+`WaterCourseFit.deviation()` (stored polyline to drawn polyline, sampled every 0.25 m) and
+reported as `max_disp`. Each stage can move the line (thinning, loop trimming, the smoothing
+solve, the resample to 2 m stations), so the cap is enforced last: stations are pulled back to it
+(`_clamp_to_drawn`) and then the chords between stations are held too (`hold_cap`: where a chord
+cuts a corner of the drawn line further than the cap, a station is added there, at 95 percent of
+the cap, until none does). Before this a hard zigzag (half-width 1.2 m, 5 m swings) stored 1.06 m
+against a 0.6 m cap, because the 2 m chord between two stations that each held the cap cut the
+corner between them. A hard zigzag now stays a zigzag (the swings are rounded, never straightened
+past the cap); a line that already holds is returned bit for bit. The cap is measured against the
+drawn half-width, not the carve's minimum (waist 1.33 m), so a thin stroke on a deep class is held
+tighter than the channel it digs.
+
+**Several strokes: conditioning is per stroke and never worse than off.** Each stroke is
+conditioned alone at plan time against the document as it is (the strokes before it, their
+ponds); stored levels are never revisited, so one stroke cannot make an earlier one climb. The
+rules that keep a map no worse than conditioning off: (1) a conditioned stroke's levels never
+climb downstream (`WaterConditioner.fit_levels`), so conditioning adds no audit rise
+(`WaterPorts.audit().rises`); (2) a stroke whose conditioning is blocked (it would cut a gorge,
+`WaterEdit.cut_limit_m`, 1.5 m), at the first plan or after an end was joined, is exactly the
+unconditioned plan (`_kept_as_drawn`): no smoothed course and no joined end ride along with levels
+as drawn, so its rises are the drawn ground's, equal to off; (3) end joins only snap within
+`WaterPorts.SNAP_PER_HALF_WIDTH` half-widths. Measured by `test_water_condition_multi.gd`
+(headless, no pixels): the verdict map of the integration run rebuilt through the same gesture
+path (new map seed 1234, the 11 tier strokes, 9 river strokes, 2 ponds, in order and reversed)
+and 20 random multi-stroke maps in both orders (tributaries that end in earlier water,
+continuations from an earlier end, runs out of and into ponds): rises 47 off, 0 on over the 40
+random maps (never more on any map), 9 and 15 on the verdict map both ways, equal to off, all on
+the one blocked stroke (a river drawn over three stacked tiers stays as drawn, flagged
+`over_hill`); bodies 354 off, 261 on. Field events are not a guarantee: over the 40 random maps
+film_run 46 -> 43, bridged_run 54 -> 60, end_near_water 3 -> 7 (a seed trades one for another, 14
+single increases, the largest bridged_run 3 -> 9), the test bounds the total within 10 percent of
+off's. A stroke noisier than its own cap can hold (hairpins and jitter at half-widths under 1 m)
+is kept as drawn, planned as with conditioning off.
 
 ## Open work
 

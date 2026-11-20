@@ -45,6 +45,9 @@ const COMPRESSION := FileAccess.COMPRESSION_ZSTD
 ## WaterPorts) unless this is false. On in every build; an A/B capture or a test of the drawn,
 ## unconditioned plan sets it false (render jobs: the `conditioning` flag).
 static var conditioning_enabled: bool = true
+## The deepest cut into the drawn ground a conditioned plan may ask of the carve before the stroke
+## is kept as drawn (WaterConditioner.CUT_LIMIT_M); a test or probe may change it.
+static var cut_limit_m: float = 1.5
 
 
 ## A copy of `doc`'s water model for history: {"bodies": Array[WaterBody] (deep copies),
@@ -165,6 +168,8 @@ static func plan_river(
 	var tail: Dictionary = ports.end_decision(
 		doc, bodies[-1].points[-1], bodies[-1].level_m, tail_hw, false, none
 	)
+	if bool(report.blocked):
+		return _kept_as_drawn(doc, points, half_widths, depth, speed, report, head, tail)
 	var line := points.duplicate()
 	var moved := false
 	for pair: Array in [[head, bodies[0].points[0]], [tail, bodies[-1].points[-1]]]:
@@ -176,12 +181,40 @@ static func plan_river(
 			moved = true
 	if moved:
 		var again := _plan(doc, line, half_widths, depth, speed, true, report)
+		if bool(report.blocked):
+			return _kept_as_drawn(doc, points, half_widths, depth, speed, report, head, tail)
 		if not again.is_empty():
 			bodies = again
 	var hints: Array = (report.get("fit_hints", []) as Array).duplicate()
 	hints.append_array(load(HINTS_PATH).plan_hints(PackedVector2Array(), {}, head, tail))
 	report["hints"] = hints
 	return bodies
+
+
+## The plan of a stroke whose conditioning was blocked (it would cut a gorge, see
+## WaterConditioner.CUT_LIMIT_M): exactly the unconditioned plan, so a blocked stroke is never
+## worse than conditioning off (neither a smoothed course nor a joined end rides along with the
+## levels as drawn), with the blocking hints and what the ends said (`head`, `tail`: end_decision
+## results, only said, never acted on).
+static func _kept_as_drawn(
+	doc: MapDocument,
+	points: PackedVector2Array,
+	half_widths: PackedFloat32Array,
+	depth: WaterBody.Depth,
+	speed: float,
+	report: Dictionary,
+	head: Dictionary,
+	tail: Dictionary
+) -> Array[WaterBody]:
+	report["max_disp"] = 0.0
+	report["level_moved"] = 0.0
+	var hints: Array = (report.get("fit_hints", []) as Array).duplicate()
+	for hint: Dictionary in load(HINTS_PATH).plan_hints(PackedVector2Array(), {}, head, tail):
+		# An end that was not snapped (the plan is as drawn) is not reported as snapped.
+		if hint.kind != &"end_snapped":
+			hints.append(hint)
+	report["hints"] = hints
+	return _plan(doc, points, half_widths, depth, speed, false, {})
 
 
 ## plan_river() once, without the end joins: `condition` runs the course and level fit.
@@ -244,7 +277,9 @@ static func _plan(
 		# The conditioning probe (WaterConditioner): levels that never climb, reaches pooled
 		# across steps under the dead band, levels on the 5 cm lattice.
 		var into := WaterGeometry.level_at(doc, course[-1], -1, courses)
-		var opts := {} if free_ends.y == 1 or into == WaterGeometry.DRY else {"pin_last": into}
+		var opts := {"cut_limit": cut_limit_m}
+		if free_ends.y == 0 and into != WaterGeometry.DRY:
+			opts["pin_last"] = into
 		var fit: Dictionary = load(CONDITIONER_PATH).condition_ranges(
 			course, ground, ranges, shaped.forced, opts, shaped.free
 		)
