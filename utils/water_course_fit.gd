@@ -12,7 +12,10 @@ extends RefCounted
 ## bends tighter than MIN_BEND_PER_WIDTH channel widths (up to four re-solves) and every point
 ## finally held within MAX_DISP_PER_HALF_WIDTH x its half-width of where it was drawn; widths
 ## median-of-3 filtered and slope-limited (WIDTH_SLOPE m per m); resample every
-## WaterEdit.RESAMPLE_M. A line the smoothing would move less than the clean tolerance is
+## WaterEdit.RESAMPLE_M; last, the cap is enforced on the result itself, stations and the chords
+## between them (hold_cap), so the stored course NEVER strays further than the cap from the drawn
+## polyline, whatever the stages before moved (deviation() measures it). A line the smoothing
+## would move less than the clean tolerance is
 ## returned unchanged bit for bit, so condition() of its own output is the identity in practice
 ## (measured in tests/unit/test_water_conditioner.gd).
 
@@ -29,6 +32,15 @@ const CLEAN_FLOOR_M := 0.05
 const CLEAN_PER_HALF_WIDTH := 0.1
 const WIDTH_SLOPE := 0.25
 const _PIN := 1.0e6
+## hold_cap(): rounds, the sampling along a chord (finer than deviation()'s 0.25 m, so what it
+## accepts also passes there), the slack over the cap it tolerates and how far inside the cap an
+## added station lands.
+const HOLD_PASSES := 40
+## An excess over the cap above this after the rounds sends the stroke back as drawn.
+const HOLD_TOLERANCE_M := 0.005
+const HOLD_SAMPLE_M := 0.05
+const HOLD_SLACK_M := 0.002
+const HOLD_PULL := 0.95
 
 
 ## `points` (map XZ, upstream first, one half-width per point in `widths`) conditioned (see the
@@ -121,8 +133,17 @@ static func condition(
 	# resample each move the line too. A station further than the cap from the drawn polyline is
 	# pulled back onto the cap.
 	out.widths = line[1]
-	_clamp_to_drawn(stations, points, out.widths, disp_k)
-	out.points = stations
+	# Holding the stations is not enough: a chord between two of them can cut a corner of the drawn
+	# line further than the cap (a hard zigzag at a 2 m station step), so the polyline itself is
+	# held, stations added where it strays (hold_cap).
+	var held := hold_cap(stations, out.widths, points, disp_k)
+	if max_excess(held[0], held[1], points, disp_k) > HOLD_TOLERANCE_M:
+		# Still strays after HOLD_PASSES rounds (a line far noisier than its own width): the
+		# guarantee wins over the cleaning, the stroke is kept as drawn.
+		out.bends_after = out.bends_before
+		return out
+	out.points = held[0]
+	out.widths = held[1]
 	out.changed = true
 	out.bends_after = _bends(out.points, out.widths, bend)
 	out.max_disp = deviation(out.points, points)
@@ -139,6 +160,74 @@ static func deviation(a: PackedVector2Array, b: PackedVector2Array) -> float:
 		for s in count + 1:
 			var p := a[i].lerp(a[i + 1], float(s) / count)
 			worst = maxf(worst, WaterGeometry.nearest_on_polyline(b, p).x)
+	return worst
+
+
+## `stations` (with `widths`) as a polyline that never strays further than `per_width` x its
+## half-width from the polyline `drawn`, whole chords included, not only the stations: where a chord
+## does, the worst point on it is added as a station pulled to 95 percent of the cap, until none
+## does (at most HOLD_PASSES rounds; each round halves what is left). The stations that hold keep
+## their places bit for bit, so a line that already held comes back unchanged. Returns
+## [points, widths].
+static func hold_cap(
+	stations: PackedVector2Array,
+	widths: PackedFloat32Array,
+	drawn: PackedVector2Array,
+	per_width: float
+) -> Array:
+	var pts := stations.duplicate()
+	var ws := widths
+	_clamp_to_drawn(pts, drawn, ws, per_width)
+	for _pass in HOLD_PASSES:
+		var next_pts := PackedVector2Array([pts[0]])
+		var next_ws := PackedFloat32Array([ws[0]])
+		var added := false
+		for i in pts.size() - 1:
+			var a := pts[i]
+			var b := pts[i + 1]
+			var count := maxi(1, ceili(a.distance_to(b) / HOLD_SAMPLE_M))
+			var worst := HOLD_SLACK_M
+			var at := Vector2.ZERO
+			var at_w := 0.0
+			for s in range(1, count):
+				var t := float(s) / count
+				var p := a.lerp(b, t)
+				var near := WaterGeometry.nearest_on_polyline(drawn, p)
+				var cap := per_width * lerpf(ws[i], ws[i + 1], t)
+				if near.y < 0.0 or near.x - cap <= worst:
+					continue
+				worst = near.x - cap
+				var foot := drawn[int(near.y)].lerp(drawn[int(near.y) + 1], near.z)
+				at = foot + (p - foot).normalized() * cap * HOLD_PULL
+				at_w = lerpf(ws[i], ws[i + 1], t)
+			if at_w > 0.0:
+				next_pts.append(at)
+				next_ws.append(at_w)
+				added = true
+			next_pts.append(b)
+			next_ws.append(ws[i + 1])
+		pts = next_pts
+		ws = next_ws
+		if not added:
+			break
+	return [pts, ws]
+
+
+## How far the polyline `pts` (with `ws`) leaves the cap of `per_width` x half-width around the
+## polyline `drawn`, at its worst (0 when it holds): the measure hold_cap() works to.
+static func max_excess(
+	pts: PackedVector2Array,
+	ws: PackedFloat32Array,
+	drawn: PackedVector2Array,
+	per_width: float
+) -> float:
+	var worst := 0.0
+	for i in pts.size() - 1:
+		var count := maxi(1, ceili(pts[i].distance_to(pts[i + 1]) / HOLD_SAMPLE_M))
+		for s in count + 1:
+			var t := float(s) / count
+			var near := WaterGeometry.nearest_on_polyline(drawn, pts[i].lerp(pts[i + 1], t))
+			worst = maxf(worst, near.x - per_width * lerpf(ws[i], ws[i + 1], t))
 	return worst
 
 

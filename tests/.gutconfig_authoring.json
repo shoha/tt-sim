@@ -208,6 +208,7 @@
 		"res://tests/unit/test_village_plaza_move.gd",
 		"res://tests/unit/test_village_tool.gd",
 		"res://tests/unit/test_water_carve.gd",
+		"res://tests/unit/test_water_condition_multi.gd",
 		"res://tests/unit/test_water_condition_pipeline.gd",
 		"res://tests/unit/test_water_conditioner.gd",
 		"res://tests/unit/test_water_distance.gd",
