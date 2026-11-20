@@ -22,16 +22,17 @@ The water it belongs to is [water.md](water.md); the bridge refusal is in
 | `utils/water_fall_plan.gd` | `WaterFallPlan` | Pure: the plan-time half: `is_uphill`, `orient`, `fine_profile`, `drop_runs`, `plan_lips`, `shape_line`; `FALL_SLOPE`, `SHOULDER_*`, `LIP_MARGIN_M`, `MERGE_M`, `SETBACK_REACHES`, `PLUNGE_WIDEN` |
 | `utils/water_edit.gd` | `WaterEdit` | `plan_river` runs the plan half in order; `join_line` treats face points as dry and moves an end on the face to the pool |
 | `utils/water_geometry.gd` | `WaterGeometry` | `reach_ranges(ground, max_drop, forced, free)`: lips as forced boundaries, face points free of the reach rule |
-| `utils/water_carve.gd` | `WaterCarve` | `bed_line(..., falls)`, `step_shape(..., full)`, `fall_shape`, `fall_profile`, `fall_foot`, `fall_gorge`; `CREST_M`, `FALL_LIP_M`, `FALL_LIP_WIDTH_M`, `FALL_BANK_SLOPE`, `FALL_BANK_REACH_M` |
+| `utils/water_carve.gd` | `WaterCarve` | `river_goals(doc, bodies, start, flags)` (the fall flags, derived by `WaterFalls.fall_flags` when empty, go into the `RiverProfile` it reads the course through), `step_shape(..., full)`, `fall_crest_depth`, `fall_shape`, `fall_profile`, `fall_foot`, `fall_gorge`, `section`, `blend_with_ground`; `CREST_M`, `FALL_LIP_M`, `FALL_LIP_WIDTH_M`, `FALL_BANK_SLOPE`, `FALL_BANK_REACH_M` |
+| `utils/river_profile.gd` | `RiverProfile` | The along-river profile `river_goals` carves from: `for_doc`, `build`, `at(s)` (bank, bed, gorge and sill shares at arc length s), `fall_at`, `field`, `stations` |
 | `utils/water_fall_mesh.gd` | `WaterFallMesh` | Pure: every fall's curtain, foam ring and mist in one mesh: `build`, `from_frames`, `crest_widths`, `trajectory`, `width_code`, `ring_radius`, `ring_centre`, `MESH_NAME`; the vertex contract is its header |
 | `utils/water_fall_frames.gd` | `WaterFallFrames` | Pure: one frame per fall (lip, direction, crest widths, `x_pool`, drop, and the traced columns the curtain is built from): `frames`, `frame`, `channels`, `window_distance`, `vertex_frame`, `vertex_channels`, `water_arc`, `curtain_arc`, `FORMAT`; the CUSTOM0/CUSTOM1 vertex contract is its header |
 | `utils/water_mesh_builder.gd` | `WaterMeshBuilder` | `cascades()` skips a fall, `fall_cells()` tucks the lip cells, `build()`'s `"falls"` and `"falls_aabb"` keys |
-| `scenes/terrain/authored_water.gd` | `AuthoredWater` | The `AuthoredWater-falls` instance, `fall_material()`, `warm_fall_material()`, `get_falls_instance()`, `FALLS_RENDER_PRIORITY` |
+| `scenes/terrain/authored_water.gd` | `AuthoredWater` | The `AuthoredWater-falls` instance, `fall_material()`, `warm_fall_material()`, `get_falls_instance()`, `FALLS_RENDER_PRIORITY`, `warmup_falls_document()`, `warmup_samples()` |
 | `shaders/waterfall.gdshader` | | The curtain / ring / mist shader, branching on COLOR.g |
 | `utils/water_glb_utils.gd` | `WaterGlbUtils` | `apply_water_settings()` forwards `FALL_SETTINGS_KEYS` onto the fall material |
 | `utils/water_dressing.gd`, `utils/water_flow_baker.gd` | `WaterDressing`, `WaterFlowBaker` | The face footprint as channel and wet samples |
 | `utils/crossing_placement.gd` | `CrossingPlacement` | `REFUSED_FALL`, `fall_near()` ([crossings.md](crossings.md)) |
-| `utils/graphics_warmup.gd` | `GraphicsWarmup` | The `"falls"` warm-up sample from `warmup_falls_document()`; the shader in `COVERED_SHADERS` |
+| `utils/graphics_warmup.gd` | `GraphicsWarmup` | The fall shader is in `COVERED_SHADERS` (the `"falls"` warm-up sample itself is `AuthoredWater.warmup_samples()`) |
 
 ## Model
 
@@ -252,8 +253,9 @@ sculpt stroke by a fall re-evaluates `is_fall` on the new ground, and sculpting 
 
 - **The fall carve (phase 4c, P4c-2 and P4c-2b, 2026-10-04):** a step `WaterFalls.fall_flags()`
   marks (the upper reach 0.75 m or more over the lower, the drop test alone: the ground is not
-  carved yet) is carved as a waterfall, not a riffle (`bed_line(..., falls)`, one byte per
-  shared point, passed through `WaterEditor.compute`). The pool tail still rises to the full
+  carved yet) is carved as a waterfall, not a riffle (`WaterCarve.river_goals(..., flags)`, one
+  byte per shared point, built into the `RiverProfile` the carve reads, and run through
+  `WaterEditor.compute`). The pool tail still rises to the full
   crest (`CREST_M` 5 cm under the upper level whatever the depth: `step_shape(..., full)`
   skips the small-step `CREST_RISE_PER_DROP` rule, so a fall is never a low bar; since card
   painter-fall-lip the crest is `fall_crest_depth()`, the channel's depth up to 12 cm). The
@@ -280,7 +282,7 @@ sculpt stroke by a fall re-evaluates `is_fall` on the new ground, and sculpting 
   `fall_foot(drop, depth)` = `fall_run`(drop + `CREST_M` + depth + plunge depth) along the
   lower course from the lip (about 2.0 m for a tier-high waist fall, 2.5 m for a 3.4 m ankle
   fall), and shallows back to the bed over `plunge_length()`; the end taper carries a plunge
-  pool past its lift (`bed_line` scales it with the depth left) instead of filling it in. The
+  pool past its lift (`RiverProfile.at()` scales it with the depth left) instead of filling it in. The
   bank level follows the same profile a crest's height above the bed and is clamped at the
   lower level, so the face runs straight across the whole cut and under the lower level runs
   on down to the plunge bed through the channel's steepened shore (the plan's bank stepping
@@ -292,7 +294,7 @@ sculpt stroke by a fall re-evaluates `is_fall` on the new ground, and sculpting 
   (the fade before it still `BANK_FADE_M`), blended by `gorge` = `fall_gorge(x, drop, depth)`:
   1 from the lip to the foot, fading to 0 over the plunge length with the basin, so the rock
   bowl at the foot opens into the pool's ordinary banks, and above the lip rising with the
-  pool tail. `bed_line` returns Vector3(bank, bed, gorge), and `section()` and
+  pool tail. `RiverProfile.at()` returns Vector4(bank, bed, gorge, sill), and `section()` and
   `blend_with_ground()` take `gorge` (default 0: a riffle's banks are byte-identical to
   before). Measured on the hillside notch: rock outside the water under one channel width per
   side, two tight notches on the flank and no dome; the tier chute unchanged. Over a Tier
