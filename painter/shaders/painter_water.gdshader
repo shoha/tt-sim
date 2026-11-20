@@ -10,18 +10,6 @@ shader_type spatial;
 #define RED_F
 #define RED_G
 #define RED_I
-// The foot rules (cards painter-water-foot-spike and painter-water-foot2): the foot coordinate's
-// fetch, the white floor and tongues (R3), the narrow-pool and bank-lap fixes, and foot2's softer
-// veil, drifting tongue tips and depth-proportional pool floor. The probe's `defs` action can
-// switch one off with "-NAME" (an #undef after these).
-#define FOOT_ANY
-#define FOOT_R3
-#define FOOT_FIX
-#define FOOT2_GATE
-#define FOOT2_VEIL
-#define FOOT2_TONGUE
-#define FOOT2_POOL
-#define FOOT2_LAP
 //ABL_DEFS
 render_mode blend_mix, depth_draw_opaque, cull_back, specular_disabled, ambient_light_disabled;
 
@@ -171,21 +159,19 @@ vec4 fld_cubic(sampler2D t, vec2 tc) {
 }
 
 const float FLOW_DROP_K = 0.5;
-// The foot rule: the metres of face above the foot and of plunge pool below it the rules reach.
-const float FOOT_FACE_M = 1.5;
-const float FOOT_POOL_M = 1.6;
-// foot2: the veil's reach below the foot (m), the depth the pool floor follows (column per metre of
-// depth), and the slot (s) a tongue's length holds before it drifts to its next.
-const float FOOT_VEIL_M = 3.0;
-const float FOOT_SLAB_M = 1.1;
-const float POOL_DEPTH_K = 5.0;
+// The foot rule (cards painter-water-foot-spike, -foot2, -foot3): the metres of face above the foot
+// the rules reach, the veil's reach below the foot (m: short, so a calm pool of blue shows at the foot
+// at every zoom), the longest tongue of white below it (m), the seconds a tongue's length takes to
+// drift, and the depth the pool floor follows (column per metre of depth).
+const float FOOT_FACE_M = 1.6;
+const float FOOT_VEIL_M = 1.9;
+const float FOOT_TONGUE_M = 0.45;
 const float FOOT_DRIFT_S = 9.0;
-// R3: the longest tongue of white below the foot (m).
-const float FOOT_TONGUE_M = 0.7;
-// R1: the energy the foot holds.
-const float FOOT_ENERGY = 0.95;
-// R2: the wash column (m) the face and the foot's pool share at the foot (the deep band).
-const float FOOT_COLUMN_M = 1.1;
+// The tongues' noise frequency across the flow (per metre) and the most white the floor holds: under
+// one, so the blobs' pattern mottles it and the pool's blue shows between the tongues.
+const float FOOT_TONGUE_FREQ = 1.6;
+const float FOOT_FILL_MAX = 0.7;
+const float POOL_DEPTH_K = 9.0;
 // Under option 2: the speed (u per second) the whites travel along the flow coordinate.
 const float FLOW_C = 1.1;
 // Under option 4: pool tint floor (a column, m) where the shore is far and the water has body.
@@ -215,10 +201,12 @@ const float COVER_PX_MAX = 0.04;
 // The half width of the white's edge in pattern units, on the flat and on a fall's face: crisp
 // enough that a foot's blobs read as shapes, not ghost rings.
 const float FOAM_EDGE = 0.05;
-const float FACE_EDGE = 0.035;
+const float FACE_EDGE = 0.055;
 // The field's shore ribbon wobble (m), and the alpha a film of a few centimetres keeps (a film is
 // water over the dug bed, not a ghost of it: the share of the deepest alpha).
 const float LAP_WOBBLE_M = 0.16;
+// How far (m) the steep bank's smoothed waterline samples the shore distance on each side.
+const float LAP_SMOOTH_M = 0.4;
 const float FILM_ALPHA = 0.8;
 const float FILM_COLUMN_M = 0.5;
 
@@ -498,36 +486,25 @@ if (fieldv) {
 	// pool), foot_v 1 where the field holds one. ONE coordinate shared by the face and the pool, so
 	// no rule ends on a line: the rules below are smooth functions of it.
 	float fd = 9.0;
-	float foot_v = 0.0;
-#ifdef FOOT_ANY
-#ifdef FOOT2_GATE
+	float foot_in = 0.0;
+	float foot_w = 0.0;
 	// The mesh flags the vertices within the foot's range (CUSTOM1.z): the fetch is made only there,
 	// whatever the energy, so the plunge pool of a fall into a pond (no energy of its own) has a foot.
 	if (fieldv && v_f1.z > 0.02) {
-#else
-	if (fieldv && (fa.w > 0.02 || fa.y > 0.04)) {
-#endif
 		vec4 fbf = texture(fld_b, ((v_mp - fld_origin) * fld_inv_step + 0.5) / fld_dim);
-		foot_v = smoothstep(0.2, 0.9, fbf.a);
+		float foot_v = smoothstep(0.2, 0.9, fbf.a);
 		fd = fbf.b / max(fbf.a, 0.001);
+		// The white floor is whole 0.3 m above the foot (a lower face of broken water, not a glass
+		// window with columns reaching the foot): the foot's last stretch holds no column edge to step
+		// across. The line it starts on is broken by a slow noise across the flow (a straight band
+		// reads as a slab).
+		float fd_in = fd + (p_noise(vec3(dot(p, across_dir) * 1.3, 3.0, 8.0)) - 0.5) * 0.5;
+		foot_in = smoothstep(-FOOT_FACE_M, -0.2, fd_in) * foot_v;
+		// The veil reaches FOOT_VEIL_M below the foot and fades over all of it (the squared smoothstep:
+		// a soft tail, no edge to cross).
+		float veil_t = 1.0 - smoothstep(-0.2, FOOT_VEIL_M, fd);
+		foot_w = foot_in * veil_t * veil_t * (3.0 - 2.0 * veil_t);
 	}
-#endif
-#ifdef FOOT2_VEIL
-	// The white floor is whole 0.4 m above the foot (a lower face of broken water, not a glass window
-	// with columns reaching the foot): the foot's last stretch holds no column edge to step across.
-	float foot_in = smoothstep(-FOOT_FACE_M, -0.4, fd) * foot_v;
-#else
-	float foot_in = smoothstep(-FOOT_FACE_M, 0.0, fd) * foot_v;
-#endif
-	float foot_out = (1.0 - smoothstep(0.0, FOOT_POOL_M, fd)) * foot_v;
-#ifdef FOOT2_VEIL
-	// The veil reaches FOOT_VEIL_M below the foot and fades over all of it (the squared smoothstep: a
-	// long soft tail, no edge to cross).
-	float veil_t = 1.0 - smoothstep(-0.2, FOOT_VEIL_M, fd);
-	float foot_w = foot_in * veil_t * veil_t * (3.0 - 2.0 * veil_t);
-#else
-	float foot_w = foot_in * (1.0 - smoothstep(0.0, FOOT_POOL_M, fd));
-#endif
 	float curtain = 0.0;
 	float path_k = 1.0;
 	if (fieldv) {
@@ -552,31 +529,14 @@ if (fieldv) {
 if (fieldv && (shade_opt & 4) != 0) {
 	// A pool (water with body, far from every bank) reads deep like main's: the pale shallow band
 	// belongs to the rim, not to the middle of a 0.3 m pool.
-#ifdef FOOT_FIX
 	// A narrow pool (a stream's lower pool, a metre across) has no middle 0.5 m from every bank: the
-	// floor engages from a rim of 0.15 m, so it reads deep like the wide ones.
-	float pool_k = smoothstep(0.08, 0.4, fa.z) * smoothstep(0.02, 0.08, fa.x) * (1.0 - curtain);
-#else
-	float pool_k = smoothstep(0.5, 1.4, fa.z) * smoothstep(0.08, 0.25, fa.x) * (1.0 - curtain);
-#endif
-#ifdef FOOT2_POOL
-	// The floor follows the water's own depth (a column per metre of depth, up to the pool's): a
-	// 0.15 m stream pool reads mid, a metre reads deep, a lip's few centimetres stay shallow, so the
-	// floor no longer steps the lip.
-	column = max(column, min(max(fa.x, 0.0) * POOL_DEPTH_K, POOL_COLUMN_M) * pool_k);
-#else
-	column = max(column, POOL_COLUMN_M * pool_k);
-#endif
+	// floor engages from a rim of a few centimetres, so it reads deep like the wide ones.
+	float pool_k = smoothstep(0.04, 0.3, fa.z) * smoothstep(0.02, 0.08, fa.x) * (1.0 - curtain);
+	// The floor follows the water's own depth (a column per metre of depth past the first 6 cm, up to
+	// the pool's): a 0.17 m stream pool already reads deep, a lip's few centimetres stay shallow, so
+	// the floor does not step the lip and thin water by a bank keeps its pale rim.
+	column = max(column, min(max(fa.x - 0.06, 0.0) * POOL_DEPTH_K, POOL_COLUMN_M) * pool_k);
 }
-#ifdef FOOT_R2
-{
-	// Colour continuity: the face's glass takes the pool's deep colour towards the foot and the pool
-	// keeps it for a metre below (the bicubic depth dips where the face's thin sheet meets the plunge
-	// pool: a pale band), then lets its own depth decide. Energy only lightens it.
-	float hold = foot_in * (1.0 - smoothstep(0.6, FOOT_POOL_M + 0.8, fd));
-	column = mix(column, max(column, FOOT_COLUMN_M), hold);
-}
-#endif
 	// Where a river leaves the map the terrain's bed and the channel patch's meet in a crease: the low
 	// column there drew a row of white dabs (the depth-slope wrap), a vertical strip of ice rim and a
 	// dip in the wash's alpha across the river (painter-edges2). The shore effects keyed to a shallow
@@ -609,7 +569,7 @@ if (fieldv && (shade_opt & 4) != 0) {
 	if (fieldv) {
 		// The waterline is the depth's zero contour: fade over its first centimetres of horizontal
 		// distance too, so a steep bank does not end the wash on a hard line.
-		shoreline = min(smoothstep(0.0, 0.035, fa.x), smoothstep(0.0, 0.1, fa.z));
+		shoreline = min(smoothstep(0.0, 0.05, fa.x), smoothstep(0.0, 0.14, fa.z));
 		wash_a = max(wash_a, p_opacity * FILM_ALPHA * (1.0 - smoothstep(0.045, 0.1, fa.x)));
 		// The thin water a bank sheds (CUSTOM1.w 0.5, WaterField's spill beyond the channel) draws
 		// from a few centimetres' depth: it read as a pale shelf standing out from the bank.
@@ -737,14 +697,11 @@ if (fieldv && (shade_opt & 4) != 0) {
 		a = max(a, lb.x * live * 0.95);
 	}
 	x = mix(x, p_shade, crack * 0.7);
-#ifdef FOOT_R3
-	{
-		// The plunge's wash: aerated water, a milky veil over the lower face and the pool below the
-		// foot, strongest at the foot and gone by FOOT_POOL_M, the same coordinate the glass colour uses.
-		x = mix(x, mix(p_lit, p_foam, 0.4), foot_w * 0.5);
-		a = max(a, foot_w * 0.85);
-	}
-#endif
+	// The plunge's wash: aerated water, a milky glaze over the lower face and the pool below the foot,
+	// strongest at the foot and gone by FOOT_VEIL_M, the same coordinate the glass colour uses. It
+	// tints and thickens the water but never covers it: the pool's blue stays under it.
+	x = mix(x, mix(p_lit, p_foam, 0.4), foot_w * 0.3);
+	a = max(a, foot_w * 0.6);
 
 	// ---- Whites -----------------------------------------------------------------------------
 	float foam_k = clamp(foam_strength, 0.5, 1.5);
@@ -784,37 +741,39 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// On a steep bank the gradient (and so d_h) jumps from one mesh triangle to the next: the lap's
 	// edge softens there, so it reads as a brushed edge and not a row of crisp triangles.
 	float steep = smoothstep(0.5, 1.3, slope);
-#ifdef FOOT_FIX
+	if (fieldv) {
+		// The smoothed waterline beside the exact one: the signed shore distance averaged over a cross of
+		// taps LAP_SMOOTH_M out. Exact on a straight bank, it rounds a ledge's corner and drops a thin
+		// shelf's finger (the average goes negative there: no lap, the water still fades by its depth),
+		// so the lap is a brushed band and not the claws of a ledge's own contour. The exact distance
+		// still drives the wash, the fade and the pool floor.
+		vec2 tcs = (v_mp - fld_origin) * fld_inv_step + 0.5;
+		vec2 r = LAP_SMOOTH_M * fld_inv_step;
+		float zs = 0.25 * (
+			texture(fld_a, (tcs + vec2(r.x, 0.0)) / fld_dim).b
+			+ texture(fld_a, (tcs - vec2(r.x, 0.0)) / fld_dim).b
+			+ texture(fld_a, (tcs + vec2(0.0, r.y)) / fld_dim).b
+			+ texture(fld_a, (tcs - vec2(0.0, r.y)) / fld_dim).b
+		);
+		d_h = zs + (d_h - fa.z);
+	}
 	// The foam's width and softness follow the bank's slope smoothly (it came from a steep/flat
 	// switch): a steep bank's grid-wide steps of waterline are brushed out, not drawn as blocks.
-#ifdef FOOT2_LAP
 	// With the exact waterline a steep bank's lap follows the terrain's triangles: a wider soft edge
 	// and a larger, slower break of the distance, so the lap is a brushed band, not a zigzag line.
 	float lap_soft = 0.03 + 0.32 * steep;
 	d_h += (p_noise(vec3(p.x * 1.3, 9.0, p.y * 1.3)) - 0.5) * 0.5 * steep;
-#else
-	float lap_soft = 0.03 + 0.2 * steep;
-	d_h += (p_noise(vec3(p.x * 1.7, 9.0, p.y * 1.7)) - 0.5) * 0.3 * steep;
-#endif
-#else
-	float lap_soft = 0.1 * steep;
-#endif
 	float lap = (1.0 - smoothstep(thr - 0.03 - lap_soft, thr + 0.02 + lap_soft, d_h)) * smoothstep(0.0, 0.03, d_h + 0.02);
 	float dash_n = p_noise(vec3(p.x * 3.1, 4.0 + floor(wt() * 0.4), p.y * 3.1));
 	float outer = lap_w * 1.5;
 	// The outer dashes sit on a gently sloped shore only: on a steep bank they broke into small
 	// glitter triangles (cards painter-edges, painter-water-edge3), so they are cut off from a
 	// slope of 0.9 (a bank about 42 degrees steep) and soft dabs, not crisp ticks, before it.
-	float dash_gate = 1.0 - smoothstep(0.35, 0.9, slope);
-#ifdef FOOT2_LAP
 	// The exact waterline follows the terrain's own triangles, so on a rough bank a crisp tick at a
 	// fixed distance from it draws a zigzag: the dashes are soft dabs (wide edge), and they stand
 	// only on a gentle shore (gate from a slope of 0.25).
-	dash_gate = 1.0 - smoothstep(0.25, 0.7, slope);
+	float dash_gate = 1.0 - smoothstep(0.25, 0.7, slope);
 	float dashes = (1.0 - smoothstep(0.03, 0.2 + world_units_per_pixel, abs(d_h - outer))) * smoothstep(0.6, 0.76, dash_n) * dash_gate;
-#else
-	float dashes = (1.0 - smoothstep(0.02, 0.08 + world_units_per_pixel, abs(d_h - outer))) * smoothstep(0.6, 0.76, dash_n) * dash_gate;
-#endif
 	shore_foam = max(lap, dashes) * ground_like * smoothstep(0.0, 0.01, column_raw + 0.004);
 	if (fieldv) {
 		// The thin water a bank sheds and a river's ramp into a pond (CUSTOM1.w 0.5 and 1) is a wet
@@ -870,64 +829,34 @@ if (fieldv && (shade_opt & 4) != 0) {
 		// near the fall and thins quickly, and a plunge pool is calm a metre or two away. A river's
 		// ramp into a lower pond (CUSTOM1.w) is a slope, not a fall: it keeps a fifth of its white.
 		float e_raw = fa.y;
-#ifdef FOOT2_LAP
 		// The slope-white of a thin shelf at a bank's waterline (the exact waterline reaches the ledge
 		// the 0.25 m grid used to cut off) is not a fall: it fades over the first 0.35 m from the shore.
 		e_raw *= smoothstep(0.04, 0.35, max(fa.z, 0.0));
-#endif
-#ifdef FOOT_R1
-		// Energy as one smooth function of the arc from the foot: the face's white holds to the foot
-		// and the plunge's decays from it over FOOT_POOL_M (the stroke's own table splits face and
-		// foot at the fall's landing, short of the foot on a tall fall).
-		e_raw = max(e_raw, foot_v * FOOT_ENERGY * smoothstep(-0.6, 0.0, fd) * (1.0 - smoothstep(0.0, FOOT_POOL_M, fd)));
-#endif
 		float en = pow(clamp(e_raw * p_white, 0.0, 1.0), ENERGY_POWER);
 		// On the face the white thins to streaks over glass; the brink and the foot keep it full.
 		float en_c = mix(en, en * 0.62, curtain);
-#ifdef FOOT_R3
-		// A white floor on the lower face: the sheet breaks into foam towards the foot.
-		// Its reach below the foot is each column's own length (the same columns as the face's
-		// tongues), so the white ends in rounded tongues of different lengths, not a line.
+		// A white floor on the lower face: the sheet breaks into foam towards the foot, and its reach
+		// below the foot is a tongue length that varies smoothly across the flow (a value noise, not a
+		// hash per column: a hash steps between columns and its edge ends in cusps) and drifts on the
+		// master clock, so the white ends in rounded tongues of different lengths that are never fixed
+		// in place. The edge is wide: the white thins into the veil, it does not end on a line.
 		float fill = 0.0;
 		if (foot_in > 0.0) {
 			float cu = dot(p, across_dir);
 			cu += (p_noise(vec3(cu * 0.5, uf * 0.45, 4.0)) - 0.5) * 0.6;
-			cu *= 3.6;
-			float edge_r = abs(fract(cu) - 0.5) * 2.0;
-			// Round tips: a column ends shorter at its sides than in its middle.
-#ifdef FOOT2_TONGUE
-			// Each column's length drifts slowly on the master clock (a smooth blend of two hashes, a
-			// slot of FOOT_DRIFT_S each), so the tips are never fixed in place; the edge softens with the
-			// distance from the foot: the white thins into the veil over a metre and a half, not a line.
-			float slot = wt() / FOOT_DRIFT_S + be_hash(vec2(floor(cu), 1.3));
-			float k0 = floor(slot);
-			float hk = mix(
-				be_hash(vec2(floor(cu), 3.7 + k0 * 5.3)),
-				be_hash(vec2(floor(cu), 3.7 + (k0 + 1.0) * 5.3)),
-				smoothstep(0.0, 1.0, fract(slot))
-			);
-			float tip = (0.1 + FOOT_TONGUE_M * hk) * (1.0 - 0.55 * edge_r * edge_r);
-			// Softer still towards a column's sides, so neighbouring tongues melt into one another.
-			fill = foot_in * (1.0 - smoothstep(tip - 0.5, tip + 0.9 + 0.9 * edge_r * edge_r, fd));
-#ifdef FOOT2_SLAB
-			// The hybrid reading of main's curtain: a slab of white of nearly one length that fades out
-			// over a metre and a half, the columns' own lengths only nudging it.
-			tip = FOOT_SLAB_M * (0.7 + 0.3 * hk) * (1.0 - 0.25 * edge_r * edge_r);
-			fill = foot_in * (1.0 - smoothstep(tip - 0.9, tip + 1.2, fd));
-#endif
-#else
-			float tip = (0.1 + FOOT_TONGUE_M * be_hash(vec2(floor(cu), 3.7))) * (1.0 - 0.55 * edge_r * edge_r);
-			fill = foot_in * (1.0 - smoothstep(tip - 0.4, tip + 0.05, fd));
-#endif
+			float hn = p_noise(vec3(cu * FOOT_TONGUE_FREQ, wt() / FOOT_DRIFT_S, 7.0));
+			float hk = clamp((hn - 0.5) * 1.9 + 0.5, 0.0, 1.0);
+			float tip = 0.05 + FOOT_TONGUE_M * hk;
+			fill = foot_in * (1.0 - smoothstep(tip - 0.3, tip + 0.35 + 0.3 * hk, fd));
 		}
-		en_c = max(en_c, fill * 0.9);
-#endif
+		float en_e = en_c;
+		en_c = max(en_c, fill * FOOT_FILL_MAX);
 		// Under the floor (the cover below) nothing is white: the noises are not read there, which is
 		// most of a pond and a river.
 #ifdef ABL_NOWHITE
 		if (false) {
 #else
-		if (en_c > 0.08) {
+		if (en_c > 0.08 || foot_w > 0.03) {
 #endif
 		// One clock (S2): the blobs travel along the flow coordinate at one speed (still where the
 			// field has no stroke: a pond's white boils in place), as the streaks and tongues do.
@@ -941,10 +870,6 @@ if (fieldv && (shade_opt & 4) != 0) {
 			}
 #endif
 			vec2 bq = one_clock ? vec2(uf, dot(p, across_dir)) : p;
-#ifdef FOOT_R1
-			// Below the foot the blobs stretch along the flow into tongues.
-			bq.x /= 1.0 + 1.2 * foot_out;
-#endif
 			vec2 bf = one_clock ? vec2(FLOW_C * has_u, 0.0) : flow_ws;
 			float c_face = (shade_opt & 4) != 0 ? smoothstep(0.1, 0.5, curtain) : curtain;
 			// The pattern is mix(blob, streak, c_face) then mixed with the tongues by the curtain: a
@@ -1005,27 +930,22 @@ if (fieldv && (shade_opt & 4) != 0) {
 			float run = p_noise(vec3(id * 1.7, 2.0, v_f * 0.35 - wt() * 0.5));
 			pattern = mix(pattern, across * (0.35 + 0.65 * hh.x) * (0.5 + 1.0 * run), curtain);
 		}
-#ifdef FOOT_R3
 		// The columns' gaps fill with white as they near the foot.
-		pattern = mix(pattern, 1.0, fill * 0.85);
-#endif
+		pattern = mix(pattern, 1.0, fill * 0.4);
 		// White where the pattern stands over 1 - energy: all of it at 1, rare bold blobs at 0.3,
-		// none under a floor.
-#ifdef FOOT2_TONGUE
-		// Where the foot's white floor stands its edge is a wide gradient (the white fades out, it
-		// does not end).
-		edge_w = max(edge_w, 0.3 * smoothstep(0.0, 0.3, fill));
-#endif
+		// none under a floor. Where the foot's white floor stands its edge is a wide gradient (the
+		// white fades out, it does not end).
+		// The veil's reach keeps it soft too: the foot's last blobs melt into the pool, they do not end
+		// on a crisp edge.
+		edge_w = max(edge_w, 0.3 * smoothstep(0.0, 0.5, max(fill, foot_w * 0.8)));
 		float cover = smoothstep(1.0 - en_c - edge_w, 1.0 - en_c + edge_w + min(px, COVER_PX_MAX) * 2.0, pattern);
-		cover *= smoothstep(0.08, 0.2, en_c);
-#ifndef FOOT_R1
-			if ((shade_opt & 4) != 0) {
-				// The plunge's white is graded by the field's own smooth energy (bicubic: no grid, no
-				// blob edge to cross): full white at the foot, fading to blue with the energy, so the
-				// pool's luminance does not step where a blob edge happens to fall.
-				cover = max(cover, smoothstep(0.5, 0.95, en) * 0.9 * (1.0 - smoothstep(0.6, 1.0, curtain)));
-			}
-#endif
+		// The floor of the energy under which nothing is white; the foot's fade is read down to a few
+		// percent (a gradual thinning into mottled mist, not a cut).
+		cover *= smoothstep(0.08 * (1.0 - smoothstep(0.0, 0.3, foot_w)), 0.2, en_c);
+		// The white the floor adds thins out by the floor's own fade (a smooth ramp over its whole
+		// reach, where the threshold above would cut it in a tenth of it): translucent white tongues
+		// over the pool's blue, not a slab with an edge. The field's own energy keeps its blobs.
+		cover *= mix(1.0, max(smoothstep(0.0, 0.9, fill), smoothstep(0.1, 0.5, en_e)), foot_in);
 		foam = max(foam, cover * smoothstep(0.0, 0.02, column_raw + curtain));
 		}
 	}

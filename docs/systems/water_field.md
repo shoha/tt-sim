@@ -85,8 +85,9 @@ per sample, shared by every cell, a ring of buried cells at the edge); `PainterW
 (`painter/painter_water_field.gd`, owned by `PainterWater`) hosts it per painted map and redoes a
 dirty rect per edit (`ground_edited`, `AuthoredWater.refreshed`, `rect_of_bodies`; the mesh is
 rebuilt whole, about 50 ms). Vertex contract: CUSTOM0 = (depth, energy, shore distance, steep),
-CUSTOM1 = (river share, FIELD_FLAG -7, ground height, spill mark: 1 a ramp into a pond, 0.5 a bank's
-thin spill, 0.125 a film). The shader (`painter_water.gdshader`, field branch) reads those instead of
+CUSTOM1 = (river share, FIELD_FLAG -7, foot flag: 1 within `WaterFieldStroke.FOOT_RANGE_M` of a
+fall's foot (the shader fetches the foot coordinate only there), spill mark: 1 a ramp into a pond,
+0.5 a bank's thin spill, 0.125 a film). The shader (`painter_water.gdshader`, field branch) reads those instead of
 the depth buffer, so the wash, the shoreline, the lap and the white are the model's.
 
 White water is one shape language over the surface: bold flow-carried blobs on the flat
@@ -109,6 +110,35 @@ Known against main (verdict frames and `metrics.jsonl` in
 f1_t and f1_z show a few holes on the face glass, st_o's lower pool is shallow water (0.15 to
 0.5 m) so it reads pale teal where main reads deep blue, and the GPU cost is +0.09 ms at the fall
 close view and +0.06 ms wide.
+
+## The exact waterline and the foot rules (cards painter-water-foot2 and -foot3, look-pending, unmerged)
+
+The exact waterline: `WaterField.ew` is the surface height per sample as the mesh draws it, and with
+`WaterField.exact_shore` (a static switch, on) `shore` is the signed distance to the zero contour of
+the depth along grid edges (`WaterFieldContour`, marching triangles), so a bank fades on the terrain's
+own line and not the 0.25 m grid's. The mesh's y is `ew`, the depth texture's `fld_a.r` is
+`ew - ground` on wet samples (dry ones hold `DEPTH_FLOOR`). Update equals build bit for bit with `ew`.
+
+The foot coordinate: `WaterField.foot` is the signed arc distance to the nearest fall's foot (negative
+on the face, positive in the plunge pool), written within `FOOT_RANGE_M` (4 m) of it and across the
+pond samples a plunge lands on (a pond has no stroke to own them). It is divided by
+`clamp(drop / FOOT_DROP_REF, FOOT_SCALE_MIN, 1)` (3 m, 0.45), so the shader's rules, fixed lengths in
+the coordinate, are shorter in metres on a low fall. It rides `fld_b.b` premultiplied by its weight
+`fld_b.a` (divided back in the shader), gated by the mesh flag CUSTOM1.z.
+
+The shader's foot rules, all smooth functions of it (no rule ends on a line): the lower face's white
+floor ramps in over `FOOT_FACE_M` above the foot (its line broken by a slow noise), the tongues below
+the foot are a smooth value noise across the flow (`FOOT_TONGUE_FREQ`, length up to `FOOT_TONGUE_M`)
+that drifts on the master clock (`FOOT_DRIFT_S`), the veil (a milky glaze that tints and thickens the
+water, never covers it) reaches `FOOT_VEIL_M` and the white's edge is widened over its whole reach, so
+a calm pool shows blue at the foot. The pool's tint floor follows the water's own depth
+(`POOL_DEPTH_K` column per metre past 6 cm) so a thin stream pool reads deep and a lip stays shallow.
+The lap ribbon reads the signed shore distance averaged over a cross of taps `LAP_SMOOTH_M` out (it
+rounds a ledge's corner and drops a thin shelf's finger: the claws the exact contour drew), the exact
+one still drives the wash, fade and floor. Known: the dL guardrail at the foot is 2 to 3 times main's
+(the white-to-pool transition is a shape, not a plateau), the lip's is 1.2 to 2 times; a straight pit
+edge in a stream's pool (st_o, stpool_z3) is the terrain's (the tier sculpt's rectilinear cliff, the dry
+capture shows it), not the field's or the shader's.
 
 ## Debug
 

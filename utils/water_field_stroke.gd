@@ -30,6 +30,10 @@ const BRIDGE_M := 2.1
 ## value outside it.
 const FOOT_RANGE_M := 4.0
 const NO_FOOT := 99.0
+## The drop (m) whose fall the shader's foot rules are written for, and the least a low fall's
+## coordinate is divided by (the rules' lengths shrink to this share of themselves).
+const FOOT_DROP_REF := 3.0
+const FOOT_SCALE_MIN := 0.45
 
 
 ## The stroke's level, white-water `energy` and brink-and-face `core` white every TABLE_STEP
@@ -72,9 +76,15 @@ static func table(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
 	foot.fill(NO_FOOT)
 	for fall in profile.falls:
 		var foot_s := float(fall.foot)
+		# The coordinate is stretched by the fall's own height (card painter-water-foot3): the shader's
+		# rules (the white floor above the foot, the tongues and the veil below it) are fixed lengths in
+		# the coordinate, so a low fall's get shorter in metres and a pool of calm blue shows at its foot
+		# at every size, where a tall fall keeps the full rules.
+		var k := clampf(float(fall.drop) / FOOT_DROP_REF, FOOT_SCALE_MIN, 1.0)
 		for t in count:
-			var d := t * TABLE_STEP - foot_s
-			if absf(d) < FOOT_RANGE_M and (foot[t] > NO_FOOT * 0.5 or absf(d) < absf(foot[t])):
+			var real := t * TABLE_STEP - foot_s
+			var d := real / k
+			if absf(real) < FOOT_RANGE_M and (foot[t] > NO_FOOT * 0.5 or absf(d) < absf(foot[t])):
 				foot[t] = d
 	# Riffles: the level's own slope, carried downstream.
 	var carry := int(RIFFLE_CARRY_M / TABLE_STEP)

@@ -32,11 +32,11 @@ const float MIST_CYCLE_S = 4.0;
 const float MIST_GROW = 1.3;
 const float MIST_STEPS = 8.0;
 const float MIST_SOFT_M = 0.25;
-const float MIST_LOBE_SPREAD = 0.22;
+const float MIST_LOBE_SPREAD = 0.3;
 const float MIST_LOBE_SPREAD_GROW = 0.08;
 const vec3 MIST_LOBE_RADII = vec3(0.55, 0.48, 0.42);
 const float MIST_LOBE_SOFT = 0.9;
-const float MIST_WARP = 0.1;
+const float MIST_WARP = 0.22;
 
 varying float seed;
 varying vec2 uv;
@@ -102,5 +102,5 @@ void fragment() {
 		0.0, MIST_SOFT_M, fall_scene_depth(SCREEN_UV, INV_PROJECTION_MATRIX) + VERTEX.z
 	);
 	ALBEDO = mix(mix(p_foam, p_sky, 0.2), p_foam, core);
-	ALPHA = body * mix(0.6, 1.0, core) * life * soft * mist_alpha;
+	ALPHA = body * mix(0.5, 1.0, core) * life * soft * mist_alpha;
 }

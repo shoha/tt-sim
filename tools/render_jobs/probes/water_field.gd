@@ -16,13 +16,13 @@ extends RefCounted
 ## a tributary and a stream into pools), saved as `_painter-water-field-painted_water`.
 
 const WATER := preload("res://tools/render_jobs/probes/water.gd")
-const PREFIX := "_painter-water-foot2_"
+const PREFIX := "_painter-water-foot3_"
 ## WaterFieldMesh.MESH_NAME, spelled out so the probe also runs on a tree without the field (the
 ## baseline the captures compare with).
 const FIELD_MESH := "PaintedWaterField"
 ## The painted water and fall shaders as they were before the field (a card's local copies, kept
 ## out of the tree), for the A/B "main" mode.
-const LEGACY_DIR := "res://tools/render_jobs/local/painter-water-foot2/"
+const LEGACY_DIR := "res://tools/render_jobs/local/painter-water-foot3/"
 const LEGACY_WATER := LEGACY_DIR + "legacy_water.gdshader"
 const LEGACY_FALL := LEGACY_DIR + "legacy_waterfall.gdshader"
 const STEP_M := 0.05
@@ -87,7 +87,7 @@ static func run(base: Node, step: Dictionary) -> String:
 			pw.set("clock_t", float(step.get("t", 10.0)))
 			return "clock_t %.2f" % float(step.get("t", 10.0))
 		"defs":
-			return _defs(base, String(step.get("defs", "")))
+			return _defs(base, String(step.get("defs", "")), String(step.get("file", "")))
 		"exact":
 			# F1 on or off: the field is rebuilt under the switch.
 			var pwe := painter_water(base)
@@ -170,16 +170,17 @@ static func _opt(base: Node, bits: int) -> String:
 
 ## Foot spike: the field shader's own text with `#define`s (space separated, e.g. "FOOT_R1") put at
 ## its //ABL_DEFS marker, on the shared water material ("" puts the shipped shader back).
-static func _defs(base: Node, defs: String) -> String:
+static func _defs(base: Node, defs: String, file: String = "") -> String:
 	var water := painter_water(base)
 	if water == null:
 		return "not painted"
 	var wm := water.call("water_material") as ShaderMaterial
-	if defs.strip_edges() == "":
+	if defs.strip_edges() == "" and file == "":
 		wm.shader = load(PainterWater.SHADER) as Shader
 		return "shader shipped"
+	# `file`: another copy of the water shader (a previous card's, in a local folder) to compare.
 	var sh := Shader.new()
-	var text := FileAccess.get_file_as_string(PainterWater.SHADER)
+	var text := FileAccess.get_file_as_string(file if file != "" else PainterWater.SHADER)
 	var lines := PackedStringArray()
 	for d in defs.split(" ", false):
 		# "-NAME" switches a shipped define off.
@@ -438,6 +439,14 @@ static func _measure(base: Node, step: Dictionary) -> String:
 	var pool_arc: float = _case.pool_arc
 	var lip_m := _window(stations, labs, widths, holes, 0.0, hw)
 	var foot_m := _window(stations, labs, widths, holes, pool_arc, hw)
+	if bool(step.get("trace", false)):
+		# The foot window's lightness along the path (arc:L, every station), to see where a step stands.
+		var trace := PackedStringArray()
+		for st_i in stations.size():
+			var tarc: float = stations[st_i].arc
+			if absf(tarc - pool_arc) <= WINDOW_M:
+				trace.append("%.2f:%.0f" % [tarc, labs[st_i].x * 100.0])
+		print("RJ| trace %s pool_arc %.2f  %s" % [step.get("label", ""), pool_arc, " ".join(trace)])
 	var all_holes := 0
 	for st_i in stations.size():
 		var arc: float = stations[st_i].arc

@@ -349,7 +349,10 @@ editor API the Water tool (P4-4) calls.
   the half-width more than `BANK_HOLD_M` under the level, or the centre more than `HOLD_SLACK_M`
   under the bed: the perched rule's tests per station; never on a fall's face or near an end
   in other water). `RiverProfile.strokes(bodies)` groups a document's river reaches into
-  ordered strokes.
+  ordered strokes. Each fall's drop also sets the scale of the painted field's foot coordinate
+  (`WaterFieldStroke.table`: arc to the foot divided by `clamp(drop / 3 m, 0.45, 1)`), so the
+  shader's foot rules shrink on a low fall (docs/systems/water_field.md "The exact waterline and the
+  foot rules", look-pending).
 - **Reach steps:** the stroke's reaches are carved as one course (their courses joined,
   exactly the lines their areas come from) with a bed line along its arc length
   (`RiverProfile.at`): each reach flat at level - depth; toward a shared point the bed rises over a
