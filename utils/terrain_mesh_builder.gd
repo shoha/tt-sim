@@ -16,9 +16,12 @@ extends RefCounted
 ## A chunk therefore reaches up to one sample step past its cell, which is harmless for
 ## culling and invisible on screen.
 ##
-## Normals are central differences on the whole document grid, not the chunk, so the
+## Normals are smoothed central differences on the whole document grid, not the chunk, so the
 ## border vertices two chunks share get the same normal from both and lighting has no
-## seam. At the map edge the difference is one-sided.
+## seam. At the map edge the difference is one-sided. Smoothed: NORMAL_SPAN samples each side,
+## weighted [1 2 1] across (shade_normal); the plain one-sample difference (sample_normal) made
+## the ground shader's slope contours zigzag on the mesh's 0.25 m triangles (card
+## painter-ground-artifacts), and a height edit moves a normal NORMAL_RADIUS samples out.
 ##
 ## UVs are world XZ in metres; the ground shader divides by each surface's tile size.
 ## UV2 carries the automatic dressing's per-vertex fields (phase 3, P3-4): x the curvature
@@ -26,6 +29,10 @@ extends RefCounted
 ## TerrainRules.CURVATURE_RADIUS_M away, so a height edit changes them that far out.
 
 const CHUNK_SIZE_M := ScatterChunker.CHUNK_SIZE_WORLD_UNITS
+## Samples each side of the difference that gives a vertex its shading normal, and how far a
+## height change reaches into the normals around it (the difference's span).
+const NORMAL_SPAN := 2
+const NORMAL_RADIUS := NORMAL_SPAN
 ## Slack, in samples, for a sample that lands on a cell edge within float error: it
 ## counts as on the edge (ScatterChunker puts an edge point in the higher cell).
 const EDGE_EPSILON_SAMPLES := 1e-4
@@ -99,6 +106,38 @@ static func sample_position(doc: MapDocument, x: int, z: int) -> Vector3:
 	return Vector3(xz.x, height_at(doc, x, z), xz.y)
 
 
+## The normal the terrain mesh is lit with at sample (x, z): the difference of heights NORMAL_SPAN
+## samples each side along an axis, averaged [1 2 1] over the three rows (or columns) across it, on
+## the whole document grid (one-sided at the map edge). It is what build_chunk_arrays() and
+## write_vertex_region() inline; sample_normal() stays the plain one-sample difference the scatter
+## and the ray casts use.
+static func shade_normal(doc: MapDocument, x: int, z: int) -> Vector3:
+	var step := doc.sample_step()
+	var width := doc.samples_x()
+	var depth := doc.samples_z()
+	var xa := maxi(x - NORMAL_SPAN, 0)
+	var xb := mini(x + NORMAL_SPAN, width - 1)
+	var za := maxi(z - NORMAL_SPAN, 0)
+	var zb := mini(z + NORMAL_SPAN, depth - 1)
+	var xm := maxi(x - 1, 0)
+	var xp := mini(x + 1, width - 1)
+	var zm := maxi(z - 1, 0)
+	var zp := mini(z + 1, depth - 1)
+	var inv_dx := 1.0 / ((xb - xa) * step.x)
+	var inv_dz := 1.0 / ((zb - za) * step.y)
+	var slope_x := (
+		0.5 * (height_at(doc, xb, z) - height_at(doc, xa, z))
+		+ 0.25 * (height_at(doc, xb, zm) - height_at(doc, xa, zm))
+		+ 0.25 * (height_at(doc, xb, zp) - height_at(doc, xa, zp))
+	) * inv_dx
+	var slope_z := (
+		0.5 * (height_at(doc, x, zb) - height_at(doc, x, za))
+		+ 0.25 * (height_at(doc, xm, zb) - height_at(doc, xm, za))
+		+ 0.25 * (height_at(doc, xp, zb) - height_at(doc, xp, za))
+	) * inv_dz
+	return Vector3(-slope_x, 1.0, -slope_z).normalized()
+
+
 ## Smooth normal at sample (x, z) from central differences on the whole document grid
 ## (one-sided at the map edge), so every chunk computes the same normal for a shared
 ## vertex.
@@ -148,7 +187,7 @@ static func build_chunk_arrays(doc: MapDocument, cell: Vector2i, fields: Diction
 	normals.resize(columns * rows)
 	uvs.resize(columns * rows)
 	uv2s.resize(columns * rows)
-	# The hot loop inlines sample_position() and sample_normal() (same arithmetic, same
+	# The hot loop inlines sample_position() and shade_normal() (same arithmetic, same
 	# results): the per-vertex helper calls cost about 10x the rest of the build.
 	var heights := collision_heights(doc)
 	var width := doc.samples_x()
@@ -158,16 +197,34 @@ static func build_chunk_arrays(doc: MapDocument, cell: Vector2i, fields: Diction
 	for row in rows:
 		var sz := rect.position.y + row
 		var z_m := sz * step.y - half.y
-		var z0 := maxi(sz - 1, 0)
-		var z1 := mini(sz + 1, depth - 1)
-		var inv_dz := 1.0 / ((z1 - z0) * step.y)
+		var za := maxi(sz - NORMAL_SPAN, 0)
+		var zb := mini(sz + NORMAL_SPAN, depth - 1)
+		var rm := maxi(sz - 1, 0) * width
+		var rp := mini(sz + 1, depth - 1) * width
+		var inv_dz := 1.0 / ((zb - za) * step.y)
 		for column in columns:
 			var sx := rect.position.x + column
-			var x0 := maxi(sx - 1, 0)
-			var x1 := mini(sx + 1, width - 1)
+			var xa := maxi(sx - NORMAL_SPAN, 0)
+			var xb := mini(sx + NORMAL_SPAN, width - 1)
+			var xm := maxi(sx - 1, 0)
+			var xp := mini(sx + 1, width - 1)
 			var here := sz * width
-			var slope_x := (heights[here + x1] - heights[here + x0]) / ((x1 - x0) * step.x)
-			var slope_z := (heights[z1 * width + sx] - heights[z0 * width + sx]) * inv_dz
+			var slope_x := (
+				(
+					0.5 * (heights[here + xb] - heights[here + xa])
+					+ 0.25 * (heights[rm + xb] - heights[rm + xa])
+					+ 0.25 * (heights[rp + xb] - heights[rp + xa])
+				)
+				/ ((xb - xa) * step.x)
+			)
+			var slope_z := (
+				(
+					0.5 * (heights[zb * width + sx] - heights[za * width + sx])
+					+ 0.25 * (heights[zb * width + xm] - heights[za * width + xm])
+					+ 0.25 * (heights[zb * width + xp] - heights[za * width + xp])
+				)
+				* inv_dz
+			)
 			var i := row * columns + column
 			var x_m := sx * step.x - half.x
 			vertices[i] = Vector3(x_m, heights[here + sx], z_m)
@@ -304,7 +361,7 @@ static func attribute_rows_bytes(mirror: Dictionary, first_row: int, last_row: i
 
 ## Rewrites the heights and normals of the samples of `part` (grid coordinates, clipped to
 ## the chunk) in a chunk_vertex_mirror() from the document's current heights. Normals use
-## the same whole-grid central differences as build_chunk_arrays(), so an updated chunk is
+## the same whole-grid smoothed differences as build_chunk_arrays(), so an updated chunk is
 ## bit-identical to a rebuilt one. Returns Vector2(lowest, highest) height written, or
 ## Vector2(INF, -INF) when `part` misses the chunk.
 static func write_vertex_region(doc: MapDocument, mirror: Dictionary, part: Rect2i) -> Vector2:
@@ -323,17 +380,35 @@ static func write_vertex_region(doc: MapDocument, mirror: Dictionary, part: Rect
 	var step := doc.sample_step()
 	# Inlined like build_chunk_arrays(): per-vertex helper calls dominate otherwise.
 	for sz in range(region.position.y, region.end.y):
-		var z0 := maxi(sz - 1, 0)
-		var z1 := mini(sz + 1, depth - 1)
-		var inv_dz := 1.0 / ((z1 - z0) * step.y)
+		var za := maxi(sz - NORMAL_SPAN, 0)
+		var zb := mini(sz + NORMAL_SPAN, depth - 1)
+		var rm := maxi(sz - 1, 0) * width
+		var rp := mini(sz + 1, depth - 1) * width
+		var inv_dz := 1.0 / ((zb - za) * step.y)
 		var here := sz * width
 		var base := (sz - rect.position.y) * columns - rect.position.x
 		for sx in range(region.position.x, region.end.x):
-			var x0 := maxi(sx - 1, 0)
-			var x1 := mini(sx + 1, width - 1)
+			var xa := maxi(sx - NORMAL_SPAN, 0)
+			var xb := mini(sx + NORMAL_SPAN, width - 1)
+			var xm := maxi(sx - 1, 0)
+			var xp := mini(sx + 1, width - 1)
 			var h := heights[here + sx]
-			var slope_x := (heights[here + x1] - heights[here + x0]) / ((x1 - x0) * step.x)
-			var slope_z := (heights[z1 * width + sx] - heights[z0 * width + sx]) * inv_dz
+			var slope_x := (
+				(
+					0.5 * (heights[here + xb] - heights[here + xa])
+					+ 0.25 * (heights[rm + xb] - heights[rm + xa])
+					+ 0.25 * (heights[rp + xb] - heights[rp + xa])
+				)
+				/ ((xb - xa) * step.x)
+			)
+			var slope_z := (
+				(
+					0.5 * (heights[zb * width + sx] - heights[za * width + sx])
+					+ 0.25 * (heights[zb * width + xm] - heights[za * width + xm])
+					+ 0.25 * (heights[zb * width + xp] - heights[za * width + xp])
+				)
+				* inv_dz
+			)
 			var n := Vector3(-slope_x, 1.0, -slope_z).normalized()
 			var i := base + sx
 			positions[i * 3 + 1] = h

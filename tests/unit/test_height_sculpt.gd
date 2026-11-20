@@ -250,10 +250,10 @@ func test_partial_update_equals_a_fresh_mirror() -> void:
 	var stroke := HeightStroke.begin(doc, HeightBrush.RAISE)
 	stroke.dab(Vector2(3, 3), Vector2(6, 4), 2.0, 1.0)
 	var changed := stroke.take_pending()
-	TerrainMeshBuilder.write_vertex_region(doc, mirror, changed.grow(1))
+	TerrainMeshBuilder.write_vertex_region(doc, mirror, changed.grow(TerrainMeshBuilder.NORMAL_RADIUS))
 	var fresh := TerrainMeshBuilder.chunk_vertex_mirror(doc, cell)
 	assert_eq(mirror.positions, fresh.positions)
-	assert_eq(mirror.normals, fresh.normals, "normals one sample around the edit too")
+	assert_eq(mirror.normals, fresh.normals, "normals NORMAL_RADIUS samples around the edit too")
 
 
 func test_terrain_updates_in_place_then_settles() -> void:

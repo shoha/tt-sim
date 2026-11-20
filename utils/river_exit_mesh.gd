@@ -397,7 +397,7 @@ static func move_column(
 			normals[at] = (
 				edge[1] as Vector3
 				if outer
-				else TerrainMeshBuilder.sample_normal(doc, sample.x, sample.y)
+				else TerrainMeshBuilder.shade_normal(doc, sample.x, sample.y)
 			)
 		elif outer:
 			var r := 0
@@ -678,7 +678,7 @@ static func _patch_vertex(
 	if k == 0:
 		var normal := skirt[1] as Vector3
 		if not outer:
-			normal = TerrainMeshBuilder.sample_normal(doc, sample.x, sample.y)
+			normal = TerrainMeshBuilder.shade_normal(doc, sample.x, sample.y)
 		return [point, normal, Vector2.ZERO, false]
 	if outer:
 		return [point, skirt[1], Vector2.ZERO, false]
