@@ -1,4 +1,5 @@
 shader_type spatial;
+//ABL_DEFS
 render_mode blend_mix, depth_draw_opaque, cull_back, specular_disabled, ambient_light_disabled;
 
 /*
@@ -109,7 +110,11 @@ uniform vec2 p_px = vec2(0.045, 0.12);
 // shade_opt bits: 1 the field's depth/energy/shore/steep read per fragment from textures (bicubic),
 // 2 ONE clock (p_clock, integrated by PainterWater) and the drop-aware flow coordinate drive every
 // motion, 4 a depth-aware tint floor for pools and a softer foot.
+#ifdef ABL_CONSTOPT
+const int shade_opt = 7;
+#else
 uniform int shade_opt = 7;
+#endif
 uniform float p_clock = 0.0;
 uniform sampler2D fld_a : filter_linear, repeat_disable, hint_default_black;
 uniform sampler2D fld_b : filter_linear, repeat_disable, hint_default_black;
@@ -272,6 +277,21 @@ vec2 stroke_layer(
 	for (int j = 0; j < 2; j++) {
 		for (int i = 0; i < 2; i++) {
 			vec2 c = b + o + vec2(float(i), float(j));
+#ifdef RED_D
+			// The same hashes as cell_rand, the density test first: a cell that draws nothing costs two.
+			vec2 ha = c + seed;
+			float hcx = be_hash(ha);
+			float cyc = wt() / boil + hcx;
+			float idx = floor(cyc);
+			float ph = cyc - idx;
+			vec2 hb = (c + vec2(idx * 13.7, idx * 5.3)) + (seed + 3.0);
+			float hrx = be_hash(hb);
+			if (hrx >= density) {
+				continue;
+			}
+			vec4 hc = vec4(hcx, be_hash(ha + vec2(17.13, 5.71)), be_hash(ha + vec2(3.37, 29.9)), be_hash(ha + vec2(41.7, 13.1)));
+			vec4 hr = vec4(hrx, be_hash(hb + vec2(17.13, 5.71)), be_hash(hb + vec2(3.37, 29.9)), be_hash(hb + vec2(41.7, 13.1)));
+#else
 			vec4 hc = cell_rand(c, seed);
 			float cyc = wt() / boil + hc.x;
 			float idx = floor(cyc);
@@ -280,6 +300,7 @@ vec2 stroke_layer(
 			if (hr.x >= density) {
 				continue;
 			}
+#endif
 			vec2 cw = rot2((c + 0.3 + 0.4 * hr.yz) * cell, LATTICE_C, LATTICE_S);
 			cw += flow * ph * boil * 0.8;
 			float ang = (hr.w - 0.5) * jitter;
@@ -369,10 +390,30 @@ void fragment() {
 	vec2 across_dir = vec2(-dir.y, dir.x);
 
 	// ---- The bed under the water --------------------------------------------------------------
+#ifdef ABL_NODEPTH
+	float bed_depth = 5.0;
+	float ground_like = 1.0;
+	float column_raw = 1.0;
+#else
 	float water_surface_depth = -VERTEX.z;
 	vec3 scene_view = water_scene_view(SCREEN_UV, INV_PROJECTION_MATRIX);
 	float bed_depth = max(-scene_view.z - water_surface_depth, 0.0);
 	float ground_like = 1.0;
+#ifdef RED_A
+	// The field surface reads its own column and takes no part of the ground test: skip both.
+	bool fieldv0 = v_f1.y < FIELD_FLAG + 0.5;
+	float column_raw = 0.0;
+	if (!fieldv0) {
+		if (shore_ground_gate > 0.0) {
+			vec3 scene_normal = cross(dFdx(scene_view), dFdy(scene_view));
+			vec3 up_view = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+			float upness = abs(dot(normalize(scene_normal + vec3(1e-6)), up_view));
+			ground_like = mix(1.0, smoothstep(0.35, 0.65, upness), shore_ground_gate);
+		}
+		vec3 bed_world = (INV_VIEW_MATRIX * vec4(scene_view, 1.0)).xyz;
+		column_raw = max(world_pos.y - bed_world.y, 0.0);
+	}
+#else
 	if (shore_ground_gate > 0.0) {
 		vec3 scene_normal = cross(dFdx(scene_view), dFdy(scene_view));
 		vec3 up_view = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
@@ -381,6 +422,8 @@ void fragment() {
 	}
 	vec3 bed_world = (INV_VIEW_MATRIX * vec4(scene_view, 1.0)).xyz;
 	float column_raw = max(world_pos.y - bed_world.y, 0.0);
+#endif
+#endif
 	bool fieldv = v_f1.y < FIELD_FLAG + 0.5;
 // The field's channels at this fragment: per vertex (the old way) or bicubic from the textures (S1).
 vec4 fa = v_f0;
@@ -388,6 +431,7 @@ vec4 fa = v_f0;
 // takes the downstream distance of the flow map's direction and the height (has_u 0).
 float uf = dot(p, dir) - FLOW_DROP_K * world_pos.y;
 float has_u = 0.0;
+#ifndef ABL_NOFETCH
 if (fieldv) {
 	vec2 tc = (v_mp - fld_origin) * fld_inv_step + 0.5;
 	if ((shade_opt & 1) != 0) {
@@ -399,6 +443,7 @@ if (fieldv) {
 		uf = mix(uf, fb.r / max(fb.g, 0.001), has_u);
 	}
 }
+#endif
 	float curtain = 0.0;
 	float path_k = 1.0;
 	if (fieldv) {
@@ -439,7 +484,11 @@ if (fieldv && (shade_opt & 4) != 0) {
 	}
 
 	// ---- The wash -----------------------------------------------------------------------------
+#ifdef ABL_NOWOB
+	float wob = 1.0;
+#else
 	float wob = 0.7 + 0.6 * p_noise(vec3(p.x * 0.16, wt() * 0.03, p.y * 0.16));
+#endif
 	float s = column / wob;
 	float m1 = mix(smoothstep(BAND_1 - 0.04, BAND_1 + 0.04, s), smoothstep(BAND_1 - 0.3, BAND_1 + 0.3, s), 1.0 - POSTERISE);
 	float m2 = mix(smoothstep(BAND_2 - 0.06, BAND_2 + 0.06, s), smoothstep(BAND_2 - 0.5, BAND_2 + 0.5, s), 1.0 - POSTERISE);
@@ -469,7 +518,11 @@ if (fieldv && (shade_opt & 4) != 0) {
 	float wake_cov = 0.0;
 	float open_water = 1.0;
 	float ring_r = max(disturbance_ripple_radius, 0.3);
+#ifdef ABL_NORINGS
+	for (int i = 0; i < 0; i++) {
+#else
 	for (int i = 0; i < 8; i++) {
+#endif
 		if (water_disturbance_points[i].w < 0.5) {
 			continue;
 		}
@@ -511,7 +564,11 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// ---- Ice --------------------------------------------------------------------------------
 	float ice_k = 0.0;
 	float crack = 0.0;
+#ifdef ABL_NOICE
+	if (false) {
+#else
 	if (p_ice_amt > 0.001) {
+#endif
 		float still = 1.0 - smoothstep(0.03, 0.12, flow_speed);
 		float rim = (1.0 - smoothstep(0.12, 0.5, column)) * edge_band;
 		float want = p_ice_amt * max(still, rim * 0.9);
@@ -548,10 +605,25 @@ if (fieldv && (shade_opt & 4) != 0) {
 	float jitter = mix(1.1, 0.4, flow_k);
 	// Still water (a pond) takes more strokes than a river: its wash has no flow to carry the eye.
 	float share = p_strokes * (1.0 + 0.9 * (1.0 - flow_k));
-	vec2 la = stroke_layer(p, dir, jitter, flow_ws, 1.0, CELL, share, p_stroke_len, 0.11, p_boil, px, vec3(0.0));
+	// Where nothing of a stroke shows (live 0: the wet edge, a fall's face) no layer is looked at.
+#ifdef RED_E
+	bool live_on = live > 0.0;
+#else
+	bool live_on = true;
+#endif
+	vec2 la = vec2(0.0);
+#ifndef ABL_NOSTROKE_A
+	if (live_on) {
+		la = stroke_layer(p, dir, jitter, flow_ws, 1.0, CELL, share, p_stroke_len, 0.11, p_boil, px, vec3(0.0));
+	}
+#endif
 	x = mix(x, p_lit, la.x * live);
 	a = max(a, la.x * live * 0.9);
-	if (fine) {
+#ifdef ABL_NOSTROKE_B
+	if (false) {
+#else
+	if (fine && live_on) {
+#endif
 		vec2 lb = stroke_layer(p, dir, jitter, flow_ws, 9.0, CELL * 1.13, share * 0.8, p_stroke_len * 1.2, 0.13, p_boil * 1.3, px, vec3(0.0));
 		x = mix(x, p_shade, lb.x * live * 0.85);
 		a = max(a, lb.x * live * 0.95);
@@ -573,6 +645,14 @@ if (fieldv && (shade_opt & 4) != 0) {
 	}
 	float slope = max(length(grad), 0.06);
 	float d_h = column_raw / slope;
+	float shore_foam = 0.0;
+	// Far from the waterline (past the widest reach of the lap and of the outer dashes, wobble and
+	// pixel footprint included) a field fragment has no shore white: its noises are not read.
+#ifdef RED_B
+	if (!fieldv || fa.z <= p_foam_w * 1.6 + 0.14 + world_units_per_pixel + LAP_WOBBLE_M * 0.5) {
+#else
+	if (true) {
+#endif
 	if (fieldv) {
 		// The true horizontal distance to the contour, smooth across triangles, and the bank's mean
 		// slope from it (depth over that distance: smooth too, where the triangle's own gradient
@@ -597,11 +677,12 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// slope of 0.9 (a bank about 42 degrees steep) and soft dabs, not crisp ticks, before it.
 	float dash_gate = 1.0 - smoothstep(0.35, 0.9, slope);
 	float dashes = (1.0 - smoothstep(0.02, 0.08 + world_units_per_pixel, abs(d_h - outer))) * smoothstep(0.6, 0.76, dash_n) * dash_gate;
-	float shore_foam = max(lap, dashes) * ground_like * smoothstep(0.0, 0.01, column_raw + 0.004);
+	shore_foam = max(lap, dashes) * ground_like * smoothstep(0.0, 0.01, column_raw + 0.004);
 	if (fieldv) {
 		// The thin water a bank sheds and a river's ramp into a pond (CUSTOM1.w 0.5 and 1) is a wet
 		// slope: no lap on it (a white arm stood out from each side of a pond's inflow).
 		shore_foam *= 1.0 - 0.9 * smoothstep(0.2, 0.45, v_f1.w);
+	}
 	}
 	// Riffles: dense short dashes along the flow on fast, shallow water.
 	// The field draws its riffles from its own energy: the baked flow map's swirls in a pool would draw
@@ -613,6 +694,9 @@ if (fieldv && (shade_opt & 4) != 0) {
 		float dash = smoothstep(0.58, 0.68, be_n2(st) * (0.55 + 0.45 * pulse) + 0.18);
 		shore_foam = max(shore_foam, dash * rapid);
 	}
+#ifdef ABL_NOLAP
+	shore_foam = 0.0;
+#endif
 	// The wrap round rocks and tokens: Classic's depth-slope detector, thresholded to a soft mask.
 	float depth_jump = fwidth(bed_depth);
 	float depth_slope = depth_jump / world_units_per_pixel;
@@ -624,8 +708,19 @@ if (fieldv && (shade_opt & 4) != 0) {
 		min(bed_depth + side_x * dFdx(bed_depth), bed_depth + side_y * dFdy(bed_depth))
 	);
 	edge_foam *= 1.0 - smoothstep(EDGE_FOAM_REACH * 0.5, EDGE_FOAM_REACH, max(near_side, 0.0));
+#ifdef RED_C
+	// No depth jump, no wrap: the noise only breaks an edge that is there.
+	if (edge_foam > 0.0) {
+		float wrap_n = p_noise(vec3(p.x * 5.0, 8.0 + floor(wt() * 0.6), p.y * 5.0));
+		edge_foam = smoothstep(0.3, 0.5, edge_foam * (0.45 + wrap_n));
+	}
+#else
 	float wrap_n = p_noise(vec3(p.x * 5.0, 8.0 + floor(wt() * 0.6), p.y * 5.0));
 	edge_foam = smoothstep(0.3, 0.5, edge_foam * (0.45 + wrap_n));
+#endif
+#ifdef ABL_NOEDGE
+	edge_foam = 0.0;
+#endif
 	edge_foam *= edge_band;
 	shore_foam *= edge_band;
 	float foam = clamp(max(max(shore_foam, edge_foam), max(ring_cov, wake_cov)) * foam_k, 0.0, 1.0);
@@ -641,30 +736,59 @@ if (fieldv && (shade_opt & 4) != 0) {
 		float en_c = mix(en, en * 0.62, curtain);
 		// Under the floor (the cover below) nothing is white: the noises are not read there, which is
 		// most of a pond and a river.
+#ifdef ABL_NOWHITE
+		if (false) {
+#else
 		if (en_c > 0.08) {
+#endif
 		// One clock (S2): the blobs travel along the flow coordinate at one speed (still where the
 			// field has no stroke: a pond's white boils in place), as the streaks and tongues do.
 			bool one_clock = (shade_opt & 2) != 0;
 			vec2 bq = one_clock ? vec2(uf, dot(p, across_dir)) : p;
 			vec2 bf = one_clock ? vec2(FLOW_C * has_u, 0.0) : flow_ws;
-			float blob = flow_blobs(bq, bf, p_blob_m, 11.0) * 0.7 + flow_blobs(bq, bf, p_blob_m * 0.45, 23.0) * 0.3;
+			float c_face = (shade_opt & 4) != 0 ? smoothstep(0.1, 0.5, curtain) : curtain;
+			// The pattern is mix(blob, streak, c_face) then mixed with the tongues by the curtain: a
+			// term whose weight is 0 is not evaluated (RED_F; the weights 0 and 1 are exact).
+#ifdef RED_F
+			bool need_blob = c_face < 1.0;
+			bool need_streak = c_face > 0.0 && curtain < 1.0;
+#else
+			bool need_blob = true;
+			bool need_streak = true;
+#endif
+			float blob = 0.0;
+			if (need_blob) {
+				blob = flow_blobs(bq, bf, p_blob_m, 11.0) * 0.7 + flow_blobs(bq, bf, p_blob_m * 0.45, 23.0) * 0.3;
+			}
 		// Stretched linearly about its mean, so the energy's threshold cuts organic shapes, not its
 		// own isolines (the raw noise sits near 0.5 and drew straight bands across the channel). A
 		// smoothstep stretch saturated a third of it at 1, and any trace of energy lit those plateaus
 		// whole (ponds plastered with blobs).
 		blob = clamp((blob - 0.5) * 1.7 + 0.5, 0.0, 1.0);
+#ifdef ABL_NOBLOB
+		blob = 0.5;
+#endif
 		vec2 st = vec2(dot(p, across_dir) * 3.2, world_pos.y * 0.45 + wt() * 1.6);
 			if (one_clock) {
 				st.y = uf * 0.45 - wt() * 0.64;
 			}
-		float streak = p_noise(vec3(st.x, st.y, 5.0)) * 0.75 + p_noise(vec3(st.x * 2.3, st.y * 1.7, 9.0)) * 0.25;
+		float streak = 0.0;
+		if (need_streak) {
+			streak = p_noise(vec3(st.x, st.y, 5.0)) * 0.75 + p_noise(vec3(st.x * 2.3, st.y * 1.7, 9.0)) * 0.25;
+		}
 		streak = clamp((streak - 0.5) * 1.7 + 0.5, 0.0, 1.0);
+#ifdef ABL_NOSTREAK
+		streak = 0.5;
+#endif
 		// Option 4: the flat's blobs give way to the face's streaks early (a face's cloud discs read as
 			// translucent bubbles on the glass).
-			float c_face = (shade_opt & 4) != 0 ? smoothstep(0.1, 0.5, curtain) : curtain;
 			float pattern = mix(blob, streak, c_face);
 		float edge_w = mix((shade_opt & 4) != 0 ? FOAM_EDGE_SOFT : FOAM_EDGE, FACE_EDGE, curtain);
+#ifdef ABL_NOTONGUE
+		if (false) {
+#else
 		if (curtain > 0.01) {
+#endif
 			// Tongues, in the flow's frame (the baked flow map's direction is smooth over the map: a
 			// direction taken per fragment from the surface turned dot(p, d) into a maze of lines).
 			// About 0.28 m columns, each its own width and white for its own length, blue between;
@@ -699,7 +823,11 @@ if (fieldv && (shade_opt & 4) != 0) {
 
 	// ---- Glints: ticks on the sun's side ------------------------------------------------------
 	float glint = 0.0;
-	if (fine && p_glints > 0.01 && ice_k < 0.5) {
+#ifdef ABL_NOGLINT
+	if (false) {
+#else
+	if (fine && p_glints > 0.01 && ice_k < 0.5 && live_on) {
+#endif
 		vec3 view_dir = -(INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz;
 		vec3 reflected = normalize(vec3(view_dir.x, -view_dir.y, view_dir.z));
 		vec2 perp = normalize(vec2(-reflected.z, reflected.x) + vec2(1e-4, 0.0));
@@ -749,8 +877,12 @@ if (fieldv && (shade_opt & 4) != 0) {
 
 
 void light() {
+#ifdef ABL_NOLIGHT
+	DIFFUSE_LIGHT += f_lit;
+#else
 	if (LIGHT_IS_DIRECTIONAL) {
 		float cast = 1.0 - smoothstep(0.44, 0.56, ATTENUATION);
 		DIFFUSE_LIGHT += mix(f_lit, f_shd, cast);
 	}
+#endif
 }

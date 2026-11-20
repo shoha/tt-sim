@@ -16,13 +16,13 @@ extends RefCounted
 ## a tributary and a stream into pools), saved as `_painter-water-field-painted_water`.
 
 const WATER := preload("res://tools/render_jobs/probes/water.gd")
-const PREFIX := "_painter-water-shade-spike_"
+const PREFIX := "_painter-water-cost-spike_"
 ## WaterFieldMesh.MESH_NAME, spelled out so the probe also runs on a tree without the field (the
 ## baseline the captures compare with).
 const FIELD_MESH := "PaintedWaterField"
 ## The painted water and fall shaders as they were before the field (a card's local copies, kept
 ## out of the tree), for the A/B "main" mode.
-const LEGACY_DIR := "res://tools/render_jobs/local/painter-water-shade-spike/"
+const LEGACY_DIR := "res://tools/render_jobs/local/painter-water-cost-spike/"
 const LEGACY_WATER := LEGACY_DIR + "legacy_water.gdshader"
 const LEGACY_FALL := LEGACY_DIR + "legacy_waterfall.gdshader"
 const STEP_M := 0.05
@@ -76,6 +76,13 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _hud(base)
 		"opt":
 			return _opt(base, int(step.get("bits", 0)))
+		"clock_set":
+			# Pins the water's one clock (with the time scale at 0) so two runs draw the same phase.
+			var pw := painter_water(base)
+			if pw == null:
+				return "not painted"
+			pw.set("clock_t", float(step.get("t", 10.0)))
+			return "clock_t %.2f" % float(step.get("t", 10.0))
 		"tokens":
 			return _tokens(base, step.get("items", []))
 		"cleanup":
