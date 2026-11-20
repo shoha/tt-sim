@@ -42,7 +42,8 @@ func test_two_inflows_and_an_outlet_are_all_joined_by_short_connectors() -> void
 	var off := PondCases.make("two_in_one_out", false)
 	var on := PondCases.make("two_in_one_out", true)
 	assert_eq(int(on.out.joined), 3, "two tails and a head reach the pond")
-	assert_eq(on.doc.water_bodies.size(), off.doc.water_bodies.size() + 3, "one connector each")
+	var added: int = on.doc.water_bodies.size() - off.doc.water_bodies.size()
+	assert_true(added >= 3 and added <= 6, "one or two reaches per connector (%d)" % added)
 	var longest := 0.0
 	for body in on.doc.water_bodies:
 		if body.is_river() and body.id > off.doc.water_bodies.size() + 1:
@@ -53,12 +54,16 @@ func test_two_inflows_and_an_outlet_are_all_joined_by_short_connectors() -> void
 	assert_true(Fit.event_counts(on.doc).values().all(func(n: int) -> bool: return n == 0))
 
 
-func test_a_river_stopping_at_a_square_corner_is_joined() -> void:
+func test_a_join_that_raises_perched_water_is_dropped_and_said() -> void:
+	# The square corner: the fall into the pond would join the end (end_near_water 1 to 0) but its
+	# lip stands proud of the bank (perched samples 0 to 4), so the guard drops it and says the end.
 	var off := PondCases.make("corner", false)
 	var on := PondCases.make("corner", true)
 	assert_eq(Fit.event_counts(off.doc)[&"end_near_water"], 1, "off leaves the end short of the pond")
-	assert_eq(Fit.event_counts(on.doc)[&"end_near_water"], 0, "on joins it")
-	assert_eq(int(on.out.joined), 1)
+	assert_true(on.out.undone, "the guard dropped the join")
+	assert_eq(int(on.out.joined), 0)
+	assert_eq(_signature(on.doc), _signature(off.doc), "and the document is as dug")
+	assert_true(_kinds(on.out.hints).has(&"end_near_water_below"))
 
 
 func test_a_head_above_the_pond_and_a_far_end_are_said_not_changed() -> void:
@@ -95,6 +100,8 @@ func test_random_maps_never_get_more_events_with_conditioning_on() -> void:
 	var off_total := 0
 	var on_total := 0
 	var worse := 0
+	var off_perched := 0
+	var on_perched := 0
 	var joins := 0
 	for seed_value in range(5, 13):
 		var off := Cases.metrics(PondCases.fuzz_map(seed_value, false).doc)
@@ -105,10 +112,13 @@ func test_random_maps_never_get_more_events_with_conditioning_on() -> void:
 		off_total += off_events
 		on_total += on_events
 		worse += 1 if on_events > off_events else 0
+		off_perched += off.perched
+		on_perched += on.perched
 		for pond: Dictionary in r.ponds:
 			joins += int(pond.out.get("joined", 0))
 			assert_true(float(pond.out.get("level_moved", 0.0)) <= Fit.LEVEL_BAND_M + 1e-6)
 		assert_eq(on.rises, 0, "seed %d: no stream climbs" % seed_value)
 	assert_true(joins > 0, "the fuzz exercises the joins")
+	assert_true(on_perched <= off_perched, "perched samples %d off, %d on" % [off_perched, on_perched])
 	assert_true(on_total <= off_total, "events %d off, %d on" % [off_total, on_total])
-	assert_true(worse <= 1, "%d of 8 maps worse (seed 10 gains a bridged run)" % worse)
+	assert_eq(worse, 0, "no map gets more events")

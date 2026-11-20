@@ -396,7 +396,24 @@ func end(brush: BrushTool) -> void:
 	elif _hint != "":
 		# The conditioner kept something as drawn or could not fix it: said, never blocking.
 		brush.refused.emit(_hint)
+	elif shape == Shape.POND and not brush.press_ctrl and brush.editor != null:
+		_say_pond_hints(brush)
 	reset()
+
+
+## Says what the pond just dug found beside it (a head above it, an end a fall above it),
+## like a river's hints. The pond is computed on a worker, so the words come when it lands.
+func _say_pond_hints(brush: BrushTool) -> void:
+	var water := brush.editor.water
+	var said := func(hints: Array) -> void:
+		var text: String = load(WaterEdit.HINTS_PATH).toast_text(hints)
+		if text != "":
+			brush.refused.emit(text)
+	if water.is_working():
+		if not water.pond_hints_landed.is_connected(said):
+			water.pond_hints_landed.connect(said, CONNECT_ONE_SHOT)
+	else:
+		said.call(water.last_hints)
 
 
 func cancel(_brush: BrushTool) -> void:

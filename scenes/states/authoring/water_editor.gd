@@ -29,6 +29,10 @@ extends RefCounted
 ## or an autosave waits, and finish_work() (from AuthoringEditor.finish_height_work(), which
 ## every other edit and undo call first) lands it at once.
 
+## A conditioned pond edit landed: what it said about the stream ends beside it (WaterHints
+## records, possibly none). The pond's compute runs on a worker, so the tool listens for it.
+signal pond_hints_landed(hints: Array)
+
 ## Why the last carve_river() or paint_pond_begin() made nothing (last_refusal), for the tool.
 const REFUSED_NO_CARVE := &"no_carve"
 const REFUSED_SHORT := &"short"
@@ -493,6 +497,7 @@ static func compute(snapshot: MapDocument, spec: Dictionary, out: Dictionary) ->
 			if fit != null:
 				joined = fit.join_ends(snapshot, body)
 				out["moved"] = joined.moved
+				out["undone"] = joined.get("undone", false)
 				hints = joined.hints
 				goals = fit.merge_goals(goals, joined.goals)
 				out["joined"] = joined.joined
@@ -651,6 +656,7 @@ func _land() -> void:
 				# The conditioned pond edit also extended stream ends into the pond (WaterPondFit).
 				doc.water_bodies = result.bodies
 			last_hints = result.get("hints", [])
+			pond_hints_landed.emit(last_hints)
 			stroke = HeightStroke.begin(doc, HeightBrush.LOWER)
 			var goals: Dictionary = result.goals
 			stroke.lower_to(goals.rect, goals.goals)
