@@ -29,6 +29,10 @@ extends RefCounted
 ## or an autosave waits, and finish_work() (from AuthoringEditor.finish_height_work(), which
 ## every other edit and undo call first) lands it at once.
 
+## A conditioned pond edit landed: what it said about the stream ends beside it (WaterHints
+## records, possibly none). The pond's compute runs on a worker, so the tool listens for it.
+signal pond_hints_landed(hints: Array)
+
 ## Why the last carve_river() or paint_pond_begin() made nothing (last_refusal), for the tool.
 const REFUSED_NO_CARVE := &"no_carve"
 const REFUSED_SHORT := &"short"
@@ -185,6 +189,7 @@ func paint_pond_begin(depth_class: WaterBody.Depth, at: Vector3) -> bool:
 		last_refusal = REFUSED_NO_CARVE
 		return false
 	var doc := e.document
+	last_hints = []
 	var id := WaterEdit.pond_id_at(doc, e.to_map_xz(at))
 	var full := doc.water_bodies.size() >= MapDocument.MAX_WATER_BODIES
 	if id <= 0 or (full and doc.water_body(id) == null):
@@ -246,6 +251,7 @@ func paint_pond_end() -> bool:
 		"id": int(pond.id),
 		"depth": pond.depth,
 		"rect": painted,
+			"condition": WaterEdit.conditioning_enabled,
 	}
 	if pond.has("old_area"):
 		spec["old_area"] = pond.old_area
@@ -473,10 +479,31 @@ static func compute(snapshot: MapDocument, spec: Dictionary, out: Dictionary) ->
 				level = extended_pond_level(snapshot, id, spec.old_area, float(spec.old_level))
 			var body := WaterBody.pond(id, spec.depth, level)
 			snapshot.water_bodies = _with_pond(snapshot, body)
+			var fit: GDScript = null
+			if bool(spec.get("condition", false)):
+				# The pond conditioner (WaterPondFit): the level may meet a stream end below
+				# it (never rise), and stream ends beside the pond are joined to it.
+				fit = load(WaterEdit.POND_FIT_PATH)
+				var fitted: float = fit.fit_level(snapshot, body, out)
+				if fitted != level:
+					level = fitted
+					body = WaterBody.pond(id, spec.depth, level)
+					snapshot.water_bodies = _with_pond(snapshot, body)
 			var goals := WaterCarve.pond_goals(snapshot, body, snapshot.heights)
 			out["level"] = level
-			out["goals"] = goals
 			lower(snapshot, goals)
+			var joined: Dictionary = {}
+			var hints: Array = []
+			if fit != null:
+				joined = fit.join_ends(snapshot, body)
+				out["moved"] = joined.moved
+				out["undone"] = joined.get("undone", false)
+				hints = joined.hints
+				goals = fit.merge_goals(goals, joined.goals)
+				out["joined"] = joined.joined
+			out["goals"] = goals
+			out["bodies"] = snapshot.water_bodies
+			out["hints"] = hints
 		"erase":
 			var bodies := WaterEdit.erased_bodies(snapshot, spec.touched, spec.shrunk)
 			out["bodies"] = bodies
@@ -625,6 +652,11 @@ func _land() -> void:
 		"pond":
 			var body := WaterBody.pond(int(spec.id), spec.depth, float(result.level))
 			doc.water_bodies = _with_pond(doc, body)
+			if result.has("bodies"):
+				# The conditioned pond edit also extended stream ends into the pond (WaterPondFit).
+				doc.water_bodies = result.bodies
+			last_hints = result.get("hints", [])
+			pond_hints_landed.emit(last_hints)
 			stroke = HeightStroke.begin(doc, HeightBrush.LOWER)
 			var goals: Dictionary = result.goals
 			stroke.lower_to(goals.rect, goals.goals)

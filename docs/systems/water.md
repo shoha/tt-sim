@@ -774,6 +774,43 @@ single increases, the largest bridged_run 3 -> 9), the test bounds the total wit
 off's. A stroke noisier than its own cap can hold (hairpins and jitter at half-widths under 1 m)
 is kept as drawn, planned as with conditioning off.
 
+**The pond tool (card painter-water-pond).** A pond is dug after the streams beside it as often as
+before them, so `WaterEditor.compute` ("pond", `spec.condition` = `WaterEdit.conditioning_enabled`,
+off is the pond as dug) calls `WaterPondFit` (`utils/water_pond_fit.gd`, loaded by path) once, on
+the authoring peer, and stores the result in the same WaterBody list (no format change, one history
+entry; the stroke's `last_hints` carry what was only said). Rules, each bounded: (1) the pond never
+rises, and sinks by at most `WaterPondFit.LEVEL_BAND_M` (0.6 m) to the level of a stream tail
+standing beside it below it (the stream would have to climb); (2) a stream end within
+`WaterPorts.SEARCH_M` (2 m) of the pond and within its snap reach (1.5 half-widths, at least 1 m),
+that WaterPorts says can meet it (a tail at or above the pond: join, inflow, a fall into it; a head
+at or below it: an outlet) gains a stepped connector to a point inside the pond (at most about 3 m
+long, see below), starting at the end's own point so the two chain as one stroke, its channel cut
+through the bank; the stream's points and levels and the pond's outline (mask) never move; (3) a
+head above the pond (water does not climb: `perched_head`) and an end out of reach or whose joins
+were dropped (`end_near_water_below`) are only said. The joins are all-or-nothing per pond: the field's events
+(film_run, bridged_run, end_near_water) and perched samples are counted before and after (two
+`WaterField` builds on the worker's snapshot) and the joins are dropped unless no kind got worse,
+no perched sample was added and, when the map reports any event, at least one was removed (a join
+that changes nothing the field reports could still change what a later pond finds: seed 10). The
+ends are then said (`end_near_water_below`) when the map had an `end_near_water` event.
+Idempotent (an end inside the pond's water has nothing to decide) and deterministic (no
+randomness, no time). The connector is `WaterPondFit._stepped`: two reaches meeting at the pond's
+edge, the stream's side at the stream's level, the pond's side at the pond's, so the drop is a
+riffle or a fall that `WaterCarve` and `WaterFalls` cut from the step as for any stroke (for a fall
+the lip is the stream's end). Why not the river conditioner's tree solver: `WaterConditioner.
+solve_tree` and `WaterPorts.condition_doc` change levels only; falls and reaches come from
+`WaterFallPlan` at plan time from the ground, and replanning a stored stroke re-reads the bed it
+already carved (a freeboard deeper each pass). A planned connector (`WaterEdit.plan_line`, the fall
+planner and level fit of a drawn river) was built and compared: over the fuzz it added bridged runs
+and film runs on every case with a fall, so the guard dropped it, which equals off. Measured in
+`test_water_pond.gd` (cases from `water_pond_cases.gd`, which run the very `compute()` the worker
+runs; a fuzz of random ground, free runs and tributaries with one to three ponds dug a little
+beyond stroke ends): over 40 maps (20 seeds, both pond orders) end_near_water 26 -> 20, bridged_run
+60 -> 60, film_run 70 -> 70, perched 300 -> 300, audit rises 0 -> 0, no map worse, 14 joins and 13
+ponds whose joins the guard dropped. Not solved: a head above a pond (water does not climb), and an
+end a fall above the pond whose fall into it would stand proud of the bank (perched samples rise:
+the square-corner case): both are said and left as drawn.
+
 ## Open work
 
 The list is [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work"; this doc does not repeat it.

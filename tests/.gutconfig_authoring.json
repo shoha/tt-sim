@@ -210,6 +210,7 @@
 		"res://tests/unit/test_water_carve.gd",
 		"res://tests/unit/test_water_condition_multi.gd",
 		"res://tests/unit/test_water_condition_pipeline.gd",
+		"res://tests/unit/test_water_pond.gd",
 		"res://tests/unit/test_water_conditioner.gd",
 		"res://tests/unit/test_water_distance.gd",
 		"res://tests/unit/test_water_fall_frames.gd",

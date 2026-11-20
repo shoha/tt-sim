@@ -214,6 +214,31 @@ func test_a_river_ending_in_a_river_joins_it_at_its_level() -> void:
 	assert_true(doc.water_bodies.is_empty(), "the river and its tributary")
 
 
+func test_the_water_brush_says_a_pond_s_hints_like_a_river_s() -> void:
+	# The pond stroke's hints (WaterEditor.last_hints, or pond_hints_landed when the worker lands
+	# them) reach BrushTool.refused as a toast, and only for a pond dug (not an erase).
+	var editor := _editor(_new_doc())
+	var tool := BrushTool.new()
+	add_child_autofree(tool)
+	tool.use_tool(ToolRegistry.find(WaterTool.ID))
+	tool.editor = editor
+	var water := WaterTool.of(tool)
+	water.shape = WaterBrush.Shape.POND
+	var said: Array[String] = []
+	tool.refused.connect(func(text: String) -> void: said.append(text))
+	editor.water.last_hints = [WaterHints.make(&"perched_head", Vector2.ZERO)]
+	water.end(tool)
+	assert_eq(said.size(), 1, "a head above the pond is said")
+	assert_true(said[0].contains("pond"), said[0])
+	tool.press_ctrl = true
+	water.end(tool)
+	assert_eq(said.size(), 1, "an erase says nothing")
+	tool.press_ctrl = false
+	editor.water.last_hints = []
+	water.end(tool)
+	assert_eq(said.size(), 1, "a pond with nothing to say is quiet")
+
+
 func test_a_line_from_a_pond_flows_out_and_a_line_in_water_is_refused() -> void:
 	var doc := _new_doc()
 	var editor := _editor(doc)

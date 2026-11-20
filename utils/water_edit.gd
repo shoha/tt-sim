@@ -38,6 +38,7 @@ const CONDITIONER_PATH := "res://utils/water_conditioner.gd"
 const PORTS_PATH := "res://utils/water_ports.gd"
 const HINTS_PATH := "res://utils/water_hints.gd"
 const REFIT_PATH := "res://utils/water_refit.gd"
+const POND_FIT_PATH := "res://utils/water_pond_fit.gd"
 const COMPRESSION := FileAccess.COMPRESSION_ZSTD
 
 ## The conditioning off switch (card painter-water-condition): plan_river() conditions a stroke
