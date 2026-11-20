@@ -157,6 +157,9 @@ var _raw := PackedFloat32Array()
 var _stroke_energy := PackedFloat32Array()
 ## The surface after the spill, before the buried rings.
 var _base := PackedFloat32Array()
+## Each stroke's WaterFieldStroke.table with the inputs it was made from (_table_of), by the
+## stroke's first body id.
+var _tables := {}
 
 
 ## The field of `doc` (a full build: update() of the whole grid).
@@ -357,6 +360,18 @@ func _reset(doc: MapDocument, rect: Rect2i) -> void:
 	var n := size.x * size.y
 	var heights := doc.heights
 	var has_heights := heights.size() == n
+	if rect == Rect2i(Vector2i.ZERO, size):
+		# The whole grid (a build): bulk fills, no per-sample loop.
+		ground = heights.duplicate() if has_heights else _zeros(n)
+		_raw.fill(WaterGeometry.DRY)
+		_stroke_energy.fill(0.0)
+		river.fill(0.0)
+		spill.fill(0)
+		calm.fill(0)
+		owner.fill(0)
+		flow_u.fill(NO_FLOW_U)
+		foot.fill(WaterFieldStroke.NO_FOOT)
+		return
 	for z in range(rect.position.y, rect.end.y):
 		var row := z * size.x
 		for i in range(row + rect.position.x, row + rect.end.x):
@@ -394,9 +409,21 @@ func _write_strokes(
 	ends: Array[Dictionary],
 	runs: Array[Dictionary]
 ) -> void:
-	for chain in RiverProfile.strokes(doc.water_bodies):
+	var rect_m := Rect2(origin + Vector2(rect.position) * step, Vector2(rect.size) * step).grow(1.0)
+	var chains := RiverProfile.strokes(doc.water_bodies)
+	if _tables.size() > chains.size():
+		# Strokes that are gone (or whose first reach changed) leave their tables behind.
+		var alive := {}
+		for chain in chains:
+			alive[chain[0].id] = true
+		for id: Variant in _tables.keys():
+			if not alive.has(id):
+				_tables.erase(id)
+	for chain in chains:
 		var typed: Array[WaterBody] = []
 		typed.assign(chain)
+		if not _chain_may_meet(typed, rect_m):
+			continue
 		var profile := RiverProfile.for_doc(doc, typed)
 		if profile.points.size() < 2:
 			continue
@@ -414,8 +441,54 @@ func _write_strokes(
 			ends.append(
 				{"body": typed[0].id, "pos": profile.points[-1], "level": profile.at(profile.total).x}
 			)
-		var table := WaterFieldStroke.table(profile, typed)
+		var table := _table_of(profile, typed)
 		_put_stroke(doc, typed[0].id, profile, table, lost, field, pond_level)
+
+
+## False when the stroke `chain` (its reaches) cannot reach `rect_m` (a window in metres): the
+## bounds of its control points, which hold its smoothed course, grown by its widest half-width,
+## the bank and a metre, miss it. Conservative, so skipping such a stroke changes nothing (the
+## profile and the raster it would have built come out empty over the rect).
+func _chain_may_meet(chain: Array[WaterBody], rect_m: Rect2) -> bool:
+	var box := Rect2()
+	var any := false
+	var widest := 0.0
+	for body in chain:
+		if body.points.is_empty():
+			continue
+		for hw in body.half_widths:
+			widest = maxf(widest, hw)
+		var part := WaterGeometry.bounds(body.points, 0.0)
+		box = part if not any else box.merge(part)
+		any = true
+	if not any:
+		return false
+	return box.grow(widest + WaterGeometry.RIVER_BANK_M + 1.0).intersects(rect_m, true)
+
+
+## WaterFieldStroke.table of `profile`, kept from the last update while its inputs (the profile's
+## shape and the reaches' speeds) are unchanged: an edit elsewhere never redoes a stroke's table.
+func _table_of(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
+	var speeds := PackedFloat32Array()
+	for body in chain:
+		speeds.append(body.speed)
+	var key: Array = [
+		profile.levels,
+		profile.bounds,
+		profile.flags,
+		profile.arc,
+		profile.depth,
+		profile.taper,
+		profile.run_off,
+		speeds,
+	]
+	var id := chain[0].id
+	var kept: Variant = _tables.get(id)
+	if kept != null and kept.key == key:
+		return kept.table
+	var table := WaterFieldStroke.table(profile, chain)
+	_tables[id] = {"key": key, "table": table}
+	return table
 
 
 ## Writes one stroke's surface into the arrays over `field.rect` (see the header).
@@ -505,6 +578,9 @@ func _put_stroke(
 ## edge. The result is the greatest surface under those caps, which does not depend on the order
 ## of relaxing. Returns the bounds of the samples that may have changed.
 func _spill_pass(rect: Rect2i, was: PackedByteArray) -> Rect2i:
+	var native := WaterFieldNative.instance()
+	if native != null:
+		return WaterFieldNative.spill(native, self, rect, was)
 	var width := size.x
 	var n := width * size.y
 	for z in range(rect.position.y, rect.end.y):
@@ -589,6 +665,10 @@ func _spill_pass(rect: Rect2i, was: PackedByteArray) -> Rect2i:
 ## every area stand at the nearest neighbour's surface but under the ground, so a mesh ends
 ## buried.
 func _derive(inner: Rect2i) -> void:
+	var native := WaterFieldNative.instance()
+	if native != null:
+		WaterFieldNative.derive(native, self, inner)
+		return
 	var dry := WaterGeometry.DRY
 	var reach := _clip(inner.grow(1))
 	var wide := _clip(reach.grow(1))
@@ -706,6 +786,10 @@ func _slope_axis(i: int, c: int, stride: int, count: int) -> float:
 ## on its edges; every sample takes the nearer of its own and its nearest boundary sample's
 ## (DistanceField), then clamps at SHORE_FAR.
 func _shore(outer: Rect2i) -> void:
+	var native := WaterFieldNative.instance()
+	if native != null:
+		WaterFieldNative.shore(native, self, outer)
+		return
 	var win := _clip(outer.grow(SHORE_MARGIN))
 	var ww := win.size.x
 	var count := ww * win.size.y

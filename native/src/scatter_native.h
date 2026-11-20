@@ -46,6 +46,14 @@ public:
 	/// row) in instance order under `seed`, "buffer": the MultiMesh buffer in that order,
 	/// "custom": whether it carries custom data (`anchors`, ScatterMass's table)}, or {"error"}.
 	Dictionary chunk(const PackedFloat32Array &rows, const Variant &indices, int64_t seed, const Dictionary &anchors) const;
+	/// WaterField's hot passes and RiverProfile.field's raster (water_field.h): each takes the arrays
+	/// and constants by name in one Dictionary and returns the arrays it changed.
+	Dictionary water_spill(const Dictionary &args) const;
+	Dictionary water_derive(const Dictionary &args) const;
+	Dictionary water_shore(const Dictionary &args) const;
+	Dictionary water_raster(const Dictionary &args) const;
+	Dictionary water_mesh(const Dictionary &args) const;
+	Dictionary water_textures(const Dictionary &args) const;
 };
 
 } // namespace godot

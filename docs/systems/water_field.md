@@ -60,9 +60,31 @@ stroke removal, a level change, a pond removal and ground edits.
 Timings (headless GDScript, canonical 61 m map, 245 x 245 samples, 31 bodies, 2026-11-19): full
 build about 200 ms (bodies 75, spill 25, derive 45, shore 55); update 16 to 50 ms for a pond, a short
 stroke or a ground edit and 25 to 85 ms for a whole long stroke (the biggest stroke's rect is 55 x 138
-samples; about 40 percent of the time is the shore transform). If an edit must be under 50 ms for the
-longest strokes, port the shore transform and the stroke rasteriser to the scatter DLL; not needed
-for the stage-1 data model.
+samples; about 40 percent of the time is the shore transform).
+
+### Edit latency (card painter-water-latency, spike, unmerged)
+
+Headless, same map, debug DLL, shared machine (medians, 9 runs): GDScript only, a full build 275 ms and
+a 60 x 40 update 52 ms; with the library (`ScatterNative.CAPABILITY_WFIELD`) a full build 43 ms,
+16 x 16 0.8 ms, 60 x 40 6 ms, a whole stroke's rect (87 x 87) 12 ms. The mesh builder 48 -> 0.4 ms and
+the two texture buffers 25 -> 0.2 ms. Nothing changes in the output: the goldens, update equals build
+and native equals GDScript (`tests/unit/test_water_field_native.gd`) all hold bit for bit.
+
+- Native (`native/src/water_field.cpp`, `water_field_mesh.cpp`; `utils/water_field_native.gd` packs the
+  arrays and constants by name, so they stay in WaterField): `_spill_pass`, `_derive`, `_shore`
+  (distance transform and marching-triangles contour included), `RiverProfile.field`'s raster,
+  `WaterFieldMesh.build` and `PainterWaterField`'s texture packing (`WaterFieldNative.pack_textures`).
+  Each is ported expression for expression, every intermediate in the type GDScript holds it in,
+  and the GDScript stays the reference and the fallback (`ScatterNative.force_gdscript_wfield`).
+- GDScript levers (also in the fallback): a stroke whose control points (grown by its widest half-width,
+  the bank and a metre) miss the dirty rect is skipped before its profile is built; each stroke's
+  `WaterFieldStroke.table` is kept in `_tables` while the profile's shape and the reaches' speeds
+  stand (39 KB on the canonical map); `RiverProfile.level_at` is `at().x` without the bed and the
+  taper (the table reads it every 5 cm); the riffle white is written from its sparse sources instead of
+  gathered by a 28-wide window per entry; `_reset` of the whole grid is bulk fills.
+- What is left in a 60 x 40 update (native, about 6 ms): the strokes' profile, stations and per-sample
+  write (`_put_stroke`, `stations`), all GDScript. A full build: `_put_stroke` 19 ms, stations 8,
+  table 4.5, profiles 4, ponds 2, native passes 5.
 
 ## Events: inconsistencies as data
 

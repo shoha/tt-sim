@@ -216,6 +216,27 @@ func at(s: float) -> Vector4:
 	return Vector4(bank, bed, gorge, sill)
 
 
+## at(s).x without the rest of the section (the bed, the gorge and sill shares, the tapered end):
+## the bank level at arc length `s`, rounded to float as the Vector4 holds it.
+## WaterFieldStroke.table reads the level every few centimetres, and at() is five times the work.
+func level_at(s: float) -> float:
+	var n := levels.size()
+	if n == 0:
+		return 0.0
+	var k := 0
+	while k < n - 1 and s > bounds[k]:
+		k += 1
+	var bank := levels[k]
+	var fall_above := k > 0 and k - 1 < flags.size() and flags[k - 1] != 0
+	if fall_above:
+		bank = WaterCarve.fall_shape(s - bounds[k - 1], levels[k - 1], levels[k], depth).x
+	elif k > 0:
+		var upper := levels[k - 1]
+		var step := WaterCarve.step_shape(upper, levels[k], depth)
+		bank = lerpf(upper, levels[k], smoothstep(bounds[k - 1], bounds[k - 1] + step.z, s))
+	return Vector4(bank, 0.0, 0.0, 0.0).x
+
+
 ## The half-width `half_width` (the course's at `s`) narrowed toward a tapered end to a rounded
 ## head (WaterCarve.head_width()).
 func head(s: float, half_width: float) -> float:
@@ -252,6 +273,31 @@ func field(doc: MapDocument, reach_m: float, clip: Rect2i = Rect2i()) -> Diction
 	var rect := _cells_in(WaterGeometry.bounds(points, reach), origin, step, grid)
 	if clip.has_area():
 		rect = rect.intersection(clip)
+	# The segment raster in the scatter library (native/src/water_field.cpp), bit for bit the loop
+	# below.
+	var native := ScatterNative.wfield_instance() if rect.has_area() else null
+	if native != null:
+		var raster: Dictionary = native.call(
+			"water_raster",
+			{
+				"points": points,
+				"widths": widths,
+				"arc": arc,
+				"rect": rect,
+				"origin": origin,
+				"step": step,
+				"grid": grid,
+				"reach": reach,
+				"total": total,
+				"run_off": run_off,
+			}
+		)
+		return {
+			"rect": rect,
+			"distance": raster.distance,
+			"along": raster.along,
+			"half_width": raster.half_width,
+		}
 	var count := rect.size.x * rect.size.y
 	var distance := PackedFloat32Array()
 	var along := PackedFloat32Array()

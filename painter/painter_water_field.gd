@@ -197,32 +197,9 @@ func _upload_textures() -> void:
 	var sm := _material as ShaderMaterial
 	var nx := field.size.x
 	var nz := field.size.y
-	var n := nx * nz
-	var a := PackedFloat32Array()
-	var b := PackedFloat32Array()
-	a.resize(n * 4)
-	b.resize(n * 4)
-	for i in n:
-		# The exact waterline: the depth of the surface as the mesh draws it (ew) on a wet sample.
-		var d: float = field.depth[i]
-		if field.w[i] != WaterGeometry.DRY:
-			d = field.ew[i] - field.ground[i]
-		a[i * 4] = maxf(d, DEPTH_FLOOR)
-		a[i * 4 + 1] = field.energy[i]
-		a[i * 4 + 2] = field.shore[i]
-		a[i * 4 + 3] = field.steep[i]
-		var u: float = field.flow_u[i]
-		if u > WaterField.NO_FLOW_U * 0.5:
-			b[i * 4] = u
-			b[i * 4 + 1] = 1.0
-		# The foot coordinate carries its own weight (fld_b.a) and is divided by it in the shader; a
-		# pond sample under a fall's plunge has one without a flow coordinate.
-		var ft: float = field.foot[i]
-		if ft < WaterFieldStroke.NO_FOOT * 0.5:
-			b[i * 4 + 2] = ft
-			b[i * 4 + 3] = 1.0
-	_tex_a = _fill_texture(_tex_a, nx, nz, a)
-	_tex_b = _fill_texture(_tex_b, nx, nz, b)
+	var packed := WaterFieldNative.pack_textures(field, DEPTH_FLOOR)
+	_tex_a = _fill_texture(_tex_a, nx, nz, packed.a)
+	_tex_b = _fill_texture(_tex_b, nx, nz, packed.b)
 	sm.set_shader_parameter(&"fld_a", _tex_a)
 	sm.set_shader_parameter(&"fld_b", _tex_b)
 	sm.set_shader_parameter(&"fld_origin", field.origin)

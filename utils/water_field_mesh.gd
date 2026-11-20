@@ -39,6 +39,9 @@ const _CORNERS: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1
 ## {"arrays", "aabb", "vertices", "triangles"} for `f` (see the header); empty arrays when the
 ## field holds no water.
 static func build(f: WaterField) -> Dictionary:
+	var native := WaterFieldNative.instance()
+	if native != null:
+		return WaterFieldNative.mesh(native, f)
 	var nx := f.size.x
 	var nz := f.size.y
 	var cells := PackedByteArray()

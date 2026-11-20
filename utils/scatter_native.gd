@@ -33,6 +33,9 @@ const CAPABILITY_WATER := "water"
 const CAPABILITY_CHUNK := "chunk"
 ## ... and TerrainRules.sample_fields (rule_fields; card terrainrules).
 const CAPABILITY_FIELDS := "fields"
+## ... and WaterField's hot passes (water_spill, water_derive, water_shore, water_raster; card
+## painter-water-latency).
+const CAPABILITY_WFIELD := "wfield"
 
 ## True: every job runs in GDScript (A/B measurements, tests of the GDScript path).
 static var force_gdscript := false
@@ -41,6 +44,9 @@ static var force_gdscript_chunks := false
 ## True: TerrainRules.sample_fields runs in GDScript while scatter jobs stay native (the stroke-end
 ## A/B of card terrainrules).
 static var force_gdscript_fields := false
+## True: the water field's passes (WaterFieldNative, RiverProfile.field) run in GDScript (A/B runs,
+## test_water_field_native).
+static var force_gdscript_wfield := false
 
 static var _mutex := Mutex.new()
 static var _native: Object = null
@@ -51,6 +57,8 @@ static var _chunk_capable: int = -1
 ## Whether the loaded library has rule_fields: 0 not checked yet, 1 yes, -1 no. A benign race:
 ## two first callers both check and write the same answer.
 static var _fields_state := 0
+## The same for the water field's passes (wfield_instance()).
+static var _wfield_state := 0
 
 
 ## Whether the native library is loaded (the class exists).
@@ -513,6 +521,20 @@ static func _fields_instance() -> Object:
 		var ok := native != null and String(native.call("version")).contains(CAPABILITY_FIELDS)
 		_fields_state = 1 if ok else -1
 	return native if _fields_state > 0 else null
+
+
+## The library's instance when it has the water field's passes (CAPABILITY_WFIELD, checked once)
+## and they are not forced into GDScript (force_gdscript_wfield, or force_gdscript), else null. Any
+## thread. RiverProfile calls it directly (it must not name WaterFieldNative: the start-up script
+## graph, test_boot_graph).
+static func wfield_instance() -> Object:
+	if force_gdscript or force_gdscript_wfield:
+		return null
+	var native := _instance()
+	if _wfield_state == 0:
+		var ok := native != null and String(native.call("version")).contains(CAPABILITY_WFIELD)
+		_wfield_state = 1 if ok else -1
+	return native if _wfield_state > 0 else null
 
 
 ## Whether ScatterRows.chunk runs natively: the library is loaded, reports CAPABILITY_CHUNK (an

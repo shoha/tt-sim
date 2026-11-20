@@ -135,10 +135,11 @@ func test_the_library_reports_the_water_capability() -> void:
 	# 6: the rule noise went 3D (rockstretch); a library built before it scatters by the
 	# sheared 2D noise and disagrees with the GDScript twin on every slope. 7: the chunk call
 	# (scatterload; generation unchanged, test_scatter_native_chunk checks the call). 8: rule_fields
-	# (TerrainRules.sample_fields, card terrainrules; test_terrain_fields_native checks it).
+	# (TerrainRules.sample_fields, card terrainrules; test_terrain_fields_native checks it). 9: the
+	# water field's hot passes (card painter-water-latency; test_water_field_native checks them).
 	assert_eq(
 		ScatterNative.version(),
-		"ttscatter 8 curves water chunk fields",
+		"ttscatter 9 curves water chunk fields wfield",
 		"rebuild native/ (AGENTS.md)"
 	)
 	var wet_rule: Array[Dictionary] = [
