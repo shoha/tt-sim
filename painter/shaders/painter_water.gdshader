@@ -284,6 +284,13 @@ const float FLOW_SPEED_UNITS_PER_SEC = 0.6;
 const float WAKE_STRETCH = 2.0;
 // Rock foam (the depth-slope detector) only where the near side of the jump reaches the surface.
 const float EDGE_FOAM_REACH = 0.3;
+// ... and not where the far side of the jump is an opaque object IN FRONT of the surface (a canopy or
+// trunk over a river): the water beside its silhouette sees a quad that straddles the object, the
+// clamped near side reads 0 and the wrap drew a white outline round it. A rock or a token that pokes
+// through the surface is at most a few pixels nearer than the surface beside its waterline; an
+// occluder nearer than this (metres of view depth, or three pixels' footprint when larger) loses the
+// wrap, fully at three times it.
+const float EDGE_FRONT_MIN_M = 0.12;
 // The arcs round a token: how many, how many steps an expansion takes, the cycle (s).
 const int RING_COUNT = 3;
 const float RING_STEPS = 7.0;
@@ -497,13 +504,16 @@ void fragment() {
 
 	// ---- The bed under the water --------------------------------------------------------------
 #ifdef ABL_NODEPTH
+	float bed_raw = 5.0;
 	float bed_depth = 5.0;
 	float ground_like = 1.0;
 	float column_raw = 1.0;
 #else
 	float water_surface_depth = -VERTEX.z;
 	vec3 scene_view = water_scene_view(SCREEN_UV, INV_PROJECTION_MATRIX);
-	float bed_depth = max(-scene_view.z - water_surface_depth, 0.0);
+	// Negative where the scene is nearer than the surface: an opaque object in front of the water.
+	float bed_raw = -scene_view.z - water_surface_depth;
+	float bed_depth = max(bed_raw, 0.0);
 	float ground_like = 1.0;
 #ifdef RED_A
 	// The field surface reads its own column and takes no part of the ground test: skip both.
@@ -894,6 +904,15 @@ if (fieldv && (shade_opt & 4) != 0) {
 		min(bed_depth + side_x * dFdx(bed_depth), bed_depth + side_y * dFdy(bed_depth))
 	);
 	edge_foam *= 1.0 - smoothstep(EDGE_FOAM_REACH * 0.5, EDGE_FOAM_REACH, max(near_side, 0.0));
+	// How far in front of the surface the nearest object of this fragment's quad is (0 when none).
+	// The derivatives are taken by every fragment of the quad; only a fragment with a wrap pays the rest.
+	float raw_dx = dFdx(bed_raw);
+	float raw_dy = dFdy(bed_raw);
+	if (edge_foam > 0.0) {
+		float front_gap = max(-min(bed_raw, min(bed_raw + side_x * raw_dx, bed_raw + side_y * raw_dy)), 0.0);
+		float front_lo = max(EDGE_FRONT_MIN_M, 3.0 * world_units_per_pixel);
+		edge_foam *= 1.0 - smoothstep(front_lo, front_lo * 3.0, front_gap);
+	}
 #ifdef RED_C
 	// No depth jump, no wrap: the noise only breaks an edge that is there.
 	if (edge_foam > 0.0) {

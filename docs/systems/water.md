@@ -244,6 +244,13 @@ maps.
   submerged reed blades and a wading token's legs were outlined the same way. The near side
   is the shallowest of the pixel and its neighbours across the derivative pair (by
   `FRAGCOORD` parity), so both pixels of a silhouette agree.
+  The painted shader also ignores a jump whose far side is an opaque object IN FRONT of the
+  surface (`EDGE_FRONT_MIN_M`, card painter-water-fringe 2026-11-20): the clamped bed depth of
+  a canopy, trunk, bank or boulder pixel in the same quad read 0, so the wrap drew a 1 to 2 px
+  white outline round everything that overlaps water on screen. The unclamped depth gap
+  (negative where the scene is nearer than the surface) is read across the same derivative
+  pair; past 0.12 m (or three pixels' footprint, if larger) the wrap fades out, fully at three
+  times that. A waterline (a gap of a few pixels) keeps its wrap.
 - **Clear shallows (2026-10-05, the ford follow-up):** where the vertical water column over
   ground (the bed's world position from the depth buffer against the surface's) is under
   `CLEAR_END` 0.3 m, full from `CLEAR_FULL` 0.12 m, the bed shows through as a clear
