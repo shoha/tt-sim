@@ -31,6 +31,14 @@ extends RefCounted
 const RESAMPLE_M := 2.0
 ## A river joining other water ends this far past that water's edge (join_line()).
 const JOIN_INSET_M := 0.6
+## The conditioning probe (card painter-water-condition-spike): when true, plan_river() smooths
+## the course (WaterCourseFit) and fits the reach levels (WaterConditioner) by default. Off: no
+## tool or save path calls it; the spike's tests pass `condition` explicitly.
+const CONDITION_PROBE := false
+## The probe's parts load by path on first use: named as classes here they would join the
+## start-up script graph (test_boot_graph).
+const COURSE_FIT_PATH := "res://utils/water_course_fit.gd"
+const CONDITIONER_PATH := "res://utils/water_conditioner.gd"
 const COMPRESSION := FileAccess.COMPRESSION_ZSTD
 
 
@@ -115,13 +123,20 @@ static func plan_river(
 	points: PackedVector2Array,
 	half_widths: PackedFloat32Array,
 	depth: WaterBody.Depth,
-	speed: float = WaterBody.DEFAULT_SPEED
+	speed: float = WaterBody.DEFAULT_SPEED,
+	condition: bool = CONDITION_PROBE
 ) -> Array[WaterBody]:
 	var bodies: Array[WaterBody] = []
 	if doc.heights.size() != doc.sample_count():
 		return bodies
 	var joined := join_line(doc, points, half_widths)
 	var line: Array = resample(joined[0], joined[1])
+	if condition:
+		# The conditioning probe (WaterCourseFit): the course smoothed within a fraction of its
+		# width, loops trimmed, widths slope-limited.
+		var fit: Dictionary = load(COURSE_FIT_PATH).condition(joined[0], joined[1])
+		if fit.changed:
+			line = [fit.points, fit.widths]
 	var course: PackedVector2Array = line[0]
 	var widths: PackedFloat32Array = line[1]
 	if course.size() < 2:
@@ -155,6 +170,17 @@ static func plan_river(
 	var ranges := WaterGeometry.reach_ranges(
 		ground, WaterGeometry.REACH_DROP_M, shaped.forced, shaped.free
 	)
+	var fitted := PackedFloat64Array()
+	if condition:
+		# The conditioning probe (WaterConditioner): levels that never climb, reaches pooled
+		# across steps under the dead band, levels on the 5 cm lattice.
+		var into := WaterGeometry.level_at(doc, course[-1], -1, courses)
+		var opts := {} if free_ends.y == 1 or into == WaterGeometry.DRY else {"pin_last": into}
+		var fit: Dictionary = load(CONDITIONER_PATH).condition_ranges(
+			course, ground, ranges, shaped.forced, opts, shaped.free
+		)
+		ranges = fit.ranges
+		fitted = fit.levels
 	var rivers := 0
 	for body in doc.water_bodies:
 		rivers += 1 if body.is_river() else 0
@@ -167,7 +193,8 @@ static func plan_river(
 	var used := {}
 	for body in doc.water_bodies:
 		used[body.id] = true
-	for reach in ranges:
+	for k in ranges.size():
+		var reach := ranges[k]
 		while next > 0 and next <= WaterBody.MAX_ID and used.has(next):
 			next += 1
 		if next <= 0 or next > WaterBody.MAX_ID:
@@ -179,7 +206,7 @@ static func plan_river(
 			course.slice(reach.x, reach.y + 1),
 			widths.slice(reach.x, reach.y + 1),
 			depth,
-			WaterGeometry.reach_level(ground, reach),
+			fitted[k] if condition else WaterGeometry.reach_level(ground, reach),
 			clampf(speed, 0.0, WaterBody.MAX_SPEED)
 		)
 		bodies.append(river)
