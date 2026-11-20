@@ -1,4 +1,15 @@
 shader_type spatial;
+// The cost spike's exact reductions are on (card painter-water-cost-spike): comment these out for the
+// unreduced shader. The marker line after the defines is where the probe injects its own.
+#define ABL_CONSTOPT
+#define RED_A
+#define RED_B
+#define RED_C
+#define RED_D
+#define RED_E
+#define RED_F
+#define RED_G
+#define RED_I
 //ABL_DEFS
 render_mode blend_mix, depth_draw_opaque, cull_back, specular_disabled, ambient_light_disabled;
 
@@ -161,6 +172,7 @@ varying vec3 f_shd;
 // The field channels (WaterFieldMesh): depth, energy, shore distance, steep; river share, flag.
 varying vec4 v_f0;
 varying vec4 v_f1;
+varying flat float v_rings;
 // The white water: how much the energy whitens, the blob size (m).
 uniform float p_white = 1.0;
 uniform float p_blob_m = 0.9;
@@ -356,6 +368,14 @@ void vertex() {
 	v_mp = VERTEX.xz;
 	v_f0 = CUSTOM0;
 	v_f1 = CUSTOM1;
+#ifdef RED_I
+	// Any token disturbance active (a uniform array: read per vertex, not per fragment).
+	float any_pt = 0.0;
+	for (int i = 0; i < 8; i++) {
+		any_pt = max(any_pt, step(0.5, water_disturbance_points[i].w));
+	}
+	v_rings = any_pt;
+#endif
 }
 
 
@@ -437,11 +457,13 @@ if (fieldv) {
 	if ((shade_opt & 1) != 0) {
 		fa = fld_cubic(fld_a, tc);
 	}
+#ifndef RED_G
 	if ((shade_opt & 2) != 0) {
 		vec4 fb = texture(fld_b, tc / fld_dim);
 		has_u = smoothstep(0.2, 0.9, fb.g);
 		uf = mix(uf, fb.r / max(fb.g, 0.001), has_u);
 	}
+#endif
 }
 #endif
 	float curtain = 0.0;
@@ -520,6 +542,8 @@ if (fieldv && (shade_opt & 4) != 0) {
 	float ring_r = max(disturbance_ripple_radius, 0.3);
 #ifdef ABL_NORINGS
 	for (int i = 0; i < 0; i++) {
+#elif defined(RED_I)
+	for (int i = 0; i < (v_rings > 0.5 ? 8 : 0); i++) {
 #else
 	for (int i = 0; i < 8; i++) {
 #endif
@@ -744,6 +768,14 @@ if (fieldv && (shade_opt & 4) != 0) {
 		// One clock (S2): the blobs travel along the flow coordinate at one speed (still where the
 			// field has no stroke: a pond's white boils in place), as the streaks and tongues do.
 			bool one_clock = (shade_opt & 2) != 0;
+#ifdef RED_G
+			// The flow coordinate's texture is read only where a white is drawn.
+			if (one_clock) {
+				vec4 fb = texture(fld_b, ((v_mp - fld_origin) * fld_inv_step + 0.5) / fld_dim);
+				has_u = smoothstep(0.2, 0.9, fb.g);
+				uf = mix(uf, fb.r / max(fb.g, 0.001), has_u);
+			}
+#endif
 			vec2 bq = one_clock ? vec2(uf, dot(p, across_dir)) : p;
 			vec2 bf = one_clock ? vec2(FLOW_C * has_u, 0.0) : flow_ws;
 			float c_face = (shade_opt & 4) != 0 ? smoothstep(0.1, 0.5, curtain) : curtain;
