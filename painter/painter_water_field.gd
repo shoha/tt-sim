@@ -142,6 +142,12 @@ func update_rect(rect: Rect2i) -> void:
 		_build_mesh()
 
 
+## Redoes the whole field and mesh (a probe's switch changes what a build makes).
+func rebuild() -> void:
+	if _terrain != null:
+		_rebuild_all()
+
+
 func _rebuild_all() -> void:
 	var doc := _terrain.document
 	var t0 := Time.get_ticks_usec()
@@ -197,7 +203,11 @@ func _upload_textures() -> void:
 	a.resize(n * 4)
 	b.resize(n * 4)
 	for i in n:
-		a[i * 4] = maxf(field.depth[i], DEPTH_FLOOR)
+		# The exact waterline: the depth of the surface as the mesh draws it (ew) on a wet sample.
+		var d: float = field.depth[i]
+		if field.w[i] != WaterGeometry.DRY:
+			d = field.ew[i] - field.ground[i]
+		a[i * 4] = maxf(d, DEPTH_FLOOR)
 		a[i * 4 + 1] = field.energy[i]
 		a[i * 4 + 2] = field.shore[i]
 		a[i * 4 + 3] = field.steep[i]
@@ -205,11 +215,12 @@ func _upload_textures() -> void:
 		if u > WaterField.NO_FLOW_U * 0.5:
 			b[i * 4] = u
 			b[i * 4 + 1] = 1.0
-			var ft: float = field.foot[i]
-			if ft < WaterFieldStroke.NO_FOOT * 0.5:
-				# The foot coordinate rides the same weight (fld_b.g) and is divided by it in the shader.
-				b[i * 4 + 2] = ft
-				b[i * 4 + 3] = 1.0
+		# The foot coordinate carries its own weight (fld_b.a) and is divided by it in the shader; a
+		# pond sample under a fall's plunge has one without a flow coordinate.
+		var ft: float = field.foot[i]
+		if ft < WaterFieldStroke.NO_FOOT * 0.5:
+			b[i * 4 + 2] = ft
+			b[i * 4 + 3] = 1.0
 	_tex_a = _fill_texture(_tex_a, nx, nz, a)
 	_tex_b = _fill_texture(_tex_b, nx, nz, b)
 	sm.set_shader_parameter(&"fld_a", _tex_a)

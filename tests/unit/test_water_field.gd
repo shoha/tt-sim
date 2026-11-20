@@ -25,7 +25,18 @@ const GOLDEN_TOLERANCE := 0.002
 const FULL_BUDGET_MS := 3000.0
 const UPDATE_BUDGET_MS := 1500.0
 const _ARRAYS := [
-	"ground", "w", "depth", "energy", "steep", "shore", "river", "spill", "calm", "owner", "foot"
+	"ground",
+	"w",
+	"ew",
+	"depth",
+	"energy",
+	"steep",
+	"shore",
+	"river",
+	"spill",
+	"calm",
+	"owner",
+	"foot",
 ]
 
 var _doc: MapDocument = null

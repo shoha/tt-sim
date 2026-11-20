@@ -79,6 +79,15 @@ const INFLUENCE_M := 3.0
 const END_NEAR_M := 2.0
 const LEVEL_GAP_M := 0.3
 
+## Exact waterline (field-resolution spike F1, ported by the foot-2 spike): the first buried ring
+## stands at the surface's own level extended over the ground (not TUCK_M under it) unless the
+## ground is lower, where it keeps EDGE_MIN under it, so the waterline is where the extended
+## surface meets the terrain's own triangles; `shore` is then the exact distance to that contour
+## (marching triangles, WaterFieldContour) within EXACT_M, the distance to its crossing points
+## beyond.
+const EDGE_MIN := 0.02
+const EXACT_M := 0.75
+
 ## Shade spike: how much a metre of drop counts in the flow coordinate (below 1 a fall's patterns
 ## stretch and run faster than the reach's), and the marker of a sample no stroke wrote.
 const FLOW_DROP_K := 0.5
@@ -95,6 +104,10 @@ const _NEIGHBOURS: Array[Vector2i] = [
 	Vector2i(1, 1),
 ]
 
+## Switch (a probe's A/B): the exact waterline on, or the stage-two shore; a field is built after a
+## change.
+static var exact_shore := true
+
 var size := Vector2i.ZERO
 var step := Vector2.ONE
 ## XZ of sample (0, 0).
@@ -103,6 +116,9 @@ var ground := PackedFloat32Array()
 ## The surface height per sample, WaterGeometry.DRY where dry; the outer two rings around the
 ## water stand buried (under the ground) so a mesh has somewhere to end.
 var w := PackedFloat32Array()
+## The surface as the mesh draws it: w, except on the first buried ring, which stands at the
+## neighbouring surface extended (see EDGE_MIN); DRY where w is.
+var ew := PackedFloat32Array()
 ## w - ground where there is water (negative on the buried rings), -INF where dry.
 var depth := PackedFloat32Array()
 ## White water, 0..1.
@@ -311,6 +327,8 @@ func _fit(doc: MapDocument) -> bool:
 	ground = _zeros(n)
 	w = _zeros(n)
 	w.fill(WaterGeometry.DRY)
+	ew = _zeros(n)
+	ew.fill(WaterGeometry.DRY)
 	depth = _zeros(n)
 	depth.fill(-INF)
 	energy = _zeros(n)
@@ -465,6 +483,16 @@ func _put_stroke(
 				foot[at] = foot_t[ti]
 				owner[at] = id
 				_stroke_energy[at] = maxf(_stroke_energy[at], 0.0 if undermined else e)
+			elif (
+				has_mask
+				and mask[at] != 0
+				and not undermined
+				and foot[at] > WaterFieldStroke.NO_FOOT * 0.5
+			):
+				# A fall that lands in a pond: the pond holds the level (the stroke does not win the
+				# sample), but the foot coordinate runs on across its cells, so the plunge's rules
+				# (the veil, the pool's floor) reach the pond as they reach a pool of the stream.
+				foot[at] = foot_t[ti]
 			# Flow share: the channel and its bank fade (the shader reads the flow map too).
 			river[at] = maxf(river[at], 1.0 - smoothstep(hw, hw + bank, d))
 
@@ -576,6 +604,7 @@ func _derive(inner: Rect2i) -> void:
 			depth[i] = v - ground[i] if v != dry else -INF
 			steep[i] = 0.0
 			energy[i] = _stroke_energy[i]
+			ew[i] = _edge_surface(i, inner.position.x + x, inner.position.y + z, v)
 	for z in range(inner.position.y, inner.end.y):
 		for x in range(inner.position.x, inner.end.x):
 			var i := z * size.x + x
@@ -687,10 +716,17 @@ func _shore(outer: Rect2i) -> void:
 	var best := PackedFloat32Array()
 	best.resize(count)
 	best.fill(INF)
+	var sedge := PackedInt32Array()
+	sedge.resize(count)
+	var ed := PackedFloat32Array()
+	ed.resize(count)
+	for z in range(win.position.y, win.end.y):
+		var lrow := (z - win.position.y) * ww - win.position.x
+		for x in range(win.position.x, win.end.x):
+			ed[lrow + x] = _edge_depth(z * size.x + x)
 	for z in range(win.position.y, win.end.y):
 		for x in range(win.position.x, win.end.x):
-			var i := z * size.x + x
-			var da := depth[i]
+			var da := ed[(z - win.position.y) * ww + x - win.position.x]
 			if da == -INF:
 				continue
 			for k in 2:
@@ -700,25 +736,29 @@ func _shore(outer: Rect2i) -> void:
 				var zz := z + dz
 				if xx >= win.end.x or zz >= win.end.y:
 					continue
-				var j := zz * size.x + xx
-				var db := depth[j]
+				var li := (z - win.position.y) * ww + x - win.position.x
+				var lj := li + dx + dz * ww
+				var db := ed[lj]
 				if db == -INF or (da > 0.0) == (db > 0.0):
 					continue
 				var t := da / (da - db)
 				var p := origin + Vector2(x + dx * t, z + dz * t) * step
-				var li := (z - win.position.y) * ww + x - win.position.x
 				var dd := (origin + Vector2(x, z) * step).distance_to(p)
 				if dd < best[li]:
 					best[li] = dd
 					seeds[li] = p
+					sedge[li] = li * 2 + k
 					has[li] = 1
-				var lj := li + dx + dz * ww
 				dd = (origin + Vector2(xx, zz) * step).distance_to(p)
 				if dd < best[lj]:
 					best[lj] = dd
 					seeds[lj] = p
+					sedge[lj] = li * 2 + k
 					has[lj] = 1
 	var near: PackedInt32Array = DistanceField.transform(has, ww, win.size.y, step)["nearest"]
+	var contour := {}
+	if exact_shore:
+		contour = WaterFieldContour.table(ed, win, has, origin, step)
 	for z in range(outer.position.y, outer.end.y):
 		for x in range(outer.position.x, outer.end.x):
 			var i := z * size.x + x
@@ -730,7 +770,39 @@ func _shore(outer: Rect2i) -> void:
 			var nn := near[li]
 			if nn >= 0 and nn != li:
 				dd = minf(dd, q.distance_to(seeds[nn]))
-			shore[i] = dd if depth[i] > 0.0 else -dd
+			if exact_shore and dd < EXACT_M + 0.12:
+				if has[li] != 0:
+					dd = minf(dd, WaterFieldContour.distance(q, contour, sedge[li], ww))
+				if nn >= 0 and nn != li:
+					dd = minf(dd, WaterFieldContour.distance(q, contour, sedge[nn], ww))
+			shore[i] = dd if ed[li] > 0.0 else -dd
+
+
+## The depth the waterline is taken from at sample `i`: with the exact shore, the surface as drawn
+## (ew) over the ground; else the stage-two depth.
+func _edge_depth(i: int) -> float:
+	if not exact_shore or w[i] == WaterGeometry.DRY:
+		return depth[i]
+	return ew[i] - ground[i]
+
+
+## The surface drawn at sample `i` (grid position (x, z), buried-ring result `v`): see `ew`.
+func _edge_surface(i: int, x: int, z: int, v: float) -> float:
+	var dry := WaterGeometry.DRY
+	if not exact_shore or v == dry or _base[i] != dry:
+		return v
+	var top := -INF
+	for o in _NEIGHBOURS:
+		var xx := x + o.x
+		var zz := z + o.y
+		if xx < 0 or zz < 0 or xx >= size.x or zz >= size.y:
+			continue
+		var h := _base[zz * size.x + xx]
+		if h != dry:
+			top = maxf(top, h)
+	if top == -INF:
+		return v
+	return minf(top, ground[i] - EDGE_MIN)
 
 
 ## Replaces the events inside `rect` (by the sample nearest their position) with those found

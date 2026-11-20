@@ -35,7 +35,7 @@ const float MIST_SOFT_M = 0.25;
 const float MIST_LOBE_SPREAD = 0.22;
 const float MIST_LOBE_SPREAD_GROW = 0.08;
 const vec3 MIST_LOBE_RADII = vec3(0.55, 0.48, 0.42);
-const float MIST_LOBE_SOFT = 0.3;
+const float MIST_LOBE_SOFT = 0.9;
 const float MIST_WARP = 0.1;
 
 varying float seed;
@@ -89,16 +89,18 @@ void fragment() {
 	float l0 = 1.0 - smoothstep(inner.x, MIST_LOBE_RADII.x, length(w - c0));
 	float l1 = 1.0 - smoothstep(inner.y, MIST_LOBE_RADII.y, length(w - c1));
 	float l2 = 1.0 - smoothstep(inner.z, MIST_LOBE_RADII.z, length(w - c2));
-	float cloud = min(l0 + l1 + l2, 1.0);
-	// A soft cloud with no rim: a firm edge read as a translucent disc laid over the face's glass
-	// (card painter-water-foot-spike).
-	float body = smoothstep(0.02, 0.95, cloud);
+	float cloud = l0 + l1 + l2;
+	// A soft cloud with no plateau and no rim: the lobes' falloff reaches their centres (MIST_LOBE_SOFT)
+	// and the sum is not capped, so the alpha is a bump that thins into the glass and the veil under it;
+	// a capped sum read as a flat translucent disc laid over the face (cards painter-water-foot-spike
+	// and painter-water-foot2).
+	float body = smoothstep(0.0, 1.6, cloud);
 	body *= body;
-	float core = smoothstep(0.7, 0.95, cloud);
+	float core = smoothstep(0.9, 1.7, cloud);
 	float life = sin(mist_phase * PI);
 	float soft = smoothstep(
 		0.0, MIST_SOFT_M, fall_scene_depth(SCREEN_UV, INV_PROJECTION_MATRIX) + VERTEX.z
 	);
-	ALBEDO = mix(mix(p_foam, p_sky, 0.55), p_foam, core);
-	ALPHA = body * mix(0.7, 1.0, core) * life * soft * mist_alpha;
+	ALBEDO = mix(mix(p_foam, p_sky, 0.2), p_foam, core);
+	ALPHA = body * mix(0.6, 1.0, core) * life * soft * mist_alpha;
 }

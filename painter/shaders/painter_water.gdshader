@@ -10,6 +10,18 @@ shader_type spatial;
 #define RED_F
 #define RED_G
 #define RED_I
+// The foot rules (cards painter-water-foot-spike and painter-water-foot2): the foot coordinate's
+// fetch, the white floor and tongues (R3), the narrow-pool and bank-lap fixes, and foot2's softer
+// veil, drifting tongue tips and depth-proportional pool floor. The probe's `defs` action can
+// switch one off with "-NAME" (an #undef after these).
+#define FOOT_ANY
+#define FOOT_R3
+#define FOOT_FIX
+#define FOOT2_GATE
+#define FOOT2_VEIL
+#define FOOT2_TONGUE
+#define FOOT2_POOL
+#define FOOT2_LAP
 //ABL_DEFS
 render_mode blend_mix, depth_draw_opaque, cull_back, specular_disabled, ambient_light_disabled;
 
@@ -162,6 +174,12 @@ const float FLOW_DROP_K = 0.5;
 // The foot rule: the metres of face above the foot and of plunge pool below it the rules reach.
 const float FOOT_FACE_M = 1.5;
 const float FOOT_POOL_M = 1.6;
+// foot2: the veil's reach below the foot (m), the depth the pool floor follows (column per metre of
+// depth), and the slot (s) a tongue's length holds before it drifts to its next.
+const float FOOT_VEIL_M = 3.0;
+const float FOOT_SLAB_M = 1.1;
+const float POOL_DEPTH_K = 5.0;
+const float FOOT_DRIFT_S = 9.0;
 // R3: the longest tongue of white below the foot (m).
 const float FOOT_TONGUE_M = 0.7;
 // R1: the energy the foot holds.
@@ -482,15 +500,34 @@ if (fieldv) {
 	float fd = 9.0;
 	float foot_v = 0.0;
 #ifdef FOOT_ANY
+#ifdef FOOT2_GATE
+	// The mesh flags the vertices within the foot's range (CUSTOM1.z): the fetch is made only there,
+	// whatever the energy, so the plunge pool of a fall into a pond (no energy of its own) has a foot.
+	if (fieldv && v_f1.z > 0.02) {
+#else
 	if (fieldv && (fa.w > 0.02 || fa.y > 0.04)) {
+#endif
 		vec4 fbf = texture(fld_b, ((v_mp - fld_origin) * fld_inv_step + 0.5) / fld_dim);
 		foot_v = smoothstep(0.2, 0.9, fbf.a);
 		fd = fbf.b / max(fbf.a, 0.001);
 	}
 #endif
+#ifdef FOOT2_VEIL
+	// The white floor is whole 0.4 m above the foot (a lower face of broken water, not a glass window
+	// with columns reaching the foot): the foot's last stretch holds no column edge to step across.
+	float foot_in = smoothstep(-FOOT_FACE_M, -0.4, fd) * foot_v;
+#else
 	float foot_in = smoothstep(-FOOT_FACE_M, 0.0, fd) * foot_v;
+#endif
 	float foot_out = (1.0 - smoothstep(0.0, FOOT_POOL_M, fd)) * foot_v;
+#ifdef FOOT2_VEIL
+	// The veil reaches FOOT_VEIL_M below the foot and fades over all of it (the squared smoothstep: a
+	// long soft tail, no edge to cross).
+	float veil_t = 1.0 - smoothstep(-0.2, FOOT_VEIL_M, fd);
+	float foot_w = foot_in * veil_t * veil_t * (3.0 - 2.0 * veil_t);
+#else
 	float foot_w = foot_in * (1.0 - smoothstep(0.0, FOOT_POOL_M, fd));
+#endif
 	float curtain = 0.0;
 	float path_k = 1.0;
 	if (fieldv) {
@@ -522,7 +559,14 @@ if (fieldv && (shade_opt & 4) != 0) {
 #else
 	float pool_k = smoothstep(0.5, 1.4, fa.z) * smoothstep(0.08, 0.25, fa.x) * (1.0 - curtain);
 #endif
+#ifdef FOOT2_POOL
+	// The floor follows the water's own depth (a column per metre of depth, up to the pool's): a
+	// 0.15 m stream pool reads mid, a metre reads deep, a lip's few centimetres stay shallow, so the
+	// floor no longer steps the lip.
+	column = max(column, min(max(fa.x, 0.0) * POOL_DEPTH_K, POOL_COLUMN_M) * pool_k);
+#else
 	column = max(column, POOL_COLUMN_M * pool_k);
+#endif
 }
 #ifdef FOOT_R2
 {
@@ -743,8 +787,15 @@ if (fieldv && (shade_opt & 4) != 0) {
 #ifdef FOOT_FIX
 	// The foam's width and softness follow the bank's slope smoothly (it came from a steep/flat
 	// switch): a steep bank's grid-wide steps of waterline are brushed out, not drawn as blocks.
+#ifdef FOOT2_LAP
+	// With the exact waterline a steep bank's lap follows the terrain's triangles: a wider soft edge
+	// and a larger, slower break of the distance, so the lap is a brushed band, not a zigzag line.
+	float lap_soft = 0.03 + 0.32 * steep;
+	d_h += (p_noise(vec3(p.x * 1.3, 9.0, p.y * 1.3)) - 0.5) * 0.5 * steep;
+#else
 	float lap_soft = 0.03 + 0.2 * steep;
 	d_h += (p_noise(vec3(p.x * 1.7, 9.0, p.y * 1.7)) - 0.5) * 0.3 * steep;
+#endif
 #else
 	float lap_soft = 0.1 * steep;
 #endif
@@ -755,7 +806,15 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// glitter triangles (cards painter-edges, painter-water-edge3), so they are cut off from a
 	// slope of 0.9 (a bank about 42 degrees steep) and soft dabs, not crisp ticks, before it.
 	float dash_gate = 1.0 - smoothstep(0.35, 0.9, slope);
+#ifdef FOOT2_LAP
+	// The exact waterline follows the terrain's own triangles, so on a rough bank a crisp tick at a
+	// fixed distance from it draws a zigzag: the dashes are soft dabs (wide edge), and they stand
+	// only on a gentle shore (gate from a slope of 0.25).
+	dash_gate = 1.0 - smoothstep(0.25, 0.7, slope);
+	float dashes = (1.0 - smoothstep(0.03, 0.2 + world_units_per_pixel, abs(d_h - outer))) * smoothstep(0.6, 0.76, dash_n) * dash_gate;
+#else
 	float dashes = (1.0 - smoothstep(0.02, 0.08 + world_units_per_pixel, abs(d_h - outer))) * smoothstep(0.6, 0.76, dash_n) * dash_gate;
+#endif
 	shore_foam = max(lap, dashes) * ground_like * smoothstep(0.0, 0.01, column_raw + 0.004);
 	if (fieldv) {
 		// The thin water a bank sheds and a river's ramp into a pond (CUSTOM1.w 0.5 and 1) is a wet
@@ -811,6 +870,11 @@ if (fieldv && (shade_opt & 4) != 0) {
 		// near the fall and thins quickly, and a plunge pool is calm a metre or two away. A river's
 		// ramp into a lower pond (CUSTOM1.w) is a slope, not a fall: it keeps a fifth of its white.
 		float e_raw = fa.y;
+#ifdef FOOT2_LAP
+		// The slope-white of a thin shelf at a bank's waterline (the exact waterline reaches the ledge
+		// the 0.25 m grid used to cut off) is not a fall: it fades over the first 0.35 m from the shore.
+		e_raw *= smoothstep(0.04, 0.35, max(fa.z, 0.0));
+#endif
 #ifdef FOOT_R1
 		// Energy as one smooth function of the arc from the foot: the face's white holds to the foot
 		// and the plunge's decays from it over FOOT_POOL_M (the stroke's own table splits face and
@@ -831,8 +895,30 @@ if (fieldv && (shade_opt & 4) != 0) {
 			cu *= 3.6;
 			float edge_r = abs(fract(cu) - 0.5) * 2.0;
 			// Round tips: a column ends shorter at its sides than in its middle.
+#ifdef FOOT2_TONGUE
+			// Each column's length drifts slowly on the master clock (a smooth blend of two hashes, a
+			// slot of FOOT_DRIFT_S each), so the tips are never fixed in place; the edge softens with the
+			// distance from the foot: the white thins into the veil over a metre and a half, not a line.
+			float slot = wt() / FOOT_DRIFT_S + be_hash(vec2(floor(cu), 1.3));
+			float k0 = floor(slot);
+			float hk = mix(
+				be_hash(vec2(floor(cu), 3.7 + k0 * 5.3)),
+				be_hash(vec2(floor(cu), 3.7 + (k0 + 1.0) * 5.3)),
+				smoothstep(0.0, 1.0, fract(slot))
+			);
+			float tip = (0.1 + FOOT_TONGUE_M * hk) * (1.0 - 0.55 * edge_r * edge_r);
+			// Softer still towards a column's sides, so neighbouring tongues melt into one another.
+			fill = foot_in * (1.0 - smoothstep(tip - 0.5, tip + 0.9 + 0.9 * edge_r * edge_r, fd));
+#ifdef FOOT2_SLAB
+			// The hybrid reading of main's curtain: a slab of white of nearly one length that fades out
+			// over a metre and a half, the columns' own lengths only nudging it.
+			tip = FOOT_SLAB_M * (0.7 + 0.3 * hk) * (1.0 - 0.25 * edge_r * edge_r);
+			fill = foot_in * (1.0 - smoothstep(tip - 0.9, tip + 1.2, fd));
+#endif
+#else
 			float tip = (0.1 + FOOT_TONGUE_M * be_hash(vec2(floor(cu), 3.7))) * (1.0 - 0.55 * edge_r * edge_r);
 			fill = foot_in * (1.0 - smoothstep(tip - 0.4, tip + 0.05, fd));
+#endif
 		}
 		en_c = max(en_c, fill * 0.9);
 #endif
@@ -925,6 +1011,11 @@ if (fieldv && (shade_opt & 4) != 0) {
 #endif
 		// White where the pattern stands over 1 - energy: all of it at 1, rare bold blobs at 0.3,
 		// none under a floor.
+#ifdef FOOT2_TONGUE
+		// Where the foot's white floor stands its edge is a wide gradient (the white fades out, it
+		// does not end).
+		edge_w = max(edge_w, 0.3 * smoothstep(0.0, 0.3, fill));
+#endif
 		float cover = smoothstep(1.0 - en_c - edge_w, 1.0 - en_c + edge_w + min(px, COVER_PX_MAX) * 2.0, pattern);
 		cover *= smoothstep(0.08, 0.2, en_c);
 #ifndef FOOT_R1

@@ -11,7 +11,9 @@ extends RefCounted
 ##
 ## Vertex contract (painter_water.gdshader): VERTEX in map space (an identity transform at the map
 ## origin), UV map-normalised (the flow map's frame), CUSTOM0 = (depth, energy, shore distance,
-## steep share), CUSTOM1 = (river share, FIELD_FLAG, ground height, the spill mark: 1 a river's
+## steep share), CUSTOM1 = (river share, FIELD_FLAG, 1 where the sample is within the foot
+## coordinate's range of a fall's foot (WaterField.foot; the shader fetches the coordinate only
+## there), the spill mark: 1 a river's
 ## ramp into a pond, 0.5 a bank's thin spill that is not drawn as a shelf, 0.125 a film). The mesh
 ## is a function of the field alone, so a field refreshed over a dirty rect draws exactly what a
 ## fresh build would.
@@ -84,13 +86,18 @@ static func build(f: WaterField) -> Dictionary:
 				var s := zz * nx + xx
 				if index_of[s] < 0:
 					index_of[s] = verts.size()
-					var p := Vector3(f.origin.x + xx * f.step.x, f.w[s], f.origin.y + zz * f.step.y)
+					# The surface as drawn (ew) and its depth over the ground: on the first buried ring the
+					# surface stands at the neighbour's extended level, so the waterline is exact.
+					var wet := f.w[s] != WaterGeometry.DRY
+					var y: float = f.ew[s] if wet else f.w[s]
+					var d: float = f.ew[s] - f.ground[s] if wet else f.depth[s]
+					var p := Vector3(f.origin.x + xx * f.step.x, y, f.origin.y + zz * f.step.y)
 					verts.append(p)
 					lo = lo.min(p)
 					hi = hi.max(p)
 					normals.append(_normal(f, xx, zz))
 					uvs.append(Vector2(float(xx) / (nx - 1), float(zz) / (nz - 1)))
-					c0.append_array([maxf(f.depth[s], -1.0), f.energy[s], f.shore[s], f.steep[s]])
+					c0.append_array([maxf(d, -1.0), f.energy[s], f.shore[s], f.steep[s]])
 					var spill := 0.0
 					if f.spill[s] == WaterField.SPILL_POND:
 						spill = SPILL_POND_MARK
@@ -98,7 +105,8 @@ static func build(f: WaterField) -> Dictionary:
 						spill = SPILL_BANK_MARK
 					elif f.calm[s] != 0:
 						spill = FILM_MARK
-					c1.append_array([f.river[s], FIELD_FLAG, f.ground[s], spill])
+					var near_foot := 1.0 if f.foot[s] < WaterFieldStroke.NO_FOOT * 0.5 else 0.0
+					c1.append_array([f.river[s], FIELD_FLAG, near_foot, spill])
 				corner.append(index_of[s])
 			indices.append_array([corner[0], corner[1], corner[2], corner[1], corner[3], corner[2]])
 	if verts.is_empty():

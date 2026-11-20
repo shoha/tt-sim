@@ -16,13 +16,13 @@ extends RefCounted
 ## a tributary and a stream into pools), saved as `_painter-water-field-painted_water`.
 
 const WATER := preload("res://tools/render_jobs/probes/water.gd")
-const PREFIX := "_painter-water-foot-spike_"
+const PREFIX := "_painter-water-foot2_"
 ## WaterFieldMesh.MESH_NAME, spelled out so the probe also runs on a tree without the field (the
 ## baseline the captures compare with).
 const FIELD_MESH := "PaintedWaterField"
 ## The painted water and fall shaders as they were before the field (a card's local copies, kept
 ## out of the tree), for the A/B "main" mode.
-const LEGACY_DIR := "res://tools/render_jobs/local/painter-water-foot-spike/"
+const LEGACY_DIR := "res://tools/render_jobs/local/painter-water-foot2/"
 const LEGACY_WATER := LEGACY_DIR + "legacy_water.gdshader"
 const LEGACY_FALL := LEGACY_DIR + "legacy_waterfall.gdshader"
 const STEP_M := 0.05
@@ -61,6 +61,9 @@ const CASES := {
 	"eye_pond": [28, 7.0, "at", Vector2(9, -2), 0.0],
 	"eye_f2": [25, 7.0, "at", Vector2(9, -4)],
 	"eye_f2w": [18, 6.0, "at", Vector2(9, -5), 60.0],
+	"shore_z3": [45, 3.0, "at", Vector2(5.8, 1.5)],
+	"bank_z3": [45, 3.0, "at", Vector2(-3.5, -12.0)],
+	"stpool_z3": [45, 3.0, "at", Vector2(23, -9.0)],
 }
 
 static var _case: Dictionary = {}
@@ -85,6 +88,15 @@ static func run(base: Node, step: Dictionary) -> String:
 			return "clock_t %.2f" % float(step.get("t", 10.0))
 		"defs":
 			return _defs(base, String(step.get("defs", "")))
+		"exact":
+			# F1 on or off: the field is rebuilt under the switch.
+			var pwe := painter_water(base)
+			var host: Variant = pwe.call("field") if pwe != null else null
+			if host == null:
+				return "not painted"
+			WaterField.exact_shore = bool(step.get("on", true))
+			host.rebuild()
+			return "exact_shore %s" % WaterField.exact_shore
 		"tokens":
 			return _tokens(base, step.get("items", []))
 		"cleanup":
@@ -170,7 +182,8 @@ static func _defs(base: Node, defs: String) -> String:
 	var text := FileAccess.get_file_as_string(PainterWater.SHADER)
 	var lines := PackedStringArray()
 	for d in defs.split(" ", false):
-		lines.append("#define " + d)
+		# "-NAME" switches a shipped define off.
+		lines.append("#undef " + d.substr(1) if d.begins_with("-") else "#define " + d)
 	sh.code = text.replace("//ABL_DEFS", "\n".join(lines))
 	wm.shader = sh
 	return "shader defs %s" % defs

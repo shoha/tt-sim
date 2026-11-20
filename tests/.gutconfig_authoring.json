@@ -213,6 +213,7 @@
 		"res://tests/unit/test_water_fall_mesh.gd",
 		"res://tests/unit/test_water_falls.gd",
 		"res://tests/unit/test_water_field.gd",
+		"res://tests/unit/test_water_field_exact_shore.gd",
 		"res://tests/unit/test_water_field_mesh.gd",
 		"res://tests/unit/test_water_flow_baker.gd",
 		"res://tests/unit/test_water_model.gd",
