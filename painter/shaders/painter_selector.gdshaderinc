@@ -368,13 +368,27 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 	wob = p_noise(wp * 1.7 + 5.0);
 }
 
+// How far above tone_lo (in N.L) a solid's face must turn toward the sun before a cast shadow
+// reaches it (light(), kind 2).
+const float SOLID_CAST_FACING = 0.4;
+
 // (A grass mark lights its own form: painter_grass_mark defines SELECTOR_OWN_LIGHT and its light().)
 #ifndef SELECTOR_OWN_LIGHT
 void light() {
 	if (LIGHT_IS_DIRECTIONAL) {
 		vec3 lw = normalize((INV_VIEW_MATRIX * vec4(LIGHT, 0.0)).xyz);
 		float cast = 1.0 - smoothstep(0.45, 0.55, ATTENUATION + (f_wob - 0.5) * 0.2);
-		float x = dot(normalize(f_n), lw) + (f_wob - 0.5) * 0.3;
+		float nl = dot(normalize(f_n), lw);
+		if (kind == 2) {
+			// A rock's or a log's face turned nearly edge-on to the sun is where the shadow map
+			// self-shadows it in stripes and the soft filter's noise stipples the edge of each (card
+			// painter-ground-artifacts: dark violet hatching on a boulder's face). Such a face is
+			// already a middle step by N.L, so it takes no cast shadow until it faces the sun, and the
+			// step that does is wider than the filter's noise.
+			cast = 1.0 - smoothstep(0.35, 0.65, ATTENUATION + (f_wob - 0.5) * 0.2);
+			cast *= smoothstep(tone_lo, tone_lo + SOLID_CAST_FACING, nl);
+		}
+		float x = nl + (f_wob - 0.5) * 0.3;
 		float t = 0.1 + 0.4 * smoothstep(tone_lo - 0.01, tone_lo + 0.01, x)
 			+ 0.4 * smoothstep(tone_hi - 0.01, tone_hi + 0.01, x);
 		if (kind == 1 || kind == 3) {

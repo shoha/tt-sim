@@ -148,6 +148,8 @@ const float SHADE_DEEP = 0.8;
 const float SEAM_LIT = 0.6;
 // Metres the seam's centre moves away from the sun.
 const float SEAM_LEAN_M = 0.3;
+// The N.L a steep face must reach before a cast shadow shades it (light()).
+const float CLIFF_CAST_FACING = 0.3;
 
 varying vec3 v_n;
 varying float v_wy;
@@ -750,7 +752,13 @@ void light() {
 		// sun flat ground's N.L (0.05) sat inside them, and the wiggle alone striped a level
 		// meadow lit and shade; now only a bank turned past the grazing sun goes into shade.
 		float turn_k = clamp(lw.y / TURN_SUN_FULL, 0.05, 1.0);
-		float turned = 1.0 - smoothstep(0.02 * turn_k, 0.1 * turn_k, dot(normalize(f_n), lw) + (f_edge - 0.5) * 0.1 * turn_k);
+		float nl = dot(normalize(f_n), lw);
+		float turned = 1.0 - smoothstep(0.02 * turn_k, 0.1 * turn_k, nl + (f_edge - 0.5) * 0.1 * turn_k);
+		// A steep face turned nearly edge-on to the sun is where the shadow map self-shadows in
+		// stripes and its filter's noise stipples their edges (card painter-ground-artifacts: fine
+		// horizontal hatching on the banks): such a face takes no cast shadow until it faces the sun
+		// (its N.L already steps it into shade above), and flat ground keeps every cast shadow.
+		cast *= 1.0 - smoothstep(0.2, 0.5, 1.0 - f_n.y) * (1.0 - smoothstep(0.0, CLIFF_CAST_FACING, nl));
 		float shade = max(cast, turned);
 		vec3 col = mix(f_lit, f_shd, shade);
 		// Contact occlusion (card painter-tree-ground): what stands on the ground shuts out the sky,

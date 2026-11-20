@@ -1343,8 +1343,10 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
 - **Chunks:** one `MeshInstance3D` per 10 m `ScatterChunker` cell (`TerrainChunk_c<x>_<z>`),
   vertices in world space. The sample grid is not aligned to the cells, so a chunk owns the
   samples from the first at or past its lower cell edge to the first at or past its upper
-  edge; neighbours share that column bit for bit. Normals are central differences on the
-  whole grid, so shared vertices light identically. The pure geometry is
+  edge; neighbours share that column bit for bit. Normals are smoothed differences (two
+  samples each side, [1 2 1] across; `TerrainMeshBuilder.shade_normal`, card
+  painter-ground-artifacts) on the whole grid, so shared vertices light identically and the
+  Painted ground's slope contours do not zigzag on the 0.25 m triangles. The pure geometry is
   `TerrainMeshBuilder` (`utils/terrain_mesh_builder.gd`).
 - **Collision:** `TerrainCollision` (card authcollide, 2026-11-08): square `HeightMapShape3D`
   tiles of 32 quads, one `StaticBody3D` each (layer 1 / mask 1, `input_ray_pickable = false`,
@@ -1739,7 +1741,9 @@ triangles, see below) and `generate_for_document()` wires both together.
   Jolt's `HeightMapShape3D`, (a, a+1, a+cols) and (a+1, a+cols+1, a+cols), so a generated
   instance stands exactly on the ground that is drawn and collided with; bilinear was off
   by up to |h00 + h11 - h10 - h01| / 4 (0.38 m on a tier step). `triangle_normal()` mixes
-  that triangle's vertex normals (the central differences the mesh is lit with)
+  that triangle's vertex normals (the one-sample central differences of
+  `ScatterGenerator.vertex_normal`; the mesh itself is lit with the smoother
+  `TerrainMeshBuilder.shade_normal`)
   barycentrically: the shading normal, smooth across triangles, so slope rules and
   normal-aligned species do not flicker facet by facet. On flat and planar ground both
   equal the old bilinear values. `ScatterPlan`

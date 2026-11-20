@@ -141,28 +141,18 @@ func test_neighbouring_chunks_share_border_vertices_exactly() -> void:
 
 func test_normals_are_continuous_across_chunk_borders() -> void:
 	# A border vertex's normal comes from the whole-document grid, so it equals the
-	# central difference that straddles the border, not a one-sided chunk-local estimate.
+	# smoothed difference that straddles the border (shade_normal), not a one-sided chunk-local
+	# estimate.
 	var doc := _sine(40)
 	var cell := Vector2i(0, 0)
 	var rect := TerrainMeshBuilder.chunk_sample_rect(doc, cell)
 	var columns := rect.size.x + 1
 	var norms := _normals(doc, cell)
-	var step := doc.sample_step()
 	var worst := 0.0
 	for row in rect.size.y + 1:
 		var sx := rect.end.x
 		var sz := rect.position.y + row
-		var slope_x := (
-			(doc.heights[doc.sample_index(sx + 1, sz)] - doc.heights[doc.sample_index(sx - 1, sz)])
-			/ (2.0 * step.x)
-		)
-		var z0 := maxi(sz - 1, 0)
-		var z1 := mini(sz + 1, doc.samples_z() - 1)
-		var slope_z := (
-			(doc.heights[doc.sample_index(sx, z1)] - doc.heights[doc.sample_index(sx, z0)])
-			/ ((z1 - z0) * step.y)
-		)
-		var expected := Vector3(-slope_x, 1.0, -slope_z).normalized()
+		var expected := TerrainMeshBuilder.shade_normal(doc, sx, sz)
 		worst = maxf(worst, (norms[row * columns + columns - 1] - expected).length())
 	assert_lt(worst, EPSILON, "border normals use neighbours across the border")
 	# And the step in normal across the border is no larger than one step inside a chunk.
@@ -170,6 +160,27 @@ func test_normals_are_continuous_across_chunk_borders() -> void:
 	var across := (east_norms[1] - norms[columns - 1]).length()
 	var inside := (norms[columns - 1] - norms[columns - 2]).length()
 	assert_lt(across, inside * 1.5 + EPSILON, "no normal jump at the border")
+
+
+func test_mesh_normals_are_the_smoothed_shading_normal() -> void:
+	# The hot loop inlines shade_normal(): every vertex agrees with it, and on a gentle sine the
+	# smoothing stays within a few degrees of the plain one-sample difference.
+	var doc := _sine(40)
+	var cell := Vector2i(0, 0)
+	var rect := TerrainMeshBuilder.chunk_sample_rect(doc, cell)
+	var columns := rect.size.x + 1
+	var norms := _normals(doc, cell)
+	var worst := 0.0
+	var apart := 0.0
+	for row in rect.size.y + 1:
+		for column in columns:
+			var sx := rect.position.x + column
+			var sz := rect.position.y + row
+			var shade := TerrainMeshBuilder.shade_normal(doc, sx, sz)
+			worst = maxf(worst, (norms[row * columns + column] - shade).length())
+			apart = maxf(apart, shade.angle_to(TerrainMeshBuilder.sample_normal(doc, sx, sz)))
+	assert_lt(worst, EPSILON, "the mesh's normals are shade_normal")
+	assert_lt(apart, 0.25, "smoothed, not a different surface")
 
 
 func test_heights_round_trip_into_mesh_vertices() -> void:

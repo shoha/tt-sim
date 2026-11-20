@@ -710,7 +710,7 @@ func queue_heights(sample_rect: Rect2i) -> void:
 	if fields_rect.has_area():
 		_fields_dirty = MaskBrush.merge_rect(_fields_dirty, fields_rect)
 		ground_edited.emit(fields_rect)
-	var grown := sample_rect.grow(1).intersection(grid)
+	var grown := sample_rect.grow(TerrainMeshBuilder.NORMAL_RADIUS).intersection(grid)
 	if not grown.has_area():
 		return
 	var world := MaskBrush.sample_rect_to_world(document, grown).grow(maxf(step.x, step.y))

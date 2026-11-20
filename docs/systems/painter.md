@@ -2485,6 +2485,35 @@ of the honey lot wood "Plank houses less honey". Frames and notes:
   under-eave weathering on A3b walls (no top in their data); the contact shade is subtle at the game
   camera.
 
+## Rock bands and ground facets (card painter-ground-artifacts, 2026-11-20; look-pending)
+
+Owner, 2026-11-20: rocks "have shading artifacts which look scratchy and weird"; the terrain "looks
+'jagged' and low-res, especially in places where it has been raised or lowered". Frames, the shader
+patch and the A/B: `docs/research/2026-11-09-prototypes/compare/painter_final99_ground_artifacts/`
+(`repro3` main, `fix3` this commit, `perf` the GPU A/B).
+
+- **Rock bands (shadow acne through the cast step).** The selector light reads the sun's shadow
+  attenuation through a narrow smoothstep. On a rock face turned almost edge-on to the sun the shadow
+  map's own depth bias leaves faint self-shadowing and the soft-shadow filter's noise; the narrow step
+  turned that noise into parallel violet bands with stippled edges. `painter_selector.gdshaderinc` now
+  fades the cast by facing (`SOLID_CAST_FACING`: a face under 0.4 of N.L takes no cast, it is already
+  in the shade step) and widens the step for a solid (0.35 to 0.65). The ground's steep faces take the
+  same fade (`CLIFF_CAST_FACING` in `painter_ground.gdshader`).
+- **Ground facets (vertex normals).** The ground shader's cliff role, strata, lip and turned shade read
+  `slope = 1 - n.y` from the interpolated vertex normal. The mesh's normals were one-sample central
+  differences, so on a carved bank the contour of that slope followed the 0.25 m triangles (a zigzag of
+  that size, read as low resolution). `TerrainMeshBuilder.shade_normal` (and the inlined build and
+  region-update loops, and the river exit's mesh) take the difference two samples each side, averaged
+  [1 2 1] across: `NORMAL_SPAN`, and a height edit now moves normals `NORMAL_RADIUS` (2) samples out
+  (`queue_heights` grows its dirty rect by it). The scatter's and the ray casts' normals
+  (`ScatterGenerator.vertex_normal`, native) are unchanged, so no scatter digest moved.
+- **Cost.** GPU, in-run A/B (docs/PERFORMANCE.md): main against this shader pair, 8 rounds, f1 overhead
+  close view 2.008 / 1.999 ms (delta -0.005), wide view 3.563 / 3.548 ms (delta -0.013): neutral. CPU,
+  the mesh normal loop over a 245 x 245 grid, 10 ms before and 23 ms after: a full rebuild only.
+- **Not fixed:** the shadow staircase on ground at a grazing sun (shadow-map texels stretched by
+  1 / sin(elevation)); an orthographic cascade removes the steps but smears, and the far distance has no
+  effect. A shadow-map resolution matter, not part of this card.
+
 ## Verification
 
 - Unit: `test_painter_sheet.gd` (lint, resolver, continuity), `test_render_style.gd` (table,
