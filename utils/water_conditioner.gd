@@ -4,11 +4,12 @@ extends RefCounted
 ## The level conditioner of the water-conditioning spike (card painter-water-condition-spike):
 ## pure static functions that turn a drawn level profile into a legal one, so that every renderer
 ## and the WaterField see a profile that never climbs, has no tiny kinks and steps only by
-## whole falls. Not wired into any tool: WaterEdit.plan_river calls condition_ranges() only when
-## its `condition` argument (default WaterEdit.CONDITION_PROBE, off) is set. The course half is
-## WaterCourseFit, the ports and dig half WaterPorts; the research is
-## docs/research/2026-11-20-water-research/03 and 04 in the suite root, the findings are in
-## docs/plans/handoffs/painter-water-condition-spike.md.
+## whole falls. WaterEdit.plan_river calls condition_ranges() at plan time, once, on the
+## authoring peer (the result is stored in the document's WaterBody list; peers never re-run it),
+## and WaterEdit.refit_document() the tree solver over a stored document. The course half is
+## WaterCourseFit, the ports half WaterPorts, the findings of the spike docs/systems/water_field.md
+## "Conditioning" and the research docs/research/2026-11-20-water-research/03 and 04 in the
+## suite root.
 ##
 ## Water is only ever LOWERED, never raised, so a conditioned level never stands over its banks
 ## (the bed is carved to follow it). The profile fit (fit_levels), over segments (stations or
@@ -48,10 +49,6 @@ const NUDGE_CAP_M := 0.5
 ## plan is kept as drawn and flagged (condition_ranges).
 const CUT_LIMIT_M := 1.5
 const _EPS := 1.0e-9
-
-## What the last condition_ranges() call decided ({"blocked", "max_cut", "cut_at"}): spike
-## scaffolding for the probe's tests, which production replaces with a structured hint.
-static var last_report := {}
 
 
 ## Fits the segments' levels (see the header). `lengths`, `targets` and `caps` are one entry per
@@ -156,14 +153,27 @@ static func condition_ranges(
 	var lengths := PackedFloat64Array()
 	var want := PackedFloat64Array()
 	var cuts := PackedByteArray()
-	for reach in ranges:
+	var rises := 0
+	var rise_m := 0.0
+	var rise_at := -1
+	for k in ranges.size():
+		var reach := ranges[k]
 		var length := 0.0
 		for i in range(reach.x, reach.y):
 			length += course[i].distance_to(course[i + 1])
 		lengths.append(length)
 		want.append(WaterGeometry.reach_level(ground, reach))
 		cuts.append(1 if forced.has(reach.y) else 0)
+		# A drawn level that climbs downstream: the plan's own reaches, before any fit.
+		if k > 0 and want[k] > want[k - 1] + 0.001:
+			rises += 1
+			rise_m += want[k] - want[k - 1]
+			rise_at = reach.x if rise_at < 0 else rise_at
 	var fit := fit_levels(lengths, want, want, cuts, opts)
+	fit["rises"] = rises
+	fit["rise_m"] = rise_m
+	fit["rise_at"] = maxi(rise_at, 0)
+	fit["reaches_before"] = ranges.size()
 	var merged: Array[Vector2i] = []
 	for block: Vector2i in fit.blocks:
 		merged.append(Vector2i(ranges[block.x].x, ranges[block.y].y))
@@ -190,7 +200,6 @@ static func condition_ranges(
 		fit["blocked"] = true
 		fit["ranges"] = ranges
 		fit["levels"] = want
-	last_report = {"blocked": fit.blocked, "max_cut": cut, "cut_at": cut_at}
 	return fit
 
 

@@ -28,11 +28,13 @@ const WAIST := WaterBody.Depth.WAIST
 const ANKLE := WaterBody.Depth.ANKLE
 
 ## The deepest cut into the drawn ground (off a fall's face) any conditioned stroke planned since
-## make() began asks of the carve (WaterConditioner.last_report); 0 for an unconditioned plan.
+## make() began asks of the carve (the plan's report); 0 for an unconditioned plan.
 static var worst_cut := 0.0
 ## True when a stroke planned since make() began was kept as drawn because conditioning it would
 ## have cut a gorge (WaterConditioner.CUT_LIMIT_M).
 static var blocked := false
+## The hints (WaterHints records) of the strokes planned since make() began.
+static var hints: Array = []
 
 
 ## A 30 m map with its ground set by `ground` (Callable(Vector2) -> float).
@@ -68,29 +70,9 @@ static func add_pond(
 	return pond
 
 
-## The end decisions of a trial plan of the stroke along `line`: [first end, last end].
-static func end_decisions(
-	doc: MapDocument, line: PackedVector2Array, hw: float, depth: WaterBody.Depth
-) -> Array:
-	var widths := PackedFloat32Array()
-	widths.resize(line.size())
-	widths.fill(hw)
-	var trial := WaterEdit.plan_river(doc, line, widths, depth, 1.0, true)
-	if trial.is_empty():
-		return []
-	var own := PackedInt32Array()
-	for body in trial:
-		own.append(body.id)
-	var tail := WaterPorts.end_decision(doc, trial[-1].points[-1], trial[-1].level_m, hw, false, own)
-	var head := WaterPorts.end_decision(doc, trial[0].points[0], trial[0].level_m, hw, true, own)
-	# The plan may have reversed the line: match the plan's ends to the drawn ones.
-	var start: Vector2 = trial[0].points[0]
-	var drawn_first := start.distance_to(line[0]) < start.distance_to(line[-1])
-	return [head, tail] if drawn_first else [tail, head]
-
-
-## Plans, carves and adds the stroke along `pts` (half-width `hw`); `condition` runs the probe and
-## snaps the ends. Returns {"bodies", "decisions" (the end decisions taken)}.
+## Plans, carves and adds the stroke along `pts` (half-width `hw`); `condition` conditions it
+## (course, levels, the ends joined: WaterEdit.plan_river). Returns {"bodies", "report" (the
+## plan's report, with its "hints")}.
 static func add_stroke(
 	doc: MapDocument,
 	pts: PackedVector2Array,
@@ -98,26 +80,18 @@ static func add_stroke(
 	depth: WaterBody.Depth,
 	condition: bool
 ) -> Dictionary:
-	var line := pts
-	var decisions := []
-	if condition:
-		decisions = end_decisions(doc, line, hw, depth)
-		if decisions.size() == 2:
-			if [&"join", &"inflow", &"fall_into"].has(decisions[1].action):
-				line[line.size() - 1] = decisions[1].target
-			if decisions[0].action == &"outlet":
-				line[0] = decisions[0].target
 	var widths := PackedFloat32Array()
-	widths.resize(line.size())
+	widths.resize(pts.size())
 	widths.fill(hw)
 	var start := doc.heights.duplicate()
-	WaterConditioner.last_report = {}
-	var bodies := WaterEdit.plan_river(doc, line, widths, depth, 1.0, condition)
-	blocked = blocked or bool(WaterConditioner.last_report.get("blocked", false))
-	worst_cut = maxf(worst_cut, float(WaterConditioner.last_report.get("max_cut", 0.0)))
+	var report := {}
+	var bodies := WaterEdit.plan_river(doc, pts, widths, depth, 1.0, condition, report)
+	blocked = blocked or bool(report.get("blocked", false))
+	worst_cut = maxf(worst_cut, float(report.get("max_cut", 0.0)))
+	hints.append_array(report.get("hints", []))
 	Fixtures.carve(doc, WaterCarve.river_goals(doc, bodies, start))
 	doc.water_bodies = WaterEdit.with_bodies(doc, bodies)
-	return {"bodies": bodies, "decisions": decisions}
+	return {"bodies": bodies, "report": report}
 
 
 ## A straight line from `a` to `b` with a point every `gap` metres and gaussian position jitter
@@ -154,6 +128,7 @@ static func make(name: String, conditioned: bool) -> MapDocument:
 	var doc: MapDocument = null
 	worst_cut = 0.0
 	blocked = false
+	hints = []
 	var flat := func(_p: Vector2) -> float: return 0.0
 	match name:
 		"jitter":

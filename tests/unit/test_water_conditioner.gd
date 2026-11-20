@@ -1,9 +1,9 @@
 extends GutTest
 
-## The water-conditioning spike (card painter-water-condition-spike; WaterConditioner,
-## WaterCourseFit, WaterPorts): pure conditioning of a drawn river's course and levels, measured
-## against the WaterField. Nothing here is wired into a tool: WaterEdit.plan_river takes the probe
-## through its `condition` argument and WaterEdit.CONDITION_PROBE stays off.
+## The water conditioner (spike card painter-water-condition-spike, shipped by painter-water-
+## condition; WaterConditioner, WaterCourseFit, WaterPorts): pure conditioning of a drawn river's
+## course and levels, measured against the WaterField. WaterEdit.plan_river runs it by default;
+## these cases pass `condition` explicitly to compare the plan with and without it.
 ##
 ## Pinned: the unit rules of the fit (never climbs, steps of at least the dead band or exactly
 ## equal, lattice levels, falls and cuts kept, idempotent), the course (moves within a fraction of
@@ -287,8 +287,8 @@ func test_end_decision_table_on_the_f4_plateau() -> void:
 # --- the plan hook ------------------------------------------------------------------
 
 
-func test_the_probe_is_off_by_default_and_changes_nothing() -> void:
-	assert_false(WaterEdit.CONDITION_PROBE, "the probe constant is off")
+func test_the_unconditioned_plan_is_deterministic() -> void:
+	assert_true(WaterEdit.conditioning_enabled, "conditioning is on in every build")
 	var a := Cases.make("jitter", false)
 	var b := Cases.make("jitter", false)
 	assert_eq(a.water_bodies.size(), b.water_bodies.size(), "the default plan is deterministic")

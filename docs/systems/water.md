@@ -702,6 +702,26 @@ document and is the planned single source for the water surface, the falls and t
 queries. Stage 1 (the data model) is in; nothing draws from it or reads it yet, so everything
 above still describes how water is built and drawn today.
 
+## Conditioning a drawn river
+
+A committed river stroke is cleaned once, at plan time, before the carve, so the document stores a
+legal river and Painted, Classic and every peer draw the same one (water_field.md "Conditioning"
+has the rules and numbers). `WaterEdit.plan_river` (switch `WaterEdit.conditioning_enabled`,
+default true; `condition` false plans as drawn) smooths the course within half a half-width
+(`WaterCourseFit`), fits the reach levels so the water never climbs and steps only by whole
+falls (`WaterConditioner`: 5 cm lattice, water only lowered, dead band 0.25 m, reaches of at least
+2 m), joins an end that stops near other water (`WaterPorts.end_decision`: join, inflow, fall
+into, outlet), and keeps the stroke as drawn when conditioning would cut deeper than 1.5 m. The
+result is the same WaterBody list: no format change, nothing recomputed on load or by peers.
+What it could not fix comes back as hint records (`WaterHints`: `{kind, pos, fixes, detail}`,
+`WaterEditor.last_hints`) and the Water tool toasts the first one worth saying through
+`BrushTool.refused` ("The river crosses a hill and was kept as drawn ... You can cut the ridge
+with the Sculpt tool, route the line around the hill or keep it as drawn."); a hint never blocks
+a stroke. Documents load as drawn; `WaterEdit.refit_document` (`WaterRefit`: strokes that climb
+downstream reversed by slope sign, the river and pond tree solved, the strokes carved again) and
+`WaterEditor.refit_water()` (one undoable history entry) clean a stored map. Starting landforms
+plan unconditioned (their digests are frozen).
+
 ## Open work
 
 The list is [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work"; this doc does not repeat it.

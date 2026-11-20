@@ -31,15 +31,20 @@ extends RefCounted
 const RESAMPLE_M := 2.0
 ## A river joining other water ends this far past that water's edge (join_line()).
 const JOIN_INSET_M := 0.6
-## The conditioning probe (card painter-water-condition-spike): when true, plan_river() smooths
-## the course (WaterCourseFit) and fits the reach levels (WaterConditioner) by default. Off: no
-## tool or save path calls it; the spike's tests pass `condition` explicitly.
-const CONDITION_PROBE := false
-## The probe's parts load by path on first use: named as classes here they would join the
+## The conditioner's parts load by path on first use: named as classes here they would join the
 ## start-up script graph (test_boot_graph).
 const COURSE_FIT_PATH := "res://utils/water_course_fit.gd"
 const CONDITIONER_PATH := "res://utils/water_conditioner.gd"
+const PORTS_PATH := "res://utils/water_ports.gd"
+const HINTS_PATH := "res://utils/water_hints.gd"
+const REFIT_PATH := "res://utils/water_refit.gd"
 const COMPRESSION := FileAccess.COMPRESSION_ZSTD
+
+## The conditioning off switch (card painter-water-condition): plan_river() conditions a stroke
+## (smooths the course, WaterCourseFit; fits the reach levels, WaterConditioner; joins the ends,
+## WaterPorts) unless this is false. On in every build; an A/B capture or a test of the drawn,
+## unconditioned plan sets it false (render jobs: the `conditioning` flag).
+static var conditioning_enabled: bool = true
 
 
 ## A copy of `doc`'s water model for history: {"bodies": Array[WaterBody] (deep copies),
@@ -118,13 +123,76 @@ static func resample(
 ## is shorter than two points, the document has no room for them (MAX_WATER_BODIES,
 ## MAX_RIVERS) or no heights. Half-widths are clamped to WaterBody's range and to at least
 ## the depth class's WaterCarve.min_half_width() (ankle 0.44 m, waist 1.33 m, deep 2.96 m).
+##
+## Conditioning (card painter-water-condition; on unless `condition` is false or
+## conditioning_enabled is): the course is smoothed within half a half-width of the drawn line
+## (loops trimmed, widths slope-limited), the reach levels are fitted so the water never climbs
+## and steps only by whole falls, and a stroke end near other water is joined to it, so the plan
+## the carve and the document store is a clean one. A plan that would cut a gorge is kept as
+## drawn. `report` (filled when given) says what happened: {"conditioned", "max_disp" (metres
+## the course moved), "max_cut", "level_moved" (metres a reach level moved), "blocked", "hints"
+## (WaterHints records)}. Pure: conditioning runs here once, on the authoring peer; the result
+## is stored in the WaterBody list and never recomputed.
 static func plan_river(
 	doc: MapDocument,
 	points: PackedVector2Array,
 	half_widths: PackedFloat32Array,
 	depth: WaterBody.Depth,
 	speed: float = WaterBody.DEFAULT_SPEED,
-	condition: bool = CONDITION_PROBE
+	condition: bool = true,
+	report: Dictionary = {}
+) -> Array[WaterBody]:
+	var on := condition and conditioning_enabled
+	report["conditioned"] = on
+	report["hints"] = []
+	report["fit_hints"] = []
+	report["max_disp"] = 0.0
+	report["max_cut"] = 0.0
+	report["level_moved"] = 0.0
+	report["blocked"] = false
+	var bodies := _plan(doc, points, half_widths, depth, speed, on, report)
+	if not on or bodies.is_empty():
+		return bodies
+	# The ends: one that stops near other water joins it (a trial plan told its level), the
+	# others are only said. The line is planned again with the joined end.
+	var ports: GDScript = load(PORTS_PATH)
+	var none := PackedInt32Array()
+	var head_hw: float = bodies[0].half_widths[0]
+	var tail_hw: float = bodies[-1].half_widths[-1]
+	var head: Dictionary = ports.end_decision(
+		doc, bodies[0].points[0], bodies[0].level_m, head_hw, true, none
+	)
+	var tail: Dictionary = ports.end_decision(
+		doc, bodies[-1].points[-1], bodies[-1].level_m, tail_hw, false, none
+	)
+	var line := points.duplicate()
+	var moved := false
+	for pair: Array in [[head, bodies[0].points[0]], [tail, bodies[-1].points[-1]]]:
+		var decision: Dictionary = pair[0]
+		if [&"join", &"inflow", &"fall_into", &"outlet"].has(decision.action):
+			var end: Vector2 = pair[1]
+			var last := line.size() - 1
+			line[last if end.distance_to(line[last]) < end.distance_to(line[0]) else 0] = decision.target
+			moved = true
+	if moved:
+		var again := _plan(doc, line, half_widths, depth, speed, true, report)
+		if not again.is_empty():
+			bodies = again
+	var hints: Array = (report.get("fit_hints", []) as Array).duplicate()
+	hints.append_array(load(HINTS_PATH).plan_hints(PackedVector2Array(), {}, head, tail))
+	report["hints"] = hints
+	return bodies
+
+
+## plan_river() once, without the end joins: `condition` runs the course and level fit.
+static func _plan(
+	doc: MapDocument,
+	points: PackedVector2Array,
+	half_widths: PackedFloat32Array,
+	depth: WaterBody.Depth,
+	speed: float,
+	condition: bool,
+	report: Dictionary
 ) -> Array[WaterBody]:
 	var bodies: Array[WaterBody] = []
 	if doc.heights.size() != doc.sample_count():
@@ -132,9 +200,10 @@ static func plan_river(
 	var joined := join_line(doc, points, half_widths)
 	var line: Array = resample(joined[0], joined[1])
 	if condition:
-		# The conditioning probe (WaterCourseFit): the course smoothed within a fraction of its
-		# width, loops trimmed, widths slope-limited.
+		# WaterCourseFit: the course smoothed within a fraction of its width, loops trimmed,
+		# widths slope-limited.
 		var fit: Dictionary = load(COURSE_FIT_PATH).condition(joined[0], joined[1])
+		report["max_disp"] = float(fit.max_disp)
 		if fit.changed:
 			line = [fit.points, fit.widths]
 	var course: PackedVector2Array = line[0]
@@ -181,6 +250,10 @@ static func plan_river(
 		)
 		ranges = fit.ranges
 		fitted = fit.levels
+		report["max_cut"] = float(fit.max_cut)
+		report["blocked"] = bool(fit.blocked)
+		report["level_moved"] = 0.0 if fit.blocked else float(fit.moved)
+		report["fit_hints"] = load(HINTS_PATH).plan_hints(course, fit, {}, {})
 	var rivers := 0
 	for body in doc.water_bodies:
 		rivers += 1 if body.is_river() else 0
@@ -211,6 +284,22 @@ static func plan_river(
 		)
 		bodies.append(river)
 	return bodies
+
+
+## What re-fitting `doc`'s stored water would do (WaterRefit.refit(): strokes that climb
+## downstream reversed, the river and pond tree solved, the strokes carved again), as a result
+## dictionary; the document is untouched. apply_refit() puts it in. Documents load as drawn: only
+## this call (the editor's "re-fit water", a render job) conditions water that is already stored.
+static func refit_document(doc: MapDocument) -> Dictionary:
+	return load(REFIT_PATH).refit(doc)
+
+
+## Puts a refit_document() result into `doc`: the new bodies and the re-carved ground.
+static func apply_refit(doc: MapDocument, result: Dictionary) -> void:
+	var bodies: Array[WaterBody] = []
+	bodies.assign(result.bodies)
+	doc.water_bodies = bodies
+	doc.heights = result.heights
 
 
 ## The ground a river plan reads along `points` of `doc`: WaterGeometry.ground_along(), except
