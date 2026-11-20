@@ -25,7 +25,18 @@ const GOLDEN_TOLERANCE := 0.002
 const FULL_BUDGET_MS := 3000.0
 const UPDATE_BUDGET_MS := 1500.0
 const _ARRAYS := [
-	"ground", "w", "depth", "energy", "steep", "shore", "river", "spill", "calm", "owner"
+	"ground",
+	"w",
+	"ew",
+	"depth",
+	"energy",
+	"steep",
+	"shore",
+	"lateral",
+	"spill",
+	"calm",
+	"owner",
+	"foot",
 ]
 
 var _doc: MapDocument = null
@@ -153,6 +164,64 @@ func test_a_fall_is_one_steep_surface() -> void:
 		bottom = minf(bottom, level)
 	assert_gt(top - bottom, 1.0, "f1 drops over a metre")
 	assert_eq(gaps, 0, "the water along f1 is one unbroken surface")
+
+
+func test_the_lateral_coordinate_is_signed_across_the_stroke() -> void:
+	# Card painter-water-curl: along f1 (a straight course) the stroke's lateral coordinate is the
+	# distance across it, positive on one side along the whole course, zero on the centre line, and
+	# 0 on a sample no stroke wrote.
+	var from: Vector2 = TRANSECTS.f1[0]
+	var to: Vector2 = TRANSECTS.f1[1]
+	var dir := (to - from).normalized()
+	var side := dir.orthogonal()
+	var checked := 0
+	var first_side := 0.0
+	var t := 1.0
+	while t <= from.distance_to(to) - 1.0:
+		var centre := from + dir * t
+		var i_in := _full.index_of(centre + side * 0.5)
+		var i_out := _full.index_of(centre - side * 0.5)
+		var held := (
+			_full.flow_u[i_in] > WaterField.NO_FLOW_U * 0.5
+			and _full.flow_u[i_out] > WaterField.NO_FLOW_U * 0.5
+		)
+		if held:
+			var a := _full.lateral[i_in]
+			var b := _full.lateral[i_out]
+			if first_side == 0.0:
+				first_side = signf(a)
+			assert_eq(signf(a), first_side, "the same side is positive along the whole course")
+			assert_lt(a * b, 0.0, "the two sides of the course have opposite signs at %.1f" % t)
+			assert_almost_eq(absf(a), 0.5, 0.3, "its size is the distance across")
+			assert_almost_eq(absf(b), 0.5, 0.3, "on both sides")
+			checked += 1
+		t += 0.5
+	assert_gt(checked, 4, "the samples beside f1 carry a lateral coordinate")
+
+
+func test_the_foot_coordinate_runs_through_the_fall() -> void:
+	# Foot spike: along the f1 line the signed arc distance to the fall's foot only grows (face
+	# negative, plunge pool positive) and crosses zero once; no sample is written far from a fall.
+	var from: Vector2 = TRANSECTS.f1[0]
+	var to: Vector2 = TRANSECTS.f1[1]
+	var dir := (to - from).normalized()
+	var last := -INF
+	var neg := 0
+	var pos := 0
+	var t := 0.0
+	while t <= from.distance_to(to):
+		var i := _full.index_of(from + dir * t)
+		var ft := _full.foot[i]
+		if ft < WaterFieldStroke.NO_FOOT * 0.5:
+			assert_gte(ft, last - 0.3, "the foot coordinate does not run back along the fall")
+			last = maxf(last, ft)
+			if ft < -0.2:
+				neg += 1
+			elif ft > 0.2:
+				pos += 1
+		t += 0.25
+	assert_gt(neg, 2, "the face lies before the foot")
+	assert_gt(pos, 2, "the plunge pool lies after it")
 
 
 func test_full_build_time_is_bounded() -> void:
@@ -304,3 +373,37 @@ func test_runs_bridge_only_short_runs_between_held_stations() -> void:
 func test_debug_image_is_the_grid_sized() -> void:
 	var img := _full.debug_image()
 	assert_eq(Vector2i(img.get_width(), img.get_height()), _full.size, "one pixel per sample")
+
+
+## RiverProfile.level_at, the table's cheap level, is at(s).x exactly, along every stroke.
+func test_level_at_is_the_profiles_bank_level() -> void:
+	var checked := 0
+	for chain in RiverProfile.strokes(_doc.water_bodies):
+		var typed: Array[WaterBody] = []
+		typed.assign(chain)
+		var profile := RiverProfile.for_doc(_doc, typed)
+		var s := 0.0
+		while s <= profile.total:
+			assert_eq(profile.level_at(s), profile.at(s).x, "stroke %d at %.2f" % [typed[0].id, s])
+			s += 0.07
+			checked += 1
+	assert_gt(checked, 1000, "every stroke checked along its length")
+
+
+## A stroke's table is kept between updates and redone when its inputs change: raising a reach
+## changes its stroke's level table (test_update_after_a_level_change: the update equals a build).
+func test_a_stroke_table_is_kept_while_its_inputs_stand() -> void:
+	var doc := _read()
+	var field := WaterField.build(doc)
+	var kept: Dictionary = field._tables.duplicate()
+	assert_gt(kept.size(), 5, "every stroke's table is kept")
+	field.update(doc, Rect2i(Vector2i.ZERO, field.size))
+	for id: Variant in kept:
+		assert_same(field._tables[id].table, kept[id].table, "stroke %s keeps its table" % id)
+	doc.water_bodies[2].level_m += 0.4
+	field.update(doc, Rect2i(Vector2i.ZERO, field.size))
+	var changed := 0
+	for id: Variant in kept:
+		if field._tables[id].table != kept[id].table:
+			changed += 1
+	assert_eq(changed, 1, "only the raised reach's stroke redoes its table")

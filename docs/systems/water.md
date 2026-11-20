@@ -31,7 +31,7 @@ drawer, Water; "Brushes and gestures").
 | `scenes/effects/water_zone.gd` | `WaterZone` | Per-body detection slabs for splashes, wakes and the visual sink |
 | `utils/water_glb_utils.gd` | `WaterGlbUtils` | `process_water_meshes()`, `apply_water_settings()`, the shared water material and the flow map plane |
 | `shaders/water.gdshader` | | The surface shader: `water_flow()`, shallows, foam, the waterline, the wind's chop (wind.md phase f: the ripples' slope times `WindDrift.chop_factor`, 1 at calm and at motion 0, up to 1.75 under a storm's gust front; the gust field only worked out above calm) |
-| `utils/water_carve.gd` | `WaterCarve` | Pure: cross-section goals, `bed_line`, reach steps, the pond basin, `keeps_rock`, `min_half_width` |
+| `utils/water_carve.gd` | `WaterCarve` | Pure: cross-section goals, `section`, `fall_shape`, reach steps, the pond basin, `keeps_rock`, `min_half_width` |
 | `utils/water_edit.gd` | `WaterEdit` | Pure model edits: `plan_river`, `join_line`, `touch_rivers`, `erased_bodies`, `model_of` |
 | `utils/water_dressing.gd` | `WaterDressing` | The wet dressing rule layer (bed, shore, depth, wet line) |
 | `scenes/states/authoring/water_editor.gd` | `WaterEditor` | `AuthoringEditor.water`: the editor API, the worker carve, `refresh`, one history entry per edit |
@@ -244,6 +244,13 @@ maps.
   submerged reed blades and a wading token's legs were outlined the same way. The near side
   is the shallowest of the pixel and its neighbours across the derivative pair (by
   `FRAGCOORD` parity), so both pixels of a silhouette agree.
+  The painted shader also ignores a jump whose far side is an opaque object IN FRONT of the
+  surface (`EDGE_FRONT_MIN_M`, card painter-water-fringe 2026-11-20): the clamped bed depth of
+  a canopy, trunk, bank or boulder pixel in the same quad read 0, so the wrap drew a 1 to 2 px
+  white outline round everything that overlaps water on screen. The unclamped depth gap
+  (negative where the scene is nearer than the surface) is read across the same derivative
+  pair; past 0.12 m (or three pixels' footprint, if larger) the wrap fades out, fully at three
+  times that. A waterline (a gap of a few pixels) keeps its wrap.
 - **Clear shallows (2026-10-05, the ford follow-up):** where the vertical water column over
   ground (the bed's world position from the depth buffer against the surface's) is under
   `CLEAR_END` 0.3 m, full from `CLEAR_FULL` 0.12 m, the bed shows through as a clear
@@ -349,7 +356,10 @@ editor API the Water tool (P4-4) calls.
   the half-width more than `BANK_HOLD_M` under the level, or the centre more than `HOLD_SLACK_M`
   under the bed: the perched rule's tests per station; never on a fall's face or near an end
   in other water). `RiverProfile.strokes(bodies)` groups a document's river reaches into
-  ordered strokes.
+  ordered strokes. Each fall's drop also sets the scale of the painted field's foot coordinate
+  (`WaterFieldStroke.table`: arc to the foot divided by `clamp(drop / 3 m, 0.45, 1)`), so the
+  shader's foot rules shrink on a low fall (docs/systems/water_field.md "The exact waterline and the
+  foot rules", look-pending).
 - **Reach steps:** the stroke's reaches are carved as one course (their courses joined,
   exactly the lines their areas come from) with a bed line along its arc length
   (`RiverProfile.at`): each reach flat at level - depth; toward a shared point the bed rises over a
@@ -695,12 +705,74 @@ keeps its names and its meaning: the painted shader declares the same uniforms, 
 material keeps its parameters across the swap. Classic's shader is unchanged. Details and cost:
 [painter.md](painter.md) "Water".
 
-## The water field (in progress)
+## The water field (combined branch painter-water-field-v2, look-pending, unmerged)
 
 `WaterField` ([water_field.md](water_field.md)) derives one water height per sample from the
-document and is the planned single source for the water surface, the falls and the gameplay
-queries. Stage 1 (the data model) is in; nothing draws from it or reads it yet, so everything
-above still describes how water is built and drawn today.
+document. On the combined branch the Painted look draws rivers, ponds, riffles and falls from it as
+ONE surface (`PainterWaterField`, `WaterFieldMesh`, the field branch of `painter_water.gdshader`):
+the shore is the exact waterline of the field (marching triangles over the depth), a fall's foot has
+its own coordinate and shader rules (blue glass, white columns, drifting tongues, a calm pool), the
+field's per-edit passes run in the native library (`wfield`, with the GDScript twin as the fallback,
+bit for bit) and a river stroke is conditioned at plan time (next section). Gameplay (`WaterSurface`,
+zones, walkability, ripples) and Classic still read the path described above, unchanged; they move to
+the field in stage 4 of the staged plan in water_field.md. Main has only stage 1 (the data model).
+
+## Conditioning a drawn river
+
+A committed river stroke is cleaned once, at plan time, before the carve, so the document stores a
+legal river and Painted, Classic and every peer draw the same one (water_field.md "Conditioning"
+has the rules and numbers). `WaterEdit.plan_river` (switch `WaterEdit.conditioning_enabled`,
+default true; `condition` false plans as drawn) smooths the course within half a half-width
+of the drawn line (`WaterCourseFit`, the cap below), fits the reach levels so the water never climbs and steps only by whole
+falls (`WaterConditioner`: 5 cm lattice, water only lowered, dead band 0.25 m, reaches of at least
+2 m), joins an end that stops near other water (`WaterPorts.end_decision`: join, inflow, fall
+into, outlet), and keeps the stroke as drawn when conditioning would cut deeper than 1.5 m. The
+result is the same WaterBody list: no format change, nothing recomputed on load or by peers.
+What it could not fix comes back as hint records (`WaterHints`: `{kind, pos, fixes, detail}`,
+`WaterEditor.last_hints`) and the Water tool toasts the first one worth saying through
+`BrushTool.refused` ("The river crosses a hill and was kept as drawn ... You can cut the ridge
+with the Sculpt tool, route the line around the hill or keep it as drawn."); a hint never blocks
+a stroke. Documents load as drawn; `WaterEdit.refit_document` (`WaterRefit`: strokes that climb
+downstream reversed by slope sign, the river and pond tree solved, the strokes carved again) and
+`WaterEditor.refit_water()` (one undoable history entry) clean a stored map. Starting landforms
+plan unconditioned (their digests are frozen).
+
+**The cap is a guarantee.** The stored course never strays further than half the stroke's
+half-width (`WaterCourseFit.MAX_DISP_PER_HALF_WIDTH`) from the line the Water tool handed
+`carve_river` (the pointer path after decimation and two Chaikin passes), measured one-sided as
+`WaterCourseFit.deviation()` (stored polyline to drawn polyline, sampled every 0.25 m) and
+reported as `max_disp`. Each stage can move the line (thinning, loop trimming, the smoothing
+solve, the resample to 2 m stations), so the cap is enforced last: stations are pulled back to it
+(`_clamp_to_drawn`) and then the chords between stations are held too (`hold_cap`: where a chord
+cuts a corner of the drawn line further than the cap, a station is added there, at 95 percent of
+the cap, until none does). Before this a hard zigzag (half-width 1.2 m, 5 m swings) stored 1.06 m
+against a 0.6 m cap, because the 2 m chord between two stations that each held the cap cut the
+corner between them. A hard zigzag now stays a zigzag (the swings are rounded, never straightened
+past the cap); a line that already holds is returned bit for bit. The cap is measured against the
+drawn half-width, not the carve's minimum (waist 1.33 m), so a thin stroke on a deep class is held
+tighter than the channel it digs.
+
+**Several strokes: conditioning is per stroke and never worse than off.** Each stroke is
+conditioned alone at plan time against the document as it is (the strokes before it, their
+ponds); stored levels are never revisited, so one stroke cannot make an earlier one climb. The
+rules that keep a map no worse than conditioning off: (1) a conditioned stroke's levels never
+climb downstream (`WaterConditioner.fit_levels`), so conditioning adds no audit rise
+(`WaterPorts.audit().rises`); (2) a stroke whose conditioning is blocked (it would cut a gorge,
+`WaterEdit.cut_limit_m`, 1.5 m), at the first plan or after an end was joined, is exactly the
+unconditioned plan (`_kept_as_drawn`): no smoothed course and no joined end ride along with levels
+as drawn, so its rises are the drawn ground's, equal to off; (3) end joins only snap within
+`WaterPorts.SNAP_PER_HALF_WIDTH` half-widths. Measured by `test_water_condition_multi.gd`
+(headless, no pixels): the verdict map of the integration run rebuilt through the same gesture
+path (new map seed 1234, the 11 tier strokes, 9 river strokes, 2 ponds, in order and reversed)
+and 20 random multi-stroke maps in both orders (tributaries that end in earlier water,
+continuations from an earlier end, runs out of and into ponds): rises 47 off, 0 on over the 40
+random maps (never more on any map), 9 and 15 on the verdict map both ways, equal to off, all on
+the one blocked stroke (a river drawn over three stacked tiers stays as drawn, flagged
+`over_hill`); bodies 354 off, 261 on. Field events are not a guarantee: over the 40 random maps
+film_run 46 -> 43, bridged_run 54 -> 60, end_near_water 3 -> 7 (a seed trades one for another, 14
+single increases, the largest bridged_run 3 -> 9), the test bounds the total within 10 percent of
+off's. A stroke noisier than its own cap can hold (hairpins and jitter at half-widths under 1 m)
+is kept as drawn, planned as with conditioning off.
 
 ## Open work
 

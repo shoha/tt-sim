@@ -367,7 +367,10 @@ channel above, the tube-shaped plunge pool) is the mesh's, the same under both s
 curtain runs 3 cm under the pool, its glass is the river's blue, and a fall's crest keeps a flat
 bed across a narrow channel (`WaterCarve.FALL_CREST_TOE_SOFT_M`), so the river joins the fall at
 both ends (card painter-fall-continuity). The white over the brink and at the foot is ONE shape
-(card painter-fall-frame-foam): `painter/shaders/painter_fall_white.gdshaderinc` draws it from
+(card painter-fall-frame-foam; since card painter-water-field-painted the Painted look draws a
+fall as the steep part of the WaterField's one surface, docs/systems/water_field.md "Drawing it",
+and `painter_fall_white.gdshaderinc` and the curtain's white are gone, so this paragraph describes
+the Classic-era path and the history): the include drew it from
 the fall frame (above) on the river and the pool (`painter_water.gdshader`) and on the curtain
 (`painter_waterfall.gdshader`), keyed to the frame's pseudo-arc, so it runs over both joins
 without a seam: the river whitens over its last 0.7 m to full white at the lip and gives the

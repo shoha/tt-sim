@@ -43,9 +43,10 @@ extends RefCounted
 ##           wide one glass between bold tongues; 8-bit, so 3 cm steps up to 8 m); ring and
 ##           mist: 1.
 ##   CUSTOM0, CUSTOM1  (RGBA float, WaterFallFrames.FORMAT) the curtain's fall frame
-##           (WaterFallFrames: lip, direction, crest half-widths, x_pool, drop), from which the
-##           painted look draws one white over the brink, the curtain and the foot
-##           (painter_fall_white.gdshaderinc); zeros on the ring and the mist.
+##           (WaterFallFrames: lip, direction, crest half-widths, x_pool, drop). The painted look
+##           no longer reads them (its water is the WaterField's surface, WaterFieldMesh, and this
+##           mesh keeps only its mist there; painter_fall_white.gdshaderinc is gone); zeros on
+##           the ring and the mist.
 ## Triangles wind clockwise seen from the front (Godot's front face), the front being the
 ## downstream side for the curtain and above for the ring. The mist quads are packed (all
 ## four vertices at the puff's centre), so the mesh's own bounds miss them: build() returns

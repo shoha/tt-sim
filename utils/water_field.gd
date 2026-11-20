@@ -52,6 +52,10 @@ const BANK_SPILL_SLOPE := 1.2
 ## A bank sample (beyond the channel) standing more than this over its own ground is not water
 ## the bank holds (beside a lip, over the face): it stays dry, so no ledge stands out sideways.
 const BANK_HOLD_M := 0.3
+## The share of its white a river keeps on its ramp into a lower pond (main's ponds are calmer).
+const RAMP_KEEP := 0.2
+## Water thinner than this beside a spill sample is a wet slope, not a curtain.
+const RAMP_FLAT_M := 0.3
 ## The surface slope that starts and fills the curtain share: a fall's face, not a riffle step.
 const STEEP := Vector2(1.2, 2.8)
 ## The surface slope that makes white water on its own (inflow ramps, spills).
@@ -75,6 +79,20 @@ const INFLUENCE_M := 3.0
 const END_NEAR_M := 2.0
 const LEVEL_GAP_M := 0.3
 
+## Exact waterline (field-resolution spike F1, ported by the foot-2 spike): the first buried ring
+## stands at the surface's own level extended over the ground (not TUCK_M under it) unless the
+## ground is lower, where it keeps EDGE_MIN under it, so the waterline is where the extended
+## surface meets the terrain's own triangles; `shore` is then the exact distance to that contour
+## (marching triangles, WaterFieldContour) within EXACT_M, the distance to its crossing points
+## beyond.
+const EDGE_MIN := 0.02
+const EXACT_M := 0.75
+
+## Shade spike: how much a metre of drop counts in the flow coordinate (below 1 a fall's patterns
+## stretch and run faster than the reach's), and the marker of a sample no stroke wrote.
+const FLOW_DROP_K := 0.5
+const NO_FLOW_U := -1.0e6
+
 const _NEIGHBOURS: Array[Vector2i] = [
 	Vector2i(-1, -1),
 	Vector2i(0, -1),
@@ -86,6 +104,10 @@ const _NEIGHBOURS: Array[Vector2i] = [
 	Vector2i(1, 1),
 ]
 
+## Switch (a probe's A/B): the exact waterline on, or the stage-two shore; a field is built after a
+## change.
+static var exact_shore := true
+
 var size := Vector2i.ZERO
 var step := Vector2.ONE
 ## XZ of sample (0, 0).
@@ -94,6 +116,9 @@ var ground := PackedFloat32Array()
 ## The surface height per sample, WaterGeometry.DRY where dry; the outer two rings around the
 ## water stand buried (under the ground) so a mesh has somewhere to end.
 var w := PackedFloat32Array()
+## The surface as the mesh draws it: w, except on the first buried ring, which stands at the
+## neighbouring surface extended (see EDGE_MIN); DRY where w is.
+var ew := PackedFloat32Array()
 ## w - ground where there is water (negative on the buried rings), -INF where dry.
 var depth := PackedFloat32Array()
 ## White water, 0..1.
@@ -102,14 +127,28 @@ var energy := PackedFloat32Array()
 var steep := PackedFloat32Array()
 ## The signed distance to the waterline in metres, positive in the water, at most SHORE_FAR.
 var shore := PackedFloat32Array()
-## 1 where a river's area holds the sample (flow), fading across its bank; 0 for still water.
-var river := PackedFloat32Array()
+## The signed lateral coordinate of a river sample: the distance across the owning stroke's course
+## in metres, the same side positive along the whole stroke (cross(tangent, sample - centre)), 0 on
+## any sample no stroke wrote. It rides CUSTOM1.x of the mesh (the slot the old river share held,
+## which the shader never read; the native mesh builder still names its array "river"). With the
+## arc `flow_u` it is the stroke's own frame, so the white's columns run along the stream: a
+## direction taken per fragment (the flow map's) turned dot(p, across) into arches (card
+## painter-water-curl).
+var lateral := PackedFloat32Array()
 ## SPILL_BANK or SPILL_POND where a river's water is not held by its own carve.
 var spill := PackedByteArray()
 ## 1 where a slope of the surface is not white water (a bank's drain, an undermined film).
 var calm := PackedByteArray()
 ## The id of the body whose level the sample holds (a pond's, or a stroke's first reach's), 0 dry.
 var owner := PackedInt32Array()
+## The drop-aware flow coordinate of a river sample (shade spike): the stroke's arc length to the
+## sample plus FLOW_DROP_K times the drop of its level since the stroke's head, so a pattern that
+## travels in this coordinate stretches down a fall with no seam at the lip (NO_FLOW_U elsewhere).
+var flow_u := PackedFloat32Array()
+## The foot coordinate of a river sample (foot spike): the signed arc distance to the nearest
+## fall's foot (negative on the face, positive in the plunge pool; WaterFieldStroke.NO_FOOT
+## beyond 4 m and on any sample no stroke wrote).
+var foot := PackedFloat32Array()
 ## What the map shows that its author should decide, sorted by (kind, body, position):
 ## {"kind": &"film_run", "body", "pos", "length"} a stretch of a stroke longer than the bridge
 ## whose ground no longer holds its water; {"kind": &"bridged_run", ...} the same, short enough
@@ -124,6 +163,9 @@ var _raw := PackedFloat32Array()
 var _stroke_energy := PackedFloat32Array()
 ## The surface after the spill, before the buried rings.
 var _base := PackedFloat32Array()
+## Each stroke's WaterFieldStroke.table with the inputs it was made from (_table_of), by the
+## stroke's first body id.
+var _tables := {}
 
 
 ## The field of `doc` (a full build: update() of the whole grid).
@@ -294,12 +336,14 @@ func _fit(doc: MapDocument) -> bool:
 	ground = _zeros(n)
 	w = _zeros(n)
 	w.fill(WaterGeometry.DRY)
+	ew = _zeros(n)
+	ew.fill(WaterGeometry.DRY)
 	depth = _zeros(n)
 	depth.fill(-INF)
 	energy = _zeros(n)
 	steep = _zeros(n)
 	shore = _zeros(n)
-	river = _zeros(n)
+	lateral = _zeros(n)
 	_raw = _zeros(n)
 	_stroke_energy = _zeros(n)
 	_base = _zeros(n)
@@ -309,6 +353,10 @@ func _fit(doc: MapDocument) -> bool:
 	calm.fill(0)
 	owner.resize(n)
 	owner.fill(0)
+	flow_u = _zeros(n)
+	flow_u.fill(NO_FLOW_U)
+	foot = _zeros(n)
+	foot.fill(WaterFieldStroke.NO_FOOT)
 	events = []
 	return true
 
@@ -318,16 +366,30 @@ func _reset(doc: MapDocument, rect: Rect2i) -> void:
 	var n := size.x * size.y
 	var heights := doc.heights
 	var has_heights := heights.size() == n
+	if rect == Rect2i(Vector2i.ZERO, size):
+		# The whole grid (a build): bulk fills, no per-sample loop.
+		ground = heights.duplicate() if has_heights else _zeros(n)
+		_raw.fill(WaterGeometry.DRY)
+		_stroke_energy.fill(0.0)
+		lateral.fill(0.0)
+		spill.fill(0)
+		calm.fill(0)
+		owner.fill(0)
+		flow_u.fill(NO_FLOW_U)
+		foot.fill(WaterFieldStroke.NO_FOOT)
+		return
 	for z in range(rect.position.y, rect.end.y):
 		var row := z * size.x
 		for i in range(row + rect.position.x, row + rect.end.x):
 			ground[i] = heights[i] if has_heights else 0.0
 			_raw[i] = WaterGeometry.DRY
 			_stroke_energy[i] = 0.0
-			river[i] = 0.0
+			lateral[i] = 0.0
 			spill[i] = 0
 			calm[i] = 0
 			owner[i] = 0
+			flow_u[i] = NO_FLOW_U
+			foot[i] = WaterFieldStroke.NO_FOOT
 
 
 ## Ponds: each sample of a pond's mask in `rect` holds its level.
@@ -353,9 +415,21 @@ func _write_strokes(
 	ends: Array[Dictionary],
 	runs: Array[Dictionary]
 ) -> void:
-	for chain in RiverProfile.strokes(doc.water_bodies):
+	var rect_m := Rect2(origin + Vector2(rect.position) * step, Vector2(rect.size) * step).grow(1.0)
+	var chains := RiverProfile.strokes(doc.water_bodies)
+	if _tables.size() > chains.size():
+		# Strokes that are gone (or whose first reach changed) leave their tables behind.
+		var alive := {}
+		for chain in chains:
+			alive[chain[0].id] = true
+		for id: Variant in _tables.keys():
+			if not alive.has(id):
+				_tables.erase(id)
+	for chain in chains:
 		var typed: Array[WaterBody] = []
 		typed.assign(chain)
+		if not _chain_may_meet(typed, rect_m):
+			continue
 		var profile := RiverProfile.for_doc(doc, typed)
 		if profile.points.size() < 2:
 			continue
@@ -373,8 +447,54 @@ func _write_strokes(
 			ends.append(
 				{"body": typed[0].id, "pos": profile.points[-1], "level": profile.at(profile.total).x}
 			)
-		var table := WaterFieldStroke.table(profile, typed)
+		var table := _table_of(profile, typed)
 		_put_stroke(doc, typed[0].id, profile, table, lost, field, pond_level)
+
+
+## False when the stroke `chain` (its reaches) cannot reach `rect_m` (a window in metres): the
+## bounds of its control points, which hold its smoothed course, grown by its widest half-width,
+## the bank and a metre, miss it. Conservative, so skipping such a stroke changes nothing (the
+## profile and the raster it would have built come out empty over the rect).
+func _chain_may_meet(chain: Array[WaterBody], rect_m: Rect2) -> bool:
+	var box := Rect2()
+	var any := false
+	var widest := 0.0
+	for body in chain:
+		if body.points.is_empty():
+			continue
+		for hw in body.half_widths:
+			widest = maxf(widest, hw)
+		var part := WaterGeometry.bounds(body.points, 0.0)
+		box = part if not any else box.merge(part)
+		any = true
+	if not any:
+		return false
+	return box.grow(widest + WaterGeometry.RIVER_BANK_M + 1.0).intersects(rect_m, true)
+
+
+## WaterFieldStroke.table of `profile`, kept from the last update while its inputs (the profile's
+## shape and the reaches' speeds) are unchanged: an edit elsewhere never redoes a stroke's table.
+func _table_of(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
+	var speeds := PackedFloat32Array()
+	for body in chain:
+		speeds.append(body.speed)
+	var key: Array = [
+		profile.levels,
+		profile.bounds,
+		profile.flags,
+		profile.arc,
+		profile.depth,
+		profile.taper,
+		profile.run_off,
+		speeds,
+	]
+	var id := chain[0].id
+	var kept: Variant = _tables.get(id)
+	if kept != null and kept.key == key:
+		return kept.table
+	var table := WaterFieldStroke.table(profile, chain)
+	_tables[id] = {"key": key, "table": table}
+	return table
 
 
 ## Writes one stroke's surface into the arrays over `field.rect` (see the header).
@@ -390,6 +510,7 @@ func _put_stroke(
 	var lev: PackedFloat32Array = table.level
 	var en: PackedFloat32Array = table.energy
 	var core: PackedFloat32Array = table.core
+	var foot_t: PackedFloat32Array = table.foot
 	var rect: Rect2i = field.rect
 	var dist: PackedFloat32Array = field.distance
 	var along: PackedFloat32Array = field.along
@@ -410,10 +531,11 @@ func _put_stroke(
 			var at := (rect.position.y + j) * size.x + rect.position.x + i
 			var ti := clampi(int(round(s / WaterFieldStroke.TABLE_STEP)), 0, lev.size() - 1)
 			var level := lev[ti]
+			var flow_coord := s + FLOW_DROP_K * (lev[0] - level)
 			# The foot foam and the riffle white gather mid-channel (a tongue), the brink and the
 			# curtain span it.
-			var lateral := 1.0 - LATERAL_FADE * smoothstep(0.2, 1.0, d / maxf(hw, 0.1))
-			var e := maxf(core[ti], en[ti] * lateral)
+			var mid := 1.0 - LATERAL_FADE * smoothstep(0.2, 1.0, d / maxf(hw, 0.1))
+			var e := maxf(core[ti], en[ti] * mid)
 			var si := clampi(
 				int(round(s / WaterFieldStroke.STATION_STEP)), 0, lost.size() - 1
 			)
@@ -436,10 +558,34 @@ func _put_stroke(
 				spill[at] = SPILL_POND if over_pond else (SPILL_BANK if d > hw else 0)
 				calm[at] = 1 if undermined or (d > hw and not over_pond) else 0
 				_raw[at] = level
+				flow_u[at] = flow_coord
+				lateral[at] = _lateral_of(
+					profile, s, d, origin + Vector2(rect.position.x + i, rect.position.y + j) * step
+				)
+				foot[at] = foot_t[ti]
 				owner[at] = id
 				_stroke_energy[at] = maxf(_stroke_energy[at], 0.0 if undermined else e)
-			# Flow share: the channel and its bank fade (the shader reads the flow map too).
-			river[at] = maxf(river[at], 1.0 - smoothstep(hw, hw + bank, d))
+			elif (
+				has_mask
+				and mask[at] != 0
+				and not undermined
+				and foot[at] > WaterFieldStroke.NO_FOOT * 0.5
+			):
+				# A fall that lands in a pond: the pond holds the level (the stroke does not win the
+				# sample), but the foot coordinate runs on across its cells, so the plunge's rules
+				# (the veil, the pool's floor) reach the pond as they reach a pool of the stream.
+				foot[at] = foot_t[ti]
+
+
+## The signed lateral coordinate of the sample at `p`, `d` from the course and `s` along it: `d`
+## with the sign of cross(segment, p - segment start) on the segment `s` falls on, so the same
+## side is positive along the whole stroke and the coordinate is continuous through a bend (it
+## only changes sign across the centre line).
+func _lateral_of(profile: RiverProfile, s: float, d: float, p: Vector2) -> float:
+	var points := profile.points
+	var k := clampi(profile.arc.bsearch(s) - 1, 0, points.size() - 2)
+	var a := points[k]
+	return -d if (points[k + 1] - a).cross(p - a) < 0.0 else d
 
 
 ## The spill rule. Resets the surface to the raw levels over `rect` and the spill samples
@@ -450,6 +596,9 @@ func _put_stroke(
 ## edge. The result is the greatest surface under those caps, which does not depend on the order
 ## of relaxing. Returns the bounds of the samples that may have changed.
 func _spill_pass(rect: Rect2i, was: PackedByteArray) -> Rect2i:
+	var native := WaterFieldNative.instance()
+	if native != null:
+		return WaterFieldNative.spill(native, self, rect, was)
 	var width := size.x
 	var n := width * size.y
 	for z in range(rect.position.y, rect.end.y):
@@ -534,6 +683,10 @@ func _spill_pass(rect: Rect2i, was: PackedByteArray) -> Rect2i:
 ## every area stand at the nearest neighbour's surface but under the ground, so a mesh ends
 ## buried.
 func _derive(inner: Rect2i) -> void:
+	var native := WaterFieldNative.instance()
+	if native != null:
+		WaterFieldNative.derive(native, self, inner)
+		return
 	var dry := WaterGeometry.DRY
 	var reach := _clip(inner.grow(1))
 	var wide := _clip(reach.grow(1))
@@ -549,6 +702,7 @@ func _derive(inner: Rect2i) -> void:
 			depth[i] = v - ground[i] if v != dry else -INF
 			steep[i] = 0.0
 			energy[i] = _stroke_energy[i]
+			ew[i] = _edge_surface(i, inner.position.x + x, inner.position.y + z, v)
 	for z in range(inner.position.y, inner.end.y):
 		for x in range(inner.position.x, inner.end.x):
 			var i := z * size.x + x
@@ -560,6 +714,15 @@ func _derive(inner: Rect2i) -> void:
 			steep[i] = smoothstep(STEEP.x, STEEP.y, sl)
 			if calm[i] == 0:
 				energy[i] = maxf(energy[i], smoothstep(SLOPE_WHITE.x, SLOPE_WHITE.y, sl) * 0.6)
+			if _spill_near(x, z, 2, SPILL_POND):
+				# A river's ramp into a lower pond is a slope of the pond, not a fall: a fifth of the
+				# white on it and on the two samples round it, so the edge of the ramp is not a ring
+				# of white pills round its calm middle (round 1: whole-cell white rectangles).
+				energy[i] *= RAMP_KEEP
+			if spill[i] != 0 or (depth[i] < RAMP_FLAT_M and _spill_near(x, z, 1, 0)):
+				# Thin water on a ramp or beside a bank's drain is a wet slope, never a curtain: a
+				# face of the carve is a stroke's own sample (spill 0) away from any spill.
+				steep[i] = 0.0
 
 
 ## The part of the grid-sized `src` inside `r`, row-major over `r`.
@@ -609,6 +772,23 @@ func _ring(src: PackedFloat32Array, src_rect: Rect2i, dst_rect: Rect2i) -> Packe
 	return out
 
 
+## Whether sample (x, z) or any sample within `reach` of it (a square window) is a spill sample
+## of `kind` (any kind when 0).
+func _spill_near(x: int, z: int, reach: int, kind: int) -> bool:
+	for dz in range(-reach, reach + 1):
+		var zz := z + dz
+		if zz < 0 or zz >= size.y:
+			continue
+		for dx in range(-reach, reach + 1):
+			var xx := x + dx
+			if xx < 0 or xx >= size.x:
+				continue
+			var s := spill[zz * size.x + xx]
+			if s != 0 and (kind == 0 or s == kind):
+				return true
+	return false
+
+
 ## Half the central difference of w along one axis among wet neighbours (one-sided at an edge).
 func _slope_axis(i: int, c: int, stride: int, count: int) -> float:
 	var a := i - stride if c > 0 and depth[i - stride] > 0.0 else i
@@ -624,6 +804,10 @@ func _slope_axis(i: int, c: int, stride: int, count: int) -> float:
 ## on its edges; every sample takes the nearer of its own and its nearest boundary sample's
 ## (DistanceField), then clamps at SHORE_FAR.
 func _shore(outer: Rect2i) -> void:
+	var native := WaterFieldNative.instance()
+	if native != null:
+		WaterFieldNative.shore(native, self, outer)
+		return
 	var win := _clip(outer.grow(SHORE_MARGIN))
 	var ww := win.size.x
 	var count := ww * win.size.y
@@ -634,10 +818,17 @@ func _shore(outer: Rect2i) -> void:
 	var best := PackedFloat32Array()
 	best.resize(count)
 	best.fill(INF)
+	var sedge := PackedInt32Array()
+	sedge.resize(count)
+	var ed := PackedFloat32Array()
+	ed.resize(count)
+	for z in range(win.position.y, win.end.y):
+		var lrow := (z - win.position.y) * ww - win.position.x
+		for x in range(win.position.x, win.end.x):
+			ed[lrow + x] = _edge_depth(z * size.x + x)
 	for z in range(win.position.y, win.end.y):
 		for x in range(win.position.x, win.end.x):
-			var i := z * size.x + x
-			var da := depth[i]
+			var da := ed[(z - win.position.y) * ww + x - win.position.x]
 			if da == -INF:
 				continue
 			for k in 2:
@@ -647,25 +838,29 @@ func _shore(outer: Rect2i) -> void:
 				var zz := z + dz
 				if xx >= win.end.x or zz >= win.end.y:
 					continue
-				var j := zz * size.x + xx
-				var db := depth[j]
+				var li := (z - win.position.y) * ww + x - win.position.x
+				var lj := li + dx + dz * ww
+				var db := ed[lj]
 				if db == -INF or (da > 0.0) == (db > 0.0):
 					continue
 				var t := da / (da - db)
 				var p := origin + Vector2(x + dx * t, z + dz * t) * step
-				var li := (z - win.position.y) * ww + x - win.position.x
 				var dd := (origin + Vector2(x, z) * step).distance_to(p)
 				if dd < best[li]:
 					best[li] = dd
 					seeds[li] = p
+					sedge[li] = li * 2 + k
 					has[li] = 1
-				var lj := li + dx + dz * ww
 				dd = (origin + Vector2(xx, zz) * step).distance_to(p)
 				if dd < best[lj]:
 					best[lj] = dd
 					seeds[lj] = p
+					sedge[lj] = li * 2 + k
 					has[lj] = 1
 	var near: PackedInt32Array = DistanceField.transform(has, ww, win.size.y, step)["nearest"]
+	var contour := {}
+	if exact_shore:
+		contour = WaterFieldContour.table(ed, win, has, origin, step)
 	for z in range(outer.position.y, outer.end.y):
 		for x in range(outer.position.x, outer.end.x):
 			var i := z * size.x + x
@@ -677,7 +872,39 @@ func _shore(outer: Rect2i) -> void:
 			var nn := near[li]
 			if nn >= 0 and nn != li:
 				dd = minf(dd, q.distance_to(seeds[nn]))
-			shore[i] = dd if depth[i] > 0.0 else -dd
+			if exact_shore and dd < EXACT_M + 0.12:
+				if has[li] != 0:
+					dd = minf(dd, WaterFieldContour.distance(q, contour, sedge[li], ww))
+				if nn >= 0 and nn != li:
+					dd = minf(dd, WaterFieldContour.distance(q, contour, sedge[nn], ww))
+			shore[i] = dd if ed[li] > 0.0 else -dd
+
+
+## The depth the waterline is taken from at sample `i`: with the exact shore, the surface as drawn
+## (ew) over the ground; else the stage-two depth.
+func _edge_depth(i: int) -> float:
+	if not exact_shore or w[i] == WaterGeometry.DRY:
+		return depth[i]
+	return ew[i] - ground[i]
+
+
+## The surface drawn at sample `i` (grid position (x, z), buried-ring result `v`): see `ew`.
+func _edge_surface(i: int, x: int, z: int, v: float) -> float:
+	var dry := WaterGeometry.DRY
+	if not exact_shore or v == dry or _base[i] != dry:
+		return v
+	var top := -INF
+	for o in _NEIGHBOURS:
+		var xx := x + o.x
+		var zz := z + o.y
+		if xx < 0 or zz < 0 or xx >= size.x or zz >= size.y:
+			continue
+		var h := _base[zz * size.x + xx]
+		if h != dry:
+			top = maxf(top, h)
+	if top == -INF:
+		return v
+	return minf(top, ground[i] - EDGE_MIN)
 
 
 ## Replaces the events inside `rect` (by the sample nearest their position) with those found

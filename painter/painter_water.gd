@@ -21,6 +21,13 @@ extends RefCounted
 ## (which pushes water_color, shore_color and foam_color by name) cannot fight the sheet; release()
 ## clears them, so the materials are as they were.
 ##
+## The surface. A map with authored water draws it as ONE field surface (PainterWaterField: a
+## WaterField of the document as one mesh under the field branch of painter_water.gdshader, falls
+## included: no curtain mesh), and AuthoredWater's own surface mesh is hidden while it does. The
+## falls mesh stays for its mist alone (painter_waterfall.gdshader). A Blender plane and the river
+## ribbon past the map edge keep the shader's depth-buffer path. `field_enabled` false draws the old
+## meshes instead (the A/B of a render job; Classic never sees the field).
+##
 ## Tones. Every colour is the sheet's: the water-* roles, the horizon for the sky tint, the water
 ## numbers, and the ground's own ramp ratio for what a cast shadow does to the wash. A new elevation
 ## re-tones the same materials.
@@ -58,13 +65,35 @@ const SHADE_ROLE := "ground"
 ## How much of the ground's lit-to-shade ratio the water takes (0 none, 1 all of it).
 const SHADE_SHARE := 0.55
 ## The uniforms the fall shader reads of the sheet's.
-const FALL_UNIFORMS: Array[StringName] = [&"p_shallow", &"p_mid", &"p_lit", &"p_foam", &"p_sky"]
+const FALL_UNIFORMS: Array[StringName] = [&"p_foam", &"p_sky"]
 
 ## What is drawn now: {"sheet", "mood", "elevation"}, {} while nothing is painted.
 var applied: Dictionary = {}
 
+## Whether the field surface draws (see the header); a harness flips it for an A/B.
+var field_enabled: bool = true:
+	set(value):
+		field_enabled = value
+		if _field != null:
+			_field.set_enabled(value)
+
+## Shade spike (S2): the ONE water clock (seconds, advanced by the engine's scaled frame time, so
+## Engine.time_scale 0 freezes it as it freezes TIME) the field branch of the shader runs every
+## motion on, and the option bits the shader reads (SHADE_* in painter_water.gdshader: 1 per-
+## fragment field textures, 2 one clock and the drop-aware flow coordinate, 4 the depth-aware tint
+## floor and the soft foot).
+var clock_t: float = 0.0
+var shade_opt: int = 7:
+	set(value):
+		shade_opt = value
+		if _water != null:
+			_water.set_shader_parameter(&"shade_opt", value)
+
+var _clock_us: int = 0
 var _water: ShaderMaterial = null
 var _fall: ShaderMaterial = null
+var _field: PainterWaterField = null
+var _field_map: Node3D = null
 var _water_classic: Shader = null
 var _fall_classic: Shader = null
 
@@ -72,7 +101,7 @@ var _fall_classic: Shader = null
 ## Paints the shared water and fall materials in `state` ({"sheet", "mood", "elevation"}), or
 ## re-tones them when they are already painted. `map` is unused (the materials are shared by every
 ## map). False, touching nothing, when the sheet or the mood is missing.
-func paint(_map: Node3D, state: Dictionary) -> bool:
+func paint(map: Node3D, state: Dictionary) -> bool:
 	var sheet := PainterSheet.load_sheet(str(state.get("sheet", "")))
 	if not sheet.has(str(state.get("mood", ""))):
 		return false
@@ -83,12 +112,19 @@ func paint(_map: Node3D, state: Dictionary) -> bool:
 	}
 	_swap()
 	_retone(sheet)
+	_bind_field(map)
 	return true
 
 
 ## Puts both materials back as they were before the first paint(): Classic's shaders, none of the
 ## sheet's parameters.
 func release() -> void:
+	if _field != null:
+		_field.detach()
+		_field_map = null
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and tree.process_frame.is_connected(_tick):
+		tree.process_frame.disconnect(_tick)
 	if _water != null and _water_classic != null:
 		_restore(_water, _water_classic)
 	if _fall != null and _fall_classic != null:
@@ -113,6 +149,11 @@ func water_material() -> ShaderMaterial:
 ## The shared fall material while painted (null otherwise).
 func fall_material() -> ShaderMaterial:
 	return _fall
+
+
+## The field surface host (null before the first painted map).
+func field() -> PainterWaterField:
+	return _field
 
 
 ## Every uniform the sheet's tones set, by name (the clear on release, the tests).
@@ -151,17 +192,43 @@ static func tones(sheet: Dictionary, mood: String, elevation: float) -> Dictiona
 	return out
 
 
+## Advances the one water clock by the scaled frame time and hands it to the water material.
+func _tick() -> void:
+	var now := Time.get_ticks_usec()
+	var dt := clampf((now - _clock_us) / 1.0e6, 0.0, 0.1) * Engine.time_scale
+	_clock_us = now
+	clock_t += dt
+	if _water != null:
+		_water.set_shader_parameter(&"p_clock", clock_t)
+
+
 func _swap() -> void:
 	if _water == null:
 		_water = WaterGlbUtils.water_material()
 		_water_classic = _water.shader
 		_water.shader = load(SHADER) as Shader
 		_water.set_meta(META, true)
+		_water.set_shader_parameter(&"shade_opt", shade_opt)
+		var tree := Engine.get_main_loop() as SceneTree
+		if tree != null and not tree.process_frame.is_connected(_tick):
+			_clock_us = Time.get_ticks_usec()
+			tree.process_frame.connect(_tick)
 	if _fall == null:
 		_fall = AuthoredWater.fall_material()
 		_fall_classic = _fall.shader
 		_fall.shader = load(FALL_SHADER) as Shader
 		_fall.set_meta(META, true)
+
+
+## Draws `map`'s water as the field surface (a re-paint of the same map keeps its field).
+func _bind_field(map: Node3D) -> void:
+	if map == null or (map == _field_map and _field != null and _field.is_attached()):
+		return
+	if _field == null:
+		_field = PainterWaterField.new()
+	_field_map = map
+	_field.set_enabled(field_enabled)
+	_field.attach(map, _water)
 
 
 func _restore(material: ShaderMaterial, classic: Shader) -> void:

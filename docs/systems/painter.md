@@ -1707,6 +1707,15 @@ by event (findings: `docs/research/2026-11-09-prototypes/compare/painter_final25
 
 ## Water
 
+**Update (card painter-water-field-painted, look-pending, unmerged, 2026-11-19):** on a map with
+authored terrain the Painted look draws its water as ONE surface from the `WaterField`
+(`PainterWaterField`, `WaterFieldMesh`, `painter_water.gdshader`'s field branch,
+docs/systems/water_field.md "Drawing it"): AuthoredWater's surface mesh is hidden, a fall is the
+steep part of that surface, and the paragraphs below about the curtain's white, the fall frames and
+`painter_fall_white.gdshaderinc` describe what that card replaced (a Blender map's water planes and
+the river ribbon still take the depth-buffer path described here). `painter_waterfall.gdshader` is
+mist only (uniforms `p_foam`, `p_sky`).
+
 Under Painted the water and the falls draw with the painter's shaders (card painter-water,
 2026-11-15; the research is `docs/research/2026-11-15-painted-water/report.md`, candidate C1).
 `PainterWater` (`painter/painter_water.gd`, loaded by path from `PainterSurfaces` like
@@ -1957,7 +1966,8 @@ painter_final25_coverage/matrix.md`; the current, code-read class-by-class audit
   (`GLASS_MID_SHARE` 0.7, `GLASS_ALPHA` 0.78; it was a grey film at 0.25 to 0.5 alpha over the
   shaded face), the brink's glass 8 cm long in the shallow wash. (3) The short ankle fall's bottle
   neck: the cross-section's soft toe (`TOE_SOFT_M` 0.25) lifted the middle of a 1.1 m channel to
-  4 cm under the level as the bed rose over the pool tail; `WaterCarve.bed_line()` now returns a crest
+  4 cm under the level as the bed rose over the pool tail; the fall profile (then `WaterCarve.bed_line()`,
+  now `WaterCarve.fall_shape()`, which returns the bank level and a crest share) gives a crest
   share (w) and `section()` keeps the crest flat across there (`MAX_SHORE_SLOPE`,
   `FALL_CREST_TOE_SOFT_M` 0.04; new carves only; hilltop digest re-pinned). Left: a thin light-cyan
   line at the brink, a small pinch at an ankle fall's brink (the lip-tuck ledge), the plunge pool's

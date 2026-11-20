@@ -3,11 +3,14 @@ extends RefCounted
 
 ## The fall frames of a map (card painter-fall-frame-foam), pure: one small set of numbers per
 ## waterfall, derived once from the document, that every surface near the fall carries in its
-## vertices, so the painted look draws ONE white foam over the brink, down the curtain and on the
-## plunge pool from one function (painter/shaders/painter_fall_white.gdshaderinc) instead of a lip
-## roll on the curtain, nothing on the river and a separate foam ring on the pool (the spike
-## painter-fall-spike, approach 1; its handoff names the seams this removes: C3, the colour band at
-## the brink, and C4, the colour jump at the foot). Summary: docs/systems/waterfalls.md (Runtime).
+## vertices, so the painted look drew ONE white foam over the brink, down the curtain and on the
+## plunge pool from one function (the shader include painter_fall_white.gdshaderinc, deleted by
+## card painter-water-field-painted: the painted look now draws that white from the WaterField's
+## energy, docs/systems/water_field.md; the frames stay for the old path and the fall tooling)
+## instead of a lip roll on the curtain, nothing on the river and a separate foam ring on the pool
+## (the spike painter-fall-spike, approach 1; its handoff names the seams this removes: C3, the
+## colour band at the brink, and C4, the colour jump at the foot). Summary:
+## docs/systems/waterfalls.md (Runtime).
 ##
 ## A frame, per fall of WaterFalls.falls(doc) with valid bodies and a direction:
 ##   lip, dir    the middle of the lip line (map XZ) and the lower course's direction there.
@@ -38,10 +41,10 @@ extends RefCounted
 ##
 ## The window: WINDOW_UP_M upstream of the lip to WINDOW_DOWN_M past x_pool, out to WINDOW_SIDE x
 ## the wider crest half-width plus WINDOW_SIDE_M across; it holds the white's whole reach
-## (painter_fall_white.gdshaderinc: the brink up to 0.64 m upstream, the foot up to 1.84 m past the
-## pool point, 1.45 half-widths across) with a margin of a few samples, so a triangle at its edge
-## draws no white whichever frame it takes. Where two windows overlap the nearer fall's wins (the
-## distance outside its along span plus the distance across).
+## (the deleted painter_fall_white.gdshaderinc: the brink up to 0.64 m upstream, the foot up to 1.84
+## m past the pool point, 1.45 half-widths across) with a margin of a few samples, so a triangle at
+## its edge draws no white whichever frame it takes. Where two windows overlap the nearer fall's
+## wins (the distance outside its along span plus the distance across).
 
 ## The two custom channels' formats, for add_surface_from_arrays(..., flags).
 const FORMAT := (

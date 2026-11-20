@@ -29,12 +29,18 @@ func _brink_z(doc: MapDocument, x: float, from_z: float, top: float) -> float:
 	return NAN
 
 
-## A straight stroke from `from` to `to` with one half-width.
+## A straight stroke from `from` to `to` with one half-width, planned unconditioned: these tests
+## pin the fall planner's own rules (test_water_conditioner.gd has the conditioned plan).
 func _plan(
 	doc: MapDocument, from: Vector2, to: Vector2, half: float, depth := WaterBody.Depth.WAIST
 ) -> Array[WaterBody]:
 	return WaterEdit.plan_river(
-		doc, PackedVector2Array([from, to]), PackedFloat32Array([half, half]), depth
+		doc,
+		PackedVector2Array([from, to]),
+		PackedFloat32Array([half, half]),
+		depth,
+		WaterBody.DEFAULT_SPEED,
+		false
 	)
 
 
@@ -167,7 +173,8 @@ func test_gentle_slope_plans_as_in_v0_1_29_with_no_fall() -> void:
 	)
 	var widths := PackedFloat32Array([1.2, 1.5, 1.4, 1.1])
 	var old := _plan_river_v0_1_29(doc, points, widths, WaterBody.Depth.WAIST, 0.8)
-	var bodies := WaterEdit.plan_river(doc, points, widths, WaterBody.Depth.WAIST, 0.8)
+	# The unconditioned plan (the conditioner smooths the course and pools the reaches).
+	var bodies := WaterEdit.plan_river(doc, points, widths, WaterBody.Depth.WAIST, 0.8, false)
 	assert_gt(bodies.size(), 3, "a long gentle slope still splits into several reaches")
 	assert_eq(_model(bodies), _model(old), "byte-identical to the v0.1.29 plan")
 	for step in _steps(bodies):

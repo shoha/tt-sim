@@ -85,6 +85,8 @@ var pond_dabs := PackedVector3Array()
 var fill: String = LineRibbon.FILL
 
 var _refusal: String = ""
+## What the last carved river's conditioning wants said (WaterHints.toast_text), or "".
+var _hint: String = ""
 
 
 func _init() -> void:
@@ -235,6 +237,7 @@ func carve(editor: AuthoringEditor, half_width: float) -> bool:
 		}
 		_refusal = reasons.get(editor.water.last_refusal, "")
 		return _refusal == ""
+	_hint = load(WaterEdit.HINTS_PATH).toast_text(editor.water.last_hints)
 	held = flow_line(line, ground_reader(editor))
 	held_radius = half_width
 	return true
@@ -387,8 +390,12 @@ func dabbed(brush: BrushTool) -> void:
 
 ## Carves a river being drawn (a refusal says why).
 func end(brush: BrushTool) -> void:
+	_hint = ""
 	if drawing and brush.editor != null and not carve(brush.editor, radius(brush.get_radius())):
 		brush.refused.emit(refusal())
+	elif _hint != "":
+		# The conditioner kept something as drawn or could not fix it: said, never blocking.
+		brush.refused.emit(_hint)
 	reset()
 
 
