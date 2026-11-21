@@ -165,10 +165,10 @@ func carve_river(
 	return bodies[0].id
 
 
-## Re-fits the map's stored water (WaterRefit: strokes that climb downstream reversed, the river
-## and pond tree solved, the strokes carved again at their new levels), one history entry like any
-## water edit; last_hints says what was reversed. The plan-time conditioning of carve_river()
-## reaches a stored map only through this. False when the map cannot be carved or has no rivers.
+## Re-fits the map's stored water (WaterRefit: the tree solved, water only lowered, the strokes
+## carved again, so a climbing stroke is cut through, never turned round), one history entry; its
+## last_hints name the strokes cut through. The plan-time conditioning of carve_river() reaches a
+## stored map only through this. False when the map cannot be carved or has no rivers.
 func refit_water() -> bool:
 	var e := _editor()
 	_prepare()
