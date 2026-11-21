@@ -203,6 +203,57 @@ static func condition_ranges(
 	return fit
 
 
+## The climbs of a stroke's reach `levels` (flow order): every stretch whose levels stand over the
+## lowest level upstream of it by more than `band`, as {"from" (the first reach over it), "to"
+## (the last), "low" (the reach it rose from), "rise" (metres, the highest of the stretch over
+## that low)}. Empty for water that only descends: the rule every stored stroke must keep
+## (docs/systems/water_field.md "Water does not climb").
+static func climbs(levels: PackedFloat64Array, band: float = DEAD_BAND_M) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var low := INF
+	var low_at := -1
+	var open := {}
+	for k in levels.size():
+		if levels[k] - low > band:
+			if open.is_empty():
+				open = {"from": k, "to": k, "low": low_at, "rise": 0.0}
+				out.append(open)
+			open.to = k
+			open.rise = maxf(float(open.rise), levels[k] - low)
+			continue
+		open = {}
+		if levels[k] < low:
+			low = levels[k]
+			low_at = k
+	return out
+
+
+## The longest part of a stroke that does not climb: the first and last reach (inclusive) of the
+## run of consecutive reaches, none over the lowest level before it in the run by more than `band`,
+## with the greatest summed `lengths`. A run begins at the reach that broke the one before it, so
+## the crest of a rise heads the run that descends from it. Vector2i(0, -1) for no reaches.
+static func longest_descent(
+	levels: PackedFloat64Array, lengths: PackedFloat64Array, band: float = DEAD_BAND_M
+) -> Vector2i:
+	var best := Vector2i(0, -1)
+	var best_len := -1.0
+	var first := 0
+	var low := INF
+	var length := 0.0
+	for k in levels.size() + 1:
+		if k == levels.size() or levels[k] - low > band:
+			if k > first and length > best_len:
+				best = Vector2i(first, k - 1)
+				best_len = length
+			first = k
+			low = INF
+			length = 0.0
+		if k < levels.size():
+			low = minf(low, levels[k])
+			length += lengths[k]
+	return best
+
+
 ## The conditioned levels of a tree of nodes (rivers' reaches and ponds). `parent[i]` is node i's
 ## downstream node (-1 for an outlet); a node must be at most each upstream neighbour (water does
 ## not climb: an outlet is lowered to the lowest water draining into it, and a node over a pond

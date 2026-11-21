@@ -160,3 +160,33 @@ static func run_events(
 			}
 		)
 	return out
+
+
+## The &"climb" events of the stroke whose reaches are `chain` (flow order): one per stretch of
+## reaches whose stored level stands over the lowest level upstream of it by more than the
+## conditioner's dead band (WaterConditioner.climbs): {"kind", "body" (the stroke's first body
+## id), "pos" (where the first climbing reach begins), "reach" (its id), "rise_m"}. Water does
+## not climb: a plan never stores one (WaterEdit.plan_river), so an event marks a map saved before
+## that rule or a document that was never conditioned; a re-fit removes it. The field draws the
+## stroke as stored (a wall of water at the foot of the rise) and says so here.
+static func climb_events(chain: Array[WaterBody]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if chain.size() < 2:
+		return out
+	var levels := PackedFloat64Array()
+	for body in chain:
+		levels.append(body.level_m)
+	# By path: the conditioner stays out of the start-up script graph (test_boot_graph).
+	var conditioner: GDScript = load("res://utils/water_conditioner.gd")
+	for found: Dictionary in conditioner.climbs(levels):
+		var first: WaterBody = chain[int(found.from)]
+		out.append(
+			{
+				"kind": &"climb",
+				"body": chain[0].id,
+				"pos": first.points[0],
+				"reach": first.id,
+				"rise_m": float(found.rise),
+			}
+		)
+	return out

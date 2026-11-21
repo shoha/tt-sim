@@ -137,6 +137,14 @@ func test_field_of_every_map() -> void:
 				continue
 			assert_false(s.has("refused"), "%s: a stroke of %s was refused" % [m.name, s.layout])
 		var r := Corpus.field_report(doc)
+		# Water does not climb: no reach of any stroke stands over the lowest reach upstream of it.
+		for chain in RiverProfile.strokes(doc.water_bodies):
+			var levels := PackedFloat64Array()
+			for body: WaterBody in chain:
+				levels.append(body.level_m)
+			var rises := WaterConditioner.climbs(levels, 1e-6).size()
+			assert_eq(rises, 0, "%s: stroke %d climbs %s" % [m.name, chain[0].id, levels])
+		assert_eq(int(r.events.get(&"climb", 0)), 0, "%s: the field reports no climb" % m.name)
 		var known: Array = KNOWN[m.name]
 		var film := int(r.events.get(&"film_run", 0))
 		var bridged := int(r.events.get(&"bridged_run", 0))

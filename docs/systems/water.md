@@ -883,6 +883,19 @@ single increases, the largest bridged_run 3 -> 9), the test bounds the total wit
 off's. A stroke noisier than its own cap can hold (hairpins and jitter at half-widths under 1 m)
 is kept as drawn, planned as with conditioning off.
 
+Water does not climb (card painter-water-climb, 2026-11-21; `docs/systems/water_field.md` "Water does
+not climb"). A blocked stroke kept as drawn used to store levels that climb the ridge it crosses
+(the verdict map's river over three walls: 1.30 m, drawn as a wall of water in each pool). Now a
+blocked plan that climbs as drawn is cut to the longest part of the line that runs downhill and
+planned again as its own stroke; the rest is not made, no ground is cut for it, and the hint
+`stopped_at_rise` ("Water cannot climb: the river stops where the ground rises. You can draw the
+rest from the top of the rise, cut the ridge with the Sculpt tool or route the line around the
+hill.") replaces `over_hill`. A blocked plan that only descends is kept as drawn as before.
+`WaterEdit.stop_at_rise = false` gives the old plan for an A/B. The field reports a stored climb
+as a `climb` event. The verdict recipe keeps the river over the walls (it now ends at the first
+wall) and gains a stepped stream that is true: three filled tiers along +z at x = 23, a fall at
+each lip (views `st2_o`, `st2_t`, `st2_w`, `st2pool_z3`).
+
 **The pond tool (card painter-water-pond).** A pond is dug after the streams beside it as often as
 before them, so `WaterEditor.compute` ("pond", `spec.condition` = `WaterEdit.conditioning_enabled`,
 off is the pond as dug) calls `WaterPondFit` (`utils/water_pond_fit.gd`, loaded by path) once, on

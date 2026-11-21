@@ -147,10 +147,20 @@ func test_a_climbing_stroke_reports_the_rise_it_removed() -> void:
 func test_over_hill_and_perched_head_are_flagged_never_blocking() -> void:
 	var hill := Cases.make("over_hill", true)
 	assert_gt(hill.water_bodies.size(), 0, "the stroke is still made")
-	assert_true(Cases.blocked, "kept as drawn")
 	var kinds := _kinds(Cases.hints)
-	assert_true(kinds.has(&"over_hill"), "over_hill: %s" % [kinds])
+	# It climbs the ridge as drawn, so it is made up to the rise (water does not climb, below).
+	assert_true(kinds.has(&"stopped_at_rise"), "stopped_at_rise: %s" % [kinds])
+	assert_false(kinds.has(&"over_hill"), "one hint per cause: %s" % [kinds])
+	WaterEdit.stop_at_rise = false
+	Cases.make("over_hill", true)
+	WaterEdit.stop_at_rise = true
+	assert_true(Cases.blocked, "before that rule: kept as drawn")
+	assert_true(_kinds(Cases.hints).has(&"over_hill"), "over_hill: %s" % [Cases.hints])
+	# The perched head's line starts up the tier's ramp, so as drawn it climbs too: the hints of
+	# the plan kept as drawn are those of the rule off.
+	WaterEdit.stop_at_rise = false
 	var near := Cases.make("head_near_pond", true)
+	WaterEdit.stop_at_rise = true
 	assert_gt(near.water_bodies.size(), 1, "the stroke is still made")
 	kinds = _kinds(Cases.hints)
 	assert_true(kinds.has(&"perched_head"), "perched_head: %s" % [kinds])
@@ -230,8 +240,120 @@ func test_editor_says_the_hints_and_never_blocks() -> void:
 	)
 	_settle(editor)
 	assert_gt(id, 0, "a stroke over a hill is still carved")
-	assert_true(_kinds(editor.water.last_hints).has(&"over_hill"), "%s" % [editor.water.last_hints])
-	assert_true(bool(editor.water.last_report.blocked))
+	var said := _kinds(editor.water.last_hints)
+	assert_true(said.has(&"stopped_at_rise"), "%s" % [editor.water.last_hints])
+	assert_true(bool(editor.water.last_report.stopped))
+	assert_true(WaterHints.worth_saying(editor.water.last_hints), "worth a toast")
+
+
+# --- water does not climb (card painter-water-climb) --------------------------------------------
+
+
+## The largest rise of any stroke of `doc`: a reach level over the lowest level upstream of it.
+func _rise(doc: MapDocument) -> float:
+	var worst := 0.0
+	for chain in RiverProfile.strokes(doc.water_bodies):
+		var low := INF
+		for body: WaterBody in chain:
+			worst = maxf(worst, body.level_m - low)
+			low = minf(low, body.level_m)
+	return worst
+
+
+## Three walls 1.6 m high across a line along z (the verdict map's stepped stream in small): a
+## raised head (z under -11), then walls 2 m wide on top at z -5, 1 and 7, flat ground between.
+func _walls(p: Vector2) -> float:
+	var h := 1.6 * clampf(-p.y - 10.0, 0.0, 1.0)
+	for z: float in [-5.0, 1.0, 7.0]:
+		h = maxf(h, 1.6 * clampf(2.0 - absf(p.y - z), 0.0, 1.0))
+	return h
+
+
+func _count_events(doc: MapDocument, kind: StringName) -> int:
+	var count := 0
+	for e in WaterField.build(doc).events:
+		count += 1 if e.kind == kind else 0
+	return count
+
+
+func test_a_stroke_over_walls_stops_at_the_rise_and_never_climbs() -> void:
+	var line := PackedVector2Array([Vector2(0, -13), Vector2(0, 12)])
+	# Before the rule: the blocked plan is stored as drawn, the water stands up every wall, and
+	# the field says so (one `climb` event per rise).
+	Cases.blocked = false
+	WaterEdit.stop_at_rise = false
+	var before := Cases.world(_walls)
+	Cases.add_stroke(before, line, 1.0, WAIST, true)
+	WaterEdit.stop_at_rise = true
+	assert_true(Cases.blocked, "levelling the walls would cut a gorge: blocked")
+	assert_gt(_rise(before), 1.0, "as drawn the water climbs the walls")
+	assert_eq(_count_events(before, &"climb"), 3, "the field reports each climb")
+	var fit := WaterEdit.refit_document(before)
+	WaterEdit.apply_refit(before, fit)
+	assert_eq(_count_events(before, &"climb"), 0, "a re-fit removes them")
+	# With it: the longest part that runs downhill, conditioned, and nothing else.
+	var doc := Cases.world(_walls)
+	var ground := doc.heights.duplicate()
+	var made: Dictionary = Cases.add_stroke(doc, line, 1.0, WAIST, true)
+	var report: Dictionary = made.report
+	assert_gt(made.bodies.size(), 0, "a river is made")
+	assert_eq(_rise(doc), 0.0, "no reach stands over the water upstream of it")
+	assert_eq(_count_events(doc, &"climb"), 0)
+	assert_true(bool(report.stopped), "the report says the line was cut")
+	assert_lt(float(report.kept_m), float(report.drawn_m) - 4.0, "part of the line was not made")
+	assert_gt(float(report.kept_m), 4.0, "the part kept is a river, not a stub")
+	var kinds := _kinds(report.hints)
+	assert_true(kinds.has(&"stopped_at_rise"), "%s" % [kinds])
+	assert_true(WaterHints.toast_text(report.hints).contains("cannot climb"), "the toast says why")
+	# The author's ground is never cut for the part not made: every sample the carve lowered lies
+	# within reach of the stored course.
+	var reach := 6.0
+	var far := 0
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var i := doc.sample_index(x, z)
+			if doc.heights[i] == ground[i]:
+				continue
+			var p := doc.sample_to_world(Vector2(x, z))
+			var nearest := INF
+			for body: WaterBody in made.bodies:
+				for q in body.points:
+					nearest = minf(nearest, p.distance_to(q))
+			far += 1 if nearest > reach else 0
+	assert_eq(far, 0, "no ground is cut away from the river that was made")
+
+
+func test_a_line_drawn_up_a_ramp_starts_at_the_crest() -> void:
+	# The fall spike's F4: the line starts on the tier's ramp, runs up it, across the top and
+	# off the lip into the pond. As drawn the water climbed the ramp 3.4 m in nine reaches; now
+	# the stream starts at the crest: the tier's top, the fall, the pond.
+	var doc := Cases.make("head_near_pond", true)
+	assert_true(_kinds(Cases.hints).has(&"stopped_at_rise"), "%s" % [_kinds(Cases.hints)])
+	assert_eq(_rise(doc), 0.0)
+	var rivers: Array[WaterBody] = []
+	for body in doc.water_bodies:
+		if body.is_river():
+			rivers.append(body)
+	assert_eq(rivers.size(), 2, "the top and the reach below the fall")
+	assert_gt(rivers[0].level_m - rivers[1].level_m, 3.0, "the fall is kept whole")
+
+
+func test_climbs_and_longest_descent() -> void:
+	var levels := PackedFloat64Array([1.0, 0.6, 0.1, -0.15, 0.07, 0.47, 0.93, -0.15, 0.06])
+	var found := WaterConditioner.climbs(levels)
+	assert_eq(found.size(), 1, "one rise: 0.07 is within the dead band of the pool")
+	assert_eq([int(found[0].from), int(found[0].to), int(found[0].low)], [5, 6, 3])
+	assert_almost_eq(float(found[0].rise), 1.08, 1e-6)
+	assert_eq(WaterConditioner.climbs(PackedFloat64Array([2.0, 1.0, 1.0, 0.2])).size(), 0)
+	assert_eq(WaterConditioner.climbs(levels, 1e-6).size(), 2, "with no band the 0.07 counts")
+	var ones := PackedFloat64Array([1, 1, 1, 1, 1, 1, 1, 1, 1])
+	assert_eq(WaterConditioner.longest_descent(levels, ones), Vector2i(0, 4), "head to the pool")
+	var long_top := PackedFloat64Array([1, 1, 1, 1, 1, 1, 9, 1, 1])
+	assert_eq(
+		WaterConditioner.longest_descent(levels, long_top), Vector2i(6, 8), "the crest heads its run"
+	)
+	var none := PackedFloat64Array()
+	assert_eq(WaterConditioner.longest_descent(none, none), Vector2i(0, -1))
 
 
 # --- re-fitting a stored document ---------------------------------------------------------------

@@ -123,6 +123,7 @@ what a validation card should offer the author to fix:
 | `film_run` | a stretch longer than the bridge whose ground no longer holds its water (`pos`, `length`, `body`) | 1 on the `st` stroke (st_o; 3 before the junction rule, two were its hairpins' insides) |
 | `bridged_run` | a short dip the water bridges (information) | 7 |
 | `end_near_water` | an open stroke end within 2 m of other water 0.3 m or more above or below (`other_body`, `gap_m`, `level_gap`) | f4: the stream head of body 7, 3.96 m above the deep pond (body 29) |
+| `climb` | a stretch of a stroke's reaches whose stored level stands over the lowest level upstream of it by more than the dead band (`pos` where it begins, `reach`, `rise_m`): "Water does not climb" below | 3 on the `st` stroke (its three walls; the fixture was stored before the rule) |
 
 `spill` and `calm` stay readable per sample. A later card adds the plan-time hydrology graph and the
 authoring markers; the renderer never guesses.
@@ -316,9 +317,8 @@ shader's `DBG_DATA` and `DBG_LAP` views and with headless dumps of the channels.
   stream's fall are the far edge of that higher water seen from its own side. It is the mesh, read
   per pixel: the same per vertex, with the film and bank marks off and under either of two repairs
   of the spill sample's surface (drawn at the upper level extended, or draped 4 cm over its
-  ground), neither of which touches it. No rule says what a climb is; `events` does not report
-  one. Until a rule does (the plan refusing or ending the stroke at the pool, or the field drawing
-  a dry sill and a new head), no change to the field's filters or the shader's wash removes it.
+  ground), neither of which touches it. No change to the field's filters or the shader's wash
+  removes it: the rule that does is "Water does not climb" below (card painter-water-climb).
 - **The square white blocks in the lap on a steep pond bank are the lap on a one-sample shelf.**
   Where a stream's bank line survives under a pond (a land wedge's end face, straight and on the
   grid) the water over it is shallow for its distance from the waterline, so the lap's slope share
@@ -347,14 +347,60 @@ spike: rises 9 to 0, film runs 3 to 0, falls 8 to 5, field_rise 4.53 to 0.09 m, 
 4087; plan_river 8.95 to 10.47 ms (the end join plans a second time when an end joins), tree solve
 0.65 ms. Rules to keep: condition BEFORE the carve (a doc-level solve on a carved map raised perched
 edges 33 to 45, so `refit` carves again); conditioning runs once on the authoring peer and the
-bodies are stored; a plan that would cut a gorge is kept as drawn and said (`over_hill`,
-`blocked_cut`), a head above a lower pond is said (`perched_head`), never forced. Known limits: a
-re-drawn stroke's levels barely stabilise (spread 0.37 to 0.35 m, only the reach count settles);
-a hump of one reach is lowered, not reversed (`WaterRefit.ascending_runs` wants two reaches);
-fuzz seed 12 keeps a 2.92 m climb in stored data; the dig refit trades film for drained stretch.
+bodies are stored; a plan that would cut a gorge is never forced: it is kept as drawn and said
+(`blocked_cut`, `over_hill`, `perched_head`) when as drawn it only descends, and cut to its
+descending part when it climbs (next section). Known limits: a re-drawn stroke's levels barely
+stabilise (spread 0.37 to 0.35 m, only the reach count settles); the dig refit trades film for
+drained stretch; `refit` has no cut limit (next section).
 Tests: `test_water_conditioner.gd` (the units, the fuzzer, the tables), `test_water_condition_
 pipeline.gd` (plan_river on and off, the report, hints, the editor's undo and redo and worker,
-`refit_document` and `refit_water`).
+`refit_document` and `refit_water`, water does not climb).
+
+## Water does not climb (card painter-water-climb, look-pending)
+
+The rule: along a stored stroke, in its flow direction, no reach stands over the lowest reach
+upstream of it. Whatever the author draws becomes a river that descends, a pool, a fall or an honest
+end, never water standing up a rise.
+
+Where the climb came from (measured 2026-11-21). The only leak was a BLOCKED plan: the running
+minimum asks the carve to cut a ridge down to the pool before it, `condition_ranges` refuses a cut
+over `CUT_LIMIT_M` (1.5 m), and `plan_river` then stored the unconditioned plan, whose reach levels
+follow the ground up the ridge. The verdict map's "stepped stream" is that case: its three `tier`
+strokes are U-shaped paths whose arms are 20, 12 and 5.5 m apart, so they raise three WALLS, not
+tiers, and the stream crosses them (stored climb 1.30 m; the canonical fixture, the same recipe,
+1.22 m). Nothing else climbs: 56 corpus strokes 0, 79 strokes of 60 fuzz maps 0 (one blocked plan,
+descending), the verdict map's other eight strokes 0. The perched-head case of the tests
+(`head_near_pond`) also climbed, 3.38 m in nine reaches: its line starts on the tier's ramp.
+
+What a blocked plan becomes now (`WaterEdit._descending`, switch `WaterEdit.stop_at_rise`):
+
+- as drawn it only descends: kept as drawn, as before; a rise within the dead band drops onto the
+  lowest level upstream (0.2 m of climb still draws as a step along the samples);
+- as drawn it climbs (`WaterConditioner.climbs`): the stroke is the longest part of the line that
+  runs downhill (`longest_descent`: runs of reaches none of which stands over the run's lowest
+  earlier level by more than the dead band; the crest of a rise heads the run that descends from
+  it), planned again as a stroke of its own: conditioned, its ends joined or tapered. The rest of
+  the line is not made and the author's ground is never cut for it. The hint `stopped_at_rise`
+  says so and offers: draw the rest from the top, cut the ridge with Sculpt, route around
+  (`report.stopped`, `kept_m`, `drawn_m`). A part too short to hold water is refused like any
+  short line.
+
+Why one piece and not all of them: `plan_river` returns one chain to about twenty callers (the
+carve, the exits, the editor's one history entry). The pieces the line would split into are each
+exactly what the author gets by drawing that piece; landing them all from one gesture is the
+editor's job (a follow-up: plan, carve and plan again per piece, one history entry).
+
+Stored documents are drawn as stored: the field reports each climb as a `climb` event and a re-fit
+removes it. Two structures were compared on the stored verdict map before the plan rule was
+chosen (`cmp_structures.png` in the evidence folder): today's `refit` (climbing runs reversed,
+then the tree solve and the re-carve) leaves no climb but CUTS THE WALLS: the solve lowers the
+reversed reaches to the pool and the carve follows, a gorge of 1.3 m the plan itself refuses, with
+pale film slabs beside it; dropping the climbing reaches (a dry sill, a head at the crest) keeps
+the falls but the kept tail 0.2 m over its pool and the untapered head at the crest still step
+along the samples. Open: `refit` should apply the plan's rule (drop what climbs, never cut past
+`CUT_LIMIT_M`) instead of reversing and cutting.
+
+Evidence: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final116_water_climb/`.
 
 ## Debug
 

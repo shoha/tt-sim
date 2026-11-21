@@ -50,6 +50,12 @@ const CASES := {
 	"st_o": [45, 5.0, "case", Vector2(23, -15)],
 	"st_t": [88, 5.0, "case", Vector2(23, -15)],
 	"st_w": [45, 12.0, "at", Vector2(23, -13)],
+	# The stepped stream that is physically true (card painter-water-climb): three filled tiers
+	# that descend along +z, a fall at each lip into the pool of the tier below.
+	"st2_o": [45, 5.0, "case", Vector2(23, 19)],
+	"st2_t": [88, 5.0, "case", Vector2(23, 19)],
+	"st2_w": [45, 12.0, "at", Vector2(23, 18)],
+	"st2pool_z3": [45, 3.0, "at", Vector2(23, 21.5)],
 	"pond_z8": [45, 8.0, "at", Vector2(9, -2)],
 	"f4up_z8": [45, 8.0, "at", Vector2(9, 7)],
 	"exit_z8": [45, 8.0, "at", Vector2(-26, 25)],

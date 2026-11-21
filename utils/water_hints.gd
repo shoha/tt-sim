@@ -16,6 +16,12 @@ extends RefCounted
 ##  - blocked_cut: conditioning would have cut deeper than WaterConditioner.CUT_LIMIT_M into the
 ##    drawn ground, so the stroke was kept as drawn;
 ##  - over_hill: the same, with the deep cut in the middle of the stroke (a stroke over a ridge);
+##  - stopped_at_rise: a blocked stroke that would climb as drawn (water standing higher than the
+##    water upstream of it) was cut to its longest part that runs downhill; the rest of the line
+##    was not made (card painter-water-climb; `detail.rise_m`, `detail.rises`). It replaces
+##    that stroke's over_hill or blocked_cut hint;
+##  - climb: a STORED stroke climbs (WaterField's `climb` event; a map saved before the rule, or a
+##    document that was never conditioned): re-fit the water;
 ##  - perched_head: the stroke's head stands above a lower pond or river within snap reach; it was
 ##    kept (the water would otherwise be cut down to the pond's level);
 ##  - end_below_water, end_near_water_below: a stroke end at or short of other water at another
@@ -37,6 +43,7 @@ extends RefCounted
 const SAID: Array[StringName] = [
 	&"too_short",
 	&"perched_head",
+	&"stopped_at_rise",
 	&"over_hill",
 	&"blocked_cut",
 	&"end_below_water",
@@ -51,6 +58,8 @@ const KIND_TEXT := {
 	&"reversed_run": "A river that ran uphill was turned around to run downhill.",
 	&"blocked_cut": "The river was kept as drawn: levelling it would cut a deep gorge.",
 	&"over_hill": "The river crosses a hill and was kept as drawn: levelling it would cut a gorge.",
+	&"stopped_at_rise": "Water cannot climb: the river stops where the ground rises.",
+	&"climb": "Part of the river stands higher than the water upstream of it.",
 	&"perched_head": "The river starts high above a lower pond and was kept as drawn.",
 	&"end_below_water": "The river ends below water of another level and was kept as drawn.",
 	&"end_near_water_below": "The river stops short of lower water and was kept as drawn.",
@@ -70,6 +79,7 @@ const FIX_TEXT := {
 	&"keep": "keep it as drawn",
 	&"extend_to_water": "extend the end into the water",
 	&"cut_ridge": "cut the ridge with the Sculpt tool",
+	&"draw_from_top": "draw the rest from the top of the rise",
 	&"reroute": "route the line around the hill",
 	&"re_fit": "re-fit the water",
 	&"lower_ground": "lower the banks",

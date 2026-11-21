@@ -126,8 +126,13 @@ func test_hold_cap_keeps_a_line_that_already_holds() -> void:
 
 
 func test_a_blocked_stroke_is_exactly_the_unconditioned_plan() -> void:
+	# The ridge stroke climbs as drawn, so the plan cuts it to its descending part
+	# (WaterEdit.stop_at_rise, test_water_condition_pipeline "water does not climb"); with that
+	# rule off a blocked stroke is the unconditioned plan and nothing else.
 	var off := Cases.make("over_hill", false)
+	WaterEdit.stop_at_rise = false
 	var on := Cases.make("over_hill", true)
+	WaterEdit.stop_at_rise = true
 	assert_true(Cases.blocked, "the ridge stroke is blocked")
 	assert_eq(on.water_bodies.size(), off.water_bodies.size(), "same reaches")
 	for i in off.water_bodies.size():

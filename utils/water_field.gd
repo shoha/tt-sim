@@ -445,6 +445,7 @@ func _write_strokes(
 		var found := WaterFieldStroke.runs(stations.undermined)
 		var lost := WaterFieldStroke.without_bridged(stations.undermined, found)
 		runs.append_array(WaterFieldStroke.run_events(typed[0].id, found, stations.centre))
+		runs.append_array(WaterFieldStroke.climb_events(typed))
 		if profile.taper.x == 1:
 			ends.append({"body": typed[0].id, "pos": profile.points[0], "level": profile.at(0.0).x})
 		if profile.taper.y == 1:
