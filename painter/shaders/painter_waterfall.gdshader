@@ -72,7 +72,10 @@ void vertex() {
 		float stepped = floor(cycle * MIST_STEPS) / MIST_STEPS;
 		mist_phase = stepped;
 		vec2 off = UV2 * mix(1.0, MIST_GROW, stepped);
-		float sway = sin(floor(p_clock * 2.0) * 0.5 + COLOR.b * TAU) * 0.12;
+		// The sway takes a new offset when the puff's own rise steps (the same count of steps, at
+		// the puff's phase): on floor(p_clock * 2.0) every puff of every fall swayed in one frame,
+		// each half second (card painter-water-edges).
+		float sway = sin(floor((p_clock / MIST_CYCLE_S + COLOR.b) * MIST_STEPS) * 0.5 + COLOR.b * TAU) * 0.12;
 		VERTEX.y += stepped * MIST_RISE_M;
 		VERTEX += INV_VIEW_MATRIX[0].xyz * (off.x + sway) + INV_VIEW_MATRIX[1].xyz * off.y;
 	}

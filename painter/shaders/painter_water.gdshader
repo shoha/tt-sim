@@ -160,6 +160,16 @@ float wt() {
 // of the terms left running alone. BITE the lap's reach, DAB the outer dabs (and a fall zone's
 // band), WRAP the wrap's break, BLOB the seeds of the flat's two blob copies, STROKE the stroke
 // lattice's per-cell cycle index.
+// ABL_<term> zeroes one term alone, so a capture with it against one without shows what that term
+// draws (card painter-water-edges: a mark's cause is what a switch proves, never its name). The
+// whites: NORIBBON the lap, NODASH the outer dabs, NOLAP both and the riffles, NOEDGE the wrap,
+// NORINGCOV a token's arcs, NOWAKE a token's wake (NORINGS the token loop whole), NOWHITE the
+// energy's white. The pale terms: NOPOOLFLOOR the pool's deep floor, NOFILMA the thin water's
+// alpha floor, NOFILMW and NOBANKW the film and bank shares, NOVEIL the plunge's milky wash,
+// NOSMOOTH the lap's smoothed distance (the exact one instead), NOSTEEP the lap's steep-bank
+// softening. Four put back what card painter-water-edges removed: WAKEBANDS the wake's stretched
+// noise dashes, LAPNOTCH the lap's start cut on the broken distance, NOROOM narrow water's full
+// rim, POOLRULED the pool floor's rim on the plain shore distance.
 const float FRZ_CLOCK = 9.99;
 #ifdef FRZ_BITE
 #define WT_BITE FRZ_CLOCK
@@ -377,6 +387,22 @@ const float FACE_EDGE = 0.055;
 const float LAP_WOBBLE_M = 0.16;
 // How far (m) the steep bank's smoothed waterline samples the shore distance on each side.
 const float LAP_SMOOTH_M = 0.4;
+// The rim's room: the shore distance (m) at which water has its full rim (the half-width of a pool
+// 1.6 m across), how far (m) towards the open water the one extra tap looks for it (past
+// ROOM_FULL_M, so a straight shore always finds it), the least share of the rim a puddle keeps, and
+// the width (m) of full white the rim never thins below: a firm white waterline, whatever the room.
+const float ROOM_FULL_M = 0.8;
+const float ROOM_FAR_M = 0.9;
+const float ROOM_MIN = 0.2;
+const float RIM_FLOOR_M = 0.035;
+// The pool floor's rim: the floor comes on over POOL_RIM_M of shore distance, a distance stretched
+// by a slow noise (POOL_RIM_FREQ cells per metre) between POOL_RIM_LO and POOL_RIM_LO + POOL_RIM_VAR
+// times, so the pale shallows are lobes of uneven width; read within POOL_RIM_FAR_M of the shore.
+const float POOL_RIM_M = 0.3;
+const float POOL_RIM_FREQ = 1.5;
+const float POOL_RIM_LO = 0.8;
+const float POOL_RIM_VAR = 1.3;
+const float POOL_RIM_FAR_M = 0.4;
 // The outer dabs of a gentle shore: the noise's cells per metre along the shore (a dab is about half
 // a cell to a cell and a half long), the half-width (m) of the widest dab, the noise level a dab
 // starts at (the higher, the fewer and shorter) and how far out it lies, in lap widths.
@@ -406,6 +432,16 @@ const float FLOW_MAX_VALID = 1.1;
 const float FLOW_SPEED_UNITS_PER_SEC = 0.6;
 // Token wake (water.gdshader): the downstream half of a token's region is compressed this much.
 const float WAKE_STRETCH = 2.0;
+// The wake's streaks: how many lanes, a lane's width as a share of the token's region at the token
+// and at the wake's end (the lanes fan), a streak's lives per second, its greatest half-width as a
+// share of the lane, its soft edge (the same share) and its greatest cover.
+const float WAKE_LANES = 3.0;
+const float WAKE_FAN_NEAR = 0.28;
+const float WAKE_FAN_FAR = 0.6;
+const float WAKE_RATE = 0.37;
+const float WAKE_WIDTH = 0.45;
+const float WAKE_SOFT = 0.4;
+const float WAKE_PEAK = 0.85;
 // Rock foam (the depth-slope detector) only where the near side of the jump reaches the surface.
 const float EDGE_FOAM_REACH = 0.3;
 // ... and not where the far side of the jump is an opaque object IN FRONT of the surface (a canopy or
@@ -765,11 +801,25 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// belongs to the rim, not to the middle of a 0.3 m pool.
 	// A narrow pool (a stream's lower pool, a metre across) has no middle 0.5 m from every bank: the
 	// floor engages from a rim of a few centimetres, so it reads deep like the wide ones.
-	float pool_k = smoothstep(0.04, 0.3, fa.z) * smoothstep(0.02, 0.08, fa.x) * (1.0 - curtain);
+	// The floor comes on with the shore distance, and the wash posterises the column: on a distance
+	// taken as it is the pale rim ended on a contour of the shore distance, a ruled band of one
+	// width along every straight shore, a pale block with square corners where a swell of the lap
+	// ended it (card painter-water-edges). The distance is stretched by a slow noise fixed in the
+	// world, so the shallows are lobes of uneven width that hold still like a bed does. A fall's
+	// zone keeps the plain distance (the approved falls); ABL_POOLRULED puts it back everywhere.
+	float rim_z = fa.z;
+#ifndef ABL_POOLRULED
+	if (fa.z < POOL_RIM_FAR_M) {
+		rim_z *= mix(POOL_RIM_LO + POOL_RIM_VAR * wn_xz(p * POOL_RIM_FREQ, 13.0), 1.0, fz);
+	}
+#endif
+	float pool_k = smoothstep(0.04, POOL_RIM_M, rim_z) * smoothstep(0.02, 0.08, fa.x) * (1.0 - curtain);
 	// The floor follows the water's own depth (a column per metre of depth past the first 6 cm, up to
 	// the pool's): a 0.17 m stream pool already reads deep, a lip's few centimetres stay shallow, so
 	// the floor does not step the lip and thin water by a bank keeps its pale rim.
+#ifndef ABL_NOPOOLFLOOR
 	column = max(column, min(max(fa.x - 0.06, 0.0) * POOL_DEPTH_K, POOL_COLUMN_M) * pool_k);
+#endif
 }
 	// Where a river leaves the map the terrain's bed and the channel patch's meet in a crease: the low
 	// column there drew a row of white dabs (the depth-slope wrap), a vertical strip of ice rim and a
@@ -810,7 +860,9 @@ if (fieldv && (shade_opt & 4) != 0) {
 		// The waterline is the depth's zero contour: fade over its first centimetres of horizontal
 		// distance too, so a steep bank does not end the wash on a hard line.
 		shoreline = min(smoothstep(0.0, 0.05, fa.x), smoothstep(0.0, 0.14, fa.z));
+#ifndef ABL_NOFILMA
 		wash_a = max(wash_a, p_opacity * FILM_ALPHA * (1.0 - smoothstep(0.045, 0.1, fa.x)));
+#endif
 		// The thin water a bank sheds (the marks' bank share, WaterField's spill beyond the channel)
 		// draws from a few centimetres' depth: it read as a pale shelf standing out from the bank.
 		float bank_spill = clamp(v_f2.z, 0.0, 1.0);
@@ -857,20 +909,59 @@ if (fieldv && (shade_opt & 4) != 0) {
 			float ph = fract(cyc);
 			float stepped = floor(ph * RING_STEPS) / RING_STEPS;
 			float rr = mix(0.3, ring_r, stepped);
-			// Broken: a gap pattern by angle that changes with each expansion.
+			// Broken: a gap pattern by angle that changes with each expansion. The pattern is read
+			// round a circle of the noise (the direction, not the angle): on the angle it had a seam
+			// where atan wraps, a straight line from the token against the world's x axis that cut
+			// every arc crossing it square (card painter-water-edges-2; ABL_RINGSEAM puts it back).
+#ifdef ABL_RINGSEAM
 			float gap = be_n2(vec2(ang * 1.7 + float(k) * 9.1, floor(cyc) * 3.7 + float(k)));
+#else
+			float gap = be_n2(to_point / max(dist, 1e-4) * 1.7 + vec2(float(k) * 9.1, floor(cyc) * 3.7 + float(k)));
+#endif
 			float arc = smoothstep(0.32, 0.45, gap);
 			float body = 1.0 - smoothstep(0.035, 0.07 + world_units_per_pixel, abs(sdist - rr));
 			ring_cov = max(ring_cov, body * arc * (1.0 - stepped));
 		}
 		if (flow_speed > 0.0 && along > 0.0) {
-			// A teardrop of dashes downstream, in the flow's frame.
-			float lobe = (1.0 - smoothstep(0.0, ring_r, sdist)) * smoothstep(0.0, 0.3, along * flow_speed);
+			// The wake downstream, in the flow's frame: WAKE_LANES soft streaks, each a lens that
+			// tapers to a point at both ends, in lanes that fan out from the thing's sides. A streak
+			// is drawn, not cut out of a noise: its half-width is a parabola along the lane (a point
+			// at each end), it drifts downstream over its life and fades in and out, so it has no end
+			// face and no parallel sides; the lanes' lives are a third of a cycle apart, so two stand
+			// at any time. What stood here was a thresholded noise stretched 4:1 along the flow
+			// (cells 0.17 m across, 0.7 m long: longer than the teardrop, so each dash kept one width
+			// from end to end) whose pulse was hashed per 0.2 m column: pale bars with straight
+			// parallel sides, a rectangle each (card painter-water-edges; ABL_WAKEBANDS puts it back).
+			float start = smoothstep(0.0, 0.3, along * flow_speed);
+#ifdef ABL_WAKEBANDS
+			float lobe = (1.0 - smoothstep(0.0, ring_r, sdist)) * start;
 			float pulse = 0.5 + 0.5 * sin(wt() * 2.3 + be_n2(vec2(floor(across * 5.0), 3.0)) * 6.28);
 			float dash = smoothstep(0.55, 0.7, be_n2(vec2(across * 6.0, along * 1.4)) * pulse + 0.15);
 			wake_cov = max(wake_cov, lobe * dash);
+#else
+			float wake_t = along / (ring_r * (1.0 + WAKE_STRETCH * flow_speed));
+			float lane = across / (ring_r * (WAKE_FAN_NEAR + (WAKE_FAN_FAR - WAKE_FAN_NEAR) * wake_t));
+			float lane_id = clamp(floor(lane + 0.5), -1.0, 1.0);
+			float lane_f = min(2.0 * abs(lane - lane_id), 1.0);
+			float ridge = 1.0 - lane_f * lane_f;
+			float lane_h = p_hash(vec3(lane_id, float(i), 7.0));
+			float life = fract(wt() * WAKE_RATE + (lane_id + 1.0) / WAKE_LANES + lane_h * 0.2);
+			float along_k = (wake_t - mix(0.22, 0.7, life)) / (0.2 + 0.12 * lane_h);
+			float half_w = WAKE_WIDTH * max(1.0 - along_k * along_k, 0.0);
+			float streak = smoothstep(1.0 - half_w, 1.0 - half_w + WAKE_SOFT, ridge);
+			// The streak comes and goes by its cover, at its full shape: thinned by its life as
+			// well, a young or dying streak was a hairline down the lane's middle.
+			streak *= WAKE_PEAK * smoothstep(0.0, 0.6, sin(life * 3.14159));
+			wake_cov = max(wake_cov, streak * start * (1.0 - smoothstep(0.6, 1.0, sdist / ring_r)));
+#endif
 		}
 	}
+#ifdef ABL_NORINGCOV
+	ring_cov = 0.0;
+#endif
+#ifdef ABL_NOWAKE
+	wake_cov = 0.0;
+#endif
 
 	// ---- Ice --------------------------------------------------------------------------------
 	float ice_k = 0.0;
@@ -947,8 +1038,10 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// The plunge's wash: aerated water, a milky glaze over the lower face and the pool below the foot,
 	// strongest at the foot and gone by FOOT_VEIL_M, the same coordinate the glass colour uses. It
 	// tints and thickens the water but never covers it: the pool's blue stays under it.
+#ifndef ABL_NOVEIL
 	x = mix(x, mix(p_lit, p_foam, 0.4), foot_w * 0.24);
 	a = max(a, foot_w * 0.48);
+#endif
 
 	// ---- Whites -----------------------------------------------------------------------------
 	float foam_k = clamp(foam_strength, 0.5, 1.5);
@@ -996,6 +1089,12 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// On a steep bank the gradient (and so d_h) jumps from one mesh triangle to the next: the lap's
 	// edge softens there, so it reads as a brushed edge and not a row of crisp triangles.
 	float steep = smoothstep(0.5, 1.3, slope);
+	// What the room rule below reads: the exact distance with the wobble, the gradient of the
+	// smoothed distance (towards the open water) and the largest distance within the taps' reach.
+	float d_exact = d_h;
+	vec2 lap_in = vec2(0.0);
+	float room = ROOM_FULL_M;
+	vec2 tc_lap = vec2(0.0);
 	if (fieldv) {
 		// The smoothed waterline beside the exact one: the signed shore distance averaged over a cross of
 		// taps LAP_SMOOTH_M out. Exact on a straight bank, it rounds a ledge's corner and drops a thin
@@ -1004,21 +1103,87 @@ if (fieldv && (shade_opt & 4) != 0) {
 		// still drives the wash, the fade and the pool floor.
 		vec2 tcs = (v_mp - fld_origin) * fld_inv_step + 0.5;
 		vec2 r = LAP_SMOOTH_M * fld_inv_step;
-		float zs = 0.25 * (
-			texture(fld_a, (tcs + vec2(r.x, 0.0)) / fld_dim).b
-			+ texture(fld_a, (tcs - vec2(r.x, 0.0)) / fld_dim).b
-			+ texture(fld_a, (tcs + vec2(0.0, r.y)) / fld_dim).b
-			+ texture(fld_a, (tcs - vec2(0.0, r.y)) / fld_dim).b
-		);
+		vec4 t0 = texture(fld_a, (tcs + vec2(r.x, 0.0)) / fld_dim);
+		vec4 t1 = texture(fld_a, (tcs - vec2(r.x, 0.0)) / fld_dim);
+		vec4 t2 = texture(fld_a, (tcs + vec2(0.0, r.y)) / fld_dim);
+		vec4 t3 = texture(fld_a, (tcs - vec2(0.0, r.y)) / fld_dim);
+		float zs = 0.25 * (t0.b + t1.b + t2.b + t3.b);
+#ifndef ABL_NOSMOOTH
 		d_h = zs + (d_h - fa.z);
+#endif
+		tc_lap = tcs;
+		lap_in = vec2(t0.b - t1.b, t2.b - t3.b);
+		room = max(max(fa.z, max(t0.b, t1.b)), max(t2.b, t3.b));
 	}
+#ifdef ABL_NOSTEEP
+	steep = 0.0;
+#endif
 	// The foam's width and softness follow the bank's slope smoothly (it came from a steep/flat
 	// switch): a steep bank's grid-wide steps of waterline are brushed out, not drawn as blocks.
 	// With the exact waterline a steep bank's lap follows the terrain's triangles: a wider soft edge
 	// and a larger, slower break of the distance, so the lap is a brushed band, not a zigzag line.
 	float lap_soft = 0.03 + 0.32 * steep;
-	d_h += (wn_xz(p * 1.3, 9.0) - 0.5) * 0.5 * steep;
-	float lap = (1.0 - smoothstep(thr - 0.03 - lap_soft, thr + 0.02 + lap_soft, d_h)) * smoothstep(0.0, 0.03, d_h + 0.02);
+	float d_lap = d_h;
+	float steep_n = (wn_xz(p * 1.3, 9.0) - 0.5) * 0.5 * steep;
+	d_h += steep_n;
+	// The lap starts at the waterline (the smoothed one), whatever the steep bank's break does to
+	// its outer edge. The start was cut on the broken distance too: where the break pushed that
+	// under zero (up to 0.25 m into the water) the lap stopped on a hard 3 cm edge and left a notch
+	// of bare thin water between the straight waterline and itself, a pale block with square
+	// corners that held still while the lap moved round it (card painter-water-edges). A fall's
+	// zone keeps the old cut (the approved falls); ABL_LAPNOTCH puts it back everywhere.
+#ifdef ABL_LAPNOTCH
+	float d_start = d_h;
+#else
+	float d_start = mix(d_lap, d_h, fz);
+#endif
+	float lap = (1.0 - smoothstep(thr - 0.03 - lap_soft, thr + 0.02 + lap_soft, d_h)) * smoothstep(0.0, 0.03, d_start + 0.02);
+	// The rim follows the room there is (card painter-water-edges). The lap's full width (its reach,
+	// a steep bank's soft edge and break, on a distance the smoothing lowers where the far bank is
+	// inside its taps) is over half a metre: a pool a metre across was white from bank to bank. So
+	// where the water is narrow the whole rim scales with its half-width: the reach, the soft edge
+	// and the break times room_k, and the distance goes back to the exact one. The room is the
+	// largest shore distance found from here: at the fragment, at the smoothing's four taps, and at
+	// ONE more tap ROOM_FAR_M towards the open water (along the smoothed distance's gradient), read
+	// only by a fragment that draws some lap and has not found ROOM_FULL_M already. An open shore
+	// finds its own distance plus ROOM_FAR_M there, so room_k is exactly 1 and it draws as before;
+	// a fall's zone keeps its rim (the approved falls). ABL_NOROOM switches the rule off.
+	float room_k = 1.0;
+#ifndef ABL_NOROOM
+	if (fieldv && lap > 0.0 && fz < 1.0 && room < ROOM_FULL_M) {
+		float gl = length(lap_in);
+		if (gl > 1e-4) {
+			vec2 tcf = tc_lap + lap_in / gl * ROOM_FAR_M * fld_inv_step;
+			room = max(room, texture(fld_a, tcf / fld_dim).b);
+		}
+		room_k = mix(clamp(room / ROOM_FULL_M, ROOM_MIN, 1.0), 1.0, fz);
+		if (room_k < 1.0) {
+			// The rim never thins below a firm line: full white over the first RIM_FLOOR_M from the
+			// waterline (less where the water itself is narrower than that leaves blue in), gone that
+			// far again beyond, and the steep bank's soft edge and break shrink with the square of the
+			// room. Scaled alone, at ROOM_MIN the reach was a centimetre or two inside a soft edge
+			// that began behind the waterline: the lap never reached full white, a pale halo and not
+			// a waterline. The floor comes in below a room share of 1, so the rule stays continuous.
+			float thr_r = thr * room_k;
+			float room_k2 = room_k * room_k;
+			float soft_r = 0.03 + 0.32 * steep * room_k2;
+			// (Mixed in, not a max against a floor scaled towards zero: the scaled reach's inner edge
+			// is negative on a steep bank, and a floor of any size, however small, cut it to zero the
+			// moment the rule engaged: a ruled line across a stream where a fall's zone ends.)
+			float lo_r = thr_r - 0.03 - soft_r;
+			lo_r = mix(lo_r, max(lo_r, min(RIM_FLOOR_M, room * 0.4)), 1.0 - smoothstep(0.6, 1.0, room_k));
+			float hi_r = max(thr_r + 0.02 + soft_r, lo_r + RIM_FLOOR_M);
+			float d_r = mix(d_exact, d_lap, room_k);
+#ifdef ABL_LAPNOTCH
+			float start_r = d_r + steep_n * room_k2;
+#else
+			float start_r = mix(d_r, d_r + steep_n * room_k2, fz);
+#endif
+			d_r += steep_n * room_k2;
+			lap = (1.0 - smoothstep(lo_r, hi_r, d_r)) * smoothstep(0.0, 0.03, start_r + 0.02);
+		}
+	}
+#endif
 #ifdef ABL_NORIBBON
 	lap = 0.0;
 #endif
