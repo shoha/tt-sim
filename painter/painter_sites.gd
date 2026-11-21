@@ -20,9 +20,10 @@ extends RefCounted
 ## the dab's reach of the stone, triangulated as the terrain's mesh is and lifted LIFT_M, so it
 ## lies on the ground whatever the ground's shape (a fan of its own, with vertices on the ground,
 ## dipped under every lip it crossed: probed, the card's first sheet). The dab's SHAPE is not in
-## the triangles: every vertex of a patch carries the stone's LOBES.size() lobes (CUSTOM0 to 2:
-## a lobe's middle, its radius and the turn of its outline's waves), placed by a hash of the
-## stone's position, and the ground's shader works the value out per pixel: for a lobe its
+## the triangles: the stone's LOBES.size() lobes (a lobe's middle, its radius and the turn of its
+## outline's waves), placed by a hash of the stone's position, are a row of texels PainterDabs
+## keeps (the patch's vertices carry the stone's slot there), and the ground's shader works the
+## value out per pixel: for a lobe its
 ## radius over BAND_M at the middle, falling in a straight line to 0 on an outline whose distance
 ## varies round the lobe by two and three waves (an uneven blob, never a clean oval), and the
 ## greatest of the lobes'. So the outline is exact at any zoom and nothing is tessellated for it.
@@ -35,7 +36,8 @@ extends RefCounted
 ##   patches that overlap the depth test keeps the one with the higher value there.
 ## CUSTOM3 holds BASE (the ground's own mesh has no CUSTOM3 and reads 0), what the value loses at
 ## this vertex (CUT per metre its ground lies past the stone's vertical reach from the ground at
-## the stone: a dab at a ledge's edge ends there and does not run down the face) and the lift.
+## the stone: a dab at a ledge's edge ends there and does not run down the face), the lift and the
+## stone's slot plus one.
 
 const HALF_M := 0.45
 const ASPECT := 1.6
@@ -140,7 +142,8 @@ static func value(
 
 
 ## Appends the patch of `site`'s dab: its `vertices`, their `uvs` (the map-frame x, z the ground's
-## shader reads), the four floats a vertex of each of `custom` (four arrays: CUSTOM0 to 3) and its
+## shader reads), the four floats a vertex of `custom` (CUSTOM3: BASE, what the value loses, the
+## lift, and `slot` plus one, the stone's place in PainterDabs' texture of lobes) and its
 ## triangles' `indices`, counted from the patch's first vertex. Returns the vertices it added: none
 ## for a stone that does not stand on this ground (off the map, or its foot further than twice
 ## its reach from the ground). The site is in the terrain's own frame; `grid` is the terrain's
@@ -155,8 +158,9 @@ static func append_dab(
 	half: Vector2,
 	vertices: PackedVector3Array,
 	uvs: PackedVector2Array,
-	custom: Array[PackedFloat32Array],
-	indices: PackedInt32Array
+	custom: PackedFloat32Array,
+	indices: PackedInt32Array,
+	slot := 0
 ) -> int:
 	var x: float = site_of[0]
 	var z: float = site_of[1]
@@ -174,15 +178,8 @@ static func append_dab(
 	var i1 := clampi(ceili((x + far + half.x) / step.x), i0 + 1, columns - 1)
 	var j0 := clampi(floori((z - far + half.y) / step.y), 0, rows - 2)
 	var j1 := clampi(ceili((z + far + half.y) / step.y), j0 + 1, rows - 1)
-	var own := lobes(x, z, r)
 	var wide := i1 - i0 + 1
-	# Every vertex of the patch holds the same lobes: each laid end to end, once.
-	for k in LOBES.size():
-		var block := own.slice(k * LOBE_FLOATS, (k + 1) * LOBE_FLOATS)
-		var need := LOBE_FLOATS * wide * (j1 - j0 + 1)
-		while block.size() < need:
-			block.append_array(block.duplicate())
-		custom[k].append_array(block.slice(0, need))
+	var tag := float(slot + 1)
 	for j in range(j0, j1 + 1):
 		var pz := j * step.y - half.y
 		var row := j * columns
@@ -191,10 +188,10 @@ static func append_dab(
 			var h := grid[row + i]
 			vertices.append(Vector3(px, h + LIFT_M, pz))
 			uvs.append(Vector2(px, pz))
-			custom[3].append(BASE)
-			custom[3].append(maxf(absf(h - ground) - up, 0.0) * CUT)
-			custom[3].append(LIFT_M)
-			custom[3].append(0.0)
+			custom.append(BASE)
+			custom.append(maxf(absf(h - ground) - up, 0.0) * CUT)
+			custom.append(LIFT_M)
+			custom.append(tag)
 	# The terrain's own triangles (TerrainMeshBuilder.build_chunk_arrays): front faces up.
 	for j in j1 - j0:
 		for i in i1 - i0:

@@ -271,9 +271,9 @@ func _grid(n: int, slope: float, drop := 0.0) -> PackedFloat32Array:
 	return grid
 
 
-## Four empty custom arrays (PainterSites.append_dab's CUSTOM0 to 3).
-func _customs() -> Array[PackedFloat32Array]:
-	return [PackedFloat32Array(), PackedFloat32Array(), PackedFloat32Array(), PackedFloat32Array()]
+## An empty custom array (PainterSites.append_dab's CUSTOM3).
+func _customs() -> PackedFloat32Array:
+	return PackedFloat32Array()
 
 
 func test_a_dab_is_a_patch_of_the_terrains_own_triangles() -> void:
@@ -287,10 +287,11 @@ func test_a_dab_is_a_patch_of_the_terrains_own_triangles() -> void:
 	var indices := PackedInt32Array()
 	# A stone on a slope of 0.3, its foot on the ground there.
 	var site := PainterSites.site(0.6, -1.1, 0.2, 0.18, 0.1)
-	var count := PainterSites.append_dab(site, grid, n, n, step, half, vertices, uvs, custom, indices)
+	var count := PainterSites.append_dab(
+		site, grid, n, n, step, half, vertices, uvs, custom, indices, 6
+	)
 	assert_gt(count, 0, "a patch")
 	assert_eq(vertices.size(), count)
-	var own := PainterSites.lobes(0.6, -1.1, 0.2)
 	var off_grid := 0
 	var lowest := Vector2(INF, INF)
 	var highest := Vector2(-INF, -INF)
@@ -305,17 +306,15 @@ func test_a_dab_is_a_patch_of_the_terrains_own_triangles() -> void:
 		lowest = lowest.min(Vector2(v.x, v.z))
 		highest = highest.max(Vector2(v.x, v.z))
 		assert_eq(uvs[i], Vector2(v.x, v.z))
-		assert_eq(custom[3][i * 4], PainterSites.BASE, "a dab's vertex")
+		assert_eq(custom[i * 4], PainterSites.BASE, "a dab's vertex")
+		assert_eq(custom[i * 4 + 3], 7.0, "its stone's slot, plus one")
 		if Vector2(v.x - 0.6, v.z + 1.1).length() < 0.5:
-			assert_eq(custom[3][i * 4 + 1], 0.0, "near the stone the value loses nothing")
+			assert_eq(custom[i * 4 + 1], 0.0, "near the stone the value loses nothing")
 	assert_eq(off_grid, 0, "every vertex is a sample of the terrain, lifted")
+	assert_eq(custom.size(), count * 4, "four floats a vertex")
 	var far := PainterSites.reach(0.2)
 	assert_true(lowest.x <= 0.6 - far and lowest.y <= -1.1 - far, "the patch holds the dab's reach")
 	assert_true(highest.x >= 0.6 + far and highest.y >= -1.1 + far, "on every side")
-	for k in 3:
-		assert_eq(custom[k].size(), count * 4)
-		assert_true(custom[k].slice(0, 4) == own.slice(k * 4, k * 4 + 4), "the lobes, at a vertex")
-		assert_true(custom[k].slice(count * 4 - 4) == own.slice(k * 4, k * 4 + 4), "at every one")
 	# The terrain's winding: front faces up (a cross product pointing down).
 	var wrong := 0
 	for t in indices.size() / 3:
@@ -383,7 +382,7 @@ func test_a_dab_ends_at_a_ledge_and_a_stone_off_the_ground_has_none() -> void:
 	for i in vertices.size():
 		if vertices[i].y < -1.0:
 			below += 1
-			assert_gt(custom[3][i * 4 + 1], 4.0, "the value is lost down the face")
+			assert_gt(custom[i * 4 + 1], 4.0, "the value is lost down the face")
 	assert_gt(below, 0, "some of the patch lies past the edge")
 	# A stone whose foot is 5 m above this ground (it stands on something else).
 	var before := vertices.size()
@@ -416,7 +415,14 @@ func test_the_dabs_host_builds_what_changed_and_nothing_else() -> void:
 	assert_eq(holder.get_child_count(), 2, "one mesh a cell")
 	var node := holder.get_child(0) as MeshInstance3D
 	assert_gt(node.mesh.surface_get_array_len(0), 8, "a patch of the terrain's samples")
-	assert_true(node.mesh.surface_get_format(0) & Mesh.ARRAY_FORMAT_CUSTOM3 != 0, "with the lobes")
+	assert_true(node.mesh.surface_get_format(0) & Mesh.ARRAY_FORMAT_CUSTOM3 != 0, "with the slots")
+	assert_eq(node.mesh.surface_get_format(0) & Mesh.ARRAY_FORMAT_CUSTOM0, 0, "not the lobes")
+	var lobes := material.get_shader_parameter(PainterDabs.LOBES_PARAM) as ImageTexture
+	assert_not_null(lobes, "the stones' lobes are a texture of the ground's shader")
+	var first := PainterSites.lobes(1.0, 1.0, 0.2)
+	var texel := lobes.get_image().get_pixel(0, 0)
+	assert_almost_eq(texel.r, first[0], 1.0e-5, "slot 0: the first stone's first lobe")
+	assert_almost_eq(texel.a, first[3], 1.0e-5)
 	assert_eq(node.material_override, material, "drawn with the ground's material")
 	assert_eq(node.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	# The same sites again (a rebuild of the field for anything else, the sun turning): nothing.
@@ -432,6 +438,8 @@ func test_the_dabs_host_builds_what_changed_and_nothing_else() -> void:
 	sites.append(PainterSites.site(1.5, 1.2, 0.2, 0.0, 0.1))
 	assert_eq(dabs.sync(map, terrain, material, sites), 1, "the new stone alone")
 	assert_eq(dabs.counts(), Vector2i(3, 2))
+	var taken := dabs.lobe_image().get_pixel(PainterDabs.LOBE_TEXELS, 0)
+	assert_almost_eq(taken.g, PainterSites.lobes(1.5, 1.2, 0.2)[1], 1.0e-5, "in the slot freed")
 	assert_eq(dabs.built, 5)
 	# A new terrain: everything again.
 	dabs.mark(Rect2i())

@@ -172,9 +172,14 @@ uniform float occ_step = 0.5;
 uniform vec4 occ_k = vec4(0.0, 0.0, 0.8, 0.3);
 uniform vec4 occ_tint = vec4(0.9, 1.0, 0.96, 0.35);
 // A small stone's dab is a patch of the terrain's triangles drawn with this material (PainterSites,
-// PainterDabs). Every vertex of a patch carries the stone's three lobes (CUSTOM0 to 2: a lobe's
-// middle x and z, its radius, its waves' turn) and CUSTOM3 (x over 1: a dab; y what the value
-// loses there; z the patch's lift in metres); the ground's own meshes have no CUSTOM3 and read 0.
+// PainterDabs). Every vertex of a patch carries CUSTOM3 (x over 1: a dab; y what the value loses
+// there; z the patch's lift in metres; w its stone's slot in dab_lobes plus one); the ground's own
+// meshes have no CUSTOM3 and read 0. The stone's three lobes (a lobe's middle x and z, its radius,
+// its waves' turn) are three RGBA32F texels of dab_lobes, DAB_ROW stones a row (PainterDabs.ROW),
+// not varyings: the ground pays for every varying on every pixel (the lobes as three flat vec4s
+// cost the torture map's wide view 0.05 to 0.07 ms with no dab drawn, card painter-terrain-dabs-
+// cost), and the value is worked out at the top of fragment(), before the ground's own work, so
+// what it holds does not add to the most the ground's code holds at once.
 // dab_value() is the mark's value at a map point: positive inside the lobes' uneven outlines, in
 // units of DAB_BAND_M metres. It joins the field's seam before the seam's threshold
 // (contact_at()), so inside its outline a dab is the seam's tone behind the seam's own edge and
@@ -189,11 +194,11 @@ const float DAB_BAND_M = 0.3;
 // The share of a lobe's radius two and three waves round it move its outline by (PainterSites
 // WAVES: keep the two equal).
 const vec2 DAB_WAVES = vec2(0.14, 0.08);
-// x: 1 on a dab's patch (0 on the ground), y: what the value loses (the patch past a ledge).
-varying vec2 v_dab;
-varying flat vec4 v_lobe0;
-varying flat vec4 v_lobe1;
-varying flat vec4 v_lobe2;
+uniform highp sampler2D dab_lobes : filter_nearest, repeat_disable;
+const int DAB_ROW = 256;
+// A dab's slot plus one (0 on the ground), and what its value loses (the patch past a ledge).
+varying flat float v_site;
+varying float v_loss;
 uniform vec4 tok[32];
 uniform int tok_n = 0;
 uniform vec2 tok_k = vec2(0.0);
@@ -638,20 +643,27 @@ float dab_value(vec2 p, vec4 l0, vec4 l1, vec4 l2) {
 	return max(dab_lobe(p, l0, lean), max(dab_lobe(p, l1, lean), dab_lobe(p, l2, lean))) / DAB_BAND_M;
 }
 
+// Lobe `k` of the stone in slot `site` minus one (dab_lobes).
+vec4 dab_lobe_of(float site, int k) {
+	int i = int(site) - 1;
+	return texelFetch(dab_lobes, ivec2(3 * (i % DAB_ROW) + k, i / DAB_ROW), 0);
+}
+
+// The value of the dab of the stone in slot `site` minus one at map point `p`.
+float dab_value_of(vec2 p, float site) {
+	return dab_value(p, dab_lobe_of(site, 0), dab_lobe_of(site, 1), dab_lobe_of(site, 2));
+}
+
 void vertex() {
 	v_n = world_frame ? normalize(mat3(MODEL_MATRIX) * NORMAL) : NORMAL;
-	v_dab = vec2(0.0);
-	v_lobe0 = vec4(0.0);
-	v_lobe1 = vec4(0.0);
-	v_lobe2 = vec4(0.0);
+	v_site = 0.0;
+	v_loss = 0.0;
 	float lift = 0.0;
 	if (CUSTOM3.x > 1.0) {
-		// A dab's vertex: its lobes for the pixels, and the lift that orders overlapping patches.
-		v_dab = vec2(1.0, CUSTOM3.y);
-		v_lobe0 = CUSTOM0;
-		v_lobe1 = CUSTOM1;
-		v_lobe2 = CUSTOM2;
-		float value = dab_value(UV, CUSTOM0, CUSTOM1, CUSTOM2) - CUSTOM3.y;
+		// A dab's vertex: its slot for the pixels, and the lift that orders overlapping patches.
+		v_site = CUSTOM3.w;
+		v_loss = CUSTOM3.y;
+		float value = dab_value_of(UV, CUSTOM3.w) - CUSTOM3.y;
 		float raised = DAB_LIFT * clamp(value + 1.0, 0.0, 2.5);
 		VERTEX.y += raised;
 		lift = CUSTOM3.z + raised;
@@ -665,8 +677,8 @@ void vertex() {
 // The contact occlusion at `xz`: x the pool, y the seam, each a flat brush-edged shape (the field's
 // 0.5 contour, moved by the ground's own noise), then the tokens' feet: a wider pool joins x, and z
 // is the disc right under the feet (a deeper step on top of the seam). light() shows the pool only
-// inside the shade.
-vec3 contact_at(vec3 p, vec2 xz) {
+// inside the shade. `dab` is the value of the dab whose patch this pixel is (fragment()).
+vec3 contact_at(vec3 p, vec2 xz, float dab) {
 	vec3 occ = vec3(0.0);
 	if (occ_present && (occ_k.x > 0.0 || occ_k.y > 0.0)) {
 		// The field is read SEAM_LEAN_M toward the sun, so its shapes sit that far down-sun: more of
@@ -683,8 +695,8 @@ vec3 contact_at(vec3 p, vec2 xz) {
 		vec2 s = f.rg * (1.0 - smoothstep(1.0, 2.0, up));
 		// A small stone's dab (on its patch alone) is a seam: joined before the threshold, it
 		// takes the same noise and the same firm step.
-		if (v_dab.x > 0.5) {
-			s.g = max(s.g, 0.45 + dab_value(xz, v_lobe0, v_lobe1, v_lobe2) - v_dab.y);
+		if (v_site > 0.5) {
+			s.g = max(s.g, 0.45 + dab - v_loss);
 		}
 		vec2 w =vec2(p_noise(p * 1.3 + 80.0), p_noise(p * 2.7 + 95.0)) - 0.5;
 		// A firm edge whatever the field's gradient: the step is a pixel wide, at most the 0.1 of
@@ -711,6 +723,11 @@ void fragment() {
 	METALLIC = 0.0;
 	vec2 xz = world_frame ? v_xz : UV;
 	vec3 p = vec3(xz.x, 0.0, xz.y);
+	// A dab's value, here where little else is held (contact_at() joins it to the seam).
+	float dab = 0.0;
+	if (v_site > 0.5) {
+		dab = dab_value_of(xz, v_site);
+	}
 	if (glb_zone) {
 		// The mip level of the baked albedo that one pixel covers.
 		f_glb_lod = clamp(log2(max(length(fwidth(xz)) * glb_texels_per_m, 1.0)), 0.0, 6.0);
@@ -981,7 +998,7 @@ void fragment() {
 	f_shd = shd;
 	f_cut =cut_amp > 0.0 ? be_cut(st) * cut_amp : 0.0;
 	f_edge = p_noise(p * 0.55 + 71.0);
-	vec3 contact = contact_at(p, xz);
+	vec3 contact = contact_at(p, xz, dab);
 	// The pool and the seam lie on the ground a thing stands on, not down the face below it: the
 	// occlusion field is a plan view, so under stones on a ledge they ran down the wall as a tall
 	// dark block that joined the ledge, the wall and the stones into one shape (card

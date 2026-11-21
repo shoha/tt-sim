@@ -308,6 +308,7 @@ func rebuild() -> void:
 		"bake_ms": (t2 - t1) / 1000.0,
 		"upload_ms": (t3 - t2) / 1000.0,
 		"dabs_ms": (Time.get_ticks_usec() - t3) / 1000.0,
+		"dabs_parts": _dabs.parts,
 	}
 
 

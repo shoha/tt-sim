@@ -2807,9 +2807,13 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
   `docs/plans/handoffs/painter-terrain-dabs.md`.
   - *How a dab takes the ground's tone.* It is drawn with the ground chunks' own material (the
     same `ShaderMaterial` object, as `material_override`): no second material and no uniform to
-    keep in step. A dab's mesh carries `CUSTOM0` to `CUSTOM3`; the terrain's meshes have none and
-    read 0, so `vertex()` tells a dab by `CUSTOM3.x` and passes the stone's three lobes on as flat
-    varyings. In `contact_at()` the dab's value joins the field's seam by `max` BEFORE the seam's
+    keep in step. A dab's mesh carries `CUSTOM3` alone (the flag, what the value loses, the lift,
+    the stone's slot plus one); the terrain's meshes have none and read 0, so `vertex()` tells a
+    dab by `CUSTOM3.x` and passes on the slot (one flat float) and the loss (one float). The
+    stone's three lobes are three RGBA32F texels of `dab_lobes`, a texture `PainterDabs` writes
+    (256 stones a row, a stone's slot kept while it stands, a freed slot taken by the next new
+    one), read by the vertex shader for the lift and at the top of `fragment()` for the value. In
+    `contact_at()` the dab's value joins the field's seam by `max` BEFORE the seam's
     threshold, on a dab's pixels alone (one compare per ground pixel). So a pixel of a dab is the
     ground at that place (its biome paint, strata, zone maps, cast shadow, pool) with the seam on
     inside the outline and nothing changed outside it. The seam is a tone the ground is set to
@@ -2871,6 +2875,24 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
     water, at the stones' marks by the sheet (the `ident` maps were not looked at). Classic:
     no `PainterDabs` node. `img.gd` scores over 18 torture frames, main | build: dots 2.42 |
     2.40, lines 4.42 | 4.40, vedge 0.46 | 0.44, hedge 0.04 | 0.04.
+  - *Where the cost was (card painter-terrain-dabs-cost, 2026-11-21; evidence `cost/` beside the
+    above; handoff "## Cost").* In-run arms against the branch tip at torture wide (twice, about
+    3.27 ms GPU): main -0.13, the dabs hidden -0.03 to -0.045, the patches drawn as plain ground
+    +0.07 to +0.09 (overlapping patches tie in depth and both shade), the patches on an unshaded
+    material -0.2, one unshaded quad a stone instead of the patches -0.03 to -0.04 (draw calls and
+    vertices cost nothing), the fragment's dab branch removed -0.13 to -0.14 (equal to main), the
+    lobes' varyings removed -0.07 to -0.10, a depth tie-break no gain. So the cost was the GROUND
+    paying for the dab's code on every pixel (about 0.1 ms, 60 % of it the three flat vec4
+    varyings), not the patches (0.015 to 0.04 ms). Patch counts at wide: 462 patches, 19632
+    triangles, 14431 vertices in 16 cells; 8710 triangles on screen, 370020 px summed, 227712 px
+    union (11 % of the frame); a sun-agnostic cut to the lobes' reach keeps 84 % of the triangles.
+    The cut taken: the lobes moved to the `dab_lobes` texture (above), the value worked out at the
+    top of `fragment()`. After, in-run main | new: wide +0.071 and +0.066 ms (gate +0.04: still
+    fails), edge_mz +0.005 and +0.027, f1_o +0.010 and -0.002 (drift 0.02 to 0.04). Edits on the
+    torture map, in one run with main: a stroke end's rebuild 4.2 to 4.6 ms (dabs 1.2 to 1.6, 16
+    built, 2 cells) against main's 3.7 to 3.9; a placed boulder 2.85 to 3.0 ms against main's 3.5
+    to 4.3 (main's field bakes the 464 small stones as marks: 594 marks against 129; the 25.9 ms
+    figure was not reproduced). Pixel identity with the branch tip was NOT shown (handoff).
   - *The look* (sheets in the evidence folder). At f1_o main is one faceted kite under the
     three stones and round 2 three clean ovals; the build is one firm flat mark that hugs the
     stones on the side away from the sun, a quarter to a third of a stone wide there and a

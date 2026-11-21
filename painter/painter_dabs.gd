@@ -17,6 +17,10 @@ extends RefCounted
 ## changed) keeps its turn in its cell: the patches after it keep their first vertex and their
 ## indices are appended as they are (adding an offset to every index of a cell was half the cost
 ## of an edit under a stroke).
+## A stone's lobes are not in its patch: each held site has a slot in one texture of the ground's
+## shader (LOBES_PARAM, ROW slots a row), written when the site is built, and its patch's vertices
+## carry the slot. The ground pays for every varying on every pixel, and the lobes as three flat
+## vec4s were most of what the dabs cost the frame (card painter-terrain-dabs-cost).
 ## Nothing here reads the sun: the dab's lean is the shader's (a uniform), so the hour changing
 ## builds nothing (`built` counts the sites built, for the tests and the proof).
 ## A map without an authored terrain (a GLB map) has no heights to lay a dab on and gets none.
@@ -24,22 +28,25 @@ extends RefCounted
 ## MANAGED BY: PainterOcclusion (painter/painter_occlusion.gd). Classic never loads this file.
 
 ## What is kept of a site (the fields of its Array).
-enum { SITE, CELL, VERTICES, UVS, CUSTOM, INDICES, RECT, FIRST, PLACED }
+enum { SITE, CELL, VERTICES, UVS, CUSTOM, INDICES, RECT, FIRST, PLACED, SLOT }
 
 const NODE_NAME := "PainterDabs"
 ## Metres a cell of dabs is across (one mesh, one draw).
 const CELL_M := 16.0
-## The mesh format's flags: four custom channels of four floats (PainterSites: the lobes, the base).
-const FORMAT := (
-	(Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT)
-	| (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
-	| (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM2_SHIFT)
-	| (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM3_SHIFT)
-)
+## The mesh format's flags: one custom channel of four floats (PainterSites.append_dab's CUSTOM3).
+const FORMAT := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM3_SHIFT
+## The ground shader's texture of the stones' lobes (painter_ground dab_lobes): a stone's slot is
+## LOBE_TEXELS RGBA32F texels, ROW slots a row (painter_ground DAB_ROW: keep the two equal).
+const LOBES_PARAM := &"dab_lobes"
+const ROW := 256
+const LOBE_TEXELS := 3
 
 ## The sites built since this host was made, and the cells put together.
 var built := 0
 var uploaded := 0
+## The last sync's parts (milliseconds): the sites compared and built, and the cells put together
+## and uploaded (with how many), for the stats and the edit-cost probe.
+var parts := {}
 
 var _holder: Node3D = null
 ## A site's kept patch by its place (world x, z and radius): the site (PainterSites.site(), in the
@@ -58,6 +65,12 @@ var _dirty := Rect2i()
 ## sites of the last sync.
 var _ground: Array = []
 var _last: Array = []
+## The stones' lobes by slot (PainterSites.lobes, in the terrain's frame), their texture, the slots
+## given out and those free again.
+var _lobes := PackedFloat32Array()
+var _lobe_texture: ImageTexture = null
+var _slots := 0
+var _free: Array[int] = []
 
 
 ## Notes an edit of the terrain's samples in `rect`: the next sync builds the sites there again. A
@@ -82,8 +95,10 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 	if ground != _ground or not is_instance_valid(_holder) or _holder.get_parent() != map:
 		clear()
 		_ground = ground
+	var t_sites := Time.get_ticks_usec()
 	var redo := _dirty.has_area()
 	if not _whole and not redo and sites == _last:
+		parts = {}
 		return 0
 	_last = sites.duplicate()
 	if _holder == null:
@@ -103,8 +118,18 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 	var seen := {}
 	var count := 0
 	for site: Array in sites:
+		seen[Vector3(site[0], site[1], site[2])] = true
+	# The stones that went first, so a new one takes the slot one of them freed.
+	for place: Vector3 in _held.keys():
+		if seen.has(place):
+			continue
+		var gone: Vector2i = _held[place][CELL]
+		(_sites[gone] as Dictionary).erase(place)
+		_free.append(_held[place][SLOT])
+		_held.erase(place)
+		changed[gone] = true
+	for site: Array in sites:
 		var place := Vector3(site[0], site[1], site[2])
-		seen[place] = true
 		var was: Array = _held.get(place, [])
 		if not was.is_empty():
 			if was[SITE] == site and not _whole and not (redo and edited.intersects(was[RECT])):
@@ -115,37 +140,48 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 		local[0] = at.x
 		local[1] = at.z
 		local[3] = at.y
+		var slot: int = was[SLOT] if not was.is_empty() else _take_slot()
 		var vertices := PackedVector3Array()
 		var uvs := PackedVector2Array()
-		var custom: Array[PackedFloat32Array] = [
-			PackedFloat32Array(), PackedFloat32Array(), PackedFloat32Array(), PackedFloat32Array()
-		]
+		var custom := PackedFloat32Array()
 		var indices := PackedInt32Array()
 		PainterSites.append_dab(
-			local, grid, doc.samples_x(), doc.samples_z(), step, half, vertices, uvs, custom, indices
+			local,
+			grid,
+			doc.samples_x(),
+			doc.samples_z(),
+			step,
+			half,
+			vertices,
+			uvs,
+			custom,
+			indices,
+			slot
 		)
+		_put_lobes(slot, PainterSites.lobes(at.x, at.z, site[2]))
 		# A sample's step past the dab's reach: the patch ends on the grid's lines.
 		var far := PainterSites.reach(site[2]) + maxf(step.x, step.y)
 		var cell := Vector2i(floori(at.x / CELL_M), floori(at.z / CELL_M))
 		var rect := Rect2(at.x - far, at.z - far, 2.0 * far, 2.0 * far)
-		# Assigned at its place: a stone built again keeps its turn in its cell.
-		_held[place] = [site, cell, vertices, uvs, custom, indices, rect, -1, indices]
+		# Assigned at its place: a stone built again keeps its turn in its cell and its slot.
+		_held[place] = [site, cell, vertices, uvs, custom, indices, rect, -1, indices, slot]
 		if not _sites.has(cell):
 			_sites[cell] = {}
 		(_sites[cell] as Dictionary)[place] = true
 		changed[cell] = true
 		count += 1
-	for place: Vector3 in _held.keys():
-		if seen.has(place):
-			continue
-		var cell: Vector2i = _held[place][CELL]
-		(_sites[cell] as Dictionary).erase(place)
-		_held.erase(place)
-		changed[cell] = true
 	_whole = false
 	_dirty = Rect2i()
+	var t_cells := Time.get_ticks_usec()
+	if count > 0:
+		_upload_lobes(material)
 	for cell: Vector2i in changed:
 		_put_together(cell, material)
+	parts = {
+		"sites_ms": (t_cells - t_sites) / 1000.0,
+		"cells_ms": (Time.get_ticks_usec() - t_cells) / 1000.0,
+		"cells": changed.size(),
+	}
 	built += count
 	return count
 
@@ -162,6 +198,9 @@ func clear() -> void:
 	_last = []
 	_whole = true
 	_dirty = Rect2i()
+	_lobes = PackedFloat32Array()
+	_slots = 0
+	_free.clear()
 
 
 ## The dabs' node (null while the map has no site), for the tests and the probes.
@@ -190,17 +229,14 @@ func counts() -> Vector2i:
 func _put_together(cell: Vector2i, material: ShaderMaterial) -> void:
 	var vertices := PackedVector3Array()
 	var uvs := PackedVector2Array()
-	var custom: Array[PackedFloat32Array] = [
-		PackedFloat32Array(), PackedFloat32Array(), PackedFloat32Array(), PackedFloat32Array()
-	]
+	var custom := PackedFloat32Array()
 	var indices := PackedInt32Array()
 	for place: Vector3 in _sites.get(cell, {}):
 		var kept: Array = _held[place]
 		var first := vertices.size()
 		vertices.append_array(kept[VERTICES])
 		uvs.append_array(kept[UVS])
-		for k in 4:
-			custom[k].append_array(kept[CUSTOM][k])
+		custom.append_array(kept[CUSTOM])
 		if kept[FIRST] != first:
 			# Counted from this first vertex once; as they are while the patches before it stay.
 			var placed := PackedInt32Array()
@@ -225,10 +261,7 @@ func _put_together(cell: Vector2i, material: ShaderMaterial) -> void:
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
-	arrays[Mesh.ARRAY_CUSTOM0] = custom[0]
-	arrays[Mesh.ARRAY_CUSTOM1] = custom[1]
-	arrays[Mesh.ARRAY_CUSTOM2] = custom[2]
-	arrays[Mesh.ARRAY_CUSTOM3] = custom[3]
+	arrays[Mesh.ARRAY_CUSTOM3] = custom
 	arrays[Mesh.ARRAY_INDEX] = indices
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, FORMAT)
@@ -241,3 +274,44 @@ func _put_together(cell: Vector2i, material: ShaderMaterial) -> void:
 	node.mesh = mesh
 	node.material_override = material
 	uploaded += 1
+
+
+## A slot in the texture of lobes: one freed by a stone that went, else the next.
+func _take_slot() -> int:
+	if not _free.is_empty():
+		return _free.pop_back()
+	_slots += 1
+	return _slots - 1
+
+
+## Writes `own` (PainterSites.lobes: LOBE_TEXELS lobes of four floats) at `slot`.
+func _put_lobes(slot: int, own: PackedFloat32Array) -> void:
+	var rows := slot / ROW + 1
+	if _lobes.size() < rows * ROW * LOBE_TEXELS * 4:
+		_lobes.resize(rows * ROW * LOBE_TEXELS * 4)
+	var at := slot * LOBE_TEXELS * 4
+	for k in mini(own.size(), LOBE_TEXELS * 4):
+		_lobes[at + k] = own[k]
+
+
+## The stones' lobes as the ground's shader reads them (null before the first): slot s's lobe k is
+## texel (LOBE_TEXELS * (s % ROW) + k, s / ROW).
+func lobe_image() -> Image:
+	var rows := _lobes.size() / (ROW * LOBE_TEXELS * 4)
+	if rows == 0:
+		return null
+	return Image.create_from_data(
+		ROW * LOBE_TEXELS, rows, false, Image.FORMAT_RGBAF, _lobes.to_byte_array()
+	)
+
+
+## Sends the lobes to the ground's shader (one texture, its image replaced: 12 KB a row).
+func _upload_lobes(material: ShaderMaterial) -> void:
+	var image := lobe_image()
+	if image == null:
+		return
+	if _lobe_texture == null:
+		_lobe_texture = ImageTexture.create_from_image(image)
+	else:
+		_lobe_texture.set_image(image)
+	material.set_shader_parameter(LOBES_PARAM, _lobe_texture)
