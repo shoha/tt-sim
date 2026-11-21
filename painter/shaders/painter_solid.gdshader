@@ -13,7 +13,7 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
  * MANAGED BY: PainterSurfaces (painter/painter_surfaces.gd).
  */
 
-// The selector's solid light: the form's shade, its planes (solid_plane()) and its cast colour.
+// The selector's solid light: the form's shade, its planes (solid_form()) and its shade's two values.
 #define SELECTOR_SOLID
 #include "res://painter/shaders/painter_selector.gdshaderinc"
 
@@ -26,12 +26,16 @@ varying vec3 v_wn;
 varying flat vec3 v_o;
 varying float v_h;
 varying flat float v_scale;
+// The rock's own turn of its plane lattice (cosine, sine): solid_form().
+varying flat vec2 v_turn;
 
 void vertex() {
 	v_h = VERTEX.y / max(selector_height, 0.01);
 	VERTEX *= selector_keep(MODEL_MATRIX[3].xyz, IN_SHADOW_PASS);
 	v_o = MODEL_MATRIX[3].xyz;
 	v_scale = length(MODEL_MATRIX[1].xyz);
+	float turn = p_hash(floor(v_o * 10.0) + vec3(5.0, 9.0, 2.0)) * 6.2832;
+	v_turn = vec2(cos(turn), sin(turn));
 	v_wn = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	v_wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
@@ -53,8 +57,11 @@ void fragment() {
 	float petal;
 	float snow;
 	selector_fragment(v_wp, v_wn, v_o, v_scale, v_h, tex, n, variant, mul, wob, petal, snow);
+	vec3 plane;
+	n = solid_form(v_wp, v_wn, v_o, v_scale, v_turn, plane, variant);
+	snow = frost > 0.0 && frost_up(n.y - 0.3, v_wp) ? 1.0 : 0.0;
 	f_n = n;
-	f_plane = solid_plane(v_wp, v_wn, v_o, v_scale);
+	f_plane = plane;
 	f_variant = variant;
 	f_mul = mul;
 	f_wob = wob;

@@ -2611,6 +2611,41 @@ and torture sheets, the score tables) and the card's handoff
   dark block or a soft edge a tenth of a metre wide, the only soft tonal edges of the ground. Now
   each step is as wide as a pixel or two, at most what it was. The pool and the seam are also not
   drawn on a sheer face (`role_slope` 0.55 or more), since the field is a plan view.
+- **A rock's planes carry three lit values and two shade values** (card painter-rocks-forms,
+  2026-11-20; evidence `docs/research/2026-11-09-prototypes/compare/painter_final109_rocks_forms/`,
+  handoff `docs/plans/handoffs/painter-rocks-forms.md`). `solid_form()` replaces `solid_plane()`:
+  the planes are a jittered Voronoi lattice on the OCTAHEDRAL map of the form's directions (2D,
+  four cells and four hashes a pixel where the lattice in space took eight cells and twenty-four;
+  `SOLID_PLANES` 2.2 cells a unit, about twenty planes a rock), turned by the rock's own angle
+  (`v_turn`, from the vertex stage), and skipped by a branch on a rock under 0.6 m of half size.
+  A plane takes its cell's hash as its colour variant (the per-pixel variant noise of solids is
+  gone), so a plane is one flat colour. On the sunward side a plane is LIGHT where it faces the
+  sun within 45 degrees (`SOLID_LIGHT` 0.7 of N.L), HALF-LIGHT from the sheet's `tone-hi`
+  (`SOLID_HALF_T` 0.7 on the ramp), MIDDLE below: a boulder lit all over has a top and sides at
+  every sun height. In shade, the form's own or a shadow cast on it, a plane that faces up
+  (`SOLID_UP` 0.6) takes the sky's step (`SOLID_SKY`, lighter and cooler), the others the shade
+  colour: two values, so a shaded boulder has a top. The bushes' half step toward the sun inside
+  a cast shadow no longer applies to solids. The form's turn is still the shade's one firm edge.
+  Seen and left: a soft darker smudge on a boulder's lit front where its own shadow's penumbra
+  reaches the shell the shadow map is asked from (the cast colour is now the full shade, so a
+  partial cast shows more than it did), and the foot's soft darkening (`base_dark`) on a large
+  flat plane. Logs (kind 2 too) were not captured.
+- **A solid's contact marks are per body, at the height of its foot** (same card).
+  `PainterOcclusion` writes one footprint per BODY of a scatter mesh (`islands()`: triangles
+  joined at welded vertices, bodies whose plans overlap taken as one, cached per mesh), its seam
+  and pool reaching at most half and once the body's narrower half (`solid_reach`; a boulder keeps
+  0.22 m and its old pool). The field is 0.25 m a texel (was 0.5) and RGBA half float: b and a
+  carry the foot's height (b the height times a weight, a the weight, one over the mark's vertical
+  reach, so the bilinear read gives a weighted height and blends to "no limit" beside a footprint
+  that has none), and `painter_ground` multiplies the coverage by a fall-off of the pixel's
+  distance in height from that foot before the brush's threshold. A footprint under half a texel
+  is not drawn. The rebuild writes floats and converts natively (no loop over the texels in
+  GDScript). Trees, bushes and structures write the same discs and boxes as before, with no
+  height. **Not fixed by this:** the olive oval round the three stones on the falls' left cliff,
+  and the same blob round the `stones` species on the torture map, about a metre across at every
+  sun hour. It did not change when the solids' path changed, so those stones do not get their
+  mark from `_add_solids`' boxes; the disc's size fits a bush's seam (`_add_trees`: 0.95 of the
+  mesh's half width) or a trunk's (`_tree`), which is the next thing to print.
 - **The terrain casts with its back faces** (`TerrainBackCaster`, a shadows-only twin of each
   chunk drawn with `painter_terrain_caster.gdshader`, `cull_front`, only while Painted): ground
   that faces the sun is never shadowed by its own surface (the stipple and the hatching on grazing

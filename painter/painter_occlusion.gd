@@ -26,6 +26,15 @@ extends RefCounted
 ## or its roof's overhang) as a rounded rectangle whose reach grows with its size and height. The
 ## yard's skirt and path (painter_yard_ground) read the field too, so the shade at a wall's foot
 ## shows through the wash laid over it.
+## A scatter solid's footprint is each of its BODIES' own (card painter-rocks-forms): a mesh of
+## three stones is three islands (`islands`), each with a seam and a pool no wider than itself
+## (`solid_reach`), so a scatter of stones is three small marks, not one oval three times the
+## stones' size. A solid's
+## footprint also carries the height of its foot (b, a: the foot's height times a weight, and the
+## weight, one over its vertical reach), and the ground shows the mark only within that reach of the
+## foot: the field is a plan view, and under stones at a cliff's edge the mark ran down the wall. A
+## footprint too small for the field to hold (under half a texel) is not drawn at all: its cast
+## shadow and its darker foot ground it.
 ## Tokens are the only moving things: their feet discs go in a small uniform array refreshed
 ## when one moved (one pass over the token group a frame, no field rebuild).
 ## Base gradients (the second half of the look): a trunk, a rock or a log is a step darker over
@@ -34,8 +43,24 @@ extends RefCounted
 ##
 ## MANAGED BY: PainterSurfaces (painter/painter_surfaces.gd). Classic never loads this file.
 
-## Metres a field texel covers.
-const TEXEL_M := 0.5
+## Metres a field texel covers (0.5 until card painter-rocks-forms: a stone's own mark is about
+## half a metre across, which a half-metre texel cannot place or keep apart from its neighbour's).
+const TEXEL_M := 0.25
+## The field's channels: the pool, the seam, the foot's height times its weight, the weight.
+const CHANNELS := 4
+const POOL_CH := 0
+const CORE_CH := 1
+const FOOT_CH := 2
+## A scatter solid's seam and pool reach (metres past its body): at most these, and at most
+## SEAM_BODY and POOL_BODY of the body's narrower half, so a mark is never wider than its stone.
+const SEAM_M := 0.22
+const SEAM_BODY := 0.5
+const POOL_BODY := 1.0
+## The most bodies of one mesh that get their own footprint (the largest), the largest mesh (in
+## vertices) that is split at all, and the grid (metres) its vertices are welded on.
+const MAX_ISLANDS := 12
+const MAX_SPLIT_VERTICES := 6000
+const WELD_M := 0.002
 ## Seconds of quiet before a changed map's field is rebuilt (growth installs trees every frame).
 const REBUILD_DELAY_S := 0.3
 const MAX_TOKENS := 32
@@ -82,6 +107,8 @@ var _token_bounds: Dictionary = {}
 var _watching := false
 var _numbers: Dictionary = {}
 var _count := 0
+## A scatter mesh's bodies (islands()), by the mesh's instance id.
+var _bodies: Dictionary = {}
 
 
 ## Starts following `map` for `surfaces` (a PainterSurfaces); `numbers` is read by retone().
@@ -98,6 +125,7 @@ func release() -> void:
 	_tex = null
 	_tokens = PackedVector4Array()
 	_token_bounds.clear()
+	_bodies.clear()
 	_clear_ground()
 	_surfaces = null
 
@@ -194,21 +222,18 @@ func rebuild() -> void:
 	var layout := field_layout(extent)
 	_origin = layout.position
 	_size = Vector2i(roundi(layout.size.x), roundi(layout.size.y))
-	var pool := PackedFloat32Array()
-	var core := PackedFloat32Array()
-	pool.resize(_size.x * _size.y)
-	core.resize(_size.x * _size.y)
+	var data := PackedFloat32Array()
+	data.resize(_size.x * _size.y * CHANNELS)
 	_count = 0
-	_add_trees(pool, core)
-	_add_solids(pool, core)
-	_add_structures(pool, core)
-	var bytes := PackedByteArray()
-	bytes.resize(pool.size() * 2)
-	for i in pool.size():
-		bytes[i * 2] = int(clampf(pool[i], 0.0, 1.0) * 255.0)
-		bytes[i * 2 + 1] = int(clampf(core[i], 0.0, 1.0) * 255.0)
-	var image := Image.create_from_data(_size.x, _size.y, false, Image.FORMAT_RG8, bytes)
-	if _tex == null or _tex.get_size() != Vector2(_size):
+	_add_trees(data)
+	_add_solids(data)
+	_add_structures(data)
+	# Floats as written, then half floats (one native pass; no loop over the texels here).
+	var image := Image.create_from_data(
+		_size.x, _size.y, false, Image.FORMAT_RGBAF, data.to_byte_array()
+	)
+	image.convert(Image.FORMAT_RGBAH)
+	if _tex == null or _tex.get_size() != Vector2(_size) or _tex.get_format() != image.get_format():
 		_tex = ImageTexture.create_from_image(image)
 	else:
 		_tex.update(image)
@@ -234,7 +259,7 @@ static func field_layout(extent: Vector2) -> Rect2:
 
 ## The painted trees and bushes: a pool under the crown's projection (centre halfway from the
 ## trunk to the crown's middle), and a core at the trunk's foot.
-func _add_trees(pool: PackedFloat32Array, core: PackedFloat32Array) -> void:
+func _add_trees(data: PackedFloat32Array) -> void:
 	var host: Object = _surfaces.call("trees")
 	if host == null:
 		return
@@ -248,18 +273,18 @@ func _add_trees(pool: PackedFloat32Array, core: PackedFloat32Array) -> void:
 		_count += 1
 		if bool(t["bush"]):
 			# A bush: its own footprint and a thin seam round it.
-			_disc(pool, p.x + mid.x, p.z + mid.z, half * 1.35)
-			_disc(core, p.x + mid.x, p.z + mid.z, half * 0.95)
+			_disc(data, POOL_CH, p.x + mid.x, p.z + mid.z, half * 1.35)
+			_disc(data, CORE_CH, p.x + mid.x, p.z + mid.z, half * 0.95)
 			continue
-		var c := Vector2(p.x + mid.x * 0.5, p.z + mid.z * 0.5)
-		_disc(pool, c.x, c.y, half * 0.5 + 0.5)
-		_disc(core, p.x, p.z, trunk_seam(box.size.y))
+		_tree(data, p, Vector3(p.x + mid.x, p.y, p.z + mid.z), half, box.size.y)
 
 
-## Rocks, logs and stumps of the scatter: a box rounded by its narrower half (a stone round, a log a
-## capsule), a pool round it and a seam at its foot. A tree the painter does not grow (its mesh
-## carries a leaf surface beside its bark, or it is tall and slender: TREE_M) gets a crown's disc.
-func _add_solids(pool: PackedFloat32Array, core: PackedFloat32Array) -> void:
+## Rocks, logs and stumps of the scatter: each body of the mesh (`islands`) a box rounded by its
+## narrower half (a stone round, a log a capsule), a pool round it and a seam at its foot, neither
+## wider than the body (`solid_reach`), shown only near the height of its foot. A tree the painter
+## does not grow (its mesh carries a leaf surface beside its bark, or it is tall and slender:
+## TREE_M) gets a crown's disc.
+func _add_solids(data: PackedFloat32Array) -> void:
 	var meshes: Dictionary = _surfaces.call("solid_meshes")
 	if meshes.is_empty():
 		return
@@ -270,38 +295,138 @@ func _add_solids(pool: PackedFloat32Array, core: PackedFloat32Array) -> void:
 			var mm := (node as MultiMeshInstance3D).multimesh
 			if mm == null or mm.mesh == null or not meshes.has(mm.mesh.get_instance_id()):
 				continue
-			var leafy := bool(meshes[mm.mesh.get_instance_id()])
+			var id := mm.mesh.get_instance_id()
+			var leafy := bool(meshes[id])
 			var box := mm.mesh.get_aabb()
+			if not _bodies.has(id):
+				_bodies[id] = islands(mm.mesh)
+			var bodies: Array[AABB] = _bodies[id]
 			var to_world := (node as Node3D).global_transform
 			for i in mm.instance_count:
 				var xf := to_world * mm.get_instance_transform(i)
-				var sx := xf.basis.x.length()
-				var sz := xf.basis.z.length()
-				var half := Vector2(box.size.x * sx, box.size.z * sz) * 0.5
-				var c := xf * box.get_center()
-				var height := box.size.y * xf.basis.y.length()
+				var scale := Vector3(xf.basis.x.length(), xf.basis.y.length(), xf.basis.z.length())
+				var whole := Vector2(box.size.x * scale.x, box.size.z * scale.z) * 0.5
+				var height := box.size.y * scale.y
 				_count += 1
-				if leafy or (height > TREE_M and height > TREE_SLENDER * maxf(half.x, half.y)):
-					_tree(pool, core, xf.origin, c, maxf(half.x, half.y), height)
+				if leafy or (height > TREE_M and height > TREE_SLENDER * maxf(whole.x, whole.y)):
+					_tree(data, xf.origin, xf * box.get_center(), maxf(whole.x, whole.y), height)
 					continue
 				var yaw := atan2(xf.basis.x.z, xf.basis.x.x)
-				var corner := minf(half.x, half.y)
-				_box(pool, c.x, c.z, yaw, half, 0.45 + 0.35 * half.length(), corner)
-				_box(core, c.x, c.z, yaw, half, 0.22, corner)
+				for body: AABB in bodies:
+					_solid(data, xf * body.get_center(), yaw, body.size * scale * 0.5)
+
+
+## One body of a scatter solid: its middle `c` (world), its turn and its half size (metres).
+func _solid(data: PackedFloat32Array, c: Vector3, yaw: float, half3: Vector3) -> void:
+	var half := Vector2(half3.x, half3.z)
+	var corner := minf(half.x, half.y)
+	var reach := solid_reach(half)
+	if corner + reach.x < 0.5 * TEXEL_M:
+		return
+	# The ground a bedded stone stands on lies between its underside and about its middle: the
+	# mark shows within the body's own reach of that.
+	var up := 0.5 * half3.y + corner + reach.x
+	var foot := Vector2((c.y - 0.5 * half3.y) / up, 1.0 / up)
+	_box(data, POOL_CH, c.x, c.z, yaw, half, reach.y, corner, foot)
+	_box(data, CORE_CH, c.x, c.z, yaw, half, reach.x, corner, foot)
+
+
+## A scatter solid's reaches (metres past a body of half size `half`): x the seam's, y the pool's.
+## Each is its old fixed reach, capped by the body's narrower half, so a boulder keeps its seam
+## and a small stone's mark is about the stone's size.
+static func solid_reach(half: Vector2) -> Vector2:
+	var corner := minf(half.x, half.y)
+	return Vector2(
+		minf(SEAM_M, SEAM_BODY * corner), minf(0.45 + 0.35 * half.length(), POOL_BODY * corner)
+	)
+
+
+## The separate bodies of `mesh`, as boxes in its own space: its triangles joined where they share
+## a vertex (welded on WELD_M), and bodies whose plans overlap taken as one (a stone built of nested
+## shells, two stones that touch). A mesh that is one body, is not triangles, or is too large to
+## split gives its whole box. At most MAX_ISLANDS, the largest in plan.
+static func islands(mesh: Mesh) -> Array[AABB]:
+	var whole: Array[AABB] = [mesh.get_aabb()]
+	var array_mesh := mesh as ArrayMesh
+	if array_mesh == null:
+		return whole
+	var parent := PackedInt32Array()
+	var points := PackedVector3Array()
+	var ids := {}
+	for s in array_mesh.get_surface_count():
+		if array_mesh.surface_get_primitive_type(s) != Mesh.PRIMITIVE_TRIANGLES:
+			return whole
+		var arrays := array_mesh.surface_get_arrays(s)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		if points.size() + verts.size() > MAX_SPLIT_VERTICES:
+			return whole
+		var welded := PackedInt32Array()
+		welded.resize(verts.size())
+		for k in verts.size():
+			var key := Vector3i((verts[k] / WELD_M).round())
+			if not ids.has(key):
+				ids[key] = points.size()
+				parent.append(points.size())
+				points.append(verts[k])
+			welded[k] = ids[key]
+		var index := PackedInt32Array()
+		if arrays[Mesh.ARRAY_INDEX] != null:
+			index = arrays[Mesh.ARRAY_INDEX]
+		var indexed := not index.is_empty()
+		var corners := index.size() if indexed else verts.size()
+		for t in range(0, corners - 2, 3):
+			var a := _root(parent, welded[index[t] if indexed else t])
+			var b := _root(parent, welded[index[t + 1] if indexed else t + 1])
+			parent[b] = a
+			var c := _root(parent, welded[index[t + 2] if indexed else t + 2])
+			parent[c] = a
+	var by_root := {}
+	for k in points.size():
+		var root := _root(parent, k)
+		if by_root.has(root):
+			by_root[root] = (by_root[root] as AABB).expand(points[k])
+		else:
+			by_root[root] = AABB(points[k], Vector3.ZERO)
+	var out: Array[AABB] = []
+	out.assign(by_root.values())
+	if out.size() <= 1 or out.size() > 8 * MAX_ISLANDS:
+		return whole
+	# Bodies whose plans overlap are one footprint.
+	var merged := true
+	while merged:
+		merged = false
+		var i := 0
+		while i < out.size():
+			for j in range(out.size() - 1, i, -1):
+				if _plan(out[i]).intersects(_plan(out[j])):
+					out[i] = out[i].merge(out[j])
+					out.remove_at(j)
+					merged = true
+			i += 1
+	out.sort_custom(func(a: AABB, b: AABB) -> bool: return _plan(a).get_area() > _plan(b).get_area())
+	if out.size() > MAX_ISLANDS:
+		out.resize(MAX_ISLANDS)
+	return out
+
+
+static func _plan(box: AABB) -> Rect2:
+	return Rect2(box.position.x, box.position.z, box.size.x, box.size.z)
+
+
+static func _root(parent: PackedInt32Array, i: int) -> int:
+	while parent[i] != i:
+		parent[i] = parent[parent[i]]
+		i = parent[i]
+	return i
 
 
 ## A tree's pool, as the painted trees' (_add_trees): a disc under the crown's projection, centred
 ## halfway from the trunk's foot `foot` to the crown's middle `crown`, and a seam at the trunk.
 func _tree(
-	pool: PackedFloat32Array,
-	core: PackedFloat32Array,
-	foot: Vector3,
-	crown: Vector3,
-	half: float,
-	height: float
+	data: PackedFloat32Array, foot: Vector3, crown: Vector3, half: float, height: float
 ) -> void:
-	_disc(pool, (foot.x + crown.x) * 0.5, (foot.z + crown.z) * 0.5, half * 0.5 + 0.5)
-	_disc(core, foot.x, foot.z, trunk_seam(height))
+	_disc(data, POOL_CH, (foot.x + crown.x) * 0.5, (foot.z + crown.z) * 0.5, half * 0.5 + 0.5)
+	_disc(data, CORE_CH, foot.x, foot.z, trunk_seam(height))
 
 
 ## The nominal radius (metres) of the seam at the foot of a trunk `height` metres tall.
@@ -311,7 +436,7 @@ static func trunk_seam(height: float) -> float:
 
 ## Structures: each one's own plan (PainterFootprint: its walls' feet, a rounded rectangle), a pool
 ## reaching a little past its walls (more for a larger, taller one) and a seam at them.
-func _add_structures(pool: PackedFloat32Array, core: PackedFloat32Array) -> void:
+func _add_structures(data: PackedFloat32Array) -> void:
 	var holder: Object = _surfaces.call("buildings")
 	if holder == null:
 		return
@@ -331,66 +456,101 @@ func _add_structures(pool: PackedFloat32Array, core: PackedFloat32Array) -> void
 		var corner: float = plan["corner"]
 		var reach := PainterFootprint.reach(half, float(plan["height"]), String(root.name))
 		_count += 1
-		_box(pool, c.x, c.y, yaw, half, reach, corner)
-		_box(core, c.x, c.y, yaw, half, WALL_SEAM_M, corner)
+		_box(data, POOL_CH, c.x, c.y, yaw, half, reach, corner)
+		_box(data, CORE_CH, c.x, c.y, yaw, half, WALL_SEAM_M, corner)
 
 
-## The coverage at `x` (distance over the footprint's nominal reach): 1 inside, 0.5 at the reach,
-## 0 past 1.45 of it.
-static func cover(x: float) -> float:
-	return 1.0 - smoothstep(0.55, 1.45, x)
+## Half the width (metres) of the band a footprint of `reach` falls off over: 0.45 of the reach,
+## and at least half a texel, so a small mark's edge is still held by the field.
+static func soft(reach: float) -> float:
+	return maxf(0.45 * reach, 0.5 * TEXEL_M)
 
 
-## Writes a disc of nominal radius `r` (metres) at world (x, z) into `field`, keeping the maximum.
-func _disc(field: PackedFloat32Array, x: float, z: float, r: float) -> void:
-	var reach := r * 1.45
+## The coverage `d` metres from a footprint whose nominal reach is `reach`: 1 inside, 0.5 at the
+## reach, 0 past the band (`soft`).
+static func cover(d: float, reach: float) -> float:
+	var band := soft(reach)
+	return 1.0 - smoothstep(reach - band, reach + band, d)
+
+
+## Writes a disc of nominal radius `r` (metres) at world (x, z) into channel `ch` of `data`
+## (CHANNELS floats a texel), keeping the maximum. `foot` (the foot's height times its weight, the
+## weight; zero for none) goes with every texel the disc takes.
+func _disc(
+	data: PackedFloat32Array, ch: int, x: float, z: float, r: float, foot := Vector2.ZERO
+) -> void:
+	var band := soft(r)
+	var reach := r + band
 	var i0 := maxi(0, floori((x - reach - _origin.x) / TEXEL_M))
 	var i1 := mini(_size.x - 1, floori((x + reach - _origin.x) / TEXEL_M))
 	var j0 := maxi(0, floori((z - reach - _origin.y) / TEXEL_M))
 	var j1 := mini(_size.y - 1, floori((z + reach - _origin.y) / TEXEL_M))
+	var full := maxf(r - band, 0.0)
+	var full2 := full * full
+	var reach2 := reach * reach
 	for j in range(j0, j1 + 1):
 		var dz := _origin.y + (j + 0.5) * TEXEL_M - z
+		var row := j * _size.x
 		for i in range(i0, i1 + 1):
 			var dx := _origin.x + (i + 0.5) * TEXEL_M - x
-			var v := cover(sqrt(dx * dx + dz * dz) / r)
-			var at := j * _size.x + i
-			if v > field[at]:
-				field[at] = v
+			var d2 := dx * dx + dz * dz
+			if d2 >= reach2:
+				continue
+			var v := 1.0 if d2 <= full2 else 1.0 - smoothstep(r - band, reach, sqrt(d2))
+			var at := (row + i) * CHANNELS
+			if v > data[at + ch]:
+				data[at + ch] = v
+				if foot.y > 0.0:
+					data[at + FOOT_CH] = foot.x
+					data[at + FOOT_CH + 1] = foot.y
 
 
 ## Writes a box (half extents `half` in its own x, z, turned by `yaw` about +y, its corners rounded
 ## by `corner` metres, at most its narrower half) grown by `reach` metres at world (x, z) into
-## `field`, keeping the maximum.
+## channel `ch` of `data`, keeping the maximum; `foot` as in _disc.
 func _box(
-	field: PackedFloat32Array,
+	data: PackedFloat32Array,
+	ch: int,
 	x: float,
 	z: float,
 	yaw: float,
 	half: Vector2,
 	reach: float,
-	corner: float = 0.0
+	corner: float = 0.0,
+	foot := Vector2.ZERO
 ) -> void:
 	var r := clampf(corner, 0.0, minf(half.x, half.y))
 	var inner := half - Vector2(r, r)
-	var rad := half.length() + reach * 1.45
+	var band := soft(reach)
+	var rad := half.length() + reach + band
 	var i0 := maxi(0, floori((x - rad - _origin.x) / TEXEL_M))
 	var i1 := mini(_size.x - 1, floori((x + rad - _origin.x) / TEXEL_M))
 	var j0 := maxi(0, floori((z - rad - _origin.y) / TEXEL_M))
 	var j1 := mini(_size.y - 1, floori((z + rad - _origin.y) / TEXEL_M))
 	var cs := cos(yaw)
 	var sn := sin(yaw)
+	var lo := reach - band
+	var hi := reach + band
 	for j in range(j0, j1 + 1):
 		var dz := _origin.y + (j + 0.5) * TEXEL_M - z
+		var row := j * _size.x
 		for i in range(i0, i1 + 1):
 			var dx := _origin.x + (i + 0.5) * TEXEL_M - x
 			# Into the box's frame (its +x axis at `yaw` from world +x towards +z).
 			var lx := absf(dx * cs + dz * sn) - inner.x
 			var lz := absf(-dx * sn + dz * cs) - inner.y
-			var d := Vector2(maxf(lx, 0.0), maxf(lz, 0.0)).length() + minf(maxf(lx, lz), 0.0) - r
-			var v := cover(d / reach)
-			var at := j * _size.x + i
-			if v > field[at]:
-				field[at] = v
+			var d := minf(maxf(lx, lz), 0.0) - r
+			if lx > 0.0 or lz > 0.0:
+				d += sqrt(maxf(lx, 0.0) ** 2 + maxf(lz, 0.0) ** 2)
+			if d >= hi:
+				continue
+			var v := 1.0 if d <= lo else 1.0 - smoothstep(lo, hi, d)
+			var at := (row + i) * CHANNELS
+			if v > data[at + ch]:
+				data[at + ch] = v
+				if foot.y > 0.0:
+					data[at + FOOT_CH] = foot.x
+					data[at + FOOT_CH + 1] = foot.y
 
 
 # ---------------------------------------------------------------- tokens
