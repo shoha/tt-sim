@@ -280,23 +280,7 @@ func _process(delta: float) -> void:
 					)
 				)
 		"look_at":
-			# Pan so the screen centre looks at world XZ `at`.
-			var cc := gm().get_camera_controller()
-			var off: Vector2 = cc.call("_get_view_center_ground_offset")
-			var holder := gm().cameraholder_node
-			var at: Array = []
-			if step.at is Dictionary:
-				# A piece spec (RenderPieceAim): look at that piece.
-				# "dx"/"dz" look that many metres off it (a piece set near the screen's edge).
-				var found := RenderPieceAim.map_of(step.at, ctrl(), gm().camera_node)
-				at = [found.x, found.y] if found != Vector2.INF else [0.0, 0.0]
-				at[0] += float(step.at.get("dx", 0.0))
-				at[1] += float(step.at.get("dz", 0.0))
-			else:
-				at = step.at
-			holder.global_position = Vector3(
-				float(at[0]) - off.x, holder.global_position.y, float(at[1]) - off.y
-			)
+			done = _framed(_look_at.bind(step))
 		"stroke":
 			done = _stroke(step)
 		"release":
@@ -385,12 +369,46 @@ func _process(delta: float) -> void:
 				_i = steps.size()
 			elif not _call_ready(script, step):
 				done = false
+			elif Steady.frames_view(script, step):
+				done = _framed(_run_call.bind(script, step))
 			else:
-				log_line("call %s -> %s" % [step.script, str(script.call("run", root_node, step))])
+				_run_call(script, step)
 		_:
 			log_line("unknown op %s" % step.op)
 	if done:
 		_next()
+
+
+func _run_call(script: GDScript, step: Dictionary) -> void:
+	log_line("call %s -> %s" % [step.script, str(script.call("run", root_node, step))])
+
+
+## A framing step's frame (Steady.framed: the zoom ease ended, `place` run once the camera is at
+## rest, then held until it stands still); logs what it gave up waiting for. True when done.
+func _framed(place: Callable) -> bool:
+	var result := Steady.framed(gm(), _state, place)
+	if result != "" and result != "hold":
+		log_line(result)
+	return result != "hold"
+
+
+## `look_at`: pans so the screen centre looks at world XZ `at`, or at a piece (RenderPieceAim
+## spec; "dx"/"dz" look that many metres off it, for a piece set near the screen's edge).
+func _look_at(step: Dictionary) -> void:
+	var cc := gm().get_camera_controller()
+	var off: Vector2 = cc.call("_get_view_center_ground_offset")
+	var holder := gm().cameraholder_node
+	var at: Array = []
+	if step.at is Dictionary:
+		var found := RenderPieceAim.map_of(step.at, ctrl(), gm().camera_node)
+		at = [found.x, found.y] if found != Vector2.INF else [0.0, 0.0]
+		at[0] += float(step.at.get("dx", 0.0))
+		at[1] += float(step.at.get("dz", 0.0))
+	else:
+		at = step.at
+	holder.global_position = Vector3(
+		float(at[0]) - off.x, holder.global_position.y, float(at[1]) - off.y
+	)
 
 
 ## Whether a `call` step may run now: a probe with a static `blocker(root, step) -> String` holds
