@@ -1,9 +1,10 @@
 class_name PainterDabs
 extends RefCounted
-## The meshes of the small stones' dabs (card painter-terrain-dabs; PainterSites has the model, the
-## outline and the geometry of one dab).
+## The meshes of the dabs of the bodies that stand on the ground: small stones (card
+## painter-terrain-dabs) and, on an authored terrain, every boulder, rock group and log (card
+## painter-terrain-contact). PainterSites has the model, the outline and the geometry of one dab.
 ##
-## PainterOcclusion finds the small stones (the sites) with its footprints and hands them here
+## PainterOcclusion finds the bodies (the sites) with its footprints and hands them here
 ## after every rebuild of its field. This host keeps one mesh per CELL_M square of the map that
 ## holds a site, all under one node beside the terrain (in the terrain's frame, drawn with the dabs'
 ## material, PainterSurfaces.dab_material(): the ground's shader body with the dab's code compiled
@@ -50,8 +51,6 @@ const FORMAT := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM3_SHIFT
 const LOBES_PARAM := &"dab_lobes"
 const ROW := 256
 const LOBE_TEXELS := 3
-## Metres past its stone's cell a patch can lie (the largest stone's reach and a sample's step).
-const REACH_MAX_M := 2.0
 
 ## The sites built since this host was made, and the cells put together.
 var built := 0
@@ -87,6 +86,9 @@ var _lobes := PackedFloat32Array()
 var _lobe_texture: ImageTexture = null
 var _slots := 0
 var _free: Array[int] = []
+## Metres past its body's cell a patch can lie: the furthest reach of any body built since the
+## last clear() (a pebble's is a quarter of a metre, a long log's several) and a sample's step.
+var _reach_max := 0.0
 
 
 ## Notes an edit of the terrain's samples in `rect`: the next sync compares the heights there with
@@ -174,6 +176,7 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 		# The samples it read: the patch's square a sample's step wide of the dab's reach, and
 		# round the stone the heights its outline took (its middle, and its foot's width across).
 		var far := reach_step + (PainterSites.reach(own) if not own.is_empty() else 0.0)
+		_reach_max = maxf(_reach_max, far)
 		var mid := Vector2(own[0], own[1]) if not own.is_empty() else Vector2(at.x, at.z)
 		var near := (own[2] if not own.is_empty() else 0.0) + 2.0 * reach_step
 		var box := Rect2(mid.x - far, mid.y - far, 2.0 * far, 2.0 * far).merge(
@@ -223,6 +226,7 @@ func clear() -> void:
 	_lobes = PackedFloat32Array()
 	_slots = 0
 	_free.clear()
+	_reach_max = 0.0
 
 
 ## The dabs' node (null while the map has no site), for the tests and the probes.
@@ -339,7 +343,7 @@ func _to_look_at(
 		var span: Vector2i = moved[j]
 		lo = Vector2i(mini(lo.x, span.x), mini(lo.y, j))
 		hi = Vector2i(maxi(hi.x, span.y), maxi(hi.y, j))
-	var pad := Vector2.ONE * REACH_MAX_M
+	var pad := Vector2.ONE * _reach_max
 	var from := Vector2i(((Vector2(lo) * step - half - pad) / CELL_M).floor())
 	var to := Vector2i(((Vector2(hi + Vector2i.ONE) * step - half + pad) / CELL_M).floor())
 	for cell_z in range(from.y, to.y + 1):

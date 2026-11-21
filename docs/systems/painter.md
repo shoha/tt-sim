@@ -2800,6 +2800,41 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
 `item1_*`, `item2_*`, `item3_*`, `owner/`, `timing/`, `captures/`, `jobs/`); handoff
 `docs/plans/handoffs/painter-terrain-marks.md`.
 
+- **One contact rule for every body (card painter-terrain-contact, 2026-11-21; look-pending).**
+  Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final123_terrain_contact/`
+  (`bodies_main_build_native.png`, `bodies_slope_main_build_native.png`,
+  `owner_main_build_native.png`, `shade_a_b_native.png`). On an authored terrain EVERY scatter body
+  is a site with a dab (`PainterSites.body_radius()`, `PainterOcclusion.all_sites`): a boulder, a
+  rock of a group and a log get the small stones' mark (the measured foot grown by a sliver, a
+  third of the body on the side away from the sun) and write NOTHING into the contact field. A
+  boulder of 0.9 m and over used to keep the field's all-round ring (pool and seam, 0.25 m
+  texels: an olive oval round it in sun); that ring is gone. What stays in the field: the pool and
+  seam of trees (crown pool, trunk seam disc), bushes, structures and tokens. `radius()` and
+  `holds()` (the 0.45 m limit) stay for a GLB map only, which has no heightfield to lay a dab on:
+  a larger body there keeps its box (pool, seam, foot height).
+  - **A long body** (a log) is told by its sections, not its box (the sawn log lies askew in its
+    mesh, box 2.6 by 1.9 m): `feet()` fits each section's crossings as a strip along their
+    principal axis (`_strip`); when the strips are 1.6 times as long as the sections' widest reach
+    across, the foot is a strip round a line (the outline's floats 10 and 11, the third lobe
+    texel's z and w: half the line), the radius is the half WIDTH, and `dab_foot()` measures from
+    that line. The mark is then a third of the log's width, whatever its length. The patch is the
+    rectangle round the line less the cells out of reach; a whole cell is two triangles.
+  - **In shade** a body's mark hides behind it (candidate (a)); the owner judged that fine ("the
+    cast shadow grounds them"), so it is the rule. Candidate (b), a contact line past the body's
+    radius drawn in shade only, is the dabs' uniform `dab_line` (`PainterSites.line()` is its
+    copy), OFF (0); at 0.1 its captures showed no visible line, so it is not a working look yet.
+    Candidate (c), the away part turned down the slope, was dropped (nothing on level ground).
+  - **Trunks** are unchanged (the field's seam disc and the crown's pool).
+  - **Cost** (in-run A/B against main f8dc0562, twice each, measured with the shade line on,
+    build minus main): torture wide -0.027 / -0.014 ms, torture edge 0.000 / +0.018 ms, falls
+    f1_o -0.025 / -0.016 ms, falls wide -0.016 / -0.024 ms. A whole bake of the field falls from
+    17 to 1.4 ms on the torture map (46 marks against 132) and from 13 to 7 ms on the falls map.
+    Level load: 540 dabs in 94 to 98 ms against main's 454 in 45 ms, and the first measure of the
+    feet 66 to 86 ms against 51. Edits (torture map, new | main twice): the rebuild after a stroke
+    end 6.4 / 7.5 ms against 5.3 / 5.5, undo 8.1 / 9.6 against 6.7 / 7.6, redo 8.5 / 9.5 against
+    6.3 / 7.3 (the large bodies' patches cost more to rebuild than the field's texels they
+    replace), a moved boulder 4.4 / 4.9 against 3.2 / 3.3, a placed boulder 7.7 / 3.8 against
+    3.1 / 3.9; frame medians and worst frames are equal. Nothing is rebuilt when the sun turns.
 - **The dabs as geometry (cards painter-terrain-dabs, -cost, -split, -finish and -edit,
   2026-11-21; look-pending; the finish round met the frame gates and the edit round removed the
   stroke end's rebuild of every dab, so the branch is ready to merge; this one is current
