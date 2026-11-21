@@ -6,6 +6,7 @@
 		"res://tests/unit/test_authored_terrain.gd",
 		"res://tests/unit/test_authored_water.gd",
 		"res://tests/unit/test_painter_surfaces.gd",
+		"res://tests/unit/test_ground_shade_field.gd",
 		"res://tests/unit/test_painter_grass_marks.gd",
 		"res://tests/unit/test_painter_ground_paths.gd",
 		"res://tests/unit/test_painter_fields.gd",

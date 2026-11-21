@@ -83,9 +83,11 @@ uniform vec4 sw_seed = vec4(0.0);
 const float SEAM_DARK = 0.38;
 // The strata bands' height (m) on a cliff face.
 const float STRATA_H = 0.6;
-// The sun height (sine of its elevation, 20 degrees) under which the turned-from-the-sun step
-// shrinks with it (light()).
-const float TURN_SUN_FULL = 0.34;
+// The terminator (light()): ground facing the sun under this share of what level ground does is
+// shade by its form.
+const float TURN_REL = 0.4;
+// The field convexity (1/m) past which a rim takes its lit lip and a foot its dark one.
+const float LIP_CURV = 0.55;
 // The wet band: the wet line's value that the band's edge sits at, and what it does to a colour
 // (darker and a little cooler, linear).
 const float WET_EDGE = 0.45;
@@ -125,6 +127,11 @@ uniform sampler2D water_weights : hint_default_black, filter_linear, repeat_disa
 uniform bool water_present = false;
 uniform vec2 layer_grid_origin = vec2(0.0);
 uniform vec2 layer_grid_step = vec2(0.25);
+// The shading field (GroundShadeField, on the zone map's grid): the authored terrain is lit from
+// it, not from the mesh's normal (card painter-ground-robust). Absent for the skirt's own slope
+// and for a GLB map's ground, which keep the mesh's normal.
+uniform sampler2D shade_map : hint_default_black, filter_linear, repeat_disable;
+uniform bool shade_present = false;
 
 // Contact occlusion (PainterOcclusion): the footprint field (r a pool under crowns, bushes, rocks and
 // houses, g a seam at their feet), its origin and texel size, the pool's and seam's strength, the
@@ -148,9 +155,6 @@ const float SHADE_DEEP = 0.8;
 const float SEAM_LIT = 0.6;
 // Metres the seam's centre moves away from the sun.
 const float SEAM_LEAN_M = 0.3;
-// The N.L a steep face must reach before a cast shadow shades it (light()).
-const float CLIFF_CAST_FACING = 0.3;
-
 varying vec3 v_n;
 varying float v_wy;
 varying vec2 v_xz;
@@ -237,6 +241,25 @@ vec4 zone(vec2 xz) {
 	}
 	vec2 size = vec2(textureSize(zone_map, 0));
 	return textureLod(zone_map, ((xz - layer_grid_origin) / layer_grid_step + 0.5) / size, 0.0);
+}
+
+// The shading field at a map-frame point (GroundShadeField; the zone map's grid): xy the gradient
+// of the band-limited heights, z the convexity, w the nearest steep face. One bilinear fetch: the
+// field is band-limited when it is baked, so its contours carry no texel kink.
+vec4 shade_field(vec2 xz) {
+	vec2 size = vec2(textureSize(shade_map, 0));
+	return textureLod(shade_map, ((xz - layer_grid_origin) / layer_grid_step + 0.5) / size, 0.0);
+}
+
+// The slope a role reads from a field value: the band-limited slope, or the nearest steep face
+// where that is steeper (a sheer step under a metre keeps its rock face).
+float field_slope(vec4 fld) {
+	return max(1.0 - inversesqrt(1.0 + dot(fld.xy, fld.xy)), fld.w);
+}
+
+// A firm step of `x` at `t`: a shape's edge, never a gradient.
+float firm(float x, float t) {
+	return smoothstep(t - 0.03, t + 0.03, x);
 }
 
 vec3 role_col(bool lit, int role, float variant) {
@@ -572,8 +595,18 @@ void fragment() {
 		f_glb_lod = clamp(log2(max(length(fwidth(xz)) * glb_texels_per_m, 1.0)), 0.0, 6.0);
 	}
 	vec3 n = normalize(v_n);
+	// The authored terrain's form comes from the shading field: a normal, a slope and a convexity
+	// that are smooth functions of the map point, so no step below follows a triangle's edge.
+	bool fielded = shade_present && !skirt && !world_frame;
+	vec4 fld = vec4(0.0);
+	if (fielded) {
+		fld = shade_field(xz);
+		n = normalize(vec3(-fld.x, 1.0, -fld.y));
+	}
 	f_n = n;
 	float slope = 1.0 - n.y;
+	// What a role and the marks read: with the field, the nearest steep face counts too.
+	float role_slope = fielded ? max(slope, fld.w) : slope;
 	float out_k = 0.0;
 	float calm = 1.0;
 	if (skirt) {
@@ -596,7 +629,8 @@ void fragment() {
 	// No marks on a steep face: laid in the map's XZ they stretch down it as smears (the face is
 	// the block-in's strata).
 	// Nor inside a village field: its rows are its strokes.
-	bool search = brushes_present && marks > 0.0 && px_m <= mark_px.y && slope < 0.4 && !field_inner(xz);
+	bool search = brushes_present && marks > 0.0 && px_m <= mark_px.y && role_slope < 0.4 && !field_inner(xz);
+	float s_k = role_slope;
 	for (int layer = 0; layer < 3 && search; layer++) {
 		// The small marks exist only in a drift or litter zone, and not when they are a pixel or two.
 		if (layer == 2 && (max(sz.x, sz.y) <= 0.0 || px_m > mark_px.x)) {
@@ -656,6 +690,17 @@ void fragment() {
 				if (textureLod(brushes, vec3(uv * 0.5 + 0.5, bl), lod).r < 0.5) {
 					continue;
 				}
+				// A mark takes the slope at its middle too, as it does its zone: it is rock or meadow
+				// as a whole, so the role's edge is made of brush marks (with the pixel's slope the
+				// edge ran ruled through a mark, along the slope's contour), and a mark whose middle
+				// lies on a steep face is not laid.
+				float slope_a = role_slope;
+				if (fielded) {
+					slope_a = field_slope(shade_field(a));
+					if (slope_a >= 0.4) {
+						continue;
+					}
+				}
 				bool keep;
 				if (layer == 2) {
 					keep = za.g < 0.25 && fract(h * 13.7 + 0.41) < (za.r > 0.5 ? sz.x : sz.y) * calm;
@@ -669,6 +714,7 @@ void fragment() {
 					a_k = a;
 					h_k = fract(h * 23.17 + 0.4);
 					l_k = layer == 2 ? 2.0 : 1.0;
+					s_k = slope_a;
 				}
 			}
 		}
@@ -683,9 +729,9 @@ void fragment() {
 	vec3 lit;
 	vec3 shd;
 	if (best > 0.0) {
-		ground_at(a_k, slope, h_k, l_k, (fract(h_k * 9.1) - 0.5) * 0.5, px_m, v_wy, lit, shd);
+		ground_at(a_k, s_k, h_k, l_k, (fract(h_k * 9.1) - 0.5) * 0.5, px_m, v_wy, lit, shd);
 	} else {
-		ground_at(xz, slope, 0.5, 0.0, 0.0, px_m, v_wy, lit, shd);
+		ground_at(xz, role_slope, 0.5, 0.0, 0.0, px_m, v_wy, lit, shd);
 	}
 	// A cliff's top edge (the ground convex, toward a steep drop) takes a lit lip, its foot
 	// (concave) a darker one: the mean curvature from the screen derivatives of the normal and
@@ -710,6 +756,18 @@ void fragment() {
 		float rim = smoothstep(0.02, 0.2, slope + wob);
 		float lip = smoothstep(0.3, 0.8, curv + brush) * rim * (1.0 - smoothstep(0.42, 0.72, slope + wob)) * near;
 		float foot = smoothstep(0.3, 0.8, -curv + brush) * rim * near;
+		if (fielded) {
+			// From the field the convexity is a smooth function of the map point (no triangle
+			// blocks), and it varies slowly: fed to a soft step it drew a grey smudge, a gradient
+			// with no shape. Every factor is a FIRM step, so the lip and the foot are flat shapes
+			// with brush edges: convex (or concave) enough, on tilted ground, with a steep face
+			// near, and for the lip not on the face itself.
+			curv = fld.z;
+			near = firm(role_slope + wob, 0.2);
+			rim = firm(slope + wob, 0.08);
+			lip = firm(curv + brush, LIP_CURV) * rim * (1.0 - firm(role_slope + wob, 0.55)) * near;
+			foot = firm(-curv + brush, LIP_CURV) * rim * near;
+		}
 		vec3 warm = vec3(1.0 + cliff_warm * 0.5, 1.0, 1.0 - cliff_warm * 0.5);
 		lit *= 1.0 + cliff_edge * lip * warm;
 		shd *= 1.0 + cliff_edge * 0.5 * lip * warm;
@@ -747,18 +805,17 @@ void light() {
 		vec3 lw = normalize((INV_VIEW_MATRIX * vec4(LIGHT, 0.0)).xyz);
 		// One flat shade colour behind a firm edge: the step sits in the middle of the penumbra.
 		float cast = 1.0 - smoothstep(0.44 + f_cut, 0.56 + f_cut, ATTENUATION);
-		// Ground turned from the sun takes its shade too (a steep bank's far side). The step and
-		// its wiggle shrink with the sun's height under TURN_SUN_FULL (painter-a2a4): at a 3 degree
-		// sun flat ground's N.L (0.05) sat inside them, and the wiggle alone striped a level
-		// meadow lit and shade; now only a bank turned past the grazing sun goes into shade.
-		float turn_k = clamp(lw.y / TURN_SUN_FULL, 0.05, 1.0);
+		// The terminator is RELATIVE (card painter-ground-robust): ground that faces the sun under
+		// TURN_REL of what level ground does (rel = N.L / L.y) is shade by its form, one firm step
+		// wobbled by the brush. Relative to level ground, so a level meadow is lit at every sun
+		// height and a bank turned from a low sun goes into shade as a whole mass. Ground near
+		// edge-on to the sun is where a shadow map stripes and stipples (its texels stretch by
+		// 1 / N.L): that ground is inside the form's shade here, and the terrain casts with its
+		// back faces only (AuthoredTerrain.set_back_caster), so ground that faces the sun is never
+		// shadowed by its own surface and the map is read plainly everywhere else.
 		float nl = dot(normalize(f_n), lw);
-		float turned = 1.0 - smoothstep(0.02 * turn_k, 0.1 * turn_k, nl + (f_edge - 0.5) * 0.1 * turn_k);
-		// A steep face turned nearly edge-on to the sun is where the shadow map self-shadows in
-		// stripes and its filter's noise stipples their edges (card painter-ground-artifacts: fine
-		// horizontal hatching on the banks): such a face takes no cast shadow until it faces the sun
-		// (its N.L already steps it into shade above), and flat ground keeps every cast shadow.
-		cast *= 1.0 - smoothstep(0.2, 0.5, 1.0 - f_n.y) * (1.0 - smoothstep(0.0, CLIFF_CAST_FACING, nl));
+		float rel = nl / max(lw.y, 0.05);
+		float turned = 1.0 - smoothstep(TURN_REL - 0.03, TURN_REL + 0.03, rel + (f_edge - 0.5) * 0.15);
 		float shade = max(cast, turned);
 		vec3 col = mix(f_lit, f_shd, shade);
 		// Contact occlusion (card painter-tree-ground): what stands on the ground shuts out the sky,
