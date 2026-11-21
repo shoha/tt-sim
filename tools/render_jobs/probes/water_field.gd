@@ -128,6 +128,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return "foot seams cleared %s" % WaterFieldStroke.foot_seams_cleared
 		"tokens":
 			return _tokens(base, step.get("items", []))
+		"state":
+			return _state(base, step)
 		"cleanup":
 			return WATER.run(base, {"action": "cleanup", "prefix": PREFIX})
 	var doc := _document(base)
@@ -256,6 +258,70 @@ static func _dump(base: Node, step: Dictionary) -> String:
 		for l in out:
 			file.store_line(l)
 	return "dump %d rows to %s" % [out.size(), path]
+
+
+## Everything the water's pixels read, written as sorted lines to `dir`/state_`tag`.txt so two runs
+## can be diffed (card painter-water-lap): the clock, the time scale, every uniform of each water
+## and fall material (a texture as the SHA-1 of its pixels), the global shader parameters, and per
+## mesh drawn with such a material its transform, instance uniforms and the SHA-1 of each vertex
+## array, plus the camera. Two runs of a pinned job must write the same file.
+static func _state(base: Node, step: Dictionary) -> String:
+	var lines := PackedStringArray()
+	var pw := painter_water(base)
+	lines.append("time_scale %s" % var_to_str(Engine.time_scale))
+	if pw != null:
+		lines.append("clock_t %s" % var_to_str(pw.get("clock_t")))
+		lines.append("shade_opt %s" % var_to_str(pw.get("shade_opt")))
+	for g in RenderingServer.global_shader_parameter_get_list():
+		lines.append("global %s %s" % [g, _state_value(RenderingServer.global_shader_parameter_get(g))])
+	var seen := {}
+	var meshes: Array[Node] = base.get_tree().root.find_children("*", "MeshInstance3D", true, false)
+	for n in meshes:
+		var mi := n as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for s in mi.mesh.get_surface_count():
+			var mat := mi.get_active_material(s) as ShaderMaterial
+			if mat == null or mat.shader == null or not mat.shader.resource_path.contains("water"):
+				continue
+			var tag := "mesh %s/%d" % [mi.name, s]
+			lines.append("%s shader %s" % [tag, mat.shader.resource_path.get_file()])
+			lines.append("%s visible %s" % [tag, mi.is_visible_in_tree()])
+			lines.append("%s xform %s" % [tag, var_to_str(mi.global_transform)])
+			var arrays := mi.mesh.surface_get_arrays(s)
+			for a in arrays.size():
+				if arrays[a] != null:
+					lines.append("%s array %d %s" % [tag, a, _state_value(arrays[a])])
+			for u in mat.shader.get_shader_uniform_list():
+				var uname := StringName(u.name)
+				var iv: Variant = mi.get_instance_shader_parameter(uname)
+				if iv != null:
+					lines.append("%s instance %s %s" % [tag, uname, _state_value(iv)])
+				if not seen.has(mat):
+					var uv: Variant = mat.get_shader_parameter(uname)
+					lines.append("%s uniform %s %s" % [tag, uname, _state_value(uv)])
+			seen[mat] = true
+	var cam := base.get_viewport().get_camera_3d()
+	if cam != null:
+		lines.append("camera %s fov %s size %s" % [var_to_str(cam.global_transform), cam.fov, cam.size])
+	var path := String(step.get("dir", "user://")).path_join("state_%s.txt" % String(step.get("tag", "a")))
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return "state: cannot write %s" % path
+	for l in lines:
+		file.store_line(l)
+	return "state %d lines to %s" % [lines.size(), path]
+
+
+## A value of the state dump: a texture or an array as the SHA-1 of its bytes, anything else in full.
+static func _state_value(v: Variant) -> String:
+	if v is Texture2D:
+		var tex: Texture2D = v
+		var img := tex.get_image()
+		return "tex %s %s" % [tex.get_size(), (img.get_data() if img != null else PackedByteArray()).hex_encode().sha1_text()]
+	if v is Array or typeof(v) >= TYPE_PACKED_BYTE_ARRAY:
+		return "sha1 %s" % var_to_bytes(v).hex_encode().sha1_text()
+	return var_to_str(v)
 
 
 static func _setup(base: Node, doc: MapDocument, name: String) -> String:
