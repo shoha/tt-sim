@@ -771,12 +771,59 @@ empty. A value noise is the stroke's half-width, not a cut: `DAB_HALF_M` (0.05 m
 the noise stands over `DAB_THR` (0.65), across the line `DAB_OUT` (1.75) lap widths from the
 waterline, measured in the smoothed shore distance without the lap's wobble (with it a slender
 stroke is a squiggle). The noise's lattice is turned 35 degrees off the world axes, has
-`DAB_FREQ` (1.6) cells a metre, and re-seeds on the 0.4 Hz step the dashes always had. What it
+`DAB_FREQ` (1.6) cells a metre, and is re-drawn place by place on the dashes' 0.4 Hz ("The
+shore's white in motion" below). A stroke stands only beside a thin stretch of the lap (the
+lap's own reach noise under 0.6, gone by 0.85): beside a thick stretch it read as a doubled rim
+line. What it
 replaces is the cause of the "square white blocks" on pond banks: a band 0.4 m wide cut along
 the shore by a thresholded noise on the world's axes (`water_field.md` "What the sample grid
 shows through" has the capture that settled it). Inside a fall's zone (`fz`) the old band still
 draws, by the zone's share, so the approved falls keep their foot. The switches `ABL_NODASH`
 and `ABL_NORIBBON` (render-job probe `water_field.gd` `defs`) zero the dabs or the lap alone.
+
+**The shore's white in motion** (card painter-water-shore, 2026-11-21, look-pending). The lap's
+reach (`bite_n`), the dabs (and a fall zone's band) and the wrap's break are held drawings: each
+keeps a shape for a while and then takes another. They read one noise, `wn_live(q, salt, u)`: a
+value noise whose lattice corners each hold a value for one unit of `u` (the clock times the
+term's rate: 0.5, 0.4 and 0.6 Hz) and ease to their next over the last `LIVE_FADE` (0.35) of
+it, every corner at a phase of its own taken from its hash. So each 0.4 m of shore changes in
+its own time, softly, and no frame re-draws a shoreline. A corner's values are a triangle wave
+of an irrational walk from that same hash (its own start and stride, `LIVE_STRIDE` 0.15 to
+0.23 a step): uniform and independent from corner to corner, so a single frame is the value
+noise it replaces, a step is at most 0.46 of the range, and the value a corner eases to costs
+no second hash: four hashes a call as before, no texture fetch. Each place swells and thins on
+a rhythm and phase of its own. The corner hash is an integer hash, on purpose: the four cells
+round a lattice corner compute its hash in separate inlined copies, and the float `p_hash`
+differs between copies in its last bits (about 5e-4). A noise that uses the hash as its value
+never shows that; a phase, a start and a stride taken from it multiply it, and the card's first
+builds drew straight steps along the lattice's rows on f3_t (up to 12 levels with the stride
+from the float hash, growing with the clock; 2 levels with a constant stride). Integer
+arithmetic is the same in every copy.
+What stood there was `wn_xz(q, seed + floor(clock * rate))`: a new seed for the whole map on a
+clock step. Measured with the switches below, clock 9.99 against 10.0 at 1920x1080: the bite's
+step alone changed 1.6 % of pond_z8's pixels and 2.9 % of f1_o's by up to 89 levels (every bank
+at once, every 2 s), the dabs' 0.3 and 0.4 % by up to 126 (every 2.5 s). A cross-fade of two
+seeds was not available in one call: `wn_xz` hashes its seed, so a fractional seed is a fresh
+noise every frame.
+The stepped terms, for the next card that hunts a pop: global steps are the two copies of the
+flat's blobs (`flow_blobs_t`, each re-seeded every `CARRY_PERIOD_S` under the other copy: 0
+pixels in both views), the fall's blobs (2.4 s, the same hand-over) and the mist's sway in
+`painter_waterfall.gdshader` (`floor(p_clock * 2)`, about 475 pixels at f1_o, the approved
+falls: left). Per place already: the stroke lattice's cycle (per cell), a token's rings, a mist
+puff's rise. The switches `FRZ_BITE`, `FRZ_DAB`, `FRZ_WRAP`, `FRZ_BLOB` and `FRZ_STROKE` hold
+one term's clock at `FRZ_CLOCK` (9.99), so a pair of captures across clock 10.0 shows the
+terms left running alone; all five frozen at 9.99 is 0 pixels from the shipped frame.
+
+**The brink's mist starts by the foot's weight** (card painter-water-shore). Seen straight down
+on the stepped stream (st_t) a straight pale line lay on a sample row just above a fall's lip,
+at the end of the gap the foot-seam pass clears. The field was not at fault: the foot's weight
+in the texture ramps over the cell (bilinear). The brink's wide soft edge (`edge_w`, the term
+`1 - smoothstep(-2, -1, fd)`) read the foot coordinate alone, which is whole from the first
+fragment that fetches it (`v_f1.z > 0.02`): the pale mist began on that line at full width
+while the zone's weight was still 0. The term is now times `foot_near`, which is 1 wherever the
+field holds a foot, so a fall draws as before (0 pixels at f1_o, f5_o and f3_t with the lap
+off). Proof by switch: `ABL_NOWHITE` and seams kept (`WaterFieldStroke.foot_seams_cleared`
+false) each remove the line, `ABL_BRINKLINE` puts it back.
 
 **One frame, one velocity (card painter-water-frames, look-pending).** On the field surface every
 pattern is in the world frame, and what moves is carried by one vector: the flow map's
