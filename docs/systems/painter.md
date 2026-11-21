@@ -200,7 +200,17 @@ blitted into the kept images (`update`); a changed plan, a first paint and a ter
 skirt entering) rebuild whole (`build`, the same region functions over the whole grid). One
 `ImageTexture` per map, shared by the ground and the skirt, updated in place; a new one only for
 another size or format. `test_painter_zone_maps.gd` proves update == build bit for bit (centre,
-edges, corners, overlapping edits, paint alone, a changed plan). The path slot map is rebound
+edges, corners, overlapping edits, paint alone, a changed plan). The shore channel reads the wet
+dressing, and a dressing refresh (`AuthoredTerrain.refresh_water_dressing`, after every water edit
+and every height edit on a map with water) marks only the samples whose dressing bytes changed
+(`WaterDressing.changed_rect`), nothing for a raise away from water, the whole grid only after a
+layer re-table (card painter-edit-hitch, 2026-11-21: it marked the whole grid every time, a 62-65
+ms zone rebuild and a 17-38 ms water field redo after every river and raise; numbers in
+`PERFORMANCE.md` "The painted look after a water or height edit"). The water field
+(`PainterWaterField`) takes the heights of an edit away from water into its ground copy without
+redoing anything, so its rect updates still equal a full build (`test_dressing_edit_rect.gd`:
+a new river, an erased one, a raise beside and away from water, the first water, the map's edge).
+The path slot map is rebound
 only when the surface ids, the base surface or the weights changed (a copy of them is kept: a
 packed array is shared by assignment in Godot 4.7, measured), and `cliff_surface` counts biome
 cells natively. Torture map (245 x 245), zone work per sculpt step: 43.1 ms -> 2.7 ms on the

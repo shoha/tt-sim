@@ -126,6 +126,9 @@ var _collision: TerrainCollision = null
 var _layers := GroundLayerBinding.new()
 ## The wet dressing texture (MapDocument.water_dressing; WaterDressing), null without water.
 var _water_texture: ImageTexture = null
+## The dressing bytes last uploaded to _water_texture, for refresh_water_dressing()'s changed
+## rect (the document's array itself: a packed array copies on write, so this one stays as bound).
+var _bound_dressing := PackedByteArray()
 ## Whole-grid rule fields: {"curvature", "steep"} (TerrainMeshBuilder.grid_fields).
 var _fields: Dictionary = {}
 ## cell -> chunk mesh arrays a loader's worker built (AuthoredLoadPrep), used once each.
@@ -507,13 +510,25 @@ func update_ground_region(sample_rect: Rect2i) -> void:
 ## Brings the ground's wet dressing up to the document's water_dressing (WaterDressing
 ## .refresh(), which the caller runs after a water or height edit): re-tables the layers when
 ## the map gains or loses water (the bed and shore surfaces are layers only with water) and
-## uploads the field (the whole texture: about 0.25 MB on a 200 ft map).
+## uploads the field (the whole texture: about 0.25 MB on a 200 ft map). ground_edited marks only
+## the samples whose dressing bytes changed since the last upload (WaterDressing.changed_rect),
+## nothing when none did (a raise far from water), and the whole grid after a re-table: every
+## listener grows the rect by what its texels read around a sample (card painter-edit-hitch).
 func refresh_water_dressing() -> void:
-	if _layers.needs_retable(_has_water()):
+	var grid := Rect2i(0, 0, document.samples_x(), document.samples_z())
+	var changed := WaterDressing.changed_rect(
+		_bound_dressing, document.water_dressing, grid.size.x, grid.size.y
+	)
+	var retabled := _layers.needs_retable(_has_water())
+	if retabled:
 		update_ground_region(Rect2i())
-	_bind_water_dressing()
+	if retabled or changed.has_area():
+		_bind_water_dressing()
 	_sync_skirt_water()
-	ground_edited.emit(Rect2i(0, 0, document.samples_x(), document.samples_z()))
+	if retabled:
+		ground_edited.emit(grid)
+	elif changed.has_area():
+		ground_edited.emit(changed)
 
 
 ## The skirt follows the ground's layer arrays and its edge surface after a re-table.
@@ -536,6 +551,7 @@ func _has_water() -> bool:
 func _bind_water_dressing() -> void:
 	var field := document.water_dressing
 	var size := Vector2i(document.samples_x(), document.samples_z())
+	_bound_dressing = field
 	if field.size() != size.x * size.y * WaterDressing.CHANNELS:
 		_water_texture = null
 		_material.set_shader_parameter("water_present", 0)
