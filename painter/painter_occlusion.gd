@@ -77,22 +77,9 @@ const FULL_SHARE := 0.3
 const DISC := 0.0
 const BOX := 1.0
 const SITE := 2.0
-## A small stone is a SITE (card painter-terrain-marks): a body whose longer half is under
-## SITE_HALF_M, no longer than SITE_ASPECT times its narrower one and at least SITE_MIN_M in radius.
-## The field cannot hold a mark its size (two texels across, or less) nor keep three stones' marks
-## apart, so such a body is not rasterized: every texel near it records the stone itself (its
-## middle, as an offset from the texel's own, its radius and its foot's height), the one whose dab
-## covers the texel most (`_site`; a dab is taken as SITE_COVER radii wide there), and the ground
-## draws the dab from those numbers, round and at the stone, at any zoom. A site is written to
-## every texel within SITE_GROW radii plus SITE_PAD_M of it: the dab's furthest reach in the
-## shader (its size, its wobble, its lean from the sun), and a texel's diagonal, so each of the
-## four texels round a pixel the dab covers holds it (unless other stones' dabs took all four).
-const SITE_HALF_M := 0.45
-const SITE_ASPECT := 1.6
-const SITE_MIN_M := 0.09
-const SITE_GROW := 1.8
-const SITE_PAD_M := 0.36
-const SITE_COVER := 1.5
+## A small stone is a SITE (card painter-terrain-marks; PainterSites has the model): it is not
+## rasterized, every texel near it records the stone itself in a second texture and is flagged in
+## the field's seam channel, and the ground draws the stone's own dab from that record.
 const MAX_TOKENS := 32
 ## Metres of empty field kept round the map's extent. The shader samples the field with a clamped
 ## edge, so a footprint cut by the field's last row (a tree near the map's edge) would be repeated
@@ -396,7 +383,8 @@ static func box(
 ## A small stone's mark: its middle (world x, z), its radius `r` (metres) and the height of its
 ## foot.
 static func site(x: float, z: float, r: float, foot: float) -> Array:
-	return [SITE, 0.0, x, z, 0.0, SITE_GROW * r + SITE_PAD_M, 0.0, r, 0.0, 0.0, foot, 0.0]
+	var reach := PainterSites.GROW * r + PainterSites.PAD_M
+	return [SITE, 0.0, x, z, 0.0, reach, 0.0, r, 0.0, 0.0, foot, 0.0]
 
 
 ## The texel rects of the marks that `marks` adds to or drops from the last bake's, joined where
@@ -440,11 +428,11 @@ static func joined(rects: Array[Rect2i]) -> Array[Rect2i]:
 	return out
 
 
+## A site moves both textures (its flag is in the field); any other mark the field alone.
 func _note_moved(mark: Array) -> void:
+	_field_moved = true
 	if mark[0] == SITE:
 		_sites_moved = true
-	else:
-		_field_moved = true
 
 
 ## The field's texels a mark may write (a rect without area: none).
@@ -464,7 +452,7 @@ func _draw(data: PackedFloat32Array, mark: Array) -> void:
 	if mark[0] == DISC:
 		_disc(data, int(mark[1]), mark[2], mark[3], mark[7])
 	elif mark[0] == SITE:
-		_site(mark[2], mark[3], mark[7], mark[5], mark[10])
+		_site(data, mark[2], mark[3], mark[7], mark[5], mark[10])
 	else:
 		_boxes(
 			data,
@@ -489,22 +477,25 @@ func _wipe(rect: Rect2i) -> void:
 				_sites[at + k] = 0.0
 
 
-## The field and the sites as textures, each when its own marks moved: floats as written, then
-## half floats (one native pass each). A map without small stones has no sites texture.
+## The field and the sites as textures, each when its own marks moved (the sites only when a
+## site did). The field goes up as half floats (one native pass: the ground filters it); the sites
+## as the floats they are, since the ground reads single texels of them and the pass to half floats
+## was most of an upload's cost. A map without small stones has no sites texture.
 func _upload() -> void:
 	if _field_moved or _tex == null:
-		_tex = _as_texture(_data, _tex)
+		_tex = _as_texture(_data, _tex, true)
 	if _site_count == 0 or _sites.is_empty():
 		_site_tex = null
 	elif _sites_moved or _site_tex == null:
-		_site_tex = _as_texture(_sites, _site_tex)
+		_site_tex = _as_texture(_sites, _site_tex, false)
 
 
-func _as_texture(floats: PackedFloat32Array, was: ImageTexture) -> ImageTexture:
+func _as_texture(floats: PackedFloat32Array, was: ImageTexture, half: bool) -> ImageTexture:
 	var image := Image.create_from_data(
 		_size.x, _size.y, false, Image.FORMAT_RGBAF, floats.to_byte_array()
 	)
-	image.convert(Image.FORMAT_RGBAH)
+	if half:
+		image.convert(Image.FORMAT_RGBAH)
 	if was == null or was.get_size() != Vector2(_size) or was.get_format() != image.get_format():
 		return ImageTexture.create_from_image(image)
 	was.update(image)
@@ -613,11 +604,10 @@ func _solids_of(mm: MultiMesh, to_world: Transform3D, leafy: bool) -> Array:
 func _solid(marks: Array, c: Vector3, yaw: float, half3: Vector3) -> void:
 	var half := Vector2(half3.x, half3.z)
 	var corner := minf(half.x, half.y)
-	var longer := maxf(half.x, half.y)
-	if longer < SITE_HALF_M and longer <= SITE_ASPECT * corner:
+	if PainterSites.holds(half):
 		# A stone the field cannot hold: its own dab, drawn from its place and size.
-		var r := sqrt(half.x * half.y)
-		if r >= SITE_MIN_M:
+		var r := PainterSites.radius(half)
+		if r > 0.0:
 			marks.append(site(c.x, c.z, r, c.y - 0.5 * half3.y))
 		return
 	var reach := solid_reach(half)
@@ -839,37 +829,18 @@ func _disc(data: PackedFloat32Array, ch: int, x: float, z: float, r: float) -> v
 
 
 ## Records a small stone (its middle at world (x, z), radius `r`, foot at height `foot`) in every
-## texel whose middle lies within `reach` metres of it, inside the window. A texel keeps one
-## stone: the one whose dab's edge (SITE_COVER radii from its middle) lies furthest past the
-## texel's middle, or nearest to it when no dab holds it, and the earlier mark on a tie, so the
-## result is one function of the sorted marks. (Nearest in its own radii let a stone take every
-## texel round a pebble beside it, and the pebble had no dab.)
-func _site(x: float, z: float, r: float, reach: float, foot: float) -> void:
+## texel whose middle lies within `reach` metres of it, inside the window, and flags the seam
+## channel of `data` there (PainterSites.record has the rule for which stone a texel keeps).
+func _site(
+	data: PackedFloat32Array, x: float, z: float, r: float, reach: float, foot: float
+) -> void:
 	var count := _size.x * _size.y * CHANNELS
 	if _sites.size() != count:
 		_sites.resize(count)
 		_sites.fill(0.0)
 	var span := _texels(x, z, reach, reach).intersection(_win)
-	var reach2 := reach * reach
-	for j in range(span.position.y, span.end.y):
-		var dz := z - (_origin.y + (j + 0.5) * TEXEL_M)
-		var row := j * _size.x
-		for i in range(span.position.x, span.end.x):
-			var dx := x - (_origin.x + (i + 0.5) * TEXEL_M)
-			var d2 := dx * dx + dz * dz
-			if d2 >= reach2:
-				continue
-			var at := (row + i) * CHANNELS
-			var had := _sites[at + 2]
-			if had > 0.0:
-				var hx := _sites[at]
-				var hz := _sites[at + 1]
-				if sqrt(hx * hx + hz * hz) - SITE_COVER * had <= sqrt(d2) - SITE_COVER * r:
-					continue
-			_sites[at] = dx
-			_sites[at + 1] = dz
-			_sites[at + 2] = r
-			_sites[at + 3] = foot
+	var stone := Vector4(x, z, r, foot)
+	PainterSites.record(_sites, data, _origin, _size.x, TEXEL_M, span, stone, reach)
 
 
 ## Writes a box (half extents `half` in its own x, z, turned by `yaw` about +y, its corners rounded

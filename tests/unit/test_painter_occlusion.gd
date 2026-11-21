@@ -83,13 +83,19 @@ func test_a_partial_update_equals_a_whole_bake_bit_for_bit() -> void:
 	whole.update(origin, size, edited.duplicate())
 	assert_true(host._data.to_byte_array() == whole._data.to_byte_array(), "bit for bit")
 	assert_true(host._sites.to_byte_array() == whole._sites.to_byte_array(), "the sites too")
-	# A stone alone moves: only the sites are uploaded again.
+	# A stone alone moves: both again, since its flag lies in the field.
 	var nudged := edited.duplicate()
 	stone = stone.duplicate()
 	stone[2] = float(stone[2]) + 0.2
 	nudged[14] = stone
 	host.update(origin, size, nudged.duplicate())
-	assert_true(host._sites_moved and not host._field_moved, "the field's texture is left alone")
+	assert_true(host._sites_moved and host._field_moved, "a site's flag is in the field")
+	# A boulder alone moves: the sites' texture is left alone.
+	moved = moved.duplicate()
+	moved[2] = float(moved[2]) + 0.2
+	nudged[nudged.find(edited[5])] = moved
+	host.update(origin, size, nudged.duplicate())
+	assert_true(host._field_moved and not host._sites_moved, "the sites are not uploaded again")
 	# And back again: what the dropped marks left is wiped.
 	host.update(origin, size, marks.duplicate())
 	var first := PainterOcclusion.new()
@@ -268,26 +274,30 @@ func test_small_stones_are_sites_each_texel_holding_the_stone_nearest_in_its_own
 	for mark: Array in marks:
 		assert_eq(mark[0], PainterOcclusion.SITE, "a site, not a box")
 	_lay(host, field, marks)
-	assert_eq(_at(host, field, -0.3, 0.1, CORE), 0.0, "nothing of it in the field")
+	# Nothing of a stone is drawn in the field: only the flag that says a site is near.
+	assert_eq(_at(host, field, -0.3, 0.1, CORE), PainterSites.FLAG, "the flag alone")
 	assert_eq(_at(host, field, -0.3, 0.1, POOL), 0.0)
 	# The texel whose middle is (-0.375, 0.125) holds the first stone, the one at (0.375, 0.125)
-	# the second: each its stone's middle from the texel's own, its radius, its foot's height.
+	# the second: each its stone's middle from the texel's own, its radius, its foot's height. Both
+	# stones' dabs may show in either texel, so the radius is negative (read the four texels).
 	var first := _site_at(host, -0.3, 0.1)
 	assert_almost_eq(first[0], 0.075, 1.0e-5)
 	assert_almost_eq(first[1], -0.125, 1.0e-5)
-	assert_almost_eq(first[2], 0.25, 1.0e-5)
+	assert_almost_eq(first[2], -0.25, 1.0e-5)
 	assert_almost_eq(first[3], 5.075, 1.0e-5, "between the stone's underside and its middle")
 	var second := _site_at(host, 0.3, 0.1)
 	assert_almost_eq(second[0], -0.075, 1.0e-5)
 	# A texel inside the stone's dab is the stone's though the pebble is nearer; the next one,
 	# outside it, is the pebble's (its dab's edge is the nearer), so the pebble keeps a dab.
-	assert_almost_eq(_site_at(host, 0.63, 0.1)[2], 0.25, 1.0e-5)
+	assert_almost_eq(_site_at(host, 0.63, 0.1)[2], -0.25, 1.0e-5)
 	var pebble := _site_at(host, 0.9, 0.1)
-	assert_almost_eq(pebble[2], 0.1, 1.0e-5)
+	assert_almost_eq(pebble[2], -0.1, 1.0e-5)
 	assert_almost_eq(pebble[0], -0.175, 1.0e-5)
-	# A stone reaches every texel a dab of it may show in, and no further.
-	assert_almost_eq(_site_at(host, -0.9, 0.1)[2], 0.25, 1.0e-5, "0.6 m off: within its reach")
+	# Where one stone alone may show, its radius is positive: the ground reads that one texel.
+	assert_almost_eq(_site_at(host, -0.9, 0.1)[2], 0.25, 1.0e-5, "0.6 m off: the first alone")
+	# A stone is written, and flagged in the field, within its reach and no further.
 	assert_eq(_site_at(host, -1.3, 0.1)[2], 0.0, "a metre off: none")
+	assert_eq(_at(host, field, -1.3, 0.1, CORE), 0.0, "and no flag")
 
 
 ## The site held by the texel under world (x, z): [dx, dz, radius, foot].

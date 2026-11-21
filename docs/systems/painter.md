@@ -2800,6 +2800,68 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
 `item1_*`, `item2_*`, `item3_*`, `owner/`, `timing/`, `captures/`, `jobs/`); handoff
 `docs/plans/handoffs/painter-terrain-marks.md`.
 
+- **Finish round (card painter-terrain-marks-finish, 2026-11-21; where it differs from the
+  bullets below, this one is current).** Evidence in `finish/` of the same folder.
+  - *The dab is the seam's own mark.* `site_dab()` gives each stone a value that is positive
+    inside an oval along the sun's line: its sunward end `SITE_NEAR` 0.85 radii from the stone's
+    middle (under the stone), its far end `SITE_FAR` 1.5 radii out on the shaded side plus
+    `SITE_LONG` 0.45 times the sun's levelness (1.80 at 14 h, 1.94 at 6.5 h: it leans longer
+    under a low sun), `SITE_WIDE` 1.15 radii either way across; it is an ovoid in height too
+    (`SITE_UP` 1.2 radii), so on ground that falls away it closes in a round end (a cut at a
+    height band ended it on straight contour lines: tried, `finish/round_a/`). The value falls by
+    one per `SITE_BAND_M` 0.3 m, joins the field's seam value by `max` BEFORE the step, and takes
+    the same 0.3 of the same noise: one flat tone, the same pixel-wide step, two dabs that touch
+    (or a dab and a boulder's seam) are one mark. Sheet `finish/dab_sheet__*.png` (main | round 1
+    | build, native): firm flat lobes hugging each stone on the side away from the sun, a third to
+    a half of a stone's width showing, merged in a cluster, longer at 6.5 h. Still visible: the
+    edge is firm but regular (a clean oval; the wobble is 0.045 m at most), so a dab reads as a
+    neat shape rather than an uneven brush mark.
+  - *Where the sites are read* (`PainterSites`, split from `PainterOcclusion`). A site raises the
+    field's seam channel to `FLAG` 1/64 within `GROW` 1.95 radii plus `PAD_M` 0.54 m (far under
+    the seam's threshold: it draws nothing), so the field read the ground already makes says
+    whether a dab can be near; only then is `occ_sites` read, one `texelFetch` of the pixel's own
+    texel, and the four texels round the pixel only where the texel's radius is negative (two or
+    more stones within `GROW` radii plus `TIGHT_M` 0.24 m of it). A texel keeps a stone that may
+    draw in it before any other, then the one it lies deepest inside (`COVER` 1.95 radii).
+    `occ_sites` is uploaded as the 32-bit floats it is (no pass to half floats; nearest reads),
+    and only when a site changed; a site's change uploads the field too (its flag).
+  - *Cost: NOT under the +0.02 ms rule.* In-run GPU A/B against main, 7 rounds of 90 frames: f1_o
+    +0.012 ms (once; main's own drift in that run 0.030); torture edge view +0.039 then +0.055;
+    torture wide +0.054 then +0.087 (the second pair is the committed shader; round 1 was +0.034
+    and +0.069). Cutting the fetches did not cut the cost: the gated zone is larger than round
+    1's (the flag must cover the field read's 0.3 m lean), and the second run adds two noise
+    calls and a varying on every skirt pixel (the wide view is half skirt). Levers not tried: a
+    flag radius without the lean (read the flag unshifted from a texture the ground reads at the
+    pixel), the skirt's fine noise taken from `warp`, removing `f_cast`.
+    Edits (torture map, `finish/timing/st_finish_log.txt`; main | round 1 | now): placed boulder
+    26.6 | 27.4 | 28.7 ms; a move 4.8 | 5.0 and 4.5 | 5.1 and 4.3; the rebuild at a stroke's end
+    3.9 | not isolated | 4.0 and 4.1; rebuilds under a sculpt stroke, median and worst: round 1
+    4.3 to 5.0 and 6.9, now 4.1 and 4.6 (upload at most 1.5 ms, was 2.2).
+  - *Owner frames* (`finish/owner/*_ident.png`, one run, main | build | no sites | main again):
+    bank_z3 0 px. f1_o 32400 px: the three stones (main's angular patch gone, three dabs), two
+    flat strips under the foam at the fall's foot that also differ with the sites unread (main
+    drew a field patch there for small bodies the build makes sites: taken to be the dressing
+    stones in the plunge pool, their positions not listed), and two specks of a few pixels in the
+    falling water (taken to be water the mask missed). wide 14896 px: every marked spot is at a
+    group of small stones; no strip along the far rim.
+  - *The skirt.* A form's end now varies across it: a noise about a wall's width across
+    (`SKIRT_END_FREQ` 0.45 per m, stretched to its full range) moves the end by `SKIRT_END_VARY`
+    0.55 of the distance either way, a finer one roughens it. Sheet `finish/skirt_sheet__*.png`:
+    the +x wall ends on a slanted line with one side running on (round 1: a vertical cap); still
+    one near-straight edge, not a taper to a point. The dashed line and streaks under the +z
+    walls at 17.5 h are the CAST term (gone with the cast off, unchanged with the form's turn
+    off); the skirt's mesh does not cast (`SkirtExits.decoration`), so they are the map's own
+    cast shadow received by the skirt's mesh, which still stands as the border's wall where its
+    paint has died (it is painted as level ground; its shadows show it). A step that drops the
+    cast on steep, undrawn faces of the mesh (`f_cast`) was built and did NOT remove them (they
+    lie on faces within about 20 degrees of level): it is still in the shader and should come
+    out. What would remove them without touching `skirt_height`: not taking the terrain's cast
+    shadow past where the forms end (every shadow on the outer ground then ends there too), or a
+    Painted-only flattening of the skirt's mesh.
+  - *Scores* (`finish/scores.tsv`, main | build): equal within 0.1 on every torture and edge view
+    but these: `edge_sz` vedge 1.37 to 0.90 and 1.00 to 0.60 (the ruled walls are gone); rk2 at
+    14 h vedge 0.35 to 0.42 (the dabs' firm edges at zoom 1.4); `out_sz` at 17.5 h dots 2.12 to
+    2.39 and lines 7.50 to 8.15 (the dashes and streaks above, where main had one solid block).
 - **A small stone is a site, not a footprint.** Three stones 0.4 m across shared ONE angular patch
   about 1.4 times the group: a 0.25 m texel is wider than the gap between them, and a hard
   threshold of a bilinear read of two or three texels has straight edges. Structures compared

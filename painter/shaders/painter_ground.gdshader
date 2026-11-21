@@ -157,6 +157,10 @@ uniform float skirt_fall = 24.0;
 // Metres past the map's edge within which the border's form is still drawn on the skirt
 // (fragment(): a form ends as a painter would end it, not where the mesh's fall does).
 const float SKIRT_END_M = 3.5;
+// How much that distance varies across a form (a share of it, either way) and the noise's
+// frequency (1 / m): lobes about two metres across, a wall's width.
+const float SKIRT_END_VARY = 0.55;
+const float SKIRT_END_FREQ = 0.45;
 
 // Contact occlusion (PainterOcclusion): the footprint field (r a pool under crowns, bushes, rocks and
 // houses, g a seam at their feet, b and a the height of a stone's foot: contact_at()), its origin
@@ -169,22 +173,26 @@ uniform vec2 occ_origin = vec2(0.0);
 uniform float occ_step = 0.5;
 uniform vec4 occ_k = vec4(0.0, 0.0, 0.8, 0.3);
 uniform vec4 occ_tint = vec4(0.9, 1.0, 0.96, 0.35);
-// The small stones' sites (PainterOcclusion SITE; laid out as occ_map): a texel holds the stone
-// whose dab covers it most, as that stone's middle from the texel's own (rg, metres), its radius
-// (b, 0 for none) and its foot's height (a). contact_at() draws each stone's own dab from them.
-uniform sampler2D occ_sites : hint_default_black, filter_linear, repeat_disable;
+// The small stones' sites (PainterOcclusion SITE; laid out as occ_map, read a texel at a time): a
+// texel holds the stone whose dab covers it most, as that stone's middle from the texel's own (rg,
+// metres), its radius (b, 0 for none, negative where more than one stone's dab may show in the
+// texel) and its foot's height (a). contact_at() draws each stone's own dab from them.
+uniform sampler2D occ_sites : hint_default_black, filter_nearest, repeat_disable;
 uniform bool occ_sites_on = false;
-// A stone's dab: its radius and how far its middle leans from the sun, in the stone's radii; the
-// soft edge's start and end (in the dab's radii) and the brush wobble on it; the height above or
-// below the stone's foot, in its radii, within which the dab shows whole (gone at twice that).
-// PainterOcclusion.SITE_GROW covers the furthest of these: SITE_DAB * (SITE_OUT + half the
-// wobble) + SITE_LEAN.
-const float SITE_DAB = 1.2;
-const float SITE_LEAN = 0.35;
-const float SITE_IN = 0.8;
-const float SITE_OUT = 1.0;
-const float SITE_WOBBLE = 0.25;
-const float SITE_UP = 1.0;
+// A stone's dab (site_dab()), in the stone's radii: how far it reaches from the stone's middle on
+// the side away from the sun (SITE_FAR, and SITE_LONG more under a level sun: it leans longer the
+// lower the sun) and on the sun's side (SITE_NEAR: under the stone), and its half width across
+// the sun's line. SITE_BAND_M is the distance (metres) the dab's value takes to fall by one: the
+// same brush wobble (0.3 of the noise) then moves its edge by up to 0.045 m, as it moves the
+// field's marks. SITE_UP: how far above or below the stone's foot the dab reaches, in its radii
+// (it lies on the ground the stone stands on, not down a face below it). PainterSites.GROW is
+// SITE_FAR + SITE_LONG.
+const float SITE_FAR = 1.5;
+const float SITE_LONG = 0.45;
+const float SITE_NEAR = 0.85;
+const float SITE_WIDE = 1.15;
+const float SITE_BAND_M = 0.3;
+const float SITE_UP = 1.2;
 uniform vec4 tok[32];
 uniform int tok_n = 0;
 uniform vec2 tok_k = vec2(0.0);
@@ -207,6 +215,8 @@ varying float f_tok;
 varying vec3 f_lit;
 varying vec3 f_shd;
 varying float f_edge;
+// How much of the cast shadow the surface takes (1 everywhere but on the skirt's dead forms).
+varying float f_cast;
 varying vec3 f_n;
 varying float f_cut;
 
@@ -611,6 +621,25 @@ void vertex() {
 	v_xz = wp.xz;
 }
 
+// A small stone's dab at `xz`, as a value that is positive inside it and falls by one per
+// SITE_BAND_M outside: `stone` is the site held by texel `t` of occ_sites, `away` the unit plan
+// direction from the sun and `low` how level the sun is (0 overhead, 1 at the horizon). The dab
+// is an oval along the sun's line that hugs the stone's foot: its sunward end lies under the
+// stone, its far end SITE_FAR radii (and SITE_LONG more under a low sun) out on the shaded side.
+// It lies at the height of the stone's foot and leaves the ground above or below it.
+float site_dab(vec4 stone, ivec2 t, vec2 xz, vec2 away, float low) {
+	float r = abs(stone.b);
+	vec2 from = xz - (occ_origin + (vec2(t) + 0.5) * occ_step + stone.rg);
+	float far = (SITE_FAR + SITE_LONG * low) * r;
+	float half_len = 0.5 * (far + SITE_NEAR * r);
+	float along = dot(from, away) - (far - half_len);
+	float across = (from.x * away.y - from.y * away.x) * (half_len / (SITE_WIDE * r));
+	// The oval is an ovoid in height too (SITE_UP radii tall either way), so on ground that falls
+	// away the dab closes in a round end. (Cut at a height it ended on straight contour lines.)
+	float rise = (v_wy - stone.a) * (half_len / (SITE_UP * r));
+	return (half_len - length(vec3(along, across, rise))) / SITE_BAND_M;
+}
+
 // The contact occlusion at `xz`: x the pool, y the seam, each a flat brush-edged shape (the field's
 // 0.5 contour, moved by the ground's own noise), then the tokens' feet: a wider pool joins x, and z
 // is the disc right under the feet (a deeper step on top of the seam). light() shows the pool only
@@ -635,34 +664,35 @@ vec3 contact_at(vec3 p, vec2 xz) {
 		// the field it used to be (round a group of stones the field falls slowly, and a 0.1 step
 		// of it was a soft-edged dark block, the one tonal edge of the ground that was no brush's).
 		vec2 v = s + w * 0.3 - 0.45;
-		occ.xy = clamp(v / clamp(fwidth(v), vec2(1.0e-4), vec2(0.1)) + 0.5, 0.0, 1.0) * occ_k.xy;
-		// A small stone sits in its own dab (card painter-terrain-marks): a soft round mark about
-		// the stone's size, leaning from the sun, drawn from the stone's own place and radius, so
-		// three stones are three dabs at any zoom (the field's texel is wider than the gap between
-		// them). One filtered read says whether any of the four texels round the pixel holds a
-		// stone; only then are the four read, each for the stone it holds.
-		if (occ_sites_on && occ_k.y > 0.0) {
+		// A small stone sits in its own dab (card painter-terrain-marks): the seam's mark, drawn
+		// from the stone's own place and radius, so three stones are three dabs at any zoom (the
+		// field's texel is wider than the gap between them). The dab's value joins the seam's
+		// before the step, so it is the same flat tone behind the same firm, wobbled edge, and two
+		// dabs that touch (or a dab and a boulder's seam) are one mark. The field's seam channel,
+		// read above, is raised a little wherever a site is near (PainterOcclusion.SITE_FLAG), so
+		// away from the stones the sites cost nothing; near one, the pixel's own texel is read,
+		// and the four round the pixel only where it says more than one stone may show.
+		if (occ_sites_on && occ_k.y > 0.0 && f.g > 0.0) {
+			vec2 away = sl > 0.01 ? -to_sun : vec2(0.0, 1.0);
 			vec2 at = (xz - occ_origin) / occ_step;
-			if (textureLod(occ_sites, at * occ_step / size, 0.0).b > 0.0) {
+			ivec2 own = ivec2(floor(at));
+			vec4 stone = texelFetch(occ_sites, own, 0);
+			float dab = -1.0;
+			if (stone.b > 0.0) {
+				dab = site_dab(stone, own, xz, away, sl);
+			} else if (stone.b < 0.0) {
 				ivec2 first = ivec2(floor(at - 0.5));
-				float wob = w.y * SITE_WOBBLE;
-				float dab = 0.0;
 				for (int k = 0; k < 4; k++) {
 					ivec2 t = first + ivec2(k & 1, k >> 1);
-					vec4 stone = texelFetch(occ_sites, t, 0);
-					if (stone.b <= 0.0) {
-						continue;
+					stone = texelFetch(occ_sites, t, 0);
+					if (stone.b != 0.0) {
+						dab = max(dab, site_dab(stone, t, xz, away, sl));
 					}
-					vec2 mid = occ_origin + (vec2(t) + 0.5) * occ_step + stone.rg
-						- to_sun * (stone.b * SITE_LEAN);
-					float d = length(xz - mid) / (stone.b * SITE_DAB);
-					float at_foot = 1.0
-						- smoothstep(1.0, 2.0, abs(v_wy - stone.a) / (stone.b * SITE_UP));
-					dab = max(dab, (1.0 - smoothstep(SITE_IN, SITE_OUT, d + wob)) * at_foot);
 				}
-				occ.y = max(occ.y, dab * occ_k.y);
 			}
+			v.y = max(v.y, dab + w.y * 0.3);
 		}
+		occ.xy = clamp(v / clamp(fwidth(v), vec2(1.0e-4), vec2(0.1)) + 0.5, 0.0, 1.0) * occ_k.xy;
 	}
 	for (int i = 0; i < tok_n; i++) {
 		vec4 t = tok[i];
@@ -676,6 +706,7 @@ vec3 contact_at(vec3 p, vec2 xz) {
 }
 
 void fragment() {
+	f_cast = 1.0;
 	ALBEDO = vec3(1.0);
 	ROUGHNESS = 1.0;
 	SPECULAR = 0.0;
@@ -725,10 +756,24 @@ void fragment() {
 		// drawn of the border's form, the mesh's own outward fall included, dies within
 		// SKIRT_END_M of the border (0.6 to 1.4 times that, by the slow noise, so the end wanders
 		// and no two forms end on one line); each role being a hard step of the read, a wall
-		// narrows to its steepest line and closes in a rounded end. 1 at the border.
+		// narrows to its steepest line and closes in a rounded end. 1 at the border. The end
+		// varies ACROSS a form too: a broad wall is as steep all the way across, so with the slow
+		// noise alone it stopped on one near-straight line, a blunt cap. A noise about a wall's
+		// width across, stretched to its full range, moves the end by SKIRT_END_VARY of the
+		// distance either way (one side of a wall runs on as a tongue, the other stops short),
+		// and a finer one roughens it.
 		float drawn = 1.0;
 		if (skirt) {
-			drawn = 1.0 - smoothstep(0.15, 1.0, out_m / (SKIRT_END_M * (0.6 + 0.8 * far_n)));
+			float lobe = smoothstep(0.25, 0.75, p_noise(p * SKIRT_END_FREQ + 33.0));
+			float fine = p_noise(p * 1.3 + 61.0) - 0.5;
+			float end_m = SKIRT_END_M * (0.6 + 0.8 * far_n)
+				* (1.0 + SKIRT_END_VARY * (2.0 * lobe - 1.0) + 0.4 * fine);
+			drawn = 1.0 - smoothstep(0.15, 1.0, out_m / end_m);
+			// Where the paint has died the mesh still stands as the border's wall, and the map's
+			// cast shadow fell on its flanks and crest in streaks and dashes: a face of the mesh
+			// that is no longer drawn as a form takes no cast shadow (a firm, wobbled step).
+			float ridge = smoothstep(0.03, 0.15, 1.0 - n.y);
+			f_cast = 1.0 - step(0.5, (1.0 - drawn) * ridge + warp.x * 0.2);
 			here *= skirt_keep(xz) * drawn;
 		}
 		float flat_k = min(inversesqrt(1.0 + dot(here.xy, here.xy)), 1.0 - here.w);
@@ -962,6 +1007,7 @@ void light() {
 		vec3 lw = normalize((INV_VIEW_MATRIX * vec4(LIGHT, 0.0)).xyz);
 		// One flat shade colour behind a firm edge: the step sits in the middle of the penumbra.
 		float cast = 1.0 - smoothstep(0.44 + f_cut, 0.56 + f_cut, ATTENUATION);
+		cast *= f_cast;
 		// The terminator is RELATIVE (card painter-ground-robust): ground that faces the sun under
 		// TURN_REL of what level ground does (rel = N.L / L.y) is shade by its form, one firm step
 		// wobbled by the brush. Relative to level ground, so a level meadow is lit at every sun
