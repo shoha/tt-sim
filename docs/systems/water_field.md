@@ -368,15 +368,25 @@ shader's `DBG_DATA` and `DBG_LAP` views and with headless dumps of the channels.
   of the spill sample's surface (drawn at the upper level extended, or draped 4 cm over its
   ground), neither of which touches it. No change to the field's filters or the shader's wash
   removes it: the rule that does is "Water does not climb" below (card painter-water-climb).
-- **The square white blocks in the lap on a steep pond bank are the lap on a one-sample shelf.**
-  Where a stream's bank line survives under a pond (a land wedge's end face, straight and on the
-  grid) the water over it is shallow for its distance from the waterline, so the lap's slope share
-  is 0 there and the ribbon is drawn with its crisp 3 cm edge, one sample wide, beside banks whose
-  share is 1 and whose ribbon is a wide brushed band. The cross of four shore taps is not the
-  cause (the block stays with the plain bicubic distance), nor is the bank-shed water the wash
-  hides (measuring `shore` to the visible waterline instead moves the block a little and changes
-  4 to 9 percent of the pixels of the falls frames).
-  Measured again 2026-11-21 (card painter-water-lap, nothing built): at the two corpus blocks
+- **The square white blocks on a pond's bank were the shader's outer dashes, not the lap and not
+  the sample grid** (card painter-water-lap-2, 2026-11-21; fixed in the shader, `docs/systems/water.md`
+  "The outer dabs"). The outer dashes were a band 0.2 m and more to each side of a fixed distance
+  from the waterline (1.5 lap widths), switched on where the bank is gentle (slope under 0.25 to
+  0.7: exactly where the lap's slope share is 0) and cut along the shore by a thresholded value
+  noise whose 0.32 m cells lie on the world's axes: a soft-edged white rectangle, a pill where a
+  cell's corner clips the band. One capture settled it (`round2/hyp_overview.png`: both | lap only
+  | dashes only, the two corpus maps): with the dashes zeroed every block is gone and the thin
+  white rim at the waterline stays; with the lap zeroed the blocks stand alone, in the same
+  places. Three cards before it had read the blocks as the lap ribbon on the field's data (a
+  one-sample shelf, the cross of shore taps, the bank-shed water, the slope share) and each found
+  them where the share is 0; the measurements below are true of the field but were not the cause.
+  The reading that stood here: where a stream's bank line survives under a pond (a land wedge's
+  end face, straight and on the grid) the water over it is shallow for its distance from the
+  waterline, so the lap's slope share is 0 there. The cross of four shore taps does not move the
+  block (it stays with the plain bicubic distance), nor does the bank-shed water the wash hides
+  (measuring `shore` to the visible waterline instead moves the block a little and changes 4 to 9
+  percent of the pixels of the falls frames).
+  Measured 2026-11-21 (card painter-water-lap, nothing built): at the two corpus blocks
   the middle row and column of a field dump show a bank that is gentle for a whole metre, not one
   sample. `f_pond_over_stream`, across the bank at z = -33.70: depth 0.036, 0.117, 0.245, 0.392,
   0.539 at shore 0.22, 0.46, 0.71, 0.97, 1.22 (depth over distance 0.16 to 0.44, all under the
