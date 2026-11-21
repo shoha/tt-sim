@@ -146,14 +146,14 @@ func test_the_biome_zone_map_exists_only_for_a_map_with_a_dry_biome() -> void:
 	doc.biome_density.resize(n)
 	doc.biome_slots.fill(1)
 	doc.biome_density.fill(255)
-	assert_null(PainterSurfaces.biome_zone_image(doc), "no dry biome, no second map")
+	assert_null(PainterZoneMaps.biome_zone_image(doc), "no dry biome, no second map")
 	doc.biome_ids = PackedStringArray(["savanna_summer_s1", "rocky_badlands_summer_s1"])
-	var image := PainterSurfaces.biome_zone_image(doc)
+	var image := PainterZoneMaps.biome_zone_image(doc)
 	assert_not_null(image)
 	assert_almost_eq(image.get_pixel(3, 3).r, 1.0, 0.01, "slot 1 is savanna: r dry")
 	assert_almost_eq(image.get_pixel(3, 3).b, 0.0, 0.01)
 	doc.biome_slots.fill(2)
-	image = PainterSurfaces.biome_zone_image(doc)
+	image = PainterZoneMaps.biome_zone_image(doc)
 	assert_almost_eq(image.get_pixel(3, 3).b, 1.0, 0.01, "slot 2 is the badlands: b earth")
 
 
@@ -165,16 +165,16 @@ func test_a_dry_map_paints_its_whole_ground_dry_and_a_mixed_map_only_where_the_b
 	doc.biome_density.resize(n)
 	doc.biome_slots.fill(1)
 	doc.biome_density.fill(30)
-	assert_true(PainterSurfaces.has_dominant_dry(doc))
-	var image := PainterSurfaces.biome_zone_image(doc)
+	assert_true(PainterZoneMaps.has_dominant_dry(doc))
+	var image := PainterZoneMaps.biome_zone_image(doc)
 	assert_almost_eq(image.get_pixel(4, 4).r, 1.0, 0.01, "sparse scatter, still all straw")
 	doc.biome_slots.fill(0)
-	assert_true(not PainterSurfaces.has_dominant_dry(doc), "no cell, no dominant biome")
+	assert_true(not PainterZoneMaps.has_dominant_dry(doc), "no cell, no dominant biome")
 	# Half forest, a tenth savanna: the forest is the larger biome, nothing is dominant.
 	for i in n:
 		doc.biome_slots[i] = 2 if i % 10 > 0 else 1
-	assert_false(PainterSurfaces.has_dominant_dry(doc))
-	image = PainterSurfaces.biome_zone_image(doc)
+	assert_false(PainterZoneMaps.has_dominant_dry(doc))
+	image = PainterZoneMaps.biome_zone_image(doc)
 	var dry_cell := 0
 	for i in n:
 		if doc.biome_slots[i] == 1:
@@ -192,10 +192,10 @@ func test_a_dry_maps_base_sand_does_not_paint_shore_under_the_biome() -> void:
 	doc.biome_density.resize(n)
 	doc.biome_slots.fill(1)
 	doc.biome_density.fill(200)
-	var zone := PainterSurfaces.zone_image(doc)
+	var zone := PainterZoneMaps.zone_image(doc)
 	assert_lt(zone.get_pixel(4, 4).a, 0.1, "no shore from the base surface")
 	doc.biome_ids = PackedStringArray(["temperate_forest_summer_s1"])
-	assert_gt(PainterSurfaces.zone_image(doc).get_pixel(4, 4).a, 0.9, "a forest map keeps it")
+	assert_gt(PainterZoneMaps.zone_image(doc).get_pixel(4, 4).a, 0.9, "a forest map keeps it")
 
 
 func test_a_dry_biomes_tufts_are_straw_and_the_others_stay_green() -> void:
@@ -422,11 +422,11 @@ func test_shade_keep_scales_the_roles_own_chroma_under_the_pull() -> void:
 
 func test_the_zone_map_reads_the_document() -> void:
 	var doc := MapDocument.create_flat(Vector2i(10, 10), "forest_floor", "test", 7)
-	var image := PainterSurfaces.zone_image(doc)
+	var image := PainterZoneMaps.zone_image(doc)
 	assert_eq(image.get_size(), Vector2i(doc.samples_x(), doc.samples_z()))
 	assert_almost_eq(image.get_pixel(3, 3).r, 0.0, 0.01, "forest floor is not meadow")
 	doc.base_surface = "grass_meadow"
-	assert_almost_eq(PainterSurfaces.zone_image(doc).get_pixel(3, 3).r, 1.0, 0.01)
+	assert_almost_eq(PainterZoneMaps.zone_image(doc).get_pixel(3, 3).r, 1.0, 0.01)
 
 
 func test_the_zone_map_matches_the_plain_loop_on_a_painted_document() -> void:
@@ -455,7 +455,7 @@ func test_the_zone_map_matches_the_plain_loop_on_a_painted_document() -> void:
 		doc.surface_weights[i] = (
 			rng.randi_range(0, 4) if is_index else rng.randi_range(0, 255) * (rng.randi() % 2)
 		)
-	var got := PainterSurfaces.zone_image(doc)
+	var got := PainterZoneMaps.zone_image(doc)
 	var want := _zone_plain(doc)
 	assert_eq(got.get_size(), want.get_size())
 	var off := 0
@@ -479,7 +479,7 @@ func _zone_plain(doc: MapDocument) -> Image:
 	var sx := doc.samples_x()
 	var sz := doc.samples_z()
 	var n := sx * sz
-	var base := PainterSurfaces._mix_role(
+	var base := PainterZoneMaps._mix_role(
 		Vector4.ZERO, PainterGroundRoles.surface_role(doc.base_surface), 1.0
 	)
 	var channels: Array[PackedFloat32Array] = []
@@ -492,12 +492,12 @@ func _zone_plain(doc: MapDocument) -> Image:
 		var slot: int = doc.biome_slots[i]
 		if slot > 0 and slot <= doc.biome_ids.size():
 			var pull := clampf(doc.biome_density[i] / 255.0 * PainterSurfaces.BIOME_PULL, 0.0, 1.0)
-			v = PainterSurfaces._mix_role(v, PainterGroundRoles.biome_role(doc.biome_ids[slot - 1]), pull)
+			v = PainterZoneMaps._mix_role(v, PainterGroundRoles.biome_role(doc.biome_ids[slot - 1]), pull)
 		for e in 4:
 			var w := doc.surface_weights[n * 4 + i * 4 + e] / 255.0
 			var at := doc.surface_weights[i * 4 + e]
 			if w > 0.0 and at < doc.surface_ids.size():
-				v = PainterSurfaces._mix_role(v, PainterGroundRoles.surface_role(doc.surface_ids[at]), w)
+				v = PainterZoneMaps._mix_role(v, PainterGroundRoles.surface_role(doc.surface_ids[at]), w)
 		v.w = maxf(v.w, maxf(doc.water_dressing[i * 4], doc.water_dressing[i * 4 + 1]) / 255.0)
 		for c in 4:
 			channels[c][i] = v[c]

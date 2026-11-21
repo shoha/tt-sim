@@ -186,11 +186,29 @@ Ground roles. `PainterGroundRoles.surface_role(id)` sorts a surface id by its `_
 (first rule wins: rock, shore, floor, path, meadow; anything else is meadow), and
 `biome_role(id)` sorts a biome the same way. `test_painter_surfaces.gd` checks that every core
 surface resolves and that each core biome's role equals its own ground surface's. The zone
-texture (`PainterSurfaces.zone_image`, RGBA8 per map cell, box-blurred; about 43 ms on a 245 x 245
-map, was 144, and it runs on every Painted level load and ground edit) holds the meadow share,
+texture (`PainterZoneMaps.zone_image`, RGBA8 per map cell, box-blurred) holds the meadow share,
 the path share, the rock share and wet ground (shore), from the map document's base surface,
 biome slots and surface weights. Real role data is still to come: a `paint_role` per surface in
 the library (and a biome's role read from its ground surface) would replace the word rules.
+
+Zone maps per edit (card painter-zone-dirty-rect, 2026-11-21). `PainterZoneMaps` keeps the zone map,
+the char map and the biome zone map with their textures. A texel is a pure function of the PLAN
+(`PainterZoneMaps.plan`: the grid's size, the roles' channel tables, the base surface's role, which
+arrays the document has, the dominant dry biome) and the samples within `ZONE_BLUR` of it, so an
+edit's `ground_edited` rectangle grown by `ZONE_BLUR` is recomputed from the samples around it and
+blitted into the kept images (`update`); a changed plan, a first paint and a terrain build (the
+skirt entering) rebuild whole (`build`, the same region functions over the whole grid). One
+`ImageTexture` per map, shared by the ground and the skirt, updated in place; a new one only for
+another size or format. `test_painter_zone_maps.gd` proves update == build bit for bit (centre,
+edges, corners, overlapping edits, paint alone, a changed plan). The path slot map is rebound
+only when the surface ids, the base surface or the weights changed (a copy of them is kept: a
+packed array is shared by assignment in Godot 4.7, measured), and `cliff_surface` counts biome
+cells natively. Torture map (245 x 245), zone work per sculpt step: 43.1 ms -> 2.7 ms on the
+plain map (of the 43: zone_image 39.7, cliff_surface 4.0, shade field 1.6), 90.6 -> 3.9 ms once
+a path and a forest are painted (paths 26.5 of it); a held sculpt stroke's frames median / worst
+48.8 / 78.2 -> 14.0 / 37.2 ms. Still whole: a Painted load or look switch (41 ms plain, 62 ms
+painted), a water edit (`refresh_water_dressing` emits the whole grid), a new surface or biome, a
+dominant biome won or lost, and the path slot map on every Paint edit of surfaces (14 ms painted).
 
 Path surfaces and cliffs (card painter-ground-surfaces, 2026-11-18; look-pending). Under the path
 role every path surface painted alike, one sand-coloured stroked band, and cliff faces were the stone
