@@ -167,6 +167,25 @@ func test_a_mesh_of_three_stones_is_three_islands() -> void:
 	assert_eq(PainterOcclusion.islands(BoxMesh.new()).size(), 1, "not an ArrayMesh: its box")
 
 
+func test_stones_set_side_by_side_stay_apart_though_their_boxes_overlap() -> void:
+	# The core library's stone cluster: five stones whose boxes overlap at the corners. Joined on
+	# any overlap they were one box, and its mark a metre-wide oval round the group.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for at: Vector3 in [Vector3(0, 0, 0), Vector3(0.5, 0, 0.5), Vector3(0.5, 0, -0.1)]:
+		_tetra(st, at, 0.3)
+	var bodies := PainterOcclusion.islands(st.commit())
+	assert_eq(bodies.size(), 3)
+	for body: AABB in bodies:
+		assert_almost_eq(body.size.x, 0.6, 0.001, "each its own stone's box")
+	var a := Rect2(0.0, 0.0, 1.0, 1.0)
+	assert_false(PainterOcclusion.nested(a, Rect2(0.8, 0.8, 1.0, 1.0)), "a corner's overlap")
+	assert_false(PainterOcclusion.nested(a, Rect2(2.0, 0.0, 1.0, 1.0)), "apart")
+	assert_true(PainterOcclusion.nested(a, Rect2(0.2, 0.2, 0.4, 0.4)), "a shell inside")
+	assert_true(PainterOcclusion.nested(a, Rect2(0.7, 0.2, 0.5, 0.4)), "a chip, more in than out")
+	assert_true(PainterOcclusion.nested(a, Rect2(0.5, 0.0, 0.0, 1.0)), "a flat sheet inside")
+
+
 ## A tetrahedron of half size `r` standing at `at`, as four unshared triangles (a flat-shaded mesh).
 func _tetra(st: SurfaceTool, at: Vector3, r: float) -> void:
 	var p := [

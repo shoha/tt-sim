@@ -2641,11 +2641,36 @@ and torture sheets, the score tables) and the card's handoff
   distance in height from that foot before the brush's threshold. A footprint under half a texel
   is not drawn. The rebuild writes floats and converts natively (no loop over the texels in
   GDScript). Trees, bushes and structures write the same discs and boxes as before, with no
-  height. **Not fixed by this:** the olive oval round the three stones on the falls' left cliff,
-  and the same blob round the `stones` species on the torture map, about a metre across at every
-  sun hour. It did not change when the solids' path changed, so those stones do not get their
-  mark from `_add_solids`' boxes; the disc's size fits a bush's seam (`_add_trees`: 0.95 of the
-  mesh's half width) or a trunk's (`_tree`), which is the next thing to print.
+  height.
+- **Stones side by side are separate bodies** (card painter-rocks-forms-finish, 2026-11-20;
+  evidence `.../painter_final109_rocks_forms/finish/`). The olive oval round the three stones on
+  the falls' left cliff (and round every `Stone_Cluster` on the torture map) WAS the contact
+  field: with the field off it is gone, with the seam off the oval goes and the pool stays, the
+  tokens' discs change nothing. A dump of every footprint showed the cluster written by
+  `_add_solids` as ONE body: `islands()` found its five stones (1632 vertices, 297 welded, 5
+  components) and then joined them, because it merged bodies on any overlap of their boxes and
+  the boxes of stones set side by side overlap at the corners. One box 0.85 by 0.9 m took a seam
+  0.21 m and a pool 0.42 m past it and a vertical reach of 0.7 m, which is the oval and its run
+  down the wall. Now only a body that lies mostly inside another's plan (`nested`, `NEST_SHARE`
+  0.5 of the smaller's area) is part of it, and a mark's vertical reach is half the body's height
+  plus its seam's reach (the body's width is no longer added): a stone 0.4 m across shows its
+  mark within about 0.2 m of its foot's height. On the falls' cliff the mark is a small dark
+  patch at the stones, about the group's width, with a short tongue (under half a metre on
+  screen) below the lowest stone; the wall below is clean. Stones that nearly touch still share
+  one patch: three separate marks need more than the field's 0.25 m.
+  Cost: the pool and the seam of a body are written in one pass (`_boxes`), over the turned
+  box's own extent. A rebuild is 22 ms on the falls map (202 footprints) and 29 ms on the torture
+  map (312), nearly all of it the solids' loop in GDScript; with one whole box a mesh at the same
+  0.25 m it was 32 to 36 ms there, and the two-pass version of the previous commit 55 ms (in
+  authoring, 291 solids). Main's
+  0.5 m field was not measured in this run (about a quarter of the texels). It runs 0.3 s after
+  the scatter applies cells, a structure or the ground changes, and after a sun hour change (about
+  every 3 s in a capture job that changes view and hour), never per frame; at 29 ms it is a
+  dropped frame or two each time, which a native or chunked rebuild would remove.
+  Seen and left: the round soft-rimmed disc on a boulder's lit face (two concentric rims, about
+  0.9 m in radius on a 1.2 m boulder, the "smudge" above) is NOT the shadow shell: it is unchanged
+  with `LIGHT_VERTEX` left alone (`noshell`), and absent with main's solid shader in the same
+  run, so it is a radial term of this card's solid shader about the rock's origin, not yet named.
 - **The terrain casts with its back faces** (`TerrainBackCaster`, a shadows-only twin of each
   chunk drawn with `painter_terrain_caster.gdshader`, `cull_front`, only while Painted): ground
   that faces the sun is never shadowed by its own surface (the stipple and the hatching on grazing

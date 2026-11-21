@@ -27,9 +27,10 @@ extends RefCounted
 ## yard's skirt and path (painter_yard_ground) read the field too, so the shade at a wall's foot
 ## shows through the wash laid over it.
 ## A scatter solid's footprint is each of its BODIES' own (card painter-rocks-forms): a mesh of
-## three stones is three islands (`islands`), each with a seam and a pool no wider than itself
-## (`solid_reach`), so a scatter of stones is three small marks, not one oval three times the
-## stones' size. A solid's
+## three stones is three islands (`islands`: stones side by side stay apart though their boxes
+## overlap, only a body mostly inside another is part of it, `nested`), each with a seam and a
+## pool no wider than itself (`solid_reach`), so a scatter of stones is small marks at the
+## stones, not one oval three times the stones' size. A solid's
 ## footprint also carries the height of its foot (b, a: the foot's height times a weight, and the
 ## weight, one over its vertical reach), and the ground shows the mark only within that reach of the
 ## foot: the field is a plan view, and under stones at a cliff's edge the mark ran down the wall. A
@@ -61,6 +62,8 @@ const POOL_BODY := 1.0
 const MAX_ISLANDS := 12
 const MAX_SPLIT_VERTICES := 6000
 const WELD_M := 0.002
+## The share of the smaller body's plan that must lie inside another's for the two to be one body.
+const NEST_SHARE := 0.5
 ## Seconds of quiet before a changed map's field is rebuilt (growth installs trees every frame).
 const REBUILD_DELAY_S := 0.3
 const MAX_TOKENS := 32
@@ -211,7 +214,9 @@ func _yard_material() -> ShaderMaterial:
 
 
 ## Rebuilds the field from the map's trees, scatter solids and structures, and hands it to the
-## ground. Pure CPU, one pass; about a millisecond for a hundred footprints.
+## ground. Pure CPU, one pass over each footprint's texels in GDScript: measured 22 ms for the
+## falls map's 202 footprints and 29 ms for the torture map's 312 (2026-11-20, of which the
+## solids 13 and 27 ms), so it is debounced (REBUILD_DELAY_S) and never per frame.
 func rebuild() -> void:
 	_queued = false
 	if _map == null or _surfaces == null:
@@ -324,11 +329,11 @@ func _solid(data: PackedFloat32Array, c: Vector3, yaw: float, half3: Vector3) ->
 	if corner + reach.x < 0.5 * TEXEL_M:
 		return
 	# The ground a bedded stone stands on lies between its underside and about its middle: the
-	# mark shows within the body's own reach of that.
-	var up := 0.5 * half3.y + corner + reach.x
+	# mark shows within half the body's height and its seam's reach of that. (With the body's
+	# width added it still ran half a metre down the wall under stones on a ledge.)
+	var up := 0.5 * half3.y + reach.x
 	var foot := Vector2((c.y - 0.5 * half3.y) / up, 1.0 / up)
-	_box(data, POOL_CH, c.x, c.z, yaw, half, reach.y, corner, foot)
-	_box(data, CORE_CH, c.x, c.z, yaw, half, reach.x, corner, foot)
+	_boxes(data, c.x, c.z, yaw, half, Vector2(reach.y, reach.x), corner, foot)
 
 
 ## A scatter solid's reaches (metres past a body of half size `half`): x the seam's, y the pool's.
@@ -391,14 +396,17 @@ static func islands(mesh: Mesh) -> Array[AABB]:
 	out.assign(by_root.values())
 	if out.size() <= 1 or out.size() > 8 * MAX_ISLANDS:
 		return whole
-	# Bodies whose plans overlap are one footprint.
+	# A body that lies mostly inside another's plan is part of it. Stones set side by side stay
+	# apart: their boxes overlap at the corners, and joined on any overlap the core library's
+	# cluster of five was one box again, its mark an oval a metre wide (card
+	# painter-rocks-forms-finish).
 	var merged := true
 	while merged:
 		merged = false
 		var i := 0
 		while i < out.size():
 			for j in range(out.size() - 1, i, -1):
-				if _plan(out[i]).intersects(_plan(out[j])):
+				if nested(_plan(out[i]), _plan(out[j])):
 					out[i] = out[i].merge(out[j])
 					out.remove_at(j)
 					merged = true
@@ -407,6 +415,14 @@ static func islands(mesh: Mesh) -> Array[AABB]:
 	if out.size() > MAX_ISLANDS:
 		out.resize(MAX_ISLANDS)
 	return out
+
+
+## Whether the smaller of two plans lies mostly (NEST_SHARE of its area) inside the other: a shell
+## nested in a stone, a chip on its top. A plan with no area that touches the other is inside it.
+static func nested(a: Rect2, b: Rect2) -> bool:
+	if not a.intersects(b, true):
+		return false
+	return a.intersection(b).get_area() >= NEST_SHARE * minf(a.get_area(), b.get_area())
 
 
 static func _plan(box: AABB) -> Rect2:
@@ -519,18 +535,42 @@ func _box(
 	corner: float = 0.0,
 	foot := Vector2.ZERO
 ) -> void:
+	var reaches := Vector2(-1.0, -1.0)
+	reaches[ch] = reach
+	_boxes(data, x, z, yaw, half, reaches, corner, foot)
+
+
+## _box for the pool and the seam in one pass over the texels (a boulder's two marks were two
+## passes): `reach` is the pool's (x) and the seam's (y), a negative one writes nothing.
+func _boxes(
+	data: PackedFloat32Array,
+	x: float,
+	z: float,
+	yaw: float,
+	half: Vector2,
+	reach: Vector2,
+	corner: float,
+	foot: Vector2
+) -> void:
 	var r := clampf(corner, 0.0, minf(half.x, half.y))
 	var inner := half - Vector2(r, r)
-	var band := soft(reach)
-	var rad := half.length() + reach + band
-	var i0 := maxi(0, floori((x - rad - _origin.x) / TEXEL_M))
-	var i1 := mini(_size.x - 1, floori((x + rad - _origin.x) / TEXEL_M))
-	var j0 := maxi(0, floori((z - rad - _origin.y) / TEXEL_M))
-	var j1 := mini(_size.y - 1, floori((z + rad - _origin.y) / TEXEL_M))
+	var lo := Vector2(reach.x - soft(reach.x), reach.y - soft(reach.y))
+	var hi := Vector2(reach.x + soft(reach.x), reach.y + soft(reach.y))
+	if reach.x < 0.0:
+		hi.x = -INF
+	if reach.y < 0.0:
+		hi.y = -INF
+	var far := maxf(hi.x, hi.y)
 	var cs := cos(yaw)
 	var sn := sin(yaw)
-	var lo := reach - band
-	var hi := reach + band
+	# The turned box's own extent along the world's axes, grown by the further reach.
+	var ex := absf(cs) * half.x + absf(sn) * half.y + far
+	var ez := absf(sn) * half.x + absf(cs) * half.y + far
+	var i0 := maxi(0, floori((x - ex - _origin.x) / TEXEL_M))
+	var i1 := mini(_size.x - 1, floori((x + ex - _origin.x) / TEXEL_M))
+	var j0 := maxi(0, floori((z - ez - _origin.y) / TEXEL_M))
+	var j1 := mini(_size.y - 1, floori((z + ez - _origin.y) / TEXEL_M))
+	var footed := foot.y > 0.0
 	for j in range(j0, j1 + 1):
 		var dz := _origin.y + (j + 0.5) * TEXEL_M - z
 		var row := j * _size.x
@@ -542,15 +582,23 @@ func _box(
 			var d := minf(maxf(lx, lz), 0.0) - r
 			if lx > 0.0 or lz > 0.0:
 				d += sqrt(maxf(lx, 0.0) ** 2 + maxf(lz, 0.0) ** 2)
-			if d >= hi:
+			if d >= far:
 				continue
-			var v := 1.0 if d <= lo else 1.0 - smoothstep(lo, hi, d)
 			var at := (row + i) * CHANNELS
-			if v > data[at + ch]:
-				data[at + ch] = v
-				if foot.y > 0.0:
-					data[at + FOOT_CH] = foot.x
-					data[at + FOOT_CH + 1] = foot.y
+			var wrote := false
+			if d < hi.x:
+				var v := 1.0 if d <= lo.x else 1.0 - smoothstep(lo.x, hi.x, d)
+				if v > data[at + POOL_CH]:
+					data[at + POOL_CH] = v
+					wrote = true
+			if d < hi.y:
+				var v := 1.0 if d <= lo.y else 1.0 - smoothstep(lo.y, hi.y, d)
+				if v > data[at + CORE_CH]:
+					data[at + CORE_CH] = v
+					wrote = true
+			if wrote and footed:
+				data[at + FOOT_CH] = foot.x
+				data[at + FOOT_CH + 1] = foot.y
 
 
 # ---------------------------------------------------------------- tokens
