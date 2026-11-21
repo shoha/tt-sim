@@ -155,6 +155,34 @@ float wt() {
 }
 
 
+// Attribution switches (render-job probe water_field.gd `defs`): FRZ_<term> holds the clock of
+// one stepped (held) term at FRZ_CLOCK, so a pair of captures straddling a step shows the step
+// of the terms left running alone. BITE the lap's reach, DAB the outer dabs (and a fall zone's
+// band), WRAP the wrap's break, BLOB the seeds of the flat's two blob copies, STROKE the stroke
+// lattice's per-cell cycle index.
+const float FRZ_CLOCK = 9.99;
+#ifdef FRZ_BITE
+#define WT_BITE FRZ_CLOCK
+#else
+#define WT_BITE wt()
+#endif
+#ifdef FRZ_DAB
+#define WT_DAB FRZ_CLOCK
+#else
+#define WT_DAB wt()
+#endif
+#ifdef FRZ_WRAP
+#define WT_WRAP FRZ_CLOCK
+#else
+#define WT_WRAP wt()
+#endif
+#ifdef FRZ_BLOB
+#define WT_BLOB FRZ_CLOCK
+#else
+#define WT_BLOB wt()
+#endif
+
+
 // p_noise at a point with one integer coordinate is a lower-dimension noise: the third axis's mix has
 // weight 0 and returns its first layer. These return the same values (the same hashes, the same
 // arithmetic) with half or a quarter of the hashes. wn_xy: z an integer; wn_xz: y an integer;
@@ -198,6 +226,57 @@ float wn_x(float x, float y, float z) {
 	return p_noise(vec3(x, y, z));
 }
 #endif
+
+
+// A held drawing that no two places re-draw together (card painter-water-shore). A value noise
+// (0..1, one cell per unit of q, four corner hashes as wn_xz) whose lattice corners each keep a
+// value for most of one unit of `u` (the clock times the term's rate), then ease to their next
+// over the last LIVE_FADE of it, each corner at a phase of its own: a stretch of shore changes
+// in its own time and softly, and no frame re-draws a whole shoreline. A corner's values are a
+// triangle wave of an irrational walk (its own start, its own stride of LIVE_STRIDE.x to x + y
+// a step): uniform in 0..1 and independent from corner to corner, so one frame is the value
+// noise it replaces; a step is at most twice the stride (a re-seed could jump the whole range),
+// and no second hash is needed for the value a corner eases to.
+// The corner's hash is an INTEGER hash, on purpose. The four cells round a corner each compute
+// it in their own inlined copy of the code, and the float hash (p_hash) differs between copies
+// in its last bits (about 5e-4 after its own amplification): unseen in a noise that uses the
+// hash as the value, but a phase, a start and a stride taken from it multiply the difference,
+// and the card's first builds drew it as straight steps along the lattice's rows (up to 12
+// levels with the stride from the hash, growing with the clock; 2 levels with a constant
+// stride and the start at 7 times the hash; f3_t). Integer arithmetic is the same in every copy.
+// What stood here re-seeded the whole noise on a clock step (`salt + floor(u)`): every bank's
+// white changed in the same frame (3 % of f1_o's pixels, by up to 89 levels, every 2 s).
+const float LIVE_FADE = 0.35;
+const vec2 LIVE_STRIDE = vec2(0.15, 0.08);
+
+float wn_live_corner(ivec2 c, uint salt, float u) {
+	uint x = (uint(c.x) * 2654435761u) ^ (uint(c.y) * 2246822519u) ^ (salt * 3266489917u);
+	x ^= x >> 15u;
+	x *= 739982445u;
+	x ^= x >> 12u;
+	x *= 695872825u;
+	x ^= x >> 15u;
+	// Three numbers of the one hash: the phase (low 16 bits), the start (high 16), the stride
+	// (the middle 8).
+	float t = u + float(x & 65535u) / 65536.0;
+	float k = floor(t);
+	float ease = smoothstep(1.0 - LIVE_FADE, 1.0, t - k);
+	float stride = LIVE_STRIDE.x + LIVE_STRIDE.y * float((x >> 12u) & 255u) / 256.0;
+	return abs(fract(float(x >> 16u) / 65536.0 + (k + ease) * stride) * 2.0 - 1.0);
+}
+
+
+float wn_live(vec2 q, uint salt, float u) {
+	vec2 fl = floor(q);
+	ivec2 i = ivec2(fl);
+	vec2 f = q - fl;
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(
+		mix(wn_live_corner(i, salt, u), wn_live_corner(i + ivec2(1, 0), salt, u), f.x),
+		mix(wn_live_corner(i + ivec2(0, 1), salt, u), wn_live_corner(i + ivec2(1, 1), salt, u), f.x),
+		f.y
+	);
+}
 
 
 // B-spline bicubic of `t` at texel-space point `tc` (texel i's centre at i + 0.5): four bilinear
@@ -422,6 +501,9 @@ vec2 stroke_layer(
 			float cyc = wt() / boil + hcx;
 			float idx = floor(cyc);
 			float ph = cyc - idx;
+#ifdef FRZ_STROKE
+			idx = floor(FRZ_CLOCK / boil + hcx);
+#endif
 			vec2 hb = (c + vec2(idx * 13.7, idx * 5.3)) + (seed + 3.0);
 			float hrx = be_hash(hb);
 			if (hrx >= density) {
@@ -519,8 +601,8 @@ float flow_blobs_t(vec2 p, vec2 flow, float scale, float seed, float period, flo
 	float tb = fract(wt() / period + 0.5);
 	vec2 qa = (p - flow * ta * period * gain) / scale;
 	vec2 qb = (p - flow * tb * period * gain) / scale;
-	float na = p_noise(vec3(qa.x, seed + floor(wt() / period) * 3.1, qa.y));
-	float nb = p_noise(vec3(qb.x, seed + 1.7 + floor(wt() / period + 0.5) * 3.1, qb.y));
+	float na = p_noise(vec3(qa.x, seed + floor(WT_BLOB / period) * 3.1, qa.y));
+	float nb = p_noise(vec3(qb.x, seed + 1.7 + floor(WT_BLOB / period + 0.5) * 3.1, qb.y));
 	float wa = 1.0 - abs(2.0 * ta - 1.0);
 	// The phases hand over by shrinking and growing, the larger of the two (a linear mix of two
 	// fields read as translucent discs wherever the thresholded white crossed the handover).
@@ -908,7 +990,8 @@ if (fieldv && (shade_opt & 4) != 0) {
 		slope = clamp(max(fa.x, 0.0) / max(fa.z, 0.03), 0.06, 3.0);
 	}
 	float lap_w = p_foam_w * (0.8 + 0.25 * sin(wt() * 1.1 + wn_xz(p * 0.3, 2.0) * 6.28));
-	float bite_n = wn_xz(p * 2.6, floor(wt() * 0.5));
+	// The lap's reach: a held drawing, each 0.4 m of shore re-drawn in its own time (wn_live).
+	float bite_n = wn_live(p * 2.6, 31u, WT_BITE * 0.5);
 	float thr = lap_w * (0.4 + 0.75 * bite_n);
 	// On a steep bank the gradient (and so d_h) jumps from one mesh triangle to the next: the lap's
 	// edge softens there, so it reads as a brushed edge and not a row of crisp triangles.
@@ -948,18 +1031,21 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// squiggle), so it has no end face. What stood here was a band 0.4 m wide at a fixed distance,
 	// cut along the shore by a thresholded noise on the world's axes: soft white rectangles and
 	// pills on every gentle pond bank (the "square white blocks", card painter-water-lap-2). The
-	// noise's lattice is turned off the world axes; it re-seeds on the dashes' 0.4 Hz step as before.
+	// noise's lattice is turned off the world axes; each cell of it is re-drawn in its own time on
+	// the dashes' 0.4 Hz (wn_live), so a stroke swells and thins where it lies and no two together.
+	// A stroke stands only where the rim beside it is thin: beside a thick stretch of the lap it
+	// read as a doubled rim line.
 	float dash_gate = 1.0 - smoothstep(0.25, 0.7, slope);
 	float d_dab = fieldv ? d_h - d_wob : d_h;
-	float dab_n = wn_xz(vec2(p.x * 0.82 + p.y * 0.57, p.y * 0.82 - p.x * 0.57) * DAB_FREQ, 4.0 + floor(wt() * 0.4));
+	float dab_n = wn_live(vec2(p.x * 0.82 + p.y * 0.57, p.y * 0.82 - p.x * 0.57) * DAB_FREQ, 34u, WT_DAB * 0.4);
 	float dab_w = DAB_HALF_M * max(dab_n - DAB_THR, 0.0) / (1.0 - DAB_THR);
 	float dashes = (1.0 - smoothstep(dab_w * 0.4, dab_w + world_units_per_pixel, abs(d_dab - lap_w * DAB_OUT)))
-		* smoothstep(0.0, 0.012, dab_w) * dash_gate;
+		* smoothstep(0.0, 0.012, dab_w) * dash_gate * (1.0 - smoothstep(0.6, 0.85, bite_n));
 	if (fz > 0.0) {
 		// Inside a fall's zone the shore white is as it was (the approved falls): the old band, by
-		// the zone's share. Only there is its noise read.
+		// the zone's share. Only there is its noise read (re-drawn place by place like the dabs').
 		float outer = lap_w * 1.5;
-		float dash_n = wn_xz(p * 3.1, 4.0 + floor(wt() * 0.4));
+		float dash_n = wn_live(p * 3.1, 37u, WT_DAB * 0.4);
 		float band = (1.0 - smoothstep(0.03, 0.2 + world_units_per_pixel, abs(d_h - outer))) * smoothstep(0.6, 0.76, dash_n) * dash_gate;
 		dashes = mix(dashes, band, fz);
 	}
@@ -1026,11 +1112,11 @@ if (fieldv && (shade_opt & 4) != 0) {
 #ifdef RED_C
 	// No depth jump, no wrap: the noise only breaks an edge that is there.
 	if (edge_foam > 0.0) {
-		float wrap_n = wn_xz(p * 5.0, 8.0 + floor(wt() * 0.6));
+		float wrap_n = wn_live(p * 5.0, 38u, WT_WRAP * 0.6);
 		edge_foam = smoothstep(0.3, 0.5, edge_foam * (0.45 + wrap_n));
 	}
 #else
-	float wrap_n = wn_xz(p * 5.0, 8.0 + floor(wt() * 0.6));
+	float wrap_n = wn_live(p * 5.0, 38u, WT_WRAP * 0.6);
 	edge_foam = smoothstep(0.3, 0.5, edge_foam * (0.45 + wrap_n));
 #endif
 #ifdef ABL_NOEDGE
@@ -1178,7 +1264,14 @@ if (fieldv && (shade_opt & 4) != 0) {
 		edge_w = max(edge_w, 0.3 * smoothstep(0.0, 0.5, max(fill, foot_w * 0.8)));
 			// The brink's white (the flat water above a fall's face, still glass: a soft line at the edge)
 			// has a wide gradient edge too, so it reads as mist on the glass, not as a drawn shape.
+			// By the foot's own weight (1 wherever the field holds a foot, so a fall is unchanged):
+			// the coordinate is whole from the first fragment that fetches it, and at the end of a
+			// cleared seam's gap that drew the mist's start as a straight pale line on a sample row.
+#ifdef ABL_BRINKLINE
 			edge_w = max(edge_w, 0.3 * (1.0 - smoothstep(-2.0, -1.0, fd)) * (1.0 - smoothstep(0.05, 0.6, curtain)));
+#else
+			edge_w = max(edge_w, 0.3 * (1.0 - smoothstep(-2.0, -1.0, fd)) * (1.0 - smoothstep(0.05, 0.6, curtain)) * foot_near);
+#endif
 		float cover = smoothstep(1.0 - en_c - edge_w, 1.0 - en_c + edge_w + min(px, COVER_PX_MAX) * 2.0, pattern);
 		// The floor of the energy under which nothing is white; the foot's fade is read down to a few
 		// percent (a gradual thinning into mottled mist, not a cut).
