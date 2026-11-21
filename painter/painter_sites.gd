@@ -1,39 +1,63 @@
 class_name PainterSites
 extends RefCounted
-## The small stones' sites of the contact field (PainterOcclusion's SITE marks; card
-## painter-terrain-marks): which body is one, and how one is recorded.
+## The small stones' dabs of the contact field (PainterOcclusion's SITE marks; card
+## painter-terrain-marks): which body is one, and how its dab is baked.
 ##
 ## A small stone is a body whose longer half is under HALF_M, no longer than ASPECT times its
-## narrower one and at least MIN_M in radius. The field cannot hold a mark its size (two texels
-## across, or less) nor keep three stones' marks apart, so such a body is not rasterized: every
-## texel near it records the stone itself (its middle, as an offset from the texel's own, its
-## radius and its foot's height), the one whose dab covers the texel most (a dab is taken as COVER
-## radii wide there), and the ground draws the dab from those numbers, at the stone, at any zoom.
-## A dab reaches at most GROW radii from its stone (painter_ground's SITE_FAR + SITE_LONG, its far
-## end under a low sun). Two distances past that, each a part of what the ground's shader does
-## with a texel:
-## - TIGHT_M: the edge's wobble and the step's width (0.06 m) and half a texel's diagonal. A stone
-##   within it of a texel's middle may draw in that texel (it is "tight" there). A texel one stone
-##   is tight in holds that stone with its radius positive, and the ground reads that one texel;
-##   where two or more are, the radius is negative and the ground reads the four texels round the
-##   pixel (each for the stone it holds).
-## - PAD_M: what a site is written within, and where it raises the field's seam channel to FLAG.
-##   The ground reads the field anyway, SEAM_LEAN_M (0.3) toward the sun and filtered, so that
-##   read being zero says no dab is near and the sites are not read at all. The flag is far under
-##   the seam's threshold: it draws nothing.
+## narrower one and at least MIN_M in radius. A coverage blob its size (main's: a rounded box
+## behind a band half a texel wide) is one or two texels of a 0.25 m field: an angular patch that
+## joins three stones into one. So a small stone's mark is baked as a DISTANCE instead. Its dab is
+## a brush's lobe about its footprint, the union of DISCS discs whose places and sizes come from
+## the stone's own position (an uneven outline, the same on every bake), and each texel of the
+## field's seam channel takes EDGE minus the dab's signed distance (negative inside) over BAND_M.
+## A distance is smooth where a coverage is a step, so the field's bilinear read rebuilds a lobe
+## 0.2 to 0.6 m across with its outline where the dab's is, and two dabs join exactly where their
+## outlines do. The ground's shader does nothing for it: EDGE is the threshold it already takes
+## the seam at, through the brush noise it already has, so a dab is the seam's own flat tone
+## behind the seam's own firm, wobbled edge, at no cost per pixel (the two structures before it,
+## a second texture of sites read per pixel, cost 0.03 to 0.09 ms a frame).
+##
+## Two corrections make a quarter-metre texel hold a mark its own size:
+## - The distance is a paraboloid's, (d * d - R * R) / (2 R) for a disc of radius R: the disc's
+##   own distance at its outline (slope 1), but without the cone's point at the middle, which a
+##   bilinear read flattens by a different amount wherever the stone sits among the texels.
+## - A bilinear read of a convex function is too high: by nothing at a texel's middle and by up to
+##   step * step / (4 R) between four of them, for that paraboloid, whatever the stone's place. So
+##   a disc is baked a little wide (its radius squared plus WIDEN of the texel's): what the ground
+##   shows then lies within about a twentieth of a metre of the disc either way. (With the mean
+##   error taken off whole, a third of the texel's square, a 0.1 m disc showed 0.17 m wide toward
+##   the texels' middles and small stones stood in a puddle.) The first disc is at least FIRST_M
+##   in radius, so it holds a texel's middle, or nearly, and every stone shows a dab.
+## The ground reads the field LEAN_M toward the sun (painter_ground SEAM_LEAN_M: a boulder's seam
+## leans to its shadow's side), which would set a stone's whole dab beside it, so a dab is baked
+## that far toward the sun (`sun`, the unit plan direction to it): it shows at the stone, the same
+## uneven lobe whatever the hour. PainterOcclusion bakes the sites again when the sun has turned.
 
 const HALF_M := 0.45
 const ASPECT := 1.6
 const MIN_M := 0.09
-const GROW := 1.95
-const TIGHT_M := 0.24
-const PAD_M := 0.54
-const COVER := 1.95
-const FLAG := 0.015625
-## Floats a texel, in the sites and in the field (PainterOcclusion.CHANNELS), and the field's
-## seam channel.
+## A dab's discs: each its middle's distance from the stone's (in the stone's radii) and its
+## radius (the same). The first lies under the stone (a body's radius is its box's, wider than its
+## foot); the others stand off it in directions the stone's place gives, so the dab shows as a
+## lobe on two sides of the stone and reaches REACH radii at most. (With the first 1.3 radii wide
+## and the others reaching 1.55, three stones side by side stood in one puddle wider than they.)
+const DISCS: Array[Vector2] = [Vector2(0.0, 0.95), Vector2(0.45, 0.8), Vector2(0.5, 0.65)]
+const REACH := 1.25
+const FIRST_M := 0.15
+const WIDEN := 0.125
+## The ground's threshold on the seam channel (painter_ground contact_at(): 0.45), the metres of
+## distance one unit of the channel stands for (the brush noise, 0.15 of the channel either way,
+## then moves a dab's edge by 0.045 m), and the ground's lean of the field's read.
+const EDGE := 0.45
+const BAND_M := 0.3
+const LEAN_M := 0.3
+## How far up and down from its foot a stone's dab shows: UP of its radius past half its height
+## (it lies on the ground the stone stands on, not down a face below it).
+const UP := 0.6
+## Floats a texel in the field (PainterOcclusion.CHANNELS), its seam channel and its foot's.
 const CHANNELS := 4
 const SEAM := 1
+const FOOT := 2
 
 
 ## The radius of the site a body of plan half extents `half` (metres) is, or 0 when it is none: too
@@ -54,59 +78,86 @@ static func holds(half: Vector2) -> bool:
 	return longer < HALF_M and longer <= ASPECT * minf(half.x, half.y)
 
 
-## Records a small stone (`stone`: its middle's world x and z, its radius, its foot's height) in
-## every texel of `span` whose middle lies within `reach` metres of it, and raises the seam
-## channel of `field` there to FLAG. `sites` and `field` are laid out alike: `width` texels a
-## row, `step` metres a texel, the first texel's corner at `origin`. A texel keeps one stone: a
-## tight one
-## before any other, then the one whose dab's edge (COVER radii from its middle) lies furthest
-## past the texel's middle, and the earlier mark on a tie, so the result is one function of the
-## sorted marks. Its radius is written negative where two or more stones are tight. (Nearest in
-## its own radii let a stone take every texel round a pebble beside it, and the pebble had no dab.)
-static func record(
-	sites: PackedFloat32Array,
+## Metres from the middle of a dab baked at a stone of radius `r` within which it may raise the
+## field: its outline and the band outside it (the correction widens a disc by less than the band's
+## curve narrows it), and a centimetre for the discs' rounding.
+static func reach(r: float) -> float:
+	return maxf(REACH * r, FIRST_M) + EDGE * BAND_M + 0.01
+
+
+## The foot of a stone whose foot stands at height `at` and whose body is `half_y` tall above and
+## below its middle, as the field holds one: the height times its weight, and the weight (one over
+## the dab's vertical reach).
+static func foot(at: float, r: float, half_y: float) -> Vector2:
+	var up := 0.5 * half_y + UP * r
+	return Vector2(at / up, 1.0 / up)
+
+
+## The discs of the dab of a stone at world (x, z) with radius `r`: three floats each, the disc's
+## middle (world x, z) and its radius. One function of the stone's place (to the millimetre).
+static func discs(x: float, z: float, r: float) -> PackedFloat32Array:
+	var h := hash(Vector2i(roundi(x * 1000.0), roundi(z * 1000.0)))
+	var turn := TAU * float(h & 0xFFFF) / 65536.0
+	var apart := 2.0 + 2.3 * float((h >> 16) & 0xFFFF) / 65536.0
+	var out := PackedFloat32Array()
+	for k in DISCS.size():
+		var off := DISCS[k].x * r
+		var a := turn + apart * float(k - 1)
+		out.append(x + off * cos(a))
+		out.append(z + off * sin(a))
+		out.append(maxf(DISCS[k].y * r, FIRST_M) if k == 0 else DISCS[k].y * r)
+	return out
+
+
+## Bakes the dab of a small stone (`stone`: its middle's world x and z, its radius) into the seam
+## channel of `field` (`width` texels a row, `step` metres a texel, the first texel's corner at
+## `origin`), inside the texels of `win`, keeping the maximum; a texel the dab raises takes the
+## stone's `foot` (foot()). The dab is baked LEAN_M toward `sun` (the unit plan direction to the
+## sun, zero for none), where the ground's leaning read finds it at the stone.
+static func bake(
 	field: PackedFloat32Array,
 	origin: Vector2,
 	width: int,
 	step: float,
-	span: Rect2i,
-	stone: Vector4,
-	reach: float
+	win: Rect2i,
+	stone: Vector3,
+	foot_of: Vector2,
+	sun: Vector2
 ) -> void:
-	var x := stone.x
-	var z := stone.y
 	var r := stone.z
-	var reach2 := reach * reach
-	var tight := GROW * r + TIGHT_M
-	for j in range(span.position.y, span.end.y):
-		var dz := z - (origin.y + (j + 0.5) * step)
+	var x := stone.x + sun.x * LEAN_M
+	var z := stone.y + sun.y * LEAN_M
+	var own := discs(stone.x, stone.y, r)
+	var count := DISCS.size()
+	# Per disc: its middle, half over its radius, and its radius squared plus the correction's
+	# share of the texel's.
+	var cx := PackedFloat32Array()
+	var cz := PackedFloat32Array()
+	var inv := PackedFloat32Array()
+	var edge2 := PackedFloat32Array()
+	for k in count:
+		cx.append(own[k * 3] + sun.x * LEAN_M)
+		cz.append(own[k * 3 + 1] + sun.y * LEAN_M)
+		inv.append(0.5 / own[k * 3 + 2])
+		edge2.append(own[k * 3 + 2] * own[k * 3 + 2] + step * step * WIDEN)
+	var far := reach(r)
+	var i0 := maxi(win.position.x, floori((x - far - origin.x) / step))
+	var i1 := mini(win.end.x - 1, floori((x + far - origin.x) / step))
+	var j0 := maxi(win.position.y, floori((z - far - origin.y) / step))
+	var j1 := mini(win.end.y - 1, floori((z + far - origin.y) / step))
+	for j in range(j0, j1 + 1):
+		var pz := origin.y + (j + 0.5) * step
 		var row := j * width
-		for i in range(span.position.x, span.end.x):
-			var dx := x - (origin.x + (i + 0.5) * step)
-			var d2 := dx * dx + dz * dz
-			if d2 >= reach2:
-				continue
+		for i in range(i0, i1 + 1):
+			var px := origin.x + (i + 0.5) * step
+			var q := INF
+			for k in count:
+				var dx := px - cx[k]
+				var dz := pz - cz[k]
+				q = minf(q, (dx * dx + dz * dz - edge2[k]) * inv[k])
+			var v := minf(EDGE - q / BAND_M, 1.0)
 			var at := (row + i) * CHANNELS
-			if field[at + SEAM] < FLAG:
-				field[at + SEAM] = FLAG
-			var d := sqrt(d2)
-			var is_tight := d <= tight
-			var had := absf(sites[at + 2])
-			var several := false
-			if had > 0.0:
-				var hx := sites[at]
-				var hz := sites[at + 1]
-				var had_d := sqrt(hx * hx + hz * hz)
-				var had_tight := had_d <= GROW * had + TIGHT_M
-				several = sites[at + 2] < 0.0 or (is_tight and had_tight)
-				var keep := had_d - COVER * had <= d - COVER * r
-				if had_tight != is_tight:
-					keep = had_tight
-				if keep:
-					if several:
-						sites[at + 2] = -had
-					continue
-			sites[at] = dx
-			sites[at + 1] = dz
-			sites[at + 2] = -r if several else r
-			sites[at + 3] = stone.w
+			if v > field[at + SEAM]:
+				field[at + SEAM] = v
+				field[at + FOOT] = foot_of.x
+				field[at + FOOT + 1] = foot_of.y

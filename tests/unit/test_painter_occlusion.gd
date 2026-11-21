@@ -44,7 +44,8 @@ func _marks(seed_value: int) -> Array:
 			continue
 		if k % 5 == 4:
 			var r := rng.randf_range(0.06, 0.4)
-			marks.append(PainterOcclusion.site(x, z, r, rng.randf_range(0.0, 3.0)))
+			var stands := PainterSites.foot(rng.randf_range(0.0, 3.0), r, 0.6 * r)
+			marks.append(PainterOcclusion.site(x, z, r, stands))
 			continue
 		var half := Vector2(rng.randf_range(0.1, 0.6), rng.randf_range(0.1, 0.6))
 		var reach := PainterOcclusion.solid_reach(half)
@@ -75,33 +76,26 @@ func test_a_partial_update_equals_a_whole_bake_bit_for_bit() -> void:
 	stone[3] = float(stone[3]) - 0.3
 	edited[14] = stone
 	edited.remove_at(19)
-	edited.append(PainterOcclusion.site(-1.1, 2.2, 0.2, 1.0))
+	edited.append(PainterOcclusion.site(-1.1, 2.2, 0.2, PainterSites.foot(1.0, 0.2, 0.1)))
 	var texels := host.update(origin, size, edited.duplicate())
 	assert_between(texels, 1, 96 * 96 / 3, "only the changed marks' rects are baked")
-	assert_true(host._field_moved and host._sites_moved, "both textures have changed marks")
 	var whole := PainterOcclusion.new()
 	whole.update(origin, size, edited.duplicate())
 	assert_true(host._data.to_byte_array() == whole._data.to_byte_array(), "bit for bit")
-	assert_true(host._sites.to_byte_array() == whole._sites.to_byte_array(), "the sites too")
-	# A stone alone moves: both again, since its flag lies in the field.
-	var nudged := edited.duplicate()
-	stone = stone.duplicate()
-	stone[2] = float(stone[2]) + 0.2
-	nudged[14] = stone
-	host.update(origin, size, nudged.duplicate())
-	assert_true(host._sites_moved and host._field_moved, "a site's flag is in the field")
-	# A boulder alone moves: the sites' texture is left alone.
-	moved = moved.duplicate()
-	moved[2] = float(moved[2]) + 0.2
-	nudged[nudged.find(edited[5])] = moved
-	host.update(origin, size, nudged.duplicate())
-	assert_true(host._field_moved and not host._sites_moved, "the sites are not uploaded again")
+	# The sun turns: the small stones' dabs are baked again where it sets them, and nothing else.
+	var sun := Vector2(0.6, 0.8)
+	texels = host.update(origin, size, edited.duplicate(), sun)
+	assert_between(texels, 1, 96 * 96 / 3, "the sites' rects alone")
+	assert_false(host._data.to_byte_array() == whole._data.to_byte_array(), "the dabs moved")
+	var turned := PainterOcclusion.new()
+	turned.update(origin, size, edited.duplicate(), sun)
+	assert_true(host._data.to_byte_array() == turned._data.to_byte_array(), "as a whole bake's")
+	assert_eq(host.update(origin, size, edited.duplicate(), sun), 0, "the same sun: nothing baked")
 	# And back again: what the dropped marks left is wiped.
 	host.update(origin, size, marks.duplicate())
 	var first := PainterOcclusion.new()
 	first.update(origin, size, marks.duplicate())
 	assert_true(host._data.to_byte_array() == first._data.to_byte_array(), "and back")
-	assert_true(host._sites.to_byte_array() == first._sites.to_byte_array(), "the sites too")
 
 
 func test_nothing_is_baked_when_no_footprint_moved_whatever_their_order() -> void:
@@ -262,7 +256,7 @@ func test_a_small_stone_takes_a_mark_of_its_own_size_at_its_foots_height() -> vo
 	assert_true(grain.is_empty(), "no mark at all")
 
 
-func test_small_stones_are_sites_each_texel_holding_the_stone_nearest_in_its_own_radii() -> void:
+func test_small_stones_are_sites_each_a_dab_in_the_seam_at_its_foots_height() -> void:
 	var host := PainterOcclusion.new()
 	var field := _field(host)
 	# Two stones 0.5 m across and 0.6 m apart, their feet at 5 m, and a pebble beside the second.
@@ -274,38 +268,65 @@ func test_small_stones_are_sites_each_texel_holding_the_stone_nearest_in_its_own
 	for mark: Array in marks:
 		assert_eq(mark[0], PainterOcclusion.SITE, "a site, not a box")
 	_lay(host, field, marks)
-	# Nothing of a stone is drawn in the field: only the flag that says a site is near.
-	assert_eq(_at(host, field, -0.3, 0.1, CORE), PainterSites.FLAG, "the flag alone")
-	assert_eq(_at(host, field, -0.3, 0.1, POOL), 0.0)
-	# The texel whose middle is (-0.375, 0.125) holds the first stone, the one at (0.375, 0.125)
-	# the second: each its stone's middle from the texel's own, its radius, its foot's height. Both
-	# stones' dabs may show in either texel, so the radius is negative (read the four texels).
-	var first := _site_at(host, -0.3, 0.1)
-	assert_almost_eq(first[0], 0.075, 1.0e-5)
-	assert_almost_eq(first[1], -0.125, 1.0e-5)
-	assert_almost_eq(first[2], -0.25, 1.0e-5)
-	assert_almost_eq(first[3], 5.075, 1.0e-5, "between the stone's underside and its middle")
-	var second := _site_at(host, 0.3, 0.1)
-	assert_almost_eq(second[0], -0.075, 1.0e-5)
-	# A texel inside the stone's dab is the stone's though the pebble is nearer; the next one,
-	# outside it, is the pebble's (its dab's edge is the nearer), so the pebble keeps a dab.
-	assert_almost_eq(_site_at(host, 0.63, 0.1)[2], -0.25, 1.0e-5)
-	var pebble := _site_at(host, 0.9, 0.1)
-	assert_almost_eq(pebble[2], -0.1, 1.0e-5)
-	assert_almost_eq(pebble[0], -0.175, 1.0e-5)
-	# Where one stone alone may show, its radius is positive: the ground reads that one texel.
-	assert_almost_eq(_site_at(host, -0.9, 0.1)[2], 0.25, 1.0e-5, "0.6 m off: the first alone")
-	# A stone is written, and flagged in the field, within its reach and no further.
-	assert_eq(_site_at(host, -1.3, 0.1)[2], 0.0, "a metre off: none")
-	assert_eq(_at(host, field, -1.3, 0.1, CORE), 0.0, "and no flag")
+	# A stone's dab is in the seam alone, over the ground's threshold under the stone.
+	assert_gt(_at(host, field, -0.3, 0.1, CORE), PainterSites.EDGE, "a seam under the stone")
+	assert_eq(_at(host, field, -0.3, 0.1, POOL), 0.0, "and no pool")
+	var weight := _at(host, field, -0.3, 0.1, PainterOcclusion.FOOT_CH + 1)
+	assert_gt(weight, 0.0, "the dab knows its height")
+	var foot := _at(host, field, -0.3, 0.1, PainterOcclusion.FOOT_CH) / weight
+	assert_almost_eq(foot, 5.075, 1.0e-4, "between the stone's underside and its middle")
+	assert_between(1.0 / weight, 0.15, 0.3, "and reaches about the stone's own size up and down")
+	# It is written within its reach and no further.
+	assert_eq(_at(host, field, -1.4, 0.1, CORE), 0.0, "a metre off: none")
+	# The sun leans the ground's read of the field, so the dab is baked that far toward it.
+	var lone := _field(host)
+	host._sun = Vector2(1.0, 0.0)
+	var mark := PainterOcclusion.site(0.125, 0.125, 0.2, PainterSites.foot(0.0, 0.2, 0.1))
+	_lay(host, lone, [mark])
+	assert_gt(_at(host, lone, 0.375, 0.125, CORE), _at(host, lone, 0.125, 0.125, CORE))
+	assert_eq(_at(host, lone, -0.375, 0.125, CORE), 0.0, "nothing on the side away from the sun")
 
 
-## The site held by the texel under world (x, z): [dx, dz, radius, foot].
-func _site_at(host: PainterOcclusion, x: float, z: float) -> Array:
-	var i := int((x - host._origin.x) / PainterOcclusion.TEXEL_M)
-	var j := int((z - host._origin.y) / PainterOcclusion.TEXEL_M)
-	var at := (j * host._size.x + i) * PainterOcclusion.CHANNELS
-	return [host._sites[at], host._sites[at + 1], host._sites[at + 2], host._sites[at + 3]]
+func test_a_dab_read_back_from_the_field_is_the_dabs_size_wherever_the_stone_sits() -> void:
+	# The ground reads the seam bilinearly and takes it at EDGE. Whatever the stone's place among
+	# the texels, what that shows is about the dab's own area (the union of its discs), and a
+	# stone of the smallest radius always shows.
+	var host := PainterOcclusion.new()
+	for r: float in [0.2, PainterSites.MIN_M]:
+		for k in 5:
+			var at := Vector2(0.07 * k - 0.11, 0.045 * k + 0.02)
+			var field := _field(host)
+			_lay(host, field, [PainterOcclusion.site(at.x, at.y, r, PainterSites.foot(0.0, r, r))])
+			var own := PainterSites.discs(at.x, at.y, r)
+			var shown := 0
+			var true_area := 0
+			for j in 60:
+				for i in 60:
+					var p := at + Vector2(i - 29.5, j - 29.5) * 0.02
+					if _read(host, field, p, CORE) >= PainterSites.EDGE:
+						shown += 1
+					for d in 3:
+						var c := Vector2(own[d * 3], own[d * 3 + 1])
+						if p.distance_to(c) <= own[d * 3 + 2]:
+							true_area += 1
+							break
+			assert_gt(shown, 0, "the dab shows (r %.2f, place %d)" % [r, k])
+			if r == 0.2:
+				var share := float(shown) / float(true_area)
+				assert_between(share, 0.5, 1.2, "about its own area (place %d)" % k)
+
+
+## The bilinear read of channel `ch` of `field` at world `p`, as the ground's shader takes it.
+func _read(host: PainterOcclusion, field: PackedFloat32Array, p: Vector2, ch: int) -> float:
+	var g := (p - host._origin) / PainterOcclusion.TEXEL_M - Vector2(0.5, 0.5)
+	var i := floori(g.x)
+	var j := floori(g.y)
+	var f := g - Vector2(i, j)
+	var w := host._size.x
+	var c := PainterOcclusion.CHANNELS
+	var a := lerpf(field[(j * w + i) * c + ch], field[(j * w + i + 1) * c + ch], f.x)
+	var b := lerpf(field[((j + 1) * w + i) * c + ch], field[((j + 1) * w + i + 1) * c + ch], f.x)
+	return lerpf(a, b, f.y)
 
 
 func test_a_boulder_keeps_its_seam_and_a_stone_gets_one_its_size() -> void:

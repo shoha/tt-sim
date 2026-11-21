@@ -2800,8 +2800,46 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
 `item1_*`, `item2_*`, `item3_*`, `owner/`, `timing/`, `captures/`, `jobs/`); handoff
 `docs/plans/handoffs/painter-terrain-marks.md`.
 
-- **Finish round (card painter-terrain-marks-finish, 2026-11-21; where it differs from the
-  bullets below, this one is current).** Evidence in `finish/` of the same folder.
+- **Round 3 (card painter-terrain-marks-3, 2026-11-21; this one is current: the sites texture,
+  its flag, `site_dab()` and `f_cast` of the bullets below are gone).** Evidence in `round3/` of
+  the same folder.
+  - *Structure.* The ground's shader does nothing per pixel for a small stone: `contact_at()` is
+    main's again. A small stone's dab is baked on the CPU into the seam channel the ground
+    already reads (`PainterSites.bake`, called from the contact field's own bake, so a partial
+    bake still equals a whole one bit for bit), as a DISTANCE, not a coverage: the channel takes
+    `EDGE` (0.45, the shader's threshold) minus the dab's signed distance over `BAND_M` (0.3 m),
+    so the field's bilinear read rebuilds the outline and the shader's own noise and firm step
+    make it the seam's flat mark. The dab is the union of three discs placed by a hash of the
+    stone's position (0.95, 0.8 and 0.65 radii wide, the last two 0.45 and 0.5 radii off the
+    middle; the first at least 0.15 m). Each disc's distance is a paraboloid's (no point at the
+    middle for the filter to flatten) and is baked wide by an eighth of the texel's square (a
+    bilinear read of a convex value is too high between texels).
+  - *The sun.* The shader reads the field 0.3 m toward the sun (`SEAM_LEAN_M`), which would set
+    a 0.2 m stone's whole dab beside it (main's displaced patch). So a dab is baked 0.3 m toward
+    the sun and shows at the stone, the same shape at every hour. `PainterOcclusion` watches
+    `FoliageLight.last_sun` each frame and queues a rebuild when the plan direction has turned
+    by more than about 6 degrees, or by anything once it has stood still 12 frames. Cost of one
+    turn: the sites' rects, or the whole field when more than 48 stones moved: 18 ms on the
+    falls map (104 sites), 28 ms on the torture map (458 sites), once, debounced.
+  - *Cost, measured.* GPU in-run A/B against main (7 rounds, 90 frames): f1_o +0.025 and -0.029
+    ms (two runs; noise both ways), torture edge -0.035, -0.023 and -0.024, torture wide -0.027
+    and -0.015. Edits: placed boulder 25.9 ms (main 26.6), move 5.0 and 4.4 (4.8), stroke-end
+    rebuild 3.9 and 3.7 (3.9). Whole bake 14 ms (falls) and 22 ms (torture).
+  - *What a 0.25 m distance channel holds, and does not.* The mark is firm, flat, the seam's
+    tone, at the stone, uneven. Its outline is FACETED: straight runs about a texel long with
+    corners, since a bilinear patch cannot carry the curve of a 0.2 m disc; and stones that
+    touch share one mark (round 2 drew one oval per stone). If that is not good enough, the
+    next structure with no per-pixel cost is the dabs as flat triangles on the ground; a finer
+    field costs bake time and upload on every edit.
+  - *The skirt.* A form's end varies across it by the brush's wobble the shader already has
+    (`warp`, stretched, `SKIRT_END_VARY` 0.25 either way): no noise call and no varying of its
+    own. `f_cast` is gone (it did not remove the dashes). Remaining defect: the dashes and
+    streaks under the +z walls at 17.5 h, the map's cast shadow received by the skirt mesh,
+    which still stands as a wall past the paint's end. The two real fixes (handoff, "Round 3"):
+    end the terrain's cast shadow where forms end, or a Painted-only skirt height that relaxes
+    to the base level.
+- **Finish round (card painter-terrain-marks-finish, 2026-11-21; superseded by round 3 where
+  they differ).** Evidence in `finish/` of the same folder.
   - *The dab is the seam's own mark.* `site_dab()` gives each stone a value that is positive
     inside an oval along the sun's line: its sunward end `SITE_NEAR` 0.85 radii from the stone's
     middle (under the stone), its far end `SITE_FAR` 1.5 radii out on the shaded side plus
