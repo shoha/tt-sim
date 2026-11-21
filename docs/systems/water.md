@@ -226,7 +226,9 @@ maps.
   Authoring).
 - **Waterfalls:** a step that is a fall (`WaterFalls.is_fall`) gets no cascade sheet; the
   lip tuck, the curtain / foam ring / mist mesh (`AuthoredWater-falls`), its shader and the
-  shared fall material are in [waterfalls.md](waterfalls.md) (Runtime).
+  shared fall material are in [waterfalls.md](waterfalls.md) (Runtime). Under the Painted look
+  only the mist of that mesh is drawn, on the painted water's one clock
+  ([water_field.md](water_field.md), "the master clock").
 - **Shallows in the shader (P4-5):** the refraction offset grows from nothing at the
   waterline over `refraction_depth_fade` (0.3 m of view depth): at full strength in
   millimetres of water it smeared the lit bed dressing of a steep bank facing the camera (an

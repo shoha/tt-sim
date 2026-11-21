@@ -225,7 +225,10 @@ whole grid and three rects.
 The shader's foot rules, all smooth functions of it (no rule ends on a line): the lower face's white
 floor ramps in over `FOOT_FACE_M` above the foot (its line broken by a slow noise), the tongues below
 the foot are a smooth value noise across the flow (`FOOT_TONGUE_FREQ`, length up to `FOOT_TONGUE_M`)
-that drifts on the master clock (`FOOT_DRIFT_S`), the veil (a milky glaze that tints and thickens the
+that drifts on the master clock (`FOOT_DRIFT_S`; the one clock is `PainterWater.clock_t`, handed
+each frame as `p_clock` to the field surface's material AND to the fall material whose mist puffs
+step on it since 2026-11-21, so a render job that sets it with the time scale at 0 pins every moving
+thing of the painted water: `tools/render_jobs/README.md`), the veil (a milky glaze that tints and thickens the
 water, never covers it) reaches `FOOT_VEIL_M` and the white's edge is widened over its whole reach, so
 a calm pool shows blue at the foot. The pool's tint floor follows the water's own depth
 (`POOL_DEPTH_K` column per metre past 6 cm) so a thin stream pool reads deep and a lip stays shallow.
@@ -373,6 +376,26 @@ shader's `DBG_DATA` and `DBG_LAP` views and with headless dumps of the channels.
   cause (the block stays with the plain bicubic distance), nor is the bank-shed water the wash
   hides (measuring `shore` to the visible waterline instead moves the block a little and changes
   4 to 9 percent of the pixels of the falls frames).
+  Measured again 2026-11-21 (card painter-water-lap, nothing built): at the two corpus blocks
+  the middle row and column of a field dump show a bank that is gentle for a whole metre, not one
+  sample. `f_pond_over_stream`, across the bank at z = -33.70: depth 0.036, 0.117, 0.245, 0.392,
+  0.539 at shore 0.22, 0.46, 0.71, 0.97, 1.22 (depth over distance 0.16 to 0.44, all under the
+  share's start of 0.5). `f_two_inflows`, along the wedge's end face at x = 10.90: seven samples
+  3 to 4 cm deep in a straight row (z = -36.76 to -35.26) at shore 0.14 to 0.20, then 0.23 m
+  deep; across it 0.041, 0.109, 0.186, 0.279 at shore 0.20, 0.45, 0.70, 0.95. The first wet row
+  therefore sits at a distance inside the range of the lap's threshold (0.05 to 0.26 m, set by
+  the bite noise, a blob about 0.4 m across), with the crisp edge of share 0 and a distance that
+  is flat along a straight face: where the bite is high the white covers the first row, where it
+  is low it stops short, and the patch between is the block. One row and one column were read
+  per site, so a bank of share 1 a few samples along the shoreline is not ruled out (`DBG_LAP`
+  shows share above 0 toward the streams' own banks). Three shader structures for the share were
+  drawn beside the shipped one (`lap_structures_corpus.png`): the slope from the means of the
+  0.4 m cross the smoothed waterline already reads (no new fetch) and the larger of that and the
+  local slope both leave the blocks as they are; the slope from a cross twice as wide removes
+  the block at the first site and weakens it at the other two, but thins the lap to a faint
+  band, adds four fetches near every shore and changes 2.2 to 4.2 percent of the pixels of every
+  frame by more than 8 levels (f1_o 2.6 percent, max 155). None won. Not tried: the bite's range
+  or its frame (it is isotropic in the world, so a blob is as long along the shore as across).
 - A mouth's bands and a ring's closure showed no step on the sample grid: soft contours of the
   depth through the wash's bands.
 
