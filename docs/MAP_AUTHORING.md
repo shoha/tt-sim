@@ -293,6 +293,10 @@ about 2.5 m upstream of the lip; a river stroke drawn uphill whose ribbon chevro
 downhill; and in play a token wading in the plunge pool with its submerged ring and another
 in the upper pool under the bridge. Unit-tested (`test_water_falls.gd`, `test_water_carve.gd`,
 `test_water_fall_mesh.gd`, `test_authored_water.gd`, `test_water_tool.gd`,
+(a river drawn over a rise, a wall, a mound or a hill, is one river along the drawn line that
+CUTS THROUGH it, card painter-water-cut: water never climbs, so the carve lowers the rise to the
+water above it with sloped, uneven banks, and the tool says so once the stroke lands;
+`systems/water_field.md` "A river cuts through a rise"),
 `test_crossings.gd`, `test_bridge_tool.gd`, `test_glb_utils_water.gd`): the rule and the plan
 (a tier stroke falls once at the brink, a hill gives spaced falls of a tier each, a gentle
 slope plans as in v0.1.29, the pool widens below the face and not the face, uphill is

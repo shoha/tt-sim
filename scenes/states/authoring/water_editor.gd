@@ -29,9 +29,10 @@ extends RefCounted
 ## or an autosave waits, and finish_work() (from AuthoringEditor.finish_height_work(), which
 ## every other edit and undo call first) lands it at once.
 
-## A conditioned pond edit landed: what it said about the stream ends beside it (WaterHints
-## records, possibly none). The pond's compute runs on a worker, so the tool listens for it.
+## A conditioned pond edit, or a river stroke, landed: what its plan said (WaterHints records,
+## possibly none). The compute runs on a worker, so the tool listens and says it once it is true.
 signal pond_hints_landed(hints: Array)
+signal river_hints_landed(hints: Array)
 
 ## Why the last carve_river() or paint_pond_begin() made nothing (last_refusal), for the tool.
 const REFUSED_NO_CARVE := &"no_carve"
@@ -724,6 +725,7 @@ func _land() -> void:
 				last_report["dropped_m"] = result.dropped_m
 			else:
 				doc.water_bodies = WaterEdit.with_bodies(doc, made)
+			river_hints_landed.emit(last_hints)
 			stroke = HeightStroke.begin(doc, HeightBrush.LOWER)
 			var goals: Dictionary = result.goals
 			stroke.lower_to(goals.rect, goals.goals)

@@ -6,14 +6,17 @@ extends RefCounted
 ## works on a snapshot of the document and returns what the document would become; nothing is
 ## changed until the caller (WaterEditor.refit_water, one undoable history entry; a render job)
 ## lands it. In order:
-##  1. a run of reaches whose levels climb downstream (ascending_runs(): two or more reaches that
-##     never descend and rise more than REVERSE_MIN_M) was stored the wrong way round: it is
-##     reversed by the sign of its slope (points, widths and skirt courses turned, the reaches'
-##     order flipped), never lowered by metres (the canonical map's three st chains, 1.2 m up);
+##  1. a stroke whose stored levels climb downstream (WaterConditioner.climbs) is noted (the hint
+##     `cut_through`): it is resolved as the plan resolves a drawn line over a rise (card
+##     painter-water-cut), by cutting. No part of a stream is ever turned round (until that card a
+##     run of climbing reaches was reversed, which left a stream flowing two ways from a crest);
 ##  2. the river and pond tree (WaterPorts.graph) is solved (WaterConditioner.solve_tree): water
-##     only lowered, steps under the dead band dropped onto the level below, ponds never moved;
+##     only lowered (a reach is at most the water upstream of it: the running minimum along a
+##     stroke), steps under the dead band dropped onto the level below, ponds never moved;
 ##  3. every stroke is carved again at its new levels, in document order, so the banks follow the
-##     water (the doc-level solve alone left perched edges, spike note (e)).
+##     water (the doc-level solve alone left perched edges, spike note (e)) and a lowered reach
+##     gets its cut (WaterCarve.cut_stations).
+## ascending_runs() and reverse_chain() are the older rule's parts, kept for tools and tests.
 ## Loaded by path from WaterEdit.refit_document (test_boot_graph).
 
 ## A run of reaches is reversed when its levels climb downstream by more than this (metres).
@@ -21,30 +24,31 @@ const REVERSE_MIN_M := 0.3
 
 
 ## What re-fitting `doc`'s water would do: {"bodies" (Array[WaterBody], new copies in the
-## document's order), "heights" (the ground after the strokes' new carve), "reversed" (strokes
-## turned round), "changed" (bodies whose level moved), "moved" (largest level change, metres),
-## "hints" (WaterHints records: reversed_run per reversed stroke), "before" and "after" (the
+## document's order), "heights" (the ground after the strokes' new carve), "reversed" (always 0:
+## no stroke is turned round), "cut" (strokes whose stored climb is cut through), "changed"
+## (bodies whose level moved), "moved" (largest level change, metres),
+## "hints" (WaterHints records: cut_through per such stroke), "before" and "after" (the
 ## WaterPorts.audit of the document and of the result)}.
 static func refit(doc: MapDocument) -> Dictionary:
 	var work := WaterMeshBuilder.snapshot(doc)
 	var before: Dictionary = WaterPorts.audit(doc)
 	var hints: Array[Dictionary] = []
-	var reversed := 0
+	var cut := 0
 	for chain in RiverProfile.strokes(work.water_bodies):
 		var typed: Array[WaterBody] = []
 		typed.assign(chain)
 		var levels := PackedFloat64Array()
 		for body in typed:
 			levels.append(body.level_m)
-		for run in ascending_runs(levels):
-			var part := typed.slice(run.x, run.y + 1)
-			reverse_chain(part)
-			reversed += 1
-			hints.append(
-				WaterHints.make(
-					&"reversed_run", part[0].points[0], [] as Array[StringName], {"reaches": part.size()}
-				)
-			)
+		# A stored stroke that climbs is resolved as the plan resolves a drawn one (WaterEdit
+		# cut_through): its direction stays, the solve below lowers the climbing reaches onto the
+		# water above them and the re-carve cuts the rise.
+		var found: Array[Dictionary] = WaterConditioner.climbs(levels)
+		if not found.is_empty():
+			cut += 1
+			var detail := {"cut_m": float(found[0].rise), "rises": found.size()}
+			var at: Vector2 = typed[int(found[0].from)].points[0]
+			hints.append(WaterHints.make(&"cut_through", at, [] as Array[StringName], detail))
 	var solved: Dictionary = WaterPorts.condition_doc(work)
 	var levels: PackedFloat64Array = solved.levels
 	var originals := doc.water_bodies
@@ -62,7 +66,8 @@ static func refit(doc: MapDocument) -> Dictionary:
 	return {
 		"bodies": all,
 		"heights": work.heights,
-		"reversed": reversed,
+		"reversed": 0,
+		"cut": cut,
 		"changed": changed,
 		"moved": moved,
 		"hints": hints,

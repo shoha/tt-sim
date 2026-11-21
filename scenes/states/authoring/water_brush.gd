@@ -151,6 +151,38 @@ static func ground_reader(editor: AuthoringEditor) -> Callable:
 		return WaterEdit.water_ground_at(editor.document, at)
 
 
+## A drawn river `line` (world XZ) with its points on a rise moved to where the author pointed
+## once the rise is cut (card painter-water-cut). The pointer's ray met the top of the rise, short
+## of where it meets the ground the cut leaves, so the river as carved swerved away from the line
+## on the screen at every wall (by the wall's height in a 45 degree view). Each point standing
+## over the lowest ground upstream of it (in the flow's direction, flow_line(); `ground_of` the
+## plan's reader) by more than half WaterCarve.CUT_FROM_M moves along its ray's ground track
+## (`slant_of`: BrushTool.ray_slant, world XZ per metre of height at a world point) by that rise,
+## in full from CUT_FROM_M; `scale` is world metres per map metre. A line over ground that only
+## descends, or seen from above, is returned as it is. Pure.
+static func through_rises(
+	line: PackedVector2Array, ground_of: Callable, slant_of: Callable, scale: float = 1.0
+) -> PackedVector2Array:
+	var out := line.duplicate()
+	var count := line.size()
+	if count < 2 or not slant_of.is_valid():
+		return out
+	var ground := PackedFloat32Array()
+	for p in line:
+		ground.append(ground_of.call(p))
+	var uphill := WaterFallPlan.is_uphill(ground)
+	var low := INF
+	for k in count:
+		var i := count - 1 - k if uphill else k
+		low = minf(low, ground[i])
+		var rise := (ground[i] - low) * scale
+		var share := smoothstep(0.5 * WaterCarve.CUT_FROM_M, WaterCarve.CUT_FROM_M, rise)
+		if share > 0.0:
+			var slant: Vector2 = slant_of.call(Vector3(line[i].x, ground[i] * scale, line[i].y))
+			out[i] = line[i] + slant * rise * share
+	return out
+
+
 ## The length of a polyline (metres; StrokePath.line_length). Pure.
 static func line_length(points: PackedVector2Array) -> float:
 	return StrokePath.line_length(points)
@@ -220,12 +252,15 @@ func hit_past_edge(origin: Vector3, direction: Vector3) -> Vector3:
 
 
 ## Carves the river drawn so far (the release) with half-width `half_width`. Returns false
-## when refused (refusal() says why; a line too short to carve is silently dropped).
-func carve(editor: AuthoringEditor, half_width: float) -> bool:
+## when refused (refusal() says why; a line too short to carve is silently dropped). `slant_of`
+## (BrushTool.ray_slant; none in a test that gives the line itself) lets the points drawn on a
+## rise land where the author pointed once it is cut (through_rises()).
+func carve(editor: AuthoringEditor, half_width: float, slant_of: Callable = Callable()) -> bool:
 	_refusal = ""
 	var line := gesture.finish()
 	if line.is_empty():
 		return true
+	line = through_rises(line, ground_reader(editor), slant_of, editor.map_scale())
 	var id := editor.water.carve_river(
 		line, PackedFloat32Array([half_width]), depth as WaterBody.Depth, speed
 	)
@@ -394,27 +429,30 @@ func dabbed(brush: BrushTool) -> void:
 ## Carves a river being drawn (a refusal says why).
 func end(brush: BrushTool) -> void:
 	_hint = ""
-	if drawing and brush.editor != null and not carve(brush.editor, radius(brush.get_radius())):
+	var slant := brush.ray_slant
+	if drawing and brush.editor != null and not carve(brush.editor, radius(brush.get_radius()), slant):
 		brush.refused.emit(refusal())
 	elif _hint != "":
-		# The conditioner kept something as drawn or could not fix it: said, never blocking.
-		brush.refused.emit(_hint)
+		# The conditioner cut through a rise, kept something as drawn or could not fix it: said,
+		# never blocking, and once the stroke has landed (what it says is then true of the map).
+		_say_hints(brush, brush.editor.water.river_hints_landed)
 	elif shape == Shape.POND and not brush.press_ctrl and brush.editor != null:
-		_say_pond_hints(brush)
+		_say_hints(brush, brush.editor.water.pond_hints_landed)
 	reset()
 
 
-## Says what the pond just dug found beside it (a head above it, an end a fall above it),
-## like a river's hints. The pond is computed on a worker, so the words come when it lands.
-func _say_pond_hints(brush: BrushTool) -> void:
+## Says what the edit just made has to say (a river: it cut through a rise, an end was kept as
+## drawn; a pond: a head above it, an end a fall above it). The edit is computed on a worker, so
+## the words come when it lands (`landed`: WaterEditor.river_hints_landed or pond_hints_landed).
+func _say_hints(brush: BrushTool, landed: Signal) -> void:
 	var water := brush.editor.water
 	var said := func(hints: Array) -> void:
 		var text: String = load(WaterEdit.HINTS_PATH).toast_text(hints)
 		if text != "":
 			brush.refused.emit(text)
 	if water.is_working():
-		if not water.pond_hints_landed.is_connected(said):
-			water.pond_hints_landed.connect(said, CONNECT_ONE_SHOT)
+		if not landed.is_connected(said):
+			landed.connect(said, CONNECT_ONE_SHOT)
 	else:
 		said.call(water.last_hints)
 

@@ -435,11 +435,81 @@ Tests: `test_water_conditioner.gd` (the units, the fuzzer, the tables), `test_wa
 pipeline.gd` (plan_river on and off, the report, hints, the editor's undo and redo and worker,
 `refit_document` and `refit_water`, water does not climb).
 
+## A river cuts through a rise (card painter-water-cut, look-pending)
+
+The owner's rule (2026-11-22, on a line drawn across three walls): "It should cut through the
+walls". A drawn river always arrives as ONE river along the line the author drew; where the ground
+would make it climb, the tool carves the ground. Water still never climbs (next section's rule
+stands); what changed is how a climbing plan is resolved: by cutting, not by dropping or splitting
+parts. Switch `WaterEdit.cut_through` (true in every build; false brings back the cut limit, and
+`stop_at_rise`, now false by default, then says whether a blocked line is split or stored as drawn).
+
+- **The profile.** With no cut limit the plan is always the conditioned one, and the conditioner's
+  fit already is the cut profile: the running minimum along the line. The reach that meets a rise
+  runs flat through it at the level of the water above it; the ground's own drops beyond stay the
+  plan's steps and falls (cut, then fall: a wall on a slope never becomes a staircase of cuts).
+  Reaches are flat by the water model, so there is no grade through a cut. `report.rise_cut` is the
+  deepest rise on the line (ground over the lowest ground upstream; `condition_ranges`' `max_cut`
+  under-reports, a mound's far side counts as a fall's face), `report.cut` that it passes
+  `WaterEdit.CUT_SAID_M` (0.75 m).
+- **The direction.** Unchanged: the first point is the source unless the last point's ground stands
+  a fall's height (0.75 m) or more over the first's, then the line is turned round
+  (`WaterFallPlan.is_uphill`). A line drawn from low ground up a hill therefore runs down it from
+  the top and is cut only where it still has to climb; the other rule (the first point is always
+  the source) would dig the whole line as a trench at its low start's level, as deep as the hill.
+- **The banks** (`WaterCarve.cut_stations`, `river_goals`; switch `WaterCarve.cut_banks`). Every
+  0.5 m along the course the carve reads the rise: the centreline's ground over the lowest ground
+  upstream and over the bank level. From 0.75 m of rise the bank slope leaves the class's (0.33 to
+  0.6) for 1.1 at 2 m and more (part rock by the cliff rule), the share spread 3 m along the course
+  so an oblique wall is broken through; the reach grows with the rise (rise / slope + wander +
+  fade, up to 16 m, a rise of about 13 m) so the bank meets the ground before the fade (with the
+  fixed 6 m reach a 3 m wall got a 1.2 shoulder and an 8 m wall a 4.5 slot wall); and the bank
+  wanders 0.7 m in and out by two octaves of the map's value noise (none at the waterline), so no
+  edge of a cut is ruled. A stroke with no rise over 0.75 m takes the ordinary path bit for bit
+  (`test_cut_banks_stand_sloped_and_uneven_and_leave_other_strokes_alone`). Across the
+  crest of a 6 m wall the steepest step between samples is under 2 against over 3 with the
+  ordinary banks (the test asserts both and prints the numbers).
+- **What a cut looks like** (`cuts_sheet.png`): 1 m, a gentle breach with soft earth banks; 3 m,
+  a V breach with sloped tan and brown ends, wider at the top, uneven edges; 8 m, a notch about
+  10 m wide each side whose sides are one broad tan slope (plain); a mound and a long hill, a
+  channel with wandering dirt banks; at the map edge the cut runs to the edge and the river off it.
+  Past about 13 m of rise the reach is capped and the bank ends in the fade's steeper wall.
+- **Things in the way.** Scatter and rocks follow the existing carve's rules; other water crossed
+  joins as before; walls, structures and crossings are not cut: they follow the lowered ground in
+  the stroke's history entry (`WaterEditor._finish`), as with any carve. Nothing stops a river at a
+  structure (not built: a river that stops at a building and says so).
+- **Ends.** An end is joined to water beside it only when that does not dig: if the joined line's
+  `rise_cut` is more than `WaterEdit.JOIN_CUT_M` (0.5 m) over the drawn line's, the line stays as
+  drawn and the end is said (`perched_head`): a head on a plateau, snapped into the pond at its
+  foot, would have dug a canal through the plateau.
+- **Undo.** One stroke, one history entry (the height diff and the water model), as every carve.
+  Erasing a river never restored its carve, and a cut is the same: the erased river leaves its cut.
+- **The hint.** `cut_through`, said when the stroke has landed (`WaterEditor.river_hints_landed`;
+  the Water tool listens as it does for a pond), so every river hint is now said after the worker
+  has finished, not at plan time.
+- **Re-fit.** `WaterRefit.refit` no longer reverses a run of climbing reaches: the tree solve lowers
+  them onto the water above (the running minimum) and the re-carve cuts the rise; `reversed` is
+  always 0, `cut` counts the strokes, hint `cut_through`.
+- **The pointer.** The pointer's ray meets the TOP of a rise, short of where it meets the ground the
+  cut leaves (by the rise times the ray's slant: 2.5 m per metre in the authoring view), so the
+  river as carved would leave the line on the screen at every wall. `WaterBrush.through_rises`
+  moves each drawn point on a rise along its ray's ground track (`BrushTool.ray_slant`, checked
+  against the camera: 0.00 px) by its rise. Render job `stroke` steps aim at the lifted map point
+  instead, so a job that must land a straight line over a rise uses `water.gd carve`.
+- **Left.** Reaches that the fit levelled keep their boundaries at the old lips (the verdict map's
+  line over the walls is four reaches at one level); the up-face of a rise is subdivided like a
+  drop (many points); the stretch below a rise steps down in a pale riffle band; `through_rises`
+  has no end-to-end capture with a real pointer.
+
+Evidence: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final124_water_cut/`.
+
 ## Water does not climb (card painter-water-climb, look-pending)
 
 The rule: along a stored stroke, in its flow direction, no reach stands over the lowest reach
 upstream of it. Whatever the author draws becomes a river that descends, a pool, a fall or an honest
-end, never water standing up a rise.
+end, never water standing up a rise. Since card painter-water-cut a line that would climb is CUT
+THROUGH the rise (section above); the split described below is what `WaterEdit.cut_through = false`
+with `stop_at_rise = true` still does, and `refit` no longer reverses.
 
 Where the climb came from (measured 2026-11-21). The only leak was a BLOCKED plan: the running
 minimum asks the carve to cut a ridge down to the pool before it, `condition_ranges` refuses a cut
