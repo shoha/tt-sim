@@ -70,7 +70,8 @@ The water it belongs to is [water.md](water.md); the bridge refusal is in
   (`WaterFallPlan.plan_lips`), shape (`WaterFallPlan.shape_line`: lips, foot and plunge points,
   subdivision), reach split. The plunge point is data, not carve: below each lip
   `WaterFallPlan.shape_line()` inserts a point of the channel's own width at the carved face's
-  foot (`WaterCarve.fall_foot`) and a point `WaterFallPlan.PLUNGE_WIDEN` 1.35 wider half the
+  foot (`WaterCarve.fall_foot`) and a point `WaterFallPlan.PLUNGE_WIDEN` 1.35 wider (never past
+  `WaterBody.MAX_HALF_WIDTH_M`, which the document writer enforces) half the
   plunge length past it (`WaterFalls.plunge_length()`: 1.5 m per metre of drop, clamped 1.5 to
   4 m), neither when the widened point would run into the next lip or the end; so the face
   keeps the stroke's width and only the pool below it widens (areas follow half-widths, so a

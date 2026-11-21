@@ -125,6 +125,10 @@ func test_field_of_every_map() -> void:
 				]
 			)
 		)
+		# What the Water tool builds must save: the writer refuses a document past the reader's
+		# caps (a fall's plunge pool on the widest stroke once widened past MAX_HALF_WIDTH_M).
+		var packed := MapDocumentSnapshot.capture(doc).encode()
+		assert_eq(String(packed.error), "", "%s: the document can be saved" % m.name)
 		assert_gt(int(r.wet), 1000, "%s: the field holds water" % m.name)
 		assert_eq(int(r.nan), 0, "%s: no NaN or infinite value in a wet sample" % m.name)
 		assert_eq(int(r.lateral_out), 0, "%s: the lateral coordinate stays inside the channel" % m.name)

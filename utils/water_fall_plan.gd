@@ -35,7 +35,8 @@ extends RefCounted
 ## The profile slope (rise over run) from which a drop counts: just above the steepest a
 ## riffle can be carved (WaterCarve.RIFFLE_SLOPE at its smoothstep peak, 0.45).
 const FALL_SLOPE := 0.5
-## How much wider than the channel the plunge pool's inserted point is.
+## How much wider than the channel the plunge pool's inserted point is (never past
+## WaterBody.MAX_HALF_WIDTH_M: a wider body is one the document refuses to save).
 const PLUNGE_WIDEN := 1.35
 ## A drop run grows over its rounded shoulder and toe this far at most (a tier's lip plus the
 ## soft profile's tent), while the ground still falls at SHOULDER_FLAT_SLOPE or more and the
@@ -227,13 +228,18 @@ static func shape_line(
 			else:
 				var p := point_at(points, arc_lengths, s)
 				out_points.append(p)
-				out_widths.append(_width_at(widths, arc_lengths, s) * float(marks[m].widen))
+				out_widths.append(
+					minf(
+						_width_at(widths, arc_lengths, s) * float(marks[m].widen),
+						WaterBody.MAX_HALF_WIDTH_M
+					)
+				)
 				out_ground.append(ground_of.call(p))
 				out_arcs.append(s)
 				lip.append(1 if marks[m].lip else 0)
 			m += 1
 		out_points.append(points[i])
-		out_widths.append(widths[i] * widen)
+		out_widths.append(minf(widths[i] * widen, WaterBody.MAX_HALF_WIDTH_M))
 		out_ground.append(ground[i])
 		out_arcs.append(arc_lengths[i])
 		lip.append(1 if is_lip else 0)
