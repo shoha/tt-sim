@@ -66,6 +66,8 @@ const SHADE_ROLE := "ground"
 const SHADE_SHARE := 0.55
 ## The uniforms the fall shader reads of the sheet's.
 const FALL_UNIFORMS: Array[StringName] = [&"p_foam", &"p_sky"]
+## The uniform both shaders read the one water clock from.
+const CLOCK_UNIFORM := &"p_clock"
 
 ## What is drawn now: {"sheet", "mood", "elevation"}, {} while nothing is painted.
 var applied: Dictionary = {}
@@ -78,8 +80,10 @@ var field_enabled: bool = true:
 			_field.set_enabled(value)
 
 ## Shade spike (S2): the ONE water clock (seconds, advanced by the engine's scaled frame time, so
-## Engine.time_scale 0 freezes it as it freezes TIME) the field branch of the shader runs every
-## motion on, and the option bits the shader reads (SHADE_* in painter_water.gdshader: 1 per-
+## Engine.time_scale 0 freezes it as it freezes TIME) the field branch of the shader and the fall
+## material's mist run every motion on (both materials get it as CLOCK_UNIFORM each frame, so
+## setting it with the time scale at 0 pins every moving thing of the water), and the option bits
+## the shader reads (SHADE_* in painter_water.gdshader: 1 per-
 ## fragment field textures, 2 one clock and the drop-aware flow coordinate, 4 the depth-aware tint
 ## floor and the soft foot).
 var clock_t: float = 0.0
@@ -199,7 +203,9 @@ func _tick() -> void:
 	_clock_us = now
 	clock_t += dt
 	if _water != null:
-		_water.set_shader_parameter(&"p_clock", clock_t)
+		_water.set_shader_parameter(CLOCK_UNIFORM, clock_t)
+	if _fall != null:
+		_fall.set_shader_parameter(CLOCK_UNIFORM, clock_t)
 
 
 func _swap() -> void:

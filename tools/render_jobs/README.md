@@ -106,6 +106,19 @@ same pixels from the same inputs. Three ops give that (REFERENCE.md "State and m
 
 - `place_seed` after `wait_ready`: placed props pick the same variants and yaws every run.
 - `wind` (`freeze`): plants hold still, so the shader clock no longer shows in the pixels.
+- Painted water: `falls.gd clock {scale: 0}` then `water_field.gd clock_set {t}` before the capture
+  (and `clock {scale: 1}` after it). The first freezes the engine's `TIME` at whatever the run had
+  reached, which differs by milliseconds from run to run; the second sets the water's one clock,
+  which the field surface AND the fall mist read (`PainterWater.clock_t`), so the water's pixels
+  are the same run after run: three runs of five views, 0 pixels (2026-11-21, card
+  painter-water-lap; before it the mist ran on `TIME` and two runs of one job differed by up to 68
+  levels in soft pale shapes at the falls). `water_field.gd state {dir, tag}` writes what
+  the water's materials and meshes hold (uniforms, textures and vertex arrays as hashes, the
+  camera) to `state_<tag>.txt`, to diff two runs when a pixel proof fails; the engine's `TIME` and
+  the global shader parameters are not in it, so equal dumps with different pixels point at one of
+  those. A new shader that animates on `TIME` is not pinned by any of this: put it on a clock a
+  probe can set. To prove a change leaves the water's surface alone when the mist's phase differs
+  between two arms, capture both under `falls.gd quality {low: true}` (it drops the mist).
 - `settle` in place of `wait` after a camera move, a placement or a toggle: it ends when the
   camera and the scatter are at rest, and snaps the zoom onto its target.
 - `view` (`yaw`, `pitch`, `zoom` in one step, through the camera controller's public API) to put

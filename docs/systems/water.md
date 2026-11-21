@@ -226,7 +226,9 @@ maps.
   Authoring).
 - **Waterfalls:** a step that is a fall (`WaterFalls.is_fall`) gets no cascade sheet; the
   lip tuck, the curtain / foam ring / mist mesh (`AuthoredWater-falls`), its shader and the
-  shared fall material are in [waterfalls.md](waterfalls.md) (Runtime).
+  shared fall material are in [waterfalls.md](waterfalls.md) (Runtime). Under the Painted look
+  only the mist of that mesh is drawn, on the painted water's one clock
+  ([water_field.md](water_field.md), "the master clock").
 - **Shallows in the shader (P4-5):** the refraction offset grows from nothing at the
   waterline over `refraction_depth_fade` (0.3 m of view depth): at full strength in
   millimetres of water it smeared the lit bed dressing of a steep bank facing the camera (an
@@ -760,6 +762,21 @@ Everything above (the surface, the flow map, the disturbance points, the skirt, 
 keeps its names and its meaning: the painted shader declares the same uniforms, and the shared
 material keeps its parameters across the swap. Classic's shader is unchanged. Details and cost:
 [painter.md](painter.md) "Water".
+
+**The outer dabs** (card painter-water-lap-2, 2026-11-21). Beyond the lap ribbon, on a gently
+sloped shore only (`dash_gate`: whole under a slope of 0.25, gone by 0.7), the painted shader
+puts a few slender pale strokes that lie along the shoreline: each widest in its middle and
+tapering to a point at both ends, uneven in length and spacing, most of the shore between them
+empty. A value noise is the stroke's half-width, not a cut: `DAB_HALF_M` (0.05 m) times how far
+the noise stands over `DAB_THR` (0.65), across the line `DAB_OUT` (1.75) lap widths from the
+waterline, measured in the smoothed shore distance without the lap's wobble (with it a slender
+stroke is a squiggle). The noise's lattice is turned 35 degrees off the world axes, has
+`DAB_FREQ` (1.6) cells a metre, and re-seeds on the 0.4 Hz step the dashes always had. What it
+replaces is the cause of the "square white blocks" on pond banks: a band 0.4 m wide cut along
+the shore by a thresholded noise on the world's axes (`water_field.md` "What the sample grid
+shows through" has the capture that settled it). Inside a fall's zone (`fz`) the old band still
+draws, by the zone's share, so the approved falls keep their foot. The switches `ABL_NODASH`
+and `ABL_NORIBBON` (render-job probe `water_field.gd` `defs`) zero the dabs or the lap alone.
 
 **One frame, one velocity (card painter-water-frames, look-pending).** On the field surface every
 pattern is in the world frame, and what moves is carried by one vector: the flow map's

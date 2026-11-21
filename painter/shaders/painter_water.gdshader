@@ -298,6 +298,13 @@ const float FACE_EDGE = 0.055;
 const float LAP_WOBBLE_M = 0.16;
 // How far (m) the steep bank's smoothed waterline samples the shore distance on each side.
 const float LAP_SMOOTH_M = 0.4;
+// The outer dabs of a gentle shore: the noise's cells per metre along the shore (a dab is about half
+// a cell to a cell and a half long), the half-width (m) of the widest dab, the noise level a dab
+// starts at (the higher, the fewer and shorter) and how far out it lies, in lap widths.
+const float DAB_FREQ = 1.6;
+const float DAB_HALF_M = 0.05;
+const float DAB_THR = 0.65;
+const float DAB_OUT = 1.75;
 const float FILM_ALPHA = 0.8;
 const float FILM_COLUMN_M = 0.5;
 
@@ -882,6 +889,7 @@ if (fieldv && (shade_opt & 4) != 0) {
 	float slope = max(length(grad), 0.06);
 	float d_h = column_raw / slope;
 	float shore_foam = 0.0;
+	float d_wob = 0.0;
 	// Far from the waterline (past the widest reach of the lap and of the outer dashes, wobble and
 	// pixel footprint included) a field fragment has no shore white: its noises are not read.
 #ifdef RED_B
@@ -895,7 +903,8 @@ if (fieldv && (shade_opt & 4) != 0) {
 		// jumps from one to the next).
 		// The contour follows the 0.25 m grid: a slow wobble in it breaks the straight, square runs
 		// of the ribbon into brush-edged ones.
-		d_h = max(fa.z + (wn_xz(p * 3.0, 6.0) - 0.5) * LAP_WOBBLE_M, 0.0);
+		d_wob = (wn_xz(p * 3.0, 6.0) - 0.5) * LAP_WOBBLE_M;
+		d_h = max(fa.z + d_wob, 0.0);
 		slope = clamp(max(fa.x, 0.0) / max(fa.z, 0.03), 0.06, 3.0);
 	}
 	float lap_w = p_foam_w * (0.8 + 0.25 * sin(wt() * 1.1 + wn_xz(p * 0.3, 2.0) * 6.28));
@@ -927,16 +936,36 @@ if (fieldv && (shade_opt & 4) != 0) {
 	float lap_soft = 0.03 + 0.32 * steep;
 	d_h += (wn_xz(p * 1.3, 9.0) - 0.5) * 0.5 * steep;
 	float lap = (1.0 - smoothstep(thr - 0.03 - lap_soft, thr + 0.02 + lap_soft, d_h)) * smoothstep(0.0, 0.03, d_h + 0.02);
-	float dash_n = wn_xz(p * 3.1, 4.0 + floor(wt() * 0.4));
-	float outer = lap_w * 1.5;
-	// The outer dashes sit on a gently sloped shore only: on a steep bank they broke into small
-	// glitter triangles (cards painter-edges, painter-water-edge3), so they are cut off from a
-	// slope of 0.9 (a bank about 42 degrees steep) and soft dabs, not crisp ticks, before it.
-	// The exact waterline follows the terrain's own triangles, so on a rough bank a crisp tick at a
-	// fixed distance from it draws a zigzag: the dashes are soft dabs (wide edge), and they stand
-	// only on a gentle shore (gate from a slope of 0.25).
+#ifdef ABL_NORIBBON
+	lap = 0.0;
+#endif
+	// The outer dabs: beyond the lap, on a gently sloped shore only (gate from a slope of 0.25, gone
+	// by 0.7: on a steep bank they broke into glitter triangles, cards painter-edges and
+	// painter-water-edge3), a few slender strokes lying ALONG the shoreline, each widest in its
+	// middle and tapering to a point at both ends, most of the shore between them empty. The noise
+	// is the stroke's HALF-WIDTH, not a cut: a dab swells and thins along the iso-distance line it
+	// lies on (the smoothed distance without the lap's wobble, which made a slender stroke a
+	// squiggle), so it has no end face. What stood here was a band 0.4 m wide at a fixed distance,
+	// cut along the shore by a thresholded noise on the world's axes: soft white rectangles and
+	// pills on every gentle pond bank (the "square white blocks", card painter-water-lap-2). The
+	// noise's lattice is turned off the world axes; it re-seeds on the dashes' 0.4 Hz step as before.
 	float dash_gate = 1.0 - smoothstep(0.25, 0.7, slope);
-	float dashes = (1.0 - smoothstep(0.03, 0.2 + world_units_per_pixel, abs(d_h - outer))) * smoothstep(0.6, 0.76, dash_n) * dash_gate;
+	float d_dab = fieldv ? d_h - d_wob : d_h;
+	float dab_n = wn_xz(vec2(p.x * 0.82 + p.y * 0.57, p.y * 0.82 - p.x * 0.57) * DAB_FREQ, 4.0 + floor(wt() * 0.4));
+	float dab_w = DAB_HALF_M * max(dab_n - DAB_THR, 0.0) / (1.0 - DAB_THR);
+	float dashes = (1.0 - smoothstep(dab_w * 0.4, dab_w + world_units_per_pixel, abs(d_dab - lap_w * DAB_OUT)))
+		* smoothstep(0.0, 0.012, dab_w) * dash_gate;
+	if (fz > 0.0) {
+		// Inside a fall's zone the shore white is as it was (the approved falls): the old band, by
+		// the zone's share. Only there is its noise read.
+		float outer = lap_w * 1.5;
+		float dash_n = wn_xz(p * 3.1, 4.0 + floor(wt() * 0.4));
+		float band = (1.0 - smoothstep(0.03, 0.2 + world_units_per_pixel, abs(d_h - outer))) * smoothstep(0.6, 0.76, dash_n) * dash_gate;
+		dashes = mix(dashes, band, fz);
+	}
+#ifdef ABL_NODASH
+	dashes = 0.0;
+#endif
 	// On the field this is the whole rule: the lap is a function of the shore distance alone. That
 	// distance is to the waterline of all the water together (WaterField.shore), so a stream's
 	// mouth in a pond, a join and a crossing have no shore across them and the lap opens there by

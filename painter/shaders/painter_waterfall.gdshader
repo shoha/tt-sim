@@ -14,6 +14,12 @@ render_mode blend_mix, depth_draw_opaque, cull_disabled, unshaded;
  *
  * Unshaded: every colour is the sheet's, so a cliff's shadow cannot grey the white water. The mist
  * steps in time, a few steps a second: nothing slides. Quality Low drops the mist.
+ *
+ * The clock is the water's ONE clock (p_clock, integrated by PainterWater and handed to both
+ * materials), not the engine's TIME: a render job that pins the water's clock pins the puffs too.
+ * On TIME a frozen capture drew each puff at whichever of two neighbouring steps the run's own
+ * milliseconds had reached, so two runs of one job differed in soft pale shapes at every fall
+ * (card painter-water-lap).
  */
 
 #include "res://painter/shaders/painter_noise.gdshaderinc"
@@ -24,6 +30,8 @@ global uniform bool water_quality_skip_fine_detail;
 
 uniform vec3 p_foam = vec3(0.95, 0.98, 0.98);
 uniform vec3 p_sky = vec3(0.7, 0.85, 0.95);
+// The water's one clock in seconds (PainterWater.clock_t).
+uniform float p_clock = 0.0;
 
 // The mist: the rise (m) and the cycle (s) of a puff, its growth, the steps its rise is drawn in,
 // the soft fade against the scene (m), its three lobes (spread, growth of spread, radii, rim share).
@@ -60,11 +68,11 @@ void vertex() {
 	} else {
 		// Mist: a billboard that rises, grows and sways over its cycle, at the puff's phase; its
 		// rise and growth go in steps.
-		float cycle = fract(TIME / MIST_CYCLE_S + COLOR.b);
+		float cycle = fract(p_clock / MIST_CYCLE_S + COLOR.b);
 		float stepped = floor(cycle * MIST_STEPS) / MIST_STEPS;
 		mist_phase = stepped;
 		vec2 off = UV2 * mix(1.0, MIST_GROW, stepped);
-		float sway = sin(floor(TIME * 2.0) * 0.5 + COLOR.b * TAU) * 0.12;
+		float sway = sin(floor(p_clock * 2.0) * 0.5 + COLOR.b * TAU) * 0.12;
 		VERTEX.y += stepped * MIST_RISE_M;
 		VERTEX += INV_VIEW_MATRIX[0].xyz * (off.x + sway) + INV_VIEW_MATRIX[1].xyz * off.y;
 	}
