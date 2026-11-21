@@ -94,6 +94,80 @@ static func busy(map: GameMap, ctrl: AuthoringController) -> String:
 	return ""
 
 
+## What driver.gd's `wait_ready` still waits on, one entry per condition that holds (empty when
+## none does): the level loading, authoring not yet open, the authored scatter regenerating or
+## growing in, and height work, the last two with the parts that hold them, so a wait that does
+## not end says why in the job log (2026-11-20: a `new_map` sat in `wait_ready` 11 minutes,
+## silent). The parts are read by name, so a field a later change renames reads as -1.
+static func holds(map: GameMap, ctrl: AuthoringController) -> PackedStringArray:
+	var out := PackedStringArray()
+	if map.call("_is_level_loading"):
+		out.append("level loading")
+	if ctrl == null or not out.is_empty():
+		return out
+	if not ctrl.get("_is_open"):
+		out.append("authoring not open")
+	var scatter: AuthoredScatter = ctrl.scatter if is_instance_valid(ctrl.scatter) else null
+	if scatter != null and (scatter.is_regenerating() or scatter.is_growing()):
+		var regen: Variant = scatter.get("_regen")
+		out.append(
+			(
+				"scatter (jobs %d, finished %d, regen pending %s, growing %d)"
+				% [
+					_size(scatter, "_jobs"),
+					_size(scatter, "_finished"),
+					regen != null and regen.has_pending(),
+					_size(scatter, "_growing"),
+				]
+			)
+		)
+	if ctrl.editor != null and ctrl.editor.has_height_work():
+		out.append("height work (%s)" % ", ".join(_height_parts(ctrl.editor)))
+	return out
+
+
+## The parts of AuthoringEditor.has_height_work (HeightEditor.has_work) that hold, by name.
+static func _height_parts(editor: Object) -> PackedStringArray:
+	var parts := PackedStringArray()
+	var heights: Variant = editor.get("heights")
+	if heights == null:
+		return parts
+	if _size(heights, "_snap_windows") != 0:
+		parts.append("snap windows %d" % _size(heights, "_snap_windows"))
+	if heights.get("_collision_dirty") and heights.get("_stroke") == null:
+		parts.append("collision")
+	var terrain: Variant = editor.get("terrain")
+	if is_instance_valid(terrain) and terrain.has_height_work():
+		parts.append(
+			(
+				"terrain (dirty %d, skirt %s, settling %d)"
+				% [
+					_size(terrain, "_dirty_heights"),
+					terrain.get("_skirt_dirty"),
+					_size(terrain, "_settling")
+				]
+			)
+		)
+	var rocks: Variant = editor.get("rock_keeper")
+	if rocks != null and rocks.is_running():
+		parts.append("rocks")
+	var water: Variant = editor.get("water")
+	if water != null and water.is_working():
+		parts.append("water (job %d)" % _size(water, "_job"))
+	var landing: Variant = heights.get("_landing")
+	if landing is Callable and (landing as Callable).is_valid():
+		parts.append("landing")
+	return parts
+
+
+## The size of the container `object` holds in `field`, or -1 when it holds none.
+static func _size(object: Object, field: String) -> int:
+	var value: Variant = object.get(field)
+	if value is Array or value is Dictionary:
+		return value.size()
+	return -1
+
+
 ## Every ShaderMaterial a node under `root` draws with: material overrides, surface
 ## overrides and the surface materials of its mesh or MultiMesh mesh.
 static func _shader_materials(root: Node) -> Array:
