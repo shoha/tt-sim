@@ -731,7 +731,9 @@ line then differs run to run.
   Detector state (2026-11-20): `ticks` (count at joined mouths 11, 7, 5 against 0 on a pond alone)
   and `holes` separate bad from good on the first render; `ring_gaps` also fires on a closed ring
   at another clock phase; `tone_seams` fires on almost every stroke's end caps and is not a usable
-  guardrail yet; `occ_white`, `pale` and `flat` have not met a real bad frame.
+  guardrail yet; `xflow_white` missed its planted bar in both selftests (so `--selftest` reports
+  FAILED today, and a 0 there proves nothing); `occ_white`, `slivers`, `pale` and `flat` have not
+  met a real bad frame.
 
   Each layout is captured from above and at 45 degrees with the water's clock pinned, with the
   water hidden (the dry frame: what differs is drawn water), and with the field projected
