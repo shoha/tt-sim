@@ -642,6 +642,21 @@ func structure_blocks(from: Vector3, to: Vector3) -> bool:
 	return _building_between(space, from, end)
 
 
+## How far the view ray through world point `at` runs across the ground per metre it descends
+## (world XZ per metre of height; zero for a view from straight above or with no camera): a point
+## the pointer met on raised ground lies this far, times the height, short of where the same ray
+## meets the ground once that rise is gone (WaterBrush.through_rises: a river's cut).
+func ray_slant(at: Vector3) -> Vector2:
+	if _camera == null:
+		return Vector2.ZERO
+	var along := -_camera.global_basis.z
+	if _camera.projection != Camera3D.PROJECTION_ORTHOGONAL:
+		along = (at - _camera.global_position).normalized()
+	if along.y > -0.05:
+		return Vector2.ZERO
+	return Vector2(along.x, along.z) / -along.y
+
+
 ## Whether a building (an authored structure, or a wall row's house) is what the pointer is over:
 ## its ray meets one before the ground. The Village tool refuses a carried piece there, since the
 ## ground the brush ray reaches through a roof is hidden behind it.

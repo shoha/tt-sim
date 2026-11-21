@@ -13,6 +13,11 @@ extends RefCounted
 ##  - rise_removed: the drawn levels climbed downstream and were lowered to run downhill (said
 ##    quietly: a note, not worth a toast);
 ##  - reversed_run: re_fit reversed a stored river that ran uphill;
+##  - cut_through: the line crossed a rise and the river was cut through it, so it is one river
+##    running downhill all the way (card painter-water-cut, the rule; `detail.cut_m` is the rise).
+##    The Water tool says it when the stroke has landed (WaterEditor.river_hints_landed);
+##  - blocked_cut, over_hill, stopped_at_rise: only with WaterEdit.cut_through off (the plans
+##    before that rule);
 ##  - blocked_cut: conditioning would have cut deeper than WaterConditioner.CUT_LIMIT_M into the
 ##    drawn ground, so the stroke was kept as drawn;
 ##  - over_hill: the same, with the deep cut in the middle of the stroke (a stroke over a ridge);
@@ -45,6 +50,7 @@ extends RefCounted
 const SAID: Array[StringName] = [
 	&"too_short",
 	&"perched_head",
+	&"cut_through",
 	&"stopped_at_rise",
 	&"over_hill",
 	&"blocked_cut",
@@ -60,6 +66,7 @@ const KIND_TEXT := {
 	&"reversed_run": "A river that ran uphill was turned around to run downhill.",
 	&"blocked_cut": "The river was kept as drawn: levelling it would cut a deep gorge.",
 	&"over_hill": "The river crosses a hill and was kept as drawn: levelling it would cut a gorge.",
+	&"cut_through": "The river cut through the rise in its way, so it runs downhill all the way.",
 	&"stopped_at_rise": "Water cannot climb: the line was split so each part runs downhill.",
 	&"climb": "Part of the river stands higher than the water upstream of it.",
 	&"perched_head": "The river starts high above a lower pond and was kept as drawn.",

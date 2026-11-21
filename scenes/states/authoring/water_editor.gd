@@ -29,9 +29,10 @@ extends RefCounted
 ## or an autosave waits, and finish_work() (from AuthoringEditor.finish_height_work(), which
 ## every other edit and undo call first) lands it at once.
 
-## A conditioned pond edit landed: what it said about the stream ends beside it (WaterHints
-## records, possibly none). The pond's compute runs on a worker, so the tool listens for it.
+## A conditioned pond edit, or a river stroke, landed: what its plan said (WaterHints records,
+## possibly none). The compute runs on a worker, so the tool listens and says it once it is true.
 signal pond_hints_landed(hints: Array)
+signal river_hints_landed(hints: Array)
 
 ## Why the last carve_river() or paint_pond_begin() made nothing (last_refusal), for the tool.
 const REFUSED_NO_CARVE := &"no_carve"
@@ -164,10 +165,10 @@ func carve_river(
 	return bodies[0].id
 
 
-## Re-fits the map's stored water (WaterRefit: strokes that climb downstream reversed, the river
-## and pond tree solved, the strokes carved again at their new levels), one history entry like any
-## water edit; last_hints says what was reversed. The plan-time conditioning of carve_river()
-## reaches a stored map only through this. False when the map cannot be carved or has no rivers.
+## Re-fits the map's stored water (WaterRefit: the tree solved, water only lowered, the strokes
+## carved again, so a climbing stroke is cut through, never turned round), one history entry; its
+## last_hints name the strokes cut through. The plan-time conditioning of carve_river() reaches a
+## stored map only through this. False when the map cannot be carved or has no rivers.
 func refit_water() -> bool:
 	var e := _editor()
 	_prepare()
@@ -724,6 +725,7 @@ func _land() -> void:
 				last_report["dropped_m"] = result.dropped_m
 			else:
 				doc.water_bodies = WaterEdit.with_bodies(doc, made)
+			river_hints_landed.emit(last_hints)
 			stroke = HeightStroke.begin(doc, HeightBrush.LOWER)
 			var goals: Dictionary = result.goals
 			stroke.lower_to(goals.rect, goals.goals)

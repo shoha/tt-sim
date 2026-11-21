@@ -1031,8 +1031,27 @@ single increases, the largest bridged_run 3 -> 9), the test bounds the total wit
 off's. A stroke noisier than its own cap can hold (hairpins and jitter at half-widths under 1 m)
 is kept as drawn, planned as with conditioning off.
 
+A river cuts through a rise (card painter-water-cut, the owner's rule of 2026-11-22;
+`docs/systems/water_field.md` "A river cuts through a rise"). This replaces rule (2) above and the
+split described in the next paragraph, which remain only behind switches: with
+`WaterEdit.cut_through` (on in every build) no plan is blocked. A line over a wall, a mound or a
+hill is ONE river along the drawn line whose levels are the conditioner's running minimum (flat
+through the rise at the level of the water above it, the ground's own drops after it still steps
+and falls), and the carve cuts the rise down to it with a cut's banks (`WaterCarve.cut_stations`:
+the bank slope rises from the class's to 1.1 with the depth of the cut, the reach grows with it up
+to 16 m so no bank ends in a slot wall, and the banks wander by the map's value noise so no edge is
+ruled). A stroke that crosses no rise over 0.75 m is planned and carved exactly as before. The
+hint is `cut_through` ("The river cut through the rise in its way, so it runs downhill all the
+way."), said when the stroke lands (`WaterEditor.river_hints_landed`). An end is not joined to
+water beside it when the joined line would dig through a rise the drawn line does not cross
+(`WaterEdit.JOIN_CUT_M`: a head on a plateau beside the pond at its foot stays as drawn,
+`perched_head`). `WaterRefit` resolves a stored climb the same way and never turns a stream round.
+The Water tool moves the points the pointer met on top of a rise to where its ray meets the ground
+the cut leaves (`WaterBrush.through_rises`, `BrushTool.ray_slant`).
+
 Water does not climb (card painter-water-climb, 2026-11-21; `docs/systems/water_field.md` "Water does
-not climb"). A blocked stroke kept as drawn used to store levels that climb the ridge it crosses
+not climb"; since painter-water-cut only with `WaterEdit.cut_through = false` and
+`stop_at_rise = true`). A blocked stroke kept as drawn used to store levels that climb the ridge it crosses
 (the verdict map's river over three walls: 1.30 m, drawn as a wall of water in each pool). Now a
 blocked plan that climbs as drawn is split at its troughs and crests: every part lands as its own
 stream running downhill (a climbing part is turned round so it runs down from its crest), all in

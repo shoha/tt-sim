@@ -161,6 +161,31 @@ const POND_UNDER_EASE_M := 1.2
 ## than this share of the channel's width blocks it.
 const SUBMERGED_MARGIN_M := 0.05
 const BLOCKING_SHARE := 0.5
+## A cut through a rise (card painter-water-cut; cut_stations(), docs/systems/water_field.md
+## "A river cuts through a rise"): the rise the
+## centreline's ground stands over the lowest ground upstream of it, where the banks begin to
+## steepen (CUT_FROM_M: under it the carve is the ordinary one, bit for bit) and where they are
+## the cut's own (CUT_FULL_M); the cut bank's slope (rise over run, 48 degrees: past the cliff
+## rule's start, so a deep cut's sides are part rock); how far along the course a rise's share
+## spreads (an oblique wall is broken through, not shaved); how far a bank wanders in and out
+## (metres across, two octaves of the map's value noise, CUT_NOISE_SCALE_M the broad one's cell;
+## in full from a cut share of CUT_WANDER_SHARE and from CUT_WANDER_IN_M past the waterline, which
+## itself stays the channel's) and the furthest a cut's bank may reach (a rise of about 13 m; past
+## it the bank ends in the fade's steeper wall).
+const CUT_FROM_M := 0.75
+const CUT_FULL_M := 2.0
+const CUT_BANK_SLOPE := 1.1
+const CUT_SPREAD_M := 3.0
+const CUT_STATION_M := 0.5
+const CUT_WANDER_M := 0.7
+const CUT_WANDER_SHARE := 0.4
+const CUT_WANDER_IN_M := 1.5
+const CUT_NOISE_SCALE_M := 3.2
+const CUT_REACH_MAX_M := 16.0
+
+## The cut banks' switch: false carves a cut through a rise with the ordinary banks (the class's
+## slope, cut no further than BANK_REACH_M), for an A/B capture.
+static var cut_banks: bool = true
 
 
 ## Soft minimum of a and b over a blend of k (polynomial; never above min(a, b)).
@@ -332,7 +357,8 @@ static func section(
 	depth: int,
 	half_width: float,
 	gorge: float = 0.0,
-	sill: float = 0.0
+	sill: float = 0.0,
+	cut_slope: float = 0.0
 ) -> float:
 	var shore := SHORE_SLOPE[depth]
 	var full := level - bed
@@ -340,6 +366,9 @@ static func section(
 		shore = clampf(full / (half_width * (1.0 - BED_SHARE)), shore, MAX_SHORE_SLOPE)
 	shore = lerpf(shore, MAX_SHORE_SLOPE, sill)
 	var bank := lerpf(BANK_SLOPE[depth], FALL_BANK_SLOPE, gorge)
+	if cut_slope > 0.0:
+		# A cut through a rise (river_goals): the bank's slope is the cut's own.
+		bank = cut_slope
 	var line := level + e * (shore if e < 0.0 else bank)
 	return smooth_max(bed, line, lerpf(TOE_SOFT_M, FALL_CREST_TOE_SOFT_M, sill))
 
@@ -356,7 +385,7 @@ static func section(
 ## there is cut crisp to the level, since eased on a tier standing 0.15 m over the level it was
 ## left 4 cm proud and the channel narrowed at the lip. Never above `start`.
 static func blend_with_ground(
-	goal: float, start: float, e: float, gorge: float = 0.0, sill: float = 0.0
+	goal: float, start: float, e: float, gorge: float = 0.0, sill: float = 0.0, cut_reach: float = 0.0
 ) -> float:
 	var cut := start - goal
 	if cut <= 0.0:
@@ -365,6 +394,9 @@ static func blend_with_ground(
 	if cut < soft:
 		cut = cut * cut * (2.0 - cut / soft) / soft
 	var reach := lerpf(BANK_REACH_M, FALL_BANK_REACH_M, gorge)
+	if cut_reach > 0.0:
+		# A cut through a rise reaches as far as its banks need (cut_stations()).
+		reach = cut_reach
 	var fade := smoothstep(reach - BANK_FADE_M, reach, e)
 	return start - cut * (1.0 - fade)
 
@@ -418,7 +450,16 @@ static func river_goals(
 	if bodies.is_empty():
 		return {"rect": Rect2i(), "goals": PackedFloat32Array()}
 	var profile := RiverProfile.for_doc(doc, bodies, flags)
-	var field := profile.field(doc, BANK_REACH_M)
+	# Where the line crosses a rise the banks are a cut's (cut_stations()); a stroke that crosses
+	# none (`cutting` false) is carved exactly as before.
+	var cut := cut_stations(doc, profile, start) if cut_banks else {}
+	var cutting := not cut.is_empty()
+	var share: PackedFloat32Array = cut.get("share", PackedFloat32Array())
+	var reach_at: PackedFloat32Array = cut.get("reach", PackedFloat32Array())
+	var furthest: float = cut.get("furthest", BANK_REACH_M)
+	var last := share.size() - 2
+	var memo := {}
+	var field := profile.field(doc, furthest)
 	var rect: Rect2i = field.rect
 	var distance: PackedFloat32Array = field.distance
 	var along: PackedFloat32Array = field.along
@@ -433,15 +474,110 @@ static func river_goals(
 			# A tapered end narrows to a rounded head (head_width()).
 			var hw := profile.head(along[k], half_width[k])
 			var e := distance[k] - hw
-			if e >= BANK_REACH_M:
+			if e >= furthest:
 				continue
-			var line := profile.at(along[k])
+			var c := 0.0
+			var reach := BANK_REACH_M
+			if cutting:
+				var t := along[k] / CUT_STATION_M
+				var s := clampi(int(t), 0, last)
+				c = lerpf(share[s], share[s + 1], clampf(t - s, 0.0, 1.0))
+				reach = lerpf(reach_at[s], reach_at[s + 1], clampf(t - s, 0.0, 1.0))
 			var ground := start[(rect.position.y + j) * columns + rect.position.x + i]
-			var goal := section(e, line.x, line.y, profile.depth_class, hw, line.z, line.w)
-			goal = blend_with_ground(goal, ground, e, line.z, line.w)
+			var goal := INF
+			if c <= 0.0:
+				if e >= BANK_REACH_M:
+					continue
+				var line := profile.at(along[k])
+				goal = section(e, line.x, line.y, profile.depth_class, hw, line.z, line.w)
+				goal = blend_with_ground(goal, ground, e, line.z, line.w)
+			elif e < reach:
+				var line := profile.at(along[k])
+				var slope := lerpf(BANK_SLOPE[profile.depth_class], CUT_BANK_SLOPE, c)
+				var across := e
+				if e > 0.0:
+					# The bank wanders in and out (nothing at the waterline, the full wander from
+					# CUT_WANDER_IN_M out), so the cut's sides and its top edge are never ruled.
+					var p := doc.sample_to_world(Vector2(rect.position.x + i, rect.position.y + j))
+					var wander := CUT_WANDER_M * smoothstep(0.0, CUT_WANDER_SHARE, c)
+					wander *= smoothstep(0.0, CUT_WANDER_IN_M, e)
+					across = e + wander * cut_noise(p, doc.map_seed, memo)
+				goal = section(across, line.x, line.y, profile.depth_class, hw, line.z, line.w, slope)
+				goal = blend_with_ground(goal, ground, e, line.z, line.w, reach)
 			if goal < ground:
 				goals[k] = goal
 	return {"rect": rect, "goals": goals}
+
+
+## The cut of a stroke through the rises on its line (card painter-water-cut; `profile` the
+## stroke's, `start` the ground before its carve), or {} when it crosses none: the carve is then
+## the ordinary one. A station every CUT_STATION_M of arc length holds the rise there: how far the
+## centreline's ground stands over the lowest ground upstream of it (water cannot climb, so the
+## channel is cut that deep) and over the bank level; ground that only descends, a fall's face
+## and a steady slope's reaches have none. {"share" (0..1 per station, CUT_FROM_M to CUT_FULL_M
+## of rise, spread CUT_SPREAD_M along the course with a linear fall-off), "reach" (per station,
+## how far past the waterline the cut's banks reach: the rise over the cut's slope, plus the
+## wander and the fade, BANK_REACH_M at the least and CUT_REACH_MAX_M at the most), "furthest"
+## (the largest reach), "deepest" (the largest rise, metres)}.
+static func cut_stations(
+	doc: MapDocument, profile: RiverProfile, start: PackedFloat32Array
+) -> Dictionary:
+	var count := ceili(profile.total / CUT_STATION_M) + 1
+	if profile.points.size() < 2 or count < 2 or start.size() != doc.sample_count():
+		return {}
+	var rise := PackedFloat32Array()
+	rise.resize(count)
+	var deepest := 0.0
+	var low := INF
+	var segment := 0
+	var edge := Vector2i(doc.samples_x() - 1, doc.samples_z() - 1)
+	for i in count:
+		var s := minf(i * CUT_STATION_M, profile.total)
+		while segment < profile.points.size() - 2 and profile.arc[segment + 1] < s:
+			segment += 1
+		var span := profile.arc[segment + 1] - profile.arc[segment]
+		var t := (s - profile.arc[segment]) / span if span > 1e-9 else 0.0
+		var p := profile.points[segment].lerp(profile.points[segment + 1], clampf(t, 0.0, 1.0))
+		var cell := doc.world_to_sample(p).round()
+		var ground := start[
+			doc.sample_index(clampi(int(cell.x), 0, edge.x), clampi(int(cell.y), 0, edge.y))
+		]
+		low = minf(low, ground)
+		var over := ground - low
+		if over > CUT_FROM_M:
+			over = minf(over, ground - profile.level_at(s))
+		rise[i] = maxf(over, 0.0)
+		deepest = maxf(deepest, rise[i])
+	if deepest <= CUT_FROM_M:
+		return {}
+	var share := PackedFloat32Array()
+	var reach := PackedFloat32Array()
+	share.resize(count)
+	reach.resize(count)
+	var spread := ceili(CUT_SPREAD_M / CUT_STATION_M)
+	var gentlest := BANK_SLOPE[profile.depth_class]
+	var furthest := BANK_REACH_M
+	for i in count:
+		var most := 0.0
+		for j in range(maxi(i - spread, 0), mini(i + spread, count - 1) + 1):
+			most = maxf(most, rise[j] * (1.0 - absf(i - j) / (spread + 1.0)))
+		share[i] = smoothstep(CUT_FROM_M, CUT_FULL_M, most)
+		reach[i] = BANK_REACH_M
+		if share[i] > 0.0:
+			var slope := lerpf(gentlest, CUT_BANK_SLOPE, share[i])
+			var need := most / slope + CUT_WANDER_M + BANK_FADE_M + TOP_SOFT_M
+			reach[i] = clampf(need, BANK_REACH_M, CUT_REACH_MAX_M)
+		furthest = maxf(furthest, reach[i])
+	return {"share": share, "reach": reach, "furthest": furthest, "deepest": deepest}
+
+
+## The wander of a cut's bank at map point `p`, -1..1: two octaves of the map's value noise
+## (TerrainRules.value_noise, seeded with the map's seed; `memo` is the caller's, one per carve).
+static func cut_noise(p: Vector2, seed_value: int, memo: Dictionary) -> float:
+	var q := p / CUT_NOISE_SCALE_M
+	var broad := TerrainRules.value_noise_memo(q + Vector2(4.3, -7.1), seed_value, memo)
+	var fine := TerrainRules.value_noise_memo(q * 2.6 + Vector2(-2.9, 5.7), seed_value, memo)
+	return (broad * 0.65 + fine * 0.35) * 2.0 - 1.0
 
 
 ## Goal heights of the basin of pond `body` over `doc`'s sample grid (its area is the

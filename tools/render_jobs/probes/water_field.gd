@@ -55,6 +55,7 @@ const CASES := {
 	"st_t": [88, 5.0, "case", Vector2(23, 19)],
 	"st_w": [45, 12.0, "at", Vector2(23, 18)],
 	"walls_w": [45, 12.0, "at", Vector2(23, -13)],
+	"walls_o": [45, 6.5, "at", Vector2(23, -11)],
 	"pond_z8": [45, 8.0, "at", Vector2(9, -2)],
 	"f4up_z8": [45, 8.0, "at", Vector2(9, 7)],
 	"exit_z8": [45, 8.0, "at", Vector2(-26, 25)],
