@@ -39,6 +39,14 @@ const NO_FOOT := 99.0
 ## coordinate is divided by (the rules' lengths shrink to this share of themselves).
 const FOOT_DROP_REF := 3.0
 const FOOT_SCALE_MIN := 0.45
+## Two neighbouring samples whose foot coordinates have opposite signs and stand further apart
+## than this are on a seam (foot_seams()). Across a foot itself the coordinate passes through 0
+## in steps of at most a sample's diagonal over FOOT_SCALE_MIN (0.8) plus a table entry (0.55).
+const FOOT_SEAM_JUMP := 2.0
+
+## Switch (a probe's A/B): false keeps the foot coordinate's seams in the field (the data of
+## before card painter-water-climb-2); a field is built after a change.
+static var foot_seams_cleared := true
 
 
 ## The stroke's level, white-water `energy` and brink-and-face `core` white every TABLE_STEP
@@ -112,6 +120,72 @@ static func table(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
 	return {"level": lev, "energy": en, "core": core, "foot": foot}
 
 
+## Writes `out`, the foot coordinate the field hands the shader, from `raw`, the coordinate as
+## the strokes wrote it, over `region` (samples) of a grid of `size`: `raw`, except NO_FOOT on
+## every sample at a seam. A seam is where the coordinate jumps across zero between two of a
+## sample's eight neighbours (FOOT_SEAM_JUMP): the far end of one fall's plunge pool (positive)
+## beside the approach of the next fall (negative), which two falls of one stroke less than twice
+## FOOT_RANGE_M apart have midway between their feet, and two strokes can have where they meet.
+## The texture's filter draws every value between the two sides there, the foot's own among them
+## (0: the white floor, the tongues and the veil), as a ruled white hairline across the pool,
+## straight along the seam whatever the water does. With both sides cleared no 2 x 2 block of
+## samples holds the two signs, and the filter (weighted by the foot's own weight) never mixes
+## them: each side ends as the coordinate ends at its range. A function of `raw` within one
+## sample, so an incremental update equals a full build. `areas` are the sample rects that can
+## hold a foot (the areas of the strokes with a fall): over the whole grid seams are looked for
+## only there, grown by one sample. Returns the array to keep: a copy of `raw` when `region` is
+## the whole grid, else `out` with `region` rewritten.
+static func foot_seams(
+	raw: PackedFloat32Array,
+	out: PackedFloat32Array,
+	size: Vector2i,
+	region: Rect2i,
+	areas: Array[Rect2i]
+) -> PackedFloat32Array:
+	var made := out
+	var look := areas
+	if region == Rect2i(Vector2i.ZERO, size):
+		made = raw.duplicate()
+	else:
+		# A dirty rect: every sample of it is judged again (a stroke that only borders the rect
+		# wrote no area this time, and its seam must stay cleared).
+		look = [region]
+		for z in range(region.position.y, region.end.y):
+			var row := z * size.x
+			for i in range(row + region.position.x, row + region.end.x):
+				made[i] = raw[i]
+	if not foot_seams_cleared:
+		return made
+	var none := NO_FOOT * 0.5
+	for area in look:
+		var part := area.grow(1).intersection(region)
+		for z in range(part.position.y, part.end.y):
+			var row := z * size.x
+			for x in range(part.position.x, part.end.x):
+				var v := raw[row + x]
+				if v < none and _at_seam(raw, size, x, z, v):
+					made[row + x] = NO_FOOT
+	return made
+
+
+## True when a neighbour of sample (x, z), whose foot coordinate is `v`, holds one of the other
+## sign more than FOOT_SEAM_JUMP away.
+static func _at_seam(raw: PackedFloat32Array, size: Vector2i, x: int, z: int, v: float) -> bool:
+	var none := NO_FOOT * 0.5
+	for dz in range(-1, 2):
+		var zz := z + dz
+		if zz < 0 or zz >= size.y:
+			continue
+		for dx in range(-1, 2):
+			var xx := x + dx
+			if xx < 0 or xx >= size.x:
+				continue
+			var o := raw[zz * size.x + xx]
+			if o < none and o * v < 0.0 and absf(o - v) > FOOT_SEAM_JUMP:
+				return true
+	return false
+
+
 ## The runs of set stations in `lost` as Vector3i(first, end, bridged): `end` is exclusive and
 ## `bridged` is 1 for a run of at most BRIDGE_M with a held station each side (a dip the water
 ## bridges), 0 for one that touches the stroke's end or is longer (a film).
@@ -157,6 +231,36 @@ static func run_events(
 				"body": body,
 				"pos": centres[mid],
 				"length": (run.y - run.x) * STATION_STEP,
+			}
+		)
+	return out
+
+
+## The &"climb" events of the stroke whose reaches are `chain` (flow order): one per stretch of
+## reaches whose stored level stands over the lowest level upstream of it by more than the
+## conditioner's dead band (WaterConditioner.climbs): {"kind", "body" (the stroke's first body
+## id), "pos" (where the first climbing reach begins), "reach" (its id), "rise_m"}. Water does
+## not climb: a plan never stores one (WaterEdit.plan_river), so an event marks a map saved before
+## that rule or a document that was never conditioned; a re-fit removes it. The field draws the
+## stroke as stored (a wall of water at the foot of the rise) and says so here.
+static func climb_events(chain: Array[WaterBody]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if chain.size() < 2:
+		return out
+	var levels := PackedFloat64Array()
+	for body in chain:
+		levels.append(body.level_m)
+	# By path: the conditioner stays out of the start-up script graph (test_boot_graph).
+	var conditioner: GDScript = load("res://utils/water_conditioner.gd")
+	for found: Dictionary in conditioner.climbs(levels):
+		var first: WaterBody = chain[int(found.from)]
+		out.append(
+			{
+				"kind": &"climb",
+				"body": chain[0].id,
+				"pos": first.points[0],
+				"reach": first.id,
+				"rise_m": float(found.rise),
 			}
 		)
 	return out

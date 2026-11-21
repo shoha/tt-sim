@@ -147,7 +147,7 @@ var owner := PackedInt32Array()
 var flow_u := PackedFloat32Array()
 ## The foot coordinate of a river sample (foot spike): the signed arc distance to the nearest
 ## fall's foot (negative on the face, positive in the plunge pool; WaterFieldStroke.NO_FOOT
-## beyond 4 m and on any sample no stroke wrote).
+## beyond 4 m, on any sample no stroke wrote and at a seam, WaterFieldStroke.foot_seams()).
 var foot := PackedFloat32Array()
 ## The continuous marks the shader reads per vertex: film, bank share, mouth distance.
 var marks := WaterFieldMarks.new()
@@ -163,6 +163,10 @@ var timings := {}
 ## The stroke and pond levels before the spill (max over bodies), and the stroke energy.
 var _raw := PackedFloat32Array()
 var _stroke_energy := PackedFloat32Array()
+## The foot coordinate as the strokes wrote it, seams included (`foot` is made from it).
+var _foot_raw := PackedFloat32Array()
+## The areas of the strokes with a fall that the last update wrote (foot_seams() looks there).
+var _foot_rects: Array[Rect2i] = []
 ## The surface after the spill, before the buried rings.
 var _base := PackedFloat32Array()
 ## Each stroke's WaterFieldStroke.table with the inputs it was made from (_table_of), by the
@@ -199,6 +203,7 @@ func update(doc: MapDocument, dirty: Rect2i) -> Rect2i:
 	var ends: Array[Dictionary] = []
 	var runs: Array[Dictionary] = []
 	_write_strokes(doc, rect, pond_level, ends, runs)
+	foot = WaterFieldStroke.foot_seams(_foot_raw, foot, size, _clip(rect.grow(1)), _foot_rects)
 	var t1 := Time.get_ticks_usec()
 	var changed := _spill_pass(rect, was)
 	var t2 := Time.get_ticks_usec()
@@ -359,6 +364,7 @@ func _fit(doc: MapDocument) -> bool:
 	flow_u.fill(NO_FLOW_U)
 	foot = _zeros(n)
 	foot.fill(WaterFieldStroke.NO_FOOT)
+	_foot_raw = foot.duplicate()
 	marks.fit(n)
 	events = []
 	return true
@@ -380,7 +386,7 @@ func _reset(doc: MapDocument, rect: Rect2i) -> void:
 		calm.fill(0)
 		owner.fill(0)
 		flow_u.fill(NO_FLOW_U)
-		foot.fill(WaterFieldStroke.NO_FOOT)
+		_foot_raw.fill(WaterFieldStroke.NO_FOOT)
 		return
 	for z in range(rect.position.y, rect.end.y):
 		var row := z * size.x
@@ -393,7 +399,7 @@ func _reset(doc: MapDocument, rect: Rect2i) -> void:
 			calm[i] = 0
 			owner[i] = 0
 			flow_u[i] = NO_FLOW_U
-			foot[i] = WaterFieldStroke.NO_FOOT
+			_foot_raw[i] = WaterFieldStroke.NO_FOOT
 
 
 ## Ponds: each sample of a pond's mask in `rect` holds its level.
@@ -421,6 +427,7 @@ func _write_strokes(
 ) -> void:
 	var rect_m := Rect2(origin + Vector2(rect.position) * step, Vector2(rect.size) * step).grow(1.0)
 	var chains := RiverProfile.strokes(doc.water_bodies)
+	_foot_rects.clear()
 	if _tables.size() > chains.size():
 		# Strokes that are gone (or whose first reach changed) leave their tables behind.
 		var alive := {}
@@ -441,10 +448,13 @@ func _write_strokes(
 		var area: Rect2i = field.rect
 		if not area.has_area():
 			continue
+		if not profile.falls.is_empty():
+			_foot_rects.append(area)
 		var stations := profile.stations(doc, WaterFieldStroke.STATION_STEP)
 		var found := WaterFieldStroke.runs(stations.undermined)
 		var lost := WaterFieldStroke.without_bridged(stations.undermined, found)
 		runs.append_array(WaterFieldStroke.run_events(typed[0].id, found, stations.centre))
+		runs.append_array(WaterFieldStroke.climb_events(typed))
 		if profile.taper.x == 1:
 			ends.append({"body": typed[0].id, "pos": profile.points[0], "level": profile.at(0.0).x})
 		if profile.taper.y == 1:
@@ -571,19 +581,19 @@ func _put_stroke(
 				lateral[at] = _lateral_of(
 					profile, s, d, origin + Vector2(rect.position.x + i, rect.position.y + j) * step
 				)
-				foot[at] = foot_t[ti]
+				_foot_raw[at] = foot_t[ti]
 				owner[at] = id
 				_stroke_energy[at] = maxf(_stroke_energy[at], 0.0 if undermined else e)
 			elif (
 				has_mask
 				and mask[at] != 0
 				and not undermined
-				and foot[at] > WaterFieldStroke.NO_FOOT * 0.5
+				and _foot_raw[at] > WaterFieldStroke.NO_FOOT * 0.5
 			):
 				# A fall that lands in a pond: the pond holds the level (the stroke does not win the
 				# sample), but the foot coordinate runs on across its cells, so the plunge's rules
 				# (the veil, the pool's floor) reach the pond as they reach a pool of the stream.
-				foot[at] = foot_t[ti]
+				_foot_raw[at] = foot_t[ti]
 
 
 ## The signed lateral coordinate of the sample at `p`, `d` from the course and `s` along it: `d`

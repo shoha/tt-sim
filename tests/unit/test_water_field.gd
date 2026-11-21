@@ -224,6 +224,63 @@ func test_the_foot_coordinate_runs_through_the_fall() -> void:
 	assert_gt(pos, 2, "the plunge pool lies after it")
 
 
+## The 2 x 2 blocks of `foot` (a grid of `size`) that hold two coordinates of opposite sign more
+## than WaterFieldStroke.FOOT_SEAM_JUMP apart: what the texture's filter would draw a foot between.
+func _seam_blocks(foot: PackedFloat32Array, size: Vector2i) -> int:
+	var none := WaterFieldStroke.NO_FOOT * 0.5
+	var found := 0
+	for z in size.y - 1:
+		for x in size.x - 1:
+			var i := z * size.x + x
+			var low := INF
+			var high := -INF
+			for v: float in [foot[i], foot[i + 1], foot[i + size.x], foot[i + size.x + 1]]:
+				if v < none:
+					low = minf(low, v)
+					high = maxf(high, v)
+			if low < 0.0 and high > 0.0 and high - low > WaterFieldStroke.FOOT_SEAM_JUMP:
+				found += 1
+	return found
+
+
+func test_foot_seams_are_cleared_at_any_angle() -> void:
+	# Card painter-water-climb-2: between two falls the coordinate jumps from the upper fall's pool
+	# (positive) to the lower fall's approach (negative); the texture's filter drew the foot's own
+	# white along that jump, a ruled hairline across the pool. An oblique seam and a natural foot.
+	var size := Vector2i(14, 12)
+	var seam := PackedFloat32Array()
+	var foot_line := PackedFloat32Array()
+	for z in size.y:
+		for x in size.x:
+			var edge := x == 0 or x == size.x - 1
+			seam.append(WaterFieldStroke.NO_FOOT if edge else (6.5 if x + 2 * z < 20 else -7.0))
+			foot_line.append((x - 5.5) * 0.5)
+	var all := Rect2i(Vector2i.ZERO, size)
+	var areas: Array[Rect2i] = [Rect2i(1, 0, size.x - 2, size.y)]
+	assert_gt(_seam_blocks(seam, size), 8, "the written coordinate holds the seam")
+	var out := WaterFieldStroke.foot_seams(seam, seam.duplicate(), size, all, areas)
+	assert_eq(_seam_blocks(out, size), 0, "no filter footprint holds both sides of it")
+	assert_eq(out[5 * size.x + 2], 6.5, "the pool away from the seam keeps its coordinate")
+	assert_eq(out[9 * size.x + 11], -7.0, "and so does the approach of the next fall")
+	# A dirty rect inside the grid is judged whole, whatever the areas: the same samples clear.
+	var part := seam.duplicate()
+	var none: Array[Rect2i] = []
+	part = WaterFieldStroke.foot_seams(seam, part, size, Rect2i(2, 2, 10, 8), none)
+	for z in range(2, 10):
+		for x in range(2, 12):
+			assert_eq(part[z * size.x + x], out[z * size.x + x], "update equals build")
+	var natural := WaterFieldStroke.foot_seams(foot_line, foot_line.duplicate(), size, all, areas)
+	assert_eq(natural, foot_line, "a foot itself (a crossing in small steps) is not a seam")
+	WaterFieldStroke.foot_seams_cleared = false
+	out = WaterFieldStroke.foot_seams(seam, seam.duplicate(), size, all, areas)
+	WaterFieldStroke.foot_seams_cleared = true
+	assert_eq(out, seam, "the switch off keeps the coordinate as written")
+
+
+func test_the_canonical_field_holds_no_foot_seam() -> void:
+	assert_eq(_seam_blocks(_full.foot, _full.size), 0, "no 2 x 2 block mixes two falls' feet")
+
+
 func test_full_build_time_is_bounded() -> void:
 	var t0 := Time.get_ticks_usec()
 	var f := WaterField.build(_read())

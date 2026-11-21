@@ -203,6 +203,100 @@ static func condition_ranges(
 	return fit
 
 
+## The climbs of a stroke's reach `levels` (flow order): every stretch whose levels stand over the
+## lowest level upstream of it by more than `band`, as {"from" (the first reach over it), "to"
+## (the last), "low" (the reach it rose from), "rise" (metres, the highest of the stretch over
+## that low)}. Empty for water that only descends: the rule every stored stroke must keep
+## (docs/systems/water_field.md "Water does not climb").
+static func climbs(levels: PackedFloat64Array, band: float = DEAD_BAND_M) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var low := INF
+	var low_at := -1
+	var open := {}
+	for k in levels.size():
+		if levels[k] - low > band:
+			if open.is_empty():
+				open = {"from": k, "to": k, "low": low_at, "rise": 0.0}
+				out.append(open)
+			open.to = k
+			open.rise = maxf(float(open.rise), levels[k] - low)
+			continue
+		open = {}
+		if levels[k] < low:
+			low = levels[k]
+			low_at = k
+	return out
+
+
+## The longest part of a stroke that does not climb: the first and last reach (inclusive) of the
+## run of consecutive reaches, none over the lowest level before it in the run by more than `band`,
+## with the greatest summed `lengths`. A run begins at the reach that broke the one before it, so
+## the crest of a rise heads the run that descends from it. Vector2i(0, -1) for no reaches.
+static func longest_descent(
+	levels: PackedFloat64Array, lengths: PackedFloat64Array, band: float = DEAD_BAND_M
+) -> Vector2i:
+	var best := Vector2i(0, -1)
+	var best_len := -1.0
+	var first := 0
+	var low := INF
+	var length := 0.0
+	for k in levels.size() + 1:
+		if k == levels.size() or levels[k] - low > band:
+			if k > first and length > best_len:
+				best = Vector2i(first, k - 1)
+				best_len = length
+			first = k
+			low = INF
+			length = 0.0
+		if k < levels.size():
+			low = minf(low, levels[k])
+			length += lengths[k]
+	return best
+
+
+## A stroke's reach `levels` (flow order) as the parts between its troughs and crests, in order:
+## Vector3i(first reach, last reach, direction), direction -1 for a part that runs downhill as
+## drawn and 1 for one that climbs (to be turned round: it runs down from its crest). A move
+## against a part's direction within `band` does not end it. A crest heads the part that descends
+## from it and a trough ends the part that descends into it, so a climbing part holds only the
+## reaches strictly between the two (none for a single step up), except at the stroke's ends,
+## where it holds the first or the last reach too. Every reach is in exactly one part.
+static func monotone_parts(
+	levels: PackedFloat64Array, band: float = DEAD_BAND_M
+) -> Array[Vector3i]:
+	var out: Array[Vector3i] = []
+	var n := levels.size()
+	if n == 0:
+		return out
+	var first := 0
+	var down := true
+	# The lowest level of a descending part so far; the index of the highest of a climbing one.
+	var low := levels[0]
+	var top := 0
+	for k in range(1, n):
+		if down:
+			if levels[k] - low > band:
+				# A stroke that begins flat and then climbs: the flat start is the climb's foot.
+				if first > 0 or levels[0] - low > band:
+					out.append(Vector3i(first, k - 1, -1))
+					first = k
+				top = k
+				down = false
+			else:
+				low = minf(low, levels[k])
+		elif levels[k] > levels[top]:
+			top = k
+		elif levels[top] - levels[k] > band:
+			if top > first:
+				out.append(Vector3i(first, top - 1, 1))
+			first = top
+			low = levels[k]
+			down = true
+	# A stroke that ends on a rise: the climb is a part up to the end, its crest included.
+	out.append(Vector3i(first, n - 1, -1 if down else 1))
+	return out
+
+
 ## The conditioned levels of a tree of nodes (rivers' reaches and ponds). `parent[i]` is node i's
 ## downstream node (-1 for an outlet); a node must be at most each upstream neighbour (water does
 ## not climb: an outlet is lowered to the lowest water draining into it, and a node over a pond

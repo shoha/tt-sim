@@ -43,6 +43,13 @@ const HINTS_PATH := "res://utils/water_hints.gd"
 const REFIT_PATH := "res://utils/water_refit.gd"
 const POND_FIT_PATH := "res://utils/water_pond_fit.gd"
 const COMPRESSION := FileAccess.COMPRESSION_ZSTD
+## How many times a stroke that climbs is cut to its longest descending part (_descending()).
+const MAX_DESCENT_TRIES := 4
+## The most parts of one gesture over rises that are planned after its first (`report.rest`).
+const MAX_PIECES := 8
+## The deepest cut into the drawn ground a part of `report.rest` may ask of the carve and still
+## land (WaterEditor._compute_rest): what one flat reach spans, far under cut_limit_m.
+const REST_CUT_M := WaterGeometry.REACH_DROP_M
 
 ## The conditioning off switch (card painter-water-condition): plan_river() conditions a stroke
 ## (smooths the course, WaterCourseFit; fits the reach levels, WaterConditioner; joins the ends,
@@ -52,6 +59,12 @@ static var conditioning_enabled: bool = true
 ## The deepest cut into the drawn ground a conditioned plan may ask of the carve before the stroke
 ## is kept as drawn (WaterConditioner.CUT_LIMIT_M); a test or probe may change it.
 static var cut_limit_m: float = 1.5
+## Water does not climb (card painter-water-climb): a blocked stroke that climbs as drawn is cut
+## to its longest descending part (_descending()). On in every build; false gives the plan before
+## that rule (the stroke stored as drawn, climbing), for an A/B table or a test of the field's
+## `climb` event.
+static var stop_at_rise: bool = true
+static var _descent_depth: int = 0
 
 
 ## A copy of `doc`'s water model for history: {"bodies": Array[WaterBody] (deep copies),
@@ -178,7 +191,8 @@ static func plan_river(
 		doc, bodies[-1].points[-1], bodies[-1].level_m, tail_hw, false, none
 	)
 	if bool(report.blocked):
-		return _kept_as_drawn(doc, points, half_widths, depth, speed, report, head, tail)
+		var drawn := _kept_as_drawn(doc, points, half_widths, depth, speed, report, head, tail)
+		return _descending(doc, points, half_widths, depth, speed, report, drawn)
 	var line := points.duplicate()
 	var moved := false
 	for pair: Array in [[head, bodies[0].points[0]], [tail, bodies[-1].points[-1]]]:
@@ -191,7 +205,8 @@ static func plan_river(
 	if moved:
 		var again := _plan(doc, line, half_widths, depth, speed, true, report)
 		if bool(report.blocked):
-			return _kept_as_drawn(doc, points, half_widths, depth, speed, report, head, tail)
+			var drawn := _kept_as_drawn(doc, points, half_widths, depth, speed, report, head, tail)
+			return _descending(doc, points, half_widths, depth, speed, report, drawn)
 		if not again.is_empty():
 			bodies = again
 	var hints: Array = (report.get("fit_hints", []) as Array).duplicate()
@@ -272,6 +287,149 @@ static func _kept_as_drawn(
 			hints.append(hint)
 	report["hints"] = hints
 	return _plan(doc, points, half_widths, depth, speed, false, {})
+
+
+## Water does not climb (docs/systems/water_field.md "Water does not climb"). `drawn` is a blocked
+## stroke's plan as drawn (_kept_as_drawn()): when its reach levels only descend it is returned
+## as it is. When they climb (the line crosses a rise the conditioner will not cut a gorge
+## through), the stroke becomes the longest part of the line that runs downhill
+## (WaterConditioner.longest_descent), planned as a stroke of its own: conditioned, its ends
+## joined or tapered, so the river ends in a pool at the foot of the rise instead of standing up
+## it as a wall of water. The hint `stopped_at_rise` says so (`report.stopped` is true, `kept_m`
+## and `drawn_m` the lengths). The author's ground is never cut for it. A part too short to hold
+## water is refused like any short line.
+## The rest of the gesture is not lost: `report.rest` lists the line's other parts between its
+## troughs and crests (WaterConditioner.monotone_parts) as [points, half_widths] lines that each
+## run downhill, a climbing part turned round so it runs down from its crest. plan_river() returns
+## one stroke, so the caller plans each of them on the document as it stands once the parts before
+## it are carved (WaterEditor.compute does, in the same history entry; at most MAX_PIECES).
+static func _descending(
+	doc: MapDocument,
+	points: PackedVector2Array,
+	half_widths: PackedFloat32Array,
+	depth: WaterBody.Depth,
+	speed: float,
+	report: Dictionary,
+	drawn: Array[WaterBody]
+) -> Array[WaterBody]:
+	var levels := PackedFloat64Array()
+	for body in drawn:
+		levels.append(body.level_m)
+	var conditioner: GDScript = load(CONDITIONER_PATH)
+	var found: Array[Dictionary] = conditioner.climbs(levels)
+	if not stop_at_rise:
+		return drawn
+	if found.is_empty():
+		# A rise within the dead band drops onto the lowest level upstream (water is only lowered):
+		# even 0.2 m of climb draws as a step along the field's samples.
+		var low := INF
+		for body in drawn:
+			low = minf(low, body.level_m)
+			body.level_m = low
+		return drawn
+	var rise_at: Vector2 = drawn[int(found[0].from)].points[0]
+	# The line's parts between its troughs and crests, each as a line that runs downhill (a
+	# climbing part turned round). The longest part that descends as drawn is the stroke planned
+	# here; the others are `report.rest`, for the caller to plan and land after it.
+	var part: Array = []
+	var best := -1.0
+	var rest: Array = []
+	for found_part: Vector3i in conditioner.monotone_parts(levels):
+		var from: Vector2 = drawn[found_part.x].points[0]
+		var piece := sub_line(points, half_widths, from, drawn[found_part.y].points[-1])
+		var length := polyline_length(piece[0])
+		if found_part.z > 0:
+			var turned_points: PackedVector2Array = piece[0]
+			var turned_sizes: PackedFloat32Array = piece[1]
+			turned_points.reverse()
+			turned_sizes.reverse()
+			piece = [turned_points, turned_sizes]
+			# A part as drawn is preferred to any turned one.
+			length *= 1e-3
+		if length > best:
+			if not part.is_empty():
+				rest.append(part)
+			part = piece
+			best = length
+		else:
+			rest.append(piece)
+	var sub := {}
+	var bodies: Array[WaterBody] = []
+	# The part is strictly shorter than the line, so this ends; the guard is for a plan that
+	# keeps finding a rise in ever shorter parts.
+	if _descent_depth < MAX_DESCENT_TRIES:
+		_descent_depth += 1
+		bodies = plan_river(doc, part[0], part[1], depth, speed, true, sub)
+		_descent_depth -= 1
+	var hints: Array = [
+		load(HINTS_PATH).make(
+			&"stopped_at_rise",
+			rise_at,
+			[&"draw_from_top", &"cut_ridge", &"reroute"] as Array[StringName],
+			{"rise_m": float(found[0].rise), "rises": found.size()}
+		)
+	]
+	hints.append_array(sub.get("hints", []))
+	for key: Variant in sub:
+		report[key] = sub[key]
+	# The part planned here may have crossed a rise of its own: its rest follows this line's.
+	rest.append_array(sub.get("rest", []))
+	report["rest"] = rest
+	report["hints"] = hints
+	report["stopped"] = true
+	report["drawn_m"] = polyline_length(points)
+	report["kept_m"] = polyline_length(part[0])
+	return bodies
+
+
+## The length of polyline `points` (metres).
+static func polyline_length(points: PackedVector2Array) -> float:
+	var length := 0.0
+	for i in points.size() - 1:
+		length += points[i].distance_to(points[i + 1])
+	return length
+
+
+## The part of the polyline `points` (a value of `sizes` per point) between the places on it
+## nearest `a` and `b`, in the polyline's own order: [points, sizes], its ends interpolated.
+static func sub_line(
+	points: PackedVector2Array, sizes: PackedFloat32Array, a: Vector2, b: Vector2
+) -> Array:
+	var from := _place_on(points, a)
+	var to := _place_on(points, b)
+	if from > to:
+		var swap := from
+		from = to
+		to = swap
+	var out_points := PackedVector2Array()
+	var out_sizes := PackedFloat32Array()
+	var last := points.size() - 1
+	for place: float in [from, to]:
+		var i := mini(int(place), last - 1)
+		var t := place - i
+		if place == to:
+			# The whole points strictly between the two places, then the far end.
+			for k in range(int(from) + 1, int(ceil(to))):
+				out_points.append(points[k])
+				out_sizes.append(sizes[k])
+		out_points.append(points[i].lerp(points[i + 1], t))
+		out_sizes.append(lerpf(sizes[i], sizes[i + 1], t))
+	return [out_points, out_sizes]
+
+
+## Where on the polyline `points` the point nearest `p` lies: segment index plus the share along it.
+static func _place_on(points: PackedVector2Array, p: Vector2) -> float:
+	var best := 0.0
+	var nearest := INF
+	for i in points.size() - 1:
+		var seg := points[i + 1] - points[i]
+		var len_sq := seg.length_squared()
+		var t := clampf((p - points[i]).dot(seg) / len_sq, 0.0, 1.0) if len_sq > 1e-12 else 0.0
+		var d := p.distance_squared_to(points[i] + seg * t)
+		if d < nearest:
+			nearest = d
+			best = i + t
+	return best
 
 
 ## plan_river() once, without the end joins: `condition` runs the course and level fit.

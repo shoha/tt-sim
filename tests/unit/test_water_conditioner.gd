@@ -635,6 +635,13 @@ func test_fuzz_hydrology_invariants() -> void:
 		var was_blocked := Cases.blocked
 		var base := Cases.metrics(_fuzz_doc(seed_value, false))
 		var cond := Cases.metrics(cond_doc)
+		# Water does not climb, blocked or not: no reach over the lowest reach upstream of it.
+		for chain in RiverProfile.strokes(cond_doc.water_bodies):
+			var stored := PackedFloat64Array()
+			for body: WaterBody in chain:
+				stored.append(body.level_m)
+			var climbing := WaterConditioner.climbs(stored, 1e-6).size()
+			assert_eq(climbing, 0, "seed %d: stroke %d climbs %s" % [seed_value, chain[0].id, stored])
 		if cond.field_rise_m > 0.2:
 			gut.p("FUZZ seed %d: field climbs %.2f m (base %.2f): %s" % [
 				seed_value, cond.field_rise_m, base.field_rise_m, _dump(cond_doc)

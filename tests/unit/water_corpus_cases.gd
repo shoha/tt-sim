@@ -526,6 +526,13 @@ static func field_report(doc: MapDocument) -> Dictionary:
 				r.foot_max = maxf(r.foot_max, f.foot[i])
 			if river and (is_nan(f.foot[i]) or (has_foot and absf(f.foot[i]) > 4.5)):
 				r.foot_out += 1
+			# A foot seam (WaterFieldStroke.foot_seams): a neighbour ahead whose coordinate has the
+			# other sign, further off than a foot's own crossing steps.
+			for ahead: int in [1, sx - 1, sx, sx + 1] if f.foot[i] < no_foot * 0.5 else []:
+				var other: float = f.foot[i + ahead] if i + ahead < f.foot.size() else no_foot
+				var jump := absf(other - f.foot[i]) > WaterFieldStroke.FOOT_SEAM_JUMP
+				if other < no_foot * 0.5 and other * f.foot[i] < 0.0 and jump:
+					r.foot_seams = int(r.get("foot_seams", 0)) + 1
 			for o: Vector2i in [Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1)]:
 				var nx := x + o.x
 				var nz := z + o.y
