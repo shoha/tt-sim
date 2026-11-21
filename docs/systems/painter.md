@@ -2833,24 +2833,79 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
     inside the outline and nothing changed outside it. The seam is a tone the ground is set to
     (`mix` toward the soil), so a dab inside a boulder's seam, a cast shadow or another dab is
     that place's own seam tone, never a second darkening.
-  - *The geometry* (`PainterSites.append_dab`). A dab's patch is the terrain's own triangles: the
-    grid samples within the dab's reach of the stone (2 radii plus 0.06 m), triangulated as
-    `TerrainMeshBuilder` does, 4 mm up. It lies on the ground whatever the ground's shape. (The
+  - *The finish round (card painter-terrain-dabs-finish, 2026-11-21) replaced the geometry, the
+    shape, the sun's part and the depth of the four bullets this one stands before; where they
+    differ, this one is current.* Evidence in `finish/` of the same folder; handoff "## Finish".
+    - *Depth: no lift.* A patch is coplanar with the ground and its vertex shader leaves every
+      vertex on the ground's own point (`v_wy` is the ground's height), then moves it toward the
+      eye along the pixel's own ray: `DAB_TIE_M` 0.5 mm to win the tie with the ground, and up to
+      2.5 mm more by its value (`DAB_ORDER_M` per unit) to order overlapping patches. An
+      orthographic camera's ray is `-CAMERA_DIRECTION_WORLD`, a perspective one's points at
+      `CAMERA_POSITION_WORLD`. The vertex stays on its pixel at every zoom and pitch, so a
+      patch's pixel outside the mark is the ground's and nothing that hugs the ground is hidden
+      (the 4 mm world lift, plus up to 20 mm by value, made a step of about 11 mm at every patch
+      border: the grid overlay rebuilds positions and normals from the depth buffer, and the
+      paint inside each patch was drawn half a pixel off).
+    - *The rule and why the old outline broke it.* Owner: about a third of a stone shows on the
+      side away from the sun and elsewhere a sliver no wider than about a tenth of the stone's
+      radius, for every stone, slope and size. The three lobes were sized by the body's BOX
+      (0.95, 0.8 and 0.65 box radii, two of them standing 0.45 to 0.5 radii off in hashed
+      directions), so toward the sun a lobe still reached 0.45 + 0.8 * 0.83 * 1.22 = 1.26 box
+      radii; the seam's noise moved the edge by a fixed 0.045 m, nearly half the radius of a
+      0.2 m stone; and a stone meets the ground inside its box (the scatter's stones measure
+      0.83 to 0.88 of it). On a slope the downhill side of an upright stone stands clear, so the
+      ring showed all round.
+    - *The foot is measured* (`PainterSites.feet`, kept per body of a mesh by
+      `PainterOcclusion._feet_of`, made the first time a stone that small is seen): the body's
+      triangles cut at 5 heights (8 % of its height up, then every 16 %), each section its
+      crossings' middle and the outermost crossing along 12 rays, stored as a mean radius and
+      three harmonics. `PainterSites.outline()` takes the section at the height where this stone
+      meets this ground, turned and scaled as the stone is; under an upright stone on sloped
+      ground the first harmonic takes the tilt (uphill the ground cuts the stone higher: the
+      radius there is the higher section's). An outline is 12 floats (the foot's centre, its
+      mean radius, the stone's radius, the harmonics), three texels of `dab_lobes`; it is made
+      again when the ground under the stone is edited.
+    - *The shape* (`dab_value()`; `PainterSites.value()` is its copy): the foot `DAB_SLIVER` 5 %
+      wider, in a smooth union (`DAB_ROUND`: no cusp) with the same foot `DAB_CAST` 0.85 as wide
+      moved `DAB_SHOW` 0.6 stone radii (plus `DAB_SHOW_LOW` 0.15 under a level sun) away from the
+      sun. The moved copy is narrower than the foot, so across the sun's line nothing passes the
+      sliver; toward the sun there is the sliver alone. The seam's noise is in the dab's own
+      units (`DAB_EDGE` 0.3 stone radii a unit: the edge moves 0.045 radii), behind its own
+      pixel-wide step, and the dab joins the field's marks by the greater coverage. Inside, the
+      dab is the seam and, in the shade, the pool, as a boulder's foot is (with the seam alone a
+      dab under a low sun was fainter than the boulders' marks beside it).
+      `test_a_dab_shows_a_third_of_a_stone_away_from_the_sun_and_a_sliver_elsewhere` checks the
+      rule at four sizes, eight sun directions and two sun heights.
+    - *The patch is cut to what the mark can reach* (`PainterSites.append_dab`): the terrain's
+      surface inside the square `reach(outline)` round the foot's centre (the furthest outline
+      whatever the sun, the edge's wobble and `MARGIN_M` 0.03 m), not whole cells. Each cell's
+      piece of the square is split along the cell's own diagonal and each part lies on its
+      triangle's plane, so the patch is coplanar with the ground everywhere (tested on ground
+      that is no plane anywhere). With no lift a cut changes nothing the ground shows.
+      `refresh_dab` is gone: a stone whose ground changed is built again, keeping its slot and
+      its turn in its cell.
+    - *What a sync looks at* (`PainterDabs._to_look_at`): the sites are compared with the last
+      sync's in their order (the same Array is the same stone; `PainterOcclusion` hands a
+      scatter node's sites again as they were while it stands still) and an edit's rect is
+      looked up in the 16 m cells it can touch, in place of a walk over every held stone.
+  - *The geometry, before the finish round* (`PainterSites.append_dab`). A dab's patch was the
+    terrain's own triangles: the grid samples within the dab's reach of the stone (2 radii plus
+    0.06 m), triangulated as `TerrainMeshBuilder` does, 4 mm up. (The
     first build, a fan per lobe with its vertices on the ground, dipped under every lip it
     crossed: a 0.3 to 0.8 m triangle on a 0.25 m heightfield sinks centimetres below a convex
     crease, and the marks were torn into shards: handoff, "Dead end".)
-  - *The shape* is not in the triangles. `dab_value()` works it out per pixel from the three
-    lobes every vertex of the patch carries (a lobe: its middle, its radius, the turn of its
-    waves; `PainterSites.lobes`, placed by a hash of the stone's position: 0.95, 0.8 and 0.65
-    radii, the last two 0.45 and 0.5 radii off the middle): a lobe's value falls in a straight
-    line from its middle to an outline whose distance varies round it by two and three waves
-    (14 % and 8 % of the radius), and the dab is the greatest of the three. Exact at any zoom:
-    curved, uneven outlines with cusps where lobes meet, no facets.
-  - *The sun* is a uniform: the value takes `DAB_LEAN` 0.2 (plus `DAB_LEAN_LOW` 0.1 times the
-    sun's levelness) of the offset from a lobe's middle along the direction away from the sun,
-    which stretches each outline to the shaded side by 1 / (1 - lean) and shortens it sunward.
+  - *The shape, before the finish round,* was not in the triangles either: `dab_value()` worked
+    it out per pixel from three lobes (a lobe: its middle, its radius, the turn of its
+    waves; placed by a hash of the stone's position: 0.95, 0.8 and 0.65
+    radii, the last two 0.45 and 0.5 radii off the middle): a lobe's value fell in a straight
+    line from its middle to an outline whose distance varied round it by two and three waves
+    (14 % and 8 % of the radius), and the dab was the greatest of the three: curved, uneven
+    outlines with cusps where lobes met.
+  - *The sun* is a uniform (before the finish round a lean of 0.2 to 0.3 of the offset from a
+    lobe's middle; now the moved copy above).
     Nothing is rebuilt when the hour changes (`PainterDabs.built` stands still across it).
-  - *Touching stones.* The vertex shader raises a vertex 8 mm per unit of its value, so where two
+  - *Touching stones.* The vertex shader orders overlapping patches by their value (8 mm of
+    lift per unit before the finish round, now up to 2.5 mm toward the eye), so where two
     stones' patches overlap the depth test keeps the one with the higher value there: the marks
     join along the union of their outlines, and the plain part of one patch never cuts the mark
     of another.

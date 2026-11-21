@@ -179,26 +179,36 @@ uniform vec4 occ_tint = vec4(0.9, 1.0, 0.96, 0.35);
 #ifdef PAINTER_DAB
 // A small stone's dab is a patch of the terrain's triangles drawn with this body under PAINTER_DAB
 // (PainterSites, PainterDabs). Every vertex of a patch carries CUSTOM3 (x over 1: a dab; y what
-// the value loses there; z the patch's lift in metres; w its stone's slot in dab_lobes plus one).
-// The stone's three lobes (a lobe's middle x and z, its radius, its waves' turn) are three RGBA32F
-// texels of dab_lobes, DAB_ROW stones a row (PainterDabs.ROW), read where they are needed. (When
-// the dabs were drawn with the ground's own shader, the ground paid for their code on every pixel:
-// the lobes as three flat vec4 varyings cost the torture map's wide view 0.05 to 0.07 ms with no
-// dab drawn, and the fragment's dab branch about 0.1 ms; card painter-terrain-dabs-cost.)
-// dab_value() is the mark's value at a map point: positive inside the lobes' uneven outlines, in
-// units of DAB_BAND_M metres. It joins the field's seam before the seam's threshold
-// (contact_at()), so inside its outline a dab is the seam's tone behind the seam's own edge and
-// outside it the ground the patch covers. DAB_LEAN (plus DAB_LEAN_LOW under a level sun) of the
-// offset from a lobe's middle away from the sun is added: the mark reaches further on the shaded
-// side, and nothing is rebuilt when the sun turns. DAB_LIFT metres per unit of the value raise a
-// vertex, so of two patches that overlap the depth test keeps the one with the higher value.
-const float DAB_LEAN = 0.2;
-const float DAB_LEAN_LOW = 0.1;
-const float DAB_LIFT = 0.008;
+// the value loses there; z unused; w its stone's slot in dab_lobes plus one).
+// The stone's outline (PainterSites.outline: the centre of its foot, the foot's mean radius, the
+// stone's radius, then the cosine and sine parts of the radius's harmonics 1 to 3 round the
+// centre) is three RGBA32F texels of dab_lobes, DAB_ROW stones a row (PainterDabs.ROW), read
+// where they are needed. (When the dabs were drawn with the ground's own shader, the ground paid
+// for their code on every pixel: three flat vec4 varyings cost the torture map's wide view 0.05
+// to 0.07 ms with no dab drawn, and the fragment's dab branch about 0.1 ms; card
+// painter-terrain-dabs-cost.)
+// dab_value() is the mark's value at a map point, positive inside: the stone's measured foot
+// DAB_SLIVER wider, joined by a smooth union (no cusp where they meet) to the same foot DAB_CAST
+// as wide moved DAB_SHOW stone radii (DAB_SHOW_LOW more under a level sun) away from the sun. So
+// about a third of a stone shows on the shaded side and a sliver elsewhere, whatever the stone's
+// size or the ground's slope (the PainterSites constants of the same names: keep each pair
+// equal), and nothing is rebuilt when the sun turns. Inside, contact_at() gives the pixel the
+// seam's tone and the pool's; outside it is the ground the patch covers.
+// A patch is coplanar with the ground and is drawn at the ground's depth, moved toward the eye
+// along the pixel's own ray: DAB_TIE_M to win the tie with the ground, and up to 2.5 times
+// DAB_ORDER_M more by its value (one unit of DAB_BAND_M), so of two patches that overlap the depth
+// test keeps the one with the higher value. Its pixels land where the ground's do: nothing that
+// hugs the ground is hidden, and outside the mark a patch's pixel is the ground's.
+const float DAB_SLIVER = 0.05;
+const float DAB_SHOW = 0.6;
+const float DAB_SHOW_LOW = 0.15;
+const float DAB_CAST = 0.85;
+const float DAB_ROUND = 0.3;
+// The stone's radii one unit of the value is: the seam's noise moves the edge by 0.15 units.
+const float DAB_EDGE = 0.3;
+const float DAB_TIE_M = 0.0005;
+const float DAB_ORDER_M = 0.001;
 const float DAB_BAND_M = 0.3;
-// The share of a lobe's radius two and three waves round it move its outline by (PainterSites
-// WAVES: keep the two equal).
-const vec2 DAB_WAVES = vec2(0.14, 0.08);
 uniform highp sampler2D dab_lobes : filter_nearest, repeat_disable;
 const int DAB_ROW = 256;
 // A dab's slot plus one, and what its value loses (the patch past a ledge).
@@ -625,55 +635,65 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float
 }
 
 #ifdef PAINTER_DAB
-// One lobe of a small stone's dab at map point `p`: `l` its middle, radius and waves' turn, `lean`
-// the direction away from the sun times the lean's share. Metres, positive inside.
-float dab_lobe(vec2 p, vec4 l, vec2 lean) {
-	vec2 d = p - l.xy;
+// A small stone's foot, `grow` times as wide, at offset `d` from its centre: `l0` its mean radius
+// (z), `l1` and `l2` the harmonics of the radius round the centre. Metres, positive inside.
+float dab_foot(vec2 d, vec4 l0, vec4 l1, vec4 l2, float grow) {
 	float len = max(length(d), 1.0e-4);
 	vec2 u = d / len;
-	// The cosines of twice and three times the angle round the lobe, less the waves' turns.
+	// The cosines and sines of twice and three times the angle round the centre.
 	vec2 two = vec2(u.x * u.x - u.y * u.y, 2.0 * u.x * u.y);
 	vec2 three = vec2(u.x * (4.0 * u.x * u.x - 3.0), u.y * (3.0 - 4.0 * u.y * u.y));
-	float rho = l.z * (1.0
-		+ DAB_WAVES.x * dot(two, vec2(cos(l.w), sin(l.w)))
-		+ DAB_WAVES.y * dot(three, vec2(cos(2.7 * l.w), sin(2.7 * l.w))));
-	return l.z * (1.0 - len / rho) + dot(d, lean);
+	float rho = l0.z + dot(u, l1.xy) + dot(two, l1.zw) + dot(three, l2.xy);
+	return max(rho, 0.3 * l0.z) * grow - len;
 }
 
-// The value of a small stone's dab at map point `p` (PainterSites.value() is its copy): the
-// greatest of its three lobes', in units of DAB_BAND_M.
+// The value of a small stone's dab at map point `p`, in metres, positive inside
+// (PainterSites.value() is its copy): the foot a sliver wider, and the foot again, narrower,
+// moved away from the sun, in a smooth union.
 float dab_value(vec2 p, vec4 l0, vec4 l1, vec4 l2) {
+	vec2 d = p - l0.xy;
 	float sl = length(foliage_sun.xz);
-	vec2 lean = sl > 0.01
-		? -foliage_sun.xz / sl * (DAB_LEAN + DAB_LEAN_LOW * min(sl, 1.0))
-		: vec2(0.0);
-	return max(dab_lobe(p, l0, lean), max(dab_lobe(p, l1, lean), dab_lobe(p, l2, lean))) / DAB_BAND_M;
+	vec2 away = sl > 0.01 ? -foliage_sun.xz / sl : vec2(0.0);
+	float show = sl > 0.01 ? l0.w * (DAB_SHOW + DAB_SHOW_LOW * min(sl, 1.0)) : 0.0;
+	float body = dab_foot(d, l0, l1, l2, 1.0 + DAB_SLIVER);
+	float cast = dab_foot(d - away * (show + (1.0 - DAB_CAST) * l0.z), l0, l1, l2, DAB_CAST);
+	float k = DAB_ROUND * l0.z;
+	float h = max(k - abs(body - cast), 0.0);
+	return max(body, cast) + h * h / (4.0 * k);
 }
 
-// Lobe `k` of the stone in slot `site` minus one (dab_lobes).
+// Texel `k` of the outline of the stone in slot `site` minus one (dab_lobes).
 vec4 dab_lobe_of(float site, int k) {
 	int i = int(site) - 1;
 	return texelFetch(dab_lobes, ivec2(3 * (i % DAB_ROW) + k, i / DAB_ROW), 0);
 }
 
-// The value of the dab of the stone in slot `site` minus one at map point `p`.
-float dab_value_of(vec2 p, float site) {
-	return dab_value(p, dab_lobe_of(site, 0), dab_lobe_of(site, 1), dab_lobe_of(site, 2));
+// The dab of the stone in slot `site` minus one at map point `p`: x its value in metres, y the
+// metres one unit of the mark's edge is (DAB_EDGE of the stone's radius).
+vec2 dab_value_of(vec2 p, float site) {
+	vec4 l0 = dab_lobe_of(site, 0);
+	return vec2(
+		dab_value(p, l0, dab_lobe_of(site, 1), dab_lobe_of(site, 2)), DAB_EDGE * max(l0.w, 0.04));
 }
 #endif
 
 void vertex() {
 	v_n = world_frame ? normalize(mat3(MODEL_MATRIX) * NORMAL) : NORMAL;
 #ifdef PAINTER_DAB
-	// A dab's vertex: its slot for the pixels, and the lift that orders overlapping patches.
+	// A dab's vertex: its slot for the pixels, and the ground's own point.
 	v_site = CUSTOM3.w;
 	v_loss = CUSTOM3.y;
-	float value = dab_value_of(UV, CUSTOM3.w) - CUSTOM3.y;
-	float raised = DAB_LIFT * clamp(value + 1.0, 0.0, 2.5);
-	VERTEX.y += raised;
 	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	// The ground's height under the dab's vertex, not the dab's.
-	v_wy = wp.y - (CUSTOM3.z + raised);
+	v_wy = wp.y;
+	// Toward the eye along the pixel's ray (an orthographic camera's is its direction): the
+	// vertex stays on its pixel and only its depth changes, to win the tie with the ground and
+	// to order overlapping patches by their value.
+	float value = dab_value_of(UV, CUSTOM3.w).x / DAB_BAND_M - CUSTOM3.y;
+	float ahead = DAB_TIE_M + DAB_ORDER_M * clamp(value + 1.0, 0.0, 2.5);
+	vec3 to_eye = PROJECTION_MATRIX[3][3] > 0.5
+		? -CAMERA_DIRECTION_WORLD
+		: normalize(CAMERA_POSITION_WORLD - wp);
+	VERTEX += (vec4(to_eye * ahead, 0.0) * MODEL_MATRIX).xyz;
 #else
 	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	v_wy = wp.y;
@@ -686,7 +706,7 @@ void vertex() {
 // is the disc right under the feet (a deeper step on top of the seam). light() shows the pool only
 // inside the shade. Under PAINTER_DAB, `dab` is the value of the dab this pixel is of (fragment()).
 #ifdef PAINTER_DAB
-vec3 contact_at(vec3 p, vec2 xz, float dab) {
+vec3 contact_at(vec3 p, vec2 xz, vec2 dab) {
 #else
 vec3 contact_at(vec3 p, vec2 xz) {
 #endif
@@ -704,17 +724,22 @@ vec3 contact_at(vec3 p, vec2 xz) {
 		// off with height before the brush's threshold, so that edge is a brush's too.
 		float up = abs(v_wy - f.b / max(f.a, 1.0e-4)) * f.a;
 		vec2 s = f.rg * (1.0 - smoothstep(1.0, 2.0, up));
-#ifdef PAINTER_DAB
-		// A small stone's dab is a seam: joined before the threshold, it takes the same noise and
-		// the same firm step.
-		s.g = max(s.g, 0.45 + dab - v_loss);
-#endif
 		vec2 w = vec2(p_noise(p * 1.3 + 80.0), p_noise(p * 2.7 + 95.0)) - 0.5;
 		// A firm edge whatever the field's gradient: the step is a pixel wide, at most the 0.1 of
 		// the field it used to be (round a group of stones the field falls slowly, and a 0.1 step
 		// of it was a soft-edged dark block, the one tonal edge of the ground that was no brush's).
 		vec2 v = s + w * 0.3 - 0.45;
 		occ.xy = clamp(v / clamp(fwidth(v), vec2(1.0e-4), vec2(0.1)) + 0.5, 0.0, 1.0) * occ_k.xy;
+#ifdef PAINTER_DAB
+		// A small stone's dab is a seam and, in the shade, a pool, as a boulder's foot is (with the
+		// seam alone it was fainter than the boulders' marks under a low sun): the same noise, in
+		// the dab's own units (a share of the stone's radius, so a pebble's edge is not moved by
+		// half its width), behind a step a pixel wide. The union with the field's marks is the
+		// greater coverage: a dab in a boulder's seam or another dab is one mark, no darker.
+		float dv = (dab.x / dab.y) - v_loss + w.y * 0.3;
+		float cover = clamp(dv / clamp(fwidth(dv), 1.0e-4, 0.6) + 0.5, 0.0, 1.0);
+		occ.xy = max(occ.xy, cover * occ_k.xy);
+#endif
 	}
 	for (int i = 0; i < tok_n; i++) {
 		vec4 t = tok[i];
@@ -736,7 +761,7 @@ void fragment() {
 	vec3 p = vec3(xz.x, 0.0, xz.y);
 #ifdef PAINTER_DAB
 	// The dab's value, here where little else is held (contact_at() joins it to the seam).
-	float dab = dab_value_of(xz, v_site);
+	vec2 dab = dab_value_of(xz, v_site);
 #endif
 	if (glb_zone) {
 		// The mip level of the baked albedo that one pixel covers.

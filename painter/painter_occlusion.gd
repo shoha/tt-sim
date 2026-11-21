@@ -124,6 +124,9 @@ var _numbers: Dictionary = {}
 var _count := 0
 ## A scatter mesh's bodies (islands()), by the mesh's instance id.
 var _bodies: Dictionary = {}
+## A scatter mesh's triangles and its small bodies' plan sections (_feet_of), by the same id.
+var _soups: Dictionary = {}
+var _feet: Dictionary = {}
 ## The field's floats (CHANNELS a texel), the sorted marks it was baked from, and the texel window
 ## the rasterizers may write (the whole field, or one dirty rect).
 var _data := PackedFloat32Array()
@@ -154,6 +157,8 @@ func release() -> void:
 	_tokens = PackedVector4Array()
 	_token_bounds.clear()
 	_bodies.clear()
+	_soups.clear()
+	_feet.clear()
 	_held.clear()
 	_marks = []
 	_data = PackedFloat32Array()
@@ -557,21 +562,95 @@ func _solids_of(mm: MultiMesh, to_world: Transform3D, leafy: bool, sites: Array)
 			_tree(out, xf.origin, xf * box.get_center(), maxf(whole.x, whole.y), height)
 			continue
 		var yaw := atan2(xf.basis.x.z, xf.basis.x.x)
-		for body: AABB in bodies:
-			_solid(out, sites, xf * body.get_center(), yaw, body.size * scale * 0.5)
+		var upright := xf.basis.y.y > 0.98 * scale.y
+		for b in bodies.size():
+			var body := bodies[b]
+			var half3 := body.size * scale * 0.5
+			var foot := PackedFloat32Array()
+			if PainterSites.radius(Vector2(half3.x, half3.z)) > 0.0:
+				foot = _feet_of(mm.mesh, b, body)
+			_solid(
+				out,
+				sites,
+				xf * body.get_center(),
+				yaw,
+				half3,
+				foot,
+				Vector2(sqrt(scale.x * scale.z), 1.0 if upright else 0.0)
+			)
+	return out
+
+
+## The plan sections of body `b` (`body`, one of islands()) of a scatter mesh (PainterSites.feet),
+## made the first time a stone that small is seen: the mesh's triangles whose middle lies in the
+## body's box, cut at a few heights.
+func _feet_of(mesh: Mesh, b: int, body: AABB) -> PackedFloat32Array:
+	var id := mesh.get_instance_id()
+	if not _feet.has(id):
+		_feet[id] = {}
+	var known: Dictionary = _feet[id]
+	if known.has(b):
+		return known[b]
+	if not _soups.has(id):
+		_soups[id] = _soup(mesh)
+	var soup: PackedVector3Array = _soups[id]
+	var inside := body.grow(0.01)
+	var own := PackedVector3Array()
+	for t in range(0, soup.size() - 2, 3):
+		if inside.has_point((soup[t] + soup[t + 1] + soup[t + 2]) / 3.0):
+			own.append(soup[t])
+			own.append(soup[t + 1])
+			own.append(soup[t + 2])
+	known[b] = PainterSites.feet(own, body)
+	return known[b]
+
+
+## Every triangle of `mesh`, three corners each (nothing for a mesh islands() does not split).
+static func _soup(mesh: Mesh) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	var array_mesh := mesh as ArrayMesh
+	if array_mesh == null:
+		return out
+	for s in array_mesh.get_surface_count():
+		if array_mesh.surface_get_primitive_type(s) != Mesh.PRIMITIVE_TRIANGLES:
+			continue
+		var arrays := array_mesh.surface_get_arrays(s)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		if out.size() + verts.size() > 6 * MAX_SPLIT_VERTICES:
+			return PackedVector3Array()
+		if arrays[Mesh.ARRAY_INDEX] == null:
+			out.append_array(verts)
+			continue
+		for index: int in arrays[Mesh.ARRAY_INDEX] as PackedInt32Array:
+			out.append(verts[index])
 	return out
 
 
 ## One body of a scatter solid: its middle `c` (world), its turn and its half size (metres). A
-## small stone is no mark: it goes to `sites`.
-func _solid(marks: Array, sites: Array, c: Vector3, yaw: float, half3: Vector3) -> void:
+## small stone is no mark: it goes to `sites`, with its measured foot when `sections` holds its
+## body's (PainterSites.feet; `stand` is then its plan scale and 1 for an upright stone).
+func _solid(
+	marks: Array,
+	sites: Array,
+	c: Vector3,
+	yaw: float,
+	half3: Vector3,
+	sections := PackedFloat32Array(),
+	stand := Vector2.ONE
+) -> void:
 	var half := Vector2(half3.x, half3.z)
 	var corner := minf(half.x, half.y)
 	if PainterSites.holds(half):
 		# A stone a coverage its size cannot hold: its own dab, as geometry (PainterDabs).
 		var r := PainterSites.radius(half)
 		if r > 0.0:
-			sites.append(PainterSites.site(c.x, c.z, r, c.y - 0.5 * half3.y, half3.y))
+			var plain := PainterSites.site(c.x, c.z, r, c.y - 0.5 * half3.y, half3.y)
+			if sections.is_empty():
+				sites.append(plain)
+			else:
+				sites.append(
+					PainterSites.measured(plain, half3.y, yaw, stand.x, stand.y > 0.5, sections)
+				)
 		return
 	var reach := solid_reach(half)
 	if corner + reach.x < 0.5 * TEXEL_M:
