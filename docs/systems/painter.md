@@ -3283,6 +3283,44 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
   shadow filter quality and blur as switches (`sun.gd shadow`), since a hard-filtered map under
   the same step has no dither to show; if the sawtooth is the caster's, `painter_terrain_caster`
   could read the field at each vertex and move a vertex the field calls lit away from the light.
+- **Past the border the cast shadow ends with the form; the hatched fringe is attributed, its fix
+  is not shipped** (card painter-terrain-shade, 2026-11-21; evidence in
+  `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final126_terrain_shade/`).
+  This supersedes the two bullets above where they differ.
+  The skirt (shipped, `painter_ground_body.gdshaderinc` only). Switches on the skirt alone
+  (`attribution/item2_*`): the streaks, the dashed line and the ruled bar past the +z walls are the
+  CAST term (gone with the cast off, unchanged with the form off); they are the extruded border
+  wall's own shadow on the skirt, which outlives the form once the form stops being drawn. The
+  detached fleck off the +x wall came from the end distance varying by the pixel's own noise, so
+  the drawn set was not monotone along an outward line. Built: the end's variation is read at the
+  BORDER point (`SKIRT_END_FREQ` 0.9 per metre along the border), so every outward line has one
+  end and no fleck can stand detached; and where the border carries a form (raised, or steep
+  within `SKIRT_NEAR_M` 0.8 m along the border: two more field reads on skirt pixels) the cast
+  step is taken down as the form stops being drawn (`cast_end`, through the `f_cut` varying). A
+  level border keeps every shadow that falls past it (trees, rocks, rim plants). Rejected: a
+  back-face caster twin of the skirt on a relaxed profile (a 7 m ruled shade rectangle with light
+  streaks at 17.5 h), and flattening the skirt in the vertex shader (the dashes stayed, two lobes
+  appeared). What `skirt_main_build_native.png` shows (+z and +x at 6.5, 14 and 17.5 h, main |
+  build): the fleck under the left +z wall, the wide sawtooth-edged bar and the dashed line at
+  17.5 h are gone; the +x wall ends in one smooth curve and its 17.5 h shade is one crescent
+  instead of a lobed blob. Still there: a thin dark outline at the right +z wall's tip and a small
+  dark tick at the left one at 17.5 h. Owner frames (bank_z3, f1_o, clock frozen): 0 px against
+  main; Classic 0 px.
+  The hatched fringe (attributed by switches, `attribution/item1_switches_native__...png`): it is
+  the sun's soft shadow filter (quality 4, `shadow_blur` 1.0, a per-pixel rotated disc) under the
+  ground's firm step; it is unchanged with the wash and the turn off and gone with a hard filter
+  or `shadow_blur` 0. With a narrow filter two more things show: a regular texel scallop along
+  long edges, and dark teeth on the lit side of crests (the caster's 0.3 m push passing in front
+  of lit ground). Candidates (`candidates/`): a wider step (a blurred, still stippled band);
+  `shadow_blur` 0.5, 0.25 and 0 with the lookup moved by the brush's wobble (`LIGHT_VERTEX`, reach
+  0.12 m) and 0.3 m toward the sun on crests. Blur 0.5 with both gave a clean firm edge on the
+  ground at zoom 5 and the same edge with the camera moved 0.5 m, but it is NOT shipped: the
+  blur is the sun's, so every Painted surface changed (f1_o: 72592 px, among them the shadow line
+  across the fall and the pool), the stipple stayed on flower heads, and the wobble drew dashes
+  in a rock face's shade (`item1_not_shipped/`, with the two files of that build). Next step for
+  the fringe: keep the sun's filter and remove the dither inside the ground's own read, for
+  example a firm step of an attenuation the ground filters itself, or a per-material narrow
+  filter if the engine offers one; any wobble of the lookup must be gated off steep faces.
 
 ## Verification
 

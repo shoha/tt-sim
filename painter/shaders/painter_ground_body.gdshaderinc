@@ -162,8 +162,11 @@ uniform float skirt_fall = 24.0;
 // Metres past the map's edge within which the border's form is still drawn on the skirt
 // (fragment(): a form ends as a painter would end it, not where the mesh's fall does).
 const float SKIRT_END_M = 3.5;
-// How much that distance varies across a form (a share of it, either way), by the brush's wobble.
-const float SKIRT_END_VARY = 0.25;
+// The frequency (1/m, along the border) of the noise that distance varies by, 0.6 to 1.4 times.
+const float SKIRT_END_FREQ = 0.9;
+// Metres along the border within which a steep face counts as the border's form for the cast
+// shadow's end (fragment()).
+const float SKIRT_NEAR_M = 0.8;
 
 // Contact occlusion (PainterOcclusion): the footprint field (r a pool under crowns, bushes, rocks and
 // houses, g a seam at their feet, b and a the height of a stone's foot: contact_at()), its origin
@@ -804,6 +807,8 @@ void fragment() {
 	// Metres past the map's edge, and the slow noise the outer ground's fades wander by.
 	float out_m = 0.0;
 	float far_n = 0.5;
+	// How far the cast shadow's step is taken down on the skirt (0: the map's own step).
+	float cast_end = 0.0;
 	if (skirt) {
 		out_m = length(max(abs(xz) - half_extent, vec2(0.0)));
 		far_n = p_noise(p * 0.2);
@@ -817,15 +822,31 @@ void fragment() {
 		// SKIRT_END_M of the border (0.6 to 1.4 times that, by the slow noise, so the end wanders
 		// and no two forms end on one line); each role being a hard step of the read, a wall
 		// narrows to its steepest line and closes in a rounded end. 1 at the border. The end
-		// varies ACROSS a form too: a broad wall is as steep all the way across, so with the slow
-		// noise alone it stopped on one near-straight line, a blunt cap. The brush's wobble (warp,
-		// already read for the form's edges; stretched toward its full range) moves the end by
-		// SKIRT_END_VARY of the distance either way, so the end is a brush's ragged one.
+		// varies ACROSS a form too (a broad wall stopped on one near-straight line, a blunt cap),
+		// and that variation is read at the BORDER point the pixel is carried out from (card
+		// painter-terrain-shade), never at the pixel: the end distance is then one number along
+		// each outward line, so what is drawn can only shrink going out and no fleck stands
+		// detached past a form's end (the pixel's own noise, 0.5 m long against an end that it
+		// moved by up to 0.9 m, cut islands off).
 		float drawn = 1.0;
 		if (skirt) {
-			float end_m = SKIRT_END_M * (0.6 + 0.8 * far_n)
-				* (1.0 + SKIRT_END_VARY * clamp(warp.x * 2.5, -1.0, 1.0));
+			vec2 edge = clamp(xz, -half_extent, half_extent);
+			float end_n = p_noise(vec3(edge.x, 0.0, edge.y) * SKIRT_END_FREQ + 33.0);
+			float end_m = SKIRT_END_M * (0.6 + 0.8 * end_n);
 			drawn = 1.0 - smoothstep(0.15, 1.0, out_m / end_m);
+			// The cast shadow ends with the form (light(), through f_cut). Where the border carries
+			// a form (it stands off the map floor, or a steep face is near), the skirt's mesh is
+			// that form carried on for skirt_fall metres under level-ground paint, and the map's
+			// shadow received by it drew streaks down a wall nobody sees and a dashed line at its
+			// foot. A level border keeps every shadow that falls out of the map (a tree's, a
+			// rock's, the rim plants'). "Near" is SKIRT_NEAR_M along the border either way: the
+			// line at a wall's foot lies on the level ground beside the wall, where the border's
+			// own point is neither raised nor steep.
+			float edge_y = abs(v_wy) / max(skirt_keep(xz), 0.05);
+			vec2 along = xz - edge;
+			along = vec2(-along.y, along.x) * (SKIRT_NEAR_M / max(out_m, 1.0e-4));
+			float steep = max(here.w, max(shade_field(edge + along).w, shade_field(edge - along).w));
+			cast_end = clamp(max(edge_y, steep) / UP_STEEP, 0.0, 1.0) * (1.0 - drawn);
 			here *= skirt_keep(xz) * drawn;
 		}
 		float flat_k = min(inversesqrt(1.0 + dot(here.xy, here.xy)), 1.0 - here.w);
@@ -1041,7 +1062,7 @@ void fragment() {
 	EMISSION = glow_em;
 	f_lit = lit;
 	f_shd = shd;
-	f_cut =cut_amp > 0.0 ? be_cut(st) * cut_amp : 0.0;
+	f_cut = (cut_amp > 0.0 ? be_cut(st) * cut_amp : 0.0) - cast_end;
 	f_edge = p_noise(p * 0.55 + 71.0);
 #ifdef PAINTER_DAB
 	vec3 contact = contact_at(p, xz, dab);
