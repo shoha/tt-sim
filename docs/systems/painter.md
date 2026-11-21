@@ -2800,8 +2800,9 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
 `item1_*`, `item2_*`, `item3_*`, `owner/`, `timing/`, `captures/`, `jobs/`); handoff
 `docs/plans/handoffs/painter-terrain-marks.md`.
 
-- **The dabs as geometry (cards painter-terrain-dabs, -cost and -split, 2026-11-21; look-pending; NOT
-  merged: torture wide is +0.05 ms over main against a +0.04 gate; this one is current
+- **The dabs as geometry (cards painter-terrain-dabs, -cost, -split, -finish and -edit,
+  2026-11-21; look-pending; the finish round met the frame gates and the edit round removed the
+  stroke end's rebuild of every dab, so the branch is ready to merge; this one is current
   for the small stones: round 3's bake of the dabs into the seam channel and its re-bake when the
   sun turns are gone; round 3's skirt part stands).** Evidence:
   `docs/research/2026-11-09-prototypes/compare/painter_final120_terrain_dabs/`; handoff
@@ -2884,10 +2885,55 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
       that is no plane anywhere). With no lift a cut changes nothing the ground shows.
       `refresh_dab` is gone: a stone whose ground changed is built again, keeping its slot and
       its turn in its cell.
-    - *What a sync looks at* (`PainterDabs._to_look_at`): the sites are compared with the last
-      sync's in their order (the same Array is the same stone; `PainterOcclusion` hands a
-      scatter node's sites again as they were while it stands still) and an edit's rect is
-      looked up in the 16 m cells it can touch, in place of a walk over every held stone.
+    - *What a sync looks at* (`PainterDabs._to_look_at`; card painter-terrain-dabs-edit, which
+      replaced the finish round's version of this bullet): a dab is one function of its site
+      (place, size, foot, measured sections) and the terrain's heights in the samples its
+      outline and patch read (`READ`, kept with it). So the sites handed over are matched to the
+      held ones by place (x, z, radius) and every dab whose site is equal and whose samples did
+      not move is kept; only new and changed ones are built, gone ones dropped (slot freed). The
+      host keeps its own COPY of the heights its patches were built on and, where an edit was
+      marked (`mark`: a sample rect, or the whole terrain), compares them row by row with the
+      terrain's (the first and last column that differ per row), so a mark of the whole terrain
+      on unchanged heights (the skirt built again at a stroke's end) builds nothing, and a
+      stone whose patch only overlaps a sculpt is built again though its site did not change.
+      The copy matters: `TerrainMeshBuilder.collision_heights` returns the document's own array
+      and `HeightStroke` writes it in place (packed arrays in a Variant share one buffer), so a
+      kept reference saw every edit as no change (the first edit run read `rows: 0` on every
+      sculpt; `test_painter_dabs` edits in place). The sites are first compared with the last
+      sync's in their order (the same Array is the same stone), so a sync with nothing changed
+      walks no held stone. A kept dab keeps its slot and its turn in its cell, so the result
+      equals a whole rebuild's bit for bit but for slot numbers and turn order
+      (`test_painter_dabs` compares every patch and its outline in the lobes texture with a
+      fresh host's).
+    - *Edits, measured (torture, 463 to 480 sites, one run with main's host, two passes each,
+      ms; the rebuild is collect + bake + upload + dabs, frames are quantized to about 7 ms):*
+      a sculpt stroke across the rock row: the stroke end's rebuild 2.9 / 3.1 (0 dabs built;
+      it was 45 to 47 with all 453 built) against main's 4.2 / 4.2; the worst rebuild frame
+      during the held stroke 21.5 / 21.4 against 21.1 / 22.6; the terrain's own stroke-end
+      frame 71.7 / 71.4 against 73.4 / 68.1 (one 50.3 ms frame 17 frames after the last rebuild
+      in the first arm only, in both runs: no rebuild in it). Undo of the stroke: 16 dabs
+      built, rebuild 6.6 / 6.9 against main's 5.6 / 5.5; redo 6.2 / 7.1 against 5.0 / 5.8
+      (+1.0 to +1.3 ms: the 16 stones on the undone ground, 1.7 to 1.9 ms sites and 0.8 ms two
+      cells; the frame it lands in 13.8 to 21 ms in both arms). An erase stroke (the scatter
+      cleared along the st3 group): 0 built, worst frame 28.8 / 28.0 against 28.4 / 28.4. A
+      biome repaint stroke (rocky badlands): 0 to 9 built a rebuild, worst rebuild 2.4 ms of
+      work; worst frames 94.5 / 90.7 against 90.9 / 90.1 (the paint's own first frames).
+      Synchronous rebuilds: a placed small stone 4.41 / 4.92 against 4.02 / 4.19, a moved one
+      3.18 / 2.44 against 4.52 / 4.28, a placed boulder 3.13 / 3.52 against 4.51 / 5.19, a
+      moved one 3.51 / 4.73 against 5.44 / 3.88 (single samples; spread about 1 ms).
+      Pixels, the tip's host (ec706ff3's text compiled in the game) against this one over the
+      same sites in one run, full size: st3 at 14 and 6.5 h 0 px, torture wide 0 px outside the
+      moving pond; f1_o's residue lies in the falls' column and is as large as the build against
+      its own second capture. The torture wide frame A/B did not move (main -0.007 ms, drift
+      +0.018). Touching stones (st3's three groups, zoom 3 and 1.6, 14 and 6.5 h): one flat
+      mark per group, no darker overlap, no seam, the same shapes at both zooms. Evidence:
+      `edit/` and `finish/ab.md` of the folder above; handoff "## Edit".
+    - *Measured feet on the ramp (card painter-terrain-dabs-edit):* right, not a bug. The kit's
+      five ramp stones all stand on the 30 degree face (x 4.0 to 6.4; the plateau starts at 7.5),
+      and the editor beds a prop on a slope by the ground's fall under its footing radius
+      (`GroundSnap.footing_drop`), so its underside meets the downhill ground: the ground at the
+      stone's middle cuts it at 0.36 to 0.44 of its height (flat row 0.08 to 0.17), where this
+      rock's section is widest, so the foot is 0.99 to 1.00 r (flat row 0.87 to 0.92).
   - *The geometry, before the finish round* (`PainterSites.append_dab`). A dab's patch was the
     terrain's own triangles: the grid samples within the dab's reach of the stone (2 radii plus
     0.06 m), triangulated as `TerrainMeshBuilder` does, 4 mm up. (The

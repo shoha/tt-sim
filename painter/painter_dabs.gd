@@ -8,24 +8,29 @@ extends RefCounted
 ## holds a site, all under one node beside the terrain (in the terrain's frame, drawn with the dabs'
 ## material, PainterSurfaces.dab_material(): the ground's shader body with the dab's code compiled
 ## in and every ground parameter the chunks' have; casting no shadow), and each site's patch as it
-## was last built, so a
-## change costs what changed:
-## - a site that is new or changed, or that stands where the ground was edited since the last sync
-##   (`mark`), is built: its outline on the ground there, and the terrain's surface under it;
-## - a site that is gone is dropped;
-## - a cell one of those lies in is put together again from its sites' kept arrays and uploaded;
-##   every other cell is left as it is.
-## What a sync looks at is found without walking every stone's patch: the sites are compared with
-## the last sync's in their order (the same Array is the same stone: PainterOcclusion hands a
-## scatter node's sites again as they were while it stands still), and an edit's rect is looked up
-## in the cells it can touch.
-## A stone is known by its place and radius, so one the ground moved under (its foot's height
-## changed) keeps its turn in its cell: the patches after it keep their first vertex and their
-## indices are appended as they are (adding an offset to every index of a cell was half the cost
-## of an edit under a stroke).
+## was last built, so a change costs what changed.
+##
+## A dab is one function of two things: its site (PainterSites.site(), the stone's place, size,
+## foot and measured sections) and the terrain's heights in the samples its outline and its patch
+## read (READ, kept with it). So each sync matches the sites it is handed to the held ones by place
+## (world x, z and radius) and keeps every dab whose site is equal and whose samples did not
+## change; it builds only the new and the changed ones and drops the gone ones. Which samples
+## changed is not taken on trust: the host keeps the heights its patches were built on and, where
+## an edit was marked since (`mark`: a rect of samples, or the whole terrain), compares them row by
+## row with the terrain's. So a whole new set of the same stones (the scatter made again at a
+## stroke's end, an undo, a level's rebuild) or a mark of the whole terrain whose heights did not
+## move (the skirt built again) builds nothing; a sculpt builds the stones on what it moved.
+## The sites are first compared with the last sync's in their order (the same Array is the same
+## stone: PainterOcclusion hands a scatter node's sites again as they were while it stands still),
+## so a sync with nothing changed walks no held stone.
+## A cell one of the built or dropped stones lies in is put together again from its sites' kept
+## arrays and uploaded; every other cell is left as it is. A stone built again keeps its turn in its
+## cell, so the patches after it keep their first vertex and their indices are appended as they
+## are (adding an offset to every index of a cell was half the cost of an edit under a stroke).
 ## A stone's outline is not in its patch: each held site has a slot in one texture of the dab's
 ## shader (LOBES_PARAM, ROW slots a row), written when a slot's outline changes, and its patch's
-## vertices carry the slot.
+## vertices carry the slot. A kept dab keeps its slot; a new one takes a freed slot first. So a
+## dab equals a whole rebuild's bit for bit but for its slot's number and its turn in its cell.
 ## Nothing here reads the sun: the mark's reach away from it is the shader's (a uniform), so the
 ## hour changing builds nothing (`built` counts the sites built, for the tests and the proof).
 ## A map without an authored terrain (a GLB map) has no heights to lay a dab on and gets none.
@@ -33,7 +38,7 @@ extends RefCounted
 ## MANAGED BY: PainterOcclusion (painter/painter_occlusion.gd). Classic never loads this file.
 
 ## What is kept of a site (the fields of its Array).
-enum { SITE, CELL, VERTICES, UVS, CUSTOM, INDICES, RECT, FIRST, PLACED, SLOT, OWN }
+enum { SITE, CELL, VERTICES, UVS, CUSTOM, INDICES, READ, FIRST, PLACED, SLOT, OWN }
 
 const NODE_NAME := "PainterDabs"
 ## Metres a cell of dabs is across (one mesh, one draw).
@@ -51,28 +56,31 @@ const REACH_MAX_M := 2.0
 ## The sites built since this host was made, and the cells put together.
 var built := 0
 var uploaded := 0
-## The last sync's parts (milliseconds): the sites compared and built, and the cells put together
-## and uploaded (with how many), for the stats and the edit-cost probe.
+## The last sync's parts (milliseconds): the ground compared (and its rows that changed), the sites
+## matched and built, and the cells put together and uploaded (with how many), for the stats and
+## the edit-cost probe.
 var parts := {}
 
 var _holder: Node3D = null
 ## A site's kept patch by its place (world x, z and radius): the site (PainterSites.site(), in the
 ## world's frame), its cell, its vertices, their uvs, their four custom arrays, its indices (from
-## its own first vertex), the rect it lies in (the terrain's frame), its indices as its cell's
-## mesh last took them (the first vertex they were counted from, and the indices so counted), its
-## slot and its outline (PainterSites.outline, in the terrain's frame).
+## its own first vertex), the samples its outline and patch read (a rect of the terrain's grid),
+## its indices as its cell's mesh last took them (the first vertex they were counted from, and the
+## indices so counted), its slot and its outline (PainterSites.outline, in the terrain's frame).
 var _held: Dictionary = {}
 ## The places of a cell's sites (a Dictionary used as an ordered set), and the cell's node.
 var _sites: Dictionary = {}
 var _nodes: Dictionary = {}
-## What the next sync must build again whatever it holds: everything, or the sites in a rect of
-## the terrain's samples.
+## Where the next sync compares the terrain's heights with those the patches were built on: all of
+## them, or the samples in a rect.
 var _whole := true
 var _dirty := Rect2i()
-## The terrain the kept patches were built on (its id and transform) and its grid's size, and the
-## sites of the last sync.
+## The terrain the kept patches were built on (its id, transform, grid size, step and extent), its
+## heights then, the sites of the last sync and the material the cells are drawn with.
 var _ground: Array = []
+var _grid := PackedFloat32Array()
 var _last: Array = []
+var _material: ShaderMaterial = null
 ## The stones' outlines by slot (PainterSites.outline, in the terrain's frame), their texture, the
 ## slots given out and those free again.
 var _lobes := PackedFloat32Array()
@@ -81,8 +89,9 @@ var _slots := 0
 var _free: Array[int] = []
 
 
-## Notes an edit of the terrain's samples in `rect`: the next sync builds the sites there again. A
-## rect without area means the whole terrain (a new document).
+## Notes an edit of the terrain's samples in `rect`: the next sync compares the heights there with
+## those its patches were built on. A rect without area means the whole terrain (a new document,
+## the terrain built again).
 func mark(rect: Rect2i) -> void:
 	if not rect.has_area():
 		_whole = true
@@ -99,22 +108,31 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 		clear()
 		return 0
 	var doc := terrain.document
-	var ground := [terrain.get_instance_id(), terrain.transform, doc.samples_x(), doc.samples_z()]
+	var columns := doc.samples_x()
+	var rows := doc.samples_z()
+	var step := doc.sample_step()
+	var half := doc.extent_m() * 0.5
+	var ground := [terrain.get_instance_id(), terrain.transform, columns, rows, step, half]
 	if ground != _ground or not is_instance_valid(_holder) or _holder.get_parent() != map:
 		clear()
 		_ground = ground
+	var t_ground := Time.get_ticks_usec()
+	var grid := TerrainMeshBuilder.collision_heights(doc)
+	var moved := _ground_moved(grid, columns, rows)
+	# A copy: the grid is the document's own array, which a sculpt writes in place.
+	if _whole or _dirty.has_area() or _grid.size() != grid.size():
+		_grid = grid.duplicate()
+	_whole = false
+	_dirty = Rect2i()
 	var t_sites := Time.get_ticks_usec()
-	var redo := _dirty.has_area()
-	var step := doc.sample_step()
-	var half := doc.extent_m() * 0.5
-	# The edited samples as metres of the terrain's frame.
-	var edited := Rect2(Vector2(_dirty.position) * step - half, Vector2(_dirty.size) * step)
 	var changed := {}
-	var todo := _to_look_at(sites, redo, edited, changed)
+	var todo := _to_look_at(sites, moved, step, half, changed)
 	_last = sites.duplicate()
+	if material != _material:
+		for cell: Vector2i in _nodes:
+			(_nodes[cell] as MeshInstance3D).material_override = material
+		_material = material
 	if todo.is_empty() and changed.is_empty():
-		_whole = false
-		_dirty = Rect2i()
 		parts = {}
 		return 0
 	if _holder == null:
@@ -122,16 +140,14 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 		_holder.name = NODE_NAME
 		map.add_child(_holder)
 		_holder.transform = terrain.transform
-	var grid := TerrainMeshBuilder.collision_heights(doc)
 	var to_local := terrain.global_transform.affine_inverse()
+	var reach_step := maxf(step.x, step.y)
 	var count := 0
 	var fresh := 0
 	for site: Array in todo:
-		var place := Vector3(site[0], site[1], site[2])
+		var place := _place(site)
 		var was: Array = _held.get(place, [])
 		if not was.is_empty():
-			if was[SITE] == site and not _whole and not (redo and edited.intersects(was[RECT])):
-				continue
 			changed[was[CELL]] = true
 		var local := site.duplicate()
 		var at := to_local * Vector3(site[0], site[3], site[1])
@@ -142,7 +158,7 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 			var under := Vector3(site[0], site[PainterSites.BOTTOM], site[1])
 			local[PainterSites.BOTTOM] = (to_local * under).y
 		# Its outline on this ground (none: it does not stand on it), and the ground under that.
-		var own := PainterSites.outline(local, grid, doc.samples_x(), doc.samples_z(), step, half)
+		var own := PainterSites.outline(local, grid, columns, rows, step, half)
 		# A stone built again keeps its slot and (assigned at its place below) its turn in its cell.
 		var slot: int = was[SLOT] if not was.is_empty() else _take_slot()
 		var vertices := PackedVector3Array()
@@ -150,35 +166,27 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 		var custom := PackedFloat32Array()
 		var indices := PackedInt32Array()
 		PainterSites.append_dab(
-			own,
-			local,
-			grid,
-			doc.samples_x(),
-			doc.samples_z(),
-			step,
-			half,
-			vertices,
-			uvs,
-			custom,
-			indices,
-			slot
+			own, local, grid, columns, rows, step, half, vertices, uvs, custom, indices, slot
 		)
 		if not own.is_empty() and (was.is_empty() or own != was[OWN]):
 			_put_lobes(slot, own)
 			fresh += 1
-		# A sample's step past the dab's reach: a patch ends inside the cells its square touches.
-		var far := maxf(step.x, step.y) + (PainterSites.reach(own) if not own.is_empty() else 0.0)
+		# The samples it read: the patch's square a sample's step wide of the dab's reach, and
+		# round the stone the heights its outline took (its middle, and its foot's width across).
+		var far := reach_step + (PainterSites.reach(own) if not own.is_empty() else 0.0)
 		var mid := Vector2(own[0], own[1]) if not own.is_empty() else Vector2(at.x, at.z)
+		var near := (own[2] if not own.is_empty() else 0.0) + 2.0 * reach_step
+		var box := Rect2(mid.x - far, mid.y - far, 2.0 * far, 2.0 * far).merge(
+			Rect2(at.x - near, at.z - near, 2.0 * near, 2.0 * near)
+		)
+		var read := _samples_of(box, step, half, columns, rows)
 		var cell := Vector2i(floori(at.x / CELL_M), floori(at.z / CELL_M))
-		var rect := Rect2(mid.x - far, mid.y - far, 2.0 * far, 2.0 * far)
-		_held[place] = [site, cell, vertices, uvs, custom, indices, rect, -1, indices, slot, own]
+		_held[place] = [site, cell, vertices, uvs, custom, indices, read, -1, indices, slot, own]
 		if not _sites.has(cell):
 			_sites[cell] = {}
 		(_sites[cell] as Dictionary)[place] = true
 		changed[cell] = true
 		count += 1
-	_whole = false
-	_dirty = Rect2i()
 	var t_cells := Time.get_ticks_usec()
 	# The outlines are sent only when one changed.
 	if fresh > 0:
@@ -188,6 +196,8 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 	for cell: Vector2i in changed:
 		_put_together(cell, material)
 	parts = {
+		"ground_ms": (t_sites - t_ground) / 1000.0,
+		"rows": moved.size(),
 		"sites_ms": (t_cells - t_sites) / 1000.0,
 		"cells_ms": (Time.get_ticks_usec() - t_cells) / 1000.0,
 		"cells": changed.size(),
@@ -205,7 +215,9 @@ func clear() -> void:
 	_sites.clear()
 	_nodes.clear()
 	_ground = []
+	_grid = PackedFloat32Array()
 	_last = []
+	_material = null
 	_whole = true
 	_dirty = Rect2i()
 	_lobes = PackedFloat32Array()
@@ -244,35 +256,121 @@ func counts() -> Vector2i:
 	return Vector2i(_held.size(), drawn)
 
 
-## The sites of `sites` this sync must look at: all of them when everything is built again or
-## their number changed (the gone are dropped, their cells marked in `changed`); else those that
-## differ from the last sync's at the same turn, and, when the ground was edited (`redo`), the held
-## ones whose patch lies in `edited` (metres of the terrain's frame), found by cell.
-func _to_look_at(sites: Array, redo: bool, edited: Rect2, changed: Dictionary) -> Array:
-	if _whole or sites.size() != _last.size():
-		_drop_gone(sites, changed)
-		return sites
+## The place a site is known by: its world x and z and its radius.
+static func _place(site: Array) -> Vector3:
+	return Vector3(site[0], site[1], site[2])
+
+
+## Where `grid` differs from the heights the kept patches were built on, looked at only where an
+## edit was marked since (everywhere after a mark of the whole terrain) and while a patch is held:
+## per row of samples, the first and last column that differ.
+func _ground_moved(grid: PackedFloat32Array, columns: int, rows: int) -> Dictionary:
+	var out := {}
+	if _held.is_empty() or not (_whole or _dirty.has_area()):
+		return out
+	if _grid.size() != grid.size():
+		for j in rows:
+			out[j] = Vector2i(0, columns - 1)
+		return out
+	var area := Rect2i(0, 0, columns, rows)
+	if not _whole:
+		area = _dirty.intersection(area)
+	elif grid == _grid:
+		return out
+	for j in range(area.position.y, area.end.y):
+		var a := j * columns + area.position.x
+		var b := j * columns + area.end.x
+		if grid.slice(a, b) == _grid.slice(a, b):
+			continue
+		var first := a
+		while grid[first] == _grid[first]:
+			first += 1
+		var last := b - 1
+		while grid[last] == _grid[last]:
+			last -= 1
+		out[j] = Vector2i(first - j * columns, last - j * columns)
+	return out
+
+
+## The sites of `sites` this sync must build: each that no held stone at its place equals (a new
+## stone, or one that changed), and each held one whose samples `moved` (_ground_moved). The held
+## stones not in `sites` are dropped, their slots freed and their cells marked in `changed`.
+## While the scatter hands the same sites again in their order only those that differ from the
+## last sync's at their turn are looked at; another number of them is matched whole, by place.
+func _to_look_at(
+	sites: Array, moved: Dictionary, step: Vector2, half: Vector2, changed: Dictionary
+) -> Array:
+	var present := {}
+	var gone: Array = []
+	if sites.size() == _last.size():
+		for i in sites.size():
+			var site: Array = sites[i]
+			var was: Array = _last[i]
+			if is_same(site, was) or site == was:
+				continue
+			present[_place(site)] = site
+			gone.append(_place(was))
+	else:
+		for site: Array in sites:
+			present[_place(site)] = site
+		gone = _held.keys()
+	for place: Vector3 in gone:
+		if present.has(place) or not _held.has(place):
+			continue
+		var cell: Vector2i = _held[place][CELL]
+		(_sites[cell] as Dictionary).erase(place)
+		_free.append(_held[place][SLOT])
+		_held.erase(place)
+		changed[cell] = true
 	var todo: Array = []
 	var seen := {}
-	for i in sites.size():
-		var site: Array = sites[i]
-		if is_same(site, _last[i]) or site == _last[i]:
-			continue
-		todo.append(site)
-		seen[Vector3(site[0], site[1], site[2])] = true
-	if not todo.is_empty():
-		_drop_gone(sites, changed)
-	if redo:
-		var grown := edited.grow(REACH_MAX_M)
-		var from := Vector2i((grown.position / CELL_M).floor())
-		var to := Vector2i((grown.end / CELL_M).floor())
-		for cell_z in range(from.y, to.y + 1):
-			for cell_x in range(from.x, to.x + 1):
-				for place: Vector3 in _sites.get(Vector2i(cell_x, cell_z), {}):
-					var kept: Array = _held[place]
-					if not seen.has(place) and edited.intersects(kept[RECT]):
-						todo.append(kept[SITE])
+	for place: Vector3 in present:
+		var site: Array = present[place]
+		var kept: Array = _held.get(place, [])
+		if kept.is_empty() or kept[SITE] != site:
+			todo.append(site)
+			seen[place] = true
+	if moved.is_empty():
+		return todo
+	# The held stones on the samples that moved, found by the cells those can reach.
+	var lo := Vector2i(1 << 30, 1 << 30)
+	var hi := Vector2i(-1, -1)
+	for j: int in moved:
+		var span: Vector2i = moved[j]
+		lo = Vector2i(mini(lo.x, span.x), mini(lo.y, j))
+		hi = Vector2i(maxi(hi.x, span.y), maxi(hi.y, j))
+	var pad := Vector2.ONE * REACH_MAX_M
+	var from := Vector2i(((Vector2(lo) * step - half - pad) / CELL_M).floor())
+	var to := Vector2i(((Vector2(hi + Vector2i.ONE) * step - half + pad) / CELL_M).floor())
+	for cell_z in range(from.y, to.y + 1):
+		for cell_x in range(from.x, to.x + 1):
+			for place: Vector3 in _sites.get(Vector2i(cell_x, cell_z), {}):
+				var kept: Array = _held[place]
+				if not seen.has(place) and _reads_moved(kept[READ], moved):
+					todo.append(kept[SITE])
+					seen[place] = true
 	return todo
+
+
+## Whether any sample of `read` (a rect of the grid) is in `moved` (_ground_moved).
+static func _reads_moved(read: Rect2i, moved: Dictionary) -> bool:
+	for j in range(read.position.y, read.end.y):
+		var span: Vector2i = moved.get(j, Vector2i(1 << 30, -1))
+		if span.x < read.end.x and span.y >= read.position.x:
+			return true
+	return false
+
+
+## The grid's samples (`columns` by `rows`, `step` metres apart, centred: `half` is half the
+## extent) whose cells `box` (metres of the terrain's frame) touches, both corners of each.
+static func _samples_of(
+	box: Rect2, step: Vector2, half: Vector2, columns: int, rows: int
+) -> Rect2i:
+	var i0 := clampi(floori((box.position.x + half.x) / step.x), 0, columns - 1)
+	var i1 := clampi(ceili((box.end.x + half.x) / step.x), i0, columns - 1)
+	var j0 := clampi(floori((box.position.y + half.y) / step.y), 0, rows - 1)
+	var j1 := clampi(ceili((box.end.y + half.y) / step.y), j0, rows - 1)
+	return Rect2i(i0, j0, i1 - i0 + 1, j1 - j0 + 1)
 
 
 ## One cell's mesh from its sites' kept patches (the node is freed when no site has a dab).
@@ -367,21 +465,3 @@ func _upload_lobes() -> void:
 		_lobe_texture.update(image)
 	else:
 		_lobe_texture.set_image(image)
-
-
-## Forgets the stones that are not in `sites` (their slots freed for the next new ones), marking
-## their cells in `changed`.
-func _drop_gone(sites: Array, changed: Dictionary) -> void:
-	if sites.size() == _held.size() and sites == _last:
-		return
-	var seen := {}
-	for site: Array in sites:
-		seen[Vector3(site[0], site[1], site[2])] = true
-	for place: Vector3 in _held.keys():
-		if seen.has(place):
-			continue
-		var gone: Vector2i = _held[place][CELL]
-		(_sites[gone] as Dictionary).erase(place)
-		_free.append(_held[place][SLOT])
-		_held.erase(place)
-		changed[gone] = true

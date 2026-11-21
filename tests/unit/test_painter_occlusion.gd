@@ -505,6 +505,9 @@ func test_the_dabs_host_builds_what_changed_and_nothing_else() -> void:
 	assert_eq(dabs.uploaded, 2, "and nothing uploaded")
 	# The ground is edited under the first stone alone.
 	var at := doc.world_to_sample(Vector2(1.0, 1.0))
+	var heights := doc.heights.duplicate()
+	heights[floori(at.y) * doc.samples_x() + floori(at.x)] += 0.02
+	doc.heights = heights
 	dabs.mark(Rect2i(Vector2i(floori(at.x), floori(at.y)), Vector2i(1, 1)))
 	assert_eq(dabs.sync(map, terrain, material, sites.duplicate()), 1, "that stone's dab alone")
 	assert_eq(dabs.uploaded, 3, "its cell alone")
@@ -516,9 +519,15 @@ func test_the_dabs_host_builds_what_changed_and_nothing_else() -> void:
 	var taken := dabs.lobe_image().get_pixel(PainterDabs.LOBE_TEXELS, 0)
 	assert_almost_eq(taken.g, 1.2, 1.0e-5, "in the slot freed")
 	assert_eq(dabs.built, 5)
-	# A new terrain: everything again.
+	# The terrain built again on the same heights: nothing; on new heights: everything.
 	dabs.mark(Rect2i())
-	assert_eq(dabs.sync(map, terrain, material, sites), 3, "a new terrain: every site")
+	assert_eq(dabs.sync(map, terrain, material, sites), 0, "the same heights: nothing")
+	heights = doc.heights.duplicate()
+	for k in heights.size():
+		heights[k] += 0.01
+	doc.heights = heights
+	dabs.mark(Rect2i())
+	assert_eq(dabs.sync(map, terrain, material, sites), 3, "new heights: every site")
 	dabs.clear()
 	assert_null(dabs.holder(), "cleared")
 
@@ -543,6 +552,9 @@ func test_the_dabs_host_finds_an_edit_by_cell_and_a_moved_stone_by_its_turn() ->
 	assert_eq(dabs.uploaded, 2, "two cells")
 	# The ground is edited round the third stone: it alone is looked up and laid again.
 	var at := doc.world_to_sample(Vector2(9.0, 1.0))
+	var heights := doc.heights.duplicate()
+	heights[floori(at.y) * doc.samples_x() + floori(at.x)] += 0.02
+	doc.heights = heights
 	dabs.mark(Rect2i(Vector2i(floori(at.x), floori(at.y)), Vector2i(2, 2)))
 	assert_eq(dabs.sync(map, terrain, material, sites.duplicate()), 1, "the stone on the edit")
 	assert_eq(dabs.uploaded, 3, "its cell alone")
