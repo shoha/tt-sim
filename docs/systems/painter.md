@@ -2593,6 +2593,24 @@ and torture sheets, the score tables) and the card's handoff
   face's mixed 0.6 to the normal of the spheroid of the asset's box, only near that spheroid's
   surface (a stone inside a scatter keeps its faces); in a cast shadow a rock keeps the bushes'
   half step, so its planes still read. The earlier fade of the cast shadow by facing is gone.
+- **A rock's planes and its shade colour** (card painter-ground-rocks-finish). The form's turn
+  decides only what is in SHADE (one firm curve); what is LIT or MIDDLE on the sunward side is
+  decided a plane at a time (`solid_plane()`, `SELECTOR_SOLID`, set by `painter_solid` only): the
+  directions round the rock are cut into about twenty cells (a jittered Voronoi lattice on the
+  sphere of the form's normals, `SOLID_PLANES`, each rock its own) and a cell is lit as its one
+  direction. A rock under 0.6 m of half size keeps its mesh's faces as its planes (a stone is two
+  or three of them), from 1.2 m the lattice's alone (a boulder's triangles drew stair steps). The
+  shade keeps `solid_pull` of the ramp's pull, the rest the rock's own colour at the shade's value:
+  `PainterPlantTone` sets it half way between 1 and the sheet's `cliff-pull` (wood: 1), since the
+  full pull made a boulder's shade side the most saturated mass of a frame. Limits seen: the
+  planes show where a boulder's lit side meets its middle step (a low or a side sun); a boulder
+  seen from the sun's side at midday is still one pale mass, and its shade side one flat tone.
+- **Contact pool, seam and wet band have pixel-wide edges** (same card). The pool and the seam
+  were a 0.1 step of the occlusion field and the wet band a 0.14 step of the wet line: where the
+  field falls slowly (round a group of stones, along a stream seen close) that was a soft-edged
+  dark block or a soft edge a tenth of a metre wide, the only soft tonal edges of the ground. Now
+  each step is as wide as a pixel or two, at most what it was. The pool and the seam are also not
+  drawn on a sheer face (`role_slope` 0.55 or more), since the field is a plan view.
 - **The terrain casts with its back faces** (`TerrainBackCaster`, a shadows-only twin of each
   chunk drawn with `painter_terrain_caster.gdshader`, `cull_front`, only while Painted): ground
   that faces the sun is never shadowed by its own surface (the stipple and the hatching on grazing
@@ -2607,12 +2625,17 @@ and torture sheets, the score tables) and the card's handoff
 - **Cost.** GPU in-run A/B against main (7 rounds, the rigs 115 s apart): f1 close view
   -0.153 ms, wide -0.098 ms (two field fetches a pixel, none per mark, no marks on the rock of a
   slope).
-- **Still visible (the owner judges):** the strata bricks above; a large soft-edged darker block
-  with near-vertical edges on the cliff left of the falls, around the three stones (in the
-  pre-field build too; its cause is not attributed, the wet band beside water laid in the map's
-  plane is the candidate); a soft-edged cast shadow across the lit bank at the left of the bank
-  view; the lip as a thin light line along a crest. Evidence of card painter-ground-rocks:
-  `docs/research/2026-11-09-prototypes/compare/painter_final107_ground_rocks/`.
+- **Still visible (the owner judges):** the strata bricks above; a darker olive oval round the
+  three stones on the cliff left of the falls, now firm-edged: it is the contact SEAM of the stone
+  group (gone with `f_core = 0`; not the pool, the wet band or a cast shadow), about three times
+  the stones' own size and on ground the field does not call sheer, so the face rule leaves it
+  (the lever is the occlusion field's footprint for a scatter of stones, `PainterOcclusion`); the
+  shade of a slope that crosses the map's edge stops at the edge in a ruled line (the skirt is
+  not field-shaded); the lip as a thin light line along a crest. The soft edge at the left of the
+  bank view was the wet band, not a cast shadow (above). Cost of the finish card's shaders against
+  main, GPU in-run A/B: f1 close view +0.041 ms, wide +0.038 ms (the planes' lattice is 24 hashes
+  a rock pixel; one hash a cell would cut it). Evidence of cards painter-ground-rocks and -finish:
+  `docs/research/2026-11-09-prototypes/compare/painter_final107_ground_rocks/` (`finish/`).
 
 ## Verification
 

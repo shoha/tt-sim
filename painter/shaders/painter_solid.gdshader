@@ -13,6 +13,8 @@ render_mode cull_back, specular_disabled, ambient_light_disabled;
  * MANAGED BY: PainterSurfaces (painter/painter_surfaces.gd).
  */
 
+// The selector's solid light: the form's shade, its planes (solid_plane()) and its cast colour.
+#define SELECTOR_SOLID
 #include "res://painter/shaders/painter_selector.gdshaderinc"
 
 uniform sampler2D albedo_texture : source_color, filter_linear_mipmap, hint_default_white;
@@ -52,6 +54,7 @@ void fragment() {
 	float snow;
 	selector_fragment(v_wp, v_wn, v_o, v_scale, v_h, tex, n, variant, mul, wob, petal, snow);
 	f_n = n;
+	f_plane = solid_plane(v_wp, v_wn, v_o, v_scale);
 	f_variant = variant;
 	f_mul = mul;
 	f_wob = wob;

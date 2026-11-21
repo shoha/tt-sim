@@ -85,7 +85,8 @@ func matches(doc: MapDocument) -> bool:
 	)
 
 
-## The field's texture (RGBA half float, no mipmaps), updated in place by bake() and update().
+## The field's texture (RGBA half float, no mipmaps), updated in place by bake() and update()
+## (re-allocated, the same object, when the grid's size changes).
 func texture() -> ImageTexture:
 	if _texture == null and width > 0:
 		_texture = ImageTexture.create_from_image(_image())
@@ -112,9 +113,17 @@ func _image() -> Image:
 	return Image.create_from_data(width, depth, false, Image.FORMAT_RGBAH, _bytes)
 
 
+## Puts the texels on the texture, if it was made. A grid of another size than the texture's (a
+## second map played in one session) re-allocates it: ImageTexture.update() refuses an image of
+## another size ("new image dimensions must match") and would leave the first map's field on the
+## ground. The ImageTexture object stays the same, so the materials bound to it follow.
 func _upload() -> void:
-	if _texture != null:
+	if _texture == null:
+		return
+	if _texture.get_width() == width and _texture.get_height() == depth:
 		_texture.update(_image())
+	else:
+		_texture.set_image(_image())
 
 
 ## Copies `doc`'s heights inside `rect` and returns the rectangle of the samples that changed.

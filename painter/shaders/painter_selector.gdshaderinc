@@ -70,6 +70,16 @@ const float SOLID_MID = 0.4;
 const float SOLID_ROUND = 0.6;
 const float SOLID_SHELL = 0.5;
 const float SOLID_SHELL_MAX = 0.4;
+// A solid's planes (solid_plane()): the radius, in cells, of the sphere of directions they are cut
+// from (1.3: about twenty planes round a rock, eight or so in view), and the half size (m) under
+// which a rock keeps its mesh's faces as its planes (from twice that the lattice's alone).
+const float SOLID_PLANES = 1.3;
+const float SOLID_PLANE_MIN = 0.6;
+// The share of the mood's shade pull a solid's shade keeps (1: the ramp's shade as it is). The
+// rest is the rock's own colour at the shade's value, as the cliff stone's shade is. With the
+// full pull a grey boulder's shade side was the most saturated mass of a frame, a violet louder
+// than anything lit (card painter-ground-rocks). PainterPlantTone sets it from the sheet.
+uniform float solid_pull = 1.0;
 
 varying vec3 f_n;
 varying float f_variant;
@@ -117,6 +127,11 @@ vec3 selector_pal(float tone, float variant) {
 	vec3 s = mix(c_shade0, c_shade1, v);
 	vec3 m = mix(c_mid0, c_mid1, v);
 	vec3 l = mix(c_lit0, c_lit1, v);
+#ifdef SELECTOR_SOLID
+	// A solid's shade: solid_pull of the ramp's, the rest its own colour at that value.
+	vec3 own = m * (dot(s, vec3(0.3, 0.59, 0.11)) / max(dot(m, vec3(0.3, 0.59, 0.11)), 0.001));
+	s = mix(own, s, solid_pull);
+#endif
 	return t < 0.5 ? mix(s, m, t * 2.0) : mix(m, l, t * 2.0 - 1.0);
 }
 
@@ -367,10 +382,10 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 		mul = (1.0 - IVY_TUCK * near * rim) * mix(1.0, mix(0.9, 1.08, dab.w), near);
 		snow = frost > 0.0 && frost_up(n.y, wp) ? 1.0 : 0.0;
 	} else {
-		// A rock or a log turns as one rounded form with its faces still in it: the face's normal
-		// part way to the normal of the spheroid its box holds, so a flat-faced boulder's shade is
-		// one curved shape that the big planes still break, not a polygon a face. A low, wide
-		// asset (a scatter of stones) has a flat spheroid, so each stone keeps its own sides.
+		// A rock or a log turns as one rounded form: the face's normal most of the way to the normal
+		// of the spheroid its box holds, so a flat-faced boulder's shade is one curved shape, not a
+		// polygon a face (its planes are solid_plane()'s, which only pick lit from middle). A low,
+		// wide asset (a scatter of stones) has a flat spheroid, so each stone keeps its own sides.
 		vec3 half_m = max(selector_extent * scale, vec3(0.02));
 		float across = max(half_m.x, half_m.z);
 		vec3 off = wp - (origin + vec3(0.0, SOLID_MID * selector_height * scale, 0.0));
@@ -387,6 +402,49 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 	wob = p_noise(wp * 1.7 + 5.0);
 }
 
+#ifdef SELECTOR_SOLID
+// The plane a solid's point lies on (painter_solid defines SELECTOR_SOLID; card
+// painter-ground-rocks). A boulder lit by its rounded form alone was a smooth egg in two values, and
+// lit by its mesh's faces its tone steps ran in stair steps along the triangles. So the form
+// decides only what is in SHADE (one firm curve), and what is LIT or MIDDLE on the sunward side is
+// decided a plane at a time: the directions round the rock are cut into a few cells (a jittered
+// Voronoi lattice on the sphere of the form's normals, each rock its own), and every point of a
+// cell is lit as the cell's one direction. The planes are larger than the mesh's triangles and
+// their borders are the lattice's, smooth on the form. Inside the box's spheroid (a stone in a
+// scatter) a point keeps its face, as the form normal does.
+varying vec3 f_plane;
+
+vec3 solid_plane(vec3 wp, vec3 wn, vec3 origin, float scale) {
+	vec3 half_m = max(selector_extent * scale, vec3(0.02));
+	float across = max(half_m.x, half_m.z);
+	vec3 off = wp - (origin + vec3(0.0, SOLID_MID * selector_height * scale, 0.0));
+	vec3 round_n = normalize(off / vec3(across * across, half_m.y * half_m.y, across * across));
+	float on_form = smoothstep(0.5, 0.9, length(off / vec3(across, half_m.y, across)));
+	vec3 shift = fract(origin * 0.37) * 9.0;
+	vec3 q = round_n * SOLID_PLANES + shift;
+	vec3 i = floor(q);
+	vec3 side = step(0.5, q - i) * 2.0 - 1.0;
+	vec3 best = round_n;
+	float best_d = 1.0e9;
+	for (int k = 0; k < 8; k++) {
+		vec3 g = i + side * vec3(float(k & 1), float((k >> 1) & 1), float((k >> 2) & 1));
+		vec3 c = g + 0.2 + 0.6 * vec3(p_hash(g + 3.1), p_hash(g + 17.3), p_hash(g + 41.7));
+		vec3 d = q - c;
+		float dd = dot(d, d);
+		if (dd < best_d) {
+			best_d = dd;
+			best = c - shift;
+		}
+	}
+	vec3 plane_n = normalize(best + round_n * 0.001);
+	// A small rock's own faces are planes enough (a stone is two or three of them); a boulder's
+	// triangles are small beside it, so there the lattice's planes take over.
+	float big = smoothstep(SOLID_PLANE_MIN, 2.0 * SOLID_PLANE_MIN, max(across, half_m.y));
+	vec3 form_n = normalize(mix(normalize(wn), round_n, SOLID_ROUND * on_form));
+	return normalize(mix(form_n, plane_n, on_form * big));
+}
+#endif
+
 // (A grass mark lights its own form: painter_grass_mark defines SELECTOR_OWN_LIGHT and its light().)
 #ifndef SELECTOR_OWN_LIGHT
 void light() {
@@ -397,8 +455,15 @@ void light() {
 		// (A rock or a log, kind 2, is shaded by its form alone: it asks the shadow map from a shell
 		// around itself, painter_solid's fragment(), so `cast` is what other things throw on it.)
 		float x = nl + (f_wob - 0.5) * 0.3;
+#ifdef SELECTOR_SOLID
+		// The form's turn is the shade's one edge; on its sunward side each plane is lit or middle.
+		float xp = dot(normalize(f_plane), lw);
+		float t = 0.1 + smoothstep(tone_lo - 0.01, tone_lo + 0.01, x)
+			* (0.4 + 0.4 * smoothstep(tone_hi - 0.01, tone_hi + 0.01, xp));
+#else
 		float t = 0.1 + 0.4 * smoothstep(tone_lo - 0.01, tone_lo + 0.01, x)
 			+ 0.4 * smoothstep(tone_hi - 0.01, tone_hi + 0.01, x);
+#endif
 		if (kind == 1 || kind == 3) {
 			// Ground cover lights like the ground it stands on (painter_ground's light()): lit unless
 			// a cast shadow or a sun at the horizon, never a middle step for a low sun, so a lawn

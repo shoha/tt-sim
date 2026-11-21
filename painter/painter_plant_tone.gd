@@ -90,6 +90,11 @@ static func tone(
 	material.set_shader_parameter(
 		&"tone_hi", PainterSheet.number(sheet, mood, "tone-hi", elevation)
 	)
+	# A rock's shade (painter_solid): half way from the mood's full shade pull to the cliff stone's
+	# share of it (the sheet's cliff-pull), so a boulder's shade side is one family with the cliff
+	# it lies under and still leans to the mood's shade hue. Wood keeps its bark- ramp as it is.
+	var cliff_pull := PainterSheet.number(sheet, mood, "cliff-pull", elevation)
+	material.set_shader_parameter(&"solid_pull", 1.0 if wood else 0.5 * (1.0 + cliff_pull))
 	# The frequency of the slow field that steps a drift of blooms lighter or darker.
 	material.set_shader_parameter(
 		&"group_freq", PainterSheet.number(sheet, mood, "flower-mix", elevation)

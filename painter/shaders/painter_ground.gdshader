@@ -539,7 +539,12 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float
 		vec2 size = vec2(textureSize(water_weights, 0));
 		vec2 muv = ((q - layer_grid_origin) / layer_grid_step + 0.5) / size;
 		float wet = textureLod(water_weights, muv, 0.0).a;
-		float band = smoothstep(WET_EDGE - 0.07, WET_EDGE + 0.07, wet + (p_noise(p * 1.7 + 83.0) - 0.5) * 0.4 + (h - 0.5) * 0.12 * min(mk, 1.0));
+		// The step is about two pixels wide, at most the 0.14 of the wet line it used to be at every
+		// zoom: the line falls over 0.8 m and the noise as fast again, so close up that 0.14 was a
+		// soft edge a tenth of a metre wide, the one soft edge of the ground (card
+		// painter-ground-rocks). px * 2.5 is the wet value's change over a pixel.
+		float wet_w = clamp(px * 2.5, 0.002, 0.07);
+		float band = smoothstep(WET_EDGE - wet_w, WET_EDGE + wet_w, wet + (p_noise(p * 1.7 + 83.0) - 0.5) * 0.4 + (h - 0.5) * 0.12 * min(mk, 1.0));
 		lit = mix(lit, lit * WET_TINT, band);
 		shd = mix(shd, shd * WET_TINT, band);
 	}
@@ -584,9 +589,11 @@ vec3 contact_at(vec3 p, vec2 xz) {
 		vec2 size = vec2(textureSize(occ_map, 0)) * occ_step;
 		vec2 s = textureLod(occ_map, (xz + to_sun * SEAM_LEAN_M - occ_origin) / size, 0.0).rg;
 		vec2 w = vec2(p_noise(p * 1.3 + 80.0), p_noise(p * 2.7 + 95.0)) - 0.5;
-		occ.xy = vec2(
-			smoothstep(0.4, 0.5, s.r + w.x * 0.3) * occ_k.x,
-			smoothstep(0.4, 0.5, s.g + w.y * 0.3) * occ_k.y);
+		// A firm edge whatever the field's gradient: the step is a pixel wide, at most the 0.1 of
+		// the field it used to be (round a group of stones the field falls slowly, and a 0.1 step
+		// of it was a soft-edged dark block, the one tonal edge of the ground that was no brush's).
+		vec2 v = s + w * 0.3 - 0.45;
+		occ.xy = clamp(v / clamp(fwidth(v), vec2(1.0e-4), vec2(0.1)) + 0.5, 0.0, 1.0) * occ_k.xy;
 	}
 	for (int i = 0; i < tok_n; i++) {
 		vec4 t = tok[i];
@@ -843,8 +850,13 @@ void fragment() {
 	f_cut =cut_amp > 0.0 ? be_cut(st) * cut_amp : 0.0;
 	f_edge = p_noise(p * 0.55 + 71.0);
 	vec3 contact = contact_at(p, xz);
-	f_pool = contact.x;
-	f_core = contact.y;
+	// The pool and the seam lie on the ground a thing stands on, not down the face below it: the
+	// occlusion field is a plan view, so under stones on a ledge they ran down the wall as a tall
+	// dark block that joined the ledge, the wall and the stones into one shape (card
+	// painter-ground-rocks). The face is the brush-edged read's, the step that keeps the lip off it.
+	float on_ground = fielded ? 1.0 - step(0.55, role_slope) : 1.0;
+	f_pool = contact.x * on_ground;
+	f_core = contact.y * on_ground;
 	f_tok = contact.z;
 }
 

@@ -78,6 +78,23 @@ func test_a_document_of_another_size_is_baked_whole() -> void:
 	assert_true(field.matches(small))
 
 
+func test_a_second_map_of_another_size_resizes_the_texture() -> void:
+	# A second map played in one session: the texture exists from the first map, and updating it
+	# in place with the second map's image errored and kept the first map's field.
+	var field := _baked(_document(_hills))
+	var texture := field.texture()
+	assert_eq(texture.get_size(), Vector2(field.width, field.depth))
+	var small := MapDocument.create_flat(Vector2i(20, 20), "", "", 0)
+	field.bake(small)
+	assert_engine_error(0, "baking another size raises no engine error")
+	assert_same(field.texture(), texture, "the bound texture object stays")
+	assert_eq(texture.get_size(), Vector2(small.samples_x(), small.samples_z()))
+	var large := MapDocument.create_flat(Vector2i(40, 26), "", "", 0)
+	field.update(large, Rect2i(0, 0, 2, 2))
+	assert_engine_error(0, "nor does an update that finds another size")
+	assert_eq(texture.get_size(), Vector2(large.samples_x(), large.samples_z()))
+
+
 func test_map_edge_samples_are_finite_and_follow_a_ramp() -> void:
 	var doc := _document(func(p: Vector2, _h: float) -> float: return 0.5 * p.x)
 	var field := _baked(doc)
