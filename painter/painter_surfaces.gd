@@ -540,7 +540,9 @@ func _rebuild_zone() -> void:
 	if not is_instance_valid(_terrain) or _terrain.document == null:
 		return
 	var doc := _terrain.document
-	_field.sync(_terrain, [_ground_material()])
+	# One field for the map and the skirt (the texture object is shared, as the zone map's): past
+	# the border the skirt's reads clamp to the border's texel (painter_ground.gdshader).
+	_field.sync(_terrain, [_ground_material(), _skirt])
 	if _zone_whole or _zones.zone == null:
 		_zones.build(doc)
 	elif _zone_dirty.has_area():
@@ -558,6 +560,7 @@ func _rebuild_zone() -> void:
 		material.set_shader_parameter(&"layer_grid_origin", -extent * 0.5)
 		material.set_shader_parameter(&"layer_grid_step", doc.sample_step())
 		material.set_shader_parameter(&"half_extent", extent * 0.5)
+		material.set_shader_parameter(&"skirt_fall", AuthoredTerrain.SKIRT_FADE_M)
 		material.set_shader_parameter(
 			&"base_meadow", 1.0 if PainterGroundRoles.surface_role(doc.base_surface) == "meadow" else 0.0
 		)

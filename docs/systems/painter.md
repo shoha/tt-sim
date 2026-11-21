@@ -2555,9 +2555,8 @@ and torture sheets, the score tables) and the card's handoff
   its convexity, and the nearest steep face (the steepest one-sample step of the raw heights, the
   two axes as one gradient so a face reads the same along the grid and across it, softened), so a
   sheer step under a metre keeps its rock face. A 4-fetch cubic read looked the same on the
-  torture set, so the read is bilinear. The skirt and a GLB map's ground keep the mesh's normal
-  (no tone step where level ground crosses the map edge at a low sun; a slope crossing the edge
-  was not looked at).
+  torture set, so the read is bilinear. A GLB map's ground keeps the mesh's normal. The skirt reads
+  the same field (below, "The map edge").
 - **One rule for every edge the form makes.** `painter_ground.gdshader` reads the field at the
   pixel's map point moved by a brush-scale noise (`EDGE_FREQ` 1.9 per metre, `EDGE_REACH` 0.5 m;
   asked at the 3D surface point so it does not streak down a face, its reach shrunk by the
@@ -2744,6 +2743,56 @@ and torture sheets, the score tables) and the card's handoff
   main, GPU in-run A/B: f1 close view +0.041 ms, wide +0.038 ms (the planes' lattice is 24 hashes
   a rock pixel; one hash a cell would cut it). Evidence of cards painter-ground-rocks and -finish:
   `docs/research/2026-11-09-prototypes/compare/painter_final107_ground_rocks/` (`finish/`).
+
+## The map edge, and the cost of an edit (card painter-terrain-edge, 2026-11-21; look-pending)
+
+- **The map edge.** The skirt's mesh normal holds only the outward fall
+  (`TerrainMeshBuilder.skirt_vertex`), never the gradient ALONG the border, and the skirt was kept
+  out of the shading field, so a form that crossed the border lost its normal, its rock and its
+  hard terminator there: a ruled line at 6.5 h, a rectangular corner at 17.5 h. Now the skirt's
+  material is bound to the same field texture as the ground (`PainterGroundField.sync` takes both
+  materials: one texture object, as the zone map's; no margin is baked and no texture is added).
+  Past the border the read clamps to the border's texel (texel middles lie on samples, so that texel
+  IS the border), which is the form the skirt's mesh carries outward; `skirt_keep()` scales the
+  read by the mesh's own fall (1 minus a smoothstep of the square-ring distance over `skirt_fall`,
+  `AuthoredTerrain.SKIRT_FADE_M`), and the fall itself comes from the mesh normal. At the border
+  the keep is 1 and the fall is level, so the read is the map's own. `fielded` is
+  `shade_present && !world_frame` in `ground_at()`, `fragment()` and `light()`, and the lip and
+  foot run on a fielded skirt. The ground's own path is unchanged: in one run, main | build, the
+  owner's bank view differs in 0 pixels, and the falls and wide views in none outside water.
+- **What it shows** (`painter_final115_terrain_edge/final_*.png`, a slope and a mound on each of
+  the +x and +z borders, 6.5 h, 14 h, 17.5 h, main | build): rock walls, strata, lip and shade
+  cross the border as one shape. Still visible: the skirt IS the border's profile pushed straight
+  out, so on it a wall or a terminator runs straight out from the border, straighter than a form
+  inside the map (the mound on +z at 6.5 h: a shade column with one near-straight side). The
+  defect measure says the same: the ruled lines are gone (`vedge` 0.64 to 0.40 on the +x slope,
+  0.72 to 0.28 on the +x mound at 17.5 h) and the walls that now run on count as straight edges
+  (`vedge` 0.40 to 0.98 and 0.61 to 1.36 on the +z slope, `hedge` 0.03 to 0.19 on the +x slope).
+  The lever, if the owner wants it, is the skirt's mesh (a fall that also rounds the profile along
+  the border), not the shading rule.
+- **No GPU readback on an edit.** A MultiMesh given only a buffer lives on the GPU alone:
+  `MultiMesh.buffer` was a readback on every call (27 to 35 ms, never cached) and the first
+  `get_instance_transform()` or `set_instance_transform()` another (13 ms; measured in a window,
+  RTX 3080, `jobs/mmprobe.gd`). The contact field's collect (`PainterOcclusion._add_solids`) paid
+  it on every multimesh the scatter had just rebuilt, and `AuthoredScatter.move_rows` paid it
+  under a held sculpt stroke. `ScatterGlbUtils.multimesh_from_chunk` now writes one instance
+  before it sets the buffer, so the RenderingServer keeps its CPU copy and the same reads take
+  about 0.01 ms and return the same floats (`test_scatter_multimesh_cpu.gd`; the cost is one more
+  copy of each settled node's buffer in RAM). Torture map, sculpt stroke across the rock row,
+  three strokes each, before | after: held stroke worst frame 43.2, 43.1, 50.6 | 22.4, 21.9,
+  23.4 ms (median 14.1 both, the vsync cap); frames over 33 ms 6, 3, 3 | 0, 0, 0; the rebuild at
+  the stroke's end 34.0 ms (collect 31.5) | 3.9 ms (collect 1.6); a rebuild after a direct move
+  27.0 | 4.8 ms; after a placed boulder 43.5 | 26.6 ms (collect 16.5 | 1.4; the rest is the whole
+  bake a new mesh asks). What is left in the worst frames (26.8 ms, at the release): heights 0.9,
+  terrain 0.9, fields 0.5, snap 0.5, collision 0.3 ms of timed parts; the recorder's parts no
+  longer hold a readback (`h_snap` max 29.6 to 1.2 ms, `flush` max 30.1 to 1.8 ms), and the
+  remainder of such a frame is outside the parts it times.
+- **The rock planes' lattice** needs no change: `solid_form()` runs its four-hash loop only where
+  the rock is big enough to take planes (`if (big > 0.0)`), and the whole lattice switched off
+  measures within the noise (GPU in-run A/B, lattice on against off: one rock filling the view
+  -0.024 ms, the rock row +0.006 ms, the falls view +0.009 ms, base drift 0.014 to 0.039 ms).
+- Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final115_terrain_edge/`
+  (`final_*.png`, `round1/`, `owner/`, `timing/`, `scores_edge_full.tsv`, `jobs/`).
 
 ## Verification
 
