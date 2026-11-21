@@ -56,8 +56,9 @@ static func holds(half: Vector2) -> bool:
 
 ## Records a small stone (`stone`: its middle's world x and z, its radius, its foot's height) in
 ## every texel of `span` whose middle lies within `reach` metres of it, and raises the seam
-## channel of `field` there to FLAG. `sites` and `field` are laid out alike: `width` texels a row, `step`
-## metres a texel, the first texel's corner at `origin`. A texel keeps one stone: a tight one
+## channel of `field` there to FLAG. `sites` and `field` are laid out alike: `width` texels a
+## row, `step` metres a texel, the first texel's corner at `origin`. A texel keeps one stone: a
+## tight one
 ## before any other, then the one whose dab's edge (COVER radii from its middle) lies furthest
 ## past the texel's middle, and the earlier mark on a tie, so the result is one function of the
 ## sorted marks. Its radius is written negative where two or more stones are tight. (Nearest in
