@@ -11,9 +11,10 @@ extends RefCounted
 ##         triangle, sample or chunk border shows in.
 ##   b     the convexity (1/m): the divergence of that normal's horizontal part, positive on a
 ##         rim, negative in a foot.
-##   a     the nearest steep face: the steepest one-sample step of the RAW heights (as a slope,
-##         1 - n.y), softened [1 2 1]. A sheer step half a metre high is one sample wide and all
-##         but vanishes from the band-limited slope; this keeps its rock face.
+##   a     the nearest steep face: the steepest one-sample step of the RAW heights (the larger of
+##         the forward and the backward step on each axis, the two axes as one gradient, as a
+##         slope 1 - n.y), softened [1 2 1]. A sheer step half a metre high is one sample wide and
+##         all but vanishes from the band-limited slope; this keeps its rock face.
 ## The model is a chain of stages, each a pure function of the stage before it at a fixed reach:
 ##   raw -> blur -> blur (smooth) -> gradient -> convexity      reach 2, 4, 5, 6 samples
 ##   raw -> steep -> softened                                   reach 1, 2 samples
@@ -203,7 +204,8 @@ func _gradient(rect: Rect2i) -> void:
 			_ny[row + x] = 1.0 / sqrt(1.0 + gx * gx + gz * gz)
 
 
-## The steepest one-sample step of the raw heights at each sample of `rect`, as a slope.
+## The steepest one-sample step of the raw heights at each sample of `rect`, as a slope: the same
+## for a face along the grid and one across its diagonal.
 func _steepness(rect: Rect2i) -> void:
 	var xmax := width - 1
 	var zmax := depth - 1
@@ -215,8 +217,11 @@ func _steepness(rect: Rect2i) -> void:
 			var c := _raw[row + x]
 			var dx := maxf(absf(_raw[row + mini(x + 1, xmax)] - c), absf(c - _raw[row + maxi(x - 1, 0)]))
 			var dz := maxf(absf(_raw[below + x] - c), absf(c - _raw[above + x]))
-			var g := maxf(dx / step.x, dz / step.y)
-			_steep[row + x] = 1.0 - 1.0 / sqrt(1.0 + g * g)
+			# The two axes' steps as one gradient: a face reads the same whichever way it is turned
+			# to the grid (with the larger axis alone a diagonal 50 degree face read as 39).
+			var gx := dx / step.x
+			var gz := dz / step.y
+			_steep[row + x] = 1.0 - 1.0 / sqrt(1.0 + gx * gx + gz * gz)
 
 
 ## The texels of `rect`: the gradient, the convexity (the divergence of the normal's horizontal

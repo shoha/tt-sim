@@ -131,6 +131,29 @@ func test_a_short_sheer_step_keeps_its_steep_face() -> void:
 	assert_almost_eq(field.texel(sx + 12, 20).a, 0.0, 0.001, "level ground beside it is not steep")
 
 
+func test_the_steep_channel_reads_a_face_the_same_along_the_grid_and_across_it() -> void:
+	# A 50 degree ramp is rock (slope 0.357, over the 0.3 threshold) whichever way it faces.
+	var rise := tan(deg_to_rad(50.0))
+	var along := _baked(_document(func(p: Vector2, _h: float) -> float: return p.x * rise))
+	var across := _baked(
+		_document(func(p: Vector2, _h: float) -> float: return (p.x + p.y) * rise / sqrt(2.0))
+	)
+	var a := along.texel(60, 60).a
+	var d := across.texel(60, 60).a
+	assert_almost_eq(a, 1.0 - cos(deg_to_rad(50.0)), 0.005, "a ramp along the grid")
+	assert_almost_eq(d, a, 0.005, "the same ramp across the diagonal")
+	# A quarter-metre kerb across a 20 degree slope stays ground with the two axes joined.
+	var slope := tan(deg_to_rad(20.0))
+	var kerb := _baked(
+		_document(
+			func(p: Vector2, _h: float) -> float: return p.y * slope + (0.25 if p.x > 0.0 else 0.0)
+		)
+	)
+	var doc := MapDocument.create_flat(SIZE_M, "", "", 0)
+	var sx := roundi(doc.world_to_sample(Vector2(0.0, 0.0)).x)
+	assert_lt(kerb.texel(sx, 60).a, 0.3, "a kerb on a 20 degree slope stays ground")
+
+
 func test_back_caster_twin_comes_and_goes() -> void:
 	var chunk := MeshInstance3D.new()
 	chunk.mesh = BoxMesh.new()

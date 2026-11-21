@@ -17,14 +17,10 @@ extends RefCounted
 ## but flips every other caster too (a token's shadow thinned): rejected.
 
 const NAME := "BackCaster"
-## The twin's material: front faces culled, depth only (it is never drawn in a colour pass).
-## Inline, so it is in neither warm-up list (GraphicsWarmup, PainterWarmup): OPEN, it should become
-## a painter shader file with a PainterWarmup sample (card painter-ground-robust-build handoff).
-const SHADER_CODE := (
-	"shader_type spatial;\n"
-	+ "render_mode cull_front, unshaded, shadows_disabled;\n"
-	+ "void fragment() {\n\tALBEDO = vec3(0.0);\n}\n"
-)
+## The twin's shader: front faces culled, depth only (it is never drawn in a colour pass), the
+## caster moved a little toward the light so what stands right in front of a face turned from the
+## sun is inside its shadow (the shader's header). Warmed by PainterWarmup.
+const SHADER := "res://painter/shaders/painter_terrain_caster.gdshader"
 
 static var _material: ShaderMaterial = null
 
@@ -66,6 +62,5 @@ static func casting(chunk: MeshInstance3D) -> GeometryInstance3D.ShadowCastingSe
 static func _caster_material() -> ShaderMaterial:
 	if _material == null:
 		_material = ShaderMaterial.new()
-		_material.shader = Shader.new()
-		_material.shader.code = SHADER_CODE
+		_material.shader = load(SHADER) as Shader
 	return _material

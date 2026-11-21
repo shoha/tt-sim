@@ -88,6 +88,12 @@ const float STRATA_H = 0.6;
 const float TURN_REL = 0.4;
 // The field convexity (1/m) past which a rim takes its lit lip and a foot its dark one.
 const float LIP_CURV = 0.55;
+// The brush edge of every shape the ground's form makes (the rock role, the lip, the foot, the
+// terminator): the field is read at the pixel's map point moved by a noise of this frequency
+// (1/m: a wobble about half a metre long, a mark's width) and this reach (m, end to end; along the
+// ground, so it shrinks on a face).
+const float EDGE_FREQ = 1.9;
+const float EDGE_REACH = 0.5;
 // The wet band: the wet line's value that the band's edge sits at, and what it does to a colour
 // (darker and a little cooler, linear).
 const float WET_EDGE = 0.45;
@@ -249,17 +255,6 @@ vec4 zone(vec2 xz) {
 vec4 shade_field(vec2 xz) {
 	vec2 size = vec2(textureSize(shade_map, 0));
 	return textureLod(shade_map, ((xz - layer_grid_origin) / layer_grid_step + 0.5) / size, 0.0);
-}
-
-// The slope a role reads from a field value: the band-limited slope, or the nearest steep face
-// where that is steeper (a sheer step under a metre keeps its rock face).
-float field_slope(vec4 fld) {
-	return max(1.0 - inversesqrt(1.0 + dot(fld.xy, fld.xy)), fld.w);
-}
-
-// A firm step of `x` at `t`: a shape's edge, never a gradient.
-float firm(float x, float t) {
-	return smoothstep(t - 0.03, t + 0.03, x);
 }
 
 vec3 role_col(bool lit, int role, float variant) {
@@ -432,7 +427,13 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float
 	if (pv > 0.46) {
 		role = 2;
 	}
-	if (max(slope, zb.b - 0.2) + (p_noise(p * 0.8 + 9.0) - 0.5) * 0.12 > 0.3) {
+	// The rock of a slope: with the shading field `slope` is the PIXEL's (fragment(): the field's
+	// brush-edged read, its slow wander already in it), so a round form keeps its round ring and
+	// the edge is the same for a mark and the block-in. Without the field the wander is asked here.
+	// The painted rock zone keeps the wander of whoever asks (a mark's, at its middle).
+	float rock_n = (p_noise(p * 0.8 + 9.0) - 0.5) * 0.12;
+	bool fielded = shade_present && !skirt && !world_frame;
+	if ((fielded ? max(slope, zb.b - 0.2 + rock_n) : max(slope, zb.b - 0.2) + rock_n) > 0.3) {
 		role = 3;
 	}
 	// Variation inside a zone: the role's own two variants by two slow noises. The block-in takes
@@ -597,16 +598,32 @@ void fragment() {
 	vec3 n = normalize(v_n);
 	// The authored terrain's form comes from the shading field: a normal, a slope and a convexity
 	// that are smooth functions of the map point, so no step below follows a triangle's edge.
+	// ONE rule for every edge the form makes (the rock of a slope, the lip, the foot, the
+	// terminator): the field is read once, at the pixel's map point moved by a brush-scale noise,
+	// and each edge is a hard step of that read. A band-limited field has smooth contours, so a
+	// round form keeps a round ring; the moved read gives the contour a brush's wobble of one size
+	// in metres whatever the field's gradient (a noise added to the VALUE moved a gentle form's
+	// edge by metres and a bank's by nothing, and a soft step on a slowly varying value was a
+	// blurred band on screen). The noise is asked at the surface point, height included, so on a
+	// face it does not stretch into streaks, and its reach shrinks with the ground's tilt and with
+	// a sheer step near (a face a quarter metre deep in the map is not read from beyond its foot).
 	bool fielded = shade_present && !skirt && !world_frame;
 	vec4 fld = vec4(0.0);
+	float slope = 1.0 - n.y;
+	float role_slope = slope;
 	if (fielded) {
-		fld = shade_field(xz);
+		vec4 here = shade_field(xz);
+		vec3 sp = vec3(xz.x, v_wy, xz.y) * EDGE_FREQ;
+		vec2 warp = vec2(p_noise(sp + 57.0), p_noise(sp + 91.0)) - 0.5;
+		float flat_k = min(inversesqrt(1.0 + dot(here.xy, here.xy)), 1.0 - here.w);
+		fld = shade_field(xz + warp * (EDGE_REACH * flat_k));
 		n = normalize(vec3(-fld.x, 1.0, -fld.y));
+		slope = 1.0 - n.y;
+		// What a role and the marks read: the nearest steep face counts too, and the edge wanders
+		// slowly besides (main's wander of the rock line).
+		role_slope = max(slope, fld.w) + (p_noise(p * 0.8 + 9.0) - 0.5) * 0.12;
 	}
 	f_n = n;
-	float slope = 1.0 - n.y;
-	// What a role and the marks read: with the field, the nearest steep face counts too.
-	float role_slope = fielded ? max(slope, fld.w) : slope;
 	float out_k = 0.0;
 	float calm = 1.0;
 	if (skirt) {
@@ -627,10 +644,10 @@ void fragment() {
 	float h_k = 0.5;
 	float l_k = 0.0;
 	// No marks on a steep face: laid in the map's XZ they stretch down it as smears (the face is
-	// the block-in's strata).
+	// the block-in's strata). With the field the limit is the rock line itself, so the rock of a
+	// slope is the block-in's and its edge is one contour.
 	// Nor inside a village field: its rows are its strokes.
-	bool search = brushes_present && marks > 0.0 && px_m <= mark_px.y && role_slope < 0.4 && !field_inner(xz);
-	float s_k = role_slope;
+	bool search = brushes_present && marks > 0.0 && px_m <= mark_px.y && role_slope < (fielded ? 0.3 : 0.4) && !field_inner(xz);
 	for (int layer = 0; layer < 3 && search; layer++) {
 		// The small marks exist only in a drift or litter zone, and not when they are a pixel or two.
 		if (layer == 2 && (max(sz.x, sz.y) <= 0.0 || px_m > mark_px.x)) {
@@ -690,17 +707,6 @@ void fragment() {
 				if (textureLod(brushes, vec3(uv * 0.5 + 0.5, bl), lod).r < 0.5) {
 					continue;
 				}
-				// A mark takes the slope at its middle too, as it does its zone: it is rock or meadow
-				// as a whole, so the role's edge is made of brush marks (with the pixel's slope the
-				// edge ran ruled through a mark, along the slope's contour), and a mark whose middle
-				// lies on a steep face is not laid.
-				float slope_a = role_slope;
-				if (fielded) {
-					slope_a = field_slope(shade_field(a));
-					if (slope_a >= 0.4) {
-						continue;
-					}
-				}
 				bool keep;
 				if (layer == 2) {
 					keep = za.g < 0.25 && fract(h * 13.7 + 0.41) < (za.r > 0.5 ? sz.x : sz.y) * calm;
@@ -714,7 +720,6 @@ void fragment() {
 					a_k = a;
 					h_k = fract(h * 23.17 + 0.4);
 					l_k = layer == 2 ? 2.0 : 1.0;
-					s_k = slope_a;
 				}
 			}
 		}
@@ -729,7 +734,7 @@ void fragment() {
 	vec3 lit;
 	vec3 shd;
 	if (best > 0.0) {
-		ground_at(a_k, s_k, h_k, l_k, (fract(h_k * 9.1) - 0.5) * 0.5, px_m, v_wy, lit, shd);
+		ground_at(a_k, role_slope, h_k, l_k, (fract(h_k * 9.1) - 0.5) * 0.5, px_m, v_wy, lit, shd);
 	} else {
 		ground_at(xz, role_slope, 0.5, 0.0, 0.0, px_m, v_wy, lit, shd);
 	}
@@ -741,32 +746,40 @@ void fragment() {
 	// barely tilts it, and drew a thin light line there. The lip is a little gold (`cliff_warm`)
 	// and under snow takes the meadow's snow as a cap; the foot goes part way to its shade colour.
 	if (cliff_edge > 0.0 && !skirt) {
-		vec3 wpos = vec3(v_xz.x, v_wy, v_xz.y);
-		vec3 dpx = dFdx(wpos);
-		vec3 dpy = dFdy(wpos);
-		float curv = (dot(dFdx(n), dpx) + dot(dFdy(n), dpy)) / max(dot(dpx, dpx) + dot(dpy, dpy), 1e-6);
-		float slope_grad = (abs(dFdx(slope)) + abs(dFdy(slope))) / max(length(dpx) + length(dpy), 1e-4);
-		float near = smoothstep(0.12, 0.3, slope + slope_grad * 0.5);
-		float brush = (p_noise(p * 3.1 + 57.0) - 0.5) * 0.6;
-		// The curvature is one value a terrain triangle (the derivative of an interpolated normal), so
-		// a band cut on it alone had a hard, triangle-stepped inner edge, a seam between the lip and
-		// the top (painter-ground-fire-round3). It only says which side is convex; the band's own
-		// edges are feathered on the slope, which runs smoothly over the rim, wobbled by a slow brush.
-		float wob = (p_noise(p * 1.3 + 91.0) - 0.5) * 0.08;
-		float rim = smoothstep(0.02, 0.2, slope + wob);
-		float lip = smoothstep(0.3, 0.8, curv + brush) * rim * (1.0 - smoothstep(0.42, 0.72, slope + wob)) * near;
-		float foot = smoothstep(0.3, 0.8, -curv + brush) * rim * near;
+		float curv;
+		float near;
+		float brush = 0.0;
+		float lip;
+		float foot;
 		if (fielded) {
 			// From the field the convexity is a smooth function of the map point (no triangle
 			// blocks), and it varies slowly: fed to a soft step it drew a grey smudge, a gradient
-			// with no shape. Every factor is a FIRM step, so the lip and the foot are flat shapes
-			// with brush edges: convex (or concave) enough, on tilted ground, with a steep face
-			// near, and for the lip not on the face itself.
+			// with no shape, and a step firm in value was still a blurred band where the value
+			// hung near its threshold. Every factor is a HARD step of the one brush-edged read, so
+			// the lip and the foot are flat shapes with brush edges: convex (or concave) enough,
+			// on tilted ground, with a steep face near, and not on the face itself (in the map a
+			// sheer face is under a texel deep: the convexity read on it flips with the texel
+			// grid, and drew a weave of lip and foot down the face).
 			curv = fld.z;
-			near = firm(role_slope + wob, 0.2);
-			rim = firm(slope + wob, 0.08);
-			lip = firm(curv + brush, LIP_CURV) * rim * (1.0 - firm(role_slope + wob, 0.55)) * near;
-			foot = firm(-curv + brush, LIP_CURV) * rim * near;
+			near = step(0.2, role_slope) * (1.0 - step(0.55, role_slope)) * step(0.08, slope);
+			lip = step(LIP_CURV, curv) * near;
+			foot = step(LIP_CURV, -curv) * near;
+		} else {
+			vec3 wpos = vec3(v_xz.x, v_wy, v_xz.y);
+			vec3 dpx = dFdx(wpos);
+			vec3 dpy = dFdy(wpos);
+			curv = (dot(dFdx(n), dpx) + dot(dFdy(n), dpy)) / max(dot(dpx, dpx) + dot(dpy, dpy), 1e-6);
+			float slope_grad = (abs(dFdx(slope)) + abs(dFdy(slope))) / max(length(dpx) + length(dpy), 1e-4);
+			near = smoothstep(0.12, 0.3, slope + slope_grad * 0.5);
+			brush = (p_noise(p * 3.1 + 57.0) - 0.5) * 0.6;
+			// The curvature is one value a terrain triangle (the derivative of an interpolated normal), so
+			// a band cut on it alone had a hard, triangle-stepped inner edge, a seam between the lip and
+			// the top (painter-ground-fire-round3). It only says which side is convex; the band's own
+			// edges are feathered on the slope, which runs smoothly over the rim, wobbled by a slow brush.
+			float wob = (p_noise(p * 1.3 + 91.0) - 0.5) * 0.08;
+			float rim = smoothstep(0.02, 0.2, slope + wob);
+			lip = smoothstep(0.3, 0.8, curv + brush) * rim * (1.0 - smoothstep(0.42, 0.72, slope + wob)) * near;
+			foot = smoothstep(0.3, 0.8, -curv + brush) * rim * near;
 		}
 		vec3 warm = vec3(1.0 + cliff_warm * 0.5, 1.0, 1.0 - cliff_warm * 0.5);
 		lit *= 1.0 + cliff_edge * lip * warm;
@@ -813,9 +826,13 @@ void light() {
 		// 1 / N.L): that ground is inside the form's shade here, and the terrain casts with its
 		// back faces only (AuthoredTerrain.set_back_caster), so ground that faces the sun is never
 		// shadowed by its own surface and the map is read plainly everywhere else.
+		// The normal is the field's brush-edged read (fragment()), so the step is hard: its edge
+		// is a brush's, not a gradient where the form turns slowly.
 		float nl = dot(normalize(f_n), lw);
 		float rel = nl / max(lw.y, 0.05);
-		float turned = 1.0 - smoothstep(TURN_REL - 0.03, TURN_REL + 0.03, rel + (f_edge - 0.5) * 0.15);
+		float turned = shade_present && !skirt && !world_frame
+			? step(rel + (f_edge - 0.5) * 0.15, TURN_REL)
+			: 1.0 - smoothstep(TURN_REL - 0.03, TURN_REL + 0.03, rel + (f_edge - 0.5) * 0.15);
 		float shade = max(cast, turned);
 		vec3 col = mix(f_lit, f_shd, shade);
 		// Contact occlusion (card painter-tree-ground): what stands on the ground shuts out the sky,

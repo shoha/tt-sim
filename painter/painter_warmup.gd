@@ -53,6 +53,8 @@ const SCRIPTS: PackedStringArray = [
 	"res://painter/painter_water.gd",
 ]
 const GROUND := "res://painter/shaders/painter_ground.gdshader"
+## The terrain's back-face shadow caster (TerrainBackCaster): a chunk's mesh, in shadow passes.
+const TERRAIN_CASTER := "res://painter/shaders/painter_terrain_caster.gdshader"
 const PLANT := "res://painter/shaders/painter_plant.gdshader"
 ## The meadow tufts' painted marks (PainterGrassMarks): one quad, LAYOUT_PLAIN.
 const GRASS_MARK := "res://painter/shaders/painter_grass_mark.gdshader"
@@ -197,6 +199,7 @@ static func base_shaders() -> PackedStringArray:
 	return PackedStringArray(
 		[
 			GROUND,
+			TERRAIN_CASTER,
 			PLANT,
 			GRASS_MARK,
 			SOLID,
@@ -345,6 +348,7 @@ static func collect(bare: bool) -> Array[Dictionary]:
 	_add(samples, "ground", GROUND, LAYOUT_GROUND, 0)
 	# A GLB map's terrain (PainterGlbMap) is a Blender mesh: no second UV set.
 	_add(samples, "ground_plain", GROUND, LAYOUT_PLAIN, 0)
+	_add(samples, "terrain_caster", TERRAIN_CASTER, LAYOUT_GROUND, 0)
 	_add(samples, "plant_lit", PLANT, LAYOUT_LIT, 0)
 	_add(samples, "plant_plain", PLANT, LAYOUT_PLAIN, 0)
 	_add(samples, "grass_mark", GRASS_MARK, LAYOUT_PLAIN, 0)

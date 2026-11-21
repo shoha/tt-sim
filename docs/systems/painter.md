@@ -2524,37 +2524,66 @@ patch and the A/B: `docs/research/2026-11-09-prototypes/compare/painter_final99_
   1 / sin(elevation)); an orthographic cascade removes the steps but smears, and the far distance has no
   effect. A shadow-map resolution matter, not part of this card.
 
-## Ground shading field (card painter-ground-robust, 2026-11-20; look-pending, defects open)
+## Ground shading field (cards painter-ground-robust and -finish, 2026-11-20; look-pending)
 
 The authored terrain's FORM is no longer lit from the mesh. Evidence, scores, the A/B and what is
-still wrong: `docs/research/2026-11-09-prototypes/compare/painter_final103_ground_field/` and the
-card's handoff (`docs/plans/handoffs/painter-ground-robust.md`, "Build").
+still visible: `docs/research/2026-11-09-prototypes/compare/painter_final103_ground_field/` (the
+build), `.../painter_final105_ground_finish/` (the finish: attribution sheets a1 to a7, the owner
+and torture sheets, the score tables) and the card's handoff
+(`docs/plans/handoffs/painter-ground-robust.md`, "Build" and "Finish").
 
 - **The field.** `GroundShadeField` (`utils/terrain/ground_shade_field.gd`) bakes one RGBA half
   texel per height sample: the gradient of the band-limited heights (binomial [1 4 6 4 1] twice),
-  its convexity, and the nearest steep face (the steepest one-sample step of the raw heights,
-  softened), so a sheer step under a metre keeps its rock face. `painter_ground.gdshader` reads it
-  with one bilinear fetch (`shade_map`, on the zone map's grid) for the normal, the slope, the lip
-  and the foot, and once more at a mark's middle: a mark is rock or meadow as a whole. A 4-fetch
-  cubic read looked the same on the torture set, so the read is bilinear. The skirt and a GLB map's
-  ground keep the mesh's normal.
+  its convexity, and the nearest steep face (the steepest one-sample step of the raw heights, the
+  two axes as one gradient so a face reads the same along the grid and across it, softened), so a
+  sheer step under a metre keeps its rock face. A 4-fetch cubic read looked the same on the
+  torture set, so the read is bilinear. The skirt and a GLB map's ground keep the mesh's normal
+  (no tone step where level ground crosses the map edge at a low sun; a slope crossing the edge
+  was not looked at).
+- **One rule for every edge the form makes.** `painter_ground.gdshader` reads the field at the
+  pixel's map point moved by a brush-scale noise (`EDGE_FREQ` 1.9 per metre, `EDGE_REACH` 0.5 m;
+  asked at the 3D surface point so it does not streak down a face, its reach shrunk by the
+  ground's tilt and a sheer step near) and takes the normal, the slope, the convexity and the
+  steep face from that ONE read. The rock of a slope, the lip, the foot and the terminator are
+  hard steps of it. A band-limited field has smooth contours, so a round form keeps a round rock
+  ring; the moved read gives every contour a brush's wobble of one size in metres. What it
+  replaced, and why: a role per whole mark broke a 7 m cone's ring into mark-sized chunks; a noise
+  added to the value moves a gentle form's edge by metres and a bank's by nothing; a step that is
+  firm in value (+-0.03) is a blurred band on screen wherever the value turns slowly (the
+  purple-grey band under a bank's shade mass was the terminator on sand, whose shade colour is
+  the sheet's cool purple). Marks stop at the rock line (0.3), so the rock of a slope is the
+  block-in's, and the lip and the foot are not drawn on a face itself (in the map a sheer face is
+  under a texel deep: the convexity read on it flips with the texel grid).
+- **A cliff's bricks are its strata on a zigzag wall.** A sheer wall turned off the grid is a
+  staircase in plan (columns 0.25 / tan(angle) wide), and level strata bands step with it on
+  screen. Main draws the same bricks, plus a stripe per facet from the mesh normal; with the
+  strata off the face is one flat tone in both. A mesh matter, left alone.
 - **Updates.** `PainterGroundField` follows `AuthoredTerrain.ground_edited` and redoes only the
   heights that changed, grown by the field's reach (6 samples); the result equals a full bake bit
   for bit (`test_ground_shade_field.gd`, and checked in the running game after a sculpt stroke).
   245 x 245 samples: 95 ms the whole map, 1.5 ms a 2.5 m dab, 0.55 ms a 1 m dab (GDScript).
 - **The terminator is relative.** Ground facing the sun under 0.4 of what level ground does
-  (N.L / L.y) is shade by its form, one firm step wobbled by the brush (`TURN_REL`); the old
-  facing fade of the cast shadow (`CLIFF_CAST_FACING`) is gone.
+  (N.L / L.y) is shade by its form, one hard step of the brush-edged read (`TURN_REL`); the old
+  facing fade of the cast shadow (`CLIFF_CAST_FACING`) is gone. A bank turned from the sun is a
+  whole shade mass in its role's shade colour (on the owner's bank view 29% of the frame went
+  from lit to shade, on the falls view 24%).
 - **The terrain casts with its back faces** (`TerrainBackCaster`, a shadows-only twin of each
-  chunk with a `cull_front` material, only while Painted): ground that faces the sun is never
-  shadowed by its own surface (the stipple and the hatching on grazing banks), and a hill's shadow
-  still starts at its foot. The sun's `shadow_reverse_cull_face` gives the terrain the same
-  shadows but flips every other caster: rejected. Classic is unchanged.
-- **Cost.** GPU in-run A/B against main: f1 close view -0.017 ms, wide -0.083 ms.
-- **Open (the look is not accepted):** shadow acne on a waterfall close in front of a cliff turned
-  from the sun (the back face is now centimetres behind it); the foot's band is firm in value but
-  still soft on screen where the convexity varies slowly; the rock outline of a steep cone is
-  ragged in whole marks, and the steep channel is not isotropic (diagonal faces read less steep).
+  chunk drawn with `painter_terrain_caster.gdshader`, `cull_front`, only while Painted): ground
+  that faces the sun is never shadowed by its own surface (the stipple and the hatching on grazing
+  banks), and a hill's shadow still starts at its foot. The sun's `shadow_reverse_cull_face` gives
+  the terrain the same shadows but flips every other caster: rejected. Classic is unchanged.
+- **The caster is pushed 0.3 m toward the light** (`push_m`, depth only: along the light's own
+  view axis, so the silhouette does not move). A back face is a surface things stand right in
+  front of (a fall's sheet, grass and flowers on a far slope), and with no push the engine's
+  shadow bias lights them in stripes: the fall was hatched at midday and mostly lit at a low sun.
+  0.05 and 0.1 m still hatch it; 0.3 m is clean at sun elevations 10 and 48, and no crest took a
+  dark line (the risk: a back face pushed past the lit ground just before a crest).
+- **Cost.** GPU in-run A/B against main (7 rounds, the rigs 115 s apart): f1 close view
+  -0.153 ms, wide -0.098 ms (two field fetches a pixel, none per mark, no marks on the rock of a
+  slope).
+- **Still visible (the owner judges):** under a shade mass on sand a thin firm purple strip (sand
+  in form shade between the rock line and the terminator) and the foot as one flat lens on the lit
+  sand below it; the strata bricks above.
 
 ## Verification
 
