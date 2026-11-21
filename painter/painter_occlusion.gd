@@ -107,6 +107,9 @@ const COOL := "occ-cool"
 const SHADE := "occ-shade"
 const BASE := "base-dark"
 
+## Whether every scatter body is a site (PainterSites.site_radius: a dab from its own foot, nothing
+## in the field). Set by rebuild(): true on an authored terrain, false on a GLB map.
+var all_sites := false
 ## Which of the two looks is on (the comparison probe switches them; both on is the shipped one).
 var ground_on := true
 var base_on := true
@@ -286,6 +289,10 @@ func rebuild() -> void:
 	_count = 0
 	var marks: Array = []
 	var sites: Array = []
+	var terrain := _map.get_node_or_null(^"AuthoredTerrain") as AuthoredTerrain
+	if all_sites != (terrain != null):
+		all_sites = terrain != null
+		_held.clear()
 	_add_trees(marks)
 	_add_solids(marks, sites)
 	_add_structures(marks)
@@ -299,7 +306,6 @@ func rebuild() -> void:
 	_apply()
 	var t3 := Time.get_ticks_usec()
 	_site_count = sites.size()
-	var terrain := _map.get_node_or_null(^"AuthoredTerrain") as AuthoredTerrain
 	var built := _dabs.sync(_map, terrain, _surfaces.call("dab_material"), sites)
 	_last = {
 		"run": int(_last.get("run", 0)) + 1,
@@ -567,7 +573,7 @@ func _solids_of(mm: MultiMesh, to_world: Transform3D, leafy: bool, sites: Array)
 			var body := bodies[b]
 			var half3 := body.size * scale * 0.5
 			var foot := PackedFloat32Array()
-			if PainterSites.radius(Vector2(half3.x, half3.z)) > 0.0:
+			if PainterSites.site_radius(Vector2(half3.x, half3.z), all_sites) > 0.0:
 				foot = _feet_of(mm.mesh, b, body)
 			_solid(
 				out,
@@ -626,9 +632,10 @@ static func _soup(mesh: Mesh) -> PackedVector3Array:
 	return out
 
 
-## One body of a scatter solid: its middle `c` (world), its turn and its half size (metres). A
-## small stone is no mark: it goes to `sites`, with its measured foot when `sections` holds its
-## body's (PainterSites.feet; `stand` is then its plan scale and 1 for an upright stone).
+## One body of a scatter solid: its middle `c` (world), its turn and its half size (metres). On an
+## authored terrain a body is no mark in the field: it goes to `sites`, with its measured foot
+## when `sections` holds its body's (PainterSites.feet; `stand` is then its plan scale and 1 for an
+## upright one). On a GLB map only a small stone does; a larger body keeps its box in the field.
 func _solid(
 	marks: Array,
 	sites: Array,
@@ -640,9 +647,9 @@ func _solid(
 ) -> void:
 	var half := Vector2(half3.x, half3.z)
 	var corner := minf(half.x, half.y)
-	if PainterSites.holds(half):
-		# A stone a coverage its size cannot hold: its own dab, as geometry (PainterDabs).
-		var r := PainterSites.radius(half)
+	if all_sites or PainterSites.holds(half):
+		# Its own mark, as geometry (PainterDabs), from its own foot.
+		var r := PainterSites.site_radius(half, all_sites)
 		if r > 0.0:
 			var plain := PainterSites.site(c.x, c.z, r, c.y - 0.5 * half3.y, half3.y)
 			if sections.is_empty():

@@ -429,6 +429,127 @@ func test_a_stones_foot_is_measured_where_it_meets_the_ground() -> void:
 	assert_almost_eq(laid[4], 0.0, 0.003, "a stone laid along the slope: its own section")
 
 
+## A log as the four side walls of a box `length` by `wide` metres and 1 m tall, turned `turn`
+## about the vertical in its mesh, three corners a triangle.
+func _log(length: float, wide: float, turn: float) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	var corners: Array[Vector2] = [
+		Vector2(-length, -wide), Vector2(length, -wide), Vector2(length, wide), Vector2(-length, wide)
+	]
+	for k in 4:
+		var a := (corners[k] * 0.5).rotated(turn)
+		var b := (corners[(k + 1) % 4] * 0.5).rotated(turn)
+		out.append(Vector3(a.x, 0.0, a.y))
+		out.append(Vector3(b.x, 0.0, b.y))
+		out.append(Vector3(a.x, 1.0, a.y))
+		out.append(Vector3(b.x, 0.0, b.y))
+		out.append(Vector3(b.x, 1.0, b.y))
+		out.append(Vector3(a.x, 1.0, a.y))
+	return out
+
+
+func test_every_body_is_a_site_on_an_authored_terrain_and_a_box_only_without_one() -> void:
+	var host := PainterOcclusion.new()
+	var marks: Array = []
+	var sites: Array = []
+	# A boulder 2 m across and a log 3 m by 0.5 m: boxes in the field where no dab can be laid.
+	host._solid(marks, sites, Vector3(0.0, 5.5, 0.0), 0.0, Vector3(1.0, 0.6, 1.0))
+	host._solid(marks, sites, Vector3(4.0, 5.2, 0.0), 0.3, Vector3(1.5, 0.25, 0.25))
+	assert_eq(marks.size(), 2, "a GLB map's boulder and log keep their footprints")
+	assert_true(sites.is_empty())
+	marks.clear()
+	host.all_sites = true
+	host._solid(marks, sites, Vector3(0.0, 5.5, 0.0), 0.0, Vector3(1.0, 0.6, 1.0))
+	host._solid(marks, sites, Vector3(4.0, 5.2, 0.0), 0.3, Vector3(1.5, 0.25, 0.25))
+	host._solid(marks, sites, Vector3(8.0, 5.0, 0.0), 0.0, Vector3(0.05, 0.05, 0.05))
+	assert_true(marks.is_empty(), "on an authored terrain no body writes into the field")
+	assert_eq(sites.size(), 2, "the boulder and the log are sites; a pebble too small is none")
+	assert_almost_eq(float(sites[0][2]), 1.0, 1.0e-5, "a round body's radius")
+	assert_almost_eq(float(sites[1][2]), 0.25, 1.0e-5, "a long body's is its half width")
+	assert_eq(PainterSites.radius(Vector2(1.0, 1.0)), 0.0, "a GLB map's limit stands")
+	assert_eq(PainterSites.site_radius(Vector2(1.0, 1.0), true), 1.0)
+
+
+func test_a_log_is_a_strip_whatever_its_box_and_its_mark_moves_by_its_width() -> void:
+	# A log 3 m long and 0.5 m wide lying 35 degrees askew in its mesh: its box is fat.
+	var turn := deg_to_rad(35.0)
+	var soup := _log(3.0, 0.5, turn)
+	var box := AABB(soup[0], Vector3.ZERO)
+	for p: Vector3 in soup:
+		box = box.expand(p)
+	assert_lt(box.size.x, PainterSites.ASPECT * box.size.z, "its box is not a long one")
+	var sections := PainterSites.feet(soup, box)
+	assert_eq(sections.size(), PainterSites.SLICES * PainterSites.SLICE_FLOATS)
+	var line := Vector2(sections[PainterSites.AXIS], sections[PainterSites.AXIS + 1])
+	var along := Vector2.RIGHT.rotated(turn)
+	assert_almost_eq(absf(line.normalized().dot(along)), 1.0, 0.01, "its sections lie along it")
+	assert_between(sections[2], 0.7 * 0.25, 0.2501, "a section's radius is half its width")
+	assert_almost_eq(line.length() + sections[2], 1.5, 0.01, "and its line half its length")
+	var round := PainterSites.feet(_frustum(0.3, 0.5), AABB(Vector3(-0.5, 0.0, -0.5), Vector3.ONE))
+	assert_eq(round[PainterSites.AXIS], 0.0, "a round body has no line")
+	assert_eq(round[PainterSites.AXIS + 1], 0.0)
+	# On level ground: the outline's radius is the log's half width, and the mark's away part is
+	# a third of that width whichever way the sun stands to the log.
+	var n := 33
+	var step := Vector2(0.5, 0.5)
+	var half := Vector2(8.0, 8.0)
+	var r := PainterSites.body_radius(Vector2(box.size.x, box.size.z) * 0.5)
+	var plain := PainterSites.site(0.5, -1.0, r, 0.0, 0.5)
+	var site := PainterSites.measured(plain, 0.5, 0.0, 1.0, true, sections)
+	var own := PainterSites.outline(site, _grid(n, 0.0), n, n, step, half)
+	assert_between(own[3], 0.7 * 0.25, 0.2501, "the mark's radius is the log's half width")
+	var axis := Vector2(own[10], own[11])
+	assert_almost_eq(axis.length() + own[2], 1.5, 0.02, "the foot is a strip the log's length")
+	var across := axis.normalized().orthogonal()
+	var foot := own[2]
+	var shaded := _ends(own, across, across, 0.3)
+	assert_between(shaded - foot, 0.5 * own[3], 0.85 * own[3], "a third of its WIDTH, shaded side")
+	assert_lt(_ends(own, -across, across, 0.3) - foot, 0.1 * own[3], "a sliver toward the sun")
+	var end := _ends(own, axis.normalized(), axis.normalized(), 0.3)
+	assert_between(end - 1.5, 0.5 * own[3], 0.85 * own[3], "past its end by its width's share")
+	assert_lt(_ends(own, across, axis.normalized(), 0.3) - foot, 0.1 * own[3], "a sliver beside it")
+	assert_lt(shaded, PainterSites.round_reach(own), "inside the patch's reach of the line")
+	# Its patch is the ground near the strip, not the square round its length.
+	var vertices := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var custom := _customs()
+	var indices := PackedInt32Array()
+	PainterSites.append_dab(own, site, _grid(n, 0.0), n, n, step, half, vertices, uvs, custom, indices)
+	var area := 0.0
+	for t in range(0, indices.size(), 3):
+		var a := vertices[indices[t]]
+		area += 0.5 * (vertices[indices[t + 1]] - a).cross(vertices[indices[t + 2]] - a).length()
+	var reach := PainterSites.reach(own)
+	assert_lt(area, 0.6 * 4.0 * reach * reach, "well under the square of its reach")
+	for v: Vector3 in vertices:
+		var d := Vector2(v.x - own[0], v.z - own[1])
+		d -= axis * clampf(d.dot(axis) / axis.length_squared(), -1.0, 1.0)
+		assert_lt(d.length(), PainterSites.round_reach(own) + 1.5, "near the strip")
+
+
+func test_a_body_in_shade_stands_in_a_line_past_its_own_radius() -> void:
+	var n := 17
+	var step := Vector2(0.5, 0.5)
+	var half := Vector2(4.0, 4.0)
+	for r: float in [0.2, 0.5, 1.0]:
+		var own := PainterSites.outline(
+			PainterSites.site(0.6, -1.1, r, 0.0, 0.5 * r), _grid(n, 0.0), n, n, step, half
+		)
+		for b in 8:
+			var away := Vector2.RIGHT.rotated(TAU * b / 8.0)
+			for k in 8:
+				var dir := Vector2.RIGHT.rotated(TAU * k / 8.0)
+				var d := 0.0
+				var at := Vector2(own[0], own[1])
+				while d < 3.0 and PainterSites.line(own, at.x + dir.x * d, at.y + dir.y * d, away) > 0.0:
+					d += 0.002
+				assert_gt(d, 1.05 * r, "past the body's radius all round (r %.1f)" % r)
+				assert_lt(d, 1.25 * r, "by about a tenth of it, a touch more away from the sun")
+				assert_lt(d, PainterSites.reach(own), "inside the patch")
+		var bare := PainterSites.line(own, own[0] + 1.02 * r, own[1], Vector2.ZERO, 0.0)
+		assert_lt(bare, 0.0, "a line of no width ends at the body's radius")
+
+
 func test_a_dab_ends_at_a_ledge_and_a_stone_off_the_ground_has_none() -> void:
 	var n := 17
 	var vertices := PackedVector3Array()
