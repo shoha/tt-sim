@@ -154,6 +154,9 @@ uniform bool shade_present = false;
 // The distance (m) over which the skirt's mesh eases the border's heights down to the map floor
 // (AuthoredTerrain.SKIRT_FADE_M, TerrainMeshBuilder.skirt_height).
 uniform float skirt_fall = 24.0;
+// Metres past the map's edge within which the border's form is still drawn on the skirt
+// (fragment(): a form ends as a painter would end it, not where the mesh's fall does).
+const float SKIRT_END_M = 3.5;
 
 // Contact occlusion (PainterOcclusion): the footprint field (r a pool under crowns, bushes, rocks and
 // houses, g a seam at their feet, b and a the height of a stone's foot: contact_at()), its origin
@@ -166,6 +169,22 @@ uniform vec2 occ_origin = vec2(0.0);
 uniform float occ_step = 0.5;
 uniform vec4 occ_k = vec4(0.0, 0.0, 0.8, 0.3);
 uniform vec4 occ_tint = vec4(0.9, 1.0, 0.96, 0.35);
+// The small stones' sites (PainterOcclusion SITE; laid out as occ_map): a texel holds the stone
+// whose dab covers it most, as that stone's middle from the texel's own (rg, metres), its radius
+// (b, 0 for none) and its foot's height (a). contact_at() draws each stone's own dab from them.
+uniform sampler2D occ_sites : hint_default_black, filter_linear, repeat_disable;
+uniform bool occ_sites_on = false;
+// A stone's dab: its radius and how far its middle leans from the sun, in the stone's radii; the
+// soft edge's start and end (in the dab's radii) and the brush wobble on it; the height above or
+// below the stone's foot, in its radii, within which the dab shows whole (gone at twice that).
+// PainterOcclusion.SITE_GROW covers the furthest of these: SITE_DAB * (SITE_OUT + half the
+// wobble) + SITE_LEAN.
+const float SITE_DAB = 1.2;
+const float SITE_LEAN = 0.35;
+const float SITE_IN = 0.8;
+const float SITE_OUT = 1.0;
+const float SITE_WOBBLE = 0.25;
+const float SITE_UP = 1.0;
 uniform vec4 tok[32];
 uniform int tok_n = 0;
 uniform vec2 tok_k = vec2(0.0);
@@ -617,6 +636,33 @@ vec3 contact_at(vec3 p, vec2 xz) {
 		// of it was a soft-edged dark block, the one tonal edge of the ground that was no brush's).
 		vec2 v = s + w * 0.3 - 0.45;
 		occ.xy = clamp(v / clamp(fwidth(v), vec2(1.0e-4), vec2(0.1)) + 0.5, 0.0, 1.0) * occ_k.xy;
+		// A small stone sits in its own dab (card painter-terrain-marks): a soft round mark about
+		// the stone's size, leaning from the sun, drawn from the stone's own place and radius, so
+		// three stones are three dabs at any zoom (the field's texel is wider than the gap between
+		// them). One filtered read says whether any of the four texels round the pixel holds a
+		// stone; only then are the four read, each for the stone it holds.
+		if (occ_sites_on && occ_k.y > 0.0) {
+			vec2 at = (xz - occ_origin) / occ_step;
+			if (textureLod(occ_sites, at * occ_step / size, 0.0).b > 0.0) {
+				ivec2 first = ivec2(floor(at - 0.5));
+				float wob = w.y * SITE_WOBBLE;
+				float dab = 0.0;
+				for (int k = 0; k < 4; k++) {
+					ivec2 t = first + ivec2(k & 1, k >> 1);
+					vec4 stone = texelFetch(occ_sites, t, 0);
+					if (stone.b <= 0.0) {
+						continue;
+					}
+					vec2 mid = occ_origin + (vec2(t) + 0.5) * occ_step + stone.rg
+						- to_sun * (stone.b * SITE_LEAN);
+					float d = length(xz - mid) / (stone.b * SITE_DAB);
+					float at_foot = 1.0
+						- smoothstep(1.0, 2.0, abs(v_wy - stone.a) / (stone.b * SITE_UP));
+					dab = max(dab, (1.0 - smoothstep(SITE_IN, SITE_OUT, d + wob)) * at_foot);
+				}
+				occ.y = max(occ.y, dab * occ_k.y);
+			}
+		}
 	}
 	for (int i = 0; i < tok_n; i++) {
 		vec4 t = tok[i];
@@ -664,17 +710,33 @@ void fragment() {
 	// The brush's wobble (also what the block-in's tone steps are read through, ground_at()).
 	vec3 sp = vec3(xz.x, v_wy, xz.y) * EDGE_FREQ;
 	vec2 warp = vec2(p_noise(sp + 57.0), p_noise(sp + 91.0)) - 0.5;
+	// Metres past the map's edge, and the slow noise the outer ground's fades wander by.
+	float out_m = 0.0;
+	float far_n = 0.5;
+	if (skirt) {
+		out_m = length(max(abs(xz) - half_extent, vec2(0.0)));
+		far_n = p_noise(p * 0.2);
+	}
 	if (fielded) {
 		vec4 here = shade_field(xz);
+		// A form ends where a painter would end it (card painter-terrain-marks): the skirt's mesh
+		// is the border's profile pushed straight out for skirt_fall metres, so a wall, a shade
+		// mass or a lip drawn as far as the mesh carries it ran on as a ruled extrusion. What is
+		// drawn of the border's form, the mesh's own outward fall included, dies within
+		// SKIRT_END_M of the border (0.6 to 1.4 times that, by the slow noise, so the end wanders
+		// and no two forms end on one line); each role being a hard step of the read, a wall
+		// narrows to its steepest line and closes in a rounded end. 1 at the border.
+		float drawn = 1.0;
 		if (skirt) {
-			here *= skirt_keep(xz);
+			drawn = 1.0 - smoothstep(0.15, 1.0, out_m / (SKIRT_END_M * (0.6 + 0.8 * far_n)));
+			here *= skirt_keep(xz) * drawn;
 		}
 		float flat_k = min(inversesqrt(1.0 + dot(here.xy, here.xy)), 1.0 - here.w);
 		vec2 moved = xz + warp * (EDGE_REACH * flat_k);
 		fld = shade_field(moved);
 		if (skirt) {
-			fld *= skirt_keep(moved);
-			fld.xy -= n.xz / max(n.y, 0.2);
+			fld *= skirt_keep(moved) * drawn;
+			fld.xy -= n.xz / max(n.y, 0.2) * drawn;
 		}
 		n = normalize(vec3(-fld.x, 1.0, -fld.y));
 		slope = 1.0 - n.y;
@@ -686,8 +748,7 @@ void fragment() {
 	float out_k = 0.0;
 	float calm = 1.0;
 	if (skirt) {
-		float out_m = length(max(abs(xz) - half_extent, vec2(0.0)));
-		out_k = smoothstep(2.0, 26.0, out_m + (p_noise(p * 0.2) - 0.5) * 6.0);
+		out_k = smoothstep(2.0, 26.0, out_m + (far_n - 0.5) * 6.0);
 		// The outer ground is calmer: fewer marks the farther out.
 		calm = 1.0 - 0.7 * smoothstep(0.0, 12.0, out_m);
 	}

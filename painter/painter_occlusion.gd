@@ -70,11 +70,29 @@ const REBUILD_DELAY_S := 0.3
 ## their rects hold more than FULL_SHARE of the field (a level load, the trees' growth).
 const MAX_DIRTY := 48
 const FULL_SHARE := 0.3
-## A footprint (a mark) is an Array of floats, sorted as such: its shape (DISC or BOX), a disc's
-## channel, world x and z, a box's turn and half extents, the pool's reach (a disc's radius), the
-## seam's reach, the corners' rounding and the foot (its height times its weight, the weight).
+## A footprint (a mark) is an Array of floats, sorted as such: its shape (DISC, BOX or SITE), a
+## disc's channel, world x and z, a box's turn and half extents (a site's written reach in the
+## first), the pool's reach (a disc's or a site's radius), the seam's reach, the corners' rounding
+## and the foot (its height times its weight, the weight; a site's: its height alone).
 const DISC := 0.0
 const BOX := 1.0
+const SITE := 2.0
+## A small stone is a SITE (card painter-terrain-marks): a body whose longer half is under
+## SITE_HALF_M, no longer than SITE_ASPECT times its narrower one and at least SITE_MIN_M in radius.
+## The field cannot hold a mark its size (two texels across, or less) nor keep three stones' marks
+## apart, so such a body is not rasterized: every texel near it records the stone itself (its
+## middle, as an offset from the texel's own, its radius and its foot's height), the one whose dab
+## covers the texel most (`_site`; a dab is taken as SITE_COVER radii wide there), and the ground
+## draws the dab from those numbers, round and at the stone, at any zoom. A site is written to
+## every texel within SITE_GROW radii plus SITE_PAD_M of it: the dab's furthest reach in the
+## shader (its size, its wobble, its lean from the sun), and a texel's diagonal, so each of the
+## four texels round a pixel the dab covers holds it (unless other stones' dabs took all four).
+const SITE_HALF_M := 0.45
+const SITE_ASPECT := 1.6
+const SITE_MIN_M := 0.09
+const SITE_GROW := 1.8
+const SITE_PAD_M := 0.36
+const SITE_COVER := 1.5
 const MAX_TOKENS := 32
 ## Metres of empty field kept round the map's extent. The shader samples the field with a clamped
 ## edge, so a footprint cut by the field's last row (a tree near the map's edge) would be repeated
@@ -126,6 +144,15 @@ var _bodies: Dictionary = {}
 var _data := PackedFloat32Array()
 var _marks: Array = []
 var _win := Rect2i()
+## The small stones' sites, laid out as the field (CHANNELS a texel: the stone's middle from the
+## texel's, x and z, its radius, 0 for none, and its foot's height), their texture, how many
+## there are, and what the last update() changed: the field's own marks, the sites, or both (each
+## texture is uploaded only when its own marks moved).
+var _sites := PackedFloat32Array()
+var _site_tex: ImageTexture = null
+var _site_count := 0
+var _field_moved := false
+var _sites_moved := false
 ## A scatter multimesh's marks by its node's id: [its transform, its buffer, its mesh's id, its
 ## marks, its footprints]. A multimesh nothing moved in is not walked again.
 var _held: Dictionary = {}
@@ -151,6 +178,9 @@ func release() -> void:
 	_held.clear()
 	_marks = []
 	_data = PackedFloat32Array()
+	_sites = PackedFloat32Array()
+	_site_tex = null
+	_site_count = 0
 	_clear_ground()
 	_surfaces = null
 
@@ -222,6 +252,7 @@ func _clear_ground() -> void:
 	zero.resize(MAX_TOKENS)
 	for material: ShaderMaterial in _surfaces.call("ground_materials"):
 		material.set_shader_parameter(&"occ_present", false)
+		material.set_shader_parameter(&"occ_sites_on", false)
 		material.set_shader_parameter(&"tok_n", 0)
 		material.set_shader_parameter(&"tok", zero)
 	var yard := _yard_material()
@@ -269,6 +300,8 @@ func rebuild() -> void:
 	var t2 := Time.get_ticks_usec()
 	if texels > 0 or _tex == null:
 		_upload()
+	elif _site_count == 0:
+		_site_tex = null
 	_hand_over()
 	_apply()
 	_last = {
@@ -276,6 +309,7 @@ func rebuild() -> void:
 		"texels": texels,
 		"whole": texels == size.x * size.y,
 		"marks": marks.size(),
+		"sites": _site_count,
 		"collect_ms": (t1 - t0) / 1000.0,
 		"bake_ms": (t2 - t1) / 1000.0,
 		"upload_ms": (Time.get_ticks_usec() - t2) / 1000.0,
@@ -291,6 +325,8 @@ func update(origin: Vector2, size: Vector2i, marks: Array) -> int:
 	marks.sort()
 	var whole := origin != _origin or size != _size or _data.size() != size.x * size.y * CHANNELS
 	var dirty: Array[Rect2i] = []
+	_field_moved = false
+	_sites_moved = false
 	if not whole:
 		if marks == _marks:
 			return 0
@@ -301,10 +337,17 @@ func update(origin: Vector2, size: Vector2i, marks: Array) -> int:
 		whole = area > FULL_SHARE * size.x * size.y
 	lay_out(origin, size)
 	_marks = marks
+	_site_count = 0
+	for mark: Array in marks:
+		if mark[0] == SITE:
+			_site_count += 1
 	if whole:
+		_field_moved = true
+		_sites_moved = true
 		_data = PackedFloat32Array()
 		_data.resize(size.x * size.y * CHANNELS)
 		_data.fill(0.0)
+		_sites = PackedFloat32Array()
 		for mark: Array in marks:
 			_draw(_data, mark)
 		return size.x * size.y
@@ -350,8 +393,15 @@ static func box(
 	return [BOX, 0.0, x, z, yaw, half.x, half.y, reach.x, reach.y, corner, foot.x, foot.y]
 
 
+## A small stone's mark: its middle (world x, z), its radius `r` (metres) and the height of its
+## foot.
+static func site(x: float, z: float, r: float, foot: float) -> Array:
+	return [SITE, 0.0, x, z, 0.0, SITE_GROW * r + SITE_PAD_M, 0.0, r, 0.0, 0.0, foot, 0.0]
+
+
 ## The texel rects of the marks that `marks` adds to or drops from the last bake's, joined where
-## they meet; the whole field when more than MAX_DIRTY changed.
+## they meet; the whole field when more than MAX_DIRTY changed. Notes which of the two textures
+## those marks belong to.
 func _changed(marks: Array) -> Array[Rect2i]:
 	var before := {}
 	for mark: Array in _marks:
@@ -362,9 +412,11 @@ func _changed(marks: Array) -> Array[Rect2i]:
 		after[mark] = true
 		if not before.has(mark):
 			rects.append(_span(mark))
+			_note_moved(mark)
 	for mark: Array in _marks:
 		if not after.has(mark):
 			rects.append(_span(mark))
+			_note_moved(mark)
 	if rects.size() > MAX_DIRTY:
 		return [Rect2i(Vector2i.ZERO, _size)]
 	return joined(rects)
@@ -388,11 +440,20 @@ static func joined(rects: Array[Rect2i]) -> Array[Rect2i]:
 	return out
 
 
+func _note_moved(mark: Array) -> void:
+	if mark[0] == SITE:
+		_sites_moved = true
+	else:
+		_field_moved = true
+
+
 ## The field's texels a mark may write (a rect without area: none).
 func _span(mark: Array) -> Rect2i:
 	if mark[0] == DISC:
 		var r: float = mark[7]
 		return _texels(mark[2], mark[3], r + soft(r), r + soft(r))
+	if mark[0] == SITE:
+		return _texels(mark[2], mark[3], mark[5], mark[5])
 	return _box_span(
 		mark[2], mark[3], mark[4], Vector2(mark[5], mark[6]), far_of(Vector2(mark[7], mark[8]))
 	)
@@ -402,6 +463,8 @@ func _span(mark: Array) -> Rect2i:
 func _draw(data: PackedFloat32Array, mark: Array) -> void:
 	if mark[0] == DISC:
 		_disc(data, int(mark[1]), mark[2], mark[3], mark[7])
+	elif mark[0] == SITE:
+		_site(mark[2], mark[3], mark[7], mark[5], mark[10])
 	else:
 		_boxes(
 			data,
@@ -421,18 +484,31 @@ func _wipe(rect: Rect2i) -> void:
 		var at := (j * _size.x + rect.position.x) * CHANNELS
 		for k in count:
 			_data[at + k] = 0.0
+		if not _sites.is_empty():
+			for k in count:
+				_sites[at + k] = 0.0
 
 
-## The field as a texture: floats as written, then half floats (one native pass each).
+## The field and the sites as textures, each when its own marks moved: floats as written, then
+## half floats (one native pass each). A map without small stones has no sites texture.
 func _upload() -> void:
+	if _field_moved or _tex == null:
+		_tex = _as_texture(_data, _tex)
+	if _site_count == 0 or _sites.is_empty():
+		_site_tex = null
+	elif _sites_moved or _site_tex == null:
+		_site_tex = _as_texture(_sites, _site_tex)
+
+
+func _as_texture(floats: PackedFloat32Array, was: ImageTexture) -> ImageTexture:
 	var image := Image.create_from_data(
-		_size.x, _size.y, false, Image.FORMAT_RGBAF, _data.to_byte_array()
+		_size.x, _size.y, false, Image.FORMAT_RGBAF, floats.to_byte_array()
 	)
 	image.convert(Image.FORMAT_RGBAH)
-	if _tex == null or _tex.get_size() != Vector2(_size) or _tex.get_format() != image.get_format():
-		_tex = ImageTexture.create_from_image(image)
-	else:
-		_tex.update(image)
+	if was == null or was.get_size() != Vector2(_size) or was.get_format() != image.get_format():
+		return ImageTexture.create_from_image(image)
+	was.update(image)
+	return was
 
 
 ## Hands the field to the ground's materials and the yard's (also one made since the last bake).
@@ -446,6 +522,9 @@ func _hand_over() -> void:
 		material.set_shader_parameter(&"occ_origin", _origin)
 		material.set_shader_parameter(&"occ_step", TEXEL_M)
 		material.set_shader_parameter(&"occ_present", true)
+		if material != yard:
+			material.set_shader_parameter(&"occ_sites", _site_tex)
+			material.set_shader_parameter(&"occ_sites_on", _site_tex != null)
 
 
 ## The field's layout for a map `extent` metres across: position the world (x, z) of its first
@@ -534,6 +613,13 @@ func _solids_of(mm: MultiMesh, to_world: Transform3D, leafy: bool) -> Array:
 func _solid(marks: Array, c: Vector3, yaw: float, half3: Vector3) -> void:
 	var half := Vector2(half3.x, half3.z)
 	var corner := minf(half.x, half.y)
+	var longer := maxf(half.x, half.y)
+	if longer < SITE_HALF_M and longer <= SITE_ASPECT * corner:
+		# A stone the field cannot hold: its own dab, drawn from its place and size.
+		var r := sqrt(half.x * half.y)
+		if r >= SITE_MIN_M:
+			marks.append(site(c.x, c.z, r, c.y - 0.5 * half3.y))
+		return
 	var reach := solid_reach(half)
 	if corner + reach.x < 0.5 * TEXEL_M:
 		return
@@ -750,6 +836,40 @@ func _disc(data: PackedFloat32Array, ch: int, x: float, z: float, r: float) -> v
 			var at := (row + i) * CHANNELS
 			if v > data[at + ch]:
 				data[at + ch] = v
+
+
+## Records a small stone (its middle at world (x, z), radius `r`, foot at height `foot`) in every
+## texel whose middle lies within `reach` metres of it, inside the window. A texel keeps one
+## stone: the one whose dab's edge (SITE_COVER radii from its middle) lies furthest past the
+## texel's middle, or nearest to it when no dab holds it, and the earlier mark on a tie, so the
+## result is one function of the sorted marks. (Nearest in its own radii let a stone take every
+## texel round a pebble beside it, and the pebble had no dab.)
+func _site(x: float, z: float, r: float, reach: float, foot: float) -> void:
+	var count := _size.x * _size.y * CHANNELS
+	if _sites.size() != count:
+		_sites.resize(count)
+		_sites.fill(0.0)
+	var span := _texels(x, z, reach, reach).intersection(_win)
+	var reach2 := reach * reach
+	for j in range(span.position.y, span.end.y):
+		var dz := z - (_origin.y + (j + 0.5) * TEXEL_M)
+		var row := j * _size.x
+		for i in range(span.position.x, span.end.x):
+			var dx := x - (_origin.x + (i + 0.5) * TEXEL_M)
+			var d2 := dx * dx + dz * dz
+			if d2 >= reach2:
+				continue
+			var at := (row + i) * CHANNELS
+			var had := _sites[at + 2]
+			if had > 0.0:
+				var hx := _sites[at]
+				var hz := _sites[at + 1]
+				if sqrt(hx * hx + hz * hz) - SITE_COVER * had <= sqrt(d2) - SITE_COVER * r:
+					continue
+			_sites[at] = dx
+			_sites[at + 1] = dz
+			_sites[at + 2] = r
+			_sites[at + 3] = foot
 
 
 ## Writes a box (half extents `half` in its own x, z, turned by `yaw` about +y, its corners rounded

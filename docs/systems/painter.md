@@ -2794,6 +2794,86 @@ and torture sheets, the score tables) and the card's handoff
 - Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final115_terrain_edge/`
   (`final_*.png`, `round1/`, `owner/`, `timing/`, `scores_edge_full.tsv`, `jobs/`).
 
+## Small stones' dabs, and where a form ends past the border (card painter-terrain-marks, 2026-11-21; look-pending)
+
+Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_marks/` (sheets
+`item1_*`, `item2_*`, `item3_*`, `owner/`, `timing/`, `captures/`, `jobs/`); handoff
+`docs/plans/handoffs/painter-terrain-marks.md`.
+
+- **A small stone is a site, not a footprint.** Three stones 0.4 m across shared ONE angular patch
+  about 1.4 times the group: a 0.25 m texel is wider than the gap between them, and a hard
+  threshold of a bilinear read of two or three texels has straight edges. Structures compared
+  (`item1_round1/`, main | no mark | sites): no mark at all for a body the field cannot hold (the
+  stones float, flat on shaded ground); a blob in the field (main is this one; a lattice of 0.25 m
+  cannot keep marks 0.4 m apart whatever the blob's weight); the stone ITSELF recorded in the
+  texels near it and its mark drawn analytically. Built: the third. `PainterOcclusion` makes a
+  body a `SITE` when its longer half is under `SITE_HALF_M` 0.45, it is no longer than
+  `SITE_ASPECT` 1.6 times its narrower half (a thin log stays a box) and its radius
+  (`sqrt(half.x * half.z)`) is at least `SITE_MIN_M` 0.09 (main drew nothing under 0.083). A site
+  is not rasterized: every texel within `SITE_GROW` 1.8 radii plus a texel's diagonal of it holds,
+  in a second RGBA half texture laid out as the field (`occ_sites`, made only when the map has a
+  site), the stone's middle as an offset from the texel's own, its radius and its foot's height;
+  a texel keeps the stone whose dab's edge lies furthest past it (`_site`; nearest in its own radii
+  let a stone take every texel round a pebble beside it). Sites are marks like the others: sorted,
+  baked whole or by dirty rects, bit for bit the same either way; each texture is uploaded only
+  when its own marks moved. Boulders, logs, trees and structures are unchanged.
+- **The dab** (`painter_ground` `contact_at()`): one filtered read of `occ_sites` says whether any
+  of the four texels round the pixel holds a stone; only then are the four fetched, and each
+  stone's dab is a disc `SITE_DAB` 1.2 radii wide whose middle leans `SITE_LEAN` 0.35 radii from
+  the sun, with a soft edge (`SITE_IN` 0.8 to `SITE_OUT` 1.0 of its radius, wobbled by the brush
+  noise) and shown within about the stone's radius of its foot's height. It joins the seam (the
+  soil tone, lighter in the sun). The yard's wash does not read sites.
+  What the sheets show (`item1_stones_native__...png`): three stones, three round dabs at 14 h and
+  6.5 h on the falls' cliff and under each stone of the torture clusters; no angular patch. Still
+  visible: the edges are soft rather than a brush's firm ones, and the lowest stone on the cliff
+  (it stands on a slope, so more of its dab shows) reads as a soft drop shadow as large as the
+  stone.
+- **Cost of the sites.** GPU in-run A/B against main (7 rounds, 90 frames): f1_o +0.011 ms (104
+  sites), torture edge view +0.034 ms, torture wide view +0.069 ms (454 sites on a 61 m map: the
+  four-fetch branch runs in a zone of 0.36 m plus 1.8 radii round every stone). Over the +0.02 ms
+  rule on the torture map; the lever is that zone (the texel diagonal of padding), not yet cut.
+  Edits, torture map in authoring (`timing/st_build_log.txt`; main in brackets): placed boulder
+  27.4 ms (26.6), a move 5.0 and 4.5 ms (4.8), a rebuild under a sculpt stroke 3.6 to 6.9 ms
+  (collect 1.5 to 2.5, bake 1.2 to 2.9, upload 0.9 to 2.2: both textures go up when stones and
+  boxes move together, about 1 ms more than main's one; main's rebuild at a stroke's end 3.9, and
+  the build's rebuild at the stroke's end was not read out on its own); whole bake 22 ms at 583 marks (main's 313 footprints 24 ms).
+- **A form ends within a few metres of the border.** The skirt's mesh is the border's profile
+  pushed straight out for 24 m, so since the skirt took the field's shade a wall, a shade mass or
+  a lip ran on as a ruled bar (10 m of rock wall on the +x slope; a rectangular shade block
+  between the +z slope's walls at 17.5 h). The mesh is shared with Classic and with what stands on
+  it (the eye rim's plants, river exits and water read `TerrainMeshBuilder.skirt_height`), so the
+  mesh is left alone and the change is in the Painted shader only: what is DRAWN of the border's
+  form (the field's read and the mesh's own outward fall) is scaled by a fall-off of the distance
+  past the border, 1 at the border and 0 at `SKIRT_END_M` 3.5 m times 0.6 to 1.4 by the slow noise
+  the outer ground already wanders by (no added noise call). Each role is a hard step of the read,
+  so a wall narrows toward its steepest line and closes. Not built: relaxing the skirt's heights
+  toward the base level, or low-passing the border's profile with distance (both change the
+  shared mesh and need it keyed by the look).
+  What the sheet shows (`item3_skirt_out_third__...png`, views centred past the border, 6.5 h and
+  17.5 h, main | build): the +x wall ends about 3 m out instead of running 10 m; the +z walls
+  taper to points; the +z mound's shade is a short round lobe instead of a 6 m column, and the
+  detached shade island at 17.5 h is gone. Still visible: the +x wall's end is a blunt, nearly
+  straight cap; under the +z walls at 17.5 h the mesh's own cast shadow shows as thin streaks and
+  a dashed line (the skirt's inner ring takes shadows, and the extruded mesh is still there to
+  cast them). At 7 m the walls outran the earlier edge views; 3.5 m was not compared against other
+  lengths. Classic: no file of its path changed (`captures/edge_sz_h140_classic_sub.png`, not
+  compared against a main frame).
+- **Mechanical edges in the shade: attributed in part, not fixed.** One sheet of switches at
+  6.5 h (`item2_attribution_native__...png`, native crops, build | cast shadow off | form's turn
+  off). On the mound the whole shade mass in view and its edge are the CAST shadow: with the cast
+  off nothing is left, with the form's turn off the picture is the build's. That edge carries a
+  stippled fringe a few pixels wide (the hatched penumbra), which is therefore the shadow map's
+  filter seen through the firm step of `cast` (0.44 to 0.56 of the attenuation), not the field
+  or a normal. The other crop (a pyramid ramp) held no terminator, so the sawtooth along mesh
+  triangles was NOT reproduced or attributed by a capture. Read from the code only, as a
+  hypothesis: the terrain casts with its back faces pushed 0.3 m toward the light, so a triangle
+  that faces away from the sun shadows itself whatever the field's smooth normal says, and where
+  the field calls such a triangle lit the shade's edge would be the triangles' outline. Next
+  steps: a native crop on a terminator with the same two switches; for the fringe, the sun's
+  shadow filter quality and blur as switches (`sun.gd shadow`), since a hard-filtered map under
+  the same step has no dither to show; if the sawtooth is the caster's, `painter_terrain_caster`
+  could read the field at each vertex and move a vertex the field calls lit away from the light.
+
 ## Verification
 
 - Unit: `test_painter_sheet.gd` (lint, resolver, continuity), `test_render_style.gd` (table,
