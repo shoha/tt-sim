@@ -103,6 +103,11 @@ static func join_ends(doc: MapDocument, pond: WaterBody) -> Dictionary:
 			before = WaterField.build(doc)
 		var chain := _stepped(doc, end, decision.target, pond)
 		if chain.is_empty():
+			if not _has_room(doc):
+				# Never silent: the document is full, the end stays as drawn and is said.
+				var room_fixes: Array[StringName] = [&"erase_water", &"keep"]
+				var cap := {"cap": MapDocument.MAX_RIVERS}
+				out.hints.append(hints_script.make(&"no_room", end.at, room_fixes, cap))
 			continue
 		for reach in chain:
 			concerned[reach.id] = true
@@ -301,16 +306,8 @@ static func _stepped(
 	doc: MapDocument, end: Dictionary, target: Vector2, pond: WaterBody
 ) -> Array[WaterBody]:
 	var chain: Array[WaterBody] = []
-	var rivers := 0
-	for body in doc.water_bodies:
-		rivers += 1 if body.is_river() else 0
 	var first_id := doc.next_water_id()
-	if (
-		doc.water_bodies.size() + 2 > MapDocument.MAX_WATER_BODIES
-		or rivers + 2 > MapDocument.MAX_RIVERS
-		or first_id <= 0
-		or first_id + 1 > WaterBody.MAX_ID
-	):
+	if not _has_room(doc):
 		return chain
 	var stream := doc.water_body(int(end.id))
 	var at: Vector2 = end.at
@@ -361,6 +358,21 @@ static func _stepped(
 		return made
 	chain.append_array(made)
 	return chain
+
+
+## True when `doc` can take a connector's two reaches (MapDocument.MAX_WATER_BODIES, MAX_RIVERS
+## and the id range).
+static func _has_room(doc: MapDocument) -> bool:
+	var rivers := 0
+	for body in doc.water_bodies:
+		rivers += 1 if body.is_river() else 0
+	var first_id := doc.next_water_id()
+	return (
+		doc.water_bodies.size() + 2 <= MapDocument.MAX_WATER_BODIES
+		and rivers + 2 <= MapDocument.MAX_RIVERS
+		and first_id > 0
+		and first_id + 1 <= WaterBody.MAX_ID
+	)
 
 
 ## True when map point `p` lies on a sample of pond `id`.

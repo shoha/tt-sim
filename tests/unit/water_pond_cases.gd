@@ -48,7 +48,11 @@ static func dig(
 				mask[doc.sample_index(x, z)] = id
 	doc.pond_mask = mask
 	var snapshot := WaterEditor.snapshot_of(doc)
-	var rim := WaterGeometry.pond_rim_level(snapshot, id)
+	# The rim as the conditioned pond reads it (card painter-water-junctions): a rim sample in a
+	# stream's area counts as that stream's level plus the freeboard, so a pond dug over or beside
+	# a stream takes the stream's level instead of its carved bed's or its eased bank's.
+	var water := WaterGeometry.levels(snapshot) if on else PackedFloat32Array()
+	var rim := WaterGeometry.pond_rim_level(snapshot, id, PackedByteArray(), -INF, water)
 	var out := {}
 	var spec := {"kind": "pond", "id": id, "depth": depth, "condition": on}
 	WaterEditor.compute(snapshot, spec, out)

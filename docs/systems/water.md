@@ -833,7 +833,7 @@ the authoring peer, and stores the result in the same WaterBody list (no format 
 entry; the stroke's `last_hints` carry what was only said). Rules, each bounded: (1) the pond never
 rises, and sinks by at most `WaterPondFit.LEVEL_BAND_M` (0.6 m) to the level of a stream tail
 standing beside it below it (the stream would have to climb); (2) a stream end within
-`WaterPorts.SEARCH_M` (2 m) of the pond and within its snap reach (1.5 half-widths, at least 1 m),
+`WaterPorts.SEARCH_M` (2 m) of the pond and within its snap reach (2 half-widths, at least 1 m),
 that WaterPorts says can meet it (a tail at or above the pond: join, inflow, a fall into it; a head
 at or below it: an outlet) gains a stepped connector to a point inside the pond (at most about 3 m
 long, see below), starting at the end's own point so the two chain as one stroke, its channel cut
@@ -852,7 +852,59 @@ alone on a map and 0 beside unrelated crossings elsewhere on it (their film and 
 tried first and let joins through that undermined a neighbour (pond fuzz perched 47 off, 54 on, 2
 of 8 maps with more events), hence the carve rectangles. Dropped joins are always said
 (`end_near_water_below`). A join the document has no room for (`MapDocument.MAX_RIVERS`, 32) is
-skipped silently: open.
+said (`no_room`, card painter-water-junctions; it was skipped silently).
+
+**Junctions: where water meets water (card painter-water-junctions, 2026-11-20).** A stroke
+crossing another or itself, a tributary's end in a stream, a fork, a pond dug over a stream, a
+stream's mouth in a pond and a ring that closes on itself are one thing: two waters that are ONE
+bed at ONE level. Before, each stroke was carved and tested alone, so the later one cut the
+earlier one's bank away, the field called both undermined (film_run, bridged_run on flat ground)
+and drew the place as a film, the pale flat slab. The model, one rule for all of them:
+
+- A junction is derived from the bodies, never stored (no format change): a station's bank or
+  bed that lies in other water standing at the station's level (no lower than
+  `WaterMeshBuilder.BANK_HOLD_M`, 0.1 m, under it and no higher than `RiverProfile.JUNCTION_OVER_M`,
+  0.3 m, over it) is held by that water, not lost (`RiverProfile.stations`, GDScript; no native
+  pass changed). Other water is another body (`other_level_at`) or another pass of the same
+  stroke (`own_level_at`: a point inside the stroke's own channel, no wider than the station's
+  own half-width, so the channel beside a bank never counts however the width varies; a bend
+  tighter than the channel is wide, a self-crossing, a closure). Held stations raise no event and
+  no film. `stations()` marks them (`junction`: `JUNCTION_OTHER`, `JUNCTION_OWN`) and
+  `WaterJunctions.find(doc)` lists the places (`{pos, radius, level, bodies, own}`, runs of marked
+  stations merged where their circles overlap, so three bodies meeting are one record), for
+  tests, hints and the renderer's later use. An erased or edited body needs no bookkeeping.
+- One level: the plan reads crossed water as ground a freeboard over its level
+  (`WaterEdit.water_ground`), so a reach is at or below it; `WaterEdit._meet_crossed_water` raises
+  a reach that fell short by `JUNCTION_RAISE_M` (0.1 m) or less to exactly that level (crossing
+  strokes on the 5 percent tilt stood at -1.45 and -1.50). A tributary's end takes the main
+  stream's level (the existing `pin_last`). A conditioned pond reads a rim sample in a stream's
+  area as that stream's level plus the freeboard (`WaterGeometry.pond_rim_level`'s `water`), so a
+  pond dug over a stream stands at the stream's level; it stood a bed's depth under it (-1.20
+  against -0.15 on flat ground: the stream's stretch through the pond was a 6.25 m film).
+- One bed: the carve is unchanged. It only lowers, so two beds at one level are one bed.
+- A stroke end inside the stroke's own channel (a part of the course further than
+  `OWN_END_SKIP_PER_HALF_WIDTH`, 4, half-widths of arc away: a drawn ring) is an open end
+  (`RiverProfile.own_end`): no taper, full width and depth. A closed ring was a C with a gap.
+- Not a junction: waters whose levels differ by more than the band. The higher one is not held,
+  the field's events say so, and a stream above a pond is the stepped connector's (below).
+- `WaterPorts.SNAP_PER_HALF_WIDTH` is 2 again (the brush's whole width): the fuzz bound that sent
+  it back to 1.5 holds now that a join raises no film or bridged run, and a stream ending 2.0 m
+  short of a pond is joined (f_end_short).
+
+Corpus ratchets `[u_jumps, lat_jumps, perched, film, bridged, end_near_water]` before and after:
+flat `[43, 20, 0, 6, 13, 0]` to `[0, 0, 0, 0, 0, 0]`, flat2 `[0, 0, 0, 1, 0, 0]` to all 0, tilt
+`[1, 14, 0, 3, 4, 0]` to `[0, 14, 0, 0, 0, 0]`, steps and steps_wide unchanged. The flow and
+lateral coordinate jumps where a stroke meets ITSELF are counted apart (`junction_seams`: flat 43,
+flat2 14, tilt 1): two passes of one stroke meet as two strokes do (two frames at one place), and
+only the renderer can cross-fade them; the count did not fall, it moved, and a closed ring adds
+its closure (14). On the canonical field fixture two of the st stroke's three film runs were the
+insides of its hairpins (the bank test found the stroke's own channel): they are held now, and
+the transect goldens were regenerated. Not solved: a stream a riffle or a fall above its pond
+(t_end_short, s0_fall_pond). The connector's water stands over 0.3 m above the dry ground beside
+it (2 samples each, by the guard's count and by the corpus's stricter one), so the guard drops
+the join and says the end; the step would have to sit where the upper level's banks still hold.
+A very wide stroke's end can read as an open end because its own other reach covers it
+(`for_doc` excludes only the end's own reach): s_fall_wide lists a junction there, as before.
 
 **Path rules of card painter-water-paths (2026-11-20).** (1) `WaterPorts.snap_reach`: an end's
 reach is 1.5 of its half-widths (at least 1 m) and the search follows it; it was cut off by a

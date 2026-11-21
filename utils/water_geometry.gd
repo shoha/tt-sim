@@ -598,11 +598,17 @@ static func reach_level(ground: PackedFloat32Array, reach: Vector2i) -> float:
 ## NAN when the pond has no area. Rim samples flagged in `floor_mask` (per sample, nonzero)
 ## count as at least `floor_m`: ground a stroke extending the pond finds already carved by
 ## its own basin (WaterEditor), which must not sink the pond by a freeboard per stroke.
+## `water` (levels() of the document before the pond, or empty) makes a rim sample in another
+## body's area (a river's channel and its bank) count as at least that water's level plus the
+## freeboard, as a river plan reads it (WaterEdit.water_ground): a pond dug over a stream takes
+## the stream's level (a junction, one bed), where the stream's carved bed on the rim sank it a
+## channel's depth under the stream (and the eased bank beside it a few centimetres).
 static func pond_rim_level(
 	doc: MapDocument,
 	body_id: int,
 	floor_mask: PackedByteArray = PackedByteArray(),
-	floor_m: float = -INF
+	floor_m: float = -INF,
+	water: PackedFloat32Array = PackedFloat32Array()
 ) -> float:
 	var mask := doc.pond_mask
 	if mask.size() != doc.sample_count():
@@ -629,6 +635,8 @@ static func pond_rim_level(
 				var h := doc.heights[i]
 				if i < floor_mask.size() and floor_mask[i] != 0:
 					h = maxf(h, floor_m)
+				if i < water.size() and water[i] != DRY:
+					h = maxf(h, water[i] + FREEBOARD_M)
 				low = minf(low, h)
 	return NAN if is_inf(low) else low - FREEBOARD_M
 

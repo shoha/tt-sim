@@ -484,9 +484,17 @@ static func digest(doc: MapDocument) -> String:
 ## more than 2 m: the arc must be continuous inside a stroke), "lat_jumps" (the same for the
 ## lateral coordinate, 1 m), "seam_pairs" (wet 4-neighbour pairs owned by different bodies: where
 ## a stroke-keyed coordinate meets another frame; information, the shader's risk scales with it),
-## "events" (the field's own, by kind)}.
+## "events" (the field's own, by kind), "junctions" (WaterJunctions.find), "junction_seams" (the
+## pairs u_jumps and lat_jumps would count that lie in a junction of a stroke with itself: a
+## self-crossing, a ring's closure, a bend's inside. Two passes of one stroke meet there as two
+## strokes do, which are seam_pairs: two frames at one place, not a break inside a frame)}.
 static func field_report(doc: MapDocument) -> Dictionary:
 	var f := WaterField.build(doc)
+	var junctions := WaterJunctions.find(doc)
+	var own: Array[Dictionary] = []
+	for junction in junctions:
+		if bool(junction.own):
+			own.append(junction)
 	var widest := 0.0
 	for b in doc.water_bodies:
 		for hw in b.half_widths:
@@ -496,6 +504,7 @@ static func field_report(doc: MapDocument) -> Dictionary:
 	var r := {
 		"wet": 0, "nan": 0, "lateral_out": 0, "foot_out": 0, "perched": 0, "u_jumps": 0,
 		"lat_jumps": 0, "seam_pairs": 0, "events": {}, "foot_min": 0.0, "foot_max": 0.0,
+		"junctions": junctions, "junction_seams": 0,
 	}
 	var sx := f.size.x
 	for z in f.size.y:
@@ -534,10 +543,22 @@ static func field_report(doc: MapDocument) -> Dictionary:
 					continue
 				var river_j := f.flow_u[j] > WaterField.NO_FLOW_U * 0.5
 				if river and river_j:
-					if absf(f.flow_u[i] - f.flow_u[j]) > 2.0:
-						r.u_jumps += 1
-					if absf(f.lateral[i] - f.lateral[j]) > 1.0:
-						r.lat_jumps += 1
+					var u_jump := absf(f.flow_u[i] - f.flow_u[j]) > 2.0
+					var lat_jump := absf(f.lateral[i] - f.lateral[j]) > 1.0
+					if not u_jump and not lat_jump:
+						continue
+					var p := f.origin + Vector2(x, z) * f.step
+					var in_junction := false
+					for junction in own:
+						if p.distance_to(junction.pos) <= float(junction.radius):
+							in_junction = true
+							break
+					if in_junction:
+						r.junction_seams += 1
+						continue
+					r.u_jumps += 1 if u_jump else 0
+					r.lat_jumps += 1 if lat_jump else 0
 	for e in f.events:
 		r.events[e.kind] = int(r.events.get(e.kind, 0)) + 1
+	r["event_list"] = f.events
 	return r

@@ -34,6 +34,15 @@ holds the sample):
 - Undermined stations (`RiverProfile.stations`: the ground no longer holds the water) in a run of at
   most 2.1 m between held stations are a dip the water bridges at its level; a longer run, or one
   at the stroke's end, is a film (`FILM_M`) over the dug bed inside the channel, and an event.
+- A junction is not undermined (card painter-water-junctions; water.md "Junctions"): a station
+  whose bank or bed lies in other water standing at its level (from 0.1 m under it to 0.3 m over
+  it: another body, or another pass of the same stroke) is held by that water. The two are one
+  bed, so a crossing, a join, a fork, a pond over a stream, a self-crossing and the inside of a
+  tight bend keep their level and raise no `film_run` or `bridged_run`. The rule lives in
+  `RiverProfile.stations` (GDScript, the bank test's inputs); no field channel and no native pass
+  was added, and `ttscatter`'s version did not move. `stations().junction` and
+  `WaterJunctions.find(doc)` say where; the shader does not read them yet (the lap fade at a
+  mouth and the cross-fade of two flow frames are a later card).
 - The lateral foot tongue: foot foam and riffle white fade by `LATERAL_FADE` toward the channel edge.
 
 Derived per sample (arrays of the grid's size, row-major, `index = z * size.x + x`, sample (0, 0) at
@@ -110,7 +119,7 @@ what a validation card should offer the author to fix:
 
 | kind | meaning | canonical map |
 |------|---------|---------------|
-| `film_run` | a stretch longer than the bridge whose ground no longer holds its water (`pos`, `length`, `body`) | 3 on the `st` stroke (st_o) |
+| `film_run` | a stretch longer than the bridge whose ground no longer holds its water (`pos`, `length`, `body`) | 1 on the `st` stroke (st_o; 3 before the junction rule, two were its hairpins' insides) |
 | `bridged_run` | a short dip the water bridges (information) | 7 |
 | `end_near_water` | an open stroke end within 2 m of other water 0.3 m or more above or below (`other_body`, `gap_m`, `level_gap`) | f4: the stream head of body 7, 3.96 m above the deep pond (body 29) |
 

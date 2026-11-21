@@ -353,7 +353,10 @@ func test_events_flag_the_maps_inconsistencies() -> void:
 			&"bridged_run":
 				bridged += 1
 				assert_lt(e.length, WaterFieldStroke.BRIDGE_M + 0.01, "a bridged run is short")
-	assert_eq(films, 3, "three film runs on st")
+	# Three before card painter-water-junctions: two were the insides of st's hairpins, where the
+	# bank test found the stroke's own channel (the other leg of the same reach) and called the
+	# water undermined. A bank in the stroke's own water at its level is one bed (a junction).
+	assert_eq(films, 1, "one film run on st")
 	assert_eq(heads, 1, "one stream head near a pond at another level (f4)")
 	assert_gt(bridged, 0, "short dips are reported as information")
 
