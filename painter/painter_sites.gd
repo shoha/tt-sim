@@ -189,7 +189,7 @@ static func append_dab(
 			vertices.append(Vector3(px, h + LIFT_M, pz))
 			uvs.append(Vector2(px, pz))
 			custom.append(BASE)
-			custom.append(maxf(absf(h - ground) - up, 0.0) * CUT)
+			custom.append(_loss(h, ground, up))
 			custom.append(LIFT_M)
 			custom.append(tag)
 	# The terrain's own triangles (TerrainMeshBuilder.build_chunk_arrays): front faces up.
@@ -203,3 +203,54 @@ static func append_dab(
 			indices.append(a + wide + 1)
 			indices.append(a + wide)
 	return wide * (j1 - j0 + 1)
+
+
+## Brings the patch append_dab() made for a stone at the same place and radius up to `site_of` on
+## an edited `grid`, in place: the patch covers the same samples, so only its `vertices`' heights
+## and what `custom`'s values lose change (its uvs, slots and indices stand). Returns false, and
+## changes nothing, when the patch must be made again instead: the stone no longer stands on this
+## ground, or `vertices` is not that patch (a stone that had none). A refreshed patch equals a new
+## one bit for bit (test_painter_occlusion).
+static func refresh_dab(
+	site_of: Array,
+	grid: PackedFloat32Array,
+	columns: int,
+	rows: int,
+	step: Vector2,
+	half: Vector2,
+	vertices: PackedVector3Array,
+	custom: PackedFloat32Array
+) -> bool:
+	var x: float = site_of[0]
+	var z: float = site_of[1]
+	var up: float = site_of[4]
+	if vertices.is_empty() or absf(x) > half.x or absf(z) > half.y:
+		return false
+	var ground := ScatterGenerator.triangle_height(
+		grid, columns, rows, Vector2((x + half.x) / step.x, (z + half.y) / step.y)
+	)
+	if absf(ground - float(site_of[3])) > 2.0 * up:
+		return false
+	var far := reach(site_of[2])
+	var i0 := clampi(floori((x - far + half.x) / step.x), 0, columns - 2)
+	var i1 := clampi(ceili((x + far + half.x) / step.x), i0 + 1, columns - 1)
+	var j0 := clampi(floori((z - far + half.y) / step.y), 0, rows - 2)
+	var j1 := clampi(ceili((z + far + half.y) / step.y), j0 + 1, rows - 1)
+	if vertices.size() != (i1 - i0 + 1) * (j1 - j0 + 1):
+		return false
+	var k := 0
+	for j in range(j0, j1 + 1):
+		var row := j * columns
+		for i in range(i0, i1 + 1):
+			var h := grid[row + i]
+			var v := vertices[k]
+			vertices[k] = Vector3(v.x, h + LIFT_M, v.z)
+			custom[4 * k + 1] = _loss(h, ground, up)
+			k += 1
+	return true
+
+
+## What a dab's value loses at a vertex whose ground is at `h`, for a stone whose foot's ground is
+## at `ground` and whose vertical reach is `up` (the patch past a ledge).
+static func _loss(h: float, ground: float, up: float) -> float:
+	return maxf(absf(h - ground) - up, 0.0) * CUT

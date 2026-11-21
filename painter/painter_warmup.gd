@@ -53,6 +53,8 @@ const SCRIPTS: PackedStringArray = [
 	"res://painter/painter_water.gd",
 ]
 const GROUND := "res://painter/shaders/painter_ground.gdshader"
+## The small stones' dabs (PainterSurfaces.DAB_SHADER), drawn in PainterDabs' layout (DAB_FLAGS).
+const GROUND_DAB := "res://painter/shaders/painter_ground_dab.gdshader"
 ## The terrain's back-face shadow caster (TerrainBackCaster): a chunk's mesh, in shadow passes.
 const TERRAIN_CASTER := "res://painter/shaders/painter_terrain_caster.gdshader"
 const PLANT := "res://painter/shaders/painter_plant.gdshader"
@@ -109,6 +111,10 @@ const LAYOUT_GLOW: Array[int] = [
 const LAYOUT_PLAIN: Array[int] = [
 	Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_TEX_UV, Mesh.ARRAY_INDEX
 ]
+## A cell of the small stones' dabs (PainterDabs._put_together), its CUSTOM3 four floats.
+const LAYOUT_DAB: Array[int] = [
+	Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_TEX_UV, Mesh.ARRAY_CUSTOM3, Mesh.ARRAY_INDEX
+]
 const LAYOUT_TREE: Array[int] = [
 	Mesh.ARRAY_VERTEX, Mesh.ARRAY_TEX_UV, Mesh.ARRAY_TEX_UV2, Mesh.ARRAY_INDEX
 ]
@@ -146,6 +152,8 @@ const LAYOUT_WATER: Array[int] = [
 ]
 ## What the manner meshes carry in CUSTOM0 (PainterMannerMesh.FORMAT).
 const MANNER_FLAGS := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
+## What the dabs carry in CUSTOM3 (PainterDabs.FORMAT).
+const DAB_FLAGS := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM3_SHIFT
 ## What the water surface and the falls carry in CUSTOM0 and CUSTOM1 (WaterFallFrames.FORMAT).
 const FRAME_FLAGS := (
 	(Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT)
@@ -199,6 +207,7 @@ static func base_shaders() -> PackedStringArray:
 	return PackedStringArray(
 		[
 			GROUND,
+			GROUND_DAB,
 			TERRAIN_CASTER,
 			PLANT,
 			GRASS_MARK,
@@ -326,7 +335,7 @@ static func triangle(slots: Array[int]) -> Array:
 				arrays[slot] = PackedColorArray([Color.WHITE, Color.WHITE, Color.WHITE])
 			Mesh.ARRAY_TEX_UV, Mesh.ARRAY_TEX_UV2:
 				arrays[slot] = uv
-			Mesh.ARRAY_CUSTOM0, Mesh.ARRAY_CUSTOM1:
+			Mesh.ARRAY_CUSTOM0, Mesh.ARRAY_CUSTOM1, Mesh.ARRAY_CUSTOM3:
 				arrays[slot] = PackedFloat32Array([0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0])
 			Mesh.ARRAY_INDEX:
 				arrays[slot] = PackedInt32Array([0, 1, 2])
@@ -348,6 +357,7 @@ static func collect(bare: bool) -> Array[Dictionary]:
 	_add(samples, "ground", GROUND, LAYOUT_GROUND, 0)
 	# A GLB map's terrain (PainterGlbMap) is a Blender mesh: no second UV set.
 	_add(samples, "ground_plain", GROUND, LAYOUT_PLAIN, 0)
+	_add(samples, "ground_dab", GROUND_DAB, LAYOUT_DAB, DAB_FLAGS)
 	_add(samples, "terrain_caster", TERRAIN_CASTER, LAYOUT_GROUND, 0)
 	_add(samples, "plant_lit", PLANT, LAYOUT_LIT, 0)
 	_add(samples, "plant_plain", PLANT, LAYOUT_PLAIN, 0)

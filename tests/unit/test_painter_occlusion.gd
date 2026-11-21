@@ -418,12 +418,12 @@ func test_the_dabs_host_builds_what_changed_and_nothing_else() -> void:
 	assert_true(node.mesh.surface_get_format(0) & Mesh.ARRAY_FORMAT_CUSTOM3 != 0, "with the slots")
 	assert_eq(node.mesh.surface_get_format(0) & Mesh.ARRAY_FORMAT_CUSTOM0, 0, "not the lobes")
 	var lobes := material.get_shader_parameter(PainterDabs.LOBES_PARAM) as ImageTexture
-	assert_not_null(lobes, "the stones' lobes are a texture of the ground's shader")
+	assert_not_null(lobes, "the stones' lobes are a texture of the dabs' shader")
 	var first := PainterSites.lobes(1.0, 1.0, 0.2)
 	var texel := lobes.get_image().get_pixel(0, 0)
 	assert_almost_eq(texel.r, first[0], 1.0e-5, "slot 0: the first stone's first lobe")
 	assert_almost_eq(texel.a, first[3], 1.0e-5)
-	assert_eq(node.material_override, material, "drawn with the ground's material")
+	assert_eq(node.material_override, material, "drawn with the material it is handed")
 	assert_eq(node.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	# The same sites again (a rebuild of the field for anything else, the sun turning): nothing.
 	assert_eq(dabs.sync(map, terrain, material, sites.duplicate()), 0, "nothing built")
@@ -446,6 +446,42 @@ func test_the_dabs_host_builds_what_changed_and_nothing_else() -> void:
 	assert_eq(dabs.sync(map, terrain, material, sites), 3, "a new terrain: every site")
 	dabs.clear()
 	assert_null(dabs.holder(), "cleared")
+
+
+## A dab patch's four empty arrays: vertices, uvs, custom, indices.
+func _patch_arrays() -> Array:
+	return [PackedVector3Array(), PackedVector2Array(), PackedFloat32Array(), PackedInt32Array()]
+
+
+func test_a_patch_refreshed_in_place_equals_one_built_anew() -> void:
+	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "test", 7)
+	var grid := TerrainMeshBuilder.collision_heights(doc).duplicate()
+	var cols := doc.samples_x()
+	var rows := doc.samples_z()
+	var step := doc.sample_step()
+	var half := doc.extent_m() * 0.5
+	var got := _patch_arrays()
+	var site := PainterSites.site(1.0, 1.0, 0.2, 0.0, 0.1)
+	PainterSites.append_dab(site, grid, cols, rows, step, half, got[0], got[1], got[2], got[3], 3)
+	# The ground raised and tilted under it (a sculpt), the stone set on it again.
+	for k in grid.size():
+		grid[k] += 0.3 + 0.04 * (k % cols)
+	var at := Vector2((1.0 + half.x) / step.x, (1.0 + half.y) / step.y)
+	var foot := ScatterGenerator.triangle_height(grid, cols, rows, at)
+	var moved := PainterSites.site(1.0, 1.0, 0.2, foot, 0.1)
+	assert_true(PainterSites.refresh_dab(moved, grid, cols, rows, step, half, got[0], got[2]))
+	var anew := _patch_arrays()
+	PainterSites.append_dab(
+		moved, grid, cols, rows, step, half, anew[0], anew[1], anew[2], anew[3], 3
+	)
+	for k in 4:
+		assert_eq(got[k], anew[k], "array %d bit for bit" % k)
+	# A stone lifted off the ground is made again instead (it has no dab now), and so is one that
+	# had none.
+	var off := PainterSites.site(1.0, 1.0, 0.2, foot + 1.0, 0.1)
+	assert_false(PainterSites.refresh_dab(off, grid, cols, rows, step, half, got[0], got[2]))
+	var none := PackedVector3Array()
+	assert_false(PainterSites.refresh_dab(moved, grid, cols, rows, step, half, none, got[2]))
 
 
 func test_a_boulder_keeps_its_seam_and_a_stone_gets_one_its_size() -> void:
@@ -632,7 +668,7 @@ func test_every_mood_has_the_grounding_numbers_in_range() -> void:
 func test_the_yard_wash_grounds_as_the_ground_does() -> void:
 	# The yard wash repeats the ground's contact rule (the pool in the shade only, the seam leaning
 	# down-sun); its constants must stay the ground's (card painter-tree-ground).
-	var ground := _constants("res://painter/shaders/painter_ground.gdshader")
+	var ground := _constants("res://painter/shaders/painter_ground_body.gdshaderinc")
 	var yard := _constants("res://painter/shaders/painter_yard_ground.gdshader")
 	for key in ["SHADE_DEEP", "SEAM_LIT", "SEAM_LEAN_M"]:
 		assert_true(ground.has(key), "the ground declares %s" % key)

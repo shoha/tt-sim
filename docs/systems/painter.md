@@ -2800,21 +2800,35 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
 `item1_*`, `item2_*`, `item3_*`, `owner/`, `timing/`, `captures/`, `jobs/`); handoff
 `docs/plans/handoffs/painter-terrain-marks.md`.
 
-- **The dabs as geometry (card painter-terrain-dabs, 2026-11-21; look-pending; this one is current
+- **The dabs as geometry (cards painter-terrain-dabs, -cost and -split, 2026-11-21; look-pending; NOT
+  merged: torture wide is +0.05 ms over main against a +0.04 gate; this one is current
   for the small stones: round 3's bake of the dabs into the seam channel and its re-bake when the
   sun turns are gone; round 3's skirt part stands).** Evidence:
   `docs/research/2026-11-09-prototypes/compare/painter_final120_terrain_dabs/`; handoff
   `docs/plans/handoffs/painter-terrain-dabs.md`.
-  - *How a dab takes the ground's tone.* It is drawn with the ground chunks' own material (the
-    same `ShaderMaterial` object, as `material_override`): no second material and no uniform to
-    keep in step. A dab's mesh carries `CUSTOM3` alone (the flag, what the value loses, the lift,
-    the stone's slot plus one); the terrain's meshes have none and read 0, so `vertex()` tells a
-    dab by `CUSTOM3.x` and passes on the slot (one flat float) and the loss (one float). The
+  - *How a dab takes the ground's tone (card painter-terrain-dabs-split).* The ground's shader is
+    a body, `painter_ground_body.gdshaderinc`, compiled twice: `painter_ground.gdshader` (the
+    chunks, the skirt, a GLB map's terrain) and `painter_ground_dab.gdshader`, which defines
+    `PAINTER_DAB` before the include. Everything of the dab's (its uniform, its two varyings, its
+    functions, the vertex lift, the join in `contact_at()`) is inside `#ifdef PAINTER_DAB`, so the
+    ground's compiled shader has none of it and its pixels are main's by construction (its uniform
+    list has no `dab_lobes`: `test_painter_ground_siblings`). The dabs are drawn with a third
+    material, `PainterSurfaces.dab_material()`, made with the chunks' and the skirt's. The three
+    are one ground, so no writer names a material: every ground parameter is written to the list
+    `PainterSurfaces.siblings()` (ground, skirt, dabs) or `ground_materials()` (those and a GLB
+    map's), and the dabs' material is a fire-bake mirror as the ground's is (the skirt, past the
+    map, is not). `test_painter_ground_siblings` enumerates the ground shader's uniforms and checks
+    that the skirt's and the dabs' value of each is the ground's (textures by identity) after a
+    paint, a sculpt, a paint stroke, a sun change, a mood change (the cliffs' snow) and a biome
+    change; the skirt differs in `skirt` alone. A forgotten target fails it. A dab's mesh carries
+    `CUSTOM3` alone (the flag, what the value loses, the lift, the stone's slot plus one), and
+    `vertex()` passes on the slot (one flat float) and the loss (one float). The
     stone's three lobes are three RGBA32F texels of `dab_lobes`, a texture `PainterDabs` writes
     (256 stones a row, a stone's slot kept while it stands, a freed slot taken by the next new
-    one), read by the vertex shader for the lift and at the top of `fragment()` for the value. In
+    one; sent only when a new stone took a slot), read by the vertex shader for the lift and at
+    the top of `fragment()` for the value. In
     `contact_at()` the dab's value joins the field's seam by `max` BEFORE the seam's
-    threshold, on a dab's pixels alone (one compare per ground pixel). So a pixel of a dab is the
+    threshold. So a pixel of a dab is the
     ground at that place (its biome paint, strata, zone maps, cast shadow, pool) with the seam on
     inside the outline and nothing changed outside it. The seam is a tone the ground is set to
     (`mix` toward the soil), so a dab inside a boulder's seam, a cast shadow or another dab is
@@ -2893,6 +2907,25 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
     built, 2 cells) against main's 3.7 to 3.9; a placed boulder 2.85 to 3.0 ms against main's 3.5
     to 4.3 (main's field bakes the 464 small stones as marks: 594 marks against 129; the 25.9 ms
     figure was not reproduced). Pixel identity with the branch tip was NOT shown (handoff).
+  - *The split, measured (card painter-terrain-dabs-split, 2026-11-21; evidence `split/` beside
+    the above; handoff "## Split").* Pixels, one run each, full size: the ground with no stone in
+    view (the water map's bank_z3) equals main, 0 pixels; the split equals the previous tip
+    9dee79f0 built as it was (its one shader on the ground and on the dabs) at st3 at 6.5, 14 and
+    17.5 h, 0 pixels, and at torture wide outside the pond that animates (its 6254 differing
+    pixels lie in the cells where new against new again differs by 8247). f1_o is not shown: the
+    falls move over the whole middle of that frame. GPU, in-run, against the split (rounds 7,
+    twice): torture wide main -0.063 and -0.046 ms (so the split costs +0.05 to +0.06; gate
+    +0.04: still over by 0.01 to 0.02 ms), 9dee79f0 +0.019 and +0.024 (the split saves 0.02);
+    edge_mz main -0.008 and -0.019 (passes); f1_o main -0.027 and -0.005 (drift +0.024 and
+    +0.028: inside it). What is left at wide is the patches themselves (11 % of that frame
+    shaded as ground plus the dab's value), not the ground. Edits (torture, the sculpt stroke
+    across the rock row, one run with main): the stroke end's rebuild 4.1 to 4.45 ms (collect
+    1.48 to 1.68, bake 0.49 to 0.51, upload 0.93 to 1.0, dabs 1.20 to 1.36: sites 0.80 to 0.94
+    for 16, cells 0.37 to 0.41 for 2) against main's 3.87 to 4.20 (bake 1.41 to 1.49): about 0.25
+    ms worse (it was 0.5). A stone at the same place on edited ground is refreshed in place
+    (`PainterSites.refresh_dab`: heights and losses only, equal bit for bit to a new build) and
+    the lobes are sent only when a new stone takes a slot; the loop over every held site (464)
+    is most of what is left.
   - *The look* (sheets in the evidence folder). At f1_o main is one faceted kite under the
     three stones and round 2 three clean ovals; the build is one firm flat mark that hugs the
     stones on the side away from the sun, a quarter to a third of a stone wide there and a

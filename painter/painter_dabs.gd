@@ -5,8 +5,10 @@ extends RefCounted
 ##
 ## PainterOcclusion finds the small stones (the sites) with its footprints and hands them here
 ## after every rebuild of its field. This host keeps one mesh per CELL_M square of the map that
-## holds a site, all under one node beside the terrain (in the terrain's frame, drawn with the
-## chunks' own material, casting no shadow), and each site's patch as it was last built, so a
+## holds a site, all under one node beside the terrain (in the terrain's frame, drawn with the dabs'
+## material, PainterSurfaces.dab_material(): the ground's shader body with the dab's code compiled
+## in and every ground parameter the chunks' have; casting no shadow), and each site's patch as it
+## was last built, so a
 ## change costs what changed:
 ## - a site that is new, or that stands where the ground was edited since the last sync
 ##   (`mark`), is built: a copy of the terrain's triangles under it;
@@ -17,10 +19,9 @@ extends RefCounted
 ## changed) keeps its turn in its cell: the patches after it keep their first vertex and their
 ## indices are appended as they are (adding an offset to every index of a cell was half the cost
 ## of an edit under a stroke).
-## A stone's lobes are not in its patch: each held site has a slot in one texture of the ground's
-## shader (LOBES_PARAM, ROW slots a row), written when the site is built, and its patch's vertices
-## carry the slot. The ground pays for every varying on every pixel, and the lobes as three flat
-## vec4s were most of what the dabs cost the frame (card painter-terrain-dabs-cost).
+## A stone's lobes are not in its patch: each held site has a slot in one texture of the dab's
+## shader (LOBES_PARAM, ROW slots a row), written when a slot's lobes change, and its patch's
+## vertices carry the slot.
 ## Nothing here reads the sun: the dab's lean is the shader's (a uniform), so the hour changing
 ## builds nothing (`built` counts the sites built, for the tests and the proof).
 ## A map without an authored terrain (a GLB map) has no heights to lay a dab on and gets none.
@@ -35,8 +36,8 @@ const NODE_NAME := "PainterDabs"
 const CELL_M := 16.0
 ## The mesh format's flags: one custom channel of four floats (PainterSites.append_dab's CUSTOM3).
 const FORMAT := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM3_SHIFT
-## The ground shader's texture of the stones' lobes (painter_ground dab_lobes): a stone's slot is
-## LOBE_TEXELS RGBA32F texels, ROW slots a row (painter_ground DAB_ROW: keep the two equal).
+## The dab shader's texture of the stones' lobes (painter_ground_body dab_lobes): a stone's slot is
+## LOBE_TEXELS RGBA32F texels, ROW slots a row (painter_ground_body DAB_ROW: keep the two equal).
 const LOBES_PARAM := &"dab_lobes"
 const ROW := 256
 const LOBE_TEXELS := 3
@@ -100,7 +101,6 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 	if not _whole and not redo and sites == _last:
 		parts = {}
 		return 0
-	_last = sites.duplicate()
 	if _holder == null:
 		if sites.is_empty():
 			return 0
@@ -115,19 +115,11 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 	# The edited samples as metres of the terrain's frame.
 	var edited := Rect2(Vector2(_dirty.position) * step - half, Vector2(_dirty.size) * step)
 	var changed := {}
-	var seen := {}
 	var count := 0
-	for site: Array in sites:
-		seen[Vector3(site[0], site[1], site[2])] = true
-	# The stones that went first, so a new one takes the slot one of them freed.
-	for place: Vector3 in _held.keys():
-		if seen.has(place):
-			continue
-		var gone: Vector2i = _held[place][CELL]
-		(_sites[gone] as Dictionary).erase(place)
-		_free.append(_held[place][SLOT])
-		_held.erase(place)
-		changed[gone] = true
+	var fresh := 0
+	if sites.size() != _held.size() or sites != _last:
+		_drop_gone(sites, changed)
+	_last = sites.duplicate()
 	for site: Array in sites:
 		var place := Vector3(site[0], site[1], site[2])
 		var was: Array = _held.get(place, [])
@@ -140,6 +132,24 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 		local[0] = at.x
 		local[1] = at.z
 		local[3] = at.y
+		if (
+			not was.is_empty()
+			and PainterSites.refresh_dab(
+				local,
+				grid,
+				doc.samples_x(),
+				doc.samples_z(),
+				step,
+				half,
+				was[VERTICES],
+				was[CUSTOM]
+			)
+		):
+			# The same samples under it (a sculpt, a stone set again where it was): its heights and
+			# losses alone, in place; its slot, lobes, indices and turn in its cell stand.
+			was[SITE] = site
+			count += 1
+			continue
 		var slot: int = was[SLOT] if not was.is_empty() else _take_slot()
 		var vertices := PackedVector3Array()
 		var uvs := PackedVector2Array()
@@ -158,7 +168,10 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 			indices,
 			slot
 		)
-		_put_lobes(slot, PainterSites.lobes(at.x, at.z, site[2]))
+		if was.is_empty():
+			# A stone kept at its place keeps its lobes (its place and radius are its key).
+			_put_lobes(slot, PainterSites.lobes(at.x, at.z, site[2]))
+			fresh += 1
 		# A sample's step past the dab's reach: the patch ends on the grid's lines.
 		var far := PainterSites.reach(site[2]) + maxf(step.x, step.y)
 		var cell := Vector2i(floori(at.x / CELL_M), floori(at.z / CELL_M))
@@ -173,8 +186,11 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 	_whole = false
 	_dirty = Rect2i()
 	var t_cells := Time.get_ticks_usec()
-	if count > 0:
-		_upload_lobes(material)
+	# The lobes are sent only when a new stone took a slot.
+	if fresh > 0:
+		_upload_lobes()
+	if _lobe_texture != null and material.get_shader_parameter(LOBES_PARAM) != _lobe_texture:
+		material.set_shader_parameter(LOBES_PARAM, _lobe_texture)
 	for cell: Vector2i in changed:
 		_put_together(cell, material)
 	parts = {
@@ -305,13 +321,31 @@ func lobe_image() -> Image:
 	)
 
 
-## Sends the lobes to the ground's shader (one texture, its image replaced: 12 KB a row).
-func _upload_lobes(material: ShaderMaterial) -> void:
+## Sends the lobes to the dab shader's texture (its image replaced: 12 KB a row; updated in place
+## while the rows are as many).
+func _upload_lobes() -> void:
 	var image := lobe_image()
 	if image == null:
 		return
 	if _lobe_texture == null:
 		_lobe_texture = ImageTexture.create_from_image(image)
+	elif Vector2i(_lobe_texture.get_size()) == image.get_size():
+		_lobe_texture.update(image)
 	else:
 		_lobe_texture.set_image(image)
-	material.set_shader_parameter(LOBES_PARAM, _lobe_texture)
+
+
+## Forgets the stones that are not in `sites` (their slots freed for the next new ones), marking
+## their cells in `changed`.
+func _drop_gone(sites: Array, changed: Dictionary) -> void:
+	var seen := {}
+	for site: Array in sites:
+		seen[Vector3(site[0], site[1], site[2])] = true
+	for place: Vector3 in _held.keys():
+		if seen.has(place):
+			continue
+		var gone: Vector2i = _held[place][CELL]
+		(_sites[gone] as Dictionary).erase(place)
+		_free.append(_held[place][SLOT])
+		_held.erase(place)
+		changed[gone] = true

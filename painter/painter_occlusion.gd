@@ -295,8 +295,7 @@ func rebuild() -> void:
 	var t3 := Time.get_ticks_usec()
 	_site_count = sites.size()
 	var terrain := _map.get_node_or_null(^"AuthoredTerrain") as AuthoredTerrain
-	var ground: ShaderMaterial = (_surfaces.call("ground_materials") as Array)[0]
-	var built := _dabs.sync(_map, terrain, ground, sites)
+	var built := _dabs.sync(_map, terrain, _surfaces.call("dab_material"), sites)
 	_last = {
 		"run": int(_last.get("run", 0)) + 1,
 		"texels": texels,
