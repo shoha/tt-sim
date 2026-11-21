@@ -218,9 +218,9 @@ func test_course_trims_a_self_loop() -> void:
 			Vector2(0, 0),
 			Vector2(4, 0),
 			Vector2(8, 0),
-			Vector2(8, 3),
-			Vector2(5, 3),
-			Vector2(5, -2),
+			Vector2(8, 2),
+			Vector2(6, 2),
+			Vector2(6, -2),
 			Vector2(12, -2),
 			Vector2(16, -2)
 		]
@@ -228,9 +228,21 @@ func test_course_trims_a_self_loop() -> void:
 	var widths := PackedFloat32Array()
 	widths.resize(pts.size())
 	widths.fill(1.0)
+	# A curl 2 m across in a channel 2 m wide (card painter-water-paths restated this test: the
+	# loop was 3 m across, and every loop was trimmed whatever its size).
 	var fit := WaterCourseFit.condition(pts, widths)
-	assert_gte(fit.loops, 1, "the loop is found")
+	assert_gte(fit.loops, 1, "the curl is found")
 	assert_eq(WaterCourseFit.trim_loops(fit.points, fit.widths).loops, 0, "none left")
+	# A loop 9 m across is the author's: the stroke crosses itself and keeps its length.
+	var big := PackedVector2Array(
+		[Vector2(0, 0), Vector2(12, 0), Vector2(12, 9), Vector2(4, 9), Vector2(4, -6), Vector2(4, -10)]
+	)
+	var big_w := PackedFloat32Array()
+	big_w.resize(big.size())
+	big_w.fill(1.0)
+	var kept: Dictionary = WaterCourseFit.trim_loops(big, big_w)
+	assert_eq(kept.loops, 0, "a large loop is not trimmed")
+	assert_eq(kept.points, big, "and the line is as drawn")
 
 
 func test_course_adds_no_tight_bends() -> void:

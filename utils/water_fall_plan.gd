@@ -35,7 +35,8 @@ extends RefCounted
 ## The profile slope (rise over run) from which a drop counts: just above the steepest a
 ## riffle can be carved (WaterCarve.RIFFLE_SLOPE at its smoothstep peak, 0.45).
 const FALL_SLOPE := 0.5
-## How much wider than the channel the plunge pool's inserted point is.
+## How much wider than the channel the plunge pool's inserted point is (never past
+## WaterBody.MAX_HALF_WIDTH_M: a wider body is one the document refuses to save).
 const PLUNGE_WIDEN := 1.35
 ## A drop run grows over its rounded shoulder and toe this far at most (a tier's lip plus the
 ## soft profile's tent), while the ground still falls at SHOULDER_FLAT_SLOPE or more and the
@@ -44,6 +45,12 @@ const SHOULDER_M := HeightBrush.TIER_LIP_WIDTH_M + HeightBrush.TIER_SOFTEN_M
 const SHOULDER_FLAT_SLOPE := 0.05
 ## No lip within this of either stroke end: both reaches need a point of their own.
 const LIP_MARGIN_M := 1.0
+## The clearance a lip keeps from a free end is half the fall spacing, but never more than this
+## share of the stroke's own length (card painter-water-paths): the spacing grows with the width
+## (30 m at the widest brush), so a wide stroke shorter than its spacing could host no lip at all,
+## its cliff became a gorge the conditioner refused to cut and the stroke was kept as drawn, a
+## body the ground does not hold. A stroke can always fall in its middle half.
+const END_CLEAR_SHARE := 0.25
 ## An inserted point this close to an existing one merges into it.
 const MERGE_M := 0.2
 ## The set-back slides a lip upstream by at most this many reaches (half-width plus bank).
@@ -155,10 +162,11 @@ static func plan_lips(
 		# slide a lip upstream of its run's brink, but never past these.
 		var floor_arc := maxf(LIP_MARGIN_M, last_lip + spacing)
 		var ceiling_arc := total - LIP_MARGIN_M
+		var end_clear := minf(spacing * 0.5, maxf(LIP_MARGIN_M, total * END_CLEAR_SHARE))
 		if free_ends.x != 0:
-			floor_arc = maxf(floor_arc, spacing * 0.5)
+			floor_arc = maxf(floor_arc, end_clear)
 		if free_ends.y != 0:
-			ceiling_arc = minf(ceiling_arc, total - spacing * 0.5)
+			ceiling_arc = minf(ceiling_arc, total - end_clear)
 		var usable := Vector2(maxf(arc[run.x], floor_arc), minf(arc[run.y], ceiling_arc))
 		if usable.y <= usable.x:
 			continue
@@ -220,13 +228,18 @@ static func shape_line(
 			else:
 				var p := point_at(points, arc_lengths, s)
 				out_points.append(p)
-				out_widths.append(_width_at(widths, arc_lengths, s) * float(marks[m].widen))
+				out_widths.append(
+					minf(
+						_width_at(widths, arc_lengths, s) * float(marks[m].widen),
+						WaterBody.MAX_HALF_WIDTH_M
+					)
+				)
 				out_ground.append(ground_of.call(p))
 				out_arcs.append(s)
 				lip.append(1 if marks[m].lip else 0)
 			m += 1
 		out_points.append(points[i])
-		out_widths.append(widths[i] * widen)
+		out_widths.append(minf(widths[i] * widen, WaterBody.MAX_HALF_WIDTH_M))
 		out_ground.append(ground[i])
 		out_arcs.append(arc_lengths[i])
 		lip.append(1 if is_lip else 0)

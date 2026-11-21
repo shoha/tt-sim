@@ -26,6 +26,8 @@ const DEEP := WaterBody.Depth.DEEP
 const BIOME := "temperate_forest_summer_s1"
 ## The half extent (m) of a layout's cell a view frames.
 const CELL_HALF := 9.0
+## The distance between the centres of neighbouring cells (m).
+const CELL_PITCH := 24.0
 ## The ground of map "steps": terraces stepping down along +x, [x of the cliff, its height].
 const STEPS := [[-18.0, 1.0], [0.0, 1.6], [18.0, 2.5]]
 ## The fall of map "tilt" along +x (m per m).
@@ -38,12 +40,20 @@ const TILT := 0.05
 static func maps() -> Array[Dictionary]:
 	# The flat layouts fill two maps: one map of all 22 reached the document's body cap, and its
 	# last strokes (the widths, the loop, the long stroke) were refused.
+	#
+	# Layouts must not touch each other (card painter-water-paths): a stroke end joins water
+	# within 1.5 of its half-widths (WaterPorts.snap_reach), so cells stand CELL_PITCH apart
+	# (strokes reach 8 m from a cell's centre: 8 m between neighbours, three widths of a waist
+	# stroke), and the widest brush (10 m half-width, a 15 m reach) is drawn first on its map
+	# (flat2) or alone on one (steps_wide).
 	var flat := _flat_layouts()
+	var wide := [_layout("s_fall_wide", _v(18, 0), [_river([_v(-7, 0), _v(7, 0)], 10.0, DEEP)])]
 	return [
-		{"name": "flat", "size_ft": 320, "ground": "flat", "layouts": flat.slice(0, 13)},
-		{"name": "flat2", "size_ft": 320, "ground": "flat", "layouts": flat.slice(13)},
-		{"name": "tilt", "size_ft": 200, "ground": "tilt", "layouts": _tilt_layouts()},
+		{"name": "flat", "size_ft": 320, "ground": "flat", "layouts": flat.slice(0, 12)},
+		{"name": "flat2", "size_ft": 320, "ground": "flat", "layouts": flat.slice(12)},
+		{"name": "tilt", "size_ft": 320, "ground": "tilt", "layouts": _tilt_layouts()},
 		{"name": "steps", "size_ft": 200, "ground": "steps", "layouts": _steps_layouts()},
+		{"name": "steps_wide", "size_ft": 200, "ground": "steps", "layouts": wide},
 		{"name": "wood", "size_ft": 200, "ground": "flat", "layouts": _wood_layouts()},
 	]
 
@@ -95,12 +105,15 @@ static func _v(x: float, z: float) -> Vector2:
 
 
 static func _flat_layouts() -> Array:
-	var c := func(col: int, row: int) -> Vector2: return Vector2(col - 2, row - 2) * 19.0
+	# Four columns and rows of cells on a 97 m map: centres at -36, -12, 12 and 36.
+	var c := func(col: int, row: int) -> Vector2:
+		return Vector2(col - 1.5, row - 1.5) * CELL_PITCH
 	var ring := []
 	for i in 25:
 		ring.append(Vector2.from_angle(TAU * i / 24.0) * 5.0)
 	return [
-		# f_through_pond again in the map's far corner, 54 m from the origin.
+		# Map "flat": 12 layouts. f_through_pond's strokes in the map's far corner, 51 m from the
+		# origin.
 		_layout(
 			"f_through_far",
 			c.call(0, 0),
@@ -124,58 +137,59 @@ static func _flat_layouts() -> Array:
 		),
 		_layout(
 			"f_self_cross",
-			c.call(4, 0),
+			c.call(0, 1),
 			[_river([_v(-7, -3), _v(4, -3), _v(5, 2), _v(0, 4), _v(-2, 0), _v(-2, -7)], 0.8)]
 		),
 		_layout(
 			"f_y_join",
-			c.call(0, 1),
+			c.call(1, 1),
 			[_river([_v(-7, 2), _v(7, 2)]), _river([_v(-5, -6), _v(-1, -1), _v(0, 1.6)], 0.7)]
 		),
 		_layout(
 			"f_split",
-			c.call(1, 1),
+			c.call(2, 1),
 			[_river([_v(-7, 0), _v(0, 0), _v(7, -4)]), _river([_v(0, 0.2), _v(3, 2), _v(7, 4)], 0.8)]
 		),
 		_layout(
-			"f_cross", c.call(2, 1), [_river([_v(-7, 0), _v(7, 0)]), _river([_v(0, -7), _v(0, 7)], 0.8)]
+			"f_cross", c.call(0, 2), [_river([_v(-7, 0), _v(7, 0)]), _river([_v(0, -7), _v(0, 7)], 0.8)]
 		),
 		_layout(
 			"f_short",
-			c.call(3, 1),
+			c.call(1, 2),
 			[_river([_v(-4, -2), _v(-2, -2)], 0.6, ANKLE), _river([_v(1, 2), _v(1.9, 2)], 0.6, ANKLE)]
 		),
 		# A stream drawn on past the map's east edge (the exit ribbon, not a field surface).
-		_layout("f_exit", c.call(4, 1), [_river([_v(-6, -3), _v(0, 0), _v(16, 0)])]),
-		_layout("f_pond_only", c.call(0, 2), [_pond([_v(0, 0), _v(0.4, 0)], 3.5, DEEP)]),
+		_layout("f_exit", c.call(3, 1), [_river([_v(-6, -3), _v(0, 0), _v(16, 0)])]),
+		_layout("f_pond_only", c.call(2, 2), [_pond([_v(0, 0), _v(0.4, 0)], 3.5, DEEP)]),
 		_layout(
 			"f_into_pond",
-			c.call(1, 2),
+			c.call(3, 2),
 			[_river([_v(-8, 0), _v(-1.6, 0)]), _pond([_v(3, 0), _v(3.4, 0)], 3.5, DEEP)]
 		),
+		# Map "flat2": 10 layouts. Both ends of the brush's width range, drawn first (the widest
+		# deep river reaches 20 m for water to join, and nothing is there yet), the wide river
+		# before the narrowest ankle stream, 14 m apart.
 		_layout(
-			"f_through_pond",
-			c.call(2, 2),
+			"f_widths",
+			_v(24, 12),
 			[
-				_river([_v(-8, -1.5), _v(-4.4, -0.6)]),
-				_river([_v(-1.5, 8), _v(-0.6, 4.4)]),
-				_river([_v(4.4, 0.6), _v(8, 2)]),
-				_pond([_v(0, 0), _v(0.4, 0)], 3.5, DEEP),
+				_river(_meander(_v(-8, 8), _v(8, 8), 1.0, 1.0), 10.0, DEEP),
+				_river(_meander(_v(-8, -6), _v(8, -6), 1.0, 2.0), 0.1, ANKLE),
 			]
 		),
 		_layout(
 			"f_out_of_pond",
-			c.call(3, 2),
+			c.call(0, 0),
 			[_pond([_v(-3, 0), _v(-2.6, 0)], 3.5, DEEP), _river([_v(-2, 0), _v(3, 0.5), _v(8, 2)])]
 		),
 		_layout(
 			"f_end_short",
-			c.call(4, 2),
+			c.call(1, 0),
 			[_river([_v(-8, 0), _v(-1.8, 0)]), _pond([_v(3, 0), _v(3.4, 0)], 2.8)]
 		),
 		_layout(
 			"f_two_inflows",
-			c.call(0, 3),
+			c.call(2, 0),
 			[
 				_pond([_v(2, 0), _v(2.4, 0)], 3.5),
 				_river([_v(-8, -5), _v(-3, -3), _v(0.5, -1.5)]),
@@ -184,37 +198,41 @@ static func _flat_layouts() -> Array:
 		),
 		_layout(
 			"f_pond_over_stream",
-			c.call(1, 3),
+			c.call(3, 0),
 			[_river([_v(-8, 0), _v(8, 0)]), _pond([_v(-1, 2.5), _v(-0.6, 2.5)], 3.0, DEEP)]
 		),
 		_layout(
 			"f_pond_chain",
-			c.call(2, 3),
+			c.call(0, 1),
 			[
 				_pond([_v(-5, -3), _v(-4.6, -3)], 2.5),
 				_pond([_v(5, 3), _v(5.4, 3)], 2.5),
 				_river([_v(-4, -2.4), _v(0, 0), _v(4, 2.4)], 0.7),
 			]
 		),
-		# Both ends of the brush's width range: the narrowest ankle stream and the widest deep river.
+		_layout("f_loop", c.call(1, 1), [_river(ring, 0.8)]),
+		# The same strokes as f_through_far, on the other map and after other layouts (on map
+		# "flat" it would be the 32nd river and beyond: MapDocument.MAX_RIVERS, a join the
+		# document has no room for is skipped).
 		_layout(
-			"f_widths",
-			c.call(3, 3),
+			"f_through_pond",
+			c.call(2, 1),
 			[
-				_river(_meander(_v(-8, -6), _v(8, -6), 1.0, 2.0), 0.1, ANKLE),
-				_river(_meander(_v(-8, 3), _v(8, 3), 1.0, 1.0), 10.0, DEEP),
+				_river([_v(-8, -1.5), _v(-4.4, -0.6)]),
+				_river([_v(-1.5, 8), _v(-0.6, 4.4)]),
+				_river([_v(4.4, 0.6), _v(8, 2)]),
+				_pond([_v(0, 0), _v(0.4, 0)], 3.5, DEEP),
 			]
 		),
-		_layout("f_loop", c.call(4, 3), [_river(ring, 0.8)]),
 		# One very long stroke along the map's south side, its ends under 3 m from the east and west
 		# edges (its views: the middle and an end).
-		_layout("f_long_mid", _v(0, 38), [_river(_meander(_v(-46, 0), _v(46, 0), 1.5, 5.0))]),
-		_layout("f_long_end", _v(39, 38), []),
+		_layout("f_long_mid", _v(0, 40), [_river(_meander(_v(-46, 0), _v(46, 0), 1.5, 5.0))]),
+		_layout("f_long_end", _v(39, 40), []),
 	]
 
 
 static func _tilt_layouts() -> Array:
-	var c := func(col: int, row: int) -> Vector2: return Vector2(col - 1, row - 1) * 19.0
+	var c := func(col: int, row: int) -> Vector2: return Vector2(col - 1, row - 1) * CELL_PITCH
 	return [
 		_layout("t_straight", c.call(0, 0), [_river([_v(-7, 0), _v(7, 0)])]),
 		_layout("t_meander", c.call(1, 0), [_river(_meander(_v(-8, 0), _v(8, 0), 2.5, 1.5))]),
@@ -258,8 +276,9 @@ static func _steps_layouts() -> Array:
 	for k in STEPS.size():
 		var x: float = STEPS[k][0]
 		var tag := "s%d" % k
-		# A stream over the cliff into its own pool.
-		out.append(_layout(tag + "_fall_pool", _v(x, -22), [_river([_v(-7, 0), _v(7, 0)])]))
+		# A stream over the cliff into its own pool (6.5 m each side: the cliffs stand 18 m apart,
+		# and 5 m between two strokes' ends keeps them from joining).
+		out.append(_layout(tag + "_fall_pool", _v(x, -22), [_river([_v(-6.5, 0), _v(6.5, 0)])]))
 		# A fall straight into a pond: the stream first and the pond dug at the foot (k 0), or the
 		# pond first and the stream drawn over the lip into it.
 		if k == 0:
@@ -282,7 +301,7 @@ static func _steps_layouts() -> Array:
 		out.append(_layout(tag + "_cliff_foot", _v(x, 5), [_river([_v(1.8, -5), _v(1.8, 5)], 0.8)]))
 	out.append(_layout("s_up_cliff", _v(-18, 17), [_river([_v(7, 0), _v(-7, 0)])]))
 	out.append(_layout("s_pond_on_lip", _v(0, 17), [_pond([_v(0, 0), _v(0.4, 0)], 3.0)]))
-	out.append(_layout("s_fall_wide", _v(18, 17), [_river([_v(-7, 0), _v(7, 0)], 10.0, DEEP)]))
+	# (s_fall_wide, the widest stroke over the 2.5 m cliff, has map "steps_wide" to itself.)
 	# Stacked falls: one stroke over all three cliffs, 3 m inside the map's south edge.
 	out.append(_layout("s_stacked_a", _v(-9, 26.5), [_river([_v(-17, 0), _v(35, 0)])]))
 	out.append(_layout("s_stacked_b", _v(12, 26.5), []))
@@ -364,12 +383,28 @@ static func add_stroke(
 	var start := doc.heights.duplicate()
 	var bodies := WaterEdit.plan_river(doc, inside, split.widths, depth, 1.0, true, report)
 	if bodies.is_empty():
-		report["refused"] = "in water or full"
+		# The plan's own refusal (a line too short to hold water) is kept.
+		report["refused"] = String(report.get("refused", "in water or full"))
 		return report
 	RiverExits.attach(bodies, split)
 	Fixtures.carve(doc, WaterCarve.river_goals(doc, bodies, start))
 	doc.water_bodies = WaterEdit.with_bodies(doc, bodies)
+	# What the tests compare: the line's length as drawn and as stored, and the stroke's bodies.
+	report["drawn_m"] = line_length(inside)
+	report["stored_m"] = 0.0
+	report["ids"] = PackedInt32Array()
+	for body in bodies:
+		report.stored_m += line_length(body.points)
+		report.ids.append(body.id)
 	return report
+
+
+## The length of polyline `points` (metres).
+static func line_length(points: PackedVector2Array) -> float:
+	var total := 0.0
+	for i in points.size() - 1:
+		total += points[i].distance_to(points[i + 1])
+	return total
 
 
 static func _moved(points: Array, at: Vector2) -> PackedVector2Array:
@@ -430,7 +465,8 @@ static func digest(doc: MapDocument) -> String:
 	var ctx := HashingContext.new()
 	ctx.start(HashingContext.HASH_SHA1)
 	ctx.update(doc.heights.to_byte_array())
-	ctx.update(doc.pond_mask)
+	if not doc.pond_mask.is_empty():
+		ctx.update(doc.pond_mask)
 	for b in doc.water_bodies:
 		var head := PackedFloat32Array([b.id, b.level_m])
 		ctx.update(head.to_byte_array())

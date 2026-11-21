@@ -22,13 +22,17 @@ extends RefCounted
 ##    level, kept as drawn;
 ##  - end_snapped: a stroke end was moved into the water it stopped short of (join, inflow, fall
 ##    into, outlet), by `detail.displacement` metres;
-##  - undermined_run: water that its banks cannot hold at the stored levels (the dig refit).
+##  - undermined_run: water that its banks cannot hold at the stored levels (the dig refit);
+##  - too_short: the one hint that refuses (card painter-water-paths): the line is shorter than
+##    its tapered ends need for its depth (WaterEdit.min_river_length), so it would carve ground
+##    and land a sliver of water or none; nothing was made (`detail.length_m`, `detail.need_m`).
 ## Loaded by path from WaterEdit (naming it there would join the start-up script graph,
 ## test_boot_graph).
 
 ## Kinds that are worth a toast (the author may want to act on them), the most telling first: a
 ## head above a lower pond is why a stroke near it was blocked.
 const SAID: Array[StringName] = [
+	&"too_short",
 	&"perched_head",
 	&"over_hill",
 	&"blocked_cut",
@@ -48,6 +52,7 @@ const KIND_TEXT := {
 	&"end_near_water_below": "The river stops short of lower water and was kept as drawn.",
 	&"end_snapped": "The end of the river was joined to the water beside it.",
 	&"undermined_run": "Part of the river sits above its banks.",
+	&"too_short": "That line is too short to hold water this deep, so nothing was made.",
 }
 
 ## The words of a fix action.
@@ -63,6 +68,9 @@ const FIX_TEXT := {
 	&"reroute": "route the line around the hill",
 	&"re_fit": "re-fit the water",
 	&"lower_ground": "lower the banks",
+	&"draw_longer": "draw a longer line",
+	&"shallower": "pick a shallower depth",
+	&"paint_pond": "paint a pond",
 }
 
 
