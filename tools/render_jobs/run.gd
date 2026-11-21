@@ -83,6 +83,8 @@ func _begin(job: Dictionary, path: String, out_arg: String) -> void:
 
 
 func _finalize() -> void:
+	# The job's own autosave slot (driver.gd), also when the run ends at the timeout.
+	(load(DRIVER) as GDScript).call("close_autosave_slot")
 	_watchdog_quit = true
 	if _watchdog != null and _watchdog.is_started():
 		_watchdog.wait_to_finish()

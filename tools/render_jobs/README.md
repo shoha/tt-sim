@@ -130,9 +130,15 @@ step S10 a library's GLBs are parsed the same way everywhere, so the difference 
 ## Levels, hangs and the process check
 
 The harness itself never saves a level. The `title` op switches state directly, bypassing the
-leave prompt, and `no_autosave` stops the authoring autosave timer, so `user://levels/_autosave`
-and existing level folders are only ever read. Use `no_autosave` after every `new_map` or
-`dress` in a job that paints. The only writes under `user://levels/` are the explicit `save`
+leave prompt, and `no_autosave` stops the authoring autosave timer. `user://levels/_autosave` is
+neither read nor written: reading it is what raised "Recover an unsaved map?" on a job's first
+`new_map` or `dress` when the author had left an autosave there, and the job then never opened
+a map. So before its first step the driver points the authoring autosave at a slot of its own,
+`user://render_jobs/_autosave_slot/`, emptied first, and discards exactly that slot when the job
+ends, also a failed one or one stopped at the timeout (a killed run's slot is emptied by the
+next run); the folder goes through `SafeDelete`. If the prompt is up all the same, `wait_ready`
+names it in the log. Existing level folders are only ever read. Use `no_autosave` after every
+`new_map` or `dress` in a job that paints. The only writes under `user://levels/` are the explicit `save`
 steps a job carries (`water.gd`, `crossing.gd` and the avatar probes), into `_<task>_` test
 folders, and the only deletes are their `cleanup` actions.
 

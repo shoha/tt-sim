@@ -106,7 +106,19 @@ static func holds(map: GameMap, ctrl: AuthoringController) -> PackedStringArray:
 	if ctrl == null or not out.is_empty():
 		return out
 	if not ctrl.get("_is_open"):
-		out.append("authoring not open")
+		# The recovery prompt holds the open until someone answers it (2026-11-20: a job run
+		# against a user folder with an autosave never opened its map; the driver now points
+		# the autosave at its own empty slot, so this names a slot something else filled).
+		var prompt: Variant = ctrl.get("_recovery_prompt")
+		if prompt is Object and is_instance_valid(prompt):
+			out.append(
+				(
+					"authoring not open: the 'Recover an unsaved map?' prompt is up (an autosave in %s)"
+					% AuthoringAutosave.directory
+				)
+			)
+		else:
+			out.append("authoring not open")
 	var scatter: AuthoredScatter = ctrl.scatter if is_instance_valid(ctrl.scatter) else null
 	if scatter != null and (scatter.is_regenerating() or scatter.is_growing()):
 		var regen: Variant = scatter.get("_regen")

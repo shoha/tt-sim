@@ -7,6 +7,12 @@ extends Node
 const Steady := preload("res://tools/render_jobs/steady.gd")
 ## A `call` step whose probe names a blocker waits at most this long (seconds) for it to clear.
 const CALL_HOLD_S := 60.0
+## The authoring autosave slot a render job owns, and the folder SafeDelete must find it in.
+## A job never reads or writes user://levels/_autosave/ (README "Levels, hangs and the process
+## check"): an autosave left there by the author raised "Recover an unsaved map?" on the job's
+## first `new_map` or `dress`, and the job never opened a map.
+const AUTOSAVE_SLOT := "user://render_jobs/_autosave_slot/"
+const AUTOSAVE_SLOT_BASE := "user://render_jobs"
 
 var steps: Array = []
 var out_dir: String = ""
@@ -43,7 +49,44 @@ func _ready() -> void:
 	get_tree().root.set_meta("render_job_done", "")
 	if saved_mode or full or not only.is_empty():
 		log_line("flags: saved %s, only %s, full %s" % [saved_mode, ",".join(only), full])
+	var slot_error := open_autosave_slot()
+	if slot_error != "":
+		log_line("autosave slot: %s" % slot_error)
 	_next()
+
+
+## The job's end, also a failed one and a quit at the timeout (run.gd's _finalize calls
+## close_autosave_slot again for a run that ends without this node leaving the tree).
+func _exit_tree() -> void:
+	close_autosave_slot()
+
+
+## Points the authoring autosave (AuthoringAutosave.directory) at AUTOSAVE_SLOT, emptied first
+## (a killed run may have left one), for the rest of the process: the author's own slot under
+## user://levels/_autosave/ is then neither read (no recovery prompt) nor written. Returns ""
+## or what went wrong.
+static func open_autosave_slot() -> String:
+	AuthoringAutosave.directory = AUTOSAVE_SLOT
+	var error := close_autosave_slot()
+	if DirAccess.make_dir_recursive_absolute(AUTOSAVE_SLOT) != OK:
+		return "cannot make %s" % AUTOSAVE_SLOT
+	if not SafeDelete.mark(AUTOSAVE_SLOT, "render job autosave slot", AUTOSAVE_SLOT_BASE):
+		return "cannot mark %s" % AUTOSAVE_SLOT
+	return error
+
+
+## Discards exactly the job's slot: its two autosave files, then the folder through SafeDelete
+## (inside AUTOSAVE_SLOT_BASE, marked, no links). Does nothing unless the autosave still points
+## at the slot, and leaves it pointing there, so a write after this never lands in the author's
+## slot. Returns "" or SafeDelete's refusal.
+static func close_autosave_slot() -> String:
+	if AuthoringAutosave.directory != AUTOSAVE_SLOT:
+		return ""
+	AuthoringAutosave.discard()
+	if not DirAccess.dir_exists_absolute(AUTOSAVE_SLOT):
+		return ""
+	var gone := SafeDelete.tree(AUTOSAVE_SLOT, AUTOSAVE_SLOT_BASE)
+	return "" if gone["ok"] else String(gone["error"])
 
 
 func log_line(s: String) -> void:
