@@ -23,7 +23,9 @@ extends RefCounted
 ##
 ## What it swaps, and the exact restore. The ground: material_override on every terrain chunk
 ## and on the skirt (painter_ground.gdshader; the material underneath is never touched); the
-## previous override is kept per node and put back. The scatter: each species mesh surface's
+## previous override is kept per node and put back. The small stones' dabs (PainterDabs) are drawn
+## with a third material on the dab variant of that shader, written with the other two
+## (siblings()). The scatter: each species mesh surface's
 ## material (mesh.surface_set_material) by a STAND-IN: for a wind material a duplicate on
 ## painter_plant.gdshader (every wind, grow-in and fade uniform kept; WindFoliage's code is
 ## included by the shader, not copied), for a still asset's own material a new
@@ -44,6 +46,8 @@ extends RefCounted
 ## The signal on LevelEnvironmentManager this follows.
 const SIGNAL := &"painted_look_changed"
 const GROUND_SHADER := "res://painter/shaders/painter_ground.gdshader"
+## The small stones' dabs' shader (PainterDabs): the ground's body with their code compiled in.
+const DAB_SHADER := "res://painter/shaders/painter_ground_dab.gdshader"
 const PLANT_SHADER := "res://painter/shaders/painter_plant.gdshader"
 const SOLID_SHADER := "res://painter/shaders/painter_solid.gdshader"
 ## The painted trees' host (PainterTrees), loaded by path on the first painted map.
@@ -78,6 +82,8 @@ var _terrain: AuthoredTerrain = null
 var _scatters: Array = []
 var _ground: ShaderMaterial = null
 var _skirt: ShaderMaterial = null
+## The small stones' dabs' material (DAB_SHADER), every ground parameter the ground's (siblings()).
+var _dab: ShaderMaterial = null
 ## Node instance id -> [node, the material_override it had].
 var _overrides: Dictionary = {}
 ## [mesh, surface, original, stand-in, plant entry] per replaced scatter surface.
@@ -186,6 +192,7 @@ func release() -> void:
 	_unbind()
 	if _ground != null:
 		FireLook.unmirror_glow(_ground)
+		FireLook.unmirror_glow(_dab)
 	for id: int in _overrides:
 		var pair: Array = _overrides[id]
 		if is_instance_valid(pair[0]):
@@ -303,6 +310,8 @@ func _on_terrain_child(node: Node) -> void:
 	_dress(node)
 	if str(node.name) == AuthoredTerrain.SKIRT_NAME:
 		# The skirt is built last by every AuthoredTerrain.build(): the document may be new.
+		if _occlusion != null:
+			_occlusion.call("ground_edited", Rect2i())
 		_zone_whole = true
 		_queue_zone()
 
@@ -311,6 +320,8 @@ func _on_terrain_child(node: Node) -> void:
 func _on_ground_edited(rect: Rect2i) -> void:
 	_zone_dirty = _zone_dirty.merge(rect) if _zone_dirty.has_area() else rect
 	_queue_zone()
+	if _occlusion != null:
+		_occlusion.call("ground_edited", rect)
 	_queue_occlusion()
 
 
@@ -363,13 +374,28 @@ func occlusion() -> RefCounted:
 	return _occlusion
 
 
-## The ground's materials: the chunks' and the skirt's.
+## The ground's materials: the authored ground's (siblings()) and a GLB map's terrain's.
 func ground_materials() -> Array[ShaderMaterial]:
-	var out: Array[ShaderMaterial] = [_ground_material()]
-	if _skirt != null:
-		out.append(_skirt)
+	var out := siblings()
 	out.append_array(_glb_ground)
 	return out
+
+
+## The authored ground's materials, in this order: the chunks', the skirt's and the small stones'
+## dabs' (made together on the first call). They are one ground drawn by three materials, so every
+## ground parameter goes to all three: each writer of one takes its targets from this list (or
+## from ground_materials()), never names a material. The skirt differs in `skirt` alone and the
+## dabs' in their own `dab_lobes` (PainterDabs); test_painter_ground_siblings checks every uniform
+## of the ground's shader after a sculpt, a paint stroke, a sun, a mood and a biome change.
+func siblings() -> Array[ShaderMaterial]:
+	_ground_material()
+	return [_ground, _skirt, _dab]
+
+
+## The small stones' dabs' material (PainterDabs draws its meshes with it).
+func dab_material() -> ShaderMaterial:
+	_ground_material()
+	return _dab
 
 
 ## The ground a GLB map's terrain mesh is dressed in (PainterGlbMap): a copy of the authored
@@ -507,19 +533,29 @@ func _dress_as(geometry: GeometryInstance3D, material: ShaderMaterial) -> void:
 
 func _ground_material() -> ShaderMaterial:
 	if _ground == null:
-		_ground = ShaderMaterial.new()
-		_ground.shader = load(GROUND_SHADER) as Shader
-		_ground.set_meta(META, true)
-		_ground.set_shader_parameter(&"brushes", PainterBrushes.texture())
-		_ground.set_shader_parameter(&"brushes_present", true)
-		_skirt = _ground.duplicate() as ShaderMaterial
-		_skirt.set_meta(META, true)
+		_ground = _new_ground(GROUND_SHADER)
+		_skirt = _new_ground(GROUND_SHADER)
+		_dab = _new_ground(DAB_SHADER)
+		for material: ShaderMaterial in [_ground, _skirt, _dab]:
+			material.set_shader_parameter(&"brushes", PainterBrushes.texture())
+			material.set_shader_parameter(&"brushes_present", true)
 		_skirt.set_shader_parameter(&"skirt", true)
-	if not FireLook.glow_mirrors.has(_ground):
-		# The persistent ground fire (FireField) binds its bake to the terrain's own material, which
-		# this one replaces: it takes the same bake and draws the char and the glow its own way.
-		FireLook.mirror_glow(_ground, _terrain.get_material() if is_instance_valid(_terrain) else null)
+	# The persistent ground fire (FireField) binds its bake to the terrain's own material, which
+	# these replace: they take the same bake and draw the char and the glow their own way. (The
+	# skirt lies past the map, where no fire burns.)
+	for material: ShaderMaterial in [_ground, _dab]:
+		if not FireLook.glow_mirrors.has(material):
+			FireLook.mirror_glow(
+				material, _terrain.get_material() if is_instance_valid(_terrain) else null
+			)
 	return _ground
+
+
+static func _new_ground(path: String) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = load(path) as Shader
+	material.set_meta(META, true)
+	return material
 
 
 func _queue_zone() -> void:
@@ -542,7 +578,7 @@ func _rebuild_zone() -> void:
 	var doc := _terrain.document
 	# One field for the map and the skirt (the texture object is shared, as the zone map's): past
 	# the border the skirt's reads clamp to the border's texel (painter_ground.gdshader).
-	_field.sync(_terrain, [_ground_material(), _skirt])
+	_field.sync(_terrain, siblings())
 	if _zone_whole or _zones.zone == null:
 		_zones.build(doc)
 	elif _zone_dirty.has_area():
@@ -550,7 +586,7 @@ func _rebuild_zone() -> void:
 	_zone_whole = false
 	_zone_dirty = Rect2i()
 	var extent := doc.extent_m()
-	for material: ShaderMaterial in [_ground_material(), _skirt]:
+	for material: ShaderMaterial in siblings():
 		material.set_shader_parameter(&"zone_map", _zones.zone_texture())
 		material.set_shader_parameter(&"zone_present", true)
 		material.set_shader_parameter(&"char_map", _zones.char_texture())
@@ -568,7 +604,7 @@ func _rebuild_zone() -> void:
 		doc.surface_ids, doc.base_surface, doc.surface_weights, doc.samples_x(), doc.samples_z()
 	]
 	var paths_changed := path_key != _path_key
-	var ids := PainterGroundPaths.bind([_ground_material(), _skirt], doc, paths_changed)
+	var ids := PainterGroundPaths.bind(siblings(), doc, paths_changed)
 	if paths_changed:
 		# Copies: a packed array is shared by assignment (measured, Godot 4.7), so a kept reference
 		# would follow the document's own array and never differ.
@@ -594,7 +630,7 @@ func _bind_wet() -> void:
 	if _ground == null or not is_instance_valid(_terrain):
 		return
 	var wet := _terrain.get_water_texture()
-	for material: ShaderMaterial in [_ground, _skirt]:
+	for material: ShaderMaterial in siblings():
 		material.set_shader_parameter(&"water_weights", wet)
 		material.set_shader_parameter(&"water_present", wet != null)
 
@@ -753,8 +789,7 @@ func _tone_ground(sheet: Dictionary, mood: String, elevation: float) -> void:
 	var num := func(prop: String) -> float: return PainterSheet.number(sheet, mood, prop, elevation)
 	var tone := func(role: String) -> Vector3:
 		return PainterTones.linear(PainterSheet.tone(sheet, mood, role, elevation))
-	var grounds: Array[ShaderMaterial] = [_ground_material(), _skirt]
-	grounds.append_array(_glb_ground)
+	var grounds := ground_materials()
 	var paths := PainterGroundPaths.tones(sheet, mood, elevation, _path_ids)
 	for material: ShaderMaterial in grounds:
 		material.set_shader_parameter(&"g_lit", lit)

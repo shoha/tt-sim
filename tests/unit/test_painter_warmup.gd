@@ -52,6 +52,8 @@ func test_every_drawn_shader_has_a_sample() -> void:
 
 func test_the_copied_constants_are_the_owners() -> void:
 	assert_eq(PainterWarmup.GROUND, PainterSurfaces.GROUND_SHADER)
+	assert_eq(PainterWarmup.GROUND_DAB, PainterSurfaces.DAB_SHADER)
+	assert_eq(PainterWarmup.DAB_FLAGS, PainterDabs.FORMAT)
 	assert_eq(PainterWarmup.TERRAIN_CASTER, TerrainBackCaster.SHADER)
 	assert_eq(PainterWarmup.PLANT, PainterSurfaces.PLANT_SHADER)
 	assert_eq(PainterWarmup.SOLID, PainterSurfaces.SOLID_SHADER)
@@ -104,6 +106,17 @@ func test_the_layouts_match_the_real_producers() -> void:
 	var water := AuthoredWater.warmup_samples()
 	assert_eq(_format_of(_sample_named("water_framed")), _format_of(water[0]), "water surface")
 	assert_eq(_format_of(_sample_named("waterfall")), _format_of(water[1]), "falls")
+	# A cell of the small stones' dabs (PainterDabs, its own shader).
+	var map := Node3D.new()
+	add_child_autofree(map)
+	var terrain := AuthoredTerrain.new()
+	terrain.document = MapDocument.create_flat(Vector2i(8, 8), "grass", "test", 7)
+	map.add_child(terrain)
+	var dabs := PainterDabs.new()
+	dabs.sync(map, terrain, ShaderMaterial.new(), [PainterSites.site(0.5, 0.5, 0.2, 0.0, 0.1)])
+	var cell := dabs.holder().get_child(0) as MeshInstance3D
+	assert_eq(_format_of(_sample_named("ground_dab")), cell.mesh.surface_get_format(0), "dabs")
+	dabs.clear()
 
 
 func test_headless_is_ready_and_starts_nothing() -> void:

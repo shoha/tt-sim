@@ -70,21 +70,14 @@ const REBUILD_DELAY_S := 0.3
 ## their rects hold more than FULL_SHARE of the field (a level load, the trees' growth).
 const MAX_DIRTY := 48
 const FULL_SHARE := 0.3
-## A footprint (a mark) is an Array of floats, sorted as such: its shape (DISC, BOX or SITE), a
-## disc's channel, world x and z, a box's turn and half extents (a site's written reach in the
-## first), the pool's reach (a disc's or a site's radius), the seam's reach, the corners' rounding
-## and the foot (its height times its weight, the weight).
+## A footprint (a mark) is an Array of floats, sorted as such: its shape (DISC or BOX), a disc's
+## channel, world x and z, a box's turn and half extents, the pool's reach (a disc's radius), the
+## seam's reach, the corners' rounding and the foot (its height times its weight, the weight).
+## A small stone is no footprint (card painter-terrain-dabs; PainterSites has the model): a mark
+## its size is a texel or two of this field, so it is a SITE instead, a few flat triangles on the
+## ground under it (PainterDabs, synced after every rebuild of the field).
 const DISC := 0.0
 const BOX := 1.0
-const SITE := 2.0
-## A small stone is a SITE (card painter-terrain-marks; PainterSites has the model): its dab goes
-## into the seam channel as a distance, not a coverage, baked toward the sun by the lean the ground
-## reads the field with, so it shows at the stone. The sites are baked again when the sun's plan
-## direction has turned by more than SUN_TURN (the length of the difference of two unit vectors:
-## about 6 degrees, 0.03 m of a dab's place), or by anything once it has stood still SUN_STILL
-## frames.
-const SUN_TURN := 0.1
-const SUN_STILL := 12
 const MAX_TOKENS := 32
 ## Metres of empty field kept round the map's extent. The shader samples the field with a clamped
 ## edge, so a footprint cut by the field's last row (a tree near the map's edge) would be repeated
@@ -131,19 +124,19 @@ var _numbers: Dictionary = {}
 var _count := 0
 ## A scatter mesh's bodies (islands()), by the mesh's instance id.
 var _bodies: Dictionary = {}
+## A scatter mesh's triangles and its small bodies' plan sections (_feet_of), by the same id.
+var _soups: Dictionary = {}
+var _feet: Dictionary = {}
 ## The field's floats (CHANNELS a texel), the sorted marks it was baked from, and the texel window
 ## the rasterizers may write (the whole field, or one dirty rect).
 var _data := PackedFloat32Array()
 var _marks: Array = []
 var _win := Rect2i()
-## How many small stones' sites the field holds, the sun they were baked for (the unit plan
-## direction to it, zero for none), the sun the last frame saw and the frames it has stood still.
+## The small stones' dabs (their meshes) and the sites the last rebuild found.
+var _dabs := PainterDabs.new()
 var _site_count := 0
-var _sun := Vector2.ZERO
-var _sun_seen := Vector2.ZERO
-var _sun_still := 0
 ## A scatter multimesh's marks by its node's id: [its transform, its buffer, its mesh's id, its
-## marks, its footprints]. A multimesh nothing moved in is not walked again.
+## marks, its footprints, its sites]. A multimesh nothing moved in is not walked again.
 var _held: Dictionary = {}
 ## The last rebuild (stats()).
 var _last: Dictionary = {}
@@ -164,10 +157,13 @@ func release() -> void:
 	_tokens = PackedVector4Array()
 	_token_bounds.clear()
 	_bodies.clear()
+	_soups.clear()
+	_feet.clear()
 	_held.clear()
 	_marks = []
 	_data = PackedFloat32Array()
 	_site_count = 0
+	_dabs.clear()
 	_clear_ground()
 	_surfaces = null
 
@@ -175,6 +171,17 @@ func release() -> void:
 ## The number of footprints in the last field (tests and the notes).
 func footprints() -> int:
 	return _count
+
+
+## The small stones' dabs (tests and the probes).
+func dabs() -> PainterDabs:
+	return _dabs
+
+
+## An edit of the terrain's samples in `rect` (none: a new terrain): the dabs standing there are
+## laid on the ground again at the next rebuild.
+func ground_edited(rect: Rect2i) -> void:
+	_dabs.mark(rect)
 
 
 ## The last rebuild (tests, the notes and the edit-cost probe): `texels` rewritten (0: no footprint
@@ -263,10 +270,10 @@ func _yard_material() -> ShaderMaterial:
 ## to the ground, in three parts. The footprints are collected as marks (a scatter multimesh that
 ## nothing moved in is not walked again). The marks are compared with the last bake's (`update`):
 ## when none moved nothing is baked or uploaded, when a few moved only their rects are baked, and
-## otherwise (a level load, the trees' growth) the whole field. The small stones' dabs are baked
-## for the sun's direction (sun_dir()), so a sun that turned moves them all. A changed field is
-## uploaded. Pure CPU, GDScript, debounced (REBUILD_DELAY_S), never per frame; painter.md
-## "Grounding" has the measured cost of each kind of edit.
+## otherwise (a level load, the trees' growth) the whole field. A changed field is uploaded. The
+## small stones found on the way (the sites) go to their dabs (PainterDabs.sync: the new ones and
+## those on edited ground are built). Pure CPU, GDScript, debounced (REBUILD_DELAY_S), never per
+## frame; painter.md "Grounding" has the measured cost of each kind of edit.
 func rebuild() -> void:
 	_queued = false
 	if _map == null or _surfaces == null:
@@ -278,26 +285,34 @@ func rebuild() -> void:
 	var layout := field_layout(extent)
 	_count = 0
 	var marks: Array = []
+	var sites: Array = []
 	_add_trees(marks)
-	_add_solids(marks)
+	_add_solids(marks, sites)
 	_add_structures(marks)
 	var t1 := Time.get_ticks_usec()
 	var size := Vector2i(roundi(layout.size.x), roundi(layout.size.y))
-	var texels := update(layout.position, size, marks, sun_dir())
+	var texels := update(layout.position, size, marks)
 	var t2 := Time.get_ticks_usec()
 	if texels > 0 or _tex == null:
 		_upload()
 	_hand_over()
 	_apply()
+	var t3 := Time.get_ticks_usec()
+	_site_count = sites.size()
+	var terrain := _map.get_node_or_null(^"AuthoredTerrain") as AuthoredTerrain
+	var built := _dabs.sync(_map, terrain, _surfaces.call("dab_material"), sites)
 	_last = {
 		"run": int(_last.get("run", 0)) + 1,
 		"texels": texels,
 		"whole": texels == size.x * size.y,
 		"marks": marks.size(),
 		"sites": _site_count,
+		"dabs_built": built,
 		"collect_ms": (t1 - t0) / 1000.0,
 		"bake_ms": (t2 - t1) / 1000.0,
-		"upload_ms": (Time.get_ticks_usec() - t2) / 1000.0,
+		"upload_ms": (t3 - t2) / 1000.0,
+		"dabs_ms": (Time.get_ticks_usec() - t3) / 1000.0,
+		"dabs_parts": _dabs.parts,
 	}
 
 
@@ -306,29 +321,20 @@ func rebuild() -> void:
 ## they are few, the whole field when its layout changed or too much did. The marks are sorted
 ## first and a texel is one function of the marks that cover it, taken in that order, so a partial
 ## bake equals a whole one bit for bit and the order the footprints were collected in is nothing.
-## `sun` is the unit plan direction to the sun (zero for none) the small stones' dabs are baked
-## for: when it differs from the last bake's, every site counts as moved.
-func update(origin: Vector2, size: Vector2i, marks: Array, sun := Vector2.ZERO) -> int:
+func update(origin: Vector2, size: Vector2i, marks: Array) -> int:
 	marks.sort()
 	var whole := origin != _origin or size != _size or _data.size() != size.x * size.y * CHANNELS
 	var dirty: Array[Rect2i] = []
-	var turned := sun != _sun
 	if not whole:
-		if marks == _marks and not (turned and _site_count > 0):
-			_sun = sun
+		if marks == _marks:
 			return 0
-		dirty = _changed(marks, turned)
+		dirty = _changed(marks)
 		var area := 0
 		for rect: Rect2i in dirty:
 			area += rect.get_area()
 		whole = area > FULL_SHARE * size.x * size.y
 	lay_out(origin, size)
 	_marks = marks
-	_sun = sun
-	_site_count = 0
-	for mark: Array in marks:
-		if mark[0] == SITE:
-			_site_count += 1
 	if whole:
 		_data = PackedFloat32Array()
 		_data.resize(size.x * size.y * CHANNELS)
@@ -378,18 +384,9 @@ static func box(
 	return [BOX, 0.0, x, z, yaw, half.x, half.y, reach.x, reach.y, corner, foot.x, foot.y]
 
 
-## A small stone's mark: its middle (world x, z), its radius `r` (metres) and its `foot` (the
-## foot's height times its weight, the weight: PainterSites.foot). Its written reach holds the
-## dab wherever the sun sets it (PainterSites.LEAN_M from the stone, any way).
-static func site(x: float, z: float, r: float, foot: Vector2) -> Array:
-	var reach := PainterSites.reach(r) + PainterSites.LEAN_M
-	return [SITE, 0.0, x, z, 0.0, reach, 0.0, r, 0.0, 0.0, foot.x, foot.y]
-
-
-## The texel rects of the marks that `marks` adds to or drops from the last bake's, and of every
-## site when the sun `turned`, joined where they meet; the whole field when more than MAX_DIRTY
-## changed.
-func _changed(marks: Array, turned: bool) -> Array[Rect2i]:
+## The texel rects of the marks that `marks` adds to or drops from the last bake's, joined where
+## they meet; the whole field when more than MAX_DIRTY changed.
+func _changed(marks: Array) -> Array[Rect2i]:
 	var before := {}
 	for mark: Array in _marks:
 		before[mark] = true
@@ -397,7 +394,7 @@ func _changed(marks: Array, turned: bool) -> Array[Rect2i]:
 	var rects: Array[Rect2i] = []
 	for mark: Array in marks:
 		after[mark] = true
-		if not before.has(mark) or (turned and mark[0] == SITE):
+		if not before.has(mark):
 			rects.append(_span(mark))
 	for mark: Array in _marks:
 		if not after.has(mark):
@@ -430,8 +427,6 @@ func _span(mark: Array) -> Rect2i:
 	if mark[0] == DISC:
 		var r: float = mark[7]
 		return _texels(mark[2], mark[3], r + soft(r), r + soft(r))
-	if mark[0] == SITE:
-		return _texels(mark[2], mark[3], mark[5], mark[5])
 	return _box_span(
 		mark[2], mark[3], mark[4], Vector2(mark[5], mark[6]), far_of(Vector2(mark[7], mark[8]))
 	)
@@ -441,17 +436,6 @@ func _span(mark: Array) -> Rect2i:
 func _draw(data: PackedFloat32Array, mark: Array) -> void:
 	if mark[0] == DISC:
 		_disc(data, int(mark[1]), mark[2], mark[3], mark[7])
-	elif mark[0] == SITE:
-		PainterSites.bake(
-			data,
-			_origin,
-			_size.x,
-			TEXEL_M,
-			_win,
-			Vector3(mark[2], mark[3], mark[7]),
-			Vector2(mark[10], mark[11]),
-			_sun
-		)
 	else:
 		_boxes(
 			data,
@@ -483,13 +467,6 @@ func _upload() -> void:
 		_tex = ImageTexture.create_from_image(image)
 	else:
 		_tex.update(image)
-
-
-## The unit plan direction to the sun as the ground's shader takes it from the foliage_sun global
-## (FoliageLight.last_sun), zero when the sun stands straight overhead or there is none.
-static func sun_dir() -> Vector2:
-	var plan := Vector2(FoliageLight.last_sun.x, FoliageLight.last_sun.z)
-	return plan / plan.length() if plan.length() > 0.01 else Vector2.ZERO
 
 
 ## Hands the field to the ground's materials and the yard's (also one made since the last bake).
@@ -540,7 +517,7 @@ func _add_trees(marks: Array) -> void:
 ## wider than the body (`solid_reach`), shown only near the height of its foot. A tree the painter
 ## does not grow (its mesh carries a leaf surface beside its bark, or it is tall and slender:
 ## TREE_M) gets a crown's disc.
-func _add_solids(marks: Array) -> void:
+func _add_solids(marks: Array, sites: Array) -> void:
 	var meshes: Dictionary = _surfaces.call("solid_meshes")
 	var held := {}
 	if not meshes.is_empty():
@@ -557,16 +534,19 @@ func _add_solids(marks: Array) -> void:
 				var buffer := mm.buffer
 				var was: Array = _held.get(node.get_instance_id(), [])
 				if was.is_empty() or was[0] != to_world or was[1] != buffer or was[2] != id:
-					var own := _solids_of(mm, to_world, bool(meshes[id]))
-					was = [to_world, buffer, id, own, mm.instance_count]
+					var own_sites: Array = []
+					var own := _solids_of(mm, to_world, bool(meshes[id]), own_sites)
+					was = [to_world, buffer, id, own, mm.instance_count, own_sites]
 				held[node.get_instance_id()] = was
 				marks.append_array(was[3])
+				sites.append_array(was[5])
 				_count += int(was[4])
 	_held = held
 
 
-## The marks of one scatter multimesh whose node stands at `to_world`.
-func _solids_of(mm: MultiMesh, to_world: Transform3D, leafy: bool) -> Array:
+## The marks of one scatter multimesh whose node stands at `to_world`; its small stones go to
+## `sites` (PainterSites.site()).
+func _solids_of(mm: MultiMesh, to_world: Transform3D, leafy: bool, sites: Array) -> Array:
 	var out: Array = []
 	var id := mm.mesh.get_instance_id()
 	var box := mm.mesh.get_aabb()
@@ -582,20 +562,95 @@ func _solids_of(mm: MultiMesh, to_world: Transform3D, leafy: bool) -> Array:
 			_tree(out, xf.origin, xf * box.get_center(), maxf(whole.x, whole.y), height)
 			continue
 		var yaw := atan2(xf.basis.x.z, xf.basis.x.x)
-		for body: AABB in bodies:
-			_solid(out, xf * body.get_center(), yaw, body.size * scale * 0.5)
+		var upright := xf.basis.y.y > 0.98 * scale.y
+		for b in bodies.size():
+			var body := bodies[b]
+			var half3 := body.size * scale * 0.5
+			var foot := PackedFloat32Array()
+			if PainterSites.radius(Vector2(half3.x, half3.z)) > 0.0:
+				foot = _feet_of(mm.mesh, b, body)
+			_solid(
+				out,
+				sites,
+				xf * body.get_center(),
+				yaw,
+				half3,
+				foot,
+				Vector2(sqrt(scale.x * scale.z), 1.0 if upright else 0.0)
+			)
 	return out
 
 
-## One body of a scatter solid: its middle `c` (world), its turn and its half size (metres).
-func _solid(marks: Array, c: Vector3, yaw: float, half3: Vector3) -> void:
+## The plan sections of body `b` (`body`, one of islands()) of a scatter mesh (PainterSites.feet),
+## made the first time a stone that small is seen: the mesh's triangles whose middle lies in the
+## body's box, cut at a few heights.
+func _feet_of(mesh: Mesh, b: int, body: AABB) -> PackedFloat32Array:
+	var id := mesh.get_instance_id()
+	if not _feet.has(id):
+		_feet[id] = {}
+	var known: Dictionary = _feet[id]
+	if known.has(b):
+		return known[b]
+	if not _soups.has(id):
+		_soups[id] = _soup(mesh)
+	var soup: PackedVector3Array = _soups[id]
+	var inside := body.grow(0.01)
+	var own := PackedVector3Array()
+	for t in range(0, soup.size() - 2, 3):
+		if inside.has_point((soup[t] + soup[t + 1] + soup[t + 2]) / 3.0):
+			own.append(soup[t])
+			own.append(soup[t + 1])
+			own.append(soup[t + 2])
+	known[b] = PainterSites.feet(own, body)
+	return known[b]
+
+
+## Every triangle of `mesh`, three corners each (nothing for a mesh islands() does not split).
+static func _soup(mesh: Mesh) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	var array_mesh := mesh as ArrayMesh
+	if array_mesh == null:
+		return out
+	for s in array_mesh.get_surface_count():
+		if array_mesh.surface_get_primitive_type(s) != Mesh.PRIMITIVE_TRIANGLES:
+			continue
+		var arrays := array_mesh.surface_get_arrays(s)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		if out.size() + verts.size() > 6 * MAX_SPLIT_VERTICES:
+			return PackedVector3Array()
+		if arrays[Mesh.ARRAY_INDEX] == null:
+			out.append_array(verts)
+			continue
+		for index: int in arrays[Mesh.ARRAY_INDEX] as PackedInt32Array:
+			out.append(verts[index])
+	return out
+
+
+## One body of a scatter solid: its middle `c` (world), its turn and its half size (metres). A
+## small stone is no mark: it goes to `sites`, with its measured foot when `sections` holds its
+## body's (PainterSites.feet; `stand` is then its plan scale and 1 for an upright stone).
+func _solid(
+	marks: Array,
+	sites: Array,
+	c: Vector3,
+	yaw: float,
+	half3: Vector3,
+	sections := PackedFloat32Array(),
+	stand := Vector2.ONE
+) -> void:
 	var half := Vector2(half3.x, half3.z)
 	var corner := minf(half.x, half.y)
 	if PainterSites.holds(half):
-		# A stone a coverage its size cannot hold: its own dab, baked as a distance.
+		# A stone a coverage its size cannot hold: its own dab, as geometry (PainterDabs).
 		var r := PainterSites.radius(half)
 		if r > 0.0:
-			marks.append(site(c.x, c.z, r, PainterSites.foot(c.y - 0.5 * half3.y, r, half3.y)))
+			var plain := PainterSites.site(c.x, c.z, r, c.y - 0.5 * half3.y, half3.y)
+			if sections.is_empty():
+				sites.append(plain)
+			else:
+				sites.append(
+					PainterSites.measured(plain, half3.y, yaw, stand.x, stand.y > 0.5, sections)
+				)
 		return
 	var reach := solid_reach(half)
 	if corner + reach.x < 0.5 * TEXEL_M:
@@ -895,13 +950,6 @@ func _on_frame() -> void:
 	var tree := _map.get_tree()
 	if tree == null:
 		return
-	# The small stones' dabs are baked for the sun: again once it has turned.
-	var sun := sun_dir()
-	_sun_still = _sun_still + 1 if sun == _sun_seen else 0
-	_sun_seen = sun
-	if _site_count > 0 and sun != _sun:
-		if sun.distance_to(_sun) > SUN_TURN or _sun_still >= SUN_STILL:
-			queue()
 	var now := PackedVector4Array()
 	for node: Node in tree.get_nodes_in_group(BoardToken.GROUP_NAME):
 		var token := node as BoardToken
