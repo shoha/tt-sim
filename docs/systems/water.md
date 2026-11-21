@@ -767,8 +767,8 @@ pattern is in the world frame, and what moves is carried by one vector: the flow
 renormalised, box-averaged over 0.75 m, so it is zero in a pond and where two flows cancel, which
 is simply still water). The strokes and glints drift by it; the flat's white (riffles, ramps,
 inflows) is two world copies of one noise cross-faded in time along it (`flow_blobs`), at
-`FLOW_CARRY` times the flow (1.1 m/s at full speed), so the white now follows a river's own speed
-and the level's flow strength. No term multiplies a direction by a map position and no coordinate
+`FLOW_CARRY` times the flow (0.8 m/s at full speed, each copy for `CARRY_PERIOD_S` = 4 s), so the
+white now follows a river's own speed and the level's flow strength. No term multiplies a direction by a map position and no coordinate
 of one frame is blended with another's. Before, the white read the owning stroke's arc and lateral
 coordinate, blended by the stroke's weight with a world projection on the flow direction: between
 two strokes the texture holds the MEAN of two arcs, which drew the white as a thin squiggle at a
@@ -777,12 +777,22 @@ the map origin. The rules that went: the coordinate blend, both world-projection
 (`dot(p, dir) - 0.5 y`, `dot(p, across_dir)`), the per-fragment fetch of the stroke frame on flat
 white. The stroke's lie (`dir`, the wind blended into the flow direction) is used only relative to
 a mark's own centre and carries its own definedness (`dir_k`): where flow and wind cancel a stroke
-shrinks to nothing instead of flipping across a contour. One exception stays, on purpose: a fall's
-face and foot belong to one stroke and draw in that stroke's raw arc and lateral coordinate
-(streaks, tongue columns, the foot's bend), entered by the steep share and the foot's weight, which
-are weights on the PATTERN; where a plunge lands in a pond no stroke owns, the foot's two noises
-are world noises cross-faded in by the stroke's weight. The field's `flow_u` and `lateral` are
-therefore read only on and under a fall; their jumps at joins and self-crossings
+shrinks to nothing instead of flipping across a contour. One exception stays, on purpose: **a
+fall's zone** (card painter-water-frames-finish). The owner approved the falls as main draws them,
+so inside the zone every term is main's, unchanged, the old frame included (the stroke's arc and
+lateral coordinate blended by the stroke's weight with the world projection, the foot's bend on
+the world fallback, the white travelling along the arc at `FLOW_C`). The zone weight `fz` is 1 on
+a face (the steep share) and, in the foot coordinate, from `FALL_UP_M` = 6 above the foot (the face
+and the brink) to `FALL_DOWN_M` = 1.5 below it (the veil's reach), and fades to 0 over
+`FALL_FADE_M` = 1 either side; it cross-fades the two blob PATTERNS (the fall's and the world's),
+never a coordinate, and switches the stroke-length rule (`dir_k`) off. Checked by pixel diff with
+the clocks matched (native 1920x1080, main's shader text against the branch's in one run): f1_o,
+f1_o8, f1_t, f3_t and f5_o are identical over the whole frame at two clocks (0 pixels differ), and
+st_o is identical over its fall, foot and upper pool. Inside a fall's foot range but outside its
+zone (the plunge pool past the veil, the reach above a brink) the flat keeps `POOL_WHITE_K` = 0.55
+of its white: at full strength the world pattern stood below the stepped stream's second lip as
+one fixed bold slab, cut straight by the edge of the upper water's mesh. The field's `flow_u` and
+`lateral` are therefore read only inside a fall's zone; their jumps at joins and self-crossings
 (`junction_seams`) are still in the data but nothing on flat water reads them. Compared and
 rejected: cross-fading per-stroke patterns (needs each sample's own frame as new field data and
 2 to 4 pattern evaluations in every band; with today's data the squiggle stays), and a world
@@ -792,7 +802,16 @@ stroke (a plunge pool below a step, a join) the stroke bends into a hook or shea
 Reading the flow once at the stroke's own centre makes it rigid and removes that, but costs one
 flow map fetch per stroke cell: +0.04 ms at the fall view f1_o in the in-run A/B, over the card's
 +0.03 ms, and the code path cost about as much switched off, so it was taken out again (captures
-`a_*_rigid`, `strip_*_nwrigid` in the evidence).
+`a_*_rigid`, `strip_*_nwrigid` in the evidence). The finish card tried a cheaper rule (a stroke
+shortens by the turn of the direction across its own length, read from the direction's screen
+derivatives: +0.004 / -0.017 / +0.002 ms at f1_o8 / f1_o / wide): it removed the hooked light arc
+below the stepped stream's lip but cut a straight stroke flat across where the derivative steps,
+and it cannot act inside a fall's zone, where the dark wedge below st_o's foot is. Not taken: the
+strokes are main's. Also open: the flat's white does not visibly travel where its energy patch is
+smaller than a blob (0.9 m), as at the t_y_join join and below the st_o lip: the white stands in
+the patch and changes shape over seconds (finish evidence `c_travel_strip.png`); and one hard
+0.15 m white tick stays below the st_o lip, on the stair-stepped edge of the upper water's mesh
+(a field data matter, with the teal steps there).
 Evidence: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final111_water_frames/`.
 
 ## The water field (combined branch painter-water-field-v2, look-pending, unmerged)
