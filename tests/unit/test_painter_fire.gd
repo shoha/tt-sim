@@ -184,7 +184,7 @@ func test_the_ground_roles_know_burnt_ground() -> void:
 
 func test_the_char_map_exists_only_for_a_document_with_burnt_ground() -> void:
 	var doc := MapDocument.create_flat(Vector2i(10, 10), "grass_meadow", "test", 7)
-	assert_null(PainterSurfaces.char_image(doc), "a plain map has none")
+	assert_null(PainterZoneMaps.char_image(doc), "a plain map has none")
 	var n := doc.samples_x() * doc.samples_z()
 	doc.biome_ids = PackedStringArray(["temperate_forest_summer_s1", "burnt_forest"])
 	doc.biome_slots.resize(n)
@@ -192,7 +192,7 @@ func test_the_char_map_exists_only_for_a_document_with_burnt_ground() -> void:
 	for i in n:
 		doc.biome_slots[i] = 2 if i < n / 2 else 0
 		doc.biome_density[i] = 255
-	assert_null(PainterSurfaces.char_image(doc), "a burnt biome alone is ash ground, not a scar")
+	assert_null(PainterZoneMaps.char_image(doc), "a burnt biome alone is ash ground, not a scar")
 	doc.surface_ids = PackedStringArray(["grass_meadow", "ash"])
 	doc.surface_weights.resize(n * MapDocument.SURFACE_BYTES)
 	doc.surface_weights.fill(0)
@@ -200,7 +200,7 @@ func test_the_char_map_exists_only_for_a_document_with_burnt_ground() -> void:
 		var burnt := i < n / 2
 		doc.surface_weights[i * 4] = 1 if burnt else 0
 		doc.surface_weights[n * 4 + i * 4] = 255
-	var image := PainterSurfaces.char_image(doc)
+	var image := PainterZoneMaps.char_image(doc)
 	assert_not_null(image)
 	assert_eq(image.get_size(), Vector2i(doc.samples_x(), doc.samples_z()))
 	assert_gt(image.get_pixel(1, 1).r, 0.9, "scorched where the ash surface is")

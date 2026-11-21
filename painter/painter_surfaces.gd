@@ -16,7 +16,8 @@ extends RefCounted
 ## (LevelMap under the map container) or re-tones what is painted, {} puts everything back. While
 ## painted it follows the map: AuthoredTerrain.child_entered_tree (a chunk or the skirt built
 ## later, by a load, a rebuild or an edit) dresses the new node; AuthoredTerrain.ground_edited
-## (a brush) rebuilds the zone map once that frame; AuthoredScatter.cells_applied and
+## (a brush) redoes the edited rectangle of the zone maps once that frame (PainterZoneMaps);
+## AuthoredScatter.cells_applied and
 ## species_added (a pan, a brush, a load that resolves a species later) paint any species not yet
 ## painted. Cells share their species' mesh, so a species is painted once for every cell.
 ##
@@ -105,6 +106,16 @@ var _field := PainterGroundField.new()  ## The ground's shading field and back-f
 ## rebuild.
 var _path_ids := PackedStringArray()
 var _cliff_surface := ""
+## The zone maps (PainterZoneMaps), kept current per edit; the ground and the skirt share their
+## textures.
+var _zones := PainterZoneMaps.new()
+## The samples edited since the last zone rebuild (AuthoredTerrain.ground_edited), and whether the
+## next rebuild is whole (a first paint, a new or rebuilt terrain).
+var _zone_dirty := Rect2i()
+var _zone_whole := true
+## The path slot map's inputs at its last bind: [surface ids, base surface, surface weights, sx, sz]
+## (copies of the document's arrays).
+var _path_key: Array = []
 
 
 ## Follows `manager`'s painted_look_changed for the map under `map_container`; called again with
@@ -134,6 +145,7 @@ func paint(map: Node3D, state: Dictionary) -> bool:
 	if _map == null:
 		_map = map
 		_bind()
+		_zone_whole = true
 		_rebuild_zone()
 	_paint_species()
 	_retone()
@@ -188,6 +200,9 @@ func release() -> void:
 	_map = null
 	_terrain = null
 	_scatters.clear()
+	_zone_dirty = Rect2i()
+	_zone_whole = true
+	_path_key = []
 	applied = {}
 
 
@@ -288,10 +303,13 @@ func _on_terrain_child(node: Node) -> void:
 	_dress(node)
 	if str(node.name) == AuthoredTerrain.SKIRT_NAME:
 		# The skirt is built last by every AuthoredTerrain.build(): the document may be new.
+		_zone_whole = true
 		_queue_zone()
 
 
-func _on_ground_edited(_rect: Rect2i) -> void:
+## An edit of the samples in `rect`: the next zone rebuild redoes that rectangle (PainterZoneMaps).
+func _on_ground_edited(rect: Rect2i) -> void:
+	_zone_dirty = _zone_dirty.merge(rect) if _zone_dirty.has_area() else rect
 	_queue_zone()
 	_queue_occlusion()
 
@@ -511,8 +529,11 @@ func _queue_zone() -> void:
 	_rebuild_zone.call_deferred()
 
 
-## The zone map from the terrain's document (PainterGroundRoles): r meadow share, g path,
-## b rock, a shore, one texel per height sample, blurred ZONE_BLUR samples.
+## Brings the ground's maps up to the terrain's document, once a frame after an edit: the shading
+## field (PainterGroundField), the zone maps (PainterZoneMaps: r meadow share, g path, b rock,
+## a shore, and the char and biome zone maps; whole after a first paint or a terrain build, else
+## the edited rectangle alone), the path slot map (only when the painted surfaces changed: a sculpt
+## step leaves it) and the cliff surface.
 func _rebuild_zone() -> void:
 	_zone_queued = false
 	_queue_occlusion()
@@ -520,29 +541,37 @@ func _rebuild_zone() -> void:
 		return
 	var doc := _terrain.document
 	_field.sync(_terrain, [_ground_material()])
-	var image := zone_image(doc)
-	var burnt := char_image(doc)
-	var biome_image := biome_zone_image(doc)
-	var biome_texture: ImageTexture = (
-		null if biome_image == null else ImageTexture.create_from_image(biome_image)
-	)
+	if _zone_whole or _zones.zone == null:
+		_zones.build(doc)
+	elif _zone_dirty.has_area():
+		_zones.update(doc, _zone_dirty)
+	_zone_whole = false
+	_zone_dirty = Rect2i()
 	var extent := doc.extent_m()
 	for material: ShaderMaterial in [_ground_material(), _skirt]:
-		material.set_shader_parameter(&"zone_map", ImageTexture.create_from_image(image))
+		material.set_shader_parameter(&"zone_map", _zones.zone_texture())
 		material.set_shader_parameter(&"zone_present", true)
-		material.set_shader_parameter(
-			&"char_map", ImageTexture.create_from_image(burnt) if burnt != null else null
-		)
-		material.set_shader_parameter(&"char_present", burnt != null)
-		material.set_shader_parameter(&"zone2_map", biome_texture)
-		material.set_shader_parameter(&"zone2_present", biome_texture != null)
+		material.set_shader_parameter(&"char_map", _zones.char_texture())
+		material.set_shader_parameter(&"char_present", _zones.char_texture() != null)
+		material.set_shader_parameter(&"zone2_map", _zones.biome_texture())
+		material.set_shader_parameter(&"zone2_present", _zones.biome_texture() != null)
 		material.set_shader_parameter(&"layer_grid_origin", -extent * 0.5)
 		material.set_shader_parameter(&"layer_grid_step", doc.sample_step())
 		material.set_shader_parameter(&"half_extent", extent * 0.5)
 		material.set_shader_parameter(
 			&"base_meadow", 1.0 if PainterGroundRoles.surface_role(doc.base_surface) == "meadow" else 0.0
 		)
-	var ids := PainterGroundPaths.bind([_ground_material(), _skirt], doc)
+	var path_key: Array = [
+		doc.surface_ids, doc.base_surface, doc.surface_weights, doc.samples_x(), doc.samples_z()
+	]
+	var paths_changed := path_key != _path_key
+	var ids := PainterGroundPaths.bind([_ground_material(), _skirt], doc, paths_changed)
+	if paths_changed:
+		# Copies: a packed array is shared by assignment (measured, Godot 4.7), so a kept reference
+		# would follow the document's own array and never differ.
+		path_key[0] = doc.surface_ids.duplicate()
+		path_key[2] = doc.surface_weights.duplicate()
+		_path_key = path_key
 	var cliff := PainterGroundPaths.cliff_surface(doc)
 	var changed := ids != _path_ids or cliff != _cliff_surface
 	_path_ids = ids
@@ -567,247 +596,9 @@ func _bind_wet() -> void:
 		material.set_shader_parameter(&"water_present", wet != null)
 
 
-## The scorched ground's share per height sample as an R8 image (the `char` role has no channel in
-## the zone maps: it is rare, so its map exists only when the document names an ash surface, the
-## scar a fire event stamps, and costs nothing else), null when it names none (pure; painter-fire).
-## A burnt BIOME is not char: it is the `ash` role of the biome zone map (painter-coverage), and
-## the scar lies over it. A surface weight is the share.
-static func char_image(doc: MapDocument) -> Image:
-	var any := false
-	var surface_char := PackedByteArray()
-	for id in doc.surface_ids:
-		var burnt := PainterGroundRoles.surface_role(id) == "char"
-		surface_char.append(1 if burnt else 0)
-		any = any or burnt
-	if not any:
-		return null
-	var sx := doc.samples_x()
-	var sz := doc.samples_z()
-	var n := sx * sz
-	var plane := PackedFloat32Array()
-	plane.resize(n)
-	var weights := doc.surface_weights
-	var has_surfaces := weights.size() == n * MapDocument.SURFACE_BYTES
-	for i in n:
-		var v := 0.0
-		if has_surfaces:
-			for e in 4:
-				var w := weights[n * 4 + i * 4 + e] / 255.0
-				var at := weights[i * 4 + e]
-				if w > 0.0 and at < surface_char.size() and surface_char[at] == 1:
-					v = maxf(v, w)
-		plane[i] = v
-	var blurred := PainterFieldBlur.box(plane, sx, sz, ZONE_BLUR)
-	var bytes := PackedByteArray()
-	bytes.resize(n)
-	for i in n:
-		bytes[i] = clampi(roundi(blurred[i] * 255.0), 0, 255)
-	return Image.create_from_data(sx, sz, false, Image.FORMAT_R8, bytes)
-
-
-## The zone map of `doc` as an RGBA8 image (pure; see _rebuild_zone). The document's arrays and the
-## roles' channels are read once, outside the sample loop (a property read on the document costs
-## more than the arithmetic it feeds), and the blur is written for the radius ZONE_BLUR has.
-static func zone_image(doc: MapDocument) -> Image:
-	var sx := doc.samples_x()
-	var sz := doc.samples_z()
-	var n := sx * sz
-	var base_role := PainterGroundRoles.surface_role(doc.base_surface)
-	if base_role == "shore" and has_dominant_dry(doc):
-		base_role = "meadow"
-	var base := _mix_role(Vector4.ZERO, base_role, 1.0)
-	var biome_channel := PackedInt32Array()
-	var biome_target := PackedFloat32Array()
-	for id in doc.biome_ids:
-		_role_channel(PainterGroundRoles.biome_role(id), biome_channel, biome_target)
-	var surface_channel := PackedInt32Array()
-	var surface_target := PackedFloat32Array()
-	for id in doc.surface_ids:
-		_role_channel(PainterGroundRoles.surface_role(id), surface_channel, surface_target)
-	var slots := doc.biome_slots
-	var density := doc.biome_density
-	var weights := doc.surface_weights
-	var wet := doc.water_dressing
-	var has_biomes := slots.size() == n and density.size() == n
-	var has_surfaces := weights.size() == n * MapDocument.SURFACE_BYTES
-	var has_wet := wet.size() == n * 4
-	var biome_count := biome_channel.size()
-	var surface_count := surface_channel.size()
-	var plane_r := PackedFloat32Array()
-	var plane_g := PackedFloat32Array()
-	var plane_b := PackedFloat32Array()
-	var plane_a := PackedFloat32Array()
-	plane_r.resize(n)
-	plane_g.resize(n)
-	plane_b.resize(n)
-	plane_a.resize(n)
-	# Which channels any sample moved off the base: a channel nothing touched is one flat value,
-	# and a flat plane blurs to itself.
-	var touched := PackedByteArray([0, 0, 0, 0])
-	for i in n:
-		var v := base
-		if has_biomes:
-			var slot := slots[i]
-			if slot > 0 and slot <= biome_count:
-				var channel := biome_channel[slot - 1]
-				if channel >= 0:
-					var pull := clampf(density[i] / 255.0 * BIOME_PULL, 0.0, 1.0)
-					v[channel] = lerpf(v[channel], biome_target[slot - 1], pull)
-					touched[channel] = 1
-		if has_surfaces:
-			for e in 4:
-				var w := weights[n * 4 + i * 4 + e] / 255.0
-				if w > 0.0:
-					var at := weights[i * 4 + e]
-					if at < surface_count and surface_channel[at] >= 0:
-						var channel := surface_channel[at]
-						v[channel] = lerpf(v[channel], surface_target[at], w)
-						touched[channel] = 1
-		if has_wet:
-			var shore := maxf(wet[i * 4], wet[i * 4 + 1]) / 255.0
-			if shore > v.w:
-				v.w = shore
-				touched[3] = 1
-		plane_r[i] = v.x
-		plane_g[i] = v.y
-		plane_b[i] = v.z
-		plane_a[i] = v.w
-	var bytes := PackedByteArray()
-	bytes.resize(n * 4)
-	var planes: Array[PackedFloat32Array] = [plane_r, plane_g, plane_b, plane_a]
-	for c in 4:
-		if touched[c] == 0:
-			var flat := clampi(roundi(base[c] * 255.0), 0, 255)
-			for i in n:
-				bytes[i * 4 + c] = flat
-			continue
-		var plane := PainterFieldBlur.box(planes[c], sx, sz, ZONE_BLUR)
-		for i in n:
-			bytes[i * 4 + c] = clampi(roundi(plane[i] * 255.0), 0, 255)
-	return Image.create_from_data(sx, sz, false, Image.FORMAT_RGBA8, bytes)
-
-
-## The biome zone map of `doc` (card painter-coverage): an RGBA8 image, one texel per height
-## sample, r the share of the dry biome's role (savanna straw), g ash (a burnt forest), b earth
-## (the badlands), blurred like the zone map; null when no biome of the map paints in one of those
-## roles (the shader then never reads it). Pure.
-static func biome_zone_image(doc: MapDocument) -> Image:
-	var targets := PackedInt32Array()
-	var any := false
-	for id in doc.biome_ids:
-		var at := PainterGroundRoles.index(PainterGroundRoles.biome_role(id))
-		var channel := at - PainterGroundRoles.BIOME_ROLES_FROM
-		targets.append(channel if channel >= 0 and channel < 3 else -1)
-		any = any or channel >= 0
-	var sx := doc.samples_x()
-	var sz := doc.samples_z()
-	var n := sx * sz
-	var slots := doc.biome_slots
-	var density := doc.biome_density
-	if not any or slots.size() != n or density.size() != n:
-		return null
-	var planes: Array[PackedFloat32Array] = []
-	for c in 3:
-		var plane := PackedFloat32Array()
-		plane.resize(n)
-		planes.append(plane)
-	var dominant := _dominant_channel(targets, slots)
-	for i in n:
-		var slot := slots[i]
-		var own := -1
-		if slot > 0 and slot <= targets.size():
-			own = targets[slot - 1]
-		if own >= 0 and own != dominant:
-			planes[own][i] = clampf(density[i] / 255.0 * BIOME_PULL, 0.0, 1.0)
-		elif dominant >= 0 and (own == dominant or slot == 0):
-			# The map's own dry biome paints the whole ground, not only where its scatter is dense.
-			planes[dominant][i] = 1.0
-	var bytes := PackedByteArray()
-	bytes.resize(n * 4)
-	for c in 3:
-		var plane := PainterFieldBlur.box(planes[c], sx, sz, ZONE_BLUR)
-		for i in n:
-			bytes[i * 4 + c] = clampi(roundi(plane[i] * 255.0), 0, 255)
-	return Image.create_from_data(sx, sz, false, Image.FORMAT_RGBA8, bytes)
-
-
-## The biome zone map's channel (0 dry, 1 ash, 2 earth) of the map's dominant dry biome, -1 when
-## none: the dry biome whose cells are at least a quarter of the map and more than any other
-## biome's. `targets` is the channel of each biome slot (-1 for a biome that is none of them),
-## `slots` the document's biome_slots. Such a map's whole ground paints in that role (a savanna is
-## straw everywhere, not in patches).
-static func _dominant_channel(targets: PackedInt32Array, slots: PackedByteArray) -> int:
-	var counts := PackedInt32Array()
-	counts.resize(targets.size() + 1)
-	for slot in slots:
-		if slot <= targets.size():
-			counts[slot] += 1
-	var best := -1
-	var best_count := 0
-	var other := 0
-	for k in targets.size():
-		if targets[k] >= 0 and counts[k + 1] > best_count:
-			best = targets[k]
-			best_count = counts[k + 1]
-	for k in targets.size():
-		if targets[k] != best:
-			other = maxi(other, counts[k + 1])
-	if best >= 0 and best_count * 4 >= slots.size() and best_count > other:
-		return best
-	return -1
-
-
-## Whether `doc`'s ground is painted by one dry biome throughout (_dominant_channel): the zone map
-## then drops the base surface's shore (a savanna or badlands map's base is sand).
-static func has_dominant_dry(doc: MapDocument) -> bool:
-	var targets := PackedInt32Array()
-	for id in doc.biome_ids:
-		var at := PainterGroundRoles.index(PainterGroundRoles.biome_role(id))
-		var channel := at - PainterGroundRoles.BIOME_ROLES_FROM
-		targets.append(channel if channel >= 0 and channel < 3 else -1)
-	return doc.biome_slots.size() > 0 and _dominant_channel(targets, doc.biome_slots) >= 0
-
-
-## Appends the channel (0 r .. 3 a, -1 for a role the zone map has no channel for) and the value a
-## ground role pulls its channel to (_mix_role's table), for the sample loop.
-static func _role_channel(
-	role: String, channels: PackedInt32Array, targets: PackedFloat32Array
-) -> void:
-	match role:
-		"meadow":
-			channels.append(0)
-			targets.append(1.0)
-		"floor":
-			channels.append(0)
-			targets.append(0.0)
-		"path":
-			channels.append(1)
-			targets.append(1.0)
-		"rock":
-			channels.append(2)
-			targets.append(1.0)
-		"shore":
-			channels.append(3)
-			targets.append(1.0)
-		_:
-			channels.append(-1)
-			targets.append(0.0)
-
-
-## `v` (r meadow share, g path, b rock, a shore) moved `w` of the way to ground role `role`.
-static func _mix_role(v: Vector4, role: String, w: float) -> Vector4:
-	match role:
-		"meadow":
-			v.x = lerpf(v.x, 1.0, w)
-		"floor":
-			v.x = lerpf(v.x, 0.0, w)
-		"path":
-			v.y = lerpf(v.y, 1.0, w)
-		"rock":
-			v.z = lerpf(v.z, 1.0, w)
-		"shore":
-			v.w = lerpf(v.w, 1.0, w)
-	return v
+## The zone maps (tests and probes).
+func zones() -> PainterZoneMaps:
+	return _zones
 
 
 # ---------------------------------------------------------------- the scatter

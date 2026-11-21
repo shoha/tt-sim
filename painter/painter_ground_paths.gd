@@ -68,7 +68,11 @@ static func slots(doc: MapDocument) -> PackedStringArray:
 ## painted anywhere (`path_only` then names it; see used()). Each slot's weight is blurred as the
 ## zone map's path share is, so every texel the share reaches holds a slot. Pure.
 static func slot_image(doc: MapDocument, ids: PackedStringArray) -> Image:
-	var planes := _planes(doc, ids)
+	return _slot_image_of(doc, _planes(doc, ids))
+
+
+## slot_image() from the slots' weight planes (_planes).
+static func _slot_image_of(doc: MapDocument, planes: Array[PackedFloat32Array]) -> Image:
 	var used: Array[int] = []
 	for k in planes.size():
 		if not planes[k].is_empty():
@@ -97,7 +101,11 @@ static func slot_image(doc: MapDocument, ids: PackedStringArray) -> Image:
 
 ## The one slot painted on `doc` (index in `ids`), -1 when none is or more than one is.
 static func only_slot(doc: MapDocument, ids: PackedStringArray) -> int:
-	var planes := _planes(doc, ids)
+	return _only_of(_planes(doc, ids))
+
+
+## only_slot() from the slots' weight planes (_planes).
+static func _only_of(planes: Array[PackedFloat32Array]) -> int:
 	var found := -1
 	for k in planes.size():
 		if not planes[k].is_empty():
@@ -109,14 +117,18 @@ static func only_slot(doc: MapDocument, ids: PackedStringArray) -> int:
 
 ## Sets the slot map (or the one slot) of `doc` on `materials`, the village fields' map
 ## (PainterFields.bind) and the meadow swathes' seed (PainterMeadowSwathes.bind); returns the slot
-## ids.
-static func bind(materials: Array, doc: MapDocument) -> PackedStringArray:
+## ids. With `slot_map` false the slot map is left as the materials have it (the caller knows the
+## painted surfaces did not change since: a sculpt step), which skips its pass over every sample.
+static func bind(materials: Array, doc: MapDocument, slot_map := true) -> PackedStringArray:
 	PainterFields.bind(materials, doc)
 	PainterMeadowSwathes.bind(materials, doc)
 	var ids := slots(doc)
-	var image := slot_image(doc, ids)
+	if not slot_map:
+		return ids
+	var planes := _planes(doc, ids)
+	var image := _slot_image_of(doc, planes)
 	var texture: ImageTexture = null if image == null else ImageTexture.create_from_image(image)
-	var only := -1 if image != null else only_slot(doc, ids)
+	var only := -1 if image != null else _only_of(planes)
 	for material: ShaderMaterial in materials:
 		material.set_shader_parameter(&"path_map", texture)
 		material.set_shader_parameter(&"path_map_present", texture != null)
@@ -227,9 +239,9 @@ static func cliff_surface(doc: MapDocument) -> String:
 		return ""
 	var counts := PackedInt32Array()
 	counts.resize(doc.biome_ids.size() + 1)
-	for slot in doc.biome_slots:
-		if slot <= doc.biome_ids.size():
-			counts[slot] += 1
+	var slots := doc.biome_slots
+	for k in counts.size():
+		counts[k] = slots.count(k)  # Native: a GDScript pass over the samples cost about 4 ms.
 	var best := 0
 	for k in doc.biome_ids.size():
 		if counts[k + 1] > counts[best + 1]:
