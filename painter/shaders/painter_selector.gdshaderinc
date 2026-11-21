@@ -431,10 +431,14 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 // Voronoi lattice on the octahedral map of the form's directions, turned by the rock's own angle
 // (`turn`: its cosine and sine), four cells and four hashes a pixel (the first lattice was cut in
 // space: eight cells, twenty-four hashes). The planes are larger than the mesh's triangles and
-// their borders are the lattice's, smooth on the form. Inside the box's spheroid (a stone in a
-// scatter, a low step of a big rock) a point keeps its face, and a small rock keeps its mesh's
-// faces as its planes (a stone is two or three of them). `variant` takes a step of the plane's own,
-// so a plane is one flat colour.
+// their borders are the lattice's, smooth on the form. A plane is chosen by the point's DIRECTION
+// from the rock's middle alone, never by its distance from it: mixed in by how near the point lay
+// to the box's spheroid, a flat face that dips inside the spheroid showed that distance's contours,
+// a round disc with two soft rims (one a tone step) across the planes of a boulder's lit front
+// (card painter-rocks-forms-merge-ready, named by switch). Only the form's normal still keeps a
+// point's face inside the spheroid (a stone in a scatter, a low step of a big rock), and a small
+// rock keeps its mesh's faces as its planes (a stone is two or three of them). `variant` takes a
+// step of the plane's own, so a plane is one flat colour.
 varying vec3 f_plane;
 
 vec2 solid_sign(vec2 v) {
@@ -450,8 +454,11 @@ vec3 solid_form(vec3 wp, vec3 wn, vec3 origin, float scale, vec2 turn, out vec3 
 	// Only the box's own surface is the one form: a point well inside the spheroid keeps its face.
 	float on_form = smoothstep(0.5, 0.9, length(off / vec3(across, half_m.y, across)));
 	vec3 form_n = normalize(mix(normalize(wn), round_n, SOLID_ROUND * on_form));
-	plane = form_n;
-	float big = on_form * smoothstep(SOLID_PLANE_MIN, 2.0 * SOLID_PLANE_MIN, max(across, half_m.y));
+	// A small rock's planes are its mesh's own faces, not the rounded form's normal: with that one
+	// a stone's light and half-light met along the form's curves.
+	plane = normalize(wn);
+	// The rock's size alone (one number a rock): every tone step on its lit side is a plane's border.
+	float big = smoothstep(SOLID_PLANE_MIN, 2.0 * SOLID_PLANE_MIN, max(across, half_m.y));
 	if (big > 0.0) {
 		// The direction on the octahedral map (the up pole its middle, the down pole its corners).
 		vec3 d = vec3(turn.x * round_n.x - turn.y * round_n.z, round_n.y,
@@ -485,7 +492,7 @@ vec3 solid_form(vec3 wp, vec3 wn, vec3 origin, float scale, vec2 turn, out vec3 
 		}
 		c3 = normalize(c3);
 		c3 = vec3(turn.x * c3.x + turn.y * c3.z, c3.y, turn.x * c3.z - turn.y * c3.x);
-		plane = normalize(mix(form_n, c3, big));
+		plane = normalize(mix(plane, c3, big));
 		variant = mix(variant, best_h, 0.5 * step(0.5, big));
 	}
 	return form_n;

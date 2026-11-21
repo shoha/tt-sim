@@ -10,11 +10,100 @@ const CORE := PainterOcclusion.CORE_CH
 
 ## An empty field `cells` texels square whose first corner is at (-4, -4): 8 m at 32 texels.
 func _field(host: PainterOcclusion, cells: int = 32) -> PackedFloat32Array:
-	host._origin = Vector2(-4.0, -4.0)
-	host._size = Vector2i(cells, cells)
+	host.lay_out(Vector2(-4.0, -4.0), Vector2i(cells, cells))
 	var field := PackedFloat32Array()
 	field.resize(cells * cells * PainterOcclusion.CHANNELS)
 	return field
+
+
+## Writes `marks` into `field`.
+func _lay(host: PainterOcclusion, field: PackedFloat32Array, marks: Array) -> void:
+	for mark: Array in marks:
+		host._draw(field, mark)
+
+
+## A box's mark in one channel (0 the pool, 1 the seam).
+func _box(
+	ch: int, x: float, z: float, yaw: float, half: Vector2, reach: float, corner := 0.0
+) -> Array:
+	var reaches := Vector2(-1.0, -1.0)
+	reaches[ch] = reach
+	return PainterOcclusion.box(x, z, yaw, half, reaches, corner)
+
+
+## Forty marks over the 8 m field (discs and footed boxes that overlap), the same for one seed.
+func _marks(seed_value: int) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var marks: Array = []
+	for k in 40:
+		var x := rng.randf_range(-3.5, 3.5)
+		var z := rng.randf_range(-3.5, 3.5)
+		if k % 3 == 0:
+			marks.append(PainterOcclusion.disc(k % 2, x, z, rng.randf_range(0.2, 1.2)))
+			continue
+		var half := Vector2(rng.randf_range(0.1, 0.6), rng.randf_range(0.1, 0.6))
+		var reach := PainterOcclusion.solid_reach(half)
+		var foot := Vector2(rng.randf_range(0.0, 3.0), rng.randf_range(1.0, 4.0))
+		var yaw := rng.randf_range(0.0, TAU)
+		var corner := minf(half.x, half.y)
+		marks.append(PainterOcclusion.box(x, z, yaw, half, Vector2(reach.y, reach.x), corner, foot))
+	return marks
+
+
+func test_a_partial_update_equals_a_whole_bake_bit_for_bit() -> void:
+	var origin := Vector2(-12.0, -12.0)
+	var size := Vector2i(96, 96)
+	var host := PainterOcclusion.new()
+	var marks := _marks(7)
+	assert_eq(host.update(origin, size, marks.duplicate()), 96 * 96, "the first bake is whole")
+	# One mark moves, one goes, one comes: a rock dragged, one removed, one placed.
+	var edited := marks.duplicate()
+	var moved: Array = (edited[4] as Array).duplicate()
+	moved[2] = float(moved[2]) + 0.6
+	edited[4] = moved
+	edited.remove_at(20)
+	edited.append(PainterOcclusion.box(1.0, -2.0, 0.4, Vector2(0.3, 0.2), Vector2(0.2, 0.1), 0.2))
+	var texels := host.update(origin, size, edited.duplicate())
+	assert_between(texels, 1, 96 * 96 / 3, "only the changed marks' rects are baked")
+	var whole := PainterOcclusion.new()
+	whole.update(origin, size, edited.duplicate())
+	assert_true(host._data.to_byte_array() == whole._data.to_byte_array(), "bit for bit")
+	# And back again: what the dropped marks left is wiped.
+	host.update(origin, size, marks.duplicate())
+	var first := PainterOcclusion.new()
+	first.update(origin, size, marks.duplicate())
+	assert_true(host._data.to_byte_array() == first._data.to_byte_array(), "and back")
+
+
+func test_nothing_is_baked_when_no_footprint_moved_whatever_their_order() -> void:
+	var origin := Vector2(-4.0, -4.0)
+	var size := Vector2i(32, 32)
+	var host := PainterOcclusion.new()
+	var marks := _marks(11)
+	host.update(origin, size, marks.duplicate())
+	var before := host._data.duplicate()
+	assert_eq(host.update(origin, size, marks.duplicate()), 0, "the same marks: nothing baked")
+	var turned := marks.duplicate()
+	turned.reverse()
+	assert_eq(host.update(origin, size, turned), 0, "collected in another order: still nothing")
+	var other := PainterOcclusion.new()
+	var again := marks.duplicate()
+	again.reverse()
+	other.update(origin, size, again)
+	assert_true(other._data == before, "the field does not depend on the order")
+	# Many moved, or the layout changed: a whole bake.
+	assert_eq(host.update(origin, size, _marks(12)), 32 * 32, "everything moved: whole")
+	assert_eq(host.update(origin, Vector2i(40, 40), _marks(12)), 40 * 40, "a new layout: whole")
+
+
+func test_rects_that_meet_are_joined() -> void:
+	var rects: Array[Rect2i] = [
+		Rect2i(0, 0, 4, 4), Rect2i(10, 10, 2, 2), Rect2i(3, 3, 4, 4), Rect2i(6, 6, 5, 5), Rect2i()
+	]
+	var joined := PainterOcclusion.joined(rects)
+	assert_eq(joined.size(), 1, "a chain of rects that meet is one")
+	assert_eq(joined[0], Rect2i(0, 0, 12, 12))
 
 
 ## Channel `ch` of the texel that holds world (x, z).
@@ -52,8 +141,7 @@ func test_a_footprint_at_the_maps_edge_leaves_the_fields_rim_empty() -> void:
 	var host := PainterOcclusion.new()
 	var extent := Vector2(49.0, 49.0)
 	var layout := PainterOcclusion.field_layout(extent)
-	host._origin = layout.position
-	host._size = Vector2i(roundi(layout.size.x), roundi(layout.size.y))
+	host.lay_out(layout.position, Vector2i(roundi(layout.size.x), roundi(layout.size.y)))
 	var field := PackedFloat32Array()
 	field.resize(host._size.x * host._size.y * PainterOcclusion.CHANNELS)
 	# A big crown's pool (nominal radius 4 m) standing on the map's far edge.
@@ -84,11 +172,11 @@ func test_box_follows_its_turn() -> void:
 	var host := PainterOcclusion.new()
 	var field := _field(host)
 	# A long box (half 2 by 0.25) along x: its far end is covered, the same distance off axis is not.
-	host._box(field, POOL, 0.0, 0.0, 0.0, Vector2(2.0, 0.25), 0.3)
+	host._draw(field, _box(POOL, 0.0, 0.0, 0.0, Vector2(2.0, 0.25), 0.3))
 	assert_eq(_at(host, field, 1.75, 0.2), 1.0)
 	assert_eq(_at(host, field, 0.2, 1.75), 0.0)
 	var turned := _field(host)
-	host._box(turned, POOL, 0.0, 0.0, PI * 0.5, Vector2(2.0, 0.25), 0.3)
+	host._draw(turned, _box(POOL, 0.0, 0.0, PI * 0.5, Vector2(2.0, 0.25), 0.3))
 	assert_eq(_at(host, turned, 0.2, 1.75), 1.0)
 	assert_eq(_at(host, turned, 1.75, 0.2), 0.0)
 
@@ -96,9 +184,9 @@ func test_box_follows_its_turn() -> void:
 func test_a_rounded_box_cuts_its_corners() -> void:
 	var host := PainterOcclusion.new()
 	var square := _field(host)
-	host._box(square, POOL, 0.0, 0.0, 0.0, Vector2(2.0, 1.5), 0.1)
+	host._draw(square, _box(POOL, 0.0, 0.0, 0.0, Vector2(2.0, 1.5), 0.1))
 	var rounded := _field(host)
-	host._box(rounded, POOL, 0.0, 0.0, 0.0, Vector2(2.0, 1.5), 0.1, 1.5)
+	host._draw(rounded, _box(POOL, 0.0, 0.0, 0.0, Vector2(2.0, 1.5), 0.1, 1.5))
 	# The texel at (1.8, 1.3) is inside the square box, outside its corner rounded by 1.5 m.
 	assert_eq(_at(host, square, 1.8, 1.3), 1.0)
 	assert_lt(_at(host, rounded, 1.8, 1.3), 0.5, "the rounded corner is cut")
@@ -109,7 +197,9 @@ func test_a_tree_the_painter_does_not_grow_gets_a_round_pool() -> void:
 	var host := PainterOcclusion.new()
 	var field := _field(host)
 	# Its foot at the origin, its crown's middle 1 m along x: the pool is a disc round (0.5, 0).
-	host._tree(field, Vector3.ZERO, Vector3(1.0, 3.0, 0.0), 2.0, 6.0)
+	var marks: Array = []
+	host._tree(marks, Vector3.ZERO, Vector3(1.0, 3.0, 0.0), 2.0, 6.0)
+	_lay(host, field, marks)
 	assert_eq(_at(host, field, 0.3, 0.3), 1.0)
 	var along := _at(host, field, 1.8, 0.1)
 	var across := _at(host, field, 0.6, 1.3)
@@ -123,8 +213,10 @@ func test_a_small_stone_takes_a_mark_of_its_own_size_at_its_foots_height() -> vo
 	var host := PainterOcclusion.new()
 	var field := _field(host)
 	# Two stones 0.5 m across, 2 m apart, their feet at 5 m.
+	var marks: Array = []
 	for x: float in [-1.0, 1.0]:
-		host._solid(field, Vector3(x, 5.15, 0.0), 0.0, Vector3(0.25, 0.15, 0.25))
+		host._solid(marks, Vector3(x, 5.15, 0.0), 0.0, Vector3(0.25, 0.15, 0.25))
+	_lay(host, field, marks)
 	assert_gt(_at(host, field, 0.95, 0.1, CORE), 0.9, "a seam under the stone")
 	assert_eq(_at(host, field, 0.1, 0.1, CORE), 0.0, "none between the two")
 	assert_eq(_at(host, field, 0.95, 0.7, CORE), 0.0, "none half a metre off the stone")
@@ -136,7 +228,10 @@ func test_a_small_stone_takes_a_mark_of_its_own_size_at_its_foots_height() -> vo
 	assert_lt(1.0 / weight, 0.6, "and reaches about the stone's own size up and down")
 	# A pebble the field cannot hold leaves no mark.
 	var none := _field(host)
-	host._solid(none, Vector3(0.0, 0.0, 0.0), 0.0, Vector3(0.05, 0.05, 0.05))
+	var pebble: Array = []
+	host._solid(pebble, Vector3(0.0, 0.0, 0.0), 0.0, Vector3(0.05, 0.05, 0.05))
+	assert_true(pebble.is_empty(), "no mark at all")
+	_lay(host, none, pebble)
 	assert_eq(_at(host, none, 0.01, 0.01, CORE), 0.0)
 
 

@@ -2659,14 +2659,44 @@ and torture sheets, the score tables) and the card's handoff
   screen) below the lowest stone; the wall below is clean. Stones that nearly touch still share
   one patch: three separate marks need more than the field's 0.25 m.
   Cost: the pool and the seam of a body are written in one pass (`_boxes`), over the turned
-  box's own extent. A rebuild is 22 ms on the falls map (202 footprints) and 29 ms on the torture
-  map (312), nearly all of it the solids' loop in GDScript; with one whole box a mesh at the same
-  0.25 m it was 32 to 36 ms there, and the two-pass version of the previous commit 55 ms (in
-  authoring, 291 solids). Main's
-  0.5 m field was not measured in this run (about a quarter of the texels). It runs 0.3 s after
-  the scatter applies cells, a structure or the ground changes, and after a sun hour change (about
-  every 3 s in a capture job that changes view and hour), never per frame; at 29 ms it is a
-  dropped frame or two each time, which a native or chunked rebuild would remove.
+  box's own extent. The field is no longer rebuilt whole on every change (card
+  painter-rocks-forms-merge-ready, 2026-11-20). `rebuild()` runs 0.3 s after the scatter applies
+  cells, a structure or the ground changes or the sun's hour does (about every 0.34 s through a
+  sculpt stroke), and has three parts: the footprints are collected as marks (arrays of floats; a
+  scatter multimesh whose transform and buffer did not change gives its marks from `_held`), the
+  marks are sorted and compared with the last bake's (`update`), and a changed field is uploaded.
+  When no mark moved nothing is baked or uploaded; when up to `MAX_DIRTY` moved and their rects
+  hold under `FULL_SHARE` of the field, only those rects are wiped and baked again from the marks
+  that reach them, in the sorted order, so a partial bake equals a whole one bit for bit
+  (`test_a_partial_update_equals_a_whole_bake_bit_for_bit`); otherwise (a level load, the trees'
+  growth) the whole field. Measured in one run against main adf2ac61's own host on the same maps
+  (ms per rebuild; main bakes its 0.5 m field whole every time):
+
+  | | main | this |
+  |---|---|---|
+  | level load, whole bake, falls map (202 footprints) | 10.7 | 17.4 |
+  | level load, whole bake, torture map (313) | 14.8 to 15.7 | 27.7 to 28.9 |
+  | nothing moved (a sun hour change, a stroke far from solids) | as a whole bake | 1.5 to 2.2 |
+  | one rock placed (torture, authoring) | 15.5 | 5.6 to 5.8 (25.6 once: a new mesh's `islands`) |
+  | one rock moved | 16.6 | 3.9 to 4.0 |
+  | a sculpt stroke step near rocks (42 to 1628 texels) | as a whole bake | 3.4 to 4.7 |
+
+  Of an edit's 4 ms about 1.4 is the collect, 1 to 2 the bake and 1 the upload of the whole
+  texture. Not explained: the first rebuild after a stroke ends collected for 21 to 31 ms in three
+  runs of three (once per stroke; no new mesh was split in the one case that logged it), and a
+  rock moved by setting its instance transform took 30 ms twice and 4 ms once. Main was not
+  measured at a stroke's end. The three kinds of per-body work each show when switched off alone
+  (`ready/ablation__...png`): one box a mesh doubles a cluster's patch, without the foot's height
+  the mark runs down the wall under the ledge's stones, and at 0.5 m the small stones' marks are
+  gone; all three are kept.
+- **The disc on a boulder's lit front** (same card): a round disc with two soft rims crossed the
+  planes of a boulder, absent on main. Named by switch (`ready/disc_switches_crop__...png`): the
+  plane was mixed in by `on_form`, the point's distance from the rock's middle, so a flat face
+  dipping inside the box's spheroid showed that distance's contours. A plane is now chosen by the
+  point's direction alone (`big` is the rock's size, one number a rock), and a small rock's planes
+  are its mesh's own faces (`normalize(wn)`), not the rounded form's normal, whose light and
+  half-light met along curves. The form's normal, which still uses `on_form`, decides the
+  terminator only.
   Seen and left: the round soft-rimmed disc on a boulder's lit face (two concentric rims, about
   0.9 m in radius on a 1.2 m boulder, the "smudge" above) is NOT the shadow shell: it is unchanged
   with `LIGHT_VERTEX` left alone (`noshell`), and absent with main's solid shader in the same

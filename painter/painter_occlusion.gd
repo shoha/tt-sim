@@ -66,6 +66,15 @@ const WELD_M := 0.002
 const NEST_SHARE := 0.5
 ## Seconds of quiet before a changed map's field is rebuilt (growth installs trees every frame).
 const REBUILD_DELAY_S := 0.3
+## A change is baked whole, not by its dirty rects, when more than MAX_DIRTY footprints changed or
+## their rects hold more than FULL_SHARE of the field (a level load, the trees' growth).
+const MAX_DIRTY := 48
+const FULL_SHARE := 0.3
+## A footprint (a mark) is an Array of floats, sorted as such: its shape (DISC or BOX), a disc's
+## channel, world x and z, a box's turn and half extents, the pool's reach (a disc's radius), the
+## seam's reach, the corners' rounding and the foot (its height times its weight, the weight).
+const DISC := 0.0
+const BOX := 1.0
 const MAX_TOKENS := 32
 ## Metres of empty field kept round the map's extent. The shader samples the field with a clamped
 ## edge, so a footprint cut by the field's last row (a tree near the map's edge) would be repeated
@@ -112,6 +121,16 @@ var _numbers: Dictionary = {}
 var _count := 0
 ## A scatter mesh's bodies (islands()), by the mesh's instance id.
 var _bodies: Dictionary = {}
+## The field's floats (CHANNELS a texel), the sorted marks it was baked from, and the texel window
+## the rasterizers may write (the whole field, or one dirty rect).
+var _data := PackedFloat32Array()
+var _marks: Array = []
+var _win := Rect2i()
+## A scatter multimesh's marks by its node's id: [its transform, its buffer, its mesh's id, its
+## marks, its footprints]. A multimesh nothing moved in is not walked again.
+var _held: Dictionary = {}
+## The last rebuild (stats()).
+var _last: Dictionary = {}
 
 
 ## Starts following `map` for `surfaces` (a PainterSurfaces); `numbers` is read by retone().
@@ -129,6 +148,9 @@ func release() -> void:
 	_tokens = PackedVector4Array()
 	_token_bounds.clear()
 	_bodies.clear()
+	_held.clear()
+	_marks = []
+	_data = PackedFloat32Array()
 	_clear_ground()
 	_surfaces = null
 
@@ -136,6 +158,13 @@ func release() -> void:
 ## The number of footprints in the last field (tests and the notes).
 func footprints() -> int:
 	return _count
+
+
+## The last rebuild (tests, the notes and the edit-cost probe): `texels` rewritten (0: no footprint
+## had moved, nothing was baked or uploaded), `whole` (a full bake), `marks`, and the milliseconds
+## of its three parts, `collect_ms`, `bake_ms` and `upload_ms`.
+func stats() -> Dictionary:
+	return _last
 
 
 ## Asks for a rebuild of the field after REBUILD_DELAY_S of quiet.
@@ -213,10 +242,13 @@ func _yard_material() -> ShaderMaterial:
 # ---------------------------------------------------------------- the field
 
 
-## Rebuilds the field from the map's trees, scatter solids and structures, and hands it to the
-## ground. Pure CPU, one pass over each footprint's texels in GDScript: measured 22 ms for the
-## falls map's 202 footprints and 29 ms for the torture map's 312 (2026-11-20, of which the
-## solids 13 and 27 ms), so it is debounced (REBUILD_DELAY_S) and never per frame.
+## Brings the field up to date with the map's trees, scatter solids and structures, and hands it
+## to the ground, in three parts. The footprints are collected as marks (a scatter multimesh that
+## nothing moved in is not walked again). The marks are compared with the last bake's (`update`):
+## when none moved nothing is baked or uploaded, when a few moved only their rects are baked, and
+## otherwise (a level load, the trees' growth) the whole field. A changed field is uploaded. Pure
+## CPU, GDScript, debounced (REBUILD_DELAY_S), never per frame; painter.md "Grounding" has the
+## measured cost of each kind of edit.
 func rebuild() -> void:
 	_queued = false
 	if _map == null or _surfaces == null:
@@ -224,24 +256,187 @@ func rebuild() -> void:
 	var extent: Vector2 = _surfaces.call("map_extent")
 	if extent.x <= 0.0 or extent.y <= 0.0:
 		return
+	var t0 := Time.get_ticks_usec()
 	var layout := field_layout(extent)
-	_origin = layout.position
-	_size = Vector2i(roundi(layout.size.x), roundi(layout.size.y))
-	var data := PackedFloat32Array()
-	data.resize(_size.x * _size.y * CHANNELS)
 	_count = 0
-	_add_trees(data)
-	_add_solids(data)
-	_add_structures(data)
-	# Floats as written, then half floats (one native pass; no loop over the texels here).
+	var marks: Array = []
+	_add_trees(marks)
+	_add_solids(marks)
+	_add_structures(marks)
+	var t1 := Time.get_ticks_usec()
+	var size := Vector2i(roundi(layout.size.x), roundi(layout.size.y))
+	var texels := update(layout.position, size, marks)
+	var t2 := Time.get_ticks_usec()
+	if texels > 0 or _tex == null:
+		_upload()
+	_hand_over()
+	_apply()
+	_last = {
+		"run": int(_last.get("run", 0)) + 1,
+		"texels": texels,
+		"whole": texels == size.x * size.y,
+		"marks": marks.size(),
+		"collect_ms": (t1 - t0) / 1000.0,
+		"bake_ms": (t2 - t1) / 1000.0,
+		"upload_ms": (Time.get_ticks_usec() - t2) / 1000.0,
+	}
+
+
+## Bakes `marks` into the field laid out at `origin`, `size` texels across, and returns the texels
+## it rewrote: none when no mark moved since the last bake, the rects of the marks that did when
+## they are few, the whole field when its layout changed or too much did. The marks are sorted
+## first and a texel is one function of the marks that cover it, taken in that order, so a partial
+## bake equals a whole one bit for bit and the order the footprints were collected in is nothing.
+func update(origin: Vector2, size: Vector2i, marks: Array) -> int:
+	marks.sort()
+	var whole := origin != _origin or size != _size or _data.size() != size.x * size.y * CHANNELS
+	var dirty: Array[Rect2i] = []
+	if not whole:
+		if marks == _marks:
+			return 0
+		dirty = _changed(marks)
+		var area := 0
+		for rect: Rect2i in dirty:
+			area += rect.get_area()
+		whole = area > FULL_SHARE * size.x * size.y
+	lay_out(origin, size)
+	_marks = marks
+	if whole:
+		_data = PackedFloat32Array()
+		_data.resize(size.x * size.y * CHANNELS)
+		_data.fill(0.0)
+		for mark: Array in marks:
+			_draw(_data, mark)
+		return size.x * size.y
+	var texels := 0
+	for rect: Rect2i in dirty:
+		_win = rect
+		_wipe(rect)
+		# The marks that may reach the rect, by a bound no smaller than their own (the rasterizers
+		# keep to the window).
+		var lo := _origin + Vector2(rect.position) * TEXEL_M
+		var hi := _origin + Vector2(rect.end) * TEXEL_M
+		for mark: Array in marks:
+			var x: float = mark[2]
+			var z: float = mark[3]
+			var reach: float = mark[5] + mark[6] + 1.5 * maxf(mark[7], mark[8]) + TEXEL_M
+			if x + reach < lo.x or x - reach > hi.x or z + reach < lo.y or z - reach > hi.y:
+				continue
+			_draw(_data, mark)
+		texels += rect.get_area()
+	_win = Rect2i(Vector2i.ZERO, size)
+	return texels
+
+
+## Lays the field out: its first texel's corner (world x, z), its size in texels, the whole of it
+## open to the rasterizers.
+func lay_out(origin: Vector2, size: Vector2i) -> void:
+	_origin = origin
+	_size = size
+	_win = Rect2i(Vector2i.ZERO, size)
+
+
+## A disc's mark: channel `ch`, nominal radius `r` (metres) at world (x, z).
+static func disc(ch: int, x: float, z: float, r: float) -> Array:
+	return [DISC, float(ch), x, z, 0.0, 0.0, 0.0, r, 0.0, 0.0, 0.0, 0.0]
+
+
+## A box's mark: half extents `half` in its own x and z, turned by `yaw` about +y at world (x, z),
+## its corners rounded by `corner` metres, grown by `reach` (x the pool's, y the seam's, a negative
+## one for none), with its `foot` (the foot's height times its weight, the weight; zero for none).
+static func box(
+	x: float, z: float, yaw: float, half: Vector2, reach: Vector2, corner: float, foot := Vector2.ZERO
+) -> Array:
+	return [BOX, 0.0, x, z, yaw, half.x, half.y, reach.x, reach.y, corner, foot.x, foot.y]
+
+
+## The texel rects of the marks that `marks` adds to or drops from the last bake's, joined where
+## they meet; the whole field when more than MAX_DIRTY changed.
+func _changed(marks: Array) -> Array[Rect2i]:
+	var before := {}
+	for mark: Array in _marks:
+		before[mark] = true
+	var after := {}
+	var rects: Array[Rect2i] = []
+	for mark: Array in marks:
+		after[mark] = true
+		if not before.has(mark):
+			rects.append(_span(mark))
+	for mark: Array in _marks:
+		if not after.has(mark):
+			rects.append(_span(mark))
+	if rects.size() > MAX_DIRTY:
+		return [Rect2i(Vector2i.ZERO, _size)]
+	return joined(rects)
+
+
+## `rects` with every two that meet made one, and those without area dropped.
+static func joined(rects: Array[Rect2i]) -> Array[Rect2i]:
+	var out: Array[Rect2i] = []
+	for rect: Rect2i in rects:
+		if not rect.has_area():
+			continue
+		var grown := rect
+		var k := out.size() - 1
+		while k >= 0:
+			if out[k].intersects(grown):
+				grown = grown.merge(out[k])
+				out.remove_at(k)
+				k = out.size()
+			k -= 1
+		out.append(grown)
+	return out
+
+
+## The field's texels a mark may write (a rect without area: none).
+func _span(mark: Array) -> Rect2i:
+	if mark[0] == DISC:
+		var r: float = mark[7]
+		return _texels(mark[2], mark[3], r + soft(r), r + soft(r))
+	return _box_span(
+		mark[2], mark[3], mark[4], Vector2(mark[5], mark[6]), far_of(Vector2(mark[7], mark[8]))
+	)
+
+
+## Writes a mark into `data` (the window's texels of it).
+func _draw(data: PackedFloat32Array, mark: Array) -> void:
+	if mark[0] == DISC:
+		_disc(data, int(mark[1]), mark[2], mark[3], mark[7])
+	else:
+		_boxes(
+			data,
+			mark[2],
+			mark[3],
+			mark[4],
+			Vector2(mark[5], mark[6]),
+			Vector2(mark[7], mark[8]),
+			mark[9],
+			Vector2(mark[10], mark[11])
+		)
+
+
+func _wipe(rect: Rect2i) -> void:
+	var count := rect.size.x * CHANNELS
+	for j in range(rect.position.y, rect.end.y):
+		var at := (j * _size.x + rect.position.x) * CHANNELS
+		for k in count:
+			_data[at + k] = 0.0
+
+
+## The field as a texture: floats as written, then half floats (one native pass each).
+func _upload() -> void:
 	var image := Image.create_from_data(
-		_size.x, _size.y, false, Image.FORMAT_RGBAF, data.to_byte_array()
+		_size.x, _size.y, false, Image.FORMAT_RGBAF, _data.to_byte_array()
 	)
 	image.convert(Image.FORMAT_RGBAH)
 	if _tex == null or _tex.get_size() != Vector2(_size) or _tex.get_format() != image.get_format():
 		_tex = ImageTexture.create_from_image(image)
 	else:
 		_tex.update(image)
+
+
+## Hands the field to the ground's materials and the yard's (also one made since the last bake).
+func _hand_over() -> void:
 	var targets: Array[ShaderMaterial] = _surfaces.call("ground_materials")
 	var yard := _yard_material()
 	if yard != null:
@@ -251,7 +446,6 @@ func rebuild() -> void:
 		material.set_shader_parameter(&"occ_origin", _origin)
 		material.set_shader_parameter(&"occ_step", TEXEL_M)
 		material.set_shader_parameter(&"occ_present", true)
-	_apply()
 
 
 ## The field's layout for a map `extent` metres across: position the world (x, z) of its first
@@ -264,7 +458,7 @@ static func field_layout(extent: Vector2) -> Rect2:
 
 ## The painted trees and bushes: a pool under the crown's projection (centre halfway from the
 ## trunk to the crown's middle), and a core at the trunk's foot.
-func _add_trees(data: PackedFloat32Array) -> void:
+func _add_trees(marks: Array) -> void:
 	var host: Object = _surfaces.call("trees")
 	if host == null:
 		return
@@ -278,10 +472,10 @@ func _add_trees(data: PackedFloat32Array) -> void:
 		_count += 1
 		if bool(t["bush"]):
 			# A bush: its own footprint and a thin seam round it.
-			_disc(data, POOL_CH, p.x + mid.x, p.z + mid.z, half * 1.35)
-			_disc(data, CORE_CH, p.x + mid.x, p.z + mid.z, half * 0.95)
+			marks.append(disc(POOL_CH, p.x + mid.x, p.z + mid.z, half * 1.35))
+			marks.append(disc(CORE_CH, p.x + mid.x, p.z + mid.z, half * 0.95))
 			continue
-		_tree(data, p, Vector3(p.x + mid.x, p.y, p.z + mid.z), half, box.size.y)
+		_tree(marks, p, Vector3(p.x + mid.x, p.y, p.z + mid.z), half, box.size.y)
 
 
 ## Rocks, logs and stumps of the scatter: each body of the mesh (`islands`) a box rounded by its
@@ -289,40 +483,55 @@ func _add_trees(data: PackedFloat32Array) -> void:
 ## wider than the body (`solid_reach`), shown only near the height of its foot. A tree the painter
 ## does not grow (its mesh carries a leaf surface beside its bark, or it is tall and slender:
 ## TREE_M) gets a crown's disc.
-func _add_solids(data: PackedFloat32Array) -> void:
+func _add_solids(marks: Array) -> void:
 	var meshes: Dictionary = _surfaces.call("solid_meshes")
-	if meshes.is_empty():
-		return
-	for scatter: Node in _surfaces.call("scatters"):
-		if not is_instance_valid(scatter):
-			continue
-		for node: Node in scatter.find_children("*", "MultiMeshInstance3D", true, false):
-			var mm := (node as MultiMeshInstance3D).multimesh
-			if mm == null or mm.mesh == null or not meshes.has(mm.mesh.get_instance_id()):
+	var held := {}
+	if not meshes.is_empty():
+		for scatter: Node in _surfaces.call("scatters"):
+			if not is_instance_valid(scatter):
 				continue
-			var id := mm.mesh.get_instance_id()
-			var leafy := bool(meshes[id])
-			var box := mm.mesh.get_aabb()
-			if not _bodies.has(id):
-				_bodies[id] = islands(mm.mesh)
-			var bodies: Array[AABB] = _bodies[id]
-			var to_world := (node as Node3D).global_transform
-			for i in mm.instance_count:
-				var xf := to_world * mm.get_instance_transform(i)
-				var scale := Vector3(xf.basis.x.length(), xf.basis.y.length(), xf.basis.z.length())
-				var whole := Vector2(box.size.x * scale.x, box.size.z * scale.z) * 0.5
-				var height := box.size.y * scale.y
-				_count += 1
-				if leafy or (height > TREE_M and height > TREE_SLENDER * maxf(whole.x, whole.y)):
-					_tree(data, xf.origin, xf * box.get_center(), maxf(whole.x, whole.y), height)
+			for node: Node in scatter.find_children("*", "MultiMeshInstance3D", true, false):
+				var mm := (node as MultiMeshInstance3D).multimesh
+				if mm == null or mm.mesh == null or not meshes.has(mm.mesh.get_instance_id()):
 					continue
-				var yaw := atan2(xf.basis.x.z, xf.basis.x.x)
-				for body: AABB in bodies:
-					_solid(data, xf * body.get_center(), yaw, body.size * scale * 0.5)
+				# The multimesh's marks as they were, unless it moved or its instances did.
+				var id := mm.mesh.get_instance_id()
+				var to_world := (node as Node3D).global_transform
+				var buffer := mm.buffer
+				var was: Array = _held.get(node.get_instance_id(), [])
+				if was.is_empty() or was[0] != to_world or was[1] != buffer or was[2] != id:
+					var own := _solids_of(mm, to_world, bool(meshes[id]))
+					was = [to_world, buffer, id, own, mm.instance_count]
+				held[node.get_instance_id()] = was
+				marks.append_array(was[3])
+				_count += int(was[4])
+	_held = held
+
+
+## The marks of one scatter multimesh whose node stands at `to_world`.
+func _solids_of(mm: MultiMesh, to_world: Transform3D, leafy: bool) -> Array:
+	var out: Array = []
+	var id := mm.mesh.get_instance_id()
+	var box := mm.mesh.get_aabb()
+	if not _bodies.has(id):
+		_bodies[id] = islands(mm.mesh)
+	var bodies: Array[AABB] = _bodies[id]
+	for i in mm.instance_count:
+		var xf := to_world * mm.get_instance_transform(i)
+		var scale := Vector3(xf.basis.x.length(), xf.basis.y.length(), xf.basis.z.length())
+		var whole := Vector2(box.size.x * scale.x, box.size.z * scale.z) * 0.5
+		var height := box.size.y * scale.y
+		if leafy or (height > TREE_M and height > TREE_SLENDER * maxf(whole.x, whole.y)):
+			_tree(out, xf.origin, xf * box.get_center(), maxf(whole.x, whole.y), height)
+			continue
+		var yaw := atan2(xf.basis.x.z, xf.basis.x.x)
+		for body: AABB in bodies:
+			_solid(out, xf * body.get_center(), yaw, body.size * scale * 0.5)
+	return out
 
 
 ## One body of a scatter solid: its middle `c` (world), its turn and its half size (metres).
-func _solid(data: PackedFloat32Array, c: Vector3, yaw: float, half3: Vector3) -> void:
+func _solid(marks: Array, c: Vector3, yaw: float, half3: Vector3) -> void:
 	var half := Vector2(half3.x, half3.z)
 	var corner := minf(half.x, half.y)
 	var reach := solid_reach(half)
@@ -333,7 +542,7 @@ func _solid(data: PackedFloat32Array, c: Vector3, yaw: float, half3: Vector3) ->
 	# width added it still ran half a metre down the wall under stones on a ledge.)
 	var up := 0.5 * half3.y + reach.x
 	var foot := Vector2((c.y - 0.5 * half3.y) / up, 1.0 / up)
-	_boxes(data, c.x, c.z, yaw, half, Vector2(reach.y, reach.x), corner, foot)
+	marks.append(box(c.x, c.z, yaw, half, Vector2(reach.y, reach.x), corner, foot))
 
 
 ## A scatter solid's reaches (metres past a body of half size `half`): x the seam's, y the pool's.
@@ -438,11 +647,11 @@ static func _root(parent: PackedInt32Array, i: int) -> int:
 
 ## A tree's pool, as the painted trees' (_add_trees): a disc under the crown's projection, centred
 ## halfway from the trunk's foot `foot` to the crown's middle `crown`, and a seam at the trunk.
-func _tree(
-	data: PackedFloat32Array, foot: Vector3, crown: Vector3, half: float, height: float
-) -> void:
-	_disc(data, POOL_CH, (foot.x + crown.x) * 0.5, (foot.z + crown.z) * 0.5, half * 0.5 + 0.5)
-	_disc(data, CORE_CH, foot.x, foot.z, trunk_seam(height))
+func _tree(marks: Array, foot: Vector3, crown: Vector3, half: float, height: float) -> void:
+	marks.append(
+		disc(POOL_CH, (foot.x + crown.x) * 0.5, (foot.z + crown.z) * 0.5, half * 0.5 + 0.5)
+	)
+	marks.append(disc(CORE_CH, foot.x, foot.z, trunk_seam(height)))
 
 
 ## The nominal radius (metres) of the seam at the foot of a trunk `height` metres tall.
@@ -452,7 +661,7 @@ static func trunk_seam(height: float) -> float:
 
 ## Structures: each one's own plan (PainterFootprint: its walls' feet, a rounded rectangle), a pool
 ## reaching a little past its walls (more for a larger, taller one) and a seam at them.
-func _add_structures(data: PackedFloat32Array) -> void:
+func _add_structures(marks: Array) -> void:
 	var holder: Object = _surfaces.call("buildings")
 	if holder == null:
 		return
@@ -472,8 +681,7 @@ func _add_structures(data: PackedFloat32Array) -> void:
 		var corner: float = plan["corner"]
 		var reach := PainterFootprint.reach(half, float(plan["height"]), String(root.name))
 		_count += 1
-		_box(data, POOL_CH, c.x, c.y, yaw, half, reach, corner)
-		_box(data, CORE_CH, c.x, c.y, yaw, half, WALL_SEAM_M, corner)
+		marks.append(box(c.x, c.y, yaw, half, Vector2(reach, WALL_SEAM_M), corner))
 
 
 ## Half the width (metres) of the band a footprint of `reach` falls off over: 0.45 of the reach,
@@ -489,18 +697,44 @@ static func cover(d: float, reach: float) -> float:
 	return 1.0 - smoothstep(reach - band, reach + band, d)
 
 
+## The further edge (metres past the body) of a box's two bands (`reach`: x the pool's, y the
+## seam's, a negative one has none).
+static func far_of(reach: Vector2) -> float:
+	var far := -INF
+	if reach.x >= 0.0:
+		far = reach.x + soft(reach.x)
+	if reach.y >= 0.0:
+		far = maxf(far, reach.y + soft(reach.y))
+	return far
+
+
+## The field's texels within `ex` and `ez` metres of world (x, z); a rect without area for none.
+func _texels(x: float, z: float, ex: float, ez: float) -> Rect2i:
+	var i0 := maxi(0, floori((x - ex - _origin.x) / TEXEL_M))
+	var i1 := mini(_size.x - 1, floori((x + ex - _origin.x) / TEXEL_M))
+	var j0 := maxi(0, floori((z - ez - _origin.y) / TEXEL_M))
+	var j1 := mini(_size.y - 1, floori((z + ez - _origin.y) / TEXEL_M))
+	return Rect2i(i0, j0, maxi(i1 - i0 + 1, 0), maxi(j1 - j0 + 1, 0))
+
+
+## The texels of a box turned by `yaw` whose bands end `far` metres past it: its own extent along
+## the world's axes, grown by that.
+func _box_span(x: float, z: float, yaw: float, half: Vector2, far: float) -> Rect2i:
+	var cs := absf(cos(yaw))
+	var sn := absf(sin(yaw))
+	return _texels(x, z, cs * half.x + sn * half.y + far, sn * half.x + cs * half.y + far)
+
+
 ## Writes a disc of nominal radius `r` (metres) at world (x, z) into channel `ch` of `data`
-## (CHANNELS floats a texel), keeping the maximum. `foot` (the foot's height times its weight, the
-## weight; zero for none) goes with every texel the disc takes.
-func _disc(
-	data: PackedFloat32Array, ch: int, x: float, z: float, r: float, foot := Vector2.ZERO
-) -> void:
+## (CHANNELS floats a texel), keeping the maximum, inside the window.
+func _disc(data: PackedFloat32Array, ch: int, x: float, z: float, r: float) -> void:
 	var band := soft(r)
 	var reach := r + band
-	var i0 := maxi(0, floori((x - reach - _origin.x) / TEXEL_M))
-	var i1 := mini(_size.x - 1, floori((x + reach - _origin.x) / TEXEL_M))
-	var j0 := maxi(0, floori((z - reach - _origin.y) / TEXEL_M))
-	var j1 := mini(_size.y - 1, floori((z + reach - _origin.y) / TEXEL_M))
+	var span := _texels(x, z, reach, reach).intersection(_win)
+	var i0 := span.position.x
+	var i1 := span.end.x - 1
+	var j0 := span.position.y
+	var j1 := span.end.y - 1
 	var full := maxf(r - band, 0.0)
 	var full2 := full * full
 	var reach2 := reach * reach
@@ -516,32 +750,13 @@ func _disc(
 			var at := (row + i) * CHANNELS
 			if v > data[at + ch]:
 				data[at + ch] = v
-				if foot.y > 0.0:
-					data[at + FOOT_CH] = foot.x
-					data[at + FOOT_CH + 1] = foot.y
 
 
 ## Writes a box (half extents `half` in its own x, z, turned by `yaw` about +y, its corners rounded
-## by `corner` metres, at most its narrower half) grown by `reach` metres at world (x, z) into
-## channel `ch` of `data`, keeping the maximum; `foot` as in _disc.
-func _box(
-	data: PackedFloat32Array,
-	ch: int,
-	x: float,
-	z: float,
-	yaw: float,
-	half: Vector2,
-	reach: float,
-	corner: float = 0.0,
-	foot := Vector2.ZERO
-) -> void:
-	var reaches := Vector2(-1.0, -1.0)
-	reaches[ch] = reach
-	_boxes(data, x, z, yaw, half, reaches, corner, foot)
-
-
-## _box for the pool and the seam in one pass over the texels (a boulder's two marks were two
-## passes): `reach` is the pool's (x) and the seam's (y), a negative one writes nothing.
+## by `corner` metres, at most its narrower half) at world (x, z) into `data`, inside the window:
+## the pool and the seam in one pass over the texels, each grown by its `reach` (x the pool's, y the
+## seam's, a negative one writes nothing), keeping the maximum. `foot` (the foot's height times its
+## weight, the weight; zero for none) goes with every texel the box raises.
 func _boxes(
 	data: PackedFloat32Array,
 	x: float,
@@ -563,13 +778,11 @@ func _boxes(
 	var far := maxf(hi.x, hi.y)
 	var cs := cos(yaw)
 	var sn := sin(yaw)
-	# The turned box's own extent along the world's axes, grown by the further reach.
-	var ex := absf(cs) * half.x + absf(sn) * half.y + far
-	var ez := absf(sn) * half.x + absf(cs) * half.y + far
-	var i0 := maxi(0, floori((x - ex - _origin.x) / TEXEL_M))
-	var i1 := mini(_size.x - 1, floori((x + ex - _origin.x) / TEXEL_M))
-	var j0 := maxi(0, floori((z - ez - _origin.y) / TEXEL_M))
-	var j1 := mini(_size.y - 1, floori((z + ez - _origin.y) / TEXEL_M))
+	var span := _box_span(x, z, yaw, half, far).intersection(_win)
+	var i0 := span.position.x
+	var i1 := span.end.x - 1
+	var j0 := span.position.y
+	var j1 := span.end.y - 1
 	var footed := foot.y > 0.0
 	for j in range(j0, j1 + 1):
 		var dz := _origin.y + (j + 0.5) * TEXEL_M - z
