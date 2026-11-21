@@ -260,11 +260,14 @@ static func _dump(base: Node, step: Dictionary) -> String:
 	return "dump %d rows to %s" % [out.size(), path]
 
 
-## Everything the water's pixels read, written as sorted lines to `dir`/state_`tag`.txt so two runs
-## can be diffed (card painter-water-lap): the clock, the time scale, every uniform of each water
-## and fall material (a texture as the SHA-1 of its pixels), the global shader parameters, and per
-## mesh drawn with such a material its transform, instance uniforms and the SHA-1 of each vertex
-## array, plus the camera. Two runs of a pinned job must write the same file.
+## What the water's materials and meshes hold, written in tree order to `dir`/state_`tag`.txt so two
+## runs can be diffed (card painter-water-lap): the clock, the time scale, every uniform of each
+## water and fall material (a texture as the SHA-1 of its pixels), and per mesh drawn with such a
+## material its transform, instance uniforms and the SHA-1 of each vertex array, plus the camera.
+## Two runs of a pinned job must write the same file. It is NOT everything the pixels read: the
+## engine's TIME and the global shader parameters are not in it (the engine reads the globals back
+## only in the editor), so two equal dumps with different pixels point at one of those, as they
+## did for the mist on that card.
 static func _state(base: Node, step: Dictionary) -> String:
 	var lines := PackedStringArray()
 	var pw := painter_water(base)
@@ -272,8 +275,6 @@ static func _state(base: Node, step: Dictionary) -> String:
 	if pw != null:
 		lines.append("clock_t %s" % var_to_str(pw.get("clock_t")))
 		lines.append("shade_opt %s" % var_to_str(pw.get("shade_opt")))
-	for g in RenderingServer.global_shader_parameter_get_list():
-		lines.append("global %s %s" % [g, _state_value(RenderingServer.global_shader_parameter_get(g))])
 	var seen := {}
 	var meshes: Array[Node] = base.get_tree().root.find_children("*", "MeshInstance3D", true, false)
 	for n in meshes:
@@ -304,7 +305,8 @@ static func _state(base: Node, step: Dictionary) -> String:
 	var cam := base.get_viewport().get_camera_3d()
 	if cam != null:
 		lines.append("camera %s fov %s size %s" % [var_to_str(cam.global_transform), cam.fov, cam.size])
-	var path := String(step.get("dir", "user://")).path_join("state_%s.txt" % String(step.get("tag", "a")))
+	var dir := String(step.get("dir", "user://"))
+	var path := dir.path_join("state_%s.txt" % String(step.get("tag", "a")))
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		return "state: cannot write %s" % path
@@ -313,12 +315,14 @@ static func _state(base: Node, step: Dictionary) -> String:
 	return "state %d lines to %s" % [lines.size(), path]
 
 
-## A value of the state dump: a texture or an array as the SHA-1 of its bytes, anything else in full.
+## A value of the state dump: a texture or an array as the SHA-1 of its bytes, anything else in
+## full.
 static func _state_value(v: Variant) -> String:
 	if v is Texture2D:
 		var tex: Texture2D = v
 		var img := tex.get_image()
-		return "tex %s %s" % [tex.get_size(), (img.get_data() if img != null else PackedByteArray()).hex_encode().sha1_text()]
+		var bytes := img.get_data() if img != null else PackedByteArray()
+		return "tex %s %s" % [tex.get_size(), bytes.hex_encode().sha1_text()]
 	if v is Array or typeof(v) >= TYPE_PACKED_BYTE_ARRAY:
 		return "sha1 %s" % var_to_bytes(v).hex_encode().sha1_text()
 	return var_to_str(v)
