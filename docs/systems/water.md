@@ -761,6 +761,40 @@ keeps its names and its meaning: the painted shader declares the same uniforms, 
 material keeps its parameters across the swap. Classic's shader is unchanged. Details and cost:
 [painter.md](painter.md) "Water".
 
+**One frame, one velocity (card painter-water-frames, look-pending).** On the field surface every
+pattern is in the world frame, and what moves is carried by one vector: the flow map's
+(`WaterFlowBaker`: the inverse-distance mean of the strokes' tangents over all the water, not
+renormalised, box-averaged over 0.75 m, so it is zero in a pond and where two flows cancel, which
+is simply still water). The strokes and glints drift by it; the flat's white (riffles, ramps,
+inflows) is two world copies of one noise cross-faded in time along it (`flow_blobs`), at
+`FLOW_CARRY` times the flow (1.1 m/s at full speed), so the white now follows a river's own speed
+and the level's flow strength. No term multiplies a direction by a map position and no coordinate
+of one frame is blended with another's. Before, the white read the owning stroke's arc and lateral
+coordinate, blended by the stroke's weight with a world projection on the flow direction: between
+two strokes the texture holds the MEAN of two arcs, which drew the white as a thin squiggle at a
+join and a tick at a crossing (t_y_join, t_cross), and the fallback depended on the distance from
+the map origin. The rules that went: the coordinate blend, both world-projection fallbacks
+(`dot(p, dir) - 0.5 y`, `dot(p, across_dir)`), the per-fragment fetch of the stroke frame on flat
+white. The stroke's lie (`dir`, the wind blended into the flow direction) is used only relative to
+a mark's own centre and carries its own definedness (`dir_k`): where flow and wind cancel a stroke
+shrinks to nothing instead of flipping across a contour. One exception stays, on purpose: a fall's
+face and foot belong to one stroke and draw in that stroke's raw arc and lateral coordinate
+(streaks, tongue columns, the foot's bend), entered by the steep share and the foot's weight, which
+are weights on the PATTERN; where a plunge lands in a pond no stroke owns, the foot's two noises
+are world noises cross-faded in by the stroke's weight. The field's `flow_u` and `lateral` are
+therefore read only on and under a fall; their jumps at joins and self-crossings
+(`junction_seams`) are still in the data but nothing on flat water reads them. Compared and
+rejected: cross-fading per-stroke patterns (needs each sample's own frame as new field data and
+2 to 4 pattern evaluations in every band; with today's data the squiggle stays), and a world
+pattern that is not carried at all (no seam either, but a stream's white would not travel).
+Still open: a stroke reads the flow direction per fragment, so where the flow turns inside one
+stroke (a plunge pool below a step, a join) the stroke bends into a hook or shears along an edge.
+Reading the flow once at the stroke's own centre makes it rigid and removes that, but costs one
+flow map fetch per stroke cell: +0.04 ms at the fall view f1_o in the in-run A/B, over the card's
++0.03 ms, and the code path cost about as much switched off, so it was taken out again (captures
+`a_*_rigid`, `strip_*_nwrigid` in the evidence).
+Evidence: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final111_water_frames/`.
+
 ## The water field (combined branch painter-water-field-v2, look-pending, unmerged)
 
 `WaterField` ([water_field.md](water_field.md)) derives one water height per sample from the
@@ -899,9 +933,10 @@ Corpus ratchets `[u_jumps, lat_jumps, perched, film, bridged, end_near_water]` b
 flat `[43, 20, 0, 6, 13, 0]` to `[0, 0, 0, 0, 0, 0]`, flat2 `[0, 0, 0, 1, 0, 0]` to all 0, tilt
 `[1, 14, 0, 3, 4, 0]` to `[0, 14, 0, 0, 0, 0]`, steps and steps_wide unchanged. The flow and
 lateral coordinate jumps where a stroke meets ITSELF are counted apart (`junction_seams`: flat 43,
-flat2 14, tilt 1): two passes of one stroke meet as two strokes do (two frames at one place), and
-only the renderer can cross-fade them; the count did not fall, it moved, and a closed ring adds
-its closure (14). On the canonical field fixture two of the st stroke's three film runs were the
+flat2 14, tilt 1): two passes of one stroke meet as two strokes do (two frames at one place); the
+count did not fall, it moved, and a closed ring adds its closure (14). Since card
+painter-water-frames the Painted shader reads these coordinates only on and under a fall ("Painted
+look"), so on flat water the jumps are data nothing draws from; the counts stay as ratchets. On the canonical field fixture two of the st stroke's three film runs were the
 insides of its hairpins (the bank test found the stroke's own channel): they are held now, and
 the transect goldens were regenerated. Not solved: a stream a riffle or a fall above its pond
 (t_end_short, s0_fall_pond). The connector's water stands over 0.3 m above the dry ground beside
