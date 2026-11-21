@@ -48,6 +48,7 @@ const CASES := {
 	"f1_o8": [45, 8.0, "case", Vector2(-8, -8)],
 	"f1_z16": [45, 16.0, "at", Vector2(-8, -6)],
 	"st_o": [45, 5.0, "case", Vector2(23, -15)],
+	"st_t": [88, 5.0, "case", Vector2(23, -15)],
 	"st_w": [45, 12.0, "at", Vector2(23, -13)],
 	"pond_z8": [45, 8.0, "at", Vector2(9, -2)],
 	"f4up_z8": [45, 8.0, "at", Vector2(9, 7)],
@@ -99,6 +100,17 @@ static func run(base: Node, step: Dictionary) -> String:
 			WaterField.exact_shore = bool(step.get("on", true))
 			host.rebuild()
 			return "exact_shore %s" % WaterField.exact_shore
+		"gd":
+			# The field's GDScript path on or off (ScatterNative.force_gdscript_wfield), the field
+			# rebuilt under it: how a twin-only prototype of a field pass is drawn beside the
+			# native path in one run (card painter-water-fielddata).
+			var pwf := painter_water(base)
+			var hostf: Variant = pwf.call("field") if pwf != null else null
+			if hostf == null:
+				return "not painted"
+			ScatterNative.force_gdscript_wfield = bool(step.get("on", false))
+			hostf.rebuild()
+			return "gdscript field %s" % ScatterNative.force_gdscript_wfield
 		"tokens":
 			return _tokens(base, step.get("items", []))
 		"cleanup":
