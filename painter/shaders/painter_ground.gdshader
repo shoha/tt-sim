@@ -154,6 +154,11 @@ uniform bool shade_present = false;
 // The distance (m) over which the skirt's mesh eases the border's heights down to the map floor
 // (AuthoredTerrain.SKIRT_FADE_M, TerrainMeshBuilder.skirt_height).
 uniform float skirt_fall = 24.0;
+// Metres past the map's edge within which the border's form is still drawn on the skirt
+// (fragment(): a form ends as a painter would end it, not where the mesh's fall does).
+const float SKIRT_END_M = 3.5;
+// How much that distance varies across a form (a share of it, either way), by the brush's wobble.
+const float SKIRT_END_VARY = 0.25;
 
 // Contact occlusion (PainterOcclusion): the footprint field (r a pool under crowns, bushes, rocks and
 // houses, g a seam at their feet, b and a the height of a stone's foot: contact_at()), its origin
@@ -166,6 +171,8 @@ uniform vec2 occ_origin = vec2(0.0);
 uniform float occ_step = 0.5;
 uniform vec4 occ_k = vec4(0.0, 0.0, 0.8, 0.3);
 uniform vec4 occ_tint = vec4(0.9, 1.0, 0.96, 0.35);
+// A small stone's dab is in the seam channel too (PainterSites): a distance there, not a coverage,
+// with the same threshold, so contact_at() does nothing of its own for it.
 uniform vec4 tok[32];
 uniform int tok_n = 0;
 uniform vec2 tok_k = vec2(0.0);
@@ -176,7 +183,8 @@ global uniform vec4 foliage_sun;
 // weight is in the shade).
 const float SHADE_DEEP = 0.8;
 const float SEAM_LIT = 0.6;
-// Metres the seam's centre moves away from the sun.
+// Metres the seam's centre moves away from the sun (PainterSites.LEAN_M bakes a small stone's dab
+// that far toward it: keep the two equal).
 const float SEAM_LEAN_M = 0.3;
 varying vec3 v_n;
 varying float v_wy;
@@ -664,17 +672,39 @@ void fragment() {
 	// The brush's wobble (also what the block-in's tone steps are read through, ground_at()).
 	vec3 sp = vec3(xz.x, v_wy, xz.y) * EDGE_FREQ;
 	vec2 warp = vec2(p_noise(sp + 57.0), p_noise(sp + 91.0)) - 0.5;
+	// Metres past the map's edge, and the slow noise the outer ground's fades wander by.
+	float out_m = 0.0;
+	float far_n = 0.5;
+	if (skirt) {
+		out_m = length(max(abs(xz) - half_extent, vec2(0.0)));
+		far_n = p_noise(p * 0.2);
+	}
 	if (fielded) {
 		vec4 here = shade_field(xz);
+		// A form ends where a painter would end it (card painter-terrain-marks): the skirt's mesh
+		// is the border's profile pushed straight out for skirt_fall metres, so a wall, a shade
+		// mass or a lip drawn as far as the mesh carries it ran on as a ruled extrusion. What is
+		// drawn of the border's form, the mesh's own outward fall included, dies within
+		// SKIRT_END_M of the border (0.6 to 1.4 times that, by the slow noise, so the end wanders
+		// and no two forms end on one line); each role being a hard step of the read, a wall
+		// narrows to its steepest line and closes in a rounded end. 1 at the border. The end
+		// varies ACROSS a form too: a broad wall is as steep all the way across, so with the slow
+		// noise alone it stopped on one near-straight line, a blunt cap. The brush's wobble (warp,
+		// already read for the form's edges; stretched toward its full range) moves the end by
+		// SKIRT_END_VARY of the distance either way, so the end is a brush's ragged one.
+		float drawn = 1.0;
 		if (skirt) {
-			here *= skirt_keep(xz);
+			float end_m = SKIRT_END_M * (0.6 + 0.8 * far_n)
+				* (1.0 + SKIRT_END_VARY * clamp(warp.x * 2.5, -1.0, 1.0));
+			drawn = 1.0 - smoothstep(0.15, 1.0, out_m / end_m);
+			here *= skirt_keep(xz) * drawn;
 		}
 		float flat_k = min(inversesqrt(1.0 + dot(here.xy, here.xy)), 1.0 - here.w);
 		vec2 moved = xz + warp * (EDGE_REACH * flat_k);
 		fld = shade_field(moved);
 		if (skirt) {
-			fld *= skirt_keep(moved);
-			fld.xy -= n.xz / max(n.y, 0.2);
+			fld *= skirt_keep(moved) * drawn;
+			fld.xy -= n.xz / max(n.y, 0.2) * drawn;
 		}
 		n = normalize(vec3(-fld.x, 1.0, -fld.y));
 		slope = 1.0 - n.y;
@@ -686,8 +716,7 @@ void fragment() {
 	float out_k = 0.0;
 	float calm = 1.0;
 	if (skirt) {
-		float out_m = length(max(abs(xz) - half_extent, vec2(0.0)));
-		out_k = smoothstep(2.0, 26.0, out_m + (p_noise(p * 0.2) - 0.5) * 6.0);
+		out_k = smoothstep(2.0, 26.0, out_m + (far_n - 0.5) * 6.0);
 		// The outer ground is calmer: fewer marks the farther out.
 		calm = 1.0 - 0.7 * smoothstep(0.0, 12.0, out_m);
 	}

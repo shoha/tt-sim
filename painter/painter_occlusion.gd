@@ -70,11 +70,21 @@ const REBUILD_DELAY_S := 0.3
 ## their rects hold more than FULL_SHARE of the field (a level load, the trees' growth).
 const MAX_DIRTY := 48
 const FULL_SHARE := 0.3
-## A footprint (a mark) is an Array of floats, sorted as such: its shape (DISC or BOX), a disc's
-## channel, world x and z, a box's turn and half extents, the pool's reach (a disc's radius), the
-## seam's reach, the corners' rounding and the foot (its height times its weight, the weight).
+## A footprint (a mark) is an Array of floats, sorted as such: its shape (DISC, BOX or SITE), a
+## disc's channel, world x and z, a box's turn and half extents (a site's written reach in the
+## first), the pool's reach (a disc's or a site's radius), the seam's reach, the corners' rounding
+## and the foot (its height times its weight, the weight).
 const DISC := 0.0
 const BOX := 1.0
+const SITE := 2.0
+## A small stone is a SITE (card painter-terrain-marks; PainterSites has the model): its dab goes
+## into the seam channel as a distance, not a coverage, baked toward the sun by the lean the ground
+## reads the field with, so it shows at the stone. The sites are baked again when the sun's plan
+## direction has turned by more than SUN_TURN (the length of the difference of two unit vectors:
+## about 6 degrees, 0.03 m of a dab's place), or by anything once it has stood still SUN_STILL
+## frames.
+const SUN_TURN := 0.1
+const SUN_STILL := 12
 const MAX_TOKENS := 32
 ## Metres of empty field kept round the map's extent. The shader samples the field with a clamped
 ## edge, so a footprint cut by the field's last row (a tree near the map's edge) would be repeated
@@ -126,6 +136,12 @@ var _bodies: Dictionary = {}
 var _data := PackedFloat32Array()
 var _marks: Array = []
 var _win := Rect2i()
+## How many small stones' sites the field holds, the sun they were baked for (the unit plan
+## direction to it, zero for none), the sun the last frame saw and the frames it has stood still.
+var _site_count := 0
+var _sun := Vector2.ZERO
+var _sun_seen := Vector2.ZERO
+var _sun_still := 0
 ## A scatter multimesh's marks by its node's id: [its transform, its buffer, its mesh's id, its
 ## marks, its footprints]. A multimesh nothing moved in is not walked again.
 var _held: Dictionary = {}
@@ -151,6 +167,7 @@ func release() -> void:
 	_held.clear()
 	_marks = []
 	_data = PackedFloat32Array()
+	_site_count = 0
 	_clear_ground()
 	_surfaces = null
 
@@ -246,9 +263,10 @@ func _yard_material() -> ShaderMaterial:
 ## to the ground, in three parts. The footprints are collected as marks (a scatter multimesh that
 ## nothing moved in is not walked again). The marks are compared with the last bake's (`update`):
 ## when none moved nothing is baked or uploaded, when a few moved only their rects are baked, and
-## otherwise (a level load, the trees' growth) the whole field. A changed field is uploaded. Pure
-## CPU, GDScript, debounced (REBUILD_DELAY_S), never per frame; painter.md "Grounding" has the
-## measured cost of each kind of edit.
+## otherwise (a level load, the trees' growth) the whole field. The small stones' dabs are baked
+## for the sun's direction (sun_dir()), so a sun that turned moves them all. A changed field is
+## uploaded. Pure CPU, GDScript, debounced (REBUILD_DELAY_S), never per frame; painter.md
+## "Grounding" has the measured cost of each kind of edit.
 func rebuild() -> void:
 	_queued = false
 	if _map == null or _surfaces == null:
@@ -265,7 +283,7 @@ func rebuild() -> void:
 	_add_structures(marks)
 	var t1 := Time.get_ticks_usec()
 	var size := Vector2i(roundi(layout.size.x), roundi(layout.size.y))
-	var texels := update(layout.position, size, marks)
+	var texels := update(layout.position, size, marks, sun_dir())
 	var t2 := Time.get_ticks_usec()
 	if texels > 0 or _tex == null:
 		_upload()
@@ -276,6 +294,7 @@ func rebuild() -> void:
 		"texels": texels,
 		"whole": texels == size.x * size.y,
 		"marks": marks.size(),
+		"sites": _site_count,
 		"collect_ms": (t1 - t0) / 1000.0,
 		"bake_ms": (t2 - t1) / 1000.0,
 		"upload_ms": (Time.get_ticks_usec() - t2) / 1000.0,
@@ -287,20 +306,29 @@ func rebuild() -> void:
 ## they are few, the whole field when its layout changed or too much did. The marks are sorted
 ## first and a texel is one function of the marks that cover it, taken in that order, so a partial
 ## bake equals a whole one bit for bit and the order the footprints were collected in is nothing.
-func update(origin: Vector2, size: Vector2i, marks: Array) -> int:
+## `sun` is the unit plan direction to the sun (zero for none) the small stones' dabs are baked
+## for: when it differs from the last bake's, every site counts as moved.
+func update(origin: Vector2, size: Vector2i, marks: Array, sun := Vector2.ZERO) -> int:
 	marks.sort()
 	var whole := origin != _origin or size != _size or _data.size() != size.x * size.y * CHANNELS
 	var dirty: Array[Rect2i] = []
+	var turned := sun != _sun
 	if not whole:
-		if marks == _marks:
+		if marks == _marks and not (turned and _site_count > 0):
+			_sun = sun
 			return 0
-		dirty = _changed(marks)
+		dirty = _changed(marks, turned)
 		var area := 0
 		for rect: Rect2i in dirty:
 			area += rect.get_area()
 		whole = area > FULL_SHARE * size.x * size.y
 	lay_out(origin, size)
 	_marks = marks
+	_sun = sun
+	_site_count = 0
+	for mark: Array in marks:
+		if mark[0] == SITE:
+			_site_count += 1
 	if whole:
 		_data = PackedFloat32Array()
 		_data.resize(size.x * size.y * CHANNELS)
@@ -350,9 +378,18 @@ static func box(
 	return [BOX, 0.0, x, z, yaw, half.x, half.y, reach.x, reach.y, corner, foot.x, foot.y]
 
 
-## The texel rects of the marks that `marks` adds to or drops from the last bake's, joined where
-## they meet; the whole field when more than MAX_DIRTY changed.
-func _changed(marks: Array) -> Array[Rect2i]:
+## A small stone's mark: its middle (world x, z), its radius `r` (metres) and its `foot` (the
+## foot's height times its weight, the weight: PainterSites.foot). Its written reach holds the
+## dab wherever the sun sets it (PainterSites.LEAN_M from the stone, any way).
+static func site(x: float, z: float, r: float, foot: Vector2) -> Array:
+	var reach := PainterSites.reach(r) + PainterSites.LEAN_M
+	return [SITE, 0.0, x, z, 0.0, reach, 0.0, r, 0.0, 0.0, foot.x, foot.y]
+
+
+## The texel rects of the marks that `marks` adds to or drops from the last bake's, and of every
+## site when the sun `turned`, joined where they meet; the whole field when more than MAX_DIRTY
+## changed.
+func _changed(marks: Array, turned: bool) -> Array[Rect2i]:
 	var before := {}
 	for mark: Array in _marks:
 		before[mark] = true
@@ -360,7 +397,7 @@ func _changed(marks: Array) -> Array[Rect2i]:
 	var rects: Array[Rect2i] = []
 	for mark: Array in marks:
 		after[mark] = true
-		if not before.has(mark):
+		if not before.has(mark) or (turned and mark[0] == SITE):
 			rects.append(_span(mark))
 	for mark: Array in _marks:
 		if not after.has(mark):
@@ -393,6 +430,8 @@ func _span(mark: Array) -> Rect2i:
 	if mark[0] == DISC:
 		var r: float = mark[7]
 		return _texels(mark[2], mark[3], r + soft(r), r + soft(r))
+	if mark[0] == SITE:
+		return _texels(mark[2], mark[3], mark[5], mark[5])
 	return _box_span(
 		mark[2], mark[3], mark[4], Vector2(mark[5], mark[6]), far_of(Vector2(mark[7], mark[8]))
 	)
@@ -402,6 +441,17 @@ func _span(mark: Array) -> Rect2i:
 func _draw(data: PackedFloat32Array, mark: Array) -> void:
 	if mark[0] == DISC:
 		_disc(data, int(mark[1]), mark[2], mark[3], mark[7])
+	elif mark[0] == SITE:
+		PainterSites.bake(
+			data,
+			_origin,
+			_size.x,
+			TEXEL_M,
+			_win,
+			Vector3(mark[2], mark[3], mark[7]),
+			Vector2(mark[10], mark[11]),
+			_sun
+		)
 	else:
 		_boxes(
 			data,
@@ -433,6 +483,13 @@ func _upload() -> void:
 		_tex = ImageTexture.create_from_image(image)
 	else:
 		_tex.update(image)
+
+
+## The unit plan direction to the sun as the ground's shader takes it from the foliage_sun global
+## (FoliageLight.last_sun), zero when the sun stands straight overhead or there is none.
+static func sun_dir() -> Vector2:
+	var plan := Vector2(FoliageLight.last_sun.x, FoliageLight.last_sun.z)
+	return plan / plan.length() if plan.length() > 0.01 else Vector2.ZERO
 
 
 ## Hands the field to the ground's materials and the yard's (also one made since the last bake).
@@ -534,6 +591,12 @@ func _solids_of(mm: MultiMesh, to_world: Transform3D, leafy: bool) -> Array:
 func _solid(marks: Array, c: Vector3, yaw: float, half3: Vector3) -> void:
 	var half := Vector2(half3.x, half3.z)
 	var corner := minf(half.x, half.y)
+	if PainterSites.holds(half):
+		# A stone a coverage its size cannot hold: its own dab, baked as a distance.
+		var r := PainterSites.radius(half)
+		if r > 0.0:
+			marks.append(site(c.x, c.z, r, PainterSites.foot(c.y - 0.5 * half3.y, r, half3.y)))
+		return
 	var reach := solid_reach(half)
 	if corner + reach.x < 0.5 * TEXEL_M:
 		return
@@ -832,6 +895,13 @@ func _on_frame() -> void:
 	var tree := _map.get_tree()
 	if tree == null:
 		return
+	# The small stones' dabs are baked for the sun: again once it has turned.
+	var sun := sun_dir()
+	_sun_still = _sun_still + 1 if sun == _sun_seen else 0
+	_sun_seen = sun
+	if _site_count > 0 and sun != _sun:
+		if sun.distance_to(_sun) > SUN_TURN or _sun_still >= SUN_STILL:
+			queue()
 	var now := PackedVector4Array()
 	for node: Node in tree.get_nodes_in_group(BoardToken.GROUP_NAME):
 		var token := node as BoardToken
