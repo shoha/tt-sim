@@ -695,6 +695,58 @@ tokens past the edge. The probe that chose the rendering is P6-0
   transparent one, the exits' draw, the load and the refresh). The numbers quoted above from
   render jobs are indicative; the pinned passes are the reference.
 
+### The water corpus (run it before a water change merges)
+
+The Painted water broke in a new way in each new place the owner looked (a sideways foam curl, a
+white outline round trees, cut foam at pond mouths), so there is a fixed set of places to look
+at instead (card painter-water-robust, 2026-11-20). `tests/unit/water_corpus_cases.gd` holds it
+as data: five maps (two flat ones of 320 ft, a tilted, a terraced, a wood) with 48 layouts, the situations an
+author draws and the ones that broke: straight and meandering streams, tight bends, a hairpin, a
+Y join, a split, crossings and a self-crossing, a loop, streams into, out of and through a
+pond, two inflows, a stream ending short, a pond dug over a stream, falls into a pool and into
+a pond over 1.0, 1.6 and 2.5 m cliffs, stacked falls, water along a cliff's foot, a stroke
+drawn uphill, the narrowest and the widest stroke, a very short and a 90 m stroke, a river past
+the map edge, the same pond with its streams at the origin and 54 m from it, and tokens in
+water (the wood map has no trees yet: a headless-built map has no scatter rows, so water under
+trees is not covered). It is built with no pointer, no frame and no worker (the Water tool's own
+steps at a fixed 5 cm sampling), so two builds are the same document (`digest()`); the render
+driver's `stroke` op is not used, because it moves the pointer by frame time and the stored
+line then differs run to run.
+
+- **In the gate:** `test_water_corpus.gd` builds every map and reads its `WaterField`: no NaN,
+  the lateral coordinate inside the channel, and ratchets on the discontinuities the corpus
+  holds today (the flow and lateral coordinates jumping inside one stroke, deep water beside
+  dry ground). A change that adds one fails; lower the numbers when a change removes some.
+- **Frames:** build the levels (headless, about 50 s: `probes/water_corpus.gd` `build` at the
+  title screen), render them (a window, the lane, about 5 minutes for 48 layouts), score them
+  (headless, about 3 minutes):
+
+  ```
+  godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/render_jobs/water_corpus_detect.gd -- <the render's output folder>
+  ```
+
+  The build and render jobs are not under `jobs/` yet: the card's own (`build.json`, `look.json`,
+  written before the flat map was split in two, so they lack `flat2`) are kept beside its
+  evidence, `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final102_water_robust/jobs/`.
+  Detector state (2026-11-20): `ticks` (count at joined mouths 11, 7, 5 against 0 on a pond alone)
+  and `holes` separate bad from good on the first render; `ring_gaps` also fires on a closed ring
+  at another clock phase; `tone_seams` fires on almost every stroke's end caps and is not a usable
+  guardrail yet; `xflow_white` missed its planted bar in both selftests (so `--selftest` reports
+  FAILED today, and a 0 there proves nothing); `occ_white`, `slivers`, `pale` and `flat` have not
+  met a real bad frame.
+
+  Each layout is captured from above and at 45 degrees with the water's clock pinned, with the
+  water hidden (the dry frame: what differs is drawn water), and with the field projected
+  through the camera (`probes/water_corpus.gd` `aux`: where the model holds water, its flow
+  direction on screen, the shore distance, pond or river). `water_corpus_detect.gd` scores
+  every view (`scores.tsv`), lists what it flagged (`flags.md`) and tiles numbered contact
+  sheets with the flagged places boxed (`sheet_<n>.png`, `sheets.md`): white ticks where a
+  stream meets a pond, gaps in a pond's foam ring, white marks and tone steps lying across a
+  river's flow, white along an occluder's silhouette, holes where the field holds water,
+  detached slivers, pale or mark-less bodies. `--selftest <view>` plants each defect in a good
+  view and checks it is found. The detectors cover many layouts cheaply; the verdict is still
+  the sheets, read by a person. Compare a change's `scores.tsv` and sheets with main's.
+
 ## Painted look
 
 Under the Painted look the shared water material draws with `painter/shaders/painter_water.gdshader`
