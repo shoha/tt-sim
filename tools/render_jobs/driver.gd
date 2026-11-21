@@ -7,6 +7,12 @@ extends Node
 const Steady := preload("res://tools/render_jobs/steady.gd")
 ## A `call` step whose probe names a blocker waits at most this long (seconds) for it to clear.
 const CALL_HOLD_S := 60.0
+## The authoring autosave slot a render job owns, and the folder SafeDelete must find it in.
+## A job never reads or writes user://levels/_autosave/ (README "Levels, hangs and the process
+## check"): an autosave left there by the author raised "Recover an unsaved map?" on the job's
+## first `new_map` or `dress`, and the job never opened a map.
+const AUTOSAVE_SLOT := "user://render_jobs/_autosave_slot/"
+const AUTOSAVE_SLOT_BASE := "user://render_jobs"
 
 var steps: Array = []
 var out_dir: String = ""
@@ -43,7 +49,44 @@ func _ready() -> void:
 	get_tree().root.set_meta("render_job_done", "")
 	if saved_mode or full or not only.is_empty():
 		log_line("flags: saved %s, only %s, full %s" % [saved_mode, ",".join(only), full])
+	var slot_error := open_autosave_slot()
+	if slot_error != "":
+		log_line("autosave slot: %s" % slot_error)
 	_next()
+
+
+## The job's end, also a failed one and a quit at the timeout (run.gd's _finalize calls
+## close_autosave_slot again for a run that ends without this node leaving the tree).
+func _exit_tree() -> void:
+	close_autosave_slot()
+
+
+## Points the authoring autosave (AuthoringAutosave.directory) at AUTOSAVE_SLOT, emptied first
+## (a killed run may have left one), for the rest of the process: the author's own slot under
+## user://levels/_autosave/ is then neither read (no recovery prompt) nor written. Returns ""
+## or what went wrong.
+static func open_autosave_slot() -> String:
+	AuthoringAutosave.directory = AUTOSAVE_SLOT
+	var error := close_autosave_slot()
+	if DirAccess.make_dir_recursive_absolute(AUTOSAVE_SLOT) != OK:
+		return "cannot make %s" % AUTOSAVE_SLOT
+	if not SafeDelete.mark(AUTOSAVE_SLOT, "render job autosave slot", AUTOSAVE_SLOT_BASE):
+		return "cannot mark %s" % AUTOSAVE_SLOT
+	return error
+
+
+## Discards exactly the job's slot: its two autosave files, then the folder through SafeDelete
+## (inside AUTOSAVE_SLOT_BASE, marked, no links). Does nothing unless the autosave still points
+## at the slot, and leaves it pointing there, so a write after this never lands in the author's
+## slot. Returns "" or SafeDelete's refusal.
+static func close_autosave_slot() -> String:
+	if AuthoringAutosave.directory != AUTOSAVE_SLOT:
+		return ""
+	AuthoringAutosave.discard()
+	if not DirAccess.dir_exists_absolute(AUTOSAVE_SLOT):
+		return ""
+	var gone := SafeDelete.tree(AUTOSAVE_SLOT, AUTOSAVE_SLOT_BASE)
+	return "" if gone["ok"] else String(gone["error"])
 
 
 func log_line(s: String) -> void:
@@ -280,23 +323,7 @@ func _process(delta: float) -> void:
 					)
 				)
 		"look_at":
-			# Pan so the screen centre looks at world XZ `at`.
-			var cc := gm().get_camera_controller()
-			var off: Vector2 = cc.call("_get_view_center_ground_offset")
-			var holder := gm().cameraholder_node
-			var at: Array = []
-			if step.at is Dictionary:
-				# A piece spec (RenderPieceAim): look at that piece.
-				# "dx"/"dz" look that many metres off it (a piece set near the screen's edge).
-				var found := RenderPieceAim.map_of(step.at, ctrl(), gm().camera_node)
-				at = [found.x, found.y] if found != Vector2.INF else [0.0, 0.0]
-				at[0] += float(step.at.get("dx", 0.0))
-				at[1] += float(step.at.get("dz", 0.0))
-			else:
-				at = step.at
-			holder.global_position = Vector3(
-				float(at[0]) - off.x, holder.global_position.y, float(at[1]) - off.y
-			)
+			done = _framed(_look_at.bind(step))
 		"stroke":
 			done = _stroke(step)
 		"release":
@@ -385,12 +412,46 @@ func _process(delta: float) -> void:
 				_i = steps.size()
 			elif not _call_ready(script, step):
 				done = false
+			elif Steady.frames_view(script, step):
+				done = _framed(_run_call.bind(script, step))
 			else:
-				log_line("call %s -> %s" % [step.script, str(script.call("run", root_node, step))])
+				_run_call(script, step)
 		_:
 			log_line("unknown op %s" % step.op)
 	if done:
 		_next()
+
+
+func _run_call(script: GDScript, step: Dictionary) -> void:
+	log_line("call %s -> %s" % [step.script, str(script.call("run", root_node, step))])
+
+
+## A framing step's frame (Steady.framed: the zoom ease ended, `place` run once the camera is at
+## rest, then held until it stands still); logs what it gave up waiting for. True when done.
+func _framed(place: Callable) -> bool:
+	var result := Steady.framed(gm(), _state, place)
+	if result != "" and result != "hold":
+		log_line(result)
+	return result != "hold"
+
+
+## `look_at`: pans so the screen centre looks at world XZ `at`, or at a piece (RenderPieceAim
+## spec; "dx"/"dz" look that many metres off it, for a piece set near the screen's edge).
+func _look_at(step: Dictionary) -> void:
+	var cc := gm().get_camera_controller()
+	var off: Vector2 = cc.call("_get_view_center_ground_offset")
+	var holder := gm().cameraholder_node
+	var at: Array = []
+	if step.at is Dictionary:
+		var found := RenderPieceAim.map_of(step.at, ctrl(), gm().camera_node)
+		at = [found.x, found.y] if found != Vector2.INF else [0.0, 0.0]
+		at[0] += float(step.at.get("dx", 0.0))
+		at[1] += float(step.at.get("dz", 0.0))
+	else:
+		at = step.at
+	holder.global_position = Vector3(
+		float(at[0]) - off.x, holder.global_position.y, float(at[1]) - off.y
+	)
 
 
 ## Whether a `call` step may run now: a probe with a static `blocker(root, step) -> String` holds

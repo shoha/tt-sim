@@ -93,7 +93,7 @@ A skipped step logs `skip <op> (<reason>)`.
 | `home` | none | Reset the camera to its home view. |
 | `zoom` | `size` (optional) | With `size`, set the target orthographic size (it eases there, so follow with a `settle`). Without it, zoom out 60 steps, which reaches full zoom-out. |
 | `view` | `yaw`, `pitch`, `zoom` (each optional), `mode` (default `orbit`) | Set the active view at once through the camera controller's public API (`set_yaw_now`, `set_pitch_now`, the orbit view's target size), and log `view <mode> yaw .. pitch .. fov ..` (the numbers the bridge's `game_state` camera block reports). `zoom` eases (follow with `settle`), as the `zoom` op does. `mode` must name the active view; only `orbit` exists, and any other value logs a line and changes nothing. No `walk` op yet. |
-| `look_at` | `at` ([x, z] world metres) | Pan so the screen centre looks at that ground point. |
+| `look_at` | `at` ([x, z] world metres) | Pan so the screen centre looks at that ground point. A framing step (steady.gd `framed`): it ends a zoom ease on its target, waits for any other camera motion to stop, pans, and returns only once the camera has stood still for 3 frames (each wait at most 10 s, logged when it gives up), so the view is the one asked for whatever view came before (2026-11-20: a pan placed while the zoom still eased was carried off by the ease's zoom toward the cursor). |
 
 ### Authoring edits
 
@@ -130,7 +130,7 @@ A skipped step logs `skip <op> (<reason>)`.
 | Op | Fields | What it does |
 |---|---|---|
 | `eval` | `expr` | Run a Godot `Expression` with the main scene (`Root`) as base instance and log the result, for example `_game_map.get_brush_tool().deactivate()`. Expressions cannot assign. |
-| `call` | `script` (a `res://` path), plus any fields the script reads | Load the script and call its static `run(root: Node, step: Dictionary) -> String`, logging the returned string. If the script fails to load, the rest of the job is skipped. |
+| `call` | `script` (a `res://` path), plus any fields the script reads | Load the script and call its static `run(root: Node, step: Dictionary) -> String`, logging the returned string. If the script fails to load, the rest of the job is skipped. A probe whose static `frames_view(step) -> bool` says true for the step (water.gd `look`, a card's named-view probe) is a framing step, run as `look_at` is: the zoom ease ended, `run` called once the camera is at rest, the step held until the camera stands still (steady.gd `framed`). |
 
 ## Probe scripts for `call`
 

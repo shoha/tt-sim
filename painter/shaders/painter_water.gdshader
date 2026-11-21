@@ -55,6 +55,16 @@ render_mode blend_mix, depth_draw_opaque, cull_back, specular_disabled, ambient_
  *   vertical share (the path through the water, not the plumb depth under it), so a pond reads as
  *   deep at an oblique view as it does from above. Any other vertex (a Blender plane, the exit
  *   ribbon) takes the depth-buffer path unchanged.
+ *   Frames on the field (card painter-water-frames). Every pattern is in the WORLD frame and what
+ *   moves is carried by ONE velocity, the flow map's vector (the filtered flow of all the water
+ *   together: zero in a pond and where two flows cancel, which is simply still water): the strokes
+ *   and glints drift by it, the flat's white is two world copies cross-faded in time along it. No
+ *   term multiplies a direction by a map position, and no coordinate of one frame is blended with
+ *   another's, so nothing can seam where strokes join, cross, close a ring or enter a pond. The
+ *   one exception is a fall's zone (its face, brink and foot, card painter-water-frames-finish):
+ *   there every term is the approved fall's own, unchanged, in the owning stroke's arc and
+ *   lateral coordinate with the old world fallback, and the zone's weight cross-fades the two
+ *   blob patterns (the fall's and the world's), never a coordinate.
  *   The glints. A third lattice of short bright ticks, kept only where a stroke's own small tilt
  *   would reflect the sun toward the camera (the sun is the foliage_sun global): a ragged column
  *   toward the sun, gold at dusk, silver under the moon. Placed, not computed from a normal.
@@ -210,7 +220,6 @@ vec4 fld_cubic(sampler2D t, vec2 tc) {
 		+ s1.y * (s0.x * texture(t, vec2(p0.x, p1.y)) + s1.x * texture(t, vec2(p1.x, p1.y)));
 }
 
-const float FLOW_DROP_K = 0.5;
 // The foot rule (cards painter-water-foot-spike, -foot2, -foot3): the metres of face above the foot
 // the rules reach, the veil's reach below the foot (m: short, so a calm pool of blue shows at the foot
 // at every zoom), the longest tongue of white below it (m), the seconds a tongue's length takes to
@@ -224,8 +233,26 @@ const float FOOT_DRIFT_S = 9.0;
 const float FOOT_TONGUE_FREQ = 1.6;
 const float FOOT_FILL_MAX = 0.7;
 const float POOL_DEPTH_K = 9.0;
-// Under option 2: the speed (u per second) the whites travel along the flow coordinate.
+// A fall's own frame (its zone, below): the drop's share in the world fallback of the arc, and the
+// speed (arc metres per second) its white travels along the owning stroke's arc.
+const float FLOW_DROP_K = 0.5;
 const float FLOW_C = 1.1;
+// The flat's white is carried by the flow map's velocity times this (0.8 m per second at the flow
+// map's full speed), handing over between its two phases every CARRY_PERIOD_S seconds: slow enough
+// that a patch is seen to travel between two looks half a second apart, not to change shape.
+const float FLOW_CARRY = 0.8 / 0.6;
+const float CARRY_PERIOD_S = 4.0;
+// A fall's zone, in the foot coordinate (card painter-water-frames-finish): from FALL_UP_M above the
+// foot (the face and the brink: a low fall's brink ends 3.8 above its foot, the coordinate being
+// stretched by the drop) to FALL_DOWN_M below it (the veil's reach), fading to the flat's world
+// frame over FALL_FADE_M either side. Inside it every term is the approved fall's, unchanged.
+const float FALL_UP_M = 6.0;
+const float FALL_DOWN_M = 1.5;
+const float FALL_FADE_M = 1.0;
+// The share of its white the flat keeps inside a fall's foot range but outside its zone (the
+// plunge pool past the veil, the reach above a brink): the foot rule's calm pool. Whole, the world
+// pattern stood there as one fixed slab of white wherever the fall's leftover energy was high.
+const float POOL_WHITE_K = 0.55;
 // Under option 4: pool tint floor (a column, m) where the shore is far and the water has body.
 const float POOL_COLUMN_M = 1.0;
 const float FOAM_EDGE_SOFT = 0.1;
@@ -478,19 +505,25 @@ void vertex() {
 }
 
 
-// Two-phase flow advection of a value-noise blob field (no stretching, no endless scroll).
-float flow_blobs(vec2 p, vec2 flow, float scale, float seed) {
-	float period = 2.4;
+// Two-phase flow advection of a value-noise blob field (no stretching, no endless scroll): each
+// phase lasts `period` seconds and travels `gain` times the flow.
+float flow_blobs_t(vec2 p, vec2 flow, float scale, float seed, float period, float gain) {
 	float ta = fract(wt() / period);
 	float tb = fract(wt() / period + 0.5);
-	vec2 qa = (p - flow * ta * period * 1.3) / scale;
-	vec2 qb = (p - flow * tb * period * 1.3) / scale;
+	vec2 qa = (p - flow * ta * period * gain) / scale;
+	vec2 qb = (p - flow * tb * period * gain) / scale;
 	float na = p_noise(vec3(qa.x, seed + floor(wt() / period) * 3.1, qa.y));
 	float nb = p_noise(vec3(qb.x, seed + 1.7 + floor(wt() / period + 0.5) * 3.1, qb.y));
 	float wa = 1.0 - abs(2.0 * ta - 1.0);
 	// The phases hand over by shrinking and growing, the larger of the two (a linear mix of two
 	// fields read as translucent discs wherever the thresholded white crossed the handover).
 	return max(na * (0.65 + 0.35 * wa), nb * (0.65 + 0.35 * (1.0 - wa)));
+}
+
+
+// A fall's blobs, along its stroke's arc: the timing the approved falls were drawn with.
+float flow_blobs(vec2 p, vec2 flow, float scale, float seed) {
+	return flow_blobs_t(p, flow, scale, seed, 2.4, 1.3);
 }
 
 
@@ -505,14 +538,26 @@ void fragment() {
 	vec2 wind_flat = wind_dir.xy;
 	wind_flat = dot(wind_flat, wind_flat) > 0.0001 ? normalize(wind_flat) : vec2(1.0, 0.0);
 	float flow_k = smoothstep(FLOW_DEAD_ZONE, 0.1, flow_speed);
-	vec2 dir = normalize(mix(wind_flat, flow_speed > 0.0 ? flow_ws / flow_speed : wind_flat, flow_k));
+	// The lie of a brush stroke: the wind on still water, the flow map's direction on a river, a
+	// blend between. It is only ever used relative to a mark's own centre (a stroke's cell, a
+	// token), never times a map position. Where the flow opposes the wind the blend cancels and
+	// has no direction: dir_k is how well it is defined, and a stroke shrinks to nothing with it
+	// instead of flipping across a contour.
+	vec2 dir_raw = mix(wind_flat, flow_speed > 0.0 ? flow_ws / flow_speed : wind_flat, flow_k);
+	vec2 dir = dot(dir_raw, dir_raw) > 1e-8 ? normalize(dir_raw) : wind_flat;
 	vec2 across_dir = vec2(-dir.y, dir.x);
-	// The white's coordinate across the stream. Over a field stroke it is the stroke's own signed
-	// lateral coordinate (CUSTOM1.x), blended in by the arc coordinate's weight; elsewhere the world
-	// projection on the flow map's frame. That frame varies from fragment to fragment, and
-	// dot(p, across_dir) multiplies the variation by |p| (the fall's distance from the world origin),
-	// so on a stepped stream it drew the columns and the lap as arches across the face.
+	float dir_k = smoothstep(0.05, 0.45, length(dir_raw));
+	// A fall's own frame (cards painter-water-frames, -finish): the owning stroke's arc (uf) and
+	// signed lateral coordinate (across_u), read only inside a fall's zone (fz: 1 on a face, at its
+	// brink and over its foot, 0 on the flat) and there in the approved fall's own terms, unchanged:
+	// blended by the stroke's weight (has_u) with the world projection on the flow's direction and
+	// the drop. Everything outside the zone is in the world frame and reads none of the three.
 	float across_u = dot(p, across_dir);
+	float uf = dot(p, dir) - FLOW_DROP_K * world_pos.y;
+	float has_u = 0.0;
+	float fz = 0.0;
+	// 1 where the field holds a foot coordinate at all (within its range of a fall's foot).
+	float foot_near = 0.0;
 
 	// ---- The bed under the water --------------------------------------------------------------
 #ifdef ABL_NODEPTH
@@ -555,30 +600,19 @@ void fragment() {
 	bool fieldv = v_f1.y < FIELD_FLAG + 0.5;
 // The field's channels at this fragment: per vertex (the old way) or bicubic from the textures (S1).
 vec4 fa = v_f0;
-// The drop-aware flow coordinate (S2): the stroke's arc plus half the drop; a pond has none and
-// takes the downstream distance of the flow map's direction and the height (has_u 0).
-float uf = dot(p, dir) - FLOW_DROP_K * world_pos.y;
-float has_u = 0.0;
 #ifndef ABL_NOFETCH
 if (fieldv) {
 	vec2 tc = (v_mp - fld_origin) * fld_inv_step + 0.5;
 	if ((shade_opt & 1) != 0) {
 		fa = fld_cubic(fld_a, tc);
 	}
-#ifndef RED_G
-	if ((shade_opt & 2) != 0) {
-		vec4 fb = texture(fld_b, tc / fld_dim);
-		has_u = smoothstep(0.2, 0.9, fb.g);
-		uf = mix(uf, fb.r / max(fb.g, 0.001), has_u);
-	}
-#endif
 }
 #endif
 	// ---- Foot rule (card painter-water-foot-spike) -----------------------------------------------
 	// fd: the signed arc distance to the fall's foot (negative on the face, positive in the plunge
 	// pool), foot_v 1 where the field holds one. ONE coordinate shared by the face and the pool, so
 	// no rule ends on a line: the rules below are smooth functions of it.
-	// The flow map texel (fld_b) is fetched once: here for the foot, and the white's flow coordinate
+	// The stroke frame's texel (fld_b) is fetched once: here for the foot, and the fall's white
 	// below reuses it.
 	vec4 fb_held = vec4(0.0);
 	bool fb_have = false;
@@ -594,6 +628,12 @@ if (fieldv) {
 		across_u = mix(across_u, v_f1.x, smoothstep(0.2, 0.9, fbf.g));
 		float foot_v = smoothstep(0.2, 0.9, fbf.a);
 		fd = fbf.b / max(fbf.a, 0.001);
+		// The fall's zone: whole wherever a foot rule can draw (the foot's weight above nothing),
+		// from the brink to the veil's end, and faded out along the foot coordinate past both.
+		foot_near = smoothstep(0.05, 0.2, fbf.a);
+		fz = foot_near
+			* (1.0 - smoothstep(FALL_DOWN_M, FALL_DOWN_M + FALL_FADE_M, fd))
+			* smoothstep(-FALL_UP_M - FALL_FADE_M, -FALL_UP_M, fd);
 		// The white floor is whole 0.3 m above the foot (a lower face of broken water, not a glass
 		// window with columns reaching the foot): the foot's last stretch holds no column edge to step
 		// across. The line it starts on is broken by a slow noise across the flow (a straight band
@@ -614,6 +654,8 @@ if (fieldv) {
 		column_raw = max(fa.x, 0.0);
 		ground_like = 1.0;
 		curtain = smoothstep(0.05, 0.9, fa.w);
+		// A face is a fall's whatever the foot coordinate's range.
+		fz = max(fz, smoothstep(0.0, 0.05, curtain));
 		vec3 view_world = (INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz;
 		path_k = 1.0 / clamp(abs(view_world.y), VIEW_SHARE_MIN, 1.0);
 		// A film (the marks' film share: water the dug bed no longer holds, a map error WaterField
@@ -792,9 +834,13 @@ if (fieldv && (shade_opt & 4) != 0) {
 	bool live_on = true;
 #endif
 	vec2 la = vec2(0.0);
+	// A stroke shortens to nothing where the flow map's direction is a blend that cancels (two
+	// rivers meeting head on), so no stroke is drawn along a direction that does not exist. Inside
+	// a fall's zone the strokes are the approved fall's, unchanged.
+	float len_in = p_stroke_len * mix(dir_k, 1.0, fz);
 #ifndef ABL_NOSTROKE_A
 	if (live_on) {
-		la = stroke_layer(p, dir, jitter, flow_ws, 1.0, CELL, share, p_stroke_len, 0.11, p_boil, px, vec3(0.0));
+		la = stroke_layer(p, dir, jitter, flow_ws, 1.0, CELL, share, len_in, 0.11, p_boil, px, vec3(0.0));
 	}
 #endif
 	x = mix(x, p_lit, la.x * live);
@@ -804,7 +850,7 @@ if (fieldv && (shade_opt & 4) != 0) {
 #else
 	if (fine && live_on) {
 #endif
-		vec2 lb = stroke_layer(p, dir, jitter, flow_ws, 9.0, CELL * 1.13, share * 0.8, p_stroke_len * 1.2, 0.13, p_boil * 1.3, px, vec3(0.0));
+		vec2 lb = stroke_layer(p, dir, jitter, flow_ws, 9.0, CELL * 1.13, share * 0.8, len_in * 1.2, 0.13, p_boil * 1.3, px, vec3(0.0));
 		x = mix(x, p_shade, lb.x * live * 0.85);
 		a = max(a, lb.x * live * 0.95);
 	}
@@ -976,6 +1022,9 @@ if (fieldv && (shade_opt & 4) != 0) {
 		// the 0.25 m grid used to cut off) is not a fall: it fades over the first 0.35 m from the shore.
 		e_raw *= smoothstep(0.04, 0.35, max(fa.z, 0.0));
 		float en = pow(clamp(e_raw * p_white, 0.0, 1.0), ENERGY_POWER);
+		// A fall's pool outside its zone stays calm: the flat's blobs pass through it, they do not
+		// fill it (inside the zone the weight is 1: the fall's own white, unchanged).
+		en *= mix(1.0, POOL_WHITE_K, foot_near * (1.0 - fz));
 		// On the face the white thins to streaks over glass; the brink and the foot keep it full.
 		float en_c = mix(en, en * 0.62, curtain);
 		// A white floor on the lower face: the sheet breaks into foam towards the foot, and its reach
@@ -1001,12 +1050,10 @@ if (fieldv && (shade_opt & 4) != 0) {
 #else
 		if (en_c > 0.08 || foot_w > 0.03) {
 #endif
-		// One clock (S2): the blobs travel along the flow coordinate at one speed (still where the
-			// field has no stroke: a pond's white boils in place), as the streaks and tongues do.
 			bool one_clock = (shade_opt & 2) != 0;
-#ifdef RED_G
-			// The flow coordinate's texture is read only where a white is drawn.
-			if (one_clock) {
+			// The stroke's frame is read only inside a fall's zone (a foot's range has fetched it
+			// already; a face past that range fetches it here); flat white never reads it.
+			if (one_clock && fz > 0.0) {
 				vec4 fb = fb_held;
 				if (!fb_have) {
 					fb = texture(fld_b, ((v_mp - fld_origin) * fld_inv_step + 0.5) / fld_dim);
@@ -1014,10 +1061,7 @@ if (fieldv && (shade_opt & 4) != 0) {
 				has_u = smoothstep(0.2, 0.9, fb.g);
 				uf = mix(uf, fb.r / max(fb.g, 0.001), has_u);
 			}
-#endif
 			across_u = mix(dot(p, across_dir), v_f1.x, has_u);
-			vec2 bq = one_clock ? vec2(uf, across_u) : p;
-			vec2 bf = one_clock ? vec2(FLOW_C * has_u, 0.0) : flow_ws;
 			float c_face = (shade_opt & 4) != 0 ? smoothstep(0.1, 0.5, curtain) : curtain;
 			// The pattern is mix(blob, streak, c_face) then mixed with the tongues by the curtain: a
 			// term whose weight is 0 is not evaluated (RED_F; the weights 0 and 1 are exact).
@@ -1030,7 +1074,25 @@ if (fieldv && (shade_opt & 4) != 0) {
 #endif
 			float blob = 0.0;
 			if (need_blob) {
-				blob = flow_blobs(bq, bf, p_blob_m, 11.0) * 0.7 + flow_blobs(bq, bf, p_blob_m * 0.45, 23.0) * 0.3;
+				// Inside a fall's zone: the fall's own blobs, along its stroke's arc (the approved
+				// falls' terms, unchanged).
+				if (fz > 0.0) {
+					vec2 bq = one_clock ? vec2(uf, across_u) : p;
+					vec2 bf = one_clock ? vec2(FLOW_C * has_u, 0.0) : flow_ws;
+					blob = flow_blobs(bq, bf, p_blob_m, 11.0) * 0.7 + flow_blobs(bq, bf, p_blob_m * 0.45, 23.0) * 0.3;
+				}
+				// The flat's white is in the WORLD frame, carried by the flow map's velocity (two
+				// phases cross-faded): the map-wide filtered flow of all the water, still in a pond
+				// and where two flows cancel. No stroke's coordinate is read, so a join, a crossing,
+				// a ring's closure and a mouth have no frame to meet another at: the mean of two
+				// strokes' arcs there drew the white as a thin squiggle. A pond's white boils in
+				// place. The two PATTERNS cross-fade by the zone's weight; no coordinate is blended.
+				if (fz < 1.0) {
+					vec2 carry = flow_ws * FLOW_CARRY;
+					float blob_w = flow_blobs_t(p, carry, p_blob_m, 11.0, CARRY_PERIOD_S, 1.0) * 0.7
+						+ flow_blobs_t(p, carry, p_blob_m * 0.45, 23.0, CARRY_PERIOD_S, 1.0) * 0.3;
+					blob = mix(blob_w, blob, fz);
+				}
 			}
 		// Stretched linearly about its mean, so the energy's threshold cuts organic shapes, not its
 		// own isolines (the raw noise sits near 0.5 and drew straight bands across the channel). A
@@ -1061,10 +1123,10 @@ if (fieldv && (shade_opt & 4) != 0) {
 #else
 		if (curtain > 0.01) {
 #endif
-			// Tongues, in the flow's frame (the baked flow map's direction is smooth over the map: a
-			// direction taken per fragment from the surface turned dot(p, d) into a maze of lines).
-			// About 0.28 m columns, each its own width and white for its own length, blue between;
-			// the columns bend gently so the sheet is not a comb.
+			// Tongues, in the fall's own frame (the owning stroke's lateral coordinate and arc: a
+			// direction taken per fragment, the surface's or the flow map's, turned dot(p, d) into a
+			// maze of lines). About 0.28 m columns, each its own width and white for its own length,
+			// blue between; the columns bend gently so the sheet is not a comb.
 			float u_f = across_u;
 			float v_f = one_clock ? uf : dot(p, dir);
 			u_f += (wn_xy(vec2(u_f * 0.5, v_f * 0.45), 4.0) - 0.5) * 0.6;
@@ -1144,6 +1206,13 @@ if (fieldv && (shade_opt & 4) != 0) {
 	SPECULAR = 0.0;
 	METALLIC = 0.0;
 	ALPHA = clamp(a, 0.0, 1.0);
+#ifdef DBG_FALL
+	// What the fall's zone is fed: red the zone, green the energy, blue the foot coordinate's
+	// contours (one band per unit, dark where the field holds none).
+	ALBEDO = vec3(0.0);
+	EMISSION = vec3(fz, clamp(fa.y, 0.0, 1.0), fd < 8.5 ? fract(fd) : 0.0);
+	ALPHA = 1.0;
+#endif
 
 	// Past the map edge (the river ribbon): the skirt's fade, lit water * a + backdrop * (1 - a),
 	// its fog times a (water.gdshader's block, exactly: the wash only changes what `lit` is).

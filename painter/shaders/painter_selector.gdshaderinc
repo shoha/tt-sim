@@ -70,11 +70,23 @@ const float SOLID_MID = 0.4;
 const float SOLID_ROUND = 0.6;
 const float SOLID_SHELL = 0.5;
 const float SOLID_SHELL_MAX = 0.4;
-// A solid's planes (solid_plane()): the radius, in cells, of the sphere of directions they are cut
-// from (1.3: about twenty planes round a rock, eight or so in view), and the half size (m) under
-// which a rock keeps its mesh's faces as its planes (from twice that the lattice's alone).
-const float SOLID_PLANES = 1.3;
+// A solid's planes (solid_form()): the cells a unit of the octahedral map of directions holds (2.2:
+// about twenty planes round a rock, eight or so in view), and the half size (m) under which a rock
+// keeps its mesh's faces as its planes (from twice that the lattice's alone).
+const float SOLID_PLANES = 2.2;
 const float SOLID_PLANE_MIN = 0.6;
+// A plane's value by how it faces the sun (card painter-rocks-forms): light from SOLID_LIGHT of
+// N.L (within 45 degrees of the sun), half-light from the sheet's tone-hi, middle below. So a
+// boulder that is lit all over still has a top and sides: at every sun height some plane faces the
+// sun squarely and the ones beside it do not (its top is light from a sun 45 degrees up; at 0.8
+// the top and the side flanks were one half-light at midday).
+const float SOLID_LIGHT = 0.7;
+const float SOLID_HALF_T = 0.7;
+// Inside shade (the form's own, or a shadow cast on it) a plane that faces up (its normal's y from
+// SOLID_UP) takes the sky's light: a step lighter and cooler, as a cliff's ledge does in the
+// ground's shade (painter_ground SHADE_SKY). Two values at most, so a shaded boulder has a top.
+const float SOLID_UP = 0.6;
+const vec3 SOLID_SKY = vec3(1.16, 1.24, 1.40);
 // The share of the mood's shade pull a solid's shade keeps (1: the ramp's shade as it is). The
 // rest is the rock's own colour at the shade's value, as the cliff stone's shade is. With the
 // full pull a grey boulder's shade side was the most saturated mass of a frame, a violet louder
@@ -382,6 +394,11 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 		mul = (1.0 - IVY_TUCK * near * rim) * mix(1.0, mix(0.9, 1.08, dab.w), near);
 		snow = frost > 0.0 && frost_up(n.y, wp) ? 1.0 : 0.0;
 	} else {
+#ifdef SELECTOR_SOLID
+		// painter_solid: solid_form() gives the normal, the plane and the plane's variant, and the
+		// includer asks the snow from that normal.
+		mul = mix(1.0 - base_dark, 1.0, smoothstep(0.0, 0.45, h));
+#else
 		// A rock or a log turns as one rounded form: the face's normal most of the way to the normal
 		// of the spheroid its box holds, so a flat-faced boulder's shade is one curved shape, not a
 		// polygon a face (its planes are solid_plane()'s, which only pick lit from middle). A low,
@@ -398,50 +415,87 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 		snow = frost > 0.0 && frost_up(n.y - 0.3, wp) ? 1.0 : 0.0;
 		// A stone or a log grows out of the ground: a step darker over its foot (PainterOcclusion).
 		mul = mix(1.0 - base_dark, 1.0, smoothstep(0.0, 0.45, h));
+#endif
 	}
 	wob = p_noise(wp * 1.7 + 5.0);
 }
 
 #ifdef SELECTOR_SOLID
-// The plane a solid's point lies on (painter_solid defines SELECTOR_SOLID; card
-// painter-ground-rocks). A boulder lit by its rounded form alone was a smooth egg in two values, and
-// lit by its mesh's faces its tone steps ran in stair steps along the triangles. So the form
-// decides only what is in SHADE (one firm curve), and what is LIT or MIDDLE on the sunward side is
-// decided a plane at a time: the directions round the rock are cut into a few cells (a jittered
-// Voronoi lattice on the sphere of the form's normals, each rock its own), and every point of a
-// cell is lit as the cell's one direction. The planes are larger than the mesh's triangles and
-// their borders are the lattice's, smooth on the form. Inside the box's spheroid (a stone in a
-// scatter) a point keeps its face, as the form normal does.
+// A solid's form and the plane its point lies on (painter_solid defines SELECTOR_SOLID; cards
+// painter-ground-rocks, painter-rocks-forms). A boulder lit by its rounded form alone was a smooth
+// egg in two values, and lit by its mesh's faces its tone steps ran in stair steps along the
+// triangles. So the form (the return value: the face's normal most of the way to the normal of
+// the spheroid its box holds) decides only what is in SHADE, one firm curve, and every other value
+// is decided a plane at a time (`plane`): the directions round the rock are cut into about twenty
+// cells and every point of a cell is lit as the cell's one direction. The cells are a jittered
+// Voronoi lattice on the octahedral map of the form's directions, turned by the rock's own angle
+// (`turn`: its cosine and sine), four cells and four hashes a pixel (the first lattice was cut in
+// space: eight cells, twenty-four hashes). The planes are larger than the mesh's triangles and
+// their borders are the lattice's, smooth on the form. A plane is chosen by the point's DIRECTION
+// from the rock's middle alone, never by its distance from it: mixed in by how near the point lay
+// to the box's spheroid, a flat face that dips inside the spheroid showed that distance's contours,
+// a round disc with two soft rims (one a tone step) across the planes of a boulder's lit front
+// (card painter-rocks-forms-merge-ready, named by switch). Only the form's normal still keeps a
+// point's face inside the spheroid (a stone in a scatter, a low step of a big rock), and a small
+// rock keeps its mesh's faces as its planes (a stone is two or three of them). `variant` takes a
+// step of the plane's own, so a plane is one flat colour.
 varying vec3 f_plane;
 
-vec3 solid_plane(vec3 wp, vec3 wn, vec3 origin, float scale) {
+vec2 solid_sign(vec2 v) {
+	return vec2(v.x >= 0.0 ? 1.0 : -1.0, v.y >= 0.0 ? 1.0 : -1.0);
+}
+
+vec3 solid_form(vec3 wp, vec3 wn, vec3 origin, float scale, vec2 turn, out vec3 plane,
+		inout float variant) {
 	vec3 half_m = max(selector_extent * scale, vec3(0.02));
 	float across = max(half_m.x, half_m.z);
 	vec3 off = wp - (origin + vec3(0.0, SOLID_MID * selector_height * scale, 0.0));
 	vec3 round_n = normalize(off / vec3(across * across, half_m.y * half_m.y, across * across));
+	// Only the box's own surface is the one form: a point well inside the spheroid keeps its face.
 	float on_form = smoothstep(0.5, 0.9, length(off / vec3(across, half_m.y, across)));
-	vec3 shift = fract(origin * 0.37) * 9.0;
-	vec3 q = round_n * SOLID_PLANES + shift;
-	vec3 i = floor(q);
-	vec3 side = step(0.5, q - i) * 2.0 - 1.0;
-	vec3 best = round_n;
-	float best_d = 1.0e9;
-	for (int k = 0; k < 8; k++) {
-		vec3 g = i + side * vec3(float(k & 1), float((k >> 1) & 1), float((k >> 2) & 1));
-		vec3 c = g + 0.2 + 0.6 * vec3(p_hash(g + 3.1), p_hash(g + 17.3), p_hash(g + 41.7));
-		vec3 d = q - c;
-		float dd = dot(d, d);
-		if (dd < best_d) {
-			best_d = dd;
-			best = c - shift;
-		}
-	}
-	vec3 plane_n = normalize(best + round_n * 0.001);
-	// A small rock's own faces are planes enough (a stone is two or three of them); a boulder's
-	// triangles are small beside it, so there the lattice's planes take over.
-	float big = smoothstep(SOLID_PLANE_MIN, 2.0 * SOLID_PLANE_MIN, max(across, half_m.y));
 	vec3 form_n = normalize(mix(normalize(wn), round_n, SOLID_ROUND * on_form));
-	return normalize(mix(form_n, plane_n, on_form * big));
+	// A small rock's planes are its mesh's own faces, not the rounded form's normal: with that one
+	// a stone's light and half-light met along the form's curves.
+	plane = normalize(wn);
+	// The rock's size alone (one number a rock): every tone step on its lit side is a plane's border.
+	float big = smoothstep(SOLID_PLANE_MIN, 2.0 * SOLID_PLANE_MIN, max(across, half_m.y));
+	if (big > 0.0) {
+		// The direction on the octahedral map (the up pole its middle, the down pole its corners).
+		vec3 d = vec3(turn.x * round_n.x - turn.y * round_n.z, round_n.y,
+			turn.y * round_n.x + turn.x * round_n.z);
+		d /= abs(d.x) + abs(d.y) + abs(d.z);
+		vec2 uv = d.y >= 0.0 ? d.xz : (1.0 - abs(d.zx)) * solid_sign(d.xz);
+		vec2 shift = fract(origin.xz * 0.37) * 9.0;
+		vec2 q = uv * SOLID_PLANES + shift;
+		vec2 i = floor(q);
+		vec2 side = step(0.5, q - i) * 2.0 - 1.0;
+		vec2 best = q;
+		float best_d = 1.0e9;
+		float best_h = 0.0;
+		for (int k = 0; k < 4; k++) {
+			vec2 g = i + side * vec2(float(k & 1), float((k >> 1) & 1));
+			float h = p_hash(vec3(g, 3.1));
+			vec2 c = g + 0.2 + 0.6 * vec2(h, fract(h * 57.31));
+			vec2 e = q - c;
+			float dd = dot(e, e);
+			if (dd < best_d) {
+				best_d = dd;
+				best = c;
+				best_h = h;
+			}
+		}
+		// The cell's own direction, turned back.
+		vec2 cuv = clamp((best - shift) / SOLID_PLANES, vec2(-1.0), vec2(1.0));
+		vec3 c3 = vec3(cuv.x, 1.0 - abs(cuv.x) - abs(cuv.y), cuv.y);
+		if (c3.y < 0.0) {
+			c3.xz = (1.0 - abs(c3.zx)) * solid_sign(c3.xz);
+		}
+		c3 = normalize(c3);
+		c3 = vec3(turn.x * c3.x + turn.y * c3.z, c3.y, turn.x * c3.z - turn.y * c3.x);
+		plane = normalize(mix(plane, c3, big));
+		variant = mix(variant, best_h, 0.5 * step(0.5, big));
+	}
+	return form_n;
 }
 #endif
 
@@ -456,10 +510,14 @@ void light() {
 		// around itself, painter_solid's fragment(), so `cast` is what other things throw on it.)
 		float x = nl + (f_wob - 0.5) * 0.3;
 #ifdef SELECTOR_SOLID
-		// The form's turn is the shade's one edge; on its sunward side each plane is lit or middle.
-		float xp = dot(normalize(f_plane), lw);
-		float t = 0.1 + smoothstep(tone_lo - 0.01, tone_lo + 0.01, x)
-			* (0.4 + 0.4 * smoothstep(tone_hi - 0.01, tone_hi + 0.01, xp));
+		// The form's turn is the shade's one edge; on its sunward side each plane is light,
+		// half-light or middle by how it faces the sun.
+		vec3 plane = normalize(f_plane);
+		float xp = dot(plane, lw);
+		float sunward = smoothstep(tone_lo - 0.01, tone_lo + 0.01, x);
+		float t = 0.1 + sunward * (0.4
+			+ (SOLID_HALF_T - 0.5) * smoothstep(tone_hi - 0.01, tone_hi + 0.01, xp)
+			+ (0.9 - SOLID_HALF_T) * smoothstep(SOLID_LIGHT - 0.01, SOLID_LIGHT + 0.01, xp));
 #else
 		float t = 0.1 + 0.4 * smoothstep(tone_lo - 0.01, tone_lo + 0.01, x)
 			+ 0.4 * smoothstep(tone_hi - 0.01, tone_hi + 0.01, x);
@@ -473,9 +531,20 @@ void light() {
 		vec3 col = selector_pal(t, f_variant + (t - 0.45) * 0.3);
 		// In a cast shadow a bush's lobes keep a half step toward the sun (as a crown's strokes keep
 		// crown-cast): one flat shade read as a smooth dark lump (painter-trees-polish3).
+#ifdef SELECTOR_SOLID
+		// A rock's shade is the same two values in its own shade and in a shadow cast on it: the
+		// shade colour, and the sky's step on the planes that face up, so the planes that read in
+		// the light read in the shade too and the mass has a top (card painter-rocks-forms; the
+		// bushes' half step toward the sun, which it took before, lit a shadowed rock from a sun it
+		// could not see).
+		vec3 shd = selector_pal(0.1, f_variant)
+			* mix(vec3(1.0), SOLID_SKY, smoothstep(SOLID_UP - 0.01, SOLID_UP + 0.01, plane.y));
+		col = mix(shd, col, sunward);
+#else
 		// A rock keeps the same half step: its planes still read inside a tree's shadow, where one
 		// flat shade was a cut-out silhouette (card painter-ground-rocks).
 		vec3 shd = selector_pal(kind == 4 || kind == 2 ? min(t, BUSH_CAST_T) : 0.1, f_variant);
+#endif
 		if (f_accent > -0.5) {
 			vec3 a = accent[int(f_accent + 0.5)];
 			float lr = dot(shd, vec3(0.3, 0.59, 0.11))

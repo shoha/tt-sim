@@ -2629,6 +2629,96 @@ and torture sheets, the score tables) and the card's handoff
   dark block or a soft edge a tenth of a metre wide, the only soft tonal edges of the ground. Now
   each step is as wide as a pixel or two, at most what it was. The pool and the seam are also not
   drawn on a sheer face (`role_slope` 0.55 or more), since the field is a plan view.
+- **A rock's planes carry three lit values and two shade values** (card painter-rocks-forms,
+  2026-11-20; evidence `docs/research/2026-11-09-prototypes/compare/painter_final109_rocks_forms/`,
+  handoff `docs/plans/handoffs/painter-rocks-forms.md`). `solid_form()` replaces `solid_plane()`:
+  the planes are a jittered Voronoi lattice on the OCTAHEDRAL map of the form's directions (2D,
+  four cells and four hashes a pixel where the lattice in space took eight cells and twenty-four;
+  `SOLID_PLANES` 2.2 cells a unit, about twenty planes a rock), turned by the rock's own angle
+  (`v_turn`, from the vertex stage), and skipped by a branch on a rock under 0.6 m of half size.
+  A plane takes its cell's hash as its colour variant (the per-pixel variant noise of solids is
+  gone), so a plane is one flat colour. On the sunward side a plane is LIGHT where it faces the
+  sun within 45 degrees (`SOLID_LIGHT` 0.7 of N.L), HALF-LIGHT from the sheet's `tone-hi`
+  (`SOLID_HALF_T` 0.7 on the ramp), MIDDLE below: a boulder lit all over has a top and sides at
+  every sun height. In shade, the form's own or a shadow cast on it, a plane that faces up
+  (`SOLID_UP` 0.6) takes the sky's step (`SOLID_SKY`, lighter and cooler), the others the shade
+  colour: two values, so a shaded boulder has a top. The bushes' half step toward the sun inside
+  a cast shadow no longer applies to solids. The form's turn is still the shade's one firm edge.
+  Seen and left: a soft darker smudge on a boulder's lit front where its own shadow's penumbra
+  reaches the shell the shadow map is asked from (the cast colour is now the full shade, so a
+  partial cast shows more than it did), and the foot's soft darkening (`base_dark`) on a large
+  flat plane. Logs (kind 2 too) were not captured.
+- **A solid's contact marks are per body, at the height of its foot** (same card).
+  `PainterOcclusion` writes one footprint per BODY of a scatter mesh (`islands()`: triangles
+  joined at welded vertices, bodies whose plans overlap taken as one, cached per mesh), its seam
+  and pool reaching at most half and once the body's narrower half (`solid_reach`; a boulder keeps
+  0.22 m and its old pool). The field is 0.25 m a texel (was 0.5) and RGBA half float: b and a
+  carry the foot's height (b the height times a weight, a the weight, one over the mark's vertical
+  reach, so the bilinear read gives a weighted height and blends to "no limit" beside a footprint
+  that has none), and `painter_ground` multiplies the coverage by a fall-off of the pixel's
+  distance in height from that foot before the brush's threshold. A footprint under half a texel
+  is not drawn. The rebuild writes floats and converts natively (no loop over the texels in
+  GDScript). Trees, bushes and structures write the same discs and boxes as before, with no
+  height.
+- **Stones side by side are separate bodies** (card painter-rocks-forms-finish, 2026-11-20;
+  evidence `.../painter_final109_rocks_forms/finish/`). The olive oval round the three stones on
+  the falls' left cliff (and round every `Stone_Cluster` on the torture map) WAS the contact
+  field: with the field off it is gone, with the seam off the oval goes and the pool stays, the
+  tokens' discs change nothing. A dump of every footprint showed the cluster written by
+  `_add_solids` as ONE body: `islands()` found its five stones (1632 vertices, 297 welded, 5
+  components) and then joined them, because it merged bodies on any overlap of their boxes and
+  the boxes of stones set side by side overlap at the corners. One box 0.85 by 0.9 m took a seam
+  0.21 m and a pool 0.42 m past it and a vertical reach of 0.7 m, which is the oval and its run
+  down the wall. Now only a body that lies mostly inside another's plan (`nested`, `NEST_SHARE`
+  0.5 of the smaller's area) is part of it, and a mark's vertical reach is half the body's height
+  plus its seam's reach (the body's width is no longer added): a stone 0.4 m across shows its
+  mark within about 0.2 m of its foot's height. On the falls' cliff the mark is a small dark
+  patch at the stones, about the group's width, with a short tongue (under half a metre on
+  screen) below the lowest stone; the wall below is clean. Stones that nearly touch still share
+  one patch: three separate marks need more than the field's 0.25 m.
+  Cost: the pool and the seam of a body are written in one pass (`_boxes`), over the turned
+  box's own extent. The field is no longer rebuilt whole on every change (card
+  painter-rocks-forms-merge-ready, 2026-11-20). `rebuild()` runs 0.3 s after the scatter applies
+  cells, a structure or the ground changes or the sun's hour does (about every 0.34 s through a
+  sculpt stroke), and has three parts: the footprints are collected as marks (arrays of floats; a
+  scatter multimesh whose transform and buffer did not change gives its marks from `_held`), the
+  marks are sorted and compared with the last bake's (`update`), and a changed field is uploaded.
+  When no mark moved nothing is baked or uploaded; when up to `MAX_DIRTY` moved and their rects
+  hold under `FULL_SHARE` of the field, only those rects are wiped and baked again from the marks
+  that reach them, in the sorted order, so a partial bake equals a whole one bit for bit
+  (`test_a_partial_update_equals_a_whole_bake_bit_for_bit`); otherwise (a level load, the trees'
+  growth) the whole field. Measured in one run against main adf2ac61's own host on the same maps
+  (ms per rebuild; main bakes its 0.5 m field whole every time):
+
+  | | main | this |
+  |---|---|---|
+  | level load, whole bake, falls map (202 footprints) | 10.7 | 17.4 |
+  | level load, whole bake, torture map (313) | 14.8 to 15.7 | 27.7 to 28.9 |
+  | nothing moved (a sun hour change, a stroke far from solids) | as a whole bake | 1.5 to 2.2 |
+  | one rock placed (torture, authoring) | 15.5 | 5.6 to 5.8 (25.6 once: a new mesh's `islands`) |
+  | one rock moved | 16.6 | 3.9 to 4.0 |
+  | a sculpt stroke step near rocks (42 to 1628 texels) | as a whole bake | 3.4 to 4.7 |
+
+  Of an edit's 4 ms about 1.4 is the collect, 1 to 2 the bake and 1 the upload of the whole
+  texture. Not explained: the first rebuild after a stroke ends collected for 21 to 31 ms in three
+  runs of three (once per stroke; no new mesh was split in the one case that logged it), and a
+  rock moved by setting its instance transform took 30 ms twice and 4 ms once. Main was not
+  measured at a stroke's end. The three kinds of per-body work each show when switched off alone
+  (`ready/ablation__...png`): one box a mesh doubles a cluster's patch, without the foot's height
+  the mark runs down the wall under the ledge's stones, and at 0.5 m the small stones' marks are
+  gone; all three are kept.
+- **The disc on a boulder's lit front** (same card): a round disc with two soft rims crossed the
+  planes of a boulder, absent on main. Named by switch (`ready/disc_switches_crop__...png`): the
+  plane was mixed in by `on_form`, the point's distance from the rock's middle, so a flat face
+  dipping inside the box's spheroid showed that distance's contours. A plane is now chosen by the
+  point's direction alone (`big` is the rock's size, one number a rock), and a small rock's planes
+  are its mesh's own faces (`normalize(wn)`), not the rounded form's normal, whose light and
+  half-light met along curves. The form's normal, which still uses `on_form`, decides the
+  terminator only.
+  Seen and left: the round soft-rimmed disc on a boulder's lit face (two concentric rims, about
+  0.9 m in radius on a 1.2 m boulder, the "smudge" above) is NOT the shadow shell: it is unchanged
+  with `LIGHT_VERTEX` left alone (`noshell`), and absent with main's solid shader in the same
+  run, so it is a radial term of this card's solid shader about the rock's origin, not yet named.
 - **The terrain casts with its back faces** (`TerrainBackCaster`, a shadows-only twin of each
   chunk drawn with `painter_terrain_caster.gdshader`, `cull_front`, only while Painted): ground
   that faces the sun is never shadowed by its own surface (the stipple and the hatching on grazing
