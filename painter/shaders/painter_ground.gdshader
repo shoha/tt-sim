@@ -144,10 +144,16 @@ uniform bool water_present = false;
 uniform vec2 layer_grid_origin = vec2(0.0);
 uniform vec2 layer_grid_step = vec2(0.25);
 // The shading field (GroundShadeField, on the zone map's grid): the authored terrain is lit from
-// it, not from the mesh's normal (card painter-ground-robust). Absent for the skirt's own slope
-// and for a GLB map's ground, which keep the mesh's normal.
+// it, not from the mesh's normal (card painter-ground-robust). The skirt reads the same texture
+// (card painter-terrain-edge): past the map's edge the read clamps to the border's texel, which is
+// the form the skirt's mesh carries outward, and skirt_keep() fades it as the mesh falls to the
+// floor, so a form's shade does not know where the map ends. Absent for a GLB map's ground, which
+// keeps the mesh's normal.
 uniform sampler2D shade_map : hint_default_black, filter_linear, repeat_disable;
 uniform bool shade_present = false;
+// The distance (m) over which the skirt's mesh eases the border's heights down to the map floor
+// (AuthoredTerrain.SKIRT_FADE_M, TerrainMeshBuilder.skirt_height).
+uniform float skirt_fall = 24.0;
 
 // Contact occlusion (PainterOcclusion): the footprint field (r a pool under crowns, bushes, rocks and
 // houses, g a seam at their feet, b and a the height of a stone's foot: contact_at()), its origin
@@ -266,6 +272,16 @@ vec4 zone(vec2 xz) {
 vec4 shade_field(vec2 xz) {
 	vec2 size = vec2(textureSize(shade_map, 0));
 	return textureLod(shade_map, ((xz - layer_grid_origin) / layer_grid_step + 0.5) / size, 0.0);
+}
+
+// How much of the border's form the skirt still carries at a point past the map's edge: its mesh
+// is the border's heights times this (TerrainMeshBuilder.skirt_height: a smoothstep down to the
+// floor over skirt_fall, along square rings round the map), so the border's gradient, convexity
+// and steep face scale by it too. 1 at the border: the skirt's shade starts as the map's ends.
+float skirt_keep(vec2 xz) {
+	vec2 out_m = max(abs(xz) - half_extent, vec2(0.0));
+	float t = clamp(max(out_m.x, out_m.y) / skirt_fall, 0.0, 1.0);
+	return 1.0 - t * t * (3.0 - 2.0 * t);
 }
 
 vec3 role_col(bool lit, int role, float variant) {
@@ -443,7 +459,7 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float
 	// the edge is the same for a mark and the block-in. Without the field the wander is asked here.
 	// The painted rock zone keeps the wander of whoever asks (a mark's, at its middle).
 	float rock_n = (p_noise(p * 0.8 + 9.0) - 0.5) * 0.12;
-	bool fielded = shade_present && !skirt && !world_frame;
+	bool fielded = shade_present && !world_frame;
 	if ((fielded ? max(slope, zb.b - 0.2 + rock_n) : max(slope, zb.b - 0.2) + rock_n) > 0.3) {
 		role = 3;
 	}
@@ -636,7 +652,12 @@ void fragment() {
 	// blurred band on screen). The noise is asked at the surface point, height included, so on a
 	// face it does not stretch into streaks, and its reach shrinks with the ground's tilt and with
 	// a sheer step near (a face a quarter metre deep in the map is not read from beyond its foot).
-	bool fielded = shade_present && !skirt && !world_frame;
+	// The skirt takes the same rule (card painter-terrain-edge): the field's read clamps to the
+	// border past the map's edge and fades with the skirt's own fall (skirt_keep), and the fall
+	// itself, the one slope the border's texel does not hold, comes from the mesh's normal. At the
+	// border that fall is level and the keep is 1, so the read is the map's own and every edge of
+	// a form (its rock, its lip, its terminator) crosses the border as one drawn shape.
+	bool fielded = shade_present && !world_frame;
 	vec4 fld = vec4(0.0);
 	float slope = 1.0 - n.y;
 	float role_slope = slope;
@@ -645,8 +666,16 @@ void fragment() {
 	vec2 warp = vec2(p_noise(sp + 57.0), p_noise(sp + 91.0)) - 0.5;
 	if (fielded) {
 		vec4 here = shade_field(xz);
+		if (skirt) {
+			here *= skirt_keep(xz);
+		}
 		float flat_k = min(inversesqrt(1.0 + dot(here.xy, here.xy)), 1.0 - here.w);
-		fld = shade_field(xz + warp * (EDGE_REACH * flat_k));
+		vec2 moved = xz + warp * (EDGE_REACH * flat_k);
+		fld = shade_field(moved);
+		if (skirt) {
+			fld *= skirt_keep(moved);
+			fld.xy -= n.xz / max(n.y, 0.2);
+		}
 		n = normalize(vec3(-fld.x, 1.0, -fld.y));
 		slope = 1.0 - n.y;
 		// What a role and the marks read: the nearest steep face counts too, and the edge wanders
@@ -775,7 +804,7 @@ void fragment() {
 	// crease on a tier's top (two strokes' caps meeting at a notch) bends the normal as fast but
 	// barely tilts it, and drew a thin light line there. The lip is a little gold (`cliff_warm`)
 	// and under snow takes the meadow's snow as a cap; the foot goes part way to its shade colour.
-	if (cliff_edge > 0.0 && !skirt) {
+	if (cliff_edge > 0.0 && (fielded || !skirt)) {
 		float curv;
 		float near;
 		float brush = 0.0;
@@ -886,7 +915,7 @@ void light() {
 		float rel = nl / max(lw.y, 0.05);
 		// TURN_REL, or TURN_NL as a share of level ground's light where that is more (a low sun).
 		float turn = max(TURN_REL, TURN_NL / max(lw.y, 0.05));
-		float turned = shade_present && !skirt && !world_frame
+		float turned = shade_present && !world_frame
 			? step(rel + (f_edge - 0.5) * 0.15, turn)
 			: 1.0 - smoothstep(turn - 0.03, turn + 0.03, rel + (f_edge - 0.5) * 0.15);
 		float shade = max(cast, turned);
