@@ -527,27 +527,47 @@ func test_a_log_is_a_strip_whatever_its_box_and_its_mark_moves_by_its_width() ->
 		assert_lt(d.length(), PainterSites.round_reach(own) + 1.5, "near the strip")
 
 
-func test_a_body_in_shade_stands_in_a_line_past_its_own_radius() -> void:
-	var n := 17
-	var step := Vector2(0.5, 0.5)
+func test_a_large_bodys_whole_cells_share_their_corners() -> void:
+	var n := 33
+	var step := Vector2(0.25, 0.25)
 	var half := Vector2(4.0, 4.0)
-	for r: float in [0.2, 0.5, 1.0]:
-		var own := PainterSites.outline(
-			PainterSites.site(0.6, -1.1, r, 0.0, 0.5 * r), _grid(n, 0.0), n, n, step, half
-		)
-		for b in 8:
-			var away := Vector2.RIGHT.rotated(TAU * b / 8.0)
-			for k in 8:
-				var dir := Vector2.RIGHT.rotated(TAU * k / 8.0)
-				var d := 0.0
-				var at := Vector2(own[0], own[1])
-				while d < 3.0 and PainterSites.line(own, at.x + dir.x * d, at.y + dir.y * d, away) > 0.0:
-					d += 0.002
-				assert_gt(d, 1.05 * r, "past the body's radius all round (r %.1f)" % r)
-				assert_lt(d, 1.25 * r, "by about a tenth of it, a touch more away from the sun")
-				assert_lt(d, PainterSites.reach(own), "inside the patch")
-		var bare := PainterSites.line(own, own[0] + 1.02 * r, own[1], Vector2.ZERO, 0.0)
-		assert_lt(bare, 0.0, "a line of no width ends at the body's radius")
+	var grid := _grid(n, 0.3)
+	for k in grid.size():
+		grid[k] += 0.05 * ((k % n + k / n) % 3)
+	var site := PainterSites.site(0.1, -0.2, 1.0, 0.0, 0.6)
+	var own := PainterSites.outline(site, grid, n, n, step, half)
+	var vertices := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var custom := _customs()
+	var indices := PackedInt32Array()
+	PainterSites.append_dab(own, site, grid, n, n, step, half, vertices, uvs, custom, indices, 2)
+	# A whole cell is two triangles (its corners 0 1 3, then 1 2 3); the corners they use are one
+	# vertex a sample, shared with the whole cells beside it (four a cell before).
+	var whole := 0
+	var corners := {}
+	var places := {}
+	for t in range(0, indices.size() - 3, 3):
+		var a := vertices[indices[t]]
+		var b := vertices[indices[t + 1]]
+		var c := vertices[indices[t + 2]]
+		if not (is_equal_approx(b.x - a.x, step.x) and is_equal_approx(c.z - a.z, step.y)):
+			continue
+		if indices[t + 3] != indices[t + 1] or indices[t + 5] != indices[t + 2]:
+			continue
+		whole += 1
+		for k: int in [t, t + 1, t + 2, t + 4]:
+			corners[indices[k]] = true
+			places[vertices[indices[k]]] = true
+	assert_gt(whole, 100, "a 1 m body's patch is mostly whole cells")
+	assert_lt(corners.size(), 2 * whole, "its whole cells share their corners")
+	assert_eq(corners.size(), places.size(), "one vertex a corner's place")
+	# Shared, a corner is the sample itself: on the ground, with its own loss and the slot.
+	for i in vertices.size():
+		var v := vertices[i]
+		var on := ScatterGenerator.triangle_height(grid, n, n, (Vector2(v.x, v.z) + half) / step)
+		assert_almost_eq(v.y, on, 1.0e-5)
+		assert_eq(uvs[i], Vector2(v.x, v.z))
+		assert_eq(custom[i * 4 + 3], 3.0)
 
 
 func test_a_dab_ends_at_a_ledge_and_a_stone_off_the_ground_has_none() -> void:

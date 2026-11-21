@@ -89,15 +89,11 @@ func test_the_ground_shader_has_no_dab_code_and_the_dabs_have_every_ground_unifo
 	var dab: Array = names.call(PainterSurfaces.DAB_SHADER)
 	assert_gt(ground.size(), 50, "the ground's uniforms are listed")
 	assert_false(ground.has(String(PainterDabs.LOBES_PARAM)), "the ground's shader has no dab code")
-	assert_false(ground.has("dab_line"), "nor the contact line of a body in shade")
+	assert_false(dab.has("dab_line"), "the shade's contact line switch is gone (card dabcost)")
 	var extra := dab.filter(func(u: String) -> bool: return not ground.has(u))
 	var missing := ground.filter(func(u: String) -> bool: return not dab.has(u))
 	extra.sort()
-	assert_eq(
-		extra,
-		["dab_line", String(PainterDabs.LOBES_PARAM)],
-		"the dabs' shader adds its lobes and the shade's contact line alone"
-	)
+	assert_eq(extra, [String(PainterDabs.LOBES_PARAM)], "the dabs' shader adds its lobes alone")
 	assert_eq(missing, [], "and has every uniform of the ground's")
 
 

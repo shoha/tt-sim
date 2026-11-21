@@ -35,6 +35,12 @@ extends RefCounted
 ## Nothing here reads the sun: the mark's reach away from it is the shader's (a uniform), so the
 ## hour changing builds nothing (`built` counts the sites built, for the tests and the proof).
 ## A map without an authored terrain (a GLB map) has no heights to lay a dab on and gets none.
+## The cost (card painter-terrain-dabcost) is the patches: a large body's covers a few hundred
+## cells. So a sync that builds PARALLEL_MIN sites or more (a level load, an edit under several
+## bodies) builds them on the WorkerThreadPool, and several changed cells put their arrays
+## together there too: each job reads only its own arguments and writes only its own Array, the
+## slots are given out first in the serial order, and the meshes are made on this thread, so the
+## result is a serial build's bit for bit (test_painter_dabs).
 ##
 ## MANAGED BY: PainterOcclusion (painter/painter_occlusion.gd). Classic never loads this file.
 
@@ -51,6 +57,9 @@ const FORMAT := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM3_SHIFT
 const LOBES_PARAM := &"dab_lobes"
 const ROW := 256
 const LOBE_TEXELS := 3
+## A sync that builds this many sites builds them on the WorkerThreadPool (a level load, an edit
+## under several bodies); fewer are built on this thread, where a task's start costs more.
+const PARALLEL_MIN := 4
 
 ## The sites built since this host was made, and the cells put together.
 var built := 0
@@ -146,9 +155,12 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 	var reach_step := maxf(step.x, step.y)
 	var count := 0
 	var fresh := 0
+	# Each site to build as a job: [its site in the terrain's frame, its slot], then its outline and
+	# patch (_build). A stone built again keeps its slot and (assigned at its place below) its turn
+	# in its cell; a new one takes a slot in this order, so the slots are a serial build's.
+	var jobs: Array = []
 	for site: Array in todo:
-		var place := _place(site)
-		var was: Array = _held.get(place, [])
+		var was: Array = _held.get(_place(site), [])
 		if not was.is_empty():
 			changed[was[CELL]] = true
 		var local := site.duplicate()
@@ -159,17 +171,27 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 		if local.size() > PainterSites.BOTTOM:
 			var under := Vector3(site[0], site[PainterSites.BOTTOM], site[1])
 			local[PainterSites.BOTTOM] = (to_local * under).y
-		# Its outline on this ground (none: it does not stand on it), and the ground under that.
-		var own := PainterSites.outline(local, grid, columns, rows, step, half)
-		# A stone built again keeps its slot and (assigned at its place below) its turn in its cell.
-		var slot: int = was[SLOT] if not was.is_empty() else _take_slot()
-		var vertices := PackedVector3Array()
-		var uvs := PackedVector2Array()
-		var custom := PackedFloat32Array()
-		var indices := PackedInt32Array()
-		PainterSites.append_dab(
-			own, local, grid, columns, rows, step, half, vertices, uvs, custom, indices, slot
-		)
+		jobs.append([local, was[SLOT] if not was.is_empty() else _take_slot()])
+	var build := func(k: int) -> void: _build(jobs[k], grid, columns, rows, step, half)
+	if jobs.size() >= PARALLEL_MIN:
+		var group := WorkerThreadPool.add_group_task(build, jobs.size(), -1, true, "PainterDabs")
+		WorkerThreadPool.wait_for_group_task_completion(group)
+	else:
+		for k in jobs.size():
+			build.call(k)
+	var t_kept := Time.get_ticks_usec()
+	for k in todo.size():
+		var site: Array = todo[k]
+		var job: Array = jobs[k]
+		var place := _place(site)
+		var was: Array = _held.get(place, [])
+		var at := to_local * Vector3(site[0], site[3], site[1])
+		var slot: int = job[1]
+		var own: PackedFloat32Array = job[2]
+		var vertices: PackedVector3Array = job[3]
+		var uvs: PackedVector2Array = job[4]
+		var custom: PackedFloat32Array = job[5]
+		var indices: PackedInt32Array = job[6]
 		if not own.is_empty() and (was.is_empty() or own != was[OWN]):
 			_put_lobes(slot, own)
 			fresh += 1
@@ -196,13 +218,29 @@ func sync(map: Node3D, terrain: AuthoredTerrain, material: ShaderMaterial, sites
 		_upload_lobes()
 	if _lobe_texture != null and material.get_shader_parameter(LOBES_PARAM) != _lobe_texture:
 		material.set_shader_parameter(LOBES_PARAM, _lobe_texture)
-	for cell: Vector2i in changed:
-		_put_together(cell, material)
+	# Each changed cell's arrays put together (on the pool when there are several: a cell touches
+	# only its own sites' kept arrays), then its mesh made here.
+	var cells: Array = changed.keys()
+	var together: Array = []
+	together.resize(cells.size())
+	var gather := func(k: int) -> void: together[k] = _arrays_of(cells[k])
+	if cells.size() > 1:
+		var group := WorkerThreadPool.add_group_task(gather, cells.size(), -1, true, "PainterDabs")
+		WorkerThreadPool.wait_for_group_task_completion(group)
+	else:
+		for k in cells.size():
+			gather.call(k)
+	var t_meshes := Time.get_ticks_usec()
+	for k in cells.size():
+		_put_together(cells[k], together[k], material)
+	var t_end := Time.get_ticks_usec()
 	parts = {
 		"ground_ms": (t_sites - t_ground) / 1000.0,
 		"rows": moved.size(),
 		"sites_ms": (t_cells - t_sites) / 1000.0,
-		"cells_ms": (Time.get_ticks_usec() - t_cells) / 1000.0,
+		"build_ms": (t_kept - t_sites) / 1000.0,
+		"cells_ms": (t_end - t_cells) / 1000.0,
+		"meshes_ms": (t_end - t_meshes) / 1000.0,
 		"cells": changed.size(),
 	}
 	built += count
@@ -377,8 +415,33 @@ static func _samples_of(
 	return Rect2i(i0, j0, i1 - i0 + 1, j1 - j0 + 1)
 
 
-## One cell's mesh from its sites' kept patches (the node is freed when no site has a dab).
-func _put_together(cell: Vector2i, material: ShaderMaterial) -> void:
+## Builds one job of sync() (`job`: a site in the terrain's frame and its slot): appends its outline
+## on this ground (empty when it does not stand on it) and its patch (PainterSites.append_dab:
+## vertices, uvs, custom, indices). Static and reading only its arguments, so jobs run on worker
+## threads, each writing its own Array.
+static func _build(
+	job: Array,
+	grid: PackedFloat32Array,
+	columns: int,
+	rows: int,
+	step: Vector2,
+	half: Vector2
+) -> void:
+	var local: Array = job[0]
+	var own := PainterSites.outline(local, grid, columns, rows, step, half)
+	var vertices := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var custom := PackedFloat32Array()
+	var indices := PackedInt32Array()
+	PainterSites.append_dab(
+		own, local, grid, columns, rows, step, half, vertices, uvs, custom, indices, job[1]
+	)
+	job.append_array([own, vertices, uvs, custom, indices])
+
+
+## One cell's mesh arrays from its sites' kept patches: [vertices, uvs, custom, indices]. It reads
+## only that cell's sites and writes only their kept indices, so cells run on worker threads.
+func _arrays_of(cell: Vector2i) -> Array:
 	var vertices := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var custom := PackedFloat32Array()
@@ -391,30 +454,42 @@ func _put_together(cell: Vector2i, material: ShaderMaterial) -> void:
 		custom.append_array(kept[CUSTOM])
 		if kept[FIRST] != first:
 			# Counted from this first vertex once; as they are while the patches before it stay.
-			var placed := PackedInt32Array()
-			for index: int in kept[INDICES]:
-				placed.append(first + index)
+			var placed: PackedInt32Array = kept[INDICES]
+			if first != 0:
+				placed = PackedInt32Array()
+				placed.resize((kept[INDICES] as PackedInt32Array).size())
+				var n := 0
+				for index: int in kept[INDICES]:
+					placed[n] = first + index
+					n += 1
 			kept[FIRST] = first
 			kept[PLACED] = placed
 		indices.append_array(kept[PLACED])
-	var node: MeshInstance3D = _nodes.get(cell, null)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
 	if vertices.is_empty():
+		return arrays
+	var normals := PackedVector3Array()
+	normals.resize(vertices.size())
+	normals.fill(Vector3.UP)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_CUSTOM3] = custom
+	arrays[Mesh.ARRAY_INDEX] = indices
+	return arrays
+
+
+## One cell's mesh from `arrays` (_arrays_of; the node is freed when no site has a dab).
+func _put_together(cell: Vector2i, arrays: Array, material: ShaderMaterial) -> void:
+	var node: MeshInstance3D = _nodes.get(cell, null)
+	if arrays[Mesh.ARRAY_VERTEX] == null:
 		if is_instance_valid(node):
 			node.queue_free()
 		_nodes.erase(cell)
 		if (_sites.get(cell, {}) as Dictionary).is_empty():
 			_sites.erase(cell)
 		return
-	var normals := PackedVector3Array()
-	normals.resize(vertices.size())
-	normals.fill(Vector3.UP)
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_NORMAL] = normals
-	arrays[Mesh.ARRAY_TEX_UV] = uvs
-	arrays[Mesh.ARRAY_CUSTOM3] = custom
-	arrays[Mesh.ARRAY_INDEX] = indices
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, FORMAT)
 	if not is_instance_valid(node):

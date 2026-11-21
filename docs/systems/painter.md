@@ -2821,9 +2821,10 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
     rectangle round the line less the cells out of reach; a whole cell is two triangles.
   - **In shade** a body's mark hides behind it (candidate (a)); the owner judged that fine ("the
     cast shadow grounds them"), so it is the rule. Candidate (b), a contact line past the body's
-    radius drawn in shade only, is the dabs' uniform `dab_line` (`PainterSites.line()` is its
-    copy), OFF (0); at 0.1 its captures showed no visible line, so it is not a working look yet.
-    Candidate (c), the away part turned down the slope, was dropped (nothing on level ground).
+    radius drawn in shade only, was the dabs' uniform `dab_line`, off; at 0.1 its captures showed
+    no visible line, and card painter-terrain-dabcost removed it (the uniform, its shader code,
+    `PainterSites.line()` and its term in `round_reach()`). Candidate (c), the away part turned
+    down the slope, was dropped (nothing on level ground).
   - **Trunks** are unchanged (the field's seam disc and the crown's pool).
   - **Cost** (in-run A/B against main f8dc0562, twice each, measured with the shade line on,
     build minus main): torture wide -0.027 / -0.014 ms, torture edge 0.000 / +0.018 ms, falls
@@ -2835,6 +2836,43 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
     6.3 / 7.3 (the large bodies' patches cost more to rebuild than the field's texels they
     replace), a moved boulder 4.4 / 4.9 against 3.2 / 3.3, a placed boulder 7.7 / 3.8 against
     3.1 / 3.9; frame medians and worst frames are equal. Nothing is rebuilt when the sun turns.
+  - **Building dabs, cut (card painter-terrain-dabcost, 2026-11-21; pixels unchanged).**
+    Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final125_terrain_dabcost/`
+    (logs, A/B files, the kit in `jobs/`, the pixel captures in `r3_pixels/`). Where the time
+    was (main 4221615a, torture map, 548 sites; medians): a 0.3 m stone's dab 0.009 ms outline,
+    0.05 ms patch (62 vertices), 0.011 ms mesh; a 2 m boulder's 0.009 outline, 0.45 ms patch
+    (1032 vertices, 504 triangles: whole cells at four vertices each), 0.064 ms mesh; a 3 m log's
+    patch 0.16 ms (158 vertices); the outlines' texture write 0.004 ms. The foot is measured
+    once a MODEL already (`PainterOcclusion._feet_of` by mesh, turned and scaled per instance by
+    `outline()`): 0.9 ms for a 550-triangle stone mesh, 2.2 ms for a 1100-triangle boulder, of
+    which the triangle soup is 0.5 to 0.8, and it lies in the rebuild's collect part, not in the
+    dabs'. A level load's dabs were 94 to 95 ms: 70 ms of patches (476 small 30 ms, 72 large
+    40 ms), 4 ms of outlines, 16 ms of cells put together (concatenated, re-indexed, meshed).
+    What changed: (1) a whole cell of a patch is its two triangles on corners SHARED with the
+    whole cells beside it (the corner is the sample: same place, height, loss and corner order,
+    so the same pixels); the torture map's dab vertices fall from 137 to 78 thousand (large
+    bodies 92 to 38 thousand), the boulder's patch to 416 vertices, 0.39 ms; (2) a sync that
+    builds `PARALLEL_MIN` (4) sites or more builds them on the WorkerThreadPool (`_build`, static,
+    one Array a job, the slots given out first in the serial order), and several changed cells
+    put their arrays together there (`_arrays_of`); the meshes are made on the main thread
+    (`test_a_build_on_the_pool_equals_one_on_this_thread`); (3) the shade-line switch is gone,
+    with its term in `round_reach()`. Level load (in-run, the replayed load with every cache
+    dropped): dabs 18.1 to 19.0 ms for 553 (build 7.8 on the pool, cells 7.6 of which the meshes
+    5.9) against the tip's 108 to 174 in the same run (95 in a quiet run); the real first load
+    17.2 and 17.9 ms. Collect (the feet) is unchanged: 67 to 78 ms on a first load. Edits
+    (torture map, the rebuild in ms, the last rebuild of each edit, two passes of each arm in
+    one run; pre = 52ce32b0's host, before the contact card): stroke end new 3.04 / 3.05, pre
+    3.23 / 3.90, tip 3.46 / 3.34; undo new 4.68 / 5.64, pre 7.11 / 8.34, tip 11.0 / 13.4; redo
+    new 4.80 / 5.93, pre 7.08 / 8.47, tip 12.8 / 14.9; a placed boulder new 3.35 / 3.30, pre
+    3.37 / 3.84, tip 4.04 / 3.77; a moved boulder new 3.95 / 4.27, pre 3.24 / 3.46, tip
+    2.76 / 4.01 (single samples, the tip's own two 1.25 ms apart; the moved boulder's cell is
+    put together and meshed again, about 1 ms, where pre rebaked a few texels). Frame medians
+    14.0 to 15.1 ms and the stroke's worst frame (72 to 79 ms at frame 241, the terrain's own)
+    are the same in every arm. GPU A/B, tip minus new: torture wide +0.033 ms (drift +0.009),
+    falls f1_o +0.047 (drift +0.062): no cost. Pixels, the tip against this tree in one run with
+    the shader clock frozen (`falls.gd clock {scale: 0}`; without it every capture differs from
+    the next by 1 to 3 levels over most of the frame), full size: st3 at 14 h and 6.5 h, f1_o,
+    bank_z3 and the bodies kit (flat_a, flat_b) at 14 h: 0 px each, and tip against tip 0 px.
 - **The dabs as geometry (cards painter-terrain-dabs, -cost, -split, -finish and -edit,
   2026-11-21; look-pending; the finish round met the frame gates and the edit round removed the
   stroke end's rebuild of every dab, so the branch is ready to merge; this one is current
