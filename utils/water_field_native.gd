@@ -102,9 +102,44 @@ static func shore(native: Object, f: WaterField, outer: Rect2i) -> void:
 	f.shore = out.shore
 
 
-## WaterFieldMesh.build's result for `f` (the same Dictionary).
+## WaterFieldMesh.build's result for `f` (the same Dictionary). The builder copies its "energy",
+## "shore" and "steep" arrays into c0 unchanged, so a second call with the field's marks
+## (WaterFieldMarks: film, bank, mouth) in those slots returns CUSTOM2 for the same vertices: no
+## change to the library (card painter-water-mouths; about 0.4 ms more per mesh).
 static func mesh(native: Object, f: WaterField) -> Dictionary:
-	var out: Dictionary = native.call(
+	var out := _mesh_call(native, f, f.energy, f.shore, f.steep)
+	var count: int = out.vertices.size()
+	if count == 0:
+		return {"arrays": [], "aabb": AABB(), "vertices": 0, "triangles": 0}
+	var marks := _mesh_call(native, f, f.marks.film, f.marks.bank, f.marks.mouth)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = out.vertices
+	arrays[Mesh.ARRAY_NORMAL] = out.normals
+	arrays[Mesh.ARRAY_TEX_UV] = out.uvs
+	arrays[Mesh.ARRAY_CUSTOM0] = out.c0
+	arrays[Mesh.ARRAY_CUSTOM1] = out.c1
+	arrays[Mesh.ARRAY_CUSTOM2] = marks.c0
+	arrays[Mesh.ARRAY_INDEX] = out.indices
+	var indices: PackedInt32Array = out.indices
+	return {
+		"arrays": arrays,
+		"aabb": out.aabb,
+		"vertices": count,
+		"triangles": indices.size() / 3,
+	}
+
+
+## One call of the native mesh builder over `f` with `second`, `third` and `fourth` as the three
+## per-sample arrays it copies into c0 behind the depth.
+static func _mesh_call(
+	native: Object,
+	f: WaterField,
+	second: PackedFloat32Array,
+	third: PackedFloat32Array,
+	fourth: PackedFloat32Array
+) -> Dictionary:
+	return native.call(
 		"water_mesh",
 		{
 			"size": f.size,
@@ -114,9 +149,9 @@ static func mesh(native: Object, f: WaterField) -> Dictionary:
 			"ew": f.ew,
 			"depth": f.depth,
 			"ground": f.ground,
-			"energy": f.energy,
-			"shore": f.shore,
-			"steep": f.steep,
+			"energy": second,
+			"shore": third,
+			"steep": fourth,
 			"river": f.lateral,
 			"foot": f.foot,
 			"spill": f.spill,
@@ -130,24 +165,6 @@ static func mesh(native: Object, f: WaterField) -> Dictionary:
 			"no_foot": WaterFieldStroke.NO_FOOT,
 		}
 	)
-	var count: int = out.vertices.size()
-	if count == 0:
-		return {"arrays": [], "aabb": AABB(), "vertices": 0, "triangles": 0}
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = out.vertices
-	arrays[Mesh.ARRAY_NORMAL] = out.normals
-	arrays[Mesh.ARRAY_TEX_UV] = out.uvs
-	arrays[Mesh.ARRAY_CUSTOM0] = out.c0
-	arrays[Mesh.ARRAY_CUSTOM1] = out.c1
-	arrays[Mesh.ARRAY_INDEX] = out.indices
-	var indices: PackedInt32Array = out.indices
-	return {
-		"arrays": arrays,
-		"aabb": out.aabb,
-		"vertices": count,
-		"triangles": indices.size() / 3,
-	}
 
 
 ## The two RGBAF texture buffers PainterWaterField uploads (see its _upload_textures), packed from

@@ -237,6 +237,15 @@ varying vec3 f_shd;
 // The field channels (WaterFieldMesh): depth, energy, shore distance, steep; river share, flag.
 varying vec4 v_f0;
 varying vec4 v_f1;
+// The field's marks (WaterFieldMarks, CUSTOM2), each its own continuous channel: y the film share,
+// z the bank-spill share, w the distance in metres to the nearest mouth line (where a stroke's
+// banks pass into other water), MOUTH_FAR and more where none is near. They replace the enum of
+// CUSTOM1.w, which interpolated through its own middle values along every border.
+varying vec4 v_f2;
+// The lap ribbon is gone within MOUTH_LAP_IN metres of a mouth line and whole from MOUTH_LAP_OUT:
+// a pond's ring opens across a stream's mouth and both ends of the opening are soft.
+const float MOUTH_LAP_IN = 0.25;
+const float MOUTH_LAP_OUT = 0.9;
 varying flat float v_rings;
 varying float v_wob;
 // The white water: how much the energy whitens, the blob size (m).
@@ -449,6 +458,7 @@ void vertex() {
 	v_mp = VERTEX.xz;
 	v_f0 = CUSTOM0;
 	v_f1 = CUSTOM1;
+	v_f2 = CUSTOM2;
 #ifdef RED_K
 	v_wob = 1.0;
 	if (CUSTOM1.y < FIELD_FLAG + 0.5) {
@@ -604,10 +614,13 @@ if (fieldv) {
 		curtain = smoothstep(0.05, 0.9, fa.w);
 		vec3 view_world = (INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz;
 		path_k = 1.0 / clamp(abs(view_world.y), VIEW_SHARE_MIN, 1.0);
-		// A film (CUSTOM1.w 0.125: water the dug bed no longer holds, a map error WaterField reports
-		// as an event) draws as mid-depth water, not as the few centimetres it is: the shallow band
-		// drew a pale teal glaze across a plunge pool.
-		float film = smoothstep(0.02, 0.11, v_f1.w) * (1.0 - smoothstep(0.16, 0.22, v_f1.w));
+		// A film (the marks' film share: water the dug bed no longer holds, a map error WaterField
+		// reports as an event) draws as mid-depth water, not as the few centimetres it is: the
+		// shallow band drew a pale teal glaze across a plunge pool.
+		float film = clamp(v_f2.y, 0.0, 1.0);
+#ifdef ABL_NOFILMW
+		film = 0.0;
+#endif
 		column_raw = mix(column_raw, max(column_raw, FILM_COLUMN_M / path_k), film);
 	}
 	// Anything that is not ground under the water (a reed blade, a token's leg) reads as deep.
@@ -665,9 +678,12 @@ if (fieldv && (shade_opt & 4) != 0) {
 		// distance too, so a steep bank does not end the wash on a hard line.
 		shoreline = min(smoothstep(0.0, 0.05, fa.x), smoothstep(0.0, 0.14, fa.z));
 		wash_a = max(wash_a, p_opacity * FILM_ALPHA * (1.0 - smoothstep(0.045, 0.1, fa.x)));
-		// The thin water a bank sheds (CUSTOM1.w 0.5, WaterField's spill beyond the channel) draws
-		// from a few centimetres' depth: it read as a pale shelf standing out from the bank.
-		float bank_spill = step(0.25, v_f1.w) * (1.0 - step(0.75, v_f1.w));
+		// The thin water a bank sheds (the marks' bank share, WaterField's spill beyond the channel)
+		// draws from a few centimetres' depth: it read as a pale shelf standing out from the bank.
+		float bank_spill = clamp(v_f2.z, 0.0, 1.0);
+#ifdef ABL_NOBANKW
+		bank_spill = 0.0;
+#endif
 		shoreline = min(shoreline, mix(1.0, smoothstep(0.05, 0.22, fa.x), bank_spill));
 		shoreline = max(shoreline, curtain);
 	}
@@ -875,9 +891,15 @@ if (fieldv && (shade_opt & 4) != 0) {
 	float dashes = (1.0 - smoothstep(0.03, 0.2 + world_units_per_pixel, abs(d_h - outer))) * smoothstep(0.6, 0.76, dash_n) * dash_gate;
 	shore_foam = max(lap, dashes) * ground_like * smoothstep(0.0, 0.01, column_raw + 0.004);
 	if (fieldv) {
-		// The thin water a bank sheds and a river's ramp into a pond (CUSTOM1.w 0.5 and 1) is a wet
-		// slope: no lap on it (a white arm stood out from each side of a pond's inflow).
-		shore_foam *= 1.0 - 0.9 * smoothstep(0.2, 0.45, v_f1.w);
+		// The thin water a bank sheds is a wet slope: no lap on it (a white arm stood out from each
+		// side of a pond's inflow). And the lap opens at a mouth: it fades out towards the line
+		// between the two land corners of a stream's mouth, a crossing or a join, so a pond's ring
+		// has a soft gap as wide as the stream and no remnant on the ramp. Both are continuous
+		// channels (the cut on the ramp flag of one sample drew a stepped ring and ticks).
+#ifndef ABL_NOCUT
+		shore_foam *= 1.0 - 0.9 * clamp(v_f2.z, 0.0, 1.0);
+		shore_foam *= smoothstep(MOUTH_LAP_IN, MOUTH_LAP_OUT, v_f2.w);
+#endif
 	}
 	}
 	// Riffles: dense short dashes along the flow on fast, shallow water.

@@ -41,8 +41,9 @@ holds the sample):
   tight bend keep their level and raise no `film_run` or `bridged_run`. The rule lives in
   `RiverProfile.stations` (GDScript, the bank test's inputs); no field channel and no native pass
   was added, and `ttscatter`'s version did not move. `stations().junction` and
-  `WaterJunctions.find(doc)` say where; the shader does not read them yet (the lap fade at a
-  mouth and the cross-fade of two flow frames are a later card).
+  `WaterJunctions.find(doc)` say where. The shader's lap fade at a mouth reads the field's own
+  mouth lines ("Marks and mouths" below), not these records; the cross-fade of two flow frames
+  is a later card.
 - The lateral foot tongue: foot foam and riffle white fade by `LATERAL_FADE` toward the channel edge.
 
 Derived per sample (arrays of the grid's size, row-major, `index = z * size.x + x`, sample (0, 0) at
@@ -216,6 +217,50 @@ gradient edge (above the face where `fd` is under -1 and the steep share is low)
 keeps more calm blue in a tight frame. The flow-map texel (`fld_b`) is fetched once per fragment (the
 foot and the white's flow coordinate share it). Changing these constants moves the energy goldens
 (`water_field_transects.json`, regenerated); native is unaffected (the table stays GDScript).
+
+## Marks and mouths (card painter-water-mouths, look-pending)
+
+The shader used to read one enum per vertex (CUSTOM1.w: 0, film 0.125, bank spill 0.5, pond ramp 1).
+Interpolated between a 0 and a 1 vertex it passed through the film and bank-spill values, so the film
+column, the bank-spill fade and the lap's cut each drew a band or a remnant along every such border;
+the cut on the per-sample ramp flag was the stepped foam ring and its ticks at a mouth (ablation:
+with the cut off the ring is whole, with the lap off the ticks are gone). `WaterFieldMarks`
+(`utils/water_field_marks.gd`, `WaterField.marks`) replaces it with three continuous channels on
+CUSTOM2 of the mesh (x repeats the depth, unread):
+
+- `film` (y): 1 on a stroke's film, else 0. `bank` (z): the thin water a bank sheds, rising from 0 at
+  the channel's edge to 1 over 0.25 m beyond it (a function of the distance across the stroke).
+- `mouth` (w): the distance in metres to the nearest MOUTH LINE, 1.25 (`MOUTH_FAR`) where none is
+  near. A mouth line is the segment across a stroke between its two mouth corners, the points where
+  its left and right bank lines pass from land into other water (a pond's mask, another stroke's
+  channel) or out of it. The corners are found by walking the course every 0.25 m and asking, 0.25 m
+  outside the channel on each side, whether other water stands there (`marks.chan`: the id of the
+  stroke whose channel covers a sample, -1 for several, written by `_put_stroke`; and the pond mask).
+  A stream's mouth in a pond has one line, a crossing two per stroke that finds the other, a corner
+  with no partner (a stream skirting a pond) a line of no length. A stroke meeting itself has none.
+
+The shader: the film column and the bank-spill fade read their shares; the lap ribbon is cut by the
+bank share and fades out from 0.9 m to 0.25 m of a mouth line (`MOUTH_LAP_OUT`, `MOUTH_LAP_IN`), so a
+pond's ring opens across the stream's own width with soft ends. The ramp flag is no longer read by
+the shader (the field still uses `SPILL_POND` for the ramp's energy and steepness). CUSTOM1.w still
+carries the old enum, unread.
+
+Rules: `mouth` is the exact distance to a set of segments, so it is 1-Lipschitz and the same for
+any order of strokes; an update clears and restamps it over the dirty rect grown by `MOUTH_FAR` plus
+a metre, which holds every sample a changed corner reaches (`test_water_field_marks.gd`: in range,
+continuous, a mouth where water meets water and nowhere else, update equals build after ground
+edits, level changes and each stroke's removal, CUSTOM2 the same on both mesh paths). Native: no
+change to the library and `version()` stays `ttscatter 9`: the marks are written in GDScript (the
+stroke's per-sample write is GDScript too), and the native mesh builder, which copies its energy,
+shore and steep arrays into c0 unchanged, is called a second time with the three marks in those
+slots (`WaterFieldNative.mesh`, about 0.4 ms more per mesh rebuild). A later port would give
+`water_mesh` a c2 output and `_put_stroke`'s writes a native twin.
+
+Not this card: the crisp white hairline along a straight carved bank with a tick at a land corner
+(corpus f_cross, f_pond_over_stream at native size) is the depth wrap (`edge_foam`: gone with
+`ABL_NOEDGE`, unchanged with the lap, the cut, the bank window or the white off), the audit's P1 at
+the bed's own silhouette; the faint arc across a ring's closure (f_loop) is in the wash (present
+under every one of those ablations), so it is the bed's depth or the frames, not a mark.
 
 ## Conditioning
 

@@ -746,6 +746,9 @@ line then differs run to run.
   detached slivers, pale or mark-less bodies. `--selftest <view>` plants each defect in a good
   view and checks it is found. The detectors cover many layouts cheaply; the verdict is still
   the sheets, read by a person. Compare a change's `scores.tsv` and sheets with main's.
+  The mouth marks (`ticks`) came from the lap's cut on a per-sample enum; the field now carries
+  continuous marks and explicit mouth lines instead (card painter-water-mouths,
+  `water_field.md` "Marks and mouths").
 
 ## Painted look
 

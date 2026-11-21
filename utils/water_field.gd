@@ -149,6 +149,8 @@ var flow_u := PackedFloat32Array()
 ## fall's foot (negative on the face, positive in the plunge pool; WaterFieldStroke.NO_FOOT
 ## beyond 4 m and on any sample no stroke wrote).
 var foot := PackedFloat32Array()
+## The continuous marks the shader reads per vertex: film, bank share, mouth distance.
+var marks := WaterFieldMarks.new()
 ## What the map shows that its author should decide, sorted by (kind, body, position):
 ## {"kind": &"film_run", "body", "pos", "length"} a stretch of a stroke longer than the bridge
 ## whose ground no longer holds its water; {"kind": &"bridged_run", ...} the same, short enough
@@ -197,6 +199,7 @@ func update(doc: MapDocument, dirty: Rect2i) -> Rect2i:
 	var ends: Array[Dictionary] = []
 	var runs: Array[Dictionary] = []
 	_write_strokes(doc, rect, pond_level, ends, runs)
+	marks.mouths(self, doc, rect)
 	var t1 := Time.get_ticks_usec()
 	var changed := _spill_pass(rect, was)
 	var t2 := Time.get_ticks_usec()
@@ -357,6 +360,7 @@ func _fit(doc: MapDocument) -> bool:
 	flow_u.fill(NO_FLOW_U)
 	foot = _zeros(n)
 	foot.fill(WaterFieldStroke.NO_FOOT)
+	marks.fit(n)
 	events = []
 	return true
 
@@ -366,6 +370,7 @@ func _reset(doc: MapDocument, rect: Rect2i) -> void:
 	var n := size.x * size.y
 	var heights := doc.heights
 	var has_heights := heights.size() == n
+	marks.reset(self, rect)
 	if rect == Rect2i(Vector2i.ZERO, size):
 		# The whole grid (a build): bulk fills, no per-sample loop.
 		ground = heights.duplicate() if has_heights else _zeros(n)
@@ -433,6 +438,7 @@ func _write_strokes(
 		var profile := RiverProfile.for_doc(doc, typed)
 		if profile.points.size() < 2:
 			continue
+		marks.profiles[typed[0].id] = profile
 		var field := profile.field(doc, WaterGeometry.RIVER_BANK_M, rect)
 		var area: Rect2i = field.rect
 		if not area.has_area():
@@ -518,6 +524,9 @@ func _put_stroke(
 	var mask := doc.pond_mask
 	var has_mask := mask.size() == size.x * size.y
 	var bank := WaterGeometry.RIVER_BANK_M
+	var chan := marks.chan
+	var film := marks.film
+	var bank_share := marks.bank
 	for j in rect.size.y:
 		for i in rect.size.x:
 			var k := j * rect.size.x + i
@@ -529,6 +538,8 @@ func _put_stroke(
 			if d > hw + bank:
 				continue
 			var at := (rect.position.y + j) * size.x + rect.position.x + i
+			if d <= hw and chan[at] != id:
+				chan[at] = id if chan[at] == 0 else -1
 			var ti := clampi(int(round(s / WaterFieldStroke.TABLE_STEP)), 0, lev.size() - 1)
 			var level := lev[ti]
 			var flow_coord := s + FLOW_DROP_K * (lev[0] - level)
@@ -557,6 +568,9 @@ func _put_stroke(
 					continue
 				spill[at] = SPILL_POND if over_pond else (SPILL_BANK if d > hw else 0)
 				calm[at] = 1 if undermined or (d > hw and not over_pond) else 0
+				film[at] = 1.0 if undermined and not over_pond else 0.0
+				var out := (d - hw) / WaterFieldMarks.BANK_SHARE_M
+				bank_share[at] = clampf(out, 0.0, 1.0) if spill[at] == SPILL_BANK else 0.0
 				_raw[at] = level
 				flow_u[at] = flow_coord
 				lateral[at] = _lateral_of(
