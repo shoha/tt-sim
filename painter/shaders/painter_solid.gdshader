@@ -58,4 +58,18 @@ void fragment() {
 	f_accent = petal;
 	f_centre = 0.0;
 	f_frost = snow;
+	// A solid does not take its own shadow from the map. A rock's faces turned near edge-on to the
+	// sun are where a shadow map stripes and stipples, and a low-poly rock's own shadow on itself
+	// is polygons that fight the shade its form already has (cards painter-ground-artifacts,
+	// painter-ground-rocks). So it asks the map from a shell around itself: each point moved out
+	// from the rock's middle (never downward, so the shell stays over level ground) by a share of
+	// its size. Out there the sun's ray clears the rock on every side but its far back, which is
+	// in the form's shade already; what a tree, a wall or the terrain throws lands on the shell as
+	// it would on the rock, in one smooth edge across its faces. The caster is untouched, so the
+	// rock's shadow on the ground starts at its foot.
+	vec3 half_m = max(selector_extent * v_scale, vec3(0.02));
+	vec3 out_dir = v_wp - (v_o + vec3(0.0, SOLID_MID * selector_height * v_scale, 0.0));
+	out_dir.y = max(out_dir.y, 0.4 * length(out_dir.xz));
+	float shell = min(SOLID_SHELL * max(half_m.x, max(half_m.y, half_m.z)), SOLID_SHELL_MAX);
+	LIGHT_VERTEX = (VIEW_MATRIX * vec4(v_wp + normalize(out_dir + vec3(0.0, 1e-4, 0.0)) * shell, 1.0)).xyz;
 }

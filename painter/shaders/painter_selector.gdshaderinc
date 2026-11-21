@@ -63,6 +63,13 @@ uniform vec3 selector_extent = vec3(0.5);
 uniform float frost = 0.0;
 uniform vec3 c_frost_lit = vec3(0.9);
 uniform vec3 c_frost_shd = vec3(0.5);
+// A solid's rounded form (kind 2, card painter-ground-rocks): the height of its middle as a share
+// of its own, how far a face's normal goes to the rounded one, and the shell it asks the shadow
+// map from, as a share of its half size and at most so many metres.
+const float SOLID_MID = 0.4;
+const float SOLID_ROUND = 0.6;
+const float SOLID_SHELL = 0.5;
+const float SOLID_SHELL_MAX = 0.4;
 
 varying vec3 f_n;
 varying float f_variant;
@@ -360,6 +367,18 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 		mul = (1.0 - IVY_TUCK * near * rim) * mix(1.0, mix(0.9, 1.08, dab.w), near);
 		snow = frost > 0.0 && frost_up(n.y, wp) ? 1.0 : 0.0;
 	} else {
+		// A rock or a log turns as one rounded form with its faces still in it: the face's normal
+		// part way to the normal of the spheroid its box holds, so a flat-faced boulder's shade is
+		// one curved shape that the big planes still break, not a polygon a face. A low, wide
+		// asset (a scatter of stones) has a flat spheroid, so each stone keeps its own sides.
+		vec3 half_m = max(selector_extent * scale, vec3(0.02));
+		float across = max(half_m.x, half_m.z);
+		vec3 off = wp - (origin + vec3(0.0, SOLID_MID * selector_height * scale, 0.0));
+		vec3 round_n = normalize(off / vec3(across * across, half_m.y * half_m.y, across * across));
+		// Only the box's own surface is the one form: a point well inside the spheroid (a stone in
+		// the middle of a scatter, a low step of a big rock) keeps its face.
+		float on_form = smoothstep(0.5, 0.9, length(off / vec3(across, half_m.y, across)));
+		n = normalize(mix(n, round_n, SOLID_ROUND * on_form));
 		variant = mix(variant, p_noise(wp * 0.9 + 17.0), 0.5);
 		snow = frost > 0.0 && frost_up(n.y - 0.3, wp) ? 1.0 : 0.0;
 		// A stone or a log grows out of the ground: a step darker over its foot (PainterOcclusion).
@@ -368,10 +387,6 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 	wob = p_noise(wp * 1.7 + 5.0);
 }
 
-// How far above tone_lo (in N.L) a solid's face must turn toward the sun before a cast shadow
-// reaches it (light(), kind 2).
-const float SOLID_CAST_FACING = 0.4;
-
 // (A grass mark lights its own form: painter_grass_mark defines SELECTOR_OWN_LIGHT and its light().)
 #ifndef SELECTOR_OWN_LIGHT
 void light() {
@@ -379,15 +394,8 @@ void light() {
 		vec3 lw = normalize((INV_VIEW_MATRIX * vec4(LIGHT, 0.0)).xyz);
 		float cast = 1.0 - smoothstep(0.45, 0.55, ATTENUATION + (f_wob - 0.5) * 0.2);
 		float nl = dot(normalize(f_n), lw);
-		if (kind == 2) {
-			// A rock's or a log's face turned nearly edge-on to the sun is where the shadow map
-			// self-shadows it in stripes and the soft filter's noise stipples the edge of each (card
-			// painter-ground-artifacts: dark violet hatching on a boulder's face). Such a face is
-			// already a middle step by N.L, so it takes no cast shadow until it faces the sun, and the
-			// step that does is wider than the filter's noise.
-			cast = 1.0 - smoothstep(0.35, 0.65, ATTENUATION + (f_wob - 0.5) * 0.2);
-			cast *= smoothstep(tone_lo, tone_lo + SOLID_CAST_FACING, nl);
-		}
+		// (A rock or a log, kind 2, is shaded by its form alone: it asks the shadow map from a shell
+		// around itself, painter_solid's fragment(), so `cast` is what other things throw on it.)
 		float x = nl + (f_wob - 0.5) * 0.3;
 		float t = 0.1 + 0.4 * smoothstep(tone_lo - 0.01, tone_lo + 0.01, x)
 			+ 0.4 * smoothstep(tone_hi - 0.01, tone_hi + 0.01, x);
@@ -400,7 +408,9 @@ void light() {
 		vec3 col = selector_pal(t, f_variant + (t - 0.45) * 0.3);
 		// In a cast shadow a bush's lobes keep a half step toward the sun (as a crown's strokes keep
 		// crown-cast): one flat shade read as a smooth dark lump (painter-trees-polish3).
-		vec3 shd = selector_pal(kind == 4 ? min(t, BUSH_CAST_T) : 0.1, f_variant);
+		// A rock keeps the same half step: its planes still read inside a tree's shadow, where one
+		// flat shade was a cut-out silhouette (card painter-ground-rocks).
+		vec3 shd = selector_pal(kind == 4 || kind == 2 ? min(t, BUSH_CAST_T) : 0.1, f_variant);
 		if (f_accent > -0.5) {
 			vec3 a = accent[int(f_accent + 0.5)];
 			float lr = dot(shd, vec3(0.3, 0.59, 0.11))
