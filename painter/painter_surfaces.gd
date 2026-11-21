@@ -100,6 +100,7 @@ var _glb_ground: Array[ShaderMaterial] = []
 var _village: RefCounted = null
 ## The meadow grass drawn as painted marks (PainterGrassMarks).
 var _marks := PainterGrassMarks.new()
+var _field := PainterGroundField.new()  ## The ground's shading field and back-face caster.
 ## The map's path surfaces by slot and its cliff surface (PainterGroundPaths), from the last zone
 ## rebuild.
 var _path_ids := PackedStringArray()
@@ -264,6 +265,7 @@ func _on_scatter_shown() -> void:
 
 
 func _unbind() -> void:
+	_field.release()
 	if is_instance_valid(_map) and _map.child_entered_tree.is_connected(_on_map_child):
 		_map.child_entered_tree.disconnect(_on_map_child)
 	if is_instance_valid(_terrain):
@@ -517,6 +519,7 @@ func _rebuild_zone() -> void:
 	if not is_instance_valid(_terrain) or _terrain.document == null:
 		return
 	var doc := _terrain.document
+	_field.sync(_terrain, [_ground_material()])
 	var image := zone_image(doc)
 	var burnt := char_image(doc)
 	var biome_image := biome_zone_image(doc)

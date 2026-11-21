@@ -119,6 +119,7 @@ var last_fields_usec: int = 0
 var height_version: int = 0  ## Bumped per height texture refresh (GroundHeightField follows).
 
 var _material: ShaderMaterial = null
+var _back_caster := false
 var _chunks: Dictionary[Vector2i, MeshInstance3D] = {}
 var _collision: TerrainCollision = null
 ## The ground's layers, index maps, routing and broad edge.
@@ -267,6 +268,15 @@ func build(
 ## The shared ground material.
 func get_material() -> ShaderMaterial:
 	return _material
+
+
+## Whether the chunks cast their shadow with their back faces only (TerrainBackCaster): the
+## Painted look's way, set by PainterSurfaces while it paints this terrain.
+func set_back_caster(on: bool) -> void:
+	_back_caster = on
+	for cell in _chunks:
+		var chunk := _chunks[cell]
+		TerrainBackCaster.apply(chunk, TerrainBackCaster.casting(chunk), on)
 
 
 ## The skirt's material (a duplicate of the ground's, made by build()), or null.
@@ -688,7 +698,7 @@ func _rebuild_chunk(cell: Vector2i) -> void:
 		add_child(chunk)
 		_chunks[cell] = chunk
 	chunk.mesh = mesh
-	chunk.cast_shadow = chunk_shadow_casting(mesh)
+	TerrainBackCaster.apply(chunk, chunk_shadow_casting(mesh), _back_caster)
 	var aabb := mesh.get_aabb()
 	_chunk_heights[cell] = Vector2(aabb.position.y, aabb.end.y)
 
@@ -903,7 +913,7 @@ func _update_chunk_in_place(cell: Vector2i, part: Rect2i) -> void:
 		Vector3(base.size.x, maxf(widened.y - widened.x, 0.0), base.size.z)
 	)
 	if widened.y - widened.x > FLAT_CHUNK_M:
-		chunk.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		TerrainBackCaster.apply(chunk, GeometryInstance3D.SHADOW_CASTING_SETTING_ON, _back_caster)
 
 
 static func _mirror_span(mirror: Dictionary) -> Vector2:

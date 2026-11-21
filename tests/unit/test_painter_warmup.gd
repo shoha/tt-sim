@@ -52,6 +52,7 @@ func test_every_drawn_shader_has_a_sample() -> void:
 
 func test_the_copied_constants_are_the_owners() -> void:
 	assert_eq(PainterWarmup.GROUND, PainterSurfaces.GROUND_SHADER)
+	assert_eq(PainterWarmup.TERRAIN_CASTER, TerrainBackCaster.SHADER)
 	assert_eq(PainterWarmup.PLANT, PainterSurfaces.PLANT_SHADER)
 	assert_eq(PainterWarmup.SOLID, PainterSurfaces.SOLID_SHADER)
 	assert_eq(PainterWarmup.STRUCTURE, PainterBuildings.SHADER)
