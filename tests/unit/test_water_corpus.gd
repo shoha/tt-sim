@@ -24,25 +24,55 @@ const Corpus := preload("res://tests/unit/water_corpus_cases.gd")
 ##    should be (film_run 2, bridged_run 1). The junction is the next card's.
 ##  - steps_wide: the widest stroke is a fall now (it was kept as drawn, blocked: six reaches
 ##    down the cliff's face), and a fall's lip is perched.
+##
+## Card painter-water-junctions (2026-11-20) brought them down: where water meets water the two
+## are one bed (RiverProfile's junction rule), so a crossing, a join, a fork, a pond over a stream
+## and the inside of a tight bend raise no film or bridged run (flat film 6 and bridged 13, flat2
+## film 1, tilt film 3 and bridged 4, all to 0). The flow and lateral jumps where a stroke meets
+## ITSELF (f_self_cross's crossing 41 and 12, f_loop's closure 14, a bend's inside 2 and 1) are
+## counted apart as junction_seams (JUNCTION_SEAMS below): two passes of one stroke meet there as
+## two strokes do (seam_pairs), two frames at one place that the renderer has to cross-fade, not a
+## break inside one frame. What is left in lat_jumps is tilt's t_through_pond (10) and t_y_join
+## (4): a stroke's end in other water at a riffle.
 const KNOWN := {
-	"flat": [43, 20, 0, 6, 13, 0],
-	"flat2": [0, 0, 0, 1, 0, 0],
-	"tilt": [1, 14, 0, 3, 4, 0],
+	"flat": [0, 0, 0, 0, 0, 0],
+	"flat2": [0, 0, 0, 0, 0, 0],
+	"tilt": [0, 14, 0, 0, 0, 0],
 	"steps": [0, 0, 10, 0, 0, 1],
 	"steps_wide": [0, 0, 4, 0, 0, 0],
 	"wood": [0, 0, 0, 0, 0, 0],
 }
 
+## Per map: the coordinate jumps inside a stroke's junction with itself (a ratchet too).
+const JUNCTION_SEAMS := {"flat": 43, "flat2": 14, "tilt": 1, "steps": 0, "steps_wide": 0, "wood": 0}
+
 ## The stream ends each pond of these layouts joins (WaterEditor.compute "joined"). 0: the ends
 ## are within reach but at another level, the stepped connector would stand proud of its bank
-## (perched samples), so the guard drops the join and the end is said (not solved by this card).
+## (perched samples), so the guard drops the join and the end is said (not solved: the samples are
+## proud by the corpus's own measure too, water over 0.3 m above the dry ground beside it).
+## f_end_short's 2.0 m gap is joined since the reach is 2 half-widths (card
+## painter-water-junctions).
 const JOINED := {
 	"f_through_far": 3,
 	"f_through_pond": 3,
 	"t_through_pond": 3,
 	"f_into_pond": 1,
+	"f_end_short": 1,
+	"t_end_short": 0,
 	"s0_fall_pond": 0,
 }
+
+## Layouts where water meets water at one level: each holds a junction and no film or bridged run.
+const ONE_BED := [
+	"f_cross",
+	"f_y_join",
+	"f_split",
+	"f_self_cross",
+	"f_pond_over_stream",
+	"f_loop",
+	"t_cross",
+	"t_y_join",
+]
 
 var _was_enabled := true
 var _builds := {}
@@ -139,6 +169,87 @@ func test_field_of_every_map() -> void:
 		assert_lte(bridged, int(known[4]), "%s: bridged runs" % m.name)
 		var near := int(r.events.get(&"end_near_water", 0))
 		assert_lte(near, int(known[5]), "%s: stroke ends left short of water" % m.name)
+		var seams := int(JUNCTION_SEAMS[m.name])
+		assert_lte(int(r.junction_seams), seams, "%s: jumps where a stroke meets itself" % m.name)
+
+
+func test_water_that_meets_water_is_one_bed() -> void:
+	var seen := 0
+	for m in Corpus.maps():
+		var r: Dictionary = Corpus.field_report(_built(m.name).doc)
+		for l: Dictionary in m.layouts:
+			if not ONE_BED.has(l.name):
+				continue
+			seen += 1
+			var at: Vector2 = l.at
+			var junctions := 0
+			for junction: Dictionary in r.junctions:
+				junctions += 1 if at.distance_to(junction.pos) < Corpus.CELL_HALF else 0
+			assert_gt(junctions, 0, "%s: the meeting is a junction" % l.name)
+			for e: Dictionary in r.event_list:
+				if at.distance_to(e.pos) < Corpus.CELL_PITCH * 0.5:
+					assert_eq(e.kind, &"end_near_water", "%s: no run of undermined water" % l.name)
+	assert_eq(seen, ONE_BED.size(), "every such layout was built")
+
+
+func test_a_junction_is_one_level() -> void:
+	# Crossing strokes on the tilt stood 5 cm apart (-1.45 and -1.50): the later one takes the
+	# crossed water's level. A pond dug over a stream stood a bed's depth under it (-1.20 against
+	# -0.15): it takes the stream's level.
+	var cross := _alone("t_cross", Vector2.ZERO)
+	var first: PackedInt32Array = cross.strokes[0].ids
+	var second: PackedInt32Array = cross.strokes[1].ids
+	var crossed := PackedFloat32Array()
+	for id in first:
+		crossed.append((cross.doc as MapDocument).water_body(id).level_m)
+	var met := false
+	for id in second:
+		met = met or crossed.has((cross.doc as MapDocument).water_body(id).level_m)
+	assert_true(met, "a reach of the crossing stroke stands at the crossed stream's level")
+	var over := _alone("f_pond_over_stream", Vector2.ZERO)
+	var doc: MapDocument = over.doc
+	var stream := doc.water_body((over.strokes[0].ids as PackedInt32Array)[0])
+	var pond := doc.water_body(int(over.ponds[0].id))
+	assert_almost_eq(pond.level_m, stream.level_m, 1e-4, "the pond stands at the stream's level")
+	# A drawn ring closes: neither end tapers, and the closure is the stroke's own junction.
+	var ring := _alone("f_loop", Vector2.ZERO)
+	var chain: Array[WaterBody] = []
+	for id in ring.strokes[0].ids as PackedInt32Array:
+		chain.append((ring.doc as MapDocument).water_body(id))
+	var profile := RiverProfile.for_doc(ring.doc, chain)
+	assert_eq(profile.taper, Vector2i.ZERO, "a closed ring has no tapered end")
+	assert_eq(profile.own_end, Vector2i.ONE, "both ends lie in the stroke's own channel")
+	var own := 0
+	for junction in WaterJunctions.find(ring.doc):
+		own += 1 if bool(junction.own) else 0
+	assert_eq(own, 1, "the closure is one junction of the stroke with itself")
+
+
+func test_a_join_the_document_has_no_room_for_is_said() -> void:
+	# f_into_pond with the document one river short of its cap: the connector's two reaches do
+	# not fit. It was skipped silently.
+	var doc := NewMap.create(200, Corpus.BIOME, 1234)
+	var hw := WaterBrush.radius_for(1.0, Corpus.WAIST)
+	var line := Corpus.gesture_line(PackedVector2Array([Vector2(-8, 0), Vector2(-1.6, 0)]), hw)
+	Corpus.add_stroke(doc, line, hw, Corpus.WAIST)
+	var bodies := doc.water_bodies.duplicate()
+	var k := 0
+	while bodies.size() < MapDocument.MAX_RIVERS - 1:
+		var from := Vector2(-28.0 + 1.5 * k, -27.0)
+		var pts := PackedVector2Array([from, from + Vector2(0.0, 1.0)])
+		var filler := WaterBody.river(
+			doc.next_water_id() + k, pts, PackedFloat32Array([0.3, 0.3]), Corpus.ANKLE, -0.15, 1.0
+		)
+		bodies.append(filler)
+		k += 1
+	doc.water_bodies = bodies
+	var out := Corpus.dig(doc, PackedVector2Array([Vector2(3, 0), Vector2(3.4, 0)]), 3.5, Corpus.DEEP)
+	assert_eq(int(out.get("joined", 0)), 0, "nothing is joined")
+	var said := false
+	for hint: Dictionary in out.get("hints", []):
+		said = said or hint.kind == &"no_room"
+	assert_true(said, "the full document is said")
+	assert_true(WaterHints.worth_saying(out.hints), "and worth a toast")
 
 
 func test_streams_within_their_own_width_of_a_pond_are_joined_or_said() -> void:

@@ -412,26 +412,22 @@ func _call_ready(script: GDScript, step: Dictionary) -> bool:
 	return false
 
 
+## `wait_ready`: done once nothing holds it (Steady.holds) for `settle` seconds. Held past 10 s,
+## and then every 30 s, it logs what still holds it.
 func _wait_ready(step: Dictionary) -> bool:
 	var settle := float(step.get("settle", 2.0))
 	var g := gm()
 	if g == null or not is_instance_valid(g):
 		return false
-	if g.call("_is_level_loading"):
-		_state.t = 0.0
-		return false
-	var c := ctrl()
-	if c != null:
-		if not c.get("_is_open"):
-			_state.t = 0.0
-			return false
-		if is_instance_valid(c.scatter) and (c.scatter.is_regenerating() or c.scatter.is_growing()):
-			_state.t = 0.0
-			return false
-		if c.editor != null and c.editor.has_height_work():
-			_state.t = 0.0
-			return false
-	return _state.t >= settle
+	var holding := Steady.holds(g, ctrl())
+	if holding.is_empty():
+		return _state.t >= settle
+	_state.t = 0.0
+	var waited := (Time.get_ticks_msec() - int(_state.get_or_add("since", Time.get_ticks_msec())))
+	if waited >= float(_state.get("report_at", 10.0)) * 1000.0:
+		log_line("wait_ready held %.0f s: %s" % [waited / 1000.0, "; ".join(holding)])
+		_state.report_at = waited / 1000.0 + 30.0
+	return false
 
 
 ## `settle`: done once nothing has moved on its own (Steady.busy) for `frames` frames in a

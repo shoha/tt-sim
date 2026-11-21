@@ -26,6 +26,9 @@ extends RefCounted
 ##  - too_short: the one hint that refuses (card painter-water-paths): the line is shorter than
 ##    its tapered ends need for its depth (WaterEdit.min_river_length), so it would carve ground
 ##    and land a sliver of water or none; nothing was made (`detail.length_m`, `detail.need_m`).
+##  - no_room: a pond would have joined a stream end beside it, but the document holds as many
+##    river reaches as it can (MapDocument.MAX_RIVERS, `detail.cap`), so the end was left as
+##    drawn (card painter-water-junctions; it was skipped silently).
 ## Loaded by path from WaterEdit (naming it there would join the start-up script graph,
 ## test_boot_graph).
 
@@ -38,6 +41,7 @@ const SAID: Array[StringName] = [
 	&"blocked_cut",
 	&"end_below_water",
 	&"end_near_water_below",
+	&"no_room",
 	&"undermined_run",
 ]
 
@@ -53,6 +57,7 @@ const KIND_TEXT := {
 	&"end_snapped": "The end of the river was joined to the water beside it.",
 	&"undermined_run": "Part of the river sits above its banks.",
 	&"too_short": "That line is too short to hold water this deep, so nothing was made.",
+	&"no_room": "The map is full of rivers, so the stream beside the pond was not joined.",
 }
 
 ## The words of a fix action.
@@ -71,6 +76,7 @@ const FIX_TEXT := {
 	&"draw_longer": "draw a longer line",
 	&"shallower": "pick a shallower depth",
 	&"paint_pond": "paint a pond",
+	&"erase_water": "erase a river you do not need",
 }
 
 

@@ -24,7 +24,9 @@ const SEARCH_M := WaterField.END_NEAR_M
 ## width) was tried there: it joined f_end_short's 2.0 m gap, and over the fuzz maps the field
 ## events rose from 110 to 122 (off 103) and the pond fuzz's perched samples from 47 to 54, each
 ## extra join being a junction the field reports; kept at 1.5 until junctions are one bed.
-const SNAP_PER_HALF_WIDTH := 1.5
+## Card painter-water-junctions (junctions are one bed: a join no longer raises film or bridged
+## runs) retried 2.
+const SNAP_PER_HALF_WIDTH := 2.0
 const MIN_SNAP_M := 1.0
 ## Hold slack of the dig re-fit: the banks must stand within this of the level.
 const HOLD_M := WaterMeshBuilder.BANK_HOLD_M

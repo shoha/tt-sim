@@ -29,6 +29,28 @@ extends RefCounted
 ## Stations (stations()): the profile sampled along the course at a spacing over a document's
 ## ground, each with an undermined flag where the ground no longer holds the water (its banks or
 ## its bed dug away by a later edit), the per-station form of WaterMeshBuilder's perched rule.
+##
+## Junctions (card painter-water-junctions; docs/systems/water.md "Junctions"). Where water meets
+## water the two are one bed: a bank or a bed that lies in other water standing at the station's
+## level (no lower than WaterMeshBuilder.BANK_HOLD_M under it, no higher than JUNCTION_OVER_M
+## over it) is held by that water, not lost.
+## Other water is another body of the document (other_level_at()) or another pass of this stroke
+## (own_level_at(): a point inside the stroke's own channel, which a local bank never is: the
+## inside of a tight bend, a self-crossing, a ring's closure). Derived from the bodies on every
+## build, never stored, so it follows every edit; stations() says which stations a junction holds
+## and WaterJunctions.find() lists the places. An end inside the stroke's own channel (a ring
+## closing on itself) is an open end: it does not taper.
+
+## A station of a junction: its bank or bed is held by another body's water ...
+const JUNCTION_OTHER := 1
+## ... or by another pass of the stroke itself.
+const JUNCTION_OWN := 2
+## Water more than this over a station's level does not hold its bank: it is another level (a
+## bank's water stands at most this over its ground, WaterField.BANK_HOLD_M).
+const JUNCTION_OVER_M := 0.3
+## An end lies in the stroke's own water when a part of the course further than this many
+## half-widths of arc from it holds it (WaterCourseFit trims nearer curls).
+const OWN_END_SKIP_PER_HALF_WIDTH := 4.0
 
 ## The stroke's joined course (see the header), the arc length of each shared point between its
 ## reaches and each reach's level.
@@ -51,6 +73,10 @@ var falls: Array[Dictionary] = []
 ## Vector2i(start, end), 1 or 0. Set by for_doc(); a bare build() tapers neither.
 var taper := Vector2i.ZERO
 var run_off := Vector2i.ZERO
+## The ids of the stroke's reaches: its own water, which is never "other water" to it.
+var ids := PackedInt32Array()
+## Which ends lie in the stroke's own channel (for_doc(): a ring closed on itself), 1 or 0.
+var own_end := Vector2i.ZERO
 
 
 ## The profile of the stroke whose reaches are `bodies` (rivers in order, each starting where
@@ -73,6 +99,8 @@ static func build(
 	profile.depth = WaterBody.depth_for(profile.depth_class)
 	profile.total = profile.arc[-1] if not profile.arc.is_empty() else 0.0
 	profile.flags = WaterFalls.fall_flags(bodies) if fall_flags.is_empty() else fall_flags
+	for body in bodies:
+		profile.ids.append(body.id)
 	for k in profile.bounds.size():
 		if k >= profile.flags.size() or profile.flags[k] == 0:
 			continue
@@ -114,6 +142,16 @@ static func for_doc(
 	var last := profile.points[-1]
 	var open_first := 0 if WaterGeometry.is_wet_at(doc, first, bodies[0].id) else 1
 	var open_last := 0 if WaterGeometry.is_wet_at(doc, last, bodies[-1].id) else 1
+	# An end in the stroke's own channel (a ring that closes on itself, a loop's end on an
+	# earlier pass) runs into that water as into any other: full depth and width, no head.
+	var skip_first := OWN_END_SKIP_PER_HALF_WIDTH * profile.widths[0]
+	var skip_last := OWN_END_SKIP_PER_HALF_WIDTH * profile.widths[-1]
+	profile.own_end = Vector2i(
+		1 if profile.own_level_at(first, 0.0, skip_first) != WaterGeometry.DRY else 0,
+		1 if profile.own_level_at(last, profile.total, skip_last) != WaterGeometry.DRY else 0
+	)
+	open_first *= 1 - profile.own_end.x
+	open_last *= 1 - profile.own_end.y
 	profile.taper = Vector2i(inside.call(first) * open_first, inside.call(last) * open_last)
 	profile.run_off = Vector2i(
 		(1 - inside.call(first)) * open_first, (1 - inside.call(last)) * open_last
@@ -340,7 +378,10 @@ func field(doc: MapDocument, reach_m: float, clip: Rect2i = Rect2i()) -> Diction
 ## WaterMeshBuilder.BANK_HOLD_M under the level, or the centre's ground lies more than
 ## WaterMeshBuilder.HOLD_SLACK_M under the bed. Never on a fall's face (lip to foot), where the
 ## water is the curtain, nor within a pool tail of an end in other water (that water's basin
-## may have deepened it).
+## may have deepened it), nor where the bank or the bed lies in other water standing at the
+## station's level (a junction, see the header: the two are one bed). "junction"
+## (PackedByteArray) is JUNCTION_OTHER or JUNCTION_OWN at the stations such water holds (an end
+## in other water included), 0 elsewhere.
 func stations(doc: MapDocument, spacing: float = 0.25) -> Dictionary:
 	var out := {
 		"arc": PackedFloat32Array(),
@@ -350,9 +391,11 @@ func stations(doc: MapDocument, spacing: float = 0.25) -> Dictionary:
 		"sill": PackedFloat32Array(),
 		"centre": PackedVector2Array(),
 		"undermined": PackedByteArray(),
+		"junction": PackedByteArray(),
 	}
 	if points.size() < 2 or spacing <= 0.0:
 		return out
+	var courses := {}
 	var tail := WaterCarve.pool_tail(depth)
 	var open_start := taper.x == 0 and run_off.x == 0
 	var open_end := taper.y == 0 and run_off.y == 0
@@ -371,15 +414,36 @@ func stations(doc: MapDocument, spacing: float = 0.25) -> Dictionary:
 		var hw := head(s, lerpf(widths[segment], widths[segment + 1], where.y))
 		var line := at(s)
 		var lost := false
-		var near_open := (open_start and s < tail) or (open_end and total - s < tail)
-		if fall_at(s).is_empty() and not near_open:
+		var junction := 0
+		var near_start := open_start and s < tail
+		var near_end := open_end and total - s < tail
+		if near_start or near_end:
+			# The end runs into other water (or the stroke's own): a junction by construction.
+			var own := (near_start and own_end.x != 0) or (near_end and own_end.y != 0)
+			junction = JUNCTION_OWN if own else JUNCTION_OTHER
+		elif fall_at(s).is_empty():
 			var hold := line.x - WaterMeshBuilder.BANK_HOLD_M
 			var reach := hw + WaterMeshBuilder.BANK_MARGIN_M
-			lost = (
-				WaterGeometry.ground_at(doc, centre + side * reach) < hold
-				or WaterGeometry.ground_at(doc, centre - side * reach) < hold
-				or WaterGeometry.ground_at(doc, centre) < line.y - WaterMeshBuilder.HOLD_SLACK_M
-			)
+			var spots := [centre + side * reach, centre - side * reach]
+			for spot: Vector2 in spots:
+				if WaterGeometry.ground_at(doc, spot) >= hold:
+					continue
+				# The bank is gone: one bed with the water that took it, or lost.
+				var held := _held_by(doc, spot, hold, hw, courses)
+				if held == 0:
+					lost = true
+					break
+				junction = maxi(junction, held)
+			if (
+				not lost
+				and WaterGeometry.ground_at(doc, centre) < line.y - WaterMeshBuilder.HOLD_SLACK_M
+			):
+				# A bed dug deeper is another body's (a pond over the stream, a deeper channel).
+				var over := other_level_at(doc, centre, courses)
+				if over >= hold and over <= line.x + JUNCTION_OVER_M:
+					junction = maxi(junction, JUNCTION_OTHER)
+				else:
+					lost = true
 		out.arc.append(s)
 		out.level.append(line.x)
 		out.bed.append(line.y)
@@ -387,7 +451,55 @@ func stations(doc: MapDocument, spacing: float = 0.25) -> Dictionary:
 		out.sill.append(line.w)
 		out.centre.append(centre)
 		out.undermined.append(1 if lost else 0)
+		out.junction.append(0 if lost else junction)
 	return out
+
+
+## JUNCTION_OWN or JUNCTION_OTHER when the water at map point `p` (a bank point of this stroke
+## whose ground lies under `hold`) is held there by another pass of the stroke or by another body
+## standing at `hold` or higher, 0 when nothing holds it. `courses` as other_level_at().
+func _held_by(doc: MapDocument, p: Vector2, hold: float, hw: float, courses: Dictionary) -> int:
+	var top := hold + WaterMeshBuilder.BANK_HOLD_M + JUNCTION_OVER_M
+	var own := own_level_at(p, 0.0, 0.0, hw)
+	if own >= hold and own <= top:
+		return JUNCTION_OWN
+	var other := other_level_at(doc, p, courses)
+	return JUNCTION_OTHER if other >= hold and other <= top else 0
+
+
+## The level of the stroke's own water over map point `p` where `p` lies inside its channel (its
+## half-width there, head() applied, and no wider than `limit`), the highest when several passes
+## hold it; WaterGeometry.DRY when none does. A bank point stands past its own station's
+## half-width, so with `limit` that half-width it is never inside the channel beside it, however
+## the width varies along the course (a plunge pool widens it by a third): a hit is another part
+## of the course, the inside of a bend tighter than the channel is wide, a crossing, a closure.
+## With `skip` over zero, parts of the course within `skip` metres of arc of arc `s` are left out
+## (for a point on the course itself: an end).
+func own_level_at(p: Vector2, s: float = 0.0, skip: float = 0.0, limit: float = INF) -> float:
+	var best := WaterGeometry.DRY
+	for k in points.size() - 1:
+		if skip > 0.0 and arc[k] < s + skip and arc[k + 1] > s - skip:
+			continue
+		var a := points[k]
+		var segment := points[k + 1] - a
+		var length_sq := segment.length_squared()
+		var t := clampf((p - a).dot(segment) / length_sq, 0.0, 1.0) if length_sq > 1e-12 else 0.0
+		var along := lerpf(arc[k], arc[k + 1], t)
+		var half := minf(head(along, lerpf(widths[k], widths[k + 1], t)), limit)
+		if p.distance_to(a + segment * t) <= half:
+			best = maxf(best, level_at(along))
+	return best
+
+
+## The level of the other bodies' water over map point `p` (WaterGeometry.level_at() without
+## this stroke's reaches), or WaterGeometry.DRY. `courses` is filled on the first call with
+## WaterGeometry.river_courses(), so a caller asking many points smooths each river once.
+func other_level_at(doc: MapDocument, p: Vector2, courses: Dictionary) -> float:
+	if courses.is_empty():
+		courses.merge(WaterGeometry.river_courses(doc))
+		for id in ids:
+			courses[id] = []
+	return WaterGeometry.level_at(doc, p, -1, courses)
 
 
 ## The depth left `s` metres from a tapered end over a pool tail `tail`: the depth tapered from

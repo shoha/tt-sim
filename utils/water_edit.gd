@@ -31,6 +31,9 @@ extends RefCounted
 const RESAMPLE_M := 2.0
 ## A river joining other water ends this far past that water's edge (join_line()).
 const JOIN_INSET_M := 0.6
+## The most a conditioned reach is raised to stand at the level of water it crosses
+## (_meet_crossed_water()): under WaterGeometry.FREEBOARD_M, so its own banks still hold it.
+const JUNCTION_RAISE_M := 0.1
 ## The conditioner's parts load by path on first use: named as classes here they would join the
 ## start-up script graph (test_boot_graph).
 const COURSE_FIT_PATH := "res://utils/water_course_fit.gd"
@@ -339,6 +342,8 @@ static func _plan(
 		)
 		ranges = fit.ranges
 		fitted = fit.levels
+		if not bool(fit.blocked):
+			fitted = _meet_crossed_water(doc, course, ranges, fitted, courses)
 		report["max_cut"] = float(fit.max_cut)
 		report["blocked"] = bool(fit.blocked)
 		report["level_moved"] = 0.0 if fit.blocked else float(fit.moved)
@@ -373,6 +378,37 @@ static func _plan(
 		)
 		bodies.append(river)
 	return bodies
+
+
+## The reach levels `levels` (one per range of `ranges` over `course`) with each reach that
+## crosses existing water of `doc` standing AT that water's level (a junction is one water at one
+## level, card painter-water-junctions). The plan reads crossed water as ground a freeboard over
+## its level (water_ground()), so a reach is at or below it already; one that fell short by
+## JUNCTION_RAISE_M or less (the 5 cm lattice, a low spot elsewhere on the reach) is raised to it,
+## which keeps at least a third of the freeboard everywhere, and never above the reach upstream.
+## A reach further below is left: the two do not meet at one level and the field says so.
+static func _meet_crossed_water(
+	doc: MapDocument,
+	course: PackedVector2Array,
+	ranges: Array,
+	levels: PackedFloat64Array,
+	courses: Dictionary
+) -> PackedFloat64Array:
+	var out := levels.duplicate()
+	for k in mini(ranges.size(), out.size()):
+		var reach: Vector2i = ranges[k]
+		var crossed := INF
+		for i in range(reach.x, reach.y + 1):
+			var level := WaterGeometry.level_at(doc, course[i], -1, courses)
+			if level != WaterGeometry.DRY and WaterGeometry.ground_at(doc, course[i]) < level:
+				crossed = minf(crossed, level)
+		if is_inf(crossed):
+			continue
+		var short := crossed - out[k]
+		var ceiling := out[k - 1] if k > 0 else INF
+		if short > 1e-4 and short <= JUNCTION_RAISE_M and crossed <= ceiling:
+			out[k] = crossed
+	return out
 
 
 ## What re-fitting `doc`'s stored water would do (WaterRefit.refit(): strokes that climb

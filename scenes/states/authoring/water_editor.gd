@@ -480,7 +480,11 @@ static func compute(snapshot: MapDocument, spec: Dictionary, out: Dictionary) ->
 			snapshot.water_bodies = WaterEdit.with_bodies(snapshot, bodies)
 		"pond":
 			var id: int = spec.id
-			var level := WaterGeometry.pond_rim_level(snapshot, id)
+			var conditioned := bool(spec.get("condition", false))
+			# A conditioned pond dug over a stream takes the stream's level, not its bed's (a
+			# junction: WaterGeometry.pond_rim_level's `water`).
+			var water := WaterGeometry.levels(snapshot) if conditioned else PackedFloat32Array()
+			var level := WaterGeometry.pond_rim_level(snapshot, id, PackedByteArray(), -INF, water)
 			if spec.has("old_area"):
 				level = extended_pond_level(snapshot, id, spec.old_area, float(spec.old_level))
 			var body := WaterBody.pond(id, spec.depth, level)
