@@ -56,6 +56,8 @@ Dictionary water_mesh(const Dictionary &args) {
 	const PackedFloat32Array steep_a = a["steep"];
 	const PackedFloat32Array river_a = a["river"];
 	const PackedFloat32Array foot_a = a["foot"];
+	const PackedFloat32Array film_a = a["film"];
+	const PackedFloat32Array bank_a = a["bank"];
 	const PackedByteArray spill_a = a["spill"];
 	const PackedByteArray calm_a = a["calm"];
 	const int spill_pond = (int)(int64_t)a["spill_pond"];
@@ -76,6 +78,8 @@ Dictionary water_mesh(const Dictionary &args) {
 	const float *steep = steep_a.ptr();
 	const float *river = river_a.ptr();
 	const float *foot = foot_a.ptr();
+	const float *film = film_a.ptr();
+	const float *bank = bank_a.ptr();
 	const uint8_t *spill = spill_a.ptr();
 	const uint8_t *calm = calm_a.ptr();
 
@@ -122,7 +126,7 @@ Dictionary water_mesh(const Dictionary &args) {
 	std::vector<Vector3> verts;
 	std::vector<Vector3> normals;
 	std::vector<Vector2> uvs;
-	std::vector<float> c0, c1;
+	std::vector<float> c0, c1, c2;
 	std::vector<int32_t> indices;
 	Vector3 lo(INFINITY, INFINITY, INFINITY);
 	Vector3 hi(-INFINITY, -INFINITY, -INFINITY);
@@ -160,6 +164,11 @@ Dictionary water_mesh(const Dictionary &args) {
 					c0.push_back(energy[s]);
 					c0.push_back(shore[s]);
 					c0.push_back(steep[s]);
+					// CUSTOM2: the depth again, the film, the bank share, the film again (WaterFieldMarks).
+					c2.push_back((float)maxd(d, -1.0));
+					c2.push_back(film[s]);
+					c2.push_back(bank[s]);
+					c2.push_back(film[s]);
 					double mark = 0.0;
 					if (spill[s] == spill_pond) {
 						mark = pond_mark;
@@ -188,7 +197,7 @@ Dictionary water_mesh(const Dictionary &args) {
 	PackedVector3Array pv;
 	PackedVector3Array pn;
 	PackedVector2Array pu;
-	PackedFloat32Array p0, p1;
+	PackedFloat32Array p0, p1, p2;
 	PackedInt32Array pi;
 	pv.resize((int64_t)verts.size());
 	pn.resize((int64_t)verts.size());
@@ -200,10 +209,12 @@ Dictionary water_mesh(const Dictionary &args) {
 	}
 	p0.resize((int64_t)c0.size());
 	p1.resize((int64_t)c1.size());
+	p2.resize((int64_t)c2.size());
 	pi.resize((int64_t)indices.size());
 	if (!c0.empty()) {
 		std::memcpy(p0.ptrw(), c0.data(), c0.size() * sizeof(float));
 		std::memcpy(p1.ptrw(), c1.data(), c1.size() * sizeof(float));
+		std::memcpy(p2.ptrw(), c2.data(), c2.size() * sizeof(float));
 		std::memcpy(pi.ptrw(), indices.data(), indices.size() * sizeof(int32_t));
 	}
 	out["vertices"] = pv;
@@ -211,6 +222,7 @@ Dictionary water_mesh(const Dictionary &args) {
 	out["uvs"] = pu;
 	out["c0"] = p0;
 	out["c1"] = p1;
+	out["c2"] = p2;
 	out["indices"] = pi;
 	out["aabb"] = verts.empty() ? AABB() : AABB(lo, hi - lo);
 	return out;

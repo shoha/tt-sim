@@ -77,9 +77,10 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
   `ScatterTerrain.wet_sampler`, and `Ground::water_dist_at` mirrors `sample_grid` over the grid
   `ScatterNative.pack` adds to the job's `source` as `water_dist`, only for a job with a
   `water_dist` curve; the cap travels in the constants table as `water_dist_max_m`) and
-  `version()` is `ttscatter 9 curves water chunk fields wfield` (9 and `wfield`: the water field's
-  hot passes, `native/src/water_field.cpp` and `water_field_mesh.cpp`, docs/systems/water_field.md
-  "Edit latency"; 6: the rule noise went 3D, rockstretch
+  `version()` is `ttscatter 10 curves water chunk fields wfield2` (10 and `wfield2`: the water
+  field's foot seam pass and the marks' CUSTOM2 in the mesh call, card painter-water-editcost; 9 and
+  `wfield`: the water field's hot passes, `native/src/water_field.cpp` and `water_field_mesh.cpp`,
+  docs/systems/water_field.md "Edit latency"; 6: the rule noise went 3D, rockstretch
   2026-11-08; 7: the chunk call, "Native path"; 8 and `fields`: `rule_fields`,
   TerrainRules.sample_fields for every caller through `ScatterNative.rule_fields`, card
   terrainrules 2026-11-08, `native/src/terrain_fields.cpp`, which the scatter window's grids in

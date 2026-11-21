@@ -52,6 +52,7 @@ public:
 	Dictionary water_derive(const Dictionary &args) const;
 	Dictionary water_shore(const Dictionary &args) const;
 	Dictionary water_raster(const Dictionary &args) const;
+	Dictionary water_foot_seams(const Dictionary &args) const;
 	Dictionary water_mesh(const Dictionary &args) const;
 	Dictionary water_textures(const Dictionary &args) const;
 };

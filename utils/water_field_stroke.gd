@@ -133,8 +133,17 @@ static func table(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
 ## them: each side ends as the coordinate ends at its range. A function of `raw` within one
 ## sample, so an incremental update equals a full build. `areas` are the sample rects that can
 ## hold a foot (the areas of the strokes with a fall): over the whole grid seams are looked for
-## only there, grown by one sample. Returns the array to keep: a copy of `raw` when `region` is
-## the whole grid, else `out` with `region` rewritten.
+## only there. Returns the array to keep: a copy of `raw` when `region` is the whole grid, else
+## `out` with `region` rewritten.
+##
+## The test is symmetric (a pair of neighbours on a seam clears both), so each pair is tested once,
+## from its first sample in row order against the four neighbours ahead of it, and only samples
+## that hold a foot are tested at all. Over the whole grid the areas are scanned as the union of
+## their rows' spans (overlapping areas once); over a dirty rect the rect grown by one sample is
+## scanned (a pair across its edge is tested from its first sample) and only samples inside the
+## rect are cleared: every sample of the rect is judged again, since a stroke that only borders
+## the rect wrote no area this time and its seam must stay cleared. The reference of the native
+## twin that WaterField runs when the library is loaded (WaterFieldNative.foot_seams), bit for bit.
 static func foot_seams(
 	raw: PackedFloat32Array,
 	out: PackedFloat32Array,
@@ -142,48 +151,87 @@ static func foot_seams(
 	region: Rect2i,
 	areas: Array[Rect2i]
 ) -> PackedFloat32Array:
+	var whole := region == Rect2i(Vector2i.ZERO, size)
 	var made := out
-	var look := areas
-	if region == Rect2i(Vector2i.ZERO, size):
+	if whole:
 		made = raw.duplicate()
 	else:
-		# A dirty rect: every sample of it is judged again (a stroke that only borders the rect
-		# wrote no area this time, and its seam must stay cleared).
-		look = [region]
 		for z in range(region.position.y, region.end.y):
 			var row := z * size.x
 			for i in range(row + region.position.x, row + region.end.x):
 				made[i] = raw[i]
 	if not foot_seams_cleared:
 		return made
+	var look: Array[Rect2i] = []
+	if whole:
+		for area in areas:
+			look.append(area.intersection(region))
+	else:
+		look.append(region.grow(1).intersection(Rect2i(Vector2i.ZERO, size)))
 	var none := NO_FOOT * 0.5
-	for area in look:
-		var part := area.grow(1).intersection(region)
-		for z in range(part.position.y, part.end.y):
-			var row := z * size.x
-			for x in range(part.position.x, part.end.x):
+	var sx := size.x
+	var x0 := region.position.x
+	var x1 := region.end.x
+	var z0 := region.position.y
+	var z1 := region.end.y
+	var top := size.y
+	var bottom := 0
+	for part in look:
+		if part.has_area():
+			top = mini(top, part.position.y)
+			bottom = maxi(bottom, part.end.y)
+	for z in range(top, bottom):
+		var spans := _row_spans(look, z)
+		var row := z * sx
+		var below := z + 1 < size.y
+		var here := z >= z0 and z < z1
+		var next := z + 1 >= z0 and z + 1 < z1
+		for k in range(0, spans.size(), 2):
+			for x in range(spans[k], spans[k + 1]):
 				var v := raw[row + x]
-				if v < none and _at_seam(raw, size, x, z, v):
-					made[row + x] = NO_FOOT
+				if v >= none:
+					continue
+				# The four neighbours ahead: (x + 1, z), (x - 1, z + 1), (x, z + 1), (x + 1, z + 1).
+				var mine := here and x >= x0 and x < x1
+				if x + 1 < sx:
+					var o := raw[row + x + 1]
+					if o < none and o * v < 0.0 and absf(o - v) > FOOT_SEAM_JUMP:
+						if mine:
+							made[row + x] = NO_FOOT
+						if here and x + 1 >= x0 and x + 1 < x1:
+							made[row + x + 1] = NO_FOOT
+				if not below:
+					continue
+				var under := row + sx + x
+				for dx in range(-1, 2):
+					if x + dx < 0 or x + dx >= sx:
+						continue
+					var o := raw[under + dx]
+					if o < none and o * v < 0.0 and absf(o - v) > FOOT_SEAM_JUMP:
+						if mine:
+							made[row + x] = NO_FOOT
+						if next and x + dx >= x0 and x + dx < x1:
+							made[under + dx] = NO_FOOT
 	return made
 
 
-## True when a neighbour of sample (x, z), whose foot coordinate is `v`, holds one of the other
-## sign more than FOOT_SEAM_JUMP away.
-static func _at_seam(raw: PackedFloat32Array, size: Vector2i, x: int, z: int, v: float) -> bool:
-	var none := NO_FOOT * 0.5
-	for dz in range(-1, 2):
-		var zz := z + dz
-		if zz < 0 or zz >= size.y:
-			continue
-		for dx in range(-1, 2):
-			var xx := x + dx
-			if xx < 0 or xx >= size.x:
-				continue
-			var o := raw[zz * size.x + xx]
-			if o < none and o * v < 0.0 and absf(o - v) > FOOT_SEAM_JUMP:
-				return true
-	return false
+## The union of `rects`' spans on row `z` as [start, end) pairs in order, overlaps merged.
+static func _row_spans(rects: Array[Rect2i], z: int) -> PackedInt32Array:
+	var starts := PackedInt32Array()
+	var ends := PackedInt32Array()
+	for r in rects:
+		if r.has_area() and z >= r.position.y and z < r.end.y:
+			var at := starts.bsearch(r.position.x)
+			starts.insert(at, r.position.x)
+			ends.insert(at, r.end.x)
+	var spans := PackedInt32Array()
+	for k in starts.size():
+		if not spans.is_empty() and starts[k] <= spans[-1]:
+			spans[-1] = maxi(spans[-1], ends[k])
+		else:
+			spans.append(starts[k])
+			spans.append(ends[k])
+	return spans
 
 
 ## The runs of set stations in `lost` as Vector3i(first, end, bridged): `end` is exclusive and

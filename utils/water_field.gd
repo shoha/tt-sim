@@ -203,7 +203,7 @@ func update(doc: MapDocument, dirty: Rect2i) -> Rect2i:
 	var ends: Array[Dictionary] = []
 	var runs: Array[Dictionary] = []
 	_write_strokes(doc, rect, pond_level, ends, runs)
-	foot = WaterFieldStroke.foot_seams(_foot_raw, foot, size, _clip(rect.grow(1)), _foot_rects)
+	foot = WaterFieldNative.foot_seams(self, _clip(rect.grow(1)))
 	var t1 := Time.get_ticks_usec()
 	var changed := _spill_pass(rect, was)
 	var t2 := Time.get_ticks_usec()

@@ -7,6 +7,7 @@ extends GutTest
 ## Pending without the library; its absence is the GDScript path test_water_field checks.
 
 const FIXTURE := "res://tests/fixtures/water_field_canonical.ttmap"
+const Corpus := preload("res://tests/unit/water_corpus_cases.gd")
 const _ARRAYS := [
 	"ground",
 	"w",
@@ -114,13 +115,14 @@ func test_the_native_mesh_and_textures_equal_the_gdscript_ones() -> void:
 	assert_eq(native.vertices, gd.vertices, "vertex count")
 	assert_eq(native.triangles, gd.triangles, "triangle count")
 	assert_eq(native.aabb, gd.aabb, "bounds")
-	var names := ["vertices", "normals", "uvs", "custom0", "custom1", "indices"]
+	var names := ["vertices", "normals", "uvs", "custom0", "custom1", "custom2", "indices"]
 	var slots := [
 		Mesh.ARRAY_VERTEX,
 		Mesh.ARRAY_NORMAL,
 		Mesh.ARRAY_TEX_UV,
 		Mesh.ARRAY_CUSTOM0,
 		Mesh.ARRAY_CUSTOM1,
+		Mesh.ARRAY_CUSTOM2,
 		Mesh.ARRAY_INDEX,
 	]
 	for k in slots.size():
@@ -153,3 +155,49 @@ func test_the_native_raster_equals_the_gdscript_raster() -> void:
 				assert_eq(native[key], gd[key], "raster %s of stroke %d clip %s" % [key, typed[0].id, clip])
 			checked += 1
 	assert_gt(checked, 20, "every stroke checked with every clip")
+
+
+func test_the_native_seam_pass_equals_the_gdscript_and_the_rule() -> void:
+	# Card painter-water-editcost: a grid of coordinates of both signs and jumps of every size
+	# inside three overlapping areas (none outside, as the strokes write them), over the whole grid
+	# and over dirty rects at the grid's edges and inside it.
+	if _skip_without_library():
+		return
+	var size := Vector2i(41, 33)
+	var areas: Array[Rect2i] = [Rect2i(2, 1, 20, 18), Rect2i(14, 10, 25, 22), Rect2i(30, 0, 11, 6)]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 118
+	var raw := PackedFloat32Array()
+	for z in size.y:
+		for x in size.x:
+			var inside := false
+			for a in areas:
+				inside = inside or a.has_point(Vector2i(x, z))
+			var has_foot := inside and rng.randf() < 0.8
+			raw.append(rng.randf_range(-8.0, 8.0) if has_foot else WaterFieldStroke.NO_FOOT)
+	var rule := Corpus.seam_rule(raw, size)
+	assert_ne(rule, raw, "the grid holds seams")
+	var f := WaterField.new()
+	f.size = size
+	f._foot_raw = raw
+	f._foot_rects = areas
+	var all := Rect2i(Vector2i.ZERO, size)
+	for region: Rect2i in [all, Rect2i(0, 0, 9, 7), Rect2i(12, 8, 17, 13), Rect2i(30, 25, 11, 8)]:
+		var before := raw.duplicate()
+		before.fill(3.0)
+		f.foot = before.duplicate()
+		var native := WaterFieldNative.foot_seams(f, region)
+		assert_eq(f.foot, before, "the field's own array is not written")
+		var gd := WaterFieldStroke.foot_seams(raw, before.duplicate(), size, region, areas)
+		assert_eq(native, gd, "native equals GDScript over %s" % region)
+		var differ := 0
+		for z in size.y:
+			for x in size.x:
+				var i := z * size.x + x
+				var want := rule[i] if region.has_point(Vector2i(x, z)) else 3.0
+				differ += 1 if native[i] != want else 0
+		assert_eq(differ, 0, "the rule's samples over %s, the rest kept" % region)
+	WaterFieldStroke.foot_seams_cleared = false
+	var kept := WaterFieldNative.foot_seams(f, all)
+	WaterFieldStroke.foot_seams_cleared = true
+	assert_eq(kept, raw, "the switch off keeps the coordinate as written")
