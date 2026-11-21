@@ -2562,11 +2562,55 @@ and torture sheets, the score tables) and the card's handoff
   heights that changed, grown by the field's reach (6 samples); the result equals a full bake bit
   for bit (`test_ground_shade_field.gd`, and checked in the running game after a sculpt stroke).
   245 x 245 samples: 95 ms the whole map, 1.5 ms a 2.5 m dab, 0.55 ms a 1 m dab (GDScript).
-- **The terminator is relative.** Ground facing the sun under 0.4 of what level ground does
-  (N.L / L.y) is shade by its form, one hard step of the brush-edged read (`TURN_REL`); the old
-  facing fade of the cast shadow (`CLIFF_CAST_FACING`) is gone. A bank turned from the sun is a
-  whole shade mass in its role's shade colour (on the owner's bank view 29% of the frame went
-  from lit to shade, on the falls view 24%).
+- **The terminator is relative, with a floor at grazing light** (card painter-ground-rocks,
+  2026-11-20, after the owner's "cleaner, but too much shade"). Ground is shade by its form, one
+  hard step of the brush-edged read, where it faces the sun under `TURN_REL` 0.1 of what level
+  ground does (N.L / L.y), or under `TURN_NL` 0.07 (about four degrees from edge-on) when that is
+  more. The floor is where the shadow map cannot be trusted: with the terminator at 0 the pushed
+  back-face caster stipples grazing ground (torture set dots +0.41 with the meadow at 0, ragged
+  edges on the falls cliff with the rock at 0), and at a sun elevation of 10 the floor equals the
+  0.4 the first build used at every hour. At midday that 0.4 put every bank steeper than 30
+  degrees and turned from the sun in shade (29% of the owner's bank view, 27% of the falls view);
+  now only ground the sun does not reach is. The old facing fade of the cast shadow
+  (`CLIFF_CAST_FACING`) is gone.
+- **The foot and the lip.** The foot is drawn only on the rock role (a face's own lower rim) and
+  not into the shade colour: on sand it was a lone lilac lens under a shade mass, on grass a dark
+  squiggle. The lip stays, lit and in shade (a crest's edge).
+- **Two shade values on a cliff.** Rock whose raw steepness (the field's a) is under `UP_STEEP`
+  0.3 (a ledge's top inside a cliff's reach) takes `SHADE_SKY`, a step lighter and cooler than the
+  wall's shade. The meadow's and the sand's shade stay the sheet's, because the grass and flowers
+  on them are toned to it (lighter ground shade made every tuft in a shadow a dark speck). On the
+  owner's two views this second value changes almost nothing (their ledges are not level in the
+  field); the ledge on the falls view reads again because of the terminator.
+- **The block-in's tone steps have brush edges.** The five-step variant of two very slow noises
+  (its contours near straight for metres: the ruled diagonals across a bank, gone with
+  `patches = 0`) is read at the pixel's point moved by the same brush wobble as the form's edges.
+- **Rocks and logs (kind 2)** are shaded by form alone: `painter_solid` asks the shadow map from a
+  shell around the asset (`LIGHT_VERTEX` moved out from its middle, never downward, by half its
+  half size and at most 0.4 m), so it never takes its own shadow (the dark blotches and jagged
+  polygons at a low sun) while the caster is untouched (its ground shadow starts at its foot) and
+  what a tree or the terrain throws lands on it in one smooth edge. The form's normal is the
+  face's mixed 0.6 to the normal of the spheroid of the asset's box, only near that spheroid's
+  surface (a stone inside a scatter keeps its faces); in a cast shadow a rock keeps the bushes'
+  half step, so its planes still read. The earlier fade of the cast shadow by facing is gone.
+- **A rock's planes and its shade colour** (card painter-ground-rocks-finish). The form's turn
+  decides only what is in SHADE (one firm curve); what is LIT or MIDDLE on the sunward side is
+  decided a plane at a time (`solid_plane()`, `SELECTOR_SOLID`, set by `painter_solid` only): the
+  directions round the rock are cut into about twenty cells (a jittered Voronoi lattice on the
+  sphere of the form's normals, `SOLID_PLANES`, each rock its own) and a cell is lit as its one
+  direction. A rock under 0.6 m of half size keeps its mesh's faces as its planes (a stone is two
+  or three of them), from 1.2 m the lattice's alone (a boulder's triangles drew stair steps). The
+  shade keeps `solid_pull` of the ramp's pull, the rest the rock's own colour at the shade's value:
+  `PainterPlantTone` sets it half way between 1 and the sheet's `cliff-pull` (wood: 1), since the
+  full pull made a boulder's shade side the most saturated mass of a frame. Limits seen: the
+  planes show where a boulder's lit side meets its middle step (a low or a side sun); a boulder
+  seen from the sun's side at midday is still one pale mass, and its shade side one flat tone.
+- **Contact pool, seam and wet band have pixel-wide edges** (same card). The pool and the seam
+  were a 0.1 step of the occlusion field and the wet band a 0.14 step of the wet line: where the
+  field falls slowly (round a group of stones, along a stream seen close) that was a soft-edged
+  dark block or a soft edge a tenth of a metre wide, the only soft tonal edges of the ground. Now
+  each step is as wide as a pixel or two, at most what it was. The pool and the seam are also not
+  drawn on a sheer face (`role_slope` 0.55 or more), since the field is a plan view.
 - **The terrain casts with its back faces** (`TerrainBackCaster`, a shadows-only twin of each
   chunk drawn with `painter_terrain_caster.gdshader`, `cull_front`, only while Painted): ground
   that faces the sun is never shadowed by its own surface (the stipple and the hatching on grazing
@@ -2581,9 +2625,17 @@ and torture sheets, the score tables) and the card's handoff
 - **Cost.** GPU in-run A/B against main (7 rounds, the rigs 115 s apart): f1 close view
   -0.153 ms, wide -0.098 ms (two field fetches a pixel, none per mark, no marks on the rock of a
   slope).
-- **Still visible (the owner judges):** under a shade mass on sand a thin firm purple strip (sand
-  in form shade between the rock line and the terminator) and the foot as one flat lens on the lit
-  sand below it; the strata bricks above.
+- **Still visible (the owner judges):** the strata bricks above; a darker olive oval round the
+  three stones on the cliff left of the falls, now firm-edged: it is the contact SEAM of the stone
+  group (gone with `f_core = 0`; not the pool, the wet band or a cast shadow), about three times
+  the stones' own size and on ground the field does not call sheer, so the face rule leaves it
+  (the lever is the occlusion field's footprint for a scatter of stones, `PainterOcclusion`); the
+  shade of a slope that crosses the map's edge stops at the edge in a ruled line (the skirt is
+  not field-shaded); the lip as a thin light line along a crest. The soft edge at the left of the
+  bank view was the wet band, not a cast shadow (above). Cost of the finish card's shaders against
+  main, GPU in-run A/B: f1 close view +0.041 ms, wide +0.038 ms (the planes' lattice is 24 hashes
+  a rock pixel; one hash a cell would cut it). Evidence of cards painter-ground-rocks and -finish:
+  `docs/research/2026-11-09-prototypes/compare/painter_final107_ground_rocks/` (`finish/`).
 
 ## Verification
 

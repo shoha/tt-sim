@@ -85,7 +85,17 @@ const float SEAM_DARK = 0.38;
 const float STRATA_H = 0.6;
 // The terminator (light()): ground facing the sun under this share of what level ground does is
 // shade by its form.
-const float TURN_REL = 0.4;
+const float TURN_REL = 0.1;
+// And ground within about four degrees of edge-on to the sun (N.L under this) is shade whatever
+// the sun's height: there the shadow map cannot be trusted (the pushed back-face caster and the
+// soft filter stipple it). At a low sun this is the larger of the two (0.4 of level ground's light
+// at elevation 10); at midday TURN_REL is, so only ground turned from the sun is shade (card
+// painter-ground-rocks: at 0.4 for every hour a bank the midday sun reaches was a shade mass).
+const float TURN_NL = 0.07;
+// Shade on up-facing ground: the raw steepness (the field's a) under which ground faces up, and
+// what the sky does to its shade colour (linear).
+const float UP_STEEP = 0.3;
+const vec3 SHADE_SKY = vec3(1.10, 1.18, 1.34);
 // The field convexity (1/m) past which a rim takes its lit lip and a foot its dark one.
 const float LIP_CURV = 0.55;
 // The brush edge of every shape the ground's form makes (the rock role, the lip, the foot, the
@@ -374,7 +384,7 @@ vec3 path_pattern(int kind, vec2 q, float px) {
 // pixel; a stone's own hash moves the path's edge, so the edge is made of whole stones. On a
 // cliff face (rock, steep) the tone steps in soft strata bands by the pixel's height `wy`, each
 // band's top a step lighter (a ledge catching the light).
-void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float wy, out vec3 lit, out vec3 shd) {
+void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float wy, vec2 ew, out vec3 lit, out vec3 shd) {
 	vec3 p = vec3(q.x, 0.0, q.y);
 	float j = (h - 0.5) * min(mk, 1.0);
 	// A slow warp carries the meadow's edge against the forest floor; the path keeps its line.
@@ -437,9 +447,14 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float
 		role = 3;
 	}
 	// Variation inside a zone: the role's own two variants by two slow noises. The block-in takes
-	// five close steps of it; a mark takes it unstepped, a little off by its own hash.
-	float n1 = p_noise(vec3(p.x * 0.05, 0.0, p.z * 0.075) + 3.0);
-	float n2 = p_noise(vec3(p.x * 0.16, 1.7, p.z * 0.21) + 11.0);
+	// five close steps of it; a mark takes it unstepped, a little off by its own hash. The noises
+	// are so slow that a step's contour is near straight for metres: close up it was a ruled
+	// diagonal across a bank (card painter-ground-rocks). The block-in reads them at the pixel's
+	// point moved by the brush's wobble (`ew`, fragment()'s: the same hand as the form's edges), so
+	// each step ends in a brush edge at every zoom and the masses stay where they were.
+	vec3 pe = p + vec3(ew.x, 0.0, ew.y);
+	float n1 = p_noise(vec3(pe.x * 0.05, 0.0, pe.z * 0.075) + 3.0);
+	float n2 = p_noise(vec3(pe.x * 0.16, 1.7, pe.z * 0.21) + 11.0);
 	float pn = (n1 - 0.5) + (n2 - 0.5) * 0.4;
 	if (mk < 0.5) {
 		pn = floor(pn * 5.0 + 0.5) / 5.0;
@@ -524,7 +539,12 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float
 		vec2 size = vec2(textureSize(water_weights, 0));
 		vec2 muv = ((q - layer_grid_origin) / layer_grid_step + 0.5) / size;
 		float wet = textureLod(water_weights, muv, 0.0).a;
-		float band = smoothstep(WET_EDGE - 0.07, WET_EDGE + 0.07, wet + (p_noise(p * 1.7 + 83.0) - 0.5) * 0.4 + (h - 0.5) * 0.12 * min(mk, 1.0));
+		// The step is about two pixels wide, at most the 0.14 of the wet line it used to be at every
+		// zoom: the line falls over 0.8 m and the noise as fast again, so close up that 0.14 was a
+		// soft edge a tenth of a metre wide, the one soft edge of the ground (card
+		// painter-ground-rocks). px * 2.5 is the wet value's change over a pixel.
+		float wet_w = clamp(px * 2.5, 0.002, 0.07);
+		float band = smoothstep(WET_EDGE - wet_w, WET_EDGE + wet_w, wet + (p_noise(p * 1.7 + 83.0) - 0.5) * 0.4 + (h - 0.5) * 0.12 * min(mk, 1.0));
 		lit = mix(lit, lit * WET_TINT, band);
 		shd = mix(shd, shd * WET_TINT, band);
 	}
@@ -569,9 +589,11 @@ vec3 contact_at(vec3 p, vec2 xz) {
 		vec2 size = vec2(textureSize(occ_map, 0)) * occ_step;
 		vec2 s = textureLod(occ_map, (xz + to_sun * SEAM_LEAN_M - occ_origin) / size, 0.0).rg;
 		vec2 w = vec2(p_noise(p * 1.3 + 80.0), p_noise(p * 2.7 + 95.0)) - 0.5;
-		occ.xy = vec2(
-			smoothstep(0.4, 0.5, s.r + w.x * 0.3) * occ_k.x,
-			smoothstep(0.4, 0.5, s.g + w.y * 0.3) * occ_k.y);
+		// A firm edge whatever the field's gradient: the step is a pixel wide, at most the 0.1 of
+		// the field it used to be (round a group of stones the field falls slowly, and a 0.1 step
+		// of it was a soft-edged dark block, the one tonal edge of the ground that was no brush's).
+		vec2 v = s + w * 0.3 - 0.45;
+		occ.xy = clamp(v / clamp(fwidth(v), vec2(1.0e-4), vec2(0.1)) + 0.5, 0.0, 1.0) * occ_k.xy;
 	}
 	for (int i = 0; i < tok_n; i++) {
 		vec4 t = tok[i];
@@ -611,10 +633,11 @@ void fragment() {
 	vec4 fld = vec4(0.0);
 	float slope = 1.0 - n.y;
 	float role_slope = slope;
+	// The brush's wobble (also what the block-in's tone steps are read through, ground_at()).
+	vec3 sp = vec3(xz.x, v_wy, xz.y) * EDGE_FREQ;
+	vec2 warp = vec2(p_noise(sp + 57.0), p_noise(sp + 91.0)) - 0.5;
 	if (fielded) {
 		vec4 here = shade_field(xz);
-		vec3 sp = vec3(xz.x, v_wy, xz.y) * EDGE_FREQ;
-		vec2 warp = vec2(p_noise(sp + 57.0), p_noise(sp + 91.0)) - 0.5;
 		float flat_k = min(inversesqrt(1.0 + dot(here.xy, here.xy)), 1.0 - here.w);
 		fld = shade_field(xz + warp * (EDGE_REACH * flat_k));
 		n = normalize(vec3(-fld.x, 1.0, -fld.y));
@@ -734,9 +757,9 @@ void fragment() {
 	vec3 lit;
 	vec3 shd;
 	if (best > 0.0) {
-		ground_at(a_k, role_slope, h_k, l_k, (fract(h_k * 9.1) - 0.5) * 0.5, px_m, v_wy, lit, shd);
+		ground_at(a_k, role_slope, h_k, l_k, (fract(h_k * 9.1) - 0.5) * 0.5, px_m, v_wy, vec2(0.0), lit, shd);
 	} else {
-		ground_at(xz, role_slope, 0.5, 0.0, 0.0, px_m, v_wy, lit, shd);
+		ground_at(xz, role_slope, 0.5, 0.0, 0.0, px_m, v_wy, warp * EDGE_REACH, lit, shd);
 	}
 	// A cliff's top edge (the ground convex, toward a steep drop) takes a lit lip, its foot
 	// (concave) a darker one: the mean curvature from the screen derivatives of the normal and
@@ -763,7 +786,11 @@ void fragment() {
 			curv = fld.z;
 			near = step(0.2, role_slope) * (1.0 - step(0.55, role_slope)) * step(0.08, slope);
 			lip = step(LIP_CURV, curv) * near;
-			foot = step(LIP_CURV, -curv) * near;
+			// The foot is the face's own lower rim (the rock role). On the meadow or the sand
+			// below a bank it was a lone lens of a middle tone under the shade mass and a dark
+			// squiggle along the grass's edge, shapes that said nothing about the form (card
+			// painter-ground-rocks).
+			foot = step(LIP_CURV, -curv) * near * step(0.3, role_slope);
 		} else {
 			vec3 wpos = vec3(v_xz.x, v_wy, v_xz.y);
 			vec3 dpx = dFdx(wpos);
@@ -782,10 +809,14 @@ void fragment() {
 			foot = smoothstep(0.3, 0.8, -curv + brush) * rim * near;
 		}
 		vec3 warm = vec3(1.0 + cliff_warm * 0.5, 1.0, 1.0 - cliff_warm * 0.5);
+		// The lip stays in the shade colour, so a ledge's edge reads inside a shade mass; the foot's
+		// darker lens there does not (with the field it was a shape with ruled edges in a bank's
+		// shade).
+		float in_shd = fielded ? 0.0 : 1.0;
 		lit *= 1.0 + cliff_edge * lip * warm;
 		shd *= 1.0 + cliff_edge * 0.5 * lip * warm;
 		lit = mix(lit, shd, foot * cliff_foot);
-		shd *= 1.0 - foot * cliff_foot * 0.3;
+		shd *= 1.0 - in_shd * foot * cliff_foot * 0.3;
 		if (cliff_snow > 0.0) {
 			float cap = smoothstep(0.35, 0.65, curv + brush) * (1.0 - smoothstep(0.5, 0.8, slope)) * near;
 			cap = floor(cap * 2.0 + 0.5) * 0.5 * cliff_snow;
@@ -793,6 +824,17 @@ void fragment() {
 			lit = mix(lit, role_col(true, 0, sv), cap);
 			shd = mix(shd, role_col(false, 0, sv), cap);
 		}
+	}
+	// Two shade values on a cliff, so its shade mass still describes its form (card
+	// painter-ground-rocks; owner: "we lose definition of the ledge"): rock that faces up (a ledge's
+	// top, the apron inside a cliff's reach) sees the sky and is a step lighter and cooler than the
+	// wall's shade. Up-facing is the field's raw steepness under UP_STEEP (the heights as sculpted,
+	// not the band-limited form, in which a narrow ledge is part of its cliff), a hard step of the
+	// brush-edged read. The meadow's and the sand's shade stay the sheet's: the grass and the
+	// flowers that stand on them are toned to it.
+	if (fielded) {
+		float up = (1.0 - step(UP_STEEP, fld.w)) * step(0.3, role_slope);
+		shd = mix(shd, shd * SHADE_SKY, up);
 	}
 	if (skirt) {
 		lit = mix(lit, foot_col, out_k);
@@ -808,8 +850,13 @@ void fragment() {
 	f_cut =cut_amp > 0.0 ? be_cut(st) * cut_amp : 0.0;
 	f_edge = p_noise(p * 0.55 + 71.0);
 	vec3 contact = contact_at(p, xz);
-	f_pool = contact.x;
-	f_core = contact.y;
+	// The pool and the seam lie on the ground a thing stands on, not down the face below it: the
+	// occlusion field is a plan view, so under stones on a ledge they ran down the wall as a tall
+	// dark block that joined the ledge, the wall and the stones into one shape (card
+	// painter-ground-rocks). The face is the brush-edged read's, the step that keeps the lip off it.
+	float on_ground = fielded ? 1.0 - step(0.55, role_slope) : 1.0;
+	f_pool = contact.x * on_ground;
+	f_core = contact.y * on_ground;
 	f_tok = contact.z;
 }
 
@@ -830,9 +877,11 @@ void light() {
 		// is a brush's, not a gradient where the form turns slowly.
 		float nl = dot(normalize(f_n), lw);
 		float rel = nl / max(lw.y, 0.05);
+		// TURN_REL, or TURN_NL as a share of level ground's light where that is more (a low sun).
+		float turn = max(TURN_REL, TURN_NL / max(lw.y, 0.05));
 		float turned = shade_present && !skirt && !world_frame
-			? step(rel + (f_edge - 0.5) * 0.15, TURN_REL)
-			: 1.0 - smoothstep(TURN_REL - 0.03, TURN_REL + 0.03, rel + (f_edge - 0.5) * 0.15);
+			? step(rel + (f_edge - 0.5) * 0.15, turn)
+			: 1.0 - smoothstep(turn - 0.03, turn + 0.03, rel + (f_edge - 0.5) * 0.15);
 		float shade = max(cast, turned);
 		vec3 col = mix(f_lit, f_shd, shade);
 		// Contact occlusion (card painter-tree-ground): what stands on the ground shuts out the sky,
