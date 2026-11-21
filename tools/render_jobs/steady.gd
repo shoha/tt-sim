@@ -17,6 +17,10 @@ extends RefCounted
 ## The gust field follows the global wind clock instead (autoloads/wind.gd): freeze_wind pins
 ## it at 0 and thaw_wind releases it.
 const WIND_SPEEDS: Array[String] = ["sway_speed", "flutter_speed", "wind_strength"]
+## Frames in a row the camera must stand still after a framing step placed it (framed()).
+const VIEW_REST_FRAMES := 3
+## How long (seconds) each of framed()'s waits lasts before the step carries on and logs it.
+const VIEW_HOLD_S := 10.0
 
 
 ## Sets the wind uniforms (WIND_SPEEDS) of every ShaderMaterial under `root` that has them to 0,
@@ -92,6 +96,61 @@ static func busy(map: GameMap, ctrl: AuthoringController) -> String:
 	if ctrl.editor != null and ctrl.editor.has_height_work():
 		return "height work"
 	return ""
+
+
+## Whether a `call` step frames the view: its probe has a static `frames_view(step) -> bool` that
+## says so (water.gd's `look`, a card's named-view probe). driver.gd runs such a step through
+## framed().
+static func frames_view(script: GDScript, step: Dictionary) -> bool:
+	var has := script.get_script_method_list().any(
+		func(m: Dictionary) -> bool: return m.name == "frames_view"
+	)
+	return has and bool(script.call("frames_view", step))
+
+
+## One frame of a framing step (driver.gd's `look_at`, a `call` whose probe frames_view): "hold"
+## while it waits, "" once done, or a line for the job log when it gave up waiting. It ends the
+## zoom ease on its target, waits for any other camera motion (a home tween, a pan) to stop, calls
+## `place` once, then holds until the camera has stood still, the holder, the camera's transform and its
+## size unchanged, for VIEW_REST_FRAMES frames in a row. Each wait gives up at VIEW_HOLD_S seconds
+## and says so in the returned line ("" when nothing gave up).
+## Why: a view placed while the zoom still eases moves with the ease's zoom toward the cursor
+## afterwards, so a capture after it showed the requested view only when the view before it had
+## the same zoom (2026-11-20, painter-rocks-forms: f1_o after `wide` came out metres off).
+## `state` is the step's own (driver._state: `t` seconds in the step, `phase` from 0).
+static func framed(map: GameMap, state: Dictionary, place: Callable) -> String:
+	var cc := map.get_camera_controller()
+	if int(state.phase) == 0:
+		cc.finish_zoom()
+		if not cc.is_at_rest():
+			if float(state.t) < VIEW_HOLD_S:
+				return "hold"
+			state.note = "view placed with the camera still moving after %.0f s" % VIEW_HOLD_S
+		place.call()
+		state.phase = 1
+		state.t = 0.0
+		state.rest = 0
+		state.pose = camera_pose(map)
+		return "hold"
+	var pose := camera_pose(map)
+	var still: bool = cc.is_at_rest() and pose == state.pose
+	state.pose = pose
+	state.rest = int(state.rest) + 1 if still else 0
+	if int(state.rest) >= VIEW_REST_FRAMES:
+		return String(state.get("note", ""))
+	if float(state.t) >= VIEW_HOLD_S:
+		return "view still moving %.0f s after it was placed" % VIEW_HOLD_S
+	return "hold"
+
+
+## The camera's pose as framed() compares it frame to frame: the holder's position, the camera's
+## global transform and its orthographic size.
+static func camera_pose(map: GameMap) -> Array:
+	return [
+		map.cameraholder_node.global_position,
+		map.camera_node.global_transform,
+		map.camera_node.size,
+	]
 
 
 ## What driver.gd's `wait_ready` still waits on, one entry per condition that holds (empty when

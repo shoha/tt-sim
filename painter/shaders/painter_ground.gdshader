@@ -150,7 +150,8 @@ uniform sampler2D shade_map : hint_default_black, filter_linear, repeat_disable;
 uniform bool shade_present = false;
 
 // Contact occlusion (PainterOcclusion): the footprint field (r a pool under crowns, bushes, rocks and
-// houses, g a seam at their feet), its origin and texel size, the pool's and seam's strength, the
+// houses, g a seam at their feet, b and a the height of a stone's foot: contact_at()), its origin
+// and texel size, the pool's and seam's strength, the
 // deeper shade's value (z) and soil share (w), its tint, and the tokens' feet discs (x, z, radius,
 // foot y) with their strengths (x the seam's, y the pool's).
 uniform sampler2D occ_map : hint_default_black, filter_linear, repeat_disable;
@@ -587,7 +588,13 @@ vec3 contact_at(vec3 p, vec2 xz) {
 		float sl = length(foliage_sun.xz);
 		vec2 to_sun = sl > 0.01 ? foliage_sun.xz / sl : vec2(0.0);
 		vec2 size = vec2(textureSize(occ_map, 0)) * occ_step;
-		vec2 s = textureLod(occ_map, (xz + to_sun * SEAM_LEAN_M - occ_origin) / size, 0.0).rg;
+		vec4 f = textureLod(occ_map, (xz + to_sun * SEAM_LEAN_M - occ_origin) / size, 0.0);
+		// A stone's mark lies at the height of its foot (b over a: the foot's height, a: one over
+		// its vertical reach; a 0 where the footprint has none): the field is a plan view, and
+		// under stones at a cliff's edge the mark ran down the wall below them. The coverage falls
+		// off with height before the brush's threshold, so that edge is a brush's too.
+		float up = abs(v_wy - f.b / max(f.a, 1.0e-4)) * f.a;
+		vec2 s = f.rg * (1.0 - smoothstep(1.0, 2.0, up));
 		vec2 w = vec2(p_noise(p * 1.3 + 80.0), p_noise(p * 2.7 + 95.0)) - 0.5;
 		// A firm edge whatever the field's gradient: the step is a pixel wide, at most the 0.1 of
 		// the field it used to be (round a group of stones the field falls slowly, and a 0.1 step

@@ -30,7 +30,8 @@ extends RefCounted
 ##                               bed, its extent, depths, and the points later steps can name
 ##                               as "found:deep", "found:shallow", "found:dry", "found:across_a"
 ##                               and "found:across_b" (any point field takes them).
-##   look {at}                   pans the camera so the screen centre looks at `at`.
+##   look {at}                   pans the camera so the screen centre looks at `at`, the zoom
+##                               ease ended first; a framing step (`frames_view`).
 ## P4-3, through the AuthoringEditor water API (the carve, dressing and plants as an edit
 ## makes them):
 ##   tilt {slope, axis}          tilts the open map's ground (a one-shot height edit).
@@ -199,6 +200,12 @@ static func blocker(base: Node, step: Dictionary) -> String:
 	return save_blocker(ctrl.scatter) if ctrl != null else ""
 
 
+## Whether `step` frames the view: the driver runs a `look` once the camera is at rest and holds it
+## until the camera stands still (Steady.framed).
+static func frames_view(step: Dictionary) -> bool:
+	return String(step.get("action", "")) == "look"
+
+
 static func run(base: Node, step: Dictionary) -> String:
 	var gm := base.get("_game_map") as GameMap
 	match String(step.get("action", "")):
@@ -207,6 +214,9 @@ static func run(base: Node, step: Dictionary) -> String:
 		"look":
 			var at := _vec(step.get("at"), Vector2.ZERO)
 			var cc := gm.get_camera_controller()
+			# A zoom set just before (a caller's named view) lands first: placed mid-ease, the
+			# ease's zoom toward the cursor would carry the view off it (Steady.framed).
+			cc.finish_zoom()
 			var off: Vector2 = cc.call("_get_view_center_ground_offset")
 			var holder := gm.cameraholder_node
 			holder.global_position = Vector3(at.x - off.x, holder.global_position.y, at.y - off.y)
