@@ -34,8 +34,10 @@ const CAPABILITY_CHUNK := "chunk"
 ## ... and TerrainRules.sample_fields (rule_fields; card terrainrules).
 const CAPABILITY_FIELDS := "fields"
 ## ... and WaterField's hot passes (water_spill, water_derive, water_shore, water_raster; card
-## painter-water-latency).
-const CAPABILITY_WFIELD := "wfield"
+## painter-water-latency), with the foot seam pass and the marks' CUSTOM2 in the mesh call
+## (water_foot_seams, water_mesh's c2; card painter-water-editcost): a library of the first passes
+## only (`wfield`) runs the whole field in GDScript.
+const CAPABILITY_WFIELD := "wfield2"
 
 ## True: every job runs in GDScript (A/B measurements, tests of the GDScript path).
 static var force_gdscript := false

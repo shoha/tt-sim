@@ -14,9 +14,9 @@ extends RefCounted
 ## steep share), CUSTOM1 = (lateral coordinate (WaterField.lateral), FIELD_FLAG, 1 where the sample
 ## is within the foot coordinate's range of a fall's foot (WaterField.foot; the shader fetches the
 ## coordinate only there), the old spill enum: 1 a river's ramp into a pond, 0.5 a bank's thin
-## spill, 0.125 a film; the shader no longer reads it), CUSTOM2 = (the depth again (unread: the
-## native builder's first slot), film share, bank share, the film share again (unread: the
-## builder's fourth slot): WaterFieldMarks, each its own continuous channel). The mesh is a
+## spill, 0.125 a film; the shader no longer reads it), CUSTOM2 = (the depth again (unread), film
+## share, bank share, the film share again (unread): WaterFieldMarks, each its own continuous
+## channel; the layout of the native builder's c2). The mesh is a
 ## function of the field alone, so a field refreshed over a dirty rect draws exactly what a fresh
 ## build would.
 

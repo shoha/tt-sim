@@ -23,7 +23,7 @@ extends RefCounted
 ##
 ## They ride CUSTOM2 of the field's mesh (WaterFieldMesh), interpolated per vertex: no texture
 ## fetch. Both are written in GDScript (the stroke's per-sample write is); the native mesh builder
-## copies the arrays in a second call, so `ttscatter`'s version did not move.
+## copies them into CUSTOM2 in its one call (card painter-water-editcost; it was a second call).
 
 ## The bank share reaches 1 this far beyond the channel's edge.
 const BANK_SHARE_M := 0.25

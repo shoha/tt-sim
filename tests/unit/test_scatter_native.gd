@@ -137,9 +137,11 @@ func test_the_library_reports_the_water_capability() -> void:
 	# (scatterload; generation unchanged, test_scatter_native_chunk checks the call). 8: rule_fields
 	# (TerrainRules.sample_fields, card terrainrules; test_terrain_fields_native checks it). 9: the
 	# water field's hot passes (card painter-water-latency; test_water_field_native checks them).
+	# 10 and wfield2: the foot seam pass and the marks' CUSTOM2 in the mesh call (card
+	# painter-water-editcost; test_water_field_native and test_water_field_marks check them).
 	assert_eq(
 		ScatterNative.version(),
-		"ttscatter 9 curves water chunk fields wfield",
+		"ttscatter 10 curves water chunk fields wfield2",
 		"rebuild native/ (AGENTS.md)"
 	)
 	var wet_rule: Array[Dictionary] = [

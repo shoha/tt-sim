@@ -87,7 +87,12 @@ and native equals GDScript (`tests/unit/test_water_field_native.gd`) all hold bi
 - Native (`native/src/water_field.cpp`, `water_field_mesh.cpp`; `utils/water_field_native.gd` packs the
   arrays and constants by name, so they stay in WaterField): `_spill_pass`, `_derive`, `_shore`
   (distance transform and marching-triangles contour included), `RiverProfile.field`'s raster,
-  `WaterFieldMesh.build` and `PainterWaterField`'s texture packing (`WaterFieldNative.pack_textures`).
+  `WaterFieldStroke.foot_seams` (`water_foot_seams`, through `WaterFieldNative.foot_seams`),
+  `WaterFieldMesh.build` with the marks' CUSTOM2 in the same call (`water_mesh`'s `c2`) and
+  `PainterWaterField`'s texture packing (`WaterFieldNative.pack_textures`). The library's
+  `version()` carries `wfield2` since the seam pass and `c2` (`ScatterNative.CAPABILITY_WFIELD`): a
+  library with only the first passes (`wfield`) is not used for the field at all, so a stale build
+  runs the GDScript twins instead of missing an array.
   Each is ported expression for expression, every intermediate in the type GDScript holds it in,
   and the GDScript stays the reference and the fallback (`ScatterNative.force_gdscript_wfield`).
 - GDScript levers (also in the fallback): a stroke whose control points (grown by its widest half-width,
@@ -99,6 +104,20 @@ and native equals GDScript (`tests/unit/test_water_field_native.gd`) all hold bi
 - What is left in a 60 x 40 update (native, about 6 ms): the strokes' profile, stations and per-sample
   write (`_put_stroke`, `stations`), all GDScript. A full build: `_put_stroke` 19 ms, stations 8,
   table 4.5, profiles 4, ponds 2, native passes 5.
+- Card painter-water-editcost (2026-11-21; the falls verdict map, level w of painter-water-climb-2:
+  245 x 245 samples, 22 bodies, 11 strokes; one stroke's update over its rect of 49 x 113; headless,
+  lane held, 20 rounds, median / worst; `tools/render_jobs/local/painter-water-editcost/cost.gd`
+  times every phase): main ec129b01 a full build 64.3 / 77.9 ms, an update 11.5 / 16.6, the mesh
+  1.06 / 1.21; after it 52.4 / 54.9, 8.6 / 8.7 and 0.53 / 0.71. The foot seam pass went 8.79 to 0.06
+  ms in a build and 2.71 to 0.03 in an update (its GDScript twin, pair-wise and inline, 3.02 and
+  1.15); the marks' second mesh call is gone (0.5 ms a mesh). What is left in that update: the
+  per-sample stroke write (`_put_stroke`) 3.9 ms, `RiverProfile.stations` 1.7, the profiles 0.7, the
+  reset 0.7, the raster 0.4, the shore 0.4; in a build `_put_stroke` 23.4, stations 11.5, the table
+  4.5, the profiles 4.3, ponds 2.1, the raster 1.9, the shore 1.8, the events 1.1. The next step is a
+  native port of `_put_stroke` (its head taper, the lateral coordinate's segment search and the
+  tables); nothing smaller is left above 1 ms. Every array (field channels, marks, the mesh with
+  CUSTOM2, both texture buffers, both paths, after a build and after every stroke's update) is the
+  same as main's on the verdict map, the canonical fixture and every corpus map.
 - In a real window (combined branch, debug DLL, f1 fall, `PainterWaterField.update_rect` as the edit
   signals call it; medians of 11): 16 x 16 samples 5.8 ms, 60 x 40 8.4 ms, 87 x 87 12.7 ms of CPU
   (field 4.4 / 7.0 / 11.3, mesh 1.0, both texture uploads queued 0.4), and the next frame ends 0.9 ms
@@ -192,12 +211,16 @@ that has a neighbour of the other sign more than `FOOT_SEAM_JUMP` (2) away, both
 stroke or two meet there; each side then ends as the coordinate ends at its range (weight 0). The
 strokes write `_foot_raw`, `foot` is made from it over the dirty rect grown by one sample (a
 function of a 3 x 3 neighbourhood: update equals build). A fall with no other foot in range is
-untouched, bit for bit. Cost (headless, indicative, the verdict map's 245 x 245 grid, 11 river
-strokes, 76 samples cleared): a full build 89.8 ms against 73.8 ms with the switch off (the pass
-alone 9.1 ms: over the whole grid it looks only inside the areas of the strokes with a fall), one
-stroke's update 16.7 ms of which the pass is 3.7 ms. Nearly all of it is the per-sample neighbour
-test in GDScript (a call and nine reads for every sample with a foot); testing the four pairs
-ahead inline, without a call, is the open optimisation.
+untouched, bit for bit. Cost: the test is symmetric, so the pass (card painter-water-editcost)
+tests each pair of neighbours once, from its first sample against the four ahead of it, only where
+a sample holds a foot: over the whole grid inside the union of the fall strokes' areas (row spans,
+overlaps once), over a dirty rect inside the rect grown by one sample, clearing only the rect. It
+runs natively (`water_foot_seams`; the GDScript is the twin): 0.06 ms a build and 0.03 ms an update
+on the verdict map (76 samples cleared), where the first pass, an 8-neighbour call per sample, took
+8.8 and 2.7 ms. Its oracle is that first definition (`water_corpus_cases.seam_rule`):
+`test_water_corpus` asserts every corpus map clears exactly its samples, and
+`test_water_field_native` a random grid of both signs, native, GDScript and the rule, over the
+whole grid and three rects.
 
 The shader's foot rules, all smooth functions of it (no rule ends on a line): the lower face's white
 floor ramps in over `FOOT_FACE_M` above the foot (its line broken by a slow noise), the tongues below
@@ -302,10 +325,10 @@ Tests (`test_water_field_marks.gd`): the marks in range and deterministic, updat
 both mesh paths; and the shoreline's invariant: along a stream's centre line through eleven corpus
 meetings (stream into pond, through a pond, two inflows, pond chain, pond over stream, fall into
 pond, tributary, crossing) `shore` never comes within the lap's reach (0.6 m) of a waterline.
-Native: no change to the library and `version()` stays `ttscatter 9`: the marks are written in
-GDScript (the stroke's per-sample write is GDScript too), and the native mesh builder, which copies
-its energy, shore and steep arrays into c0 unchanged, is called a second time with the marks in
-those slots (`WaterFieldNative.mesh`, about 0.4 ms more per mesh rebuild).
+Native: the marks are written in GDScript (the stroke's per-sample write is GDScript too); the
+native mesh builder takes `film` and `bank` beside its other arrays and returns CUSTOM2 as `c2`,
+(depth, film, bank, film) per vertex, in the one call (card painter-water-editcost, `ttscatter 10`;
+it was a second call with the marks in c0's slots, 0.5 ms more per mesh rebuild).
 
 Known defect of the one distance (measured 2026-11-20, not fixed: a native change): the shore pass
 measures each sample to the crossing and contour piece of its NEAREST BOUNDARY SAMPLE only, and

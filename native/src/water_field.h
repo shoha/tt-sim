@@ -27,8 +27,12 @@ godot::Dictionary water_shore(const godot::Dictionary &args);
 /// RiverProfile.field's segment raster over "rect": {"distance", "along", "half_width"}.
 godot::Dictionary water_raster(const godot::Dictionary &args);
 
+/// WaterFieldStroke.foot_seams over "region": {"foot"} from "size", "raw", "out", "areas",
+/// "cleared", "no_foot" and "jump" (card painter-water-editcost).
+godot::Dictionary water_foot_seams(const godot::Dictionary &args);
+
 /// WaterFieldMesh.build's cells, vertices and indices (water_field_mesh.cpp): {"vertices", "normals",
-/// "uvs", "c0", "c1", "indices", "aabb"}.
+/// "uvs", "c0", "c1", "c2", "indices", "aabb"}; c2 carries the marks ("film", "bank").
 godot::Dictionary water_mesh(const godot::Dictionary &args);
 
 /// The two RGBAF textures PainterWaterField._upload_textures packs from the field: {"a", "b"}.

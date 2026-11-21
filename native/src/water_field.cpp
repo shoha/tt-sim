@@ -3,9 +3,11 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 #include <godot_cpp/core/math.hpp>
+#include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/variant.hpp>
@@ -748,6 +750,115 @@ Dictionary water_raster(const Dictionary &args) {
 	out["distance"] = distance_a;
 	out["along"] = along_a;
 	out["half_width"] = half_a;
+	return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// WaterFieldStroke.foot_seams (card painter-water-editcost)
+// ---------------------------------------------------------------------------------------------
+
+Dictionary water_foot_seams(const Dictionary &args) {
+	const Args a{ args };
+	const Vector2i size = a["size"];
+	const Rect2i region = a["region"];
+	const PackedFloat32Array raw_a = a["raw"];
+	const Array areas = a["areas"];
+	const bool cleared = a["cleared"];
+	const double no_foot = a["no_foot"];
+	const double none = no_foot * 0.5;
+	const double jump = a["jump"];
+	const int sx = size.x;
+	const int sz = size.y;
+	const bool whole = region == Rect2i(0, 0, sx, sz);
+	// The array to keep: a copy of raw over the whole grid, else out with the region rewritten
+	// (ptrw copies on write, so the caller's arrays stay as they were).
+	PackedFloat32Array made_a = whole ? raw_a : (PackedFloat32Array)a["out"];
+	float *made = made_a.ptrw();
+	const float *raw = raw_a.ptr();
+	if (!whole) {
+		for (int z = region.position.y; z < region.position.y + region.size.y; z++) {
+			const int64_t at = (int64_t)z * sx + region.position.x;
+			std::memcpy(made + at, raw + at, sizeof(float) * (size_t)region.size.x);
+		}
+	}
+	Dictionary out;
+	if (!cleared) {
+		out["foot"] = made_a;
+		return out;
+	}
+	// Where to look: the areas over the whole grid, the region grown by one sample over a part.
+	std::vector<uint8_t> look((size_t)sx * sz, 0);
+	Rect2i box;
+	bool any = false;
+	auto add = [&](const Rect2i &r) {
+		if (!r.has_area()) {
+			return;
+		}
+		for (int z = r.position.y; z < r.position.y + r.size.y; z++) {
+			std::memset(look.data() + (size_t)z * sx + r.position.x, 1, (size_t)r.size.x);
+		}
+		box = any ? box.merge(r) : r;
+		any = true;
+	};
+	if (whole) {
+		for (int64_t k = 0; k < areas.size(); k++) {
+			add(((Rect2i)areas[k]).intersection(region));
+		}
+	} else {
+		add(clip_to(region.grow(1), sx, sz));
+	}
+	const int x0 = region.position.x;
+	const int x1 = region.position.x + region.size.x;
+	const int z0 = region.position.y;
+	const int z1 = region.position.y + region.size.y;
+	const float clear = (float)no_foot;
+	for (int z = box.position.y; any && z < box.position.y + box.size.y; z++) {
+		const int64_t row = (int64_t)z * sx;
+		const bool below = z + 1 < sz;
+		const bool here = z >= z0 && z < z1;
+		const bool next = z + 1 >= z0 && z + 1 < z1;
+		for (int x = box.position.x; x < box.position.x + box.size.x; x++) {
+			if (look[(size_t)(row + x)] == 0) {
+				continue;
+			}
+			const double v = raw[row + x];
+			if (v >= none) {
+				continue;
+			}
+			// The four neighbours ahead: (x + 1, z), (x - 1, z + 1), (x, z + 1), (x + 1, z + 1).
+			const bool mine = here && x >= x0 && x < x1;
+			if (x + 1 < sx) {
+				const double o = raw[row + x + 1];
+				if (o < none && o * v < 0.0 && std::fabs(o - v) > jump) {
+					if (mine) {
+						made[row + x] = clear;
+					}
+					if (here && x + 1 >= x0 && x + 1 < x1) {
+						made[row + x + 1] = clear;
+					}
+				}
+			}
+			if (!below) {
+				continue;
+			}
+			const int64_t under = row + sx + x;
+			for (int dx = -1; dx <= 1; dx++) {
+				if (x + dx < 0 || x + dx >= sx) {
+					continue;
+				}
+				const double o = raw[under + dx];
+				if (o < none && o * v < 0.0 && std::fabs(o - v) > jump) {
+					if (mine) {
+						made[row + x] = clear;
+					}
+					if (next && x + dx >= x0 && x + dx < x1) {
+						made[under + dx] = clear;
+					}
+				}
+			}
+		}
+	}
+	out["foot"] = made_a;
 	return out;
 }
 

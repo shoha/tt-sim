@@ -2,9 +2,10 @@ class_name WaterFieldNative
 extends RefCounted
 
 ## The native twins of WaterField's hot passes (card painter-water-latency): the spill relaxation,
-## the buried rings, depth, slope and energy pass, the shore, and RiverProfile.field's course
-## raster, run in the scatter library (native/src/water_field.cpp, ScatterNative.CAPABILITY_WFIELD)
-## and give every array the GDScript gives bit for bit (test_water_field_native). Each wrapper takes
+## the buried rings, depth, slope and energy pass, the shore, the foot seam pass (card
+## painter-water-editcost), the mesh with its marks and RiverProfile.field's course raster, run in
+## the scatter library (native/src/water_field.cpp, ScatterNative.CAPABILITY_WFIELD) and give
+## every array the GDScript gives bit for bit (test_water_field_native). Each wrapper takes
 ## the field, packs the arrays and constants the C++ reads by name (so the constants stay in
 ## WaterField), and stores what comes back. instance() is null without the library (or with
 ## `ScatterNative.force_gdscript_wfield`), and the callers then run their GDScript, which stays the
@@ -102,45 +103,32 @@ static func shore(native: Object, f: WaterField, outer: Rect2i) -> void:
 	f.shore = out.shore
 
 
-## WaterFieldMesh.build's result for `f` (the same Dictionary). The builder copies its "energy",
-## "shore" and "steep" arrays into c0 unchanged, so a second call with the field's marks
-## (WaterFieldMarks: film, bank, and film again in the unread fourth slot) in those slots returns
-## CUSTOM2 for the same vertices: no change to the library (card painter-water-mouths; about
-## 0.4 ms more per mesh).
+## WaterFieldStroke.foot_seams(f._foot_raw, f.foot, f.size, region, f._foot_rects): the foot
+## coordinate to keep. Native when the library is loaded, else GDScript (the reference).
+static func foot_seams(f: WaterField, region: Rect2i) -> PackedFloat32Array:
+	var native := instance()
+	if native == null:
+		return WaterFieldStroke.foot_seams(f._foot_raw, f.foot, f.size, region, f._foot_rects)
+	var out: Dictionary = native.call(
+		"water_foot_seams",
+		{
+			"size": f.size,
+			"region": region,
+			"raw": f._foot_raw,
+			"out": f.foot,
+			"areas": f._foot_rects,
+			"cleared": WaterFieldStroke.foot_seams_cleared,
+			"no_foot": WaterFieldStroke.NO_FOOT,
+			"jump": WaterFieldStroke.FOOT_SEAM_JUMP,
+		}
+	)
+	return out.foot
+
+
+## WaterFieldMesh.build's result for `f` (the same Dictionary), CUSTOM2 (the field's marks,
+## WaterFieldMarks: the depth, film, bank, and film again in the unread fourth slot) included.
 static func mesh(native: Object, f: WaterField) -> Dictionary:
-	var out := _mesh_call(native, f, f.energy, f.shore, f.steep)
-	var count: int = out.vertices.size()
-	if count == 0:
-		return {"arrays": [], "aabb": AABB(), "vertices": 0, "triangles": 0}
-	var marks := _mesh_call(native, f, f.marks.film, f.marks.bank, f.marks.film)
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = out.vertices
-	arrays[Mesh.ARRAY_NORMAL] = out.normals
-	arrays[Mesh.ARRAY_TEX_UV] = out.uvs
-	arrays[Mesh.ARRAY_CUSTOM0] = out.c0
-	arrays[Mesh.ARRAY_CUSTOM1] = out.c1
-	arrays[Mesh.ARRAY_CUSTOM2] = marks.c0
-	arrays[Mesh.ARRAY_INDEX] = out.indices
-	var indices: PackedInt32Array = out.indices
-	return {
-		"arrays": arrays,
-		"aabb": out.aabb,
-		"vertices": count,
-		"triangles": indices.size() / 3,
-	}
-
-
-## One call of the native mesh builder over `f` with `second`, `third` and `fourth` as the three
-## per-sample arrays it copies into c0 behind the depth.
-static func _mesh_call(
-	native: Object,
-	f: WaterField,
-	second: PackedFloat32Array,
-	third: PackedFloat32Array,
-	fourth: PackedFloat32Array
-) -> Dictionary:
-	return native.call(
+	var out: Dictionary = native.call(
 		"water_mesh",
 		{
 			"size": f.size,
@@ -150,9 +138,11 @@ static func _mesh_call(
 			"ew": f.ew,
 			"depth": f.depth,
 			"ground": f.ground,
-			"energy": second,
-			"shore": third,
-			"steep": fourth,
+			"energy": f.energy,
+			"shore": f.shore,
+			"steep": f.steep,
+			"film": f.marks.film,
+			"bank": f.marks.bank,
 			"river": f.lateral,
 			"foot": f.foot,
 			"spill": f.spill,
@@ -166,6 +156,25 @@ static func _mesh_call(
 			"no_foot": WaterFieldStroke.NO_FOOT,
 		}
 	)
+	var count: int = out.vertices.size()
+	if count == 0:
+		return {"arrays": [], "aabb": AABB(), "vertices": 0, "triangles": 0}
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = out.vertices
+	arrays[Mesh.ARRAY_NORMAL] = out.normals
+	arrays[Mesh.ARRAY_TEX_UV] = out.uvs
+	arrays[Mesh.ARRAY_CUSTOM0] = out.c0
+	arrays[Mesh.ARRAY_CUSTOM1] = out.c1
+	arrays[Mesh.ARRAY_CUSTOM2] = out.c2
+	arrays[Mesh.ARRAY_INDEX] = out.indices
+	var indices: PackedInt32Array = out.indices
+	return {
+		"arrays": arrays,
+		"aabb": out.aabb,
+		"vertices": count,
+		"triangles": indices.size() / 3,
+	}
 
 
 ## The two RGBAF texture buffers PainterWaterField uploads (see its _upload_textures), packed from

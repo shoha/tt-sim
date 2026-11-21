@@ -487,7 +487,8 @@ static func digest(doc: MapDocument) -> String:
 ## "events" (the field's own, by kind), "junctions" (WaterJunctions.find), "junction_seams" (the
 ## pairs u_jumps and lat_jumps would count that lie in a junction of a stroke with itself: a
 ## self-crossing, a ring's closure, a bend's inside. Two passes of one stroke meet there as two
-## strokes do, which are seam_pairs: two frames at one place, not a break inside a frame)}.
+## strokes do, which are seam_pairs: two frames at one place, not a break inside a frame),
+## "seam_rule_diff" (samples whose foot coordinate is not seam_rule()'s of the raw one)}.
 static func field_report(doc: MapDocument) -> Dictionary:
 	var f := WaterField.build(doc)
 	var junctions := WaterJunctions.find(doc)
@@ -568,4 +569,34 @@ static func field_report(doc: MapDocument) -> Dictionary:
 	for e in f.events:
 		r.events[e.kind] = int(r.events.get(e.kind, 0)) + 1
 	r["event_list"] = f.events
+	var raw: PackedFloat32Array = f._foot_raw
+	var rule := seam_rule(raw, f.size)
+	var differ := 0
+	for i in rule.size():
+		differ += 1 if rule[i] != f.foot[i] else 0
+	r["seam_rule_diff"] = differ
 	return r
+
+
+## The foot coordinate WaterFieldStroke.foot_seams makes from `raw` over a whole grid of `size`, by
+## its definition and the way the pass first did it (card painter-water-climb-2): every sample
+## with a foot and an 8-neighbour of the other sign more than FOOT_SEAM_JUMP away is cleared. The
+## oracle of the faster pass (card painter-water-editcost), which must clear exactly these.
+static func seam_rule(raw: PackedFloat32Array, size: Vector2i) -> PackedFloat32Array:
+	var none := WaterFieldStroke.NO_FOOT * 0.5
+	var out := raw.duplicate()
+	for z in size.y:
+		for x in size.x:
+			var v := raw[z * size.x + x]
+			if v >= none:
+				continue
+			for dz in range(-1, 2):
+				for dx in range(-1, 2):
+					var xx := x + dx
+					var zz := z + dz
+					if xx < 0 or zz < 0 or xx >= size.x or zz >= size.y:
+						continue
+					var o := raw[zz * size.x + xx]
+					if o < none and o * v < 0.0 and absf(o - v) > WaterFieldStroke.FOOT_SEAM_JUMP:
+						out[z * size.x + x] = WaterFieldStroke.NO_FOOT
+	return out

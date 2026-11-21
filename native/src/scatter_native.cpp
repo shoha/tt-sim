@@ -16,6 +16,7 @@ void TTScatterNative::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("water_derive", "args"), &TTScatterNative::water_derive);
 	ClassDB::bind_method(D_METHOD("water_shore", "args"), &TTScatterNative::water_shore);
 	ClassDB::bind_method(D_METHOD("water_raster", "args"), &TTScatterNative::water_raster);
+	ClassDB::bind_method(D_METHOD("water_foot_seams", "args"), &TTScatterNative::water_foot_seams);
 	ClassDB::bind_method(D_METHOD("water_mesh", "args"), &TTScatterNative::water_mesh);
 	ClassDB::bind_method(D_METHOD("water_textures", "args"), &TTScatterNative::water_textures);
 	ClassDB::bind_method(D_METHOD("version"), &TTScatterNative::version);
@@ -29,7 +30,7 @@ void TTScatterNative::_bind_methods() {
 }
 
 String TTScatterNative::version() const {
-	return String("ttscatter 9 curves water chunk fields wfield");
+	return String("ttscatter 10 curves water chunk fields wfield2");
 }
 
 Dictionary TTScatterNative::water_spill(const Dictionary &args) const {
@@ -46,6 +47,10 @@ Dictionary TTScatterNative::water_shore(const Dictionary &args) const {
 
 Dictionary TTScatterNative::water_raster(const Dictionary &args) const {
 	return ttscatter::water_raster(args);
+}
+
+Dictionary TTScatterNative::water_foot_seams(const Dictionary &args) const {
+	return ttscatter::water_foot_seams(args);
 }
 
 Dictionary TTScatterNative::water_mesh(const Dictionary &args) const {
