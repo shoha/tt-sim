@@ -2800,7 +2800,88 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
 `item1_*`, `item2_*`, `item3_*`, `owner/`, `timing/`, `captures/`, `jobs/`); handoff
 `docs/plans/handoffs/painter-terrain-marks.md`.
 
-- **Round 3 (card painter-terrain-marks-3, 2026-11-21; this one is current: the sites texture,
+- **The dabs as geometry (card painter-terrain-dabs, 2026-11-21; look-pending; this one is current
+  for the small stones: round 3's bake of the dabs into the seam channel and its re-bake when the
+  sun turns are gone; round 3's skirt part stands).** Evidence:
+  `docs/research/2026-11-09-prototypes/compare/painter_final120_terrain_dabs/`; handoff
+  `docs/plans/handoffs/painter-terrain-dabs.md`.
+  - *How a dab takes the ground's tone.* It is drawn with the ground chunks' own material (the
+    same `ShaderMaterial` object, as `material_override`): no second material and no uniform to
+    keep in step. A dab's mesh carries `CUSTOM0` to `CUSTOM3`; the terrain's meshes have none and
+    read 0, so `vertex()` tells a dab by `CUSTOM3.x` and passes the stone's three lobes on as flat
+    varyings. In `contact_at()` the dab's value joins the field's seam by `max` BEFORE the seam's
+    threshold, on a dab's pixels alone (one compare per ground pixel). So a pixel of a dab is the
+    ground at that place (its biome paint, strata, zone maps, cast shadow, pool) with the seam on
+    inside the outline and nothing changed outside it. The seam is a tone the ground is set to
+    (`mix` toward the soil), so a dab inside a boulder's seam, a cast shadow or another dab is
+    that place's own seam tone, never a second darkening.
+  - *The geometry* (`PainterSites.append_dab`). A dab's patch is the terrain's own triangles: the
+    grid samples within the dab's reach of the stone (2 radii plus 0.06 m), triangulated as
+    `TerrainMeshBuilder` does, 4 mm up. It lies on the ground whatever the ground's shape. (The
+    first build, a fan per lobe with its vertices on the ground, dipped under every lip it
+    crossed: a 0.3 to 0.8 m triangle on a 0.25 m heightfield sinks centimetres below a convex
+    crease, and the marks were torn into shards: handoff, "Dead end".)
+  - *The shape* is not in the triangles. `dab_value()` works it out per pixel from the three
+    lobes every vertex of the patch carries (a lobe: its middle, its radius, the turn of its
+    waves; `PainterSites.lobes`, placed by a hash of the stone's position: 0.95, 0.8 and 0.65
+    radii, the last two 0.45 and 0.5 radii off the middle): a lobe's value falls in a straight
+    line from its middle to an outline whose distance varies round it by two and three waves
+    (14 % and 8 % of the radius), and the dab is the greatest of the three. Exact at any zoom:
+    curved, uneven outlines with cusps where lobes meet, no facets.
+  - *The sun* is a uniform: the value takes `DAB_LEAN` 0.2 (plus `DAB_LEAN_LOW` 0.1 times the
+    sun's levelness) of the offset from a lobe's middle along the direction away from the sun,
+    which stretches each outline to the shaded side by 1 / (1 - lean) and shortens it sunward.
+    Nothing is rebuilt when the hour changes (`PainterDabs.built` stands still across it).
+  - *Touching stones.* The vertex shader raises a vertex 8 mm per unit of its value, so where two
+    stones' patches overlap the depth test keeps the one with the higher value there: the marks
+    join along the union of their outlines, and the plain part of one patch never cuts the mark
+    of another.
+  - *The host* (`PainterDabs`, owned by `PainterOcclusion`, synced at the end of every
+    `rebuild()`): one mesh per 16 m cell holding a site, under a `PainterDabs` node beside the
+    terrain, casting no shadow. It keeps each site's patch and builds only a site that is new or
+    stands on samples edited since (`PainterSurfaces._on_ground_edited` forwards the rect; a new
+    terrain marks everything); a stone is known by its place and radius, so one the ground moved
+    under keeps its turn in its cell and the patches after it keep their indices. A stone whose
+    foot is further than twice its vertical reach from the terrain (it stands on something else)
+    or off the map gets none, and a vertex whose ground lies past that reach loses value (a dab
+    ends at a ledge's edge). No dab on a GLB map (no heightfield to copy) or on the skirt.
+  - *The field* is main's before the marks cards for everything else: a small stone writes
+    nothing into it (`test_small_stones_are_sites_and_leave_the_field_alone`), `update()` takes
+    no sun, and `PainterOcclusion` no longer watches `FoliageLight.last_sun`.
+  - *Measured (2026-11-21, against main 1a1a6c22 in-run; NOT merged: the frame cost gate
+    fails).* GPU A/B, main | build, two rounds, twice: f1_o +0.049, +0.025 and +0.043, +0.039 ms;
+    torture edge view +0.037, +0.025 and +0.036, +0.033 ms; torture wide (456 sites) +0.097,
+    +0.090 and +0.142, +0.123 ms (main's own drift in those runs 0.00 to 0.05 ms; the gate was
+    +0.02 ms). The second pair had a per-pixel early-out in `dab_lobe` past 2 radii, which did
+    not help (taken out again), so the cost is not the outline's arithmetic: a patch is whole
+    terrain cells at 0.25 m, about a fifth of the wide view's ground is patch, and the suspects
+    left are the extra vertices and small triangles, and the patches' overlap. Next structure
+    to try: fewer, larger triangles per patch (one quad per stone lifted enough to clear the
+    ground, or a `MultiMesh` of fixed patches reading the height texture), or no patch beyond
+    a zoom at which a dab is under a few pixels.
+    Edits (torture, 458 sites, ms): a placed boulder's rebuild 4.89 (dabs 1.59), a moved one
+    4.26 and 3.92 (dabs 0.4), a placed cluster of small stones 2.25 (dabs 0.74, 3 built), a
+    moved small stone 3.27 and 2.77 (dabs 1.21 and 0.87), the rebuild under a sculpt stroke
+    across the rock row 4.7 to 4.8 (dabs 1.5 to 1.6, 18 built; main's stroke end is 3.7 to
+    3.9, so about 1 ms worse; taken before the host's index cache and early-out, not taken
+    again). A whole build of 104 sites 5.2 ms, of 456 sites 16.2 ms; a sync with nothing
+    changed 0.03 to 0.08 ms. The sun: across 6.5, 9, 12 and 14 h `built` and `uploaded` stood
+    still on both maps (104 | 16 and 456 | 16) and the field's bake wrote 0 texels. Owner
+    frames in one run: bank_z3 0 pixels; f1_o 27903 and wide 8423 pixels outside the moving
+    water, at the stones' marks by the sheet (the `ident` maps were not looked at). Classic:
+    no `PainterDabs` node. `img.gd` scores over 18 torture frames, main | build: dots 2.42 |
+    2.40, lines 4.42 | 4.40, vedge 0.46 | 0.44, hedge 0.04 | 0.04.
+  - *The look* (sheets in the evidence folder). At f1_o main is one faceted kite under the
+    three stones and round 2 three clean ovals; the build is one firm flat mark that hugs the
+    stones on the side away from the sun, a quarter to a third of a stone wide there and a
+    sliver elsewhere, joined across the three with no darker overlap, its outline uneven. Still
+    wrong: where two lobes meet the outline makes a pointed corner (a squared tail under the
+    lowest stone at f1_o), the smallest stone of st3 gets barely a sliver, and at 6.5 h the
+    mark is faint against the dim ground. Inside a boulder's mark and in a cast shadow the
+    build equals main to the eye (no second darkening). The slope view was mostly a boulder,
+    so a dab on a slope was not judged.
+- **Round 3 (card painter-terrain-marks-3, 2026-11-21; superseded for the small stones by the
+  bullet above: the sites texture,
   its flag, `site_dab()` and `f_cast` of the bullets below are gone).** Evidence in `round3/` of
   the same folder.
   - *Structure.* The ground's shader does nothing per pixel for a small stone: `contact_at()` is

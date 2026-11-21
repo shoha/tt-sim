@@ -73,7 +73,7 @@ func _field(multimesh: MultiMesh) -> Array:
 	var occlusion := PainterOcclusion.new()
 	occlusion._surfaces = surfaces
 	var marks: Array = []
-	occlusion._add_solids(marks)
+	occlusion._add_solids(marks, [])
 	occlusion.update(Vector2(-12.0, -12.0), Vector2i(160, 160), marks)
 	return [marks, occlusion._data]
 

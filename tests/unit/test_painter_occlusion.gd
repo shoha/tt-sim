@@ -42,11 +42,6 @@ func _marks(seed_value: int) -> Array:
 		if k % 3 == 0:
 			marks.append(PainterOcclusion.disc(k % 2, x, z, rng.randf_range(0.2, 1.2)))
 			continue
-		if k % 5 == 4:
-			var r := rng.randf_range(0.06, 0.4)
-			var stands := PainterSites.foot(rng.randf_range(0.0, 3.0), r, 0.6 * r)
-			marks.append(PainterOcclusion.site(x, z, r, stands))
-			continue
 		var half := Vector2(rng.randf_range(0.1, 0.6), rng.randf_range(0.1, 0.6))
 		var reach := PainterOcclusion.solid_reach(half)
 		var foot := Vector2(rng.randf_range(0.0, 3.0), rng.randf_range(1.0, 4.0))
@@ -70,27 +65,11 @@ func test_a_partial_update_equals_a_whole_bake_bit_for_bit() -> void:
 	edited[5] = moved
 	edited.remove_at(20)
 	edited.append(PainterOcclusion.box(1.0, -2.0, 0.4, Vector2(0.3, 0.2), Vector2(0.2, 0.1), 0.2))
-	# And a small stone moves, one goes and one comes (marks 4, 14 and 19 are sites).
-	var stone: Array = (edited[14] as Array).duplicate()
-	assert_eq(stone[0], PainterOcclusion.SITE)
-	stone[3] = float(stone[3]) - 0.3
-	edited[14] = stone
-	edited.remove_at(19)
-	edited.append(PainterOcclusion.site(-1.1, 2.2, 0.2, PainterSites.foot(1.0, 0.2, 0.1)))
 	var texels := host.update(origin, size, edited.duplicate())
 	assert_between(texels, 1, 96 * 96 / 3, "only the changed marks' rects are baked")
 	var whole := PainterOcclusion.new()
 	whole.update(origin, size, edited.duplicate())
 	assert_true(host._data.to_byte_array() == whole._data.to_byte_array(), "bit for bit")
-	# The sun turns: the small stones' dabs are baked again where it sets them, and nothing else.
-	var sun := Vector2(0.6, 0.8)
-	texels = host.update(origin, size, edited.duplicate(), sun)
-	assert_between(texels, 1, 96 * 96 / 3, "the sites' rects alone")
-	assert_false(host._data.to_byte_array() == whole._data.to_byte_array(), "the dabs moved")
-	var turned := PainterOcclusion.new()
-	turned.update(origin, size, edited.duplicate(), sun)
-	assert_true(host._data.to_byte_array() == turned._data.to_byte_array(), "as a whole bake's")
-	assert_eq(host.update(origin, size, edited.duplicate(), sun), 0, "the same sun: nothing baked")
 	# And back again: what the dropped marks left is wiped.
 	host.update(origin, size, marks.duplicate())
 	var first := PainterOcclusion.new()
@@ -236,7 +215,8 @@ func test_a_small_stone_takes_a_mark_of_its_own_size_at_its_foots_height() -> vo
 	var field := _field(host)
 	# A stone 1.4 m by 1 m: the field holds its mark, about its own size, at its foot's height.
 	var marks: Array = []
-	host._solid(marks, Vector3(1.0, 5.3, 0.0), 0.0, Vector3(0.7, 0.3, 0.5))
+	var none: Array = []
+	host._solid(marks, none, Vector3(1.0, 5.3, 0.0), 0.0, Vector3(0.7, 0.3, 0.5))
 	assert_eq(marks[0][0], PainterOcclusion.BOX)
 	_lay(host, field, marks)
 	assert_gt(_at(host, field, 0.95, 0.1, CORE), 0.9, "a seam under the stone")
@@ -248,85 +228,216 @@ func test_a_small_stone_takes_a_mark_of_its_own_size_at_its_foots_height() -> vo
 	assert_lt(1.0 / weight, 0.6, "and reaches about the stone's own size up and down")
 	# A log as thin as a stone is still a box: a round dab cannot follow it.
 	var log_marks: Array = []
-	host._solid(log_marks, Vector3.ZERO, 0.0, Vector3(0.4, 0.15, 0.15))
+	host._solid(log_marks, none, Vector3.ZERO, 0.0, Vector3(0.4, 0.15, 0.15))
 	assert_eq(log_marks[0][0], PainterOcclusion.BOX)
 	# A grain leaves no mark at all.
 	var grain: Array = []
-	host._solid(grain, Vector3.ZERO, 0.0, Vector3(0.03, 0.03, 0.03))
+	host._solid(grain, none, Vector3.ZERO, 0.0, Vector3(0.03, 0.03, 0.03))
 	assert_true(grain.is_empty(), "no mark at all")
+	assert_true(none.is_empty(), "and none of them is a site")
 
 
-func test_small_stones_are_sites_each_a_dab_in_the_seam_at_its_foots_height() -> void:
+func test_small_stones_are_sites_and_leave_the_field_alone() -> void:
 	var host := PainterOcclusion.new()
 	var field := _field(host)
 	# Two stones 0.5 m across and 0.6 m apart, their feet at 5 m, and a pebble beside the second.
 	var marks: Array = []
-	host._solid(marks, Vector3(-0.3, 5.15, 0.0), 0.0, Vector3(0.25, 0.15, 0.25))
-	host._solid(marks, Vector3(0.3, 5.15, 0.0), 0.0, Vector3(0.25, 0.15, 0.25))
-	host._solid(marks, Vector3(0.7, 5.05, 0.0), 0.0, Vector3(0.1, 0.05, 0.1))
-	assert_eq(marks.size(), 3)
-	for mark: Array in marks:
-		assert_eq(mark[0], PainterOcclusion.SITE, "a site, not a box")
+	var sites: Array = []
+	host._solid(marks, sites, Vector3(-0.3, 5.15, 0.0), 0.0, Vector3(0.25, 0.15, 0.25))
+	host._solid(marks, sites, Vector3(0.3, 5.15, 0.0), 0.0, Vector3(0.25, 0.15, 0.25))
+	host._solid(marks, sites, Vector3(0.7, 5.05, 0.0), 0.0, Vector3(0.1, 0.05, 0.1))
+	assert_true(marks.is_empty(), "no footprint: the field is what it is without them")
+	assert_eq(sites.size(), 3, "three sites")
 	_lay(host, field, marks)
-	# A stone's dab is in the seam alone, over the ground's threshold under the stone.
-	assert_gt(_at(host, field, -0.3, 0.1, CORE), PainterSites.EDGE, "a seam under the stone")
-	assert_eq(_at(host, field, -0.3, 0.1, POOL), 0.0, "and no pool")
-	var weight := _at(host, field, -0.3, 0.1, PainterOcclusion.FOOT_CH + 1)
-	assert_gt(weight, 0.0, "the dab knows its height")
-	var foot := _at(host, field, -0.3, 0.1, PainterOcclusion.FOOT_CH) / weight
-	assert_almost_eq(foot, 5.075, 1.0e-4, "between the stone's underside and its middle")
-	assert_between(1.0 / weight, 0.15, 0.3, "and reaches about the stone's own size up and down")
-	# It is written within its reach and no further.
-	assert_eq(_at(host, field, -1.4, 0.1, CORE), 0.0, "a metre off: none")
-	# The sun leans the ground's read of the field, so the dab is baked that far toward it.
-	var lone := _field(host)
-	host._sun = Vector2(1.0, 0.0)
-	var mark := PainterOcclusion.site(0.125, 0.125, 0.2, PainterSites.foot(0.0, 0.2, 0.1))
-	_lay(host, lone, [mark])
-	assert_gt(_at(host, lone, 0.375, 0.125, CORE), _at(host, lone, 0.125, 0.125, CORE))
-	assert_eq(_at(host, lone, -0.375, 0.125, CORE), 0.0, "nothing on the side away from the sun")
+	var empty := PackedFloat32Array()
+	empty.resize(field.size())
+	assert_true(field == empty, "nothing written")
+	var site: Array = sites[0]
+	assert_eq(site.size(), PainterSites.SITE_FLOATS)
+	assert_almost_eq(float(site[2]), 0.25, 1.0e-5, "its radius")
+	assert_almost_eq(float(site[3]), 5.075, 1.0e-4, "between the stone's underside and its middle")
+	assert_between(float(site[4]), 0.15, 0.3, "and reaches about the stone's own size up and down")
 
 
-func test_a_dab_read_back_from_the_field_is_the_dabs_size_wherever_the_stone_sits() -> void:
-	# The ground reads the seam bilinearly and takes it at EDGE. Whatever the stone's place among
-	# the texels, what that shows is about the dab's own area (the union of its discs), and a
-	# stone of the smallest radius always shows.
-	var host := PainterOcclusion.new()
-	for r: float in [0.2, PainterSites.MIN_M]:
-		for k in 5:
-			var at := Vector2(0.07 * k - 0.11, 0.045 * k + 0.02)
-			var field := _field(host)
-			_lay(host, field, [PainterOcclusion.site(at.x, at.y, r, PainterSites.foot(0.0, r, r))])
-			var own := PainterSites.discs(at.x, at.y, r)
-			var shown := 0
-			var true_area := 0
-			for j in 60:
-				for i in 60:
-					var p := at + Vector2(i - 29.5, j - 29.5) * 0.02
-					if _read(host, field, p, CORE) >= PainterSites.EDGE:
-						shown += 1
-					for d in 3:
-						var c := Vector2(own[d * 3], own[d * 3 + 1])
-						if p.distance_to(c) <= own[d * 3 + 2]:
-							true_area += 1
-							break
-			assert_gt(shown, 0, "the dab shows (r %.2f, place %d)" % [r, k])
-			if r == 0.2:
-				var share := float(shown) / float(true_area)
-				assert_between(share, 0.5, 1.2, "about its own area (place %d)" % k)
+## A terrain's heights, `n` samples square and half a metre apart about the origin, rising `slope`
+## metres a metre along x, and `drop` metres lower past x = 0.5.
+func _grid(n: int, slope: float, drop := 0.0) -> PackedFloat32Array:
+	var grid := PackedFloat32Array()
+	grid.resize(n * n)
+	for j in n:
+		for i in n:
+			var x := i * 0.5 - (n - 1) * 0.25
+			grid[j * n + i] = slope * x - (drop if x > 0.5 else 0.0)
+	return grid
 
 
-## The bilinear read of channel `ch` of `field` at world `p`, as the ground's shader takes it.
-func _read(host: PainterOcclusion, field: PackedFloat32Array, p: Vector2, ch: int) -> float:
-	var g := (p - host._origin) / PainterOcclusion.TEXEL_M - Vector2(0.5, 0.5)
-	var i := floori(g.x)
-	var j := floori(g.y)
-	var f := g - Vector2(i, j)
-	var w := host._size.x
-	var c := PainterOcclusion.CHANNELS
-	var a := lerpf(field[(j * w + i) * c + ch], field[(j * w + i + 1) * c + ch], f.x)
-	var b := lerpf(field[((j + 1) * w + i) * c + ch], field[((j + 1) * w + i + 1) * c + ch], f.x)
-	return lerpf(a, b, f.y)
+## Four empty custom arrays (PainterSites.append_dab's CUSTOM0 to 3).
+func _customs() -> Array[PackedFloat32Array]:
+	return [PackedFloat32Array(), PackedFloat32Array(), PackedFloat32Array(), PackedFloat32Array()]
+
+
+func test_a_dab_is_a_patch_of_the_terrains_own_triangles() -> void:
+	var n := 17
+	var step := Vector2(0.5, 0.5)
+	var half := Vector2(4.0, 4.0)
+	var grid := _grid(n, 0.3)
+	var vertices := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var custom := _customs()
+	var indices := PackedInt32Array()
+	# A stone on a slope of 0.3, its foot on the ground there.
+	var site := PainterSites.site(0.6, -1.1, 0.2, 0.18, 0.1)
+	var count := PainterSites.append_dab(site, grid, n, n, step, half, vertices, uvs, custom, indices)
+	assert_gt(count, 0, "a patch")
+	assert_eq(vertices.size(), count)
+	var own := PainterSites.lobes(0.6, -1.1, 0.2)
+	var off_grid := 0
+	var lowest := Vector2(INF, INF)
+	var highest := Vector2(-INF, -INF)
+	for i in count:
+		var v := vertices[i]
+		var at := (Vector2(v.x, v.z) + half) / step
+		var sample := Vector2i(roundi(at.x), roundi(at.y))
+		if not at.is_equal_approx(Vector2(sample)):
+			off_grid += 1
+		elif not is_equal_approx(v.y, grid[sample.y * n + sample.x] + PainterSites.LIFT_M):
+			off_grid += 1
+		lowest = lowest.min(Vector2(v.x, v.z))
+		highest = highest.max(Vector2(v.x, v.z))
+		assert_eq(uvs[i], Vector2(v.x, v.z))
+		assert_eq(custom[3][i * 4], PainterSites.BASE, "a dab's vertex")
+		if Vector2(v.x - 0.6, v.z + 1.1).length() < 0.5:
+			assert_eq(custom[3][i * 4 + 1], 0.0, "near the stone the value loses nothing")
+	assert_eq(off_grid, 0, "every vertex is a sample of the terrain, lifted")
+	var far := PainterSites.reach(0.2)
+	assert_true(lowest.x <= 0.6 - far and lowest.y <= -1.1 - far, "the patch holds the dab's reach")
+	assert_true(highest.x >= 0.6 + far and highest.y >= -1.1 + far, "on every side")
+	for k in 3:
+		assert_eq(custom[k].size(), count * 4)
+		assert_true(custom[k].slice(0, 4) == own.slice(k * 4, k * 4 + 4), "the lobes, at a vertex")
+		assert_true(custom[k].slice(count * 4 - 4) == own.slice(k * 4, k * 4 + 4), "at every one")
+	# The terrain's winding: front faces up (a cross product pointing down).
+	var wrong := 0
+	for t in indices.size() / 3:
+		var a := vertices[indices[t * 3]]
+		var b := vertices[indices[t * 3 + 1]]
+		var c := vertices[indices[t * 3 + 2]]
+		if (b - a).cross(c - a).y >= 0.0:
+			wrong += 1
+	assert_eq(wrong, 0, "every triangle faces up")
+	assert_gt(indices.size(), 0)
+
+
+func test_a_dabs_value_is_uneven_lobes_that_lean_and_stay_within_reach() -> void:
+	var r := 0.2
+	var own := PainterSites.lobes(0.6, -1.1, r)
+	assert_eq(own.size(), PainterSites.LOBES.size() * PainterSites.LOBE_FLOATS)
+	assert_true(own == PainterSites.lobes(0.6, -1.1, r), "the same stone: the same lobes")
+	assert_false(own == PainterSites.lobes(0.7, -1.1, r), "another stone: others")
+	assert_gt(PainterSites.value(own, 0.6, -1.1, Vector2.ZERO, 0.3), 0.3, "inside at the stone")
+	# Whatever the sun's lean, nothing shows past the reach less its margin.
+	var far := PainterSites.reach(r) - PainterSites.MARGIN_M
+	var most := -INF
+	for a in 16:
+		var dir := Vector2.RIGHT.rotated(TAU * a / 16.0)
+		for b in 8:
+			var lean := Vector2.RIGHT.rotated(TAU * b / 8.0) * PainterSites.LEAN_MAX
+			most = maxf(most, PainterSites.value(own, 0.6 + dir.x * far, -1.1 + dir.y * far, lean, 0.3))
+	assert_lt(most, 0.0, "outside at the reach")
+	# The outline is no circle: the distance where the first lobe ends differs round it.
+	var ends: Array[float] = []
+	var first := own.slice(0, 4)
+	for a in 12:
+		var dir := Vector2.RIGHT.rotated(TAU * a / 12.0)
+		var d := 0.0
+		while PainterSites.value(first, 0.6 + dir.x * d, -1.1 + dir.y * d, Vector2.ZERO, 0.3) > 0.0:
+			d += 0.005
+		ends.append(d)
+	assert_gt(ends.max() - ends.min(), 0.03, "an uneven outline")
+	# The lean reaches further on the side away from the sun and less toward it.
+	var away := Vector2(0.0, 1.0) * 0.25
+	var out := 1.1 * 0.95 * r
+	assert_gt(
+		PainterSites.value(first, 0.6, -1.1 + out, away, 0.3),
+		PainterSites.value(first, 0.6, -1.1 + out, Vector2.ZERO, 0.3)
+	)
+	assert_lt(
+		PainterSites.value(first, 0.6, -1.1 - out, away, 0.3),
+		PainterSites.value(first, 0.6, -1.1 - out, Vector2.ZERO, 0.3)
+	)
+
+
+func test_a_dab_ends_at_a_ledge_and_a_stone_off_the_ground_has_none() -> void:
+	var n := 17
+	var vertices := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var custom := _customs()
+	var indices := PackedInt32Array()
+	var step := Vector2(0.5, 0.5)
+	var half := Vector2(4.0, 4.0)
+	# The ground drops 3 m past x = 0.5; the stone stands 0.2 m before the edge.
+	var site := PainterSites.site(0.3, 0.0, 0.2, 0.0, 0.1)
+	var grid := _grid(n, 0.0, 3.0)
+	PainterSites.append_dab(site, grid, n, n, step, half, vertices, uvs, custom, indices)
+	var below := 0
+	for i in vertices.size():
+		if vertices[i].y < -1.0:
+			below += 1
+			assert_gt(custom[3][i * 4 + 1], 4.0, "the value is lost down the face")
+	assert_gt(below, 0, "some of the patch lies past the edge")
+	# A stone whose foot is 5 m above this ground (it stands on something else).
+	var before := vertices.size()
+	var high := PainterSites.site(-2.0, 0.0, 0.2, 5.0, 0.1)
+	assert_eq(
+		PainterSites.append_dab(high, grid, n, n, step, half, vertices, uvs, custom, indices), 0
+	)
+	assert_eq(vertices.size(), before, "nothing added")
+
+
+func test_the_dabs_host_builds_what_changed_and_nothing_else() -> void:
+	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "test", 7)
+	var map := Node3D.new()
+	add_child_autofree(map)
+	var terrain := AuthoredTerrain.new()
+	terrain.name = "AuthoredTerrain"
+	terrain.document = doc
+	map.add_child(terrain)
+	var material := ShaderMaterial.new()
+	var dabs := PainterDabs.new()
+	var outside := doc.extent_m().x
+	var sites: Array = [
+		PainterSites.site(1.0, 1.0, 0.2, 0.0, 0.1),
+		PainterSites.site(-3.0, -3.0, 0.15, 0.0, 0.1),
+		PainterSites.site(outside, 0.0, 0.2, 0.0, 0.1),
+	]
+	assert_eq(dabs.sync(map, terrain, material, sites), 3, "the first sync builds every site")
+	assert_eq(dabs.counts(), Vector2i(3, 2), "the two on the map have a dab")
+	var holder := dabs.holder()
+	assert_eq(holder.get_child_count(), 2, "one mesh a cell")
+	var node := holder.get_child(0) as MeshInstance3D
+	assert_gt(node.mesh.surface_get_array_len(0), 8, "a patch of the terrain's samples")
+	assert_true(node.mesh.surface_get_format(0) & Mesh.ARRAY_FORMAT_CUSTOM3 != 0, "with the lobes")
+	assert_eq(node.material_override, material, "drawn with the ground's material")
+	assert_eq(node.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	# The same sites again (a rebuild of the field for anything else, the sun turning): nothing.
+	assert_eq(dabs.sync(map, terrain, material, sites.duplicate()), 0, "nothing built")
+	assert_eq(dabs.uploaded, 2, "and nothing uploaded")
+	# The ground is edited under the first stone alone.
+	var at := doc.world_to_sample(Vector2(1.0, 1.0))
+	dabs.mark(Rect2i(Vector2i(floori(at.x), floori(at.y)), Vector2i(1, 1)))
+	assert_eq(dabs.sync(map, terrain, material, sites.duplicate()), 1, "that stone's dab alone")
+	assert_eq(dabs.uploaded, 3, "its cell alone")
+	# One stone goes and one comes.
+	sites.remove_at(1)
+	sites.append(PainterSites.site(1.5, 1.2, 0.2, 0.0, 0.1))
+	assert_eq(dabs.sync(map, terrain, material, sites), 1, "the new stone alone")
+	assert_eq(dabs.counts(), Vector2i(3, 2))
+	assert_eq(dabs.built, 5)
+	# A new terrain: everything again.
+	dabs.mark(Rect2i())
+	assert_eq(dabs.sync(map, terrain, material, sites), 3, "a new terrain: every site")
+	dabs.clear()
+	assert_null(dabs.holder(), "cleared")
 
 
 func test_a_boulder_keeps_its_seam_and_a_stone_gets_one_its_size() -> void:

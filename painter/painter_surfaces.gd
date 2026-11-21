@@ -303,6 +303,8 @@ func _on_terrain_child(node: Node) -> void:
 	_dress(node)
 	if str(node.name) == AuthoredTerrain.SKIRT_NAME:
 		# The skirt is built last by every AuthoredTerrain.build(): the document may be new.
+		if _occlusion != null:
+			_occlusion.call("ground_edited", Rect2i())
 		_zone_whole = true
 		_queue_zone()
 
@@ -311,6 +313,8 @@ func _on_terrain_child(node: Node) -> void:
 func _on_ground_edited(rect: Rect2i) -> void:
 	_zone_dirty = _zone_dirty.merge(rect) if _zone_dirty.has_area() else rect
 	_queue_zone()
+	if _occlusion != null:
+		_occlusion.call("ground_edited", rect)
 	_queue_occlusion()
 
 

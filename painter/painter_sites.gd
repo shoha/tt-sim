@@ -1,63 +1,70 @@
 class_name PainterSites
 extends RefCounted
-## The small stones' dabs of the contact field (PainterOcclusion's SITE marks; card
-## painter-terrain-marks): which body is one, and how its dab is baked.
+## The small stones' dabs (card painter-terrain-dabs): which body is one, and the flat geometry its
+## contact mark is drawn with. PainterDabs keeps the meshes; painter_ground draws them.
 ##
 ## A small stone is a body whose longer half is under HALF_M, no longer than ASPECT times its
-## narrower one and at least MIN_M in radius. A coverage blob its size (main's: a rounded box
-## behind a band half a texel wide) is one or two texels of a 0.25 m field: an angular patch that
-## joins three stones into one. So a small stone's mark is baked as a DISTANCE instead. Its dab is
-## a brush's lobe about its footprint, the union of DISCS discs whose places and sizes come from
-## the stone's own position (an uneven outline, the same on every bake), and each texel of the
-## field's seam channel takes EDGE minus the dab's signed distance (negative inside) over BAND_M.
-## A distance is smooth where a coverage is a step, so the field's bilinear read rebuilds a lobe
-## 0.2 to 0.6 m across with its outline where the dab's is, and two dabs join exactly where their
-## outlines do. The ground's shader does nothing for it: EDGE is the threshold it already takes
-## the seam at, through the brush noise it already has, so a dab is the seam's own flat tone
-## behind the seam's own firm, wobbled edge, at no cost per pixel (the two structures before it,
-## a second texture of sites read per pixel, cost 0.03 to 0.09 ms a frame).
+## narrower one and at least MIN_M in radius. A mark its size (0.2 to 0.9 m) is one or two texels
+## of the contact field (PainterOcclusion, 0.25 m): baked there it was an angular patch that joined
+## three stones into one, and a second texture read per ground pixel cost 0.03 to 0.09 ms a frame.
+## So a small stone leaves the field alone and its dab is GEOMETRY: a patch of flat triangles
+## lying on the ground under it, drawn with the ground's own material. A pixel of a patch is
+## therefore the ground at that place (the same biome paint, strata, zone maps, cast shadow and
+## contact field) with one difference, a VALUE the ground's shader joins to the field's seam
+## before the seam's own threshold: positive inside the dab's outline, negative round it. Inside,
+## the pixel takes the seam's tone behind the seam's firm, noise-wobbled edge, as a boulder's foot
+## does; outside it is the plain ground the patch covers. The seam is a tone the ground is set to,
+## not a darkening, so a dab inside a boulder's seam or another dab is no darker than either.
 ##
-## Two corrections make a quarter-metre texel hold a mark its own size:
-## - The distance is a paraboloid's, (d * d - R * R) / (2 R) for a disc of radius R: the disc's
-##   own distance at its outline (slope 1), but without the cone's point at the middle, which a
-##   bilinear read flattens by a different amount wherever the stone sits among the texels.
-## - A bilinear read of a convex function is too high: by nothing at a texel's middle and by up to
-##   step * step / (4 R) between four of them, for that paraboloid, whatever the stone's place. So
-##   a disc is baked a little wide (its radius squared plus WIDEN of the texel's): what the ground
-##   shows then lies within about a twentieth of a metre of the disc either way. (With the mean
-##   error taken off whole, a third of the texel's square, a 0.1 m disc showed 0.17 m wide toward
-##   the texels' middles and small stones stood in a puddle.) The first disc is at least FIRST_M
-##   in radius, so it holds a texel's middle, or nearly, and every stone shows a dab.
-## The ground reads the field LEAN_M toward the sun (painter_ground SEAM_LEAN_M: a boulder's seam
-## leans to its shadow's side), which would set a stone's whole dab beside it, so a dab is baked
-## that far toward the sun (`sun`, the unit plan direction to it): it shows at the stone, the same
-## uneven lobe whatever the hour. PainterOcclusion bakes the sites again when the sun has turned.
+## The patch is the terrain's own triangles, copied: every sample of the terrain's grid within
+## the dab's reach of the stone, triangulated as the terrain's mesh is and lifted LIFT_M, so it
+## lies on the ground whatever the ground's shape (a fan of its own, with vertices on the ground,
+## dipped under every lip it crossed: probed, the card's first sheet). The dab's SHAPE is not in
+## the triangles: every vertex of a patch carries the stone's LOBES.size() lobes (CUSTOM0 to 2:
+## a lobe's middle, its radius and the turn of its outline's waves), placed by a hash of the
+## stone's position, and the ground's shader works the value out per pixel: for a lobe its
+## radius over BAND_M at the middle, falling in a straight line to 0 on an outline whose distance
+## varies round the lobe by two and three waves (an uneven blob, never a clean oval), and the
+## greatest of the lobes'. So the outline is exact at any zoom and nothing is tessellated for it.
+## The shader's too, from the same lobes:
+## - The lean with the sun: the value takes a share (at most LEAN_MAX) of the offset from the
+##   lobe's middle along the direction away from the sun, which stretches each outline to that
+##   side (about a third of a stone shows there, a sliver elsewhere). A uniform: nothing is
+##   rebuilt when the sun turns.
+## - The union of touching stones' dabs: a vertex is lifted a little more by its value, so of two
+##   patches that overlap the depth test keeps the one with the higher value there.
+## CUSTOM3 holds BASE (the ground's own mesh has no CUSTOM3 and reads 0), what the value loses at
+## this vertex (CUT per metre its ground lies past the stone's vertical reach from the ground at
+## the stone: a dab at a ledge's edge ends there and does not run down the face) and the lift.
 
 const HALF_M := 0.45
 const ASPECT := 1.6
 const MIN_M := 0.09
-## A dab's discs: each its middle's distance from the stone's (in the stone's radii) and its
-## radius (the same). The first lies under the stone (a body's radius is its box's, wider than its
-## foot); the others stand off it in directions the stone's place gives, so the dab shows as a
-## lobe on two sides of the stone and reaches REACH radii at most. (With the first 1.3 radii wide
-## and the others reaching 1.55, three stones side by side stood in one puddle wider than they.)
-const DISCS: Array[Vector2] = [Vector2(0.0, 0.95), Vector2(0.45, 0.8), Vector2(0.5, 0.65)]
-const REACH := 1.25
-const FIRST_M := 0.15
-const WIDEN := 0.125
-## The ground's threshold on the seam channel (painter_ground contact_at(): 0.45), the metres of
-## distance one unit of the channel stands for (the brush noise, 0.15 of the channel either way,
-## then moves a dab's edge by 0.045 m), and the ground's lean of the field's read.
-const EDGE := 0.45
-const BAND_M := 0.3
-const LEAN_M := 0.3
-## How far up and down from its foot a stone's dab shows: UP of its radius past half its height
-## (it lies on the ground the stone stands on, not down a face below it).
+## A dab's lobes: each its middle's distance from the stone's and its radius, in the stone's radii
+## (a body's radius is its box's, wider than its foot). The first lies under the stone, the others
+## stand off it in directions the stone's place gives.
+const LOBES: Array[Vector2] = [Vector2(0.0, 0.95), Vector2(0.45, 0.8), Vector2(0.5, 0.65)]
+## The outline's unevenness: the share of a lobe's radius that two and three waves round it move
+## the outline by (painter_ground DAB_WAVES: keep the two equal).
+const WAVES := Vector2(0.14, 0.08)
+## The most the shader leans a dab by (painter_ground DAB_LEAN plus DAB_LEAN_LOW: keep under this),
+## and the metres of plain ground a patch keeps round the furthest outline (the ground's brush
+## noise moves the edge by 0.045 m).
+const LEAN_MAX := 0.3
+const MARGIN_M := 0.06
+## What a patch's vertex holds in CUSTOM3.x (painter_ground takes anything over 1 for a dab).
+const BASE := 8.0
+## Metres a patch stands above the terrain's surface.
+const LIFT_M := 0.004
+## How far up and down from the ground at the stone a dab shows: UP of the stone's radius past
+## half its height, and the value lost per metre past that.
 const UP := 0.6
-## Floats a texel in the field (PainterOcclusion.CHANNELS), its seam channel and its foot's.
-const CHANNELS := 4
-const SEAM := 1
-const FOOT := 2
+const CUT := 12.0
+## Floats a site is: its middle's world x and z, its radius, the height of its foot and its
+## vertical reach (metres).
+const SITE_FLOATS := 5
+## Floats a lobe is: its middle's x and z, its radius, its waves' turn.
+const LOBE_FLOATS := 4
 
 
 ## The radius of the site a body of plan half extents `half` (metres) is, or 0 when it is none: too
@@ -78,86 +85,124 @@ static func holds(half: Vector2) -> bool:
 	return longer < HALF_M and longer <= ASPECT * minf(half.x, half.y)
 
 
-## Metres from the middle of a dab baked at a stone of radius `r` within which it may raise the
-## field: its outline and the band outside it (the correction widens a disc by less than the band's
-## curve narrows it), and a centimetre for the discs' rounding.
+## A site: a stone whose body's middle is at world (x, z), with radius `r` (radius()), whose foot
+## stands at height `at` and whose body is `half_y` tall above and below its middle.
+static func site(x: float, z: float, r: float, at: float, half_y: float) -> Array:
+	return [x, z, r, at, 0.5 * half_y + UP * r]
+
+
+## Metres from a stone's middle within which its dab can show, whatever the sun: the furthest a
+## lobe's outline reaches when leaned by LEAN_MAX, and the margin.
 static func reach(r: float) -> float:
-	return maxf(REACH * r, FIRST_M) + EDGE * BAND_M + 0.01
+	var most := (1.0 + WAVES.x + WAVES.y)
+	var stretch := most / (1.0 - LEAN_MAX * most)
+	var far := 0.0
+	for lobe: Vector2 in LOBES:
+		far = maxf(far, lobe.x + lobe.y * stretch)
+	return far * r + MARGIN_M
 
 
-## The foot of a stone whose foot stands at height `at` and whose body is `half_y` tall above and
-## below its middle, as the field holds one: the height times its weight, and the weight (one over
-## the dab's vertical reach).
-static func foot(at: float, r: float, half_y: float) -> Vector2:
-	var up := 0.5 * half_y + UP * r
-	return Vector2(at / up, 1.0 / up)
-
-
-## The discs of the dab of a stone at world (x, z) with radius `r`: three floats each, the disc's
-## middle (world x, z) and its radius. One function of the stone's place (to the millimetre).
-static func discs(x: float, z: float, r: float) -> PackedFloat32Array:
+## The lobes of the dab of a stone at (x, z) with radius `r`: LOBE_FLOATS each. One function of
+## the stone's place (to the millimetre).
+static func lobes(x: float, z: float, r: float) -> PackedFloat32Array:
 	var h := hash(Vector2i(roundi(x * 1000.0), roundi(z * 1000.0)))
 	var turn := TAU * float(h & 0xFFFF) / 65536.0
 	var apart := 2.0 + 2.3 * float((h >> 16) & 0xFFFF) / 65536.0
 	var out := PackedFloat32Array()
-	for k in DISCS.size():
-		var off := DISCS[k].x * r
+	for k in LOBES.size():
+		var off := LOBES[k].x * r
 		var a := turn + apart * float(k - 1)
 		out.append(x + off * cos(a))
 		out.append(z + off * sin(a))
-		out.append(maxf(DISCS[k].y * r, FIRST_M) if k == 0 else DISCS[k].y * r)
+		out.append(LOBES[k].y * r)
+		out.append(TAU * float(hash(Vector2i(h & 0xFFFFFF, k)) & 0x3FF) / 1024.0)
 	return out
 
 
-## Bakes the dab of a small stone (`stone`: its middle's world x and z, its radius) into the seam
-## channel of `field` (`width` texels a row, `step` metres a texel, the first texel's corner at
-## `origin`), inside the texels of `win`, keeping the maximum; a texel the dab raises takes the
-## stone's `foot` (foot()). The dab is baked LEAN_M toward `sun` (the unit plan direction to the
-## sun, zero for none), where the ground's leaning read finds it at the stone.
-static func bake(
-	field: PackedFloat32Array,
-	origin: Vector2,
-	width: int,
-	step: float,
-	win: Rect2i,
-	stone: Vector3,
-	foot_of: Vector2,
-	sun: Vector2
-) -> void:
-	var r := stone.z
-	var x := stone.x + sun.x * LEAN_M
-	var z := stone.y + sun.y * LEAN_M
-	var own := discs(stone.x, stone.y, r)
-	var count := DISCS.size()
-	# Per disc: its middle, half over its radius, and its radius squared plus the correction's
-	# share of the texel's.
-	var cx := PackedFloat32Array()
-	var cz := PackedFloat32Array()
-	var inv := PackedFloat32Array()
-	var edge2 := PackedFloat32Array()
-	for k in count:
-		cx.append(own[k * 3] + sun.x * LEAN_M)
-		cz.append(own[k * 3 + 1] + sun.y * LEAN_M)
-		inv.append(0.5 / own[k * 3 + 2])
-		edge2.append(own[k * 3 + 2] * own[k * 3 + 2] + step * step * WIDEN)
+## The value of the dab whose lobes are `own` (lobes()) at (x, z), leaned by `lean` (the direction
+## away from the sun times the lean's share): what painter_ground's dab_value() works out per pixel
+## (the tests' and the probes' copy of it), in units of BAND_M metres, positive inside.
+static func value(
+	own: PackedFloat32Array, x: float, z: float, lean: Vector2, band_m: float
+) -> float:
+	var best := -INF
+	for k in own.size() / LOBE_FLOATS:
+		var d := Vector2(x - own[k * 4], z - own[k * 4 + 1])
+		var radius_m := own[k * 4 + 2]
+		var turn := own[k * 4 + 3]
+		var th := d.angle()
+		var rho := (
+			radius_m
+			* (1.0 + WAVES.x * cos(2.0 * th - turn) + WAVES.y * cos(3.0 * th - 2.7 * turn))
+		)
+		best = maxf(best, (radius_m * (1.0 - d.length() / rho) + d.dot(lean)) / band_m)
+	return best
+
+
+## Appends the patch of `site`'s dab: its `vertices`, their `uvs` (the map-frame x, z the ground's
+## shader reads), the four floats a vertex of each of `custom` (four arrays: CUSTOM0 to 3) and its
+## triangles' `indices`, counted from the patch's first vertex. Returns the vertices it added: none
+## for a stone that does not stand on this ground (off the map, or its foot further than twice
+## its reach from the ground). The site is in the terrain's own frame; `grid` is the terrain's
+## heights (`columns` by `rows` samples, `step` metres apart, centred on the origin: `half` is
+## half its extent).
+static func append_dab(
+	site_of: Array,
+	grid: PackedFloat32Array,
+	columns: int,
+	rows: int,
+	step: Vector2,
+	half: Vector2,
+	vertices: PackedVector3Array,
+	uvs: PackedVector2Array,
+	custom: Array[PackedFloat32Array],
+	indices: PackedInt32Array
+) -> int:
+	var x: float = site_of[0]
+	var z: float = site_of[1]
+	var r: float = site_of[2]
+	var up: float = site_of[4]
+	if absf(x) > half.x or absf(z) > half.y:
+		return 0
+	var ground := ScatterGenerator.triangle_height(
+		grid, columns, rows, Vector2((x + half.x) / step.x, (z + half.y) / step.y)
+	)
+	if absf(ground - float(site_of[3])) > 2.0 * up:
+		return 0
 	var far := reach(r)
-	var i0 := maxi(win.position.x, floori((x - far - origin.x) / step))
-	var i1 := mini(win.end.x - 1, floori((x + far - origin.x) / step))
-	var j0 := maxi(win.position.y, floori((z - far - origin.y) / step))
-	var j1 := mini(win.end.y - 1, floori((z + far - origin.y) / step))
+	var i0 := clampi(floori((x - far + half.x) / step.x), 0, columns - 2)
+	var i1 := clampi(ceili((x + far + half.x) / step.x), i0 + 1, columns - 1)
+	var j0 := clampi(floori((z - far + half.y) / step.y), 0, rows - 2)
+	var j1 := clampi(ceili((z + far + half.y) / step.y), j0 + 1, rows - 1)
+	var own := lobes(x, z, r)
+	var wide := i1 - i0 + 1
+	# Every vertex of the patch holds the same lobes: each laid end to end, once.
+	for k in LOBES.size():
+		var block := own.slice(k * LOBE_FLOATS, (k + 1) * LOBE_FLOATS)
+		var need := LOBE_FLOATS * wide * (j1 - j0 + 1)
+		while block.size() < need:
+			block.append_array(block.duplicate())
+		custom[k].append_array(block.slice(0, need))
 	for j in range(j0, j1 + 1):
-		var pz := origin.y + (j + 0.5) * step
-		var row := j * width
+		var pz := j * step.y - half.y
+		var row := j * columns
 		for i in range(i0, i1 + 1):
-			var px := origin.x + (i + 0.5) * step
-			var q := INF
-			for k in count:
-				var dx := px - cx[k]
-				var dz := pz - cz[k]
-				q = minf(q, (dx * dx + dz * dz - edge2[k]) * inv[k])
-			var v := minf(EDGE - q / BAND_M, 1.0)
-			var at := (row + i) * CHANNELS
-			if v > field[at + SEAM]:
-				field[at + SEAM] = v
-				field[at + FOOT] = foot_of.x
-				field[at + FOOT + 1] = foot_of.y
+			var px := i * step.x - half.x
+			var h := grid[row + i]
+			vertices.append(Vector3(px, h + LIFT_M, pz))
+			uvs.append(Vector2(px, pz))
+			custom[3].append(BASE)
+			custom[3].append(maxf(absf(h - ground) - up, 0.0) * CUT)
+			custom[3].append(LIFT_M)
+			custom[3].append(0.0)
+	# The terrain's own triangles (TerrainMeshBuilder.build_chunk_arrays): front faces up.
+	for j in j1 - j0:
+		for i in i1 - i0:
+			var a := j * wide + i
+			indices.append(a)
+			indices.append(a + 1)
+			indices.append(a + wide)
+			indices.append(a + 1)
+			indices.append(a + wide + 1)
+			indices.append(a + wide)
+	return wide * (j1 - j0 + 1)
