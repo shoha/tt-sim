@@ -13,15 +13,18 @@ extends RefCounted
 ## origin), UV map-normalised (the flow map's frame), CUSTOM0 = (depth, energy, shore distance,
 ## steep share), CUSTOM1 = (lateral coordinate (WaterField.lateral), FIELD_FLAG, 1 where the sample
 ## is within the foot coordinate's range of a fall's foot (WaterField.foot; the shader fetches the
-## coordinate only there), the spill mark: 1 a river's ramp into a pond,
-## 0.5 a bank's thin spill that is not drawn as a shelf, 0.125 a film). The mesh
-## is a function of the field alone, so a field refreshed over a dirty rect draws exactly what a
-## fresh build would.
+## coordinate only there), the old spill enum: 1 a river's ramp into a pond, 0.5 a bank's thin
+## spill, 0.125 a film; the shader no longer reads it), CUSTOM2 = (the depth again (unread: the
+## native builder's first slot), film share, bank share, the film share again (unread: the
+## builder's fourth slot): WaterFieldMarks, each its own continuous channel). The mesh is a
+## function of the field alone, so a field refreshed over a dirty rect draws exactly what a fresh
+## build would.
 
 const MESH_NAME := "PaintedWaterField"
 const FORMAT := (
 	(Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT)
 	| (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
+	| (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM2_SHIFT)
 )
 ## CUSTOM1.y of a field vertex (the shader's FIELD_FLAG): never a half-width, which is >= 0.
 const FIELD_FLAG := -7.0
@@ -75,6 +78,8 @@ static func build(f: WaterField) -> Dictionary:
 	var uvs := PackedVector2Array()
 	var c0 := PackedFloat32Array()
 	var c1 := PackedFloat32Array()
+	var c2 := PackedFloat32Array()
+	var marks := f.marks
 	var indices := PackedInt32Array()
 	var lo := Vector3(INF, INF, INF)
 	var hi := -lo
@@ -110,6 +115,7 @@ static func build(f: WaterField) -> Dictionary:
 						spill = FILM_MARK
 					var near_foot := 1.0 if f.foot[s] < WaterFieldStroke.NO_FOOT * 0.5 else 0.0
 					c1.append_array([f.lateral[s], FIELD_FLAG, near_foot, spill])
+					c2.append_array([maxf(d, -1.0), marks.film[s], marks.bank[s], marks.film[s]])
 				corner.append(index_of[s])
 			indices.append_array([corner[0], corner[1], corner[2], corner[1], corner[3], corner[2]])
 	if verts.is_empty():
@@ -121,6 +127,7 @@ static func build(f: WaterField) -> Dictionary:
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_CUSTOM0] = c0
 	arrays[Mesh.ARRAY_CUSTOM1] = c1
+	arrays[Mesh.ARRAY_CUSTOM2] = c2
 	arrays[Mesh.ARRAY_INDEX] = indices
 	return {
 		"arrays": arrays,

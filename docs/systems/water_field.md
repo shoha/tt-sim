@@ -41,8 +41,9 @@ holds the sample):
   tight bend keep their level and raise no `film_run` or `bridged_run`. The rule lives in
   `RiverProfile.stations` (GDScript, the bank test's inputs); no field channel and no native pass
   was added, and `ttscatter`'s version did not move. `stations().junction` and
-  `WaterJunctions.find(doc)` say where; the shader does not read them yet (the lap fade at a
-  mouth and the cross-fade of two flow frames are a later card).
+  `WaterJunctions.find(doc)` say where. The shader needs no record of a mouth: one bed at one
+  level gives the depth one zero contour, so `shore` has no waterline across a mouth ("Marks and
+  the one shoreline" below); the cross-fade of two flow frames is a later card.
 - The lateral foot tongue: foot foam and riffle white fade by `LATERAL_FADE` toward the channel edge.
 
 Derived per sample (arrays of the grid's size, row-major, `index = z * size.x + x`, sample (0, 0) at
@@ -216,6 +217,86 @@ gradient edge (above the face where `fd` is under -1 and the steep share is low)
 keeps more calm blue in a tight frame. The flow-map texel (`fld_b`) is fetched once per fragment (the
 foot and the white's flow coordinate share it). Changing these constants moves the energy goldens
 (`water_field_transects.json`, regenerated); native is unaffected (the table stays GDScript).
+
+## Marks and the one shoreline (cards painter-water-mouths, painter-water-shoreline; look-pending)
+
+**The white at the water's edge is one function of one distance.** `shore` is the signed distance
+to the zero contour of the depth of ALL the water (one pass over the whole field, not per body).
+Since the junction work stands the water at one level over one bed wherever water meets water, the
+depth has no zero across a stream's mouth in a pond, a join, a crossing or a pond over a stream:
+the union's waterline simply does not pass there. The lap ribbon (`painter_water.gdshader`,
+"shore_foam") reads that distance and nothing else on the field, so it opens at a mouth by itself,
+turns each land corner as one line and runs on along a neck's banks. No rule knows about mouths.
+
+The inventory that led here (2026-11-20; every term that draws white or pale at an edge, the data
+it reads and that data's grain):
+
+| Term | Reads | Grain | State |
+|---|---|---|---|
+| lap ribbon and outer dashes | `shore` (bicubic, plus a 4-tap smoothed copy), the depth-over-distance slope | per sample, filtered, one field for all water | the only edge white on the field |
+| the lap's cut on the ramp flag (main) | CUSTOM1.w enum 0 / 0.125 / 0.5 / 1 | per sample, hard, interpolated; written per stroke | removed: stepped ring and ticks at a mouth, an uneven cut along every stream bank (0.5 is over the 0.45 threshold, so every bank band cut the lap by where a vertex fell) |
+| the lap's bank cut and mouth fade (card painter-water-mouths) | `bank` share, `mouth` distance | per stroke geometry, continuous | removed: no lap within 0.9 m of a mouth line, so a pond's neck and every land corner lost it |
+| depth wrap (`edge_foam`) | `fwidth` of the depth buffer behind the surface | per pixel, screen space | kept for objects only: on the field it needs the scene to stand above the field's own ground |
+| film column | `film` share | per stroke, 0/1 | kept (tint, not white) |
+| bank-spill fade of the wash | `bank` share, depth | per stroke geometry, continuous | kept (alpha of thin shed water, not white) |
+| ramp white (`RAMP_KEEP`), fall foot, tongues | `energy`, `foot`, `lateral` | per stroke tables | not edge white; untouched |
+
+Three structures were compared on corpus f_into_pond, f_pond_over_stream, s1_fall_pond and the
+canonical pond's neck, native crops (`cmp_structures.png` in
+`docs/research/2026-11-09-prototypes/compare/painter_final110_water_shoreline/`): (A) per-body
+marks plus the mouth fade, with the ribbon tapered in width instead of coverage: the neck and the
+corners still lose their lap, because the rule itself removes it; (B) the lap from `shore` alone:
+one continuous line round every corner, the neck's lap as on main; (C) the shoreline as a drawn
+ribbon along the extracted contour: not built, since `shore` already is the exact distance to that
+contour (`WaterFieldContour`), so a ribbon would draw the same line and add a mesh, its rebuild per
+edit and its sorting against the surface, for an arc coordinate the lap does not use today. B won
+by look and by count: it removes two rules, one channel and the mouth finder, and adds none.
+
+`WaterFieldMarks` (`utils/water_field_marks.gd`, `WaterField.marks`) keeps the two continuous
+channels the wash still reads, on CUSTOM2 of the mesh (x repeats the depth and w the film, unread):
+
+- `film` (y): 1 on a stroke's film, else 0. `bank` (z): the thin water a bank sheds, rising from 0 at
+  the channel's edge to 1 over 0.25 m beyond it (a function of the distance across the stroke).
+
+The `mouth` distance, the per-sample stroke id (`chan`), the mouth-line finder and the grown update
+rect are gone. CUSTOM1.w still carries the old enum, unread by the shipped shader: it is what lets
+main's shader text draw main's look on this mesh for an exact A/B, and goes with the next native
+version.
+
+**The wrap is for objects.** The depth-slope white (`edge_foam`) also fired on the bed's own
+silhouette: a crisp hairline along a straight carved bank and a tick past each land corner, a
+second mechanism drawing the edge the lap already draws. On the field it is now multiplied by a
+lift test: the scene point behind the fragment against the field's own bed where the view ray
+lands (`fld_a.r` at the hit point, one bilinear fetch, only where a wrap is present), from
+`WRAP_LIFT_LO` 0.06 m to `WRAP_LIFT_HI` 0.16 m. A carved bank has no lift; a token's legs and a
+rock do (checked with a token standing in a pond: its wrap is unchanged). Known remainder: at the
+foot of a near-vertical cliff (corpus s1_fall_pond) the bilinear bed is off by more than the
+threshold and a thin line still draws along the wall.
+
+Tests (`test_water_field_marks.gd`): the marks in range and deterministic, update equals build
+(marks and `shore`) after ground edits, level changes and each stroke's removal, CUSTOM2 the same on
+both mesh paths; and the shoreline's invariant: along a stream's centre line through eleven corpus
+meetings (stream into pond, through a pond, two inflows, pond chain, pond over stream, fall into
+pond, tributary, crossing) `shore` never comes within the lap's reach (0.6 m) of a waterline.
+Native: no change to the library and `version()` stays `ttscatter 9`: the marks are written in
+GDScript (the stroke's per-sample write is GDScript too), and the native mesh builder, which copies
+its energy, shore and steep arrays into c0 unchanged, is called a second time with the marks in
+those slots (`WaterFieldNative.mesh`, about 0.4 ms more per mesh rebuild).
+
+Known defect of the one distance (measured 2026-11-20, not fixed: a native change): the shore pass
+measures each sample to the crossing and contour piece of its NEAREST BOUNDARY SAMPLE only, and
+where two boundary samples tie it can take the one whose crossing lies further, so `shore` reads up
+to 0.18 m long on the second row of samples from a bank: steps of 0.33 m (corpus flat, 71 pairs)
+and 0.43 m (steps, 23 pairs) between neighbours 0.25 m apart, at notches of the bank; beyond
+`EXACT_M` up to 0.13 m long along whole columns. A true distance steps at most 0.25 m. The fix:
+in `water_shore` (native and the `_shore` twin) compare the candidates of every boundary sample in
+the 3 by 3 round the nearest one (their crossings, and within `EXACT_M` their contour pieces), bump
+`version()`, regenerate the shore goldens, and tighten the test's two-step bound to one step.
+
+Attributed, not this card's: the ladder of white rungs on a fall's ramp into a pond seen from above
+(corpus s1_fall_pond, top, zoom 8) is on main too and goes only with `ABL_NOWHITE` (not with the
+lap or the wrap off): it is the fall face's tongue columns (the energy white), not an edge mark.
+The faint arc across a ring's closure (f_loop) is in the wash, as before.
 
 ## Conditioning
 

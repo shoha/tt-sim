@@ -149,6 +149,8 @@ var flow_u := PackedFloat32Array()
 ## fall's foot (negative on the face, positive in the plunge pool; WaterFieldStroke.NO_FOOT
 ## beyond 4 m and on any sample no stroke wrote).
 var foot := PackedFloat32Array()
+## The continuous marks the shader reads per vertex: film, bank share, mouth distance.
+var marks := WaterFieldMarks.new()
 ## What the map shows that its author should decide, sorted by (kind, body, position):
 ## {"kind": &"film_run", "body", "pos", "length"} a stretch of a stroke longer than the bridge
 ## whose ground no longer holds its water; {"kind": &"bridged_run", ...} the same, short enough
@@ -357,6 +359,7 @@ func _fit(doc: MapDocument) -> bool:
 	flow_u.fill(NO_FLOW_U)
 	foot = _zeros(n)
 	foot.fill(WaterFieldStroke.NO_FOOT)
+	marks.fit(n)
 	events = []
 	return true
 
@@ -366,6 +369,7 @@ func _reset(doc: MapDocument, rect: Rect2i) -> void:
 	var n := size.x * size.y
 	var heights := doc.heights
 	var has_heights := heights.size() == n
+	marks.reset(self, rect)
 	if rect == Rect2i(Vector2i.ZERO, size):
 		# The whole grid (a build): bulk fills, no per-sample loop.
 		ground = heights.duplicate() if has_heights else _zeros(n)
@@ -518,6 +522,8 @@ func _put_stroke(
 	var mask := doc.pond_mask
 	var has_mask := mask.size() == size.x * size.y
 	var bank := WaterGeometry.RIVER_BANK_M
+	var film := marks.film
+	var bank_share := marks.bank
 	for j in rect.size.y:
 		for i in rect.size.x:
 			var k := j * rect.size.x + i
@@ -557,6 +563,9 @@ func _put_stroke(
 					continue
 				spill[at] = SPILL_POND if over_pond else (SPILL_BANK if d > hw else 0)
 				calm[at] = 1 if undermined or (d > hw and not over_pond) else 0
+				film[at] = 1.0 if undermined and not over_pond else 0.0
+				var out := (d - hw) / WaterFieldMarks.BANK_SHARE_M
+				bank_share[at] = clampf(out, 0.0, 1.0) if spill[at] == SPILL_BANK else 0.0
 				_raw[at] = level
 				flow_u[at] = flow_coord
 				lateral[at] = _lateral_of(

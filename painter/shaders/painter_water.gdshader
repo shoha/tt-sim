@@ -237,6 +237,17 @@ varying vec3 f_shd;
 // The field channels (WaterFieldMesh): depth, energy, shore distance, steep; river share, flag.
 varying vec4 v_f0;
 varying vec4 v_f1;
+// The field's marks (WaterFieldMarks, CUSTOM2), each its own continuous channel: y the film share,
+// z the bank-spill share. They replace the enum of CUSTOM1.w, which interpolated through its own
+// middle values along every border. Neither is read by the white at the water's edge: on the
+// field that white is one function of the shore distance (v_f0.z / fld_a.b), the distance to the
+// waterline of all the water together, so it opens where water meets water with no rule for it.
+varying vec4 v_f2;
+// The wrap (the depth-slope white round a rock or a token standing in the water) fires on the
+// field only where the scene behind the surface stands this far (m, from and to) above the
+// field's own ground: a bare bank is the lap's edge, not a second white line along it.
+const float WRAP_LIFT_LO = 0.06;
+const float WRAP_LIFT_HI = 0.16;
 varying flat float v_rings;
 varying float v_wob;
 // The white water: how much the energy whitens, the blob size (m).
@@ -449,6 +460,7 @@ void vertex() {
 	v_mp = VERTEX.xz;
 	v_f0 = CUSTOM0;
 	v_f1 = CUSTOM1;
+	v_f2 = CUSTOM2;
 #ifdef RED_K
 	v_wob = 1.0;
 	if (CUSTOM1.y < FIELD_FLAG + 0.5) {
@@ -604,10 +616,13 @@ if (fieldv) {
 		curtain = smoothstep(0.05, 0.9, fa.w);
 		vec3 view_world = (INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz;
 		path_k = 1.0 / clamp(abs(view_world.y), VIEW_SHARE_MIN, 1.0);
-		// A film (CUSTOM1.w 0.125: water the dug bed no longer holds, a map error WaterField reports
-		// as an event) draws as mid-depth water, not as the few centimetres it is: the shallow band
-		// drew a pale teal glaze across a plunge pool.
-		float film = smoothstep(0.02, 0.11, v_f1.w) * (1.0 - smoothstep(0.16, 0.22, v_f1.w));
+		// A film (the marks' film share: water the dug bed no longer holds, a map error WaterField
+		// reports as an event) draws as mid-depth water, not as the few centimetres it is: the
+		// shallow band drew a pale teal glaze across a plunge pool.
+		float film = clamp(v_f2.y, 0.0, 1.0);
+#ifdef ABL_NOFILMW
+		film = 0.0;
+#endif
 		column_raw = mix(column_raw, max(column_raw, FILM_COLUMN_M / path_k), film);
 	}
 	// Anything that is not ground under the water (a reed blade, a token's leg) reads as deep.
@@ -665,9 +680,12 @@ if (fieldv && (shade_opt & 4) != 0) {
 		// distance too, so a steep bank does not end the wash on a hard line.
 		shoreline = min(smoothstep(0.0, 0.05, fa.x), smoothstep(0.0, 0.14, fa.z));
 		wash_a = max(wash_a, p_opacity * FILM_ALPHA * (1.0 - smoothstep(0.045, 0.1, fa.x)));
-		// The thin water a bank sheds (CUSTOM1.w 0.5, WaterField's spill beyond the channel) draws
-		// from a few centimetres' depth: it read as a pale shelf standing out from the bank.
-		float bank_spill = step(0.25, v_f1.w) * (1.0 - step(0.75, v_f1.w));
+		// The thin water a bank sheds (the marks' bank share, WaterField's spill beyond the channel)
+		// draws from a few centimetres' depth: it read as a pale shelf standing out from the bank.
+		float bank_spill = clamp(v_f2.z, 0.0, 1.0);
+#ifdef ABL_NOBANKW
+		bank_spill = 0.0;
+#endif
 		shoreline = min(shoreline, mix(1.0, smoothstep(0.05, 0.22, fa.x), bank_spill));
 		shoreline = max(shoreline, curtain);
 	}
@@ -873,12 +891,13 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// only on a gentle shore (gate from a slope of 0.25).
 	float dash_gate = 1.0 - smoothstep(0.25, 0.7, slope);
 	float dashes = (1.0 - smoothstep(0.03, 0.2 + world_units_per_pixel, abs(d_h - outer))) * smoothstep(0.6, 0.76, dash_n) * dash_gate;
+	// On the field this is the whole rule: the lap is a function of the shore distance alone. That
+	// distance is to the waterline of all the water together (WaterField.shore), so a stream's
+	// mouth in a pond, a join and a crossing have no shore across them and the lap opens there by
+	// itself, turns each land corner as one line and runs on along a neck's banks. The cuts that
+	// stood here (the ramp flag of one sample, then a bank share and a fade by the distance to a
+	// mouth line) each drew their own border: a stepped ring, ticks, a neck with no lap.
 	shore_foam = max(lap, dashes) * ground_like * smoothstep(0.0, 0.01, column_raw + 0.004);
-	if (fieldv) {
-		// The thin water a bank sheds and a river's ramp into a pond (CUSTOM1.w 0.5 and 1) is a wet
-		// slope: no lap on it (a white arm stood out from each side of a pond's inflow).
-		shore_foam *= 1.0 - 0.9 * smoothstep(0.2, 0.45, v_f1.w);
-	}
 	}
 	// Riffles: dense short dashes along the flow on fast, shallow water.
 	// The field draws its riffles from its own energy: the baked flow map's swirls in a pool would draw
@@ -913,6 +932,22 @@ if (fieldv && (shade_opt & 4) != 0) {
 		float front_lo = max(EDGE_FRONT_MIN_M, 3.0 * world_units_per_pixel);
 		edge_foam *= 1.0 - smoothstep(front_lo, front_lo * 3.0, front_gap);
 	}
+#ifndef ABL_NODEPTH
+#ifndef ABL_NOLIFT
+	if (fieldv && edge_foam > 0.0) {
+		// On the field the wrap is for what the field does not know (a rock, a token, a reed): the
+		// scene point behind this fragment against the field's own bed at that point (its depth
+		// texture, read where the view ray lands). A carved bank is the field's bed, so it has no
+		// lift and no wrap: the bank's edge is the lap's, drawn once. (The depth slope alone fired
+		// on the bed's own silhouette: a crisp hairline along a straight bank and a tick past each
+		// land corner.)
+		vec3 hit = (INV_VIEW_MATRIX * vec4(scene_view, 1.0)).xyz;
+		vec2 tch = (hit.xz - p + v_mp - fld_origin) * fld_inv_step + 0.5;
+		float lift = texture(fld_a, tch / fld_dim).r - (world_pos.y - hit.y);
+		edge_foam *= smoothstep(WRAP_LIFT_LO, WRAP_LIFT_HI, lift);
+	}
+#endif
+#endif
 #ifdef RED_C
 	// No depth jump, no wrap: the noise only breaks an edge that is there.
 	if (edge_foam > 0.0) {
