@@ -842,9 +842,39 @@ head above the pond (water does not climb: `perched_head`) and an end out of rea
 were dropped (`end_near_water_below`) are only said. The joins are all-or-nothing per pond: the field's events
 (film_run, bridged_run, end_near_water) and perched samples are counted before and after (two
 `WaterField` builds on the worker's snapshot) and the joins are dropped unless no kind got worse,
-no perched sample was added and, when the map reports any event, at least one was removed (a join
-that changes nothing the field reports could still change what a later pond finds: seed 10). The
-ends are then said (`end_near_water_below`) when the map had an `end_near_water` event.
+no perched sample was added and, when the counted bodies report any event, at least one was removed
+(a join that changes nothing the field reports could still change what a later pond finds: seed
+10). The count is LOCAL since card painter-water-paths (`WaterPondFit.scoped_counts`): the pond, the
+joined strokes, their connectors, and whatever lies in the rectangles the connectors' carve lowered
+(a metre round them), never the whole map. Before, the same pond and three streams joined 3 ends
+alone on a map and 0 beside unrelated crossings elsewhere on it (their film and bridged runs made
+"the map reports an event" true, and the join removed none); counting only the joined bodies was
+tried first and let joins through that undermined a neighbour (pond fuzz perched 47 off, 54 on, 2
+of 8 maps with more events), hence the carve rectangles. Dropped joins are always said
+(`end_near_water_below`). A join the document has no room for (`MapDocument.MAX_RIVERS`, 32) is
+skipped silently: open.
+
+**Path rules of card painter-water-paths (2026-11-20).** (1) `WaterPorts.snap_reach`: an end's
+reach is 1.5 of its half-widths (at least 1 m) and the search follows it; it was cut off by a
+constant 2 m search, so the widest stroke reached no further than a waist stream. Two half-widths
+was tried and put back (fuzz events 110 to 122 against 103 off: every extra join is a junction the
+field reports). (2) `WaterCourseFit.trim_loops` trims only pointer curls (a self-loop within 4
+half-widths of its crossing, which cannot enclose dry ground); a larger loop is kept, the stroke
+crosses itself as one body (a 32 m stroke with one crossing was stored as its first 8 m). Its
+crossing raises what two crossing strokes raise (film_run, bridged_run, coordinate jumps). (3)
+`WaterFallPlan.END_CLEAR_SHARE`: a lip keeps half the fall spacing from a free end, but at most a
+quarter of the stroke's length; the spacing is 30 m at the widest brush, so a 14 m wide stroke
+over a cliff could host no lip, was blocked (cut 2.30 m) and kept as drawn as six reaches down the
+face. (4) `WaterEdit.min_river_length`: a line shorter than half a pool tail per tapered end
+(ankle 1.5 m, waist 2.7 m, deep 5 m with two free ends) is refused whole with the `too_short` hint
+(`WaterEditor.REFUSED_PLAN`, the brush toast) and nothing is carved; measured, a 0.9 m stroke
+carved 15 to 17 samples and landed 1 or 2 wet ones. Off (`conditioning_enabled` false) stores every
+stroke as drawn. Not solved: a 2 m ankle stroke still lands about 1 m of water (every stroke's
+water is about 0.5 m shorter than its line at each tapered end; the taper would have to scale with
+a short stroke), and a stream a riffle or a fall above a pond is still left as drawn and said (the
+stepped connector stands proud of its bank: t_end_short, s0_fall_pond in the corpus). The corpus
+(`water_corpus_cases.gd`) was respaced for these rules: cells 24 m apart, the widest strokes first
+on their map or alone on one (`steps_wide`), six maps.
 Idempotent (an end inside the pond's water has nothing to decide) and deterministic (no
 randomness, no time). The connector is `WaterPondFit._stepped`: two reaches meeting at the pond's
 edge, the stream's side at the stream's level, the pond's side at the pond's, so the drop is a

@@ -236,6 +236,9 @@ func carve(editor: AuthoringEditor, half_width: float) -> bool:
 			WaterEditor.REFUSED_IN_WATER: IN_WATER,
 		}
 		_refusal = reasons.get(editor.water.last_refusal, "")
+		if editor.water.last_refusal == WaterEditor.REFUSED_PLAN:
+			# The conditioner refused the stroke whole: its hint says why and what to do.
+			_refusal = load(WaterEdit.HINTS_PATH).toast_text(editor.water.last_hints)
 		return _refusal == ""
 	_hint = load(WaterEdit.HINTS_PATH).toast_text(editor.water.last_hints)
 	held = flow_line(line, ground_reader(editor))

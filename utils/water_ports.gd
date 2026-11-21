@@ -15,9 +15,15 @@ extends RefCounted
 ##  - refit_stroke(): the dig-aware re-fit of one stroke's reach levels under the ground as it is
 ##    now (what the field would call undermined is lowered until the banks hold it again).
 
-## A stroke end within this of other water is looked at (WaterField.END_NEAR_M).
+## A stroke end within this of other water is looked at (WaterField.END_NEAR_M), or within its
+## own snap reach when that is longer.
 const SEARCH_M := WaterField.END_NEAR_M
-## The snap tolerance of an end: the larger of this many half-widths and MIN_SNAP_M.
+## The snap reach of an end (snap_reach()): this many half-widths of its own stroke, at least
+## MIN_SNAP_M. The search follows it (card painter-water-paths: under a constant 2 m search the
+## widest strokes reached no further than a waist stream). 2 half-widths (the brush's whole
+## width) was tried there: it joined f_end_short's 2.0 m gap, and over the fuzz maps the field
+## events rose from 110 to 122 (off 103) and the pond fuzz's perched samples from 47 to 54, each
+## extra join being a junction the field reports; kept at 1.5 until junctions are one bed.
 const SNAP_PER_HALF_WIDTH := 1.5
 const MIN_SNAP_M := 1.0
 ## Hold slack of the dig re-fit: the banks must stand within this of the level.
@@ -51,13 +57,13 @@ static func end_decision(
 		"kind": &"",
 		"fixes": [],
 	}
-	var near := _nearest_water(doc, at, own)
+	var reach := snap_reach(half_width)
+	var near := _nearest_water(doc, at, own, maxf(SEARCH_M, reach))
 	# An end already inside other water (join_line put it there) has nothing to decide.
 	if near.is_empty() or float(near.distance) <= 0.0 or _pond_at(doc, at) in _others(doc, own):
 		return out
 	var other: WaterBody = doc.water_body(near.id)
 	var gap := other.level_m - level
-	var reach := maxf(SNAP_PER_HALF_WIDTH * half_width, MIN_SNAP_M)
 	out.other_body = near.id
 	out.gap = gap
 	out.distance = near.distance
@@ -86,6 +92,19 @@ static func end_decision(
 		out.kind = &"end_near_water_below"
 		out.fixes = [&"extend_to_water", &"carve_fall", &"keep"]
 	return out
+
+
+## How far the end of a stroke `half_width` wide reaches for other water to join: its own width
+## (SNAP_PER_HALF_WIDTH half-widths), at least MIN_SNAP_M.
+static func snap_reach(half_width: float) -> float:
+	return maxf(SNAP_PER_HALF_WIDTH * half_width, MIN_SNAP_M)
+
+
+## True when `at` lies in water of `doc` or within `reach` metres of its edge.
+static func water_within(doc: MapDocument, at: Vector2, reach: float) -> bool:
+	if WaterGeometry.is_wet_at(doc, at):
+		return true
+	return not _nearest_water(doc, at, PackedInt32Array(), reach).is_empty()
 
 
 ## The river and pond tree of `doc` for WaterConditioner.solve_tree(): {"parent" (per body in
@@ -324,15 +343,17 @@ static func _would_loop(parent: PackedInt32Array, from: int, to: int) -> bool:
 	return false
 
 
-## The nearest other water within SEARCH_M of `at` (outside `own` ids): {"id", "distance" to its
-## edge, "point" (the nearest water point)}, or {}.
-static func _nearest_water(doc: MapDocument, at: Vector2, own: PackedInt32Array) -> Dictionary:
+## The nearest other water within `search` metres of `at` (outside `own` ids): {"id", "distance"
+## to its edge, "point" (the nearest water point)}, or {}.
+static func _nearest_water(
+	doc: MapDocument, at: Vector2, own: PackedInt32Array, search: float = SEARCH_M
+) -> Dictionary:
 	var best := {}
-	var best_d := SEARCH_M
+	var best_d := search
 	var step := doc.sample_step()
 	if doc.pond_mask.size() == doc.sample_count():
 		var c := doc.world_to_sample(at).round()
-		var reach := int(ceil(SEARCH_M / minf(step.x, step.y)))
+		var reach := int(ceil(search / minf(step.x, step.y)))
 		for dz in range(-reach, reach + 1):
 			for dx in range(-reach, reach + 1):
 				var x := int(c.x) + dx

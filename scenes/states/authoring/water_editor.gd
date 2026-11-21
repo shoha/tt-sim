@@ -38,6 +38,8 @@ const REFUSED_NO_CARVE := &"no_carve"
 const REFUSED_SHORT := &"short"
 const REFUSED_FULL := &"full"
 const REFUSED_IN_WATER := &"in_water"
+## The plan refused the stroke whole (it could not hold water); last_hints says why.
+const REFUSED_PLAN := &"plan"
 
 ## Why the last carve_river() or paint_pond_begin() made nothing (REFUSED_*), or &"".
 var last_refusal: StringName = &""
@@ -146,6 +148,10 @@ func carve_river(
 	last_report = report
 	last_hints = report.get("hints", [])
 	if bodies.is_empty():
+		if report.has("refused"):
+			# The conditioner refused it whole (too short to hold water): nothing is carved.
+			last_refusal = REFUSED_PLAN
+			return -1
 		var joined: PackedVector2Array = WaterEdit.join_line(doc, line, widths)[0]
 		last_refusal = REFUSED_IN_WATER if joined.size() < 2 else REFUSED_FULL
 		return -1
@@ -498,6 +504,7 @@ static func compute(snapshot: MapDocument, spec: Dictionary, out: Dictionary) ->
 				joined = fit.join_ends(snapshot, body)
 				out["moved"] = joined.moved
 				out["undone"] = joined.get("undone", false)
+				out["guard"] = joined.get("guard", {})
 				hints = joined.hints
 				goals = fit.merge_goals(goals, joined.goals)
 				out["joined"] = joined.joined

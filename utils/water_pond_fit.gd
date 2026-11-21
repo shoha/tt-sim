@@ -22,19 +22,27 @@ extends RefCounted
 ##  3. Anything else near the pond is only said (WaterHints): a head above the pond cannot be fed
 ##     from it (water does not climb): "perched_head"; an end too far to snap, or whose joins were
 ##     dropped: "end_near_water_below".
-## The joins are all-or-nothing per pond and must pay for themselves: the field's events
-## (film_run, bridged_run, end_near_water) and perched samples are counted before and after (two
-## WaterField builds, on the worker's snapshot) and the joins are dropped unless no kind got worse
-## and at least one event was removed. Off with WaterEdit.conditioning_enabled (the editor then
-## does not call this); idempotent: once an end is inside the pond's water it has nothing to decide.
+## The joins are all-or-nothing per pond and are judged on the bodies they concern, never on the
+## map (card painter-water-paths: the same pond and streams joined 3 ends alone on a map and 0
+## beside unrelated crossings, whose events the guard used to read): the pond, the strokes joined
+## and their connectors. Their field events (film_run, bridged_run, end_near_water) and their
+## perched samples are counted before and after (two WaterField builds, on the worker's snapshot)
+## and the joins are dropped when any of those counts rose, or when those bodies reported an event
+## and none was removed. So the same drawing gives the same joins wherever and whenever it is
+## drawn. Off with WaterEdit.conditioning_enabled (the editor then does not call this);
+## idempotent: once an end is inside the pond's water it has nothing to decide.
 
 ## The most a pond is dug below the level its rim gives it to meet a stream end (metres).
 const LEVEL_BAND_M := 0.6
-## The guard drops joins that remove no event (a join that changes nothing the field reports could
-## still change what a later pond finds: measured, 2 of 40 fuzz maps without it) ...
+## The guard drops joins that remove no event when the concerned bodies report any (a join that
+## changes nothing the field reports could still change what a later pond finds: measured, 2 of
+## 40 fuzz maps without it) ...
 static var strict := true
-## ... and joins that add perched samples (wet samples over 0.3 m deep beside dry ground, the steep
-## wall a channel cuts through a bank). Switches for the comparison probes.
+## ... and joins that add perched samples (wet samples over 0.3 m deep beside dry ground: the
+## steep wall a channel cuts through a bank, a step standing proud of it) to the concerned
+## bodies, the connector's own water included: counting only the water that was already there
+## was tried (card painter-water-paths) and the fuzz got worse than conditioning off (perched 47
+## off, 62 on; 2 of 8 maps with more events). Switches for the comparison probes.
 static var perched_guard := true
 
 
@@ -59,7 +67,9 @@ static func fit_level(doc: MapDocument, pond: WaterBody, report: Dictionary) -> 
 ## The stream ends beside pond `pond` (in `doc.water_bodies` at its final level, its basin already
 ## carved into `doc.heights`) joined or said (rules 2 and 3 of the header): {"goals" (the carve
 ## of the joined strokes, merged, WaterCarve goals), "hints" (WaterHints records), "joined" (ends
-## joined), "moved" (the longest join, metres), "undone" (true when the guard dropped them)}. `doc`
+## joined), "moved" (the longest join, metres), "undone" (true when the guard dropped them),
+## "guard" ({"before", "after"}: the guard's counts over the concerned bodies, scoped_counts();
+## absent when nothing was joined)}. `doc`
 ## takes the connectors (new bodies; the stored ones are never touched) and the carve, so that the
 ## caller reads the result from it (WaterEditor.compute() does, on its snapshot).
 static func join_ends(doc: MapDocument, pond: WaterBody) -> Dictionary:
@@ -73,14 +83,15 @@ static func join_ends(doc: MapDocument, pond: WaterBody) -> Dictionary:
 	var hints_script: GDScript = load(WaterEdit.HINTS_PATH)
 	var kept_bodies := doc.water_bodies.duplicate()
 	var kept_heights := doc.heights.duplicate()
-	var before := {}
+	var before: WaterField = null
+	# The bodies the joins concern: the pond, each joined stroke's reaches and its connector.
+	var concerned := {pond.id: true}
+	var touched: Array[Rect2] = []
 	var joined_ends: Array[Dictionary] = []
 	for end: Dictionary in open_ends(doc):
 		var decision := _decide(doc, end)
 		if decision.other_body != pond.id or decision.action == &"none":
 			continue
-		if before.is_empty():
-			before = event_counts(doc)
 		var tail := not bool(end.head)
 		if decision.action == &"flag":
 			var said: Array = hints_script.plan_hints(
@@ -88,27 +99,43 @@ static func join_ends(doc: MapDocument, pond: WaterBody) -> Dictionary:
 			)
 			out.hints.append_array(said)
 			continue
+		if before == null:
+			before = WaterField.build(doc)
 		var chain := _stepped(doc, end, decision.target, pond)
 		if chain.is_empty():
 			continue
+		for reach in chain:
+			concerned[reach.id] = true
 		var goals := WaterCarve.river_goals(doc, chain, doc.heights)
 		lower(doc, goals)
 		out.goals = merge_goals(out.goals, goals)
 		out.joined += 1
 		out.moved = maxf(float(out.moved), float(decision.displacement))
 		joined_ends.append(end)
-	if int(out.joined) > 0 and _worse(event_counts(doc), before):
-		# The joins made the field worse, or did nothing it reports (a bank that no longer holds
-		# the water, a steep channel wall): all of this pond's joins are dropped, as the river tool
-		# keeps a plan as drawn that it cannot improve. The ends are said instead.
+		# What the connector's carve reaches is concerned too, whoever owns it (a neighbour's bank
+		# it undermines): the rectangle it lowered, in map metres, and a metre round it.
+		var cut: Rect2i = goals.rect
+		if cut.has_area():
+			var from := doc.sample_to_world(Vector2(cut.position))
+			touched.append(Rect2(from, doc.sample_to_world(Vector2(cut.end)) - from).abs().grow(1.0))
+	if int(out.joined) == 0:
+		return out
+	var guard := {
+		"before": scoped_counts(before, concerned, touched),
+		"after": scoped_counts(WaterField.build(doc), concerned, touched),
+	}
+	out["guard"] = guard
+	if _worse(guard.after, guard.before):
+		# The joins made the bodies they concern worse (a bank that no longer holds the water, an
+		# undermined run): all of this pond's joins are dropped, as the river tool keeps a plan as
+		# drawn that it cannot improve. The ends are said instead.
 		var bodies: Array[WaterBody] = []
 		bodies.assign(kept_bodies)
 		doc.water_bodies = bodies
 		doc.heights = kept_heights
 		var fixes: Array[StringName] = [&"extend_to_water", &"carve_fall", &"keep"]
-		if int(before[&"end_near_water"]) > 0:
-			for end: Dictionary in joined_ends:
-				out.hints.append(hints_script.make(&"end_near_water_below", end.at, fixes, {}))
+		for end: Dictionary in joined_ends:
+			out.hints.append(hints_script.make(&"end_near_water_below", end.at, fixes, {}))
 		out.goals = {"rect": Rect2i(), "goals": PackedFloat32Array()}
 		out.joined = 0
 		out.moved = 0.0
@@ -118,7 +145,7 @@ static func join_ends(doc: MapDocument, pond: WaterBody) -> Dictionary:
 
 ## How many field events of each kind an author should decide (film_run, bridged_run,
 ## end_near_water) `doc`'s water raises, and its perched samples: {kind: count}, one WaterField
-## build.
+## build. The whole map's: what the tests and probes compare; the guard reads scoped_counts().
 static func event_counts(doc: MapDocument) -> Dictionary:
 	var counts := {&"film_run": 0, &"bridged_run": 0, &"end_near_water": 0, &"perched": 0}
 	var field := WaterField.build(doc)
@@ -129,14 +156,37 @@ static func event_counts(doc: MapDocument) -> Dictionary:
 	return counts
 
 
+## The guard's counts of `field` over the bodies in `ids` (a set of body ids: a field event and a
+## sample belong to a pond or to a stroke's first reach) and inside the map rectangles `near`
+## (whoever owns what lies there): {kind: count} as event_counts().
+static func scoped_counts(
+	field: WaterField, ids: Dictionary, near: Array[Rect2] = []
+) -> Dictionary:
+	var counts := {&"film_run": 0, &"bridged_run": 0, &"end_near_water": 0, &"perched": 0}
+	for event in field.events:
+		if not counts.has(event.kind):
+			continue
+		if ids.has(int(event.body)) or _inside(near, event.pos):
+			counts[event.kind] += 1
+	counts[&"perched"] = perched_count(field, ids, near)
+	return counts
+
+
 ## Wet samples over 0.3 m deep with a dry neighbour (water standing proud of its shore: the steep
-## wall of a channel through a bank, the lip of a fall), the tests' "perched" metric.
-static func perched_count(field: WaterField) -> int:
+## wall of a channel through a bank, the lip of a fall), the tests' "perched" metric. With `ids`
+## or `near` only the samples those bodies own and those inside the map rectangles `near`.
+static func perched_count(field: WaterField, ids: Dictionary = {}, near: Array[Rect2] = []) -> int:
 	var count := 0
 	var w := field.size.x
+	var scoped := not ids.is_empty() or not near.is_empty()
 	for i in field.depth.size():
 		if field.depth[i] <= 0.3:
 			continue
+		if scoped and not ids.has(field.owner[i]):
+			@warning_ignore("integer_division")
+			var p := field.origin + Vector2(i % w, i / w) * field.step
+			if not _inside(near, p):
+				continue
 		var x := i % w
 		for off in [-1, 1, -w, w]:
 			var j: int = i + off
@@ -148,7 +198,14 @@ static func perched_count(field: WaterField) -> int:
 	return count
 
 
-## True when the joins must go: any event kind of `after` (event_counts()) is higher than in
+static func _inside(rects: Array[Rect2], p: Vector2) -> bool:
+	for rect in rects:
+		if rect.has_point(p):
+			return true
+	return false
+
+
+## True when the joins must go: any event kind of `after` (scoped_counts()) is higher than in
 ## `before`, perched samples are (with `perched_guard`), or (with `strict`) no event was removed.
 static func _worse(after: Dictionary, before: Dictionary) -> bool:
 	var removed := 0

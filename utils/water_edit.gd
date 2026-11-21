@@ -154,6 +154,11 @@ static func plan_river(
 	report["max_cut"] = 0.0
 	report["level_moved"] = 0.0
 	report["blocked"] = false
+	if on and not _long_enough(doc, points, half_widths, depth, report):
+		# A line too short to hold water is refused whole and said: it carved ground and landed
+		# a sliver of water or none.
+		var nothing: Array[WaterBody] = []
+		return nothing
 	var bodies := _plan(doc, points, half_widths, depth, speed, on, report)
 	if not on or bodies.is_empty():
 		return bodies
@@ -190,6 +195,54 @@ static func plan_river(
 	hints.append_array(load(HINTS_PATH).plan_hints(PackedVector2Array(), {}, head, tail))
 	report["hints"] = hints
 	return bodies
+
+
+## The shortest a river of depth class `depth` with `free_ends` tapered ends (0 to 2: ends on
+## dry ground, not at the map edge) can be and still hold water: each tapered end's bed rises to
+## the surface over WaterCarve.pool_tail() of that depth (ankle 1.5 m, waist 2.7 m, deep 5 m),
+## so under half a tail per end the bed never reaches half the class's depth (ankle 1.5 m, waist
+## 2.7 m, deep 5 m with two free ends: for waist and deep about the channel's own width).
+## Measured (card painter-water-paths): a 0.9 m stroke of any class carved 15 to 17 samples of
+## ground and landed 1 or 2 wet ones; a 2 m waist stroke landed 0.24 m of its 0.9 m depth.
+static func min_river_length(depth: WaterBody.Depth, free_ends: int = 2) -> float:
+	return WaterCarve.pool_tail(WaterBody.depth_for(depth)) * free_ends * 0.5
+
+
+## True when the drawn line `points` is at least min_river_length() long for its free ends (an
+## end in or within snap reach of other water, or at the map edge, does not taper). Else false,
+## with `report` "refused" (&"too_short") and the hint (WaterHints "too_short"): the stroke is
+## refused whole, nothing is planned and nothing carved.
+static func _long_enough(
+	doc: MapDocument,
+	points: PackedVector2Array,
+	half_widths: PackedFloat32Array,
+	depth: WaterBody.Depth,
+	report: Dictionary
+) -> bool:
+	if points.size() < 2 or half_widths.size() != points.size():
+		return true
+	var ports: GDScript = load(PORTS_PATH)
+	var narrowest := maxf(WaterBody.MIN_HALF_WIDTH_M, WaterCarve.min_half_width(depth))
+	var edge := doc.extent_m() * 0.5 - Vector2.ONE * WaterCarve.EDGE_MARGIN_M
+	var free: Array[int] = []
+	for i: int in [0, points.size() - 1]:
+		var p := points[i]
+		var hw := clampf(half_widths[i], narrowest, WaterBody.MAX_HALF_WIDTH_M)
+		var at_edge := absf(p.x) >= edge.x or absf(p.y) >= edge.y
+		if not at_edge and not ports.water_within(doc, p, ports.snap_reach(hw)):
+			free.append(i)
+	var length := 0.0
+	for i in points.size() - 1:
+		length += points[i].distance_to(points[i + 1])
+	var need := min_river_length(depth, free.size())
+	if length >= need:
+		return true
+	var fixes: Array[StringName] = [&"draw_longer", &"shallower", &"paint_pond"]
+	var middle := (points[0] + points[points.size() - 1]) * 0.5
+	var detail := {"length_m": length, "need_m": need}
+	report["refused"] = &"too_short"
+	report["hints"] = [load(HINTS_PATH).make(&"too_short", middle, fixes, detail)]
+	return false
 
 
 ## The plan of a stroke whose conditioning was blocked (it would cut a gorge, see

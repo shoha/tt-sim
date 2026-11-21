@@ -31,6 +31,10 @@ const SMOOTH_M := 2.0
 const CLEAN_FLOOR_M := 0.05
 const CLEAN_PER_HALF_WIDTH := 0.1
 const WIDTH_SLOPE := 0.25
+## A self-loop no point of which lies further than this many half-widths from its crossing is a
+## pointer curl and is trimmed (trim_loops()): under two channel widths across, the loop's two
+## passes leave no dry ground inside it, so the channel could not show it. A larger one is kept.
+const CURL_PER_HALF_WIDTH := 4.0
 const _PIN := 1.0e6
 ## hold_cap(): rounds, the sampling along a chord (finer than deviation()'s 0.25 m, so what it
 ## accepts also passes there), the slack over the cap it tolerates and how far inside the cap an
@@ -277,8 +281,12 @@ static func douglas_peucker(points: PackedVector2Array, eps: float) -> PackedInt
 	return out
 
 
-## `points` with every self-loop cut out (the first pass is kept, the loop's far side rejoins at
-## the crossing): {"points", "widths", "loops"}.
+## `points` with every pointer curl cut out (the first pass is kept, the loop's far side rejoins
+## at the crossing): {"points", "widths", "loops"}. A curl is a self-loop that stays within
+## CURL_PER_HALF_WIDTH half-widths of its own crossing: too small to enclose dry ground, so the
+## channel could not show it. A larger loop is the author's (card painter-water-paths: a 32 m
+## stroke that crossed itself once was stored as its first 8 m) and is kept whole: it crosses,
+## one body, one bed.
 static func trim_loops(points: PackedVector2Array, widths: PackedFloat32Array) -> Dictionary:
 	var pts := points.duplicate()
 	var hws := widths.duplicate()
@@ -299,6 +307,11 @@ static func trim_loops(points: PackedVector2Array, widths: PackedFloat32Array) -
 					pts[i].distance_to(at) / maxf(pts[i].distance_to(pts[i + 1]), 1e-9), 0.0, 1.0
 				)
 				var width := lerpf(hws[i], hws[i + 1], t)
+				var extent := 0.0
+				for k in range(i + 1, j + 1):
+					extent = maxf(extent, pts[k].distance_to(at))
+				if extent > CURL_PER_HALF_WIDTH * width:
+					continue
 				var np := pts.slice(0, i + 1)
 				var nw := hws.slice(0, i + 1)
 				np.append(at)
