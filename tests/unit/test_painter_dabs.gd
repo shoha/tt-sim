@@ -144,3 +144,31 @@ func test_a_new_set_of_the_same_stones_builds_nothing_and_an_edit_builds_its_own
 		assert_eq(mine.get(key, []), whole[key], "its patch bit for bit")
 	dabs.clear()
 	fresh.clear()
+
+
+## Card painter-terrain-dabcost: a sync of PARALLEL_MIN sites or more builds them on the
+## WorkerThreadPool (and its cells' arrays too); what it draws equals the same sites built one a
+## sync, on this thread, bit for bit, slots and turns included.
+func test_a_build_on_the_pool_equals_one_on_this_thread() -> void:
+	var doc := _doc()
+	var terrain := _stage(doc)
+	var sites: Array = []
+	for k in 2 * PainterDabs.PARALLEL_MIN:
+		sites.append(_site(doc, -7.0 + 2.0 * k, 0.6 * k - 2.0, 0.12 + 0.1 * k))
+	var pooled := PainterDabs.new()
+	var map := terrain.get_parent() as Node3D
+	assert_eq(pooled.sync(map, terrain, ShaderMaterial.new(), sites), sites.size(), "all at once")
+	var serial := PainterDabs.new()
+	var other := _stage(doc)
+	var some: Array = []
+	for site: Array in sites:
+		some = some.duplicate()
+		some.append(site)
+		assert_eq(serial.sync(other.get_parent(), other, ShaderMaterial.new(), some), 1, "one a sync")
+	var a := _drawn(pooled)
+	var b := _drawn(serial)
+	assert_eq(a.size(), sites.size(), "a patch a site")
+	assert_eq(a, b, "the same patches, outlines, slots and turns")
+	assert_eq(pooled.lobe_image().get_data(), serial.lobe_image().get_data(), "the same outlines")
+	pooled.clear()
+	serial.clear()

@@ -211,17 +211,11 @@ const float DAB_ORDER_M = 0.001;
 const float DAB_BAND_M = 0.3;
 uniform highp sampler2D dab_lobes : filter_nearest, repeat_disable;
 const int DAB_ROW = 256;
-// The contact line of a body in shade (card painter-terrain-contact; PainterSites.line() is its
-// copy; set it on the dabs' material): the body's radii the line reaches past the body's own
-// radius all round, DAB_LINE_AWAY of that further on the side away from the sun. light() draws
-// it in the deeper shade's tone and ONLY where the ground is in shade, so a lit side never gets a mark: a
-// body wholly in shade, whose mark's away part hides behind it, still stands in a thin dark line.
-// 0 draws none, and 0 is the default: the owner judged the stones in low morning sun "Fine: the
-// cast shadow grounds them" (card painter-terrain-contact), so the line is a switch that is off. A long body's
-// outline (a log) carries half the line its foot is a strip round in its third texel's z and w:
-// its foot is the distance from that line.
-uniform float dab_line = 0.0;
-const float DAB_LINE_AWAY = 0.6;
+// A long body's outline (a log) carries half the line its foot is a strip round in its third
+// texel's z and w: its foot is the distance from that line. A body wholly in shade has no mark of
+// its own: the owner judged "Fine: the cast shadow grounds them" (card painter-terrain-contact; a
+// contact line in shade, tried as a switch, drew nothing visible and went with card
+// painter-terrain-dabcost).
 // A dab's slot plus one, and what its value loses (the patch past a ledge).
 varying flat float v_site;
 varying float v_loss;
@@ -250,10 +244,6 @@ varying vec3 f_shd;
 varying float f_edge;
 varying vec3 f_n;
 varying float f_cut;
-#ifdef PAINTER_DAB
-// The contact line's coverage (contact_at()), for light(): shown only in shade.
-varying float f_line;
-#endif
 
 // The village fields' soil and crop rows (PainterFields).
 #include "res://painter/shaders/painter_field.gdshaderinc"
@@ -688,28 +678,6 @@ vec4 dab_lobe_of(float site, int k) {
 	return texelFetch(dab_lobes, ivec2(3 * (i % DAB_ROW) + k, i / DAB_ROW), 0);
 }
 
-// The value of the contact line of the stone in slot `site` minus one at map point `p`, `wide`
-// stone radii wide, in metres, positive inside (PainterSites.line() is its copy): the foot grown
-// by the line all round, and the foot again, narrower, reaching DAB_LINE_AWAY further on the side
-// away from the sun, in the same smooth union as the mark's.
-float dab_line_of(vec2 p, float site, float wide) {
-	vec4 l0 = dab_lobe_of(site, 0);
-	vec4 l1 = dab_lobe_of(site, 1);
-	vec4 l2 = dab_lobe_of(site, 2);
-	vec2 d = p - l0.xy;
-	float sl = length(foliage_sun.xz);
-	vec2 away = sl > 0.01 ? -foliage_sun.xz / sl : vec2(0.0);
-	// The line lies past the body's own radius, not past its foot: a body bulges over its foot,
-	// and a line at the foot hid under it as the sliver does (the card's first probe).
-	float shift = max((1.0 + (1.0 + DAB_LINE_AWAY) * wide) * l0.w - l0.z, 0.0);
-	float grow = max((1.0 + wide) * l0.w / max(l0.z, 1.0e-4), 1.0 + DAB_SLIVER);
-	float body = dab_foot(d, l0, l1, l2, grow);
-	float cast = dab_foot(d - away * (shift + (1.0 - DAB_CAST) * l0.z), l0, l1, l2, DAB_CAST);
-	float k = DAB_ROUND * l0.z;
-	float h = max(k - abs(body - cast), 0.0);
-	return max(body, cast) + h * h / (4.0 * k);
-}
-
 // The dab of the stone in slot `site` minus one at map point `p`: x its value in metres, y the
 // metres one unit of the mark's edge is (DAB_EDGE of the stone's radius).
 vec2 dab_value_of(vec2 p, float site) {
@@ -746,11 +714,9 @@ void vertex() {
 // The contact occlusion at `xz`: x the pool, y the seam, each a flat brush-edged shape (the field's
 // 0.5 contour, moved by the ground's own noise), then the tokens' feet: a wider pool joins x, and z
 // is the disc right under the feet (a deeper step on top of the seam). light() shows the pool only
-// inside the shade. Under PAINTER_DAB, `dab` is the value of the dab this pixel is of (fragment())
-// and `line` takes the coverage of the body's contact line (shown in shade only: light()).
+// inside the shade. Under PAINTER_DAB, `dab` is the value of the dab this pixel is of (fragment()).
 #ifdef PAINTER_DAB
-vec3 contact_at(vec3 p, vec2 xz, vec2 dab, out float line) {
-	line = 0.0;
+vec3 contact_at(vec3 p, vec2 xz, vec2 dab) {
 #else
 vec3 contact_at(vec3 p, vec2 xz) {
 #endif
@@ -783,12 +749,6 @@ vec3 contact_at(vec3 p, vec2 xz) {
 		float dv = (dab.x / dab.y) - v_loss + w.y * 0.3;
 		float cover = clamp(dv / clamp(fwidth(dv), 1.0e-4, 0.6) + 0.5, 0.0, 1.0);
 		occ.xy = max(occ.xy, cover * occ_k.xy);
-		// The contact line of a body in shade: the same units, noise and step; light() shows it
-		// where the ground is in shade only.
-		if (dab_line > 0.0) {
-			float lv = dab_line_of(xz, v_site, dab_line) / dab.y - v_loss + w.y * 0.3;
-			line = clamp(lv / clamp(fwidth(lv), 1.0e-4, 0.6) + 0.5, 0.0, 1.0);
-		}
 #endif
 	}
 	for (int i = 0; i < tok_n; i++) {
@@ -1084,8 +1044,7 @@ void fragment() {
 	f_cut =cut_amp > 0.0 ? be_cut(st) * cut_amp : 0.0;
 	f_edge = p_noise(p * 0.55 + 71.0);
 #ifdef PAINTER_DAB
-	float line;
-	vec3 contact = contact_at(p, xz, dab, line);
+	vec3 contact = contact_at(p, xz, dab);
 #else
 	vec3 contact = contact_at(p, xz);
 #endif
@@ -1097,9 +1056,6 @@ void fragment() {
 	f_pool = contact.x * on_ground;
 	f_core = contact.y * on_ground;
 	f_tok = contact.z;
-#ifdef PAINTER_DAB
-	f_line = line * on_ground;
-#endif
 }
 
 void light() {
@@ -1132,27 +1088,14 @@ void light() {
 		// beside a trunk stays lit (a pool there read as a second light). The seam at a foot leans
 		// toward the soil, full in the shade and lighter in the sun; a token's feet stand on a deeper
 		// disc still (f_tok).
-#ifdef PAINTER_DAB
-		// A body's contact line (contact_at()) is the pool and the seam of ground in shade, and
-		// nothing on lit ground: no mark on a lit side.
-		float pool = max(f_pool, f_line * shade * occ_k.x);
-		float core = max(f_core, f_line * shade * occ_k.y);
-		if (pool > 0.0 || core > 0.0 || f_tok > 0.0) {
-#else
 		if (f_pool > 0.0 || f_core > 0.0 || f_tok > 0.0) {
-#endif
 			float lr = lum(f_shd) / max(lum(f_lit), 0.001);
 			vec3 deep = mix(f_lit, f_shd, occ_tint.a) * occ_k.z * occ_tint.rgb;
 			vec3 deeper = f_shd * occ_k.z * SHADE_DEEP * occ_tint.rgb;
 			vec3 soil = mix(deep, litter_col * lr * occ_k.z, occ_k.w);
 			vec3 soil_shd = mix(deeper, litter_col * lr * occ_k.z * SHADE_DEEP, occ_k.w * 0.6);
-#ifdef PAINTER_DAB
-			col = mix(col, deeper, pool * shade);
-			col = mix(col, mix(soil, soil_shd, shade), core * mix(SEAM_LIT, 1.0, shade));
-#else
 			col = mix(col, deeper, f_pool * shade);
 			col = mix(col, mix(soil, soil_shd, shade), f_core * mix(SEAM_LIT, 1.0, shade));
-#endif
 			col *= mix(vec3(1.0), vec3(0.74, 0.84, 0.8), f_tok);
 		}
 		DIFFUSE_LIGHT += col;

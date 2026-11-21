@@ -42,16 +42,18 @@ extends RefCounted
 ## not its box (a log may lie askew in its mesh): its foot is a strip round a line (the outline's
 ## last two floats: half that line), its radius is its half width, so its mark shows a third of its
 ## width away from the sun whatever its length. A body wholly in shade, whose mark's away part
-## hides behind it, has no mark of its own: the owner judged "the cast shadow grounds them". (A
-## contact line in shade only, line() and LINE, is the dabs' uniform dab_line, off at 0: at 0.1
-## its captures showed no visible line, so it is not a working look.) Only a GLB map (no
-## heightfield to lay a dab on) keeps radius()'s limit: a larger body there keeps its box in the
-## field. Tree trunks still have the field's seam disc.
+## hides behind it, has no mark of its own: the owner judged "the cast shadow grounds them" (a
+## contact line in shade, tried as a switch, drew nothing visible and was removed, card
+## painter-terrain-dabcost). Only a GLB map (no heightfield to lay a dab on) keeps radius()'s
+## limit: a larger body there keeps its box in the field. Tree trunks still have the field's seam
+## disc.
 ##
 ## The patch (append_dab) is the terrain's surface inside the rectangle the mark can reach
 ## whatever the sun (round_reach() of the foot's line; cells further from it are left out), cut
 ## exactly: each cell's part of the rectangle is split along the cell's own
-## diagonal and each piece lies on its triangle's plane, so the patch is coplanar with the ground
+## diagonal and each piece lies on its triangle's plane; a cell wholly inside is its two triangles
+## on corners it shares with the whole cells beside it (a large body's patch is mostly those: one
+## vertex a sample, not four a cell). So the patch is coplanar with the ground
 ## everywhere and the shader draws it at the ground's depth, moved toward the eye by under 3 mm
 ## along the pixel's own ray (no world lift: nothing that hugs the ground is hidden by it, and a
 ## pixel of the patch outside the mark is the ground's own). CUSTOM3 holds BASE, what the value
@@ -101,12 +103,6 @@ const SHOW_LOW := 0.15
 const CAST := 0.85
 const ROUND := 0.3
 const EDGE := 0.3
-## The contact line a body in shade may stand in (painter_ground_body's uniform dab_line on the
-## dabs' material; 0, its default, draws none): the body's radii the line reaches past the BODY's
-## own radius all round (a line at the foot hid under the body's bulge), and how much further on
-## the side away from the sun as a share of that (DAB_LINE_AWAY).
-const LINE := 0.1
-const LINE_AWAY := 0.6
 ## Metres of plain ground a patch keeps round the furthest outline (the edge's one soft pixel).
 const MARGIN_M := 0.03
 ## Floats an outline is (three RGBA texels).
@@ -475,9 +471,8 @@ static func reach(own: PackedFloat32Array) -> float:
 
 
 ## Metres from an outline's centre (a long body's: from the line its foot is a strip round) within
-## which its dab can show, whatever the sun: the foot's furthest reach with its sliver (or with the
-## shade's contact line, LINE and its LINE_AWAY), or the moved copy's under a level sun, the
-## union's rounding, the edge's wobble and the margin.
+## which its dab can show, whatever the sun: the foot's furthest reach with its sliver, or the
+## moved copy's under a level sun, the union's rounding, the edge's wobble and the margin.
 static func round_reach(own: PackedFloat32Array) -> float:
 	var foot := own[2]
 	var r := own[3]
@@ -488,10 +483,8 @@ static func round_reach(own: PackedFloat32Array) -> float:
 		+ Vector2(own[8], own[9]).length()
 	)
 	var moved := (SHOW + SHOW_LOW) * r + (1.0 - CAST) * foot + CAST * most
-	# The shade's contact line lies past the body's radius (a patch holds a line up to LINE wide).
-	var line := (1.0 + (1.0 + LINE_AWAY) * LINE) * r * most / maxf(foot, 1.0e-4)
 	return (
-		maxf(maxf(most * (1.0 + SLIVER), moved), line)
+		maxf(most * (1.0 + SLIVER), moved)
 		+ 0.25 * ROUND * foot
 		+ 0.15 * EDGE * maxf(r, 0.04)
 		+ MARGIN_M
@@ -531,18 +524,6 @@ static func value(
 	return _mark(own, d, 1.0 + SLIVER, away, show) / (EDGE * maxf(own[3], 0.04))
 
 
-## The value of the contact line of the body whose outline is `own` at (x, z), `wide` stone radii
-## wide (LINE), in value()'s units: positive within `wide` radii of the foot all round and LINE_AWAY
-## of that further on the side away from the sun (`away`: a unit vector, or zero). The ground shows
-## it only where it is in shade (painter_ground_body's light()): a lit side gets none.
-static func line(own: PackedFloat32Array, x: float, z: float, away: Vector2, wide := LINE) -> float:
-	var d := Vector2(x - own[0], z - own[1])
-	# Past the body's own radius, not past its foot: a body bulges over its foot.
-	var grow := maxf((1.0 + wide) * own[3] / maxf(own[2], 1.0e-4), 1.0 + SLIVER)
-	var shift := maxf((1.0 + (1.0 + LINE_AWAY) * wide) * own[3] - own[2], 0.0)
-	return _mark(own, d, grow, away, shift) / (EDGE * maxf(own[3], 0.04))
-
-
 ## The foot of `own` `grow` times as wide in a smooth union with the same foot CAST as wide whose
 ## far edge lies `shift` metres past the foot along `away`, at offset `d` from the centre: metres
 ## inside (painter_ground_body's dab_mark()).
@@ -562,7 +543,9 @@ static func _mark(
 ## place in PainterDabs' texture of outlines) and its triangles' `indices`, counted from the
 ## patch's first vertex. The patch is the terrain's surface inside the square reach(own) round the
 ## outline's centre: every cell's part of it, split along the cell's diagonal, each piece on its
-## triangle's plane. Returns the vertices it added.
+## triangle's plane (a whole cell's two triangles on corners shared with the whole cells beside
+## it). Pure: it reads only its arguments, so PainterDabs builds patches on worker threads.
+## Returns the vertices it added.
 static func append_dab(
 	own: PackedFloat32Array,
 	site_of: Array,
@@ -600,6 +583,13 @@ static func append_dab(
 	var j1 := clampi(ceili((high.y + half.y) / step.y) - 1, j0, rows - 2)
 	var lower := PackedVector2Array()
 	var upper := PackedVector2Array()
+	# The whole cells' corners, a vertex a sample (its index in the patch, -1 until made): a corner
+	# is the same sample's height, place and loss whichever whole cell beside it makes it.
+	var wide := i1 - i0 + 2
+	var corner := PackedInt32Array()
+	corner.resize(wide * (j1 - j0 + 2))
+	corner.fill(-1)
+	var quad := PackedInt32Array([0, 0, 0, 0])
 	for j in range(j0, j1 + 1):
 		var cell_z := j * step.y - half.y
 		var va := (maxf(low.y, cell_z) - cell_z) / step.y
@@ -623,24 +613,29 @@ static func append_dab(
 			var h01 := grid[row + columns + i]
 			var h11 := grid[row + columns + i + 1]
 			if ua == 0.0 and va == 0.0 and ub == 1.0 and vb == 1.0:
-				# A whole cell: its two triangles as they are (most of a large body's patch).
-				var base := vertices.size() - first
+				# A whole cell (most of a large body's patch): its two triangles as the terrain's,
+				# on the corners it shares with the whole cells beside it.
+				var key := (j - j0) * wide + (i - i0)
 				for n in 4:
-					var cx := cell_x + (step.x if n == 1 or n == 2 else 0.0)
-					var cz := cell_z + (step.y if n >= 2 else 0.0)
-					var ch := h00 if n == 0 else (h10 if n == 1 else (h11 if n == 2 else h01))
-					vertices.append(Vector3(cx, ch, cz))
-					uvs.append(Vector2(cx, cz))
-					custom.append(BASE)
-					custom.append(maxf(absf(ch - ground) - up, 0.0) * CUT)
-					custom.append(0.0)
-					custom.append(tag)
-				indices.append(base)
-				indices.append(base + 1)
-				indices.append(base + 3)
-				indices.append(base + 1)
-				indices.append(base + 2)
-				indices.append(base + 3)
+					var at := key + (1 if n == 1 or n == 2 else 0) + (wide if n >= 2 else 0)
+					if corner[at] < 0:
+						var cx := cell_x + (step.x if n == 1 or n == 2 else 0.0)
+						var cz := cell_z + (step.y if n >= 2 else 0.0)
+						var ch := h00 if n == 0 else (h10 if n == 1 else (h11 if n == 2 else h01))
+						corner[at] = vertices.size() - first
+						vertices.append(Vector3(cx, ch, cz))
+						uvs.append(Vector2(cx, cz))
+						custom.append(BASE)
+						custom.append(maxf(absf(ch - ground) - up, 0.0) * CUT)
+						custom.append(0.0)
+						custom.append(tag)
+					quad[n] = corner[at]
+				indices.append(quad[0])
+				indices.append(quad[1])
+				indices.append(quad[3])
+				indices.append(quad[1])
+				indices.append(quad[2])
+				indices.append(quad[3])
 				continue
 			# The piece's corners in the cell (front faces up, as the terrain's), split along
 			# the cell's diagonal u + v = 1 into the part on each of its two triangles.
