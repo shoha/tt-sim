@@ -298,6 +298,40 @@ Attributed, not this card's: the ladder of white rungs on a fall's ramp into a p
 lap or the wrap off): it is the fall face's tongue columns (the energy white), not an edge mark.
 The faint arc across a ring's closure (f_loop) is in the wash, as before.
 
+## What the sample grid shows through (card painter-water-fielddata, attribution only)
+
+Measured 2026-11-21 on the falls verdict map and the corpus, with every mark switched off, with the
+shader's `DBG_DATA` and `DBG_LAP` views and with headless dumps of the channels. Nothing was changed.
+
+- **A stroke's stored levels can climb, and the field draws the climb as a wall of water.** The
+  stepped stream of the falls map (one stroke, 16 reaches) runs over three tier walls: its reach
+  levels go 1.03, 0.58, 0.14, -0.15, then UP 0.08, 0.49, 0.95, down to -0.15, up to 0.94, down to
+  -0.15, up to 1.14, down to -0.15 (the plan keeps such a course as drawn rather than cut a gorge:
+  "Conditioning" below). Each pool below a fall therefore has water standing 1.1 to 1.3 m higher
+  just downstream. Across the course the higher pass wins its samples, so between two neighbouring
+  samples `w` steps 1.29 m with deep water on both sides (st_o's pool, z = -10.75: 1.139 at
+  x = 23.23, -0.148 at x = 23.48, ground 0.82 and -0.56, steep 1, slope white 0.6, both held, no
+  spill flag). That step follows the samples the higher pass owns, so it is a staircase in plan:
+  the "teal stair steps", the "straight top" and the "white tick" in the pool below the stepped
+  stream's fall are the far edge of that higher water seen from its own side. It is the mesh, read
+  per pixel: the same per vertex, with the film and bank marks off and under either of two repairs
+  of the spill sample's surface (drawn at the upper level extended, or draped 4 cm over its
+  ground), neither of which touches it. No rule says what a climb is; `events` does not report
+  one. Until a rule does (the plan refusing or ending the stroke at the pool, or the field drawing
+  a dry sill and a new head), no change to the field's filters or the shader's wash removes it.
+- **The square white blocks in the lap on a steep pond bank are the lap on a one-sample shelf.**
+  Where a stream's bank line survives under a pond (a land wedge's end face, straight and on the
+  grid) the water over it is shallow for its distance from the waterline, so the lap's slope share
+  is 0 there and the ribbon is drawn with its crisp 3 cm edge, one sample wide, beside banks whose
+  share is 1 and whose ribbon is a wide brushed band. The cross of four shore taps is not the
+  cause (the block stays with the plain bicubic distance), nor is the bank-shed water the wash
+  hides (measuring `shore` to the visible waterline instead moves the block a little and changes
+  4 to 9 percent of the pixels of the falls frames).
+- A mouth's bands and a ring's closure showed no step on the sample grid: soft contours of the
+  depth through the wash's bands.
+
+Evidence: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final114_water_fielddata/`.
+
 ## Conditioning
 
 The events above are what a stroke can leave behind; conditioning removes the ones plan time can fix and turns the rest into

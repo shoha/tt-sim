@@ -1213,6 +1213,31 @@ if (fieldv && (shade_opt & 4) != 0) {
 	EMISSION = vec3(fz, clamp(fa.y, 0.0, 1.0), fd < 8.5 ? fract(fd) : 0.0);
 	ALPHA = 1.0;
 #endif
+#ifdef DBG_DATA
+	// The field's data under the wash, over the sample grid (card painter-water-fielddata): red the
+	// curtain share, green the depth the wash reads (a third of a metre is full), blue the
+	// surface's height in 0.2 m saw teeth; a dark line on every row and column of samples.
+	if (fieldv) {
+		vec2 gs = (v_mp - fld_origin) * fld_inv_step;
+		vec2 gl = abs(fract(gs + 0.5) - 0.5);
+		float line = smoothstep(0.03, 0.07, min(gl.x, gl.y));
+		ALBEDO = vec3(0.0);
+		EMISSION = vec3(curtain, clamp(fa.x * 3.0, 0.0, 1.0), fract(world_pos.y * 5.0)) * (0.35 + 0.65 * line);
+		ALPHA = 1.0;
+	}
+#endif
+#ifdef DBG_LAP
+	// What the lap is fed: red the distance it thresholds (d_h, four bands a metre, dark where
+	// negative), green the bank's slope share, blue the lap itself; the sample grid's lines over it.
+	if (fieldv) {
+		vec2 gs2 = (v_mp - fld_origin) * fld_inv_step;
+		vec2 gl2 = abs(fract(gs2 + 0.5) - 0.5);
+		float line2 = smoothstep(0.03, 0.07, min(gl2.x, gl2.y));
+		ALBEDO = vec3(0.0);
+		EMISSION = vec3(d_h > 0.0 ? 0.3 + 0.7 * fract(d_h * 4.0) : 0.0, smoothstep(0.5, 1.3, slope), shore_foam) * (0.35 + 0.65 * line2);
+		ALPHA = 1.0;
+	}
+#endif
 
 	// Past the map edge (the river ribbon): the skirt's fade, lit water * a + backdrop * (1 - a),
 	// its fog times a (water.gdshader's block, exactly: the wash only changes what `lit` is).
