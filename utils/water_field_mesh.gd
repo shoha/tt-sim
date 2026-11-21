@@ -15,9 +15,10 @@ extends RefCounted
 ## is within the foot coordinate's range of a fall's foot (WaterField.foot; the shader fetches the
 ## coordinate only there), the old spill enum: 1 a river's ramp into a pond, 0.5 a bank's thin
 ## spill, 0.125 a film; the shader no longer reads it), CUSTOM2 = (the depth again (unread: the
-## native builder's first slot), film share, bank share, mouth distance in metres: WaterFieldMarks,
-## each its own continuous channel). The mesh is a function of the field alone, so a field
-## refreshed over a dirty rect draws exactly what a fresh build would.
+## native builder's first slot), film share, bank share, the film share again (unread: the
+## builder's fourth slot): WaterFieldMarks, each its own continuous channel). The mesh is a
+## function of the field alone, so a field refreshed over a dirty rect draws exactly what a fresh
+## build would.
 
 const MESH_NAME := "PaintedWaterField"
 const FORMAT := (
@@ -114,7 +115,7 @@ static func build(f: WaterField) -> Dictionary:
 						spill = FILM_MARK
 					var near_foot := 1.0 if f.foot[s] < WaterFieldStroke.NO_FOOT * 0.5 else 0.0
 					c1.append_array([f.lateral[s], FIELD_FLAG, near_foot, spill])
-					c2.append_array([maxf(d, -1.0), marks.film[s], marks.bank[s], marks.mouth[s]])
+					c2.append_array([maxf(d, -1.0), marks.film[s], marks.bank[s], marks.film[s]])
 				corner.append(index_of[s])
 			indices.append_array([corner[0], corner[1], corner[2], corner[1], corner[3], corner[2]])
 	if verts.is_empty():

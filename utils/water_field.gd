@@ -199,7 +199,6 @@ func update(doc: MapDocument, dirty: Rect2i) -> Rect2i:
 	var ends: Array[Dictionary] = []
 	var runs: Array[Dictionary] = []
 	_write_strokes(doc, rect, pond_level, ends, runs)
-	marks.mouths(self, doc, rect)
 	var t1 := Time.get_ticks_usec()
 	var changed := _spill_pass(rect, was)
 	var t2 := Time.get_ticks_usec()
@@ -438,7 +437,6 @@ func _write_strokes(
 		var profile := RiverProfile.for_doc(doc, typed)
 		if profile.points.size() < 2:
 			continue
-		marks.profiles[typed[0].id] = profile
 		var field := profile.field(doc, WaterGeometry.RIVER_BANK_M, rect)
 		var area: Rect2i = field.rect
 		if not area.has_area():
@@ -524,7 +522,6 @@ func _put_stroke(
 	var mask := doc.pond_mask
 	var has_mask := mask.size() == size.x * size.y
 	var bank := WaterGeometry.RIVER_BANK_M
-	var chan := marks.chan
 	var film := marks.film
 	var bank_share := marks.bank
 	for j in rect.size.y:
@@ -538,8 +535,6 @@ func _put_stroke(
 			if d > hw + bank:
 				continue
 			var at := (rect.position.y + j) * size.x + rect.position.x + i
-			if d <= hw and chan[at] != id:
-				chan[at] = id if chan[at] == 0 else -1
 			var ti := clampi(int(round(s / WaterFieldStroke.TABLE_STEP)), 0, lev.size() - 1)
 			var level := lev[ti]
 			var flow_coord := s + FLOW_DROP_K * (lev[0] - level)

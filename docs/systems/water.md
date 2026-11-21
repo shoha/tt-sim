@@ -746,9 +746,10 @@ line then differs run to run.
   detached slivers, pale or mark-less bodies. `--selftest <view>` plants each defect in a good
   view and checks it is found. The detectors cover many layouts cheaply; the verdict is still
   the sheets, read by a person. Compare a change's `scores.tsv` and sheets with main's.
-  The mouth marks (`ticks`) came from the lap's cut on a per-sample enum; the field now carries
-  continuous marks and explicit mouth lines instead (card painter-water-mouths,
-  `water_field.md` "Marks and mouths").
+  The mouth marks (`ticks`) came from rules laid over the lap (a cut on a per-sample enum, then a
+  fade by the distance to a mouth line). The lap is now a function of the field's shore distance
+  alone, which is to the waterline of all the water together and so opens at a mouth by itself
+  (card painter-water-shoreline, `water_field.md` "Marks and the one shoreline").
 
 ## Painted look
 

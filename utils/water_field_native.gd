@@ -104,14 +104,15 @@ static func shore(native: Object, f: WaterField, outer: Rect2i) -> void:
 
 ## WaterFieldMesh.build's result for `f` (the same Dictionary). The builder copies its "energy",
 ## "shore" and "steep" arrays into c0 unchanged, so a second call with the field's marks
-## (WaterFieldMarks: film, bank, mouth) in those slots returns CUSTOM2 for the same vertices: no
-## change to the library (card painter-water-mouths; about 0.4 ms more per mesh).
+## (WaterFieldMarks: film, bank, and film again in the unread fourth slot) in those slots returns
+## CUSTOM2 for the same vertices: no change to the library (card painter-water-mouths; about
+## 0.4 ms more per mesh).
 static func mesh(native: Object, f: WaterField) -> Dictionary:
 	var out := _mesh_call(native, f, f.energy, f.shore, f.steep)
 	var count: int = out.vertices.size()
 	if count == 0:
 		return {"arrays": [], "aabb": AABB(), "vertices": 0, "triangles": 0}
-	var marks := _mesh_call(native, f, f.marks.film, f.marks.bank, f.marks.mouth)
+	var marks := _mesh_call(native, f, f.marks.film, f.marks.bank, f.marks.film)
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = out.vertices
