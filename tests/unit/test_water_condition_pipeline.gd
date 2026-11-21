@@ -356,6 +356,88 @@ func test_climbs_and_longest_descent() -> void:
 	assert_eq(WaterConditioner.longest_descent(none, none), Vector2i(0, -1))
 
 
+func test_monotone_parts() -> void:
+	var levels := PackedFloat64Array([1.0, 0.6, 0.1, -0.15, 0.07, 0.47, 0.93, -0.15, 0.06])
+	var want: Array[Vector3i] = [Vector3i(0, 4, -1), Vector3i(5, 5, 1), Vector3i(6, 8, -1)]
+	assert_eq(WaterConditioner.monotone_parts(levels), want, "down, the climb between, down")
+	var step_up := PackedFloat64Array([2.0, 0.0, 1.5, 0.0])
+	want = [Vector3i(0, 1, -1), Vector3i(2, 3, -1)]
+	assert_eq(WaterConditioner.monotone_parts(step_up), want, "one step up is no part of its own")
+	var uphill := PackedFloat64Array([0.0, 0.1, 0.8, 1.6])
+	want = [Vector3i(0, 3, 1)]
+	assert_eq(WaterConditioner.monotone_parts(uphill), want, "a line drawn uphill is one climb")
+	var ends_up := PackedFloat64Array([2.0, 0.0, 0.7, 1.4])
+	want = [Vector3i(0, 1, -1), Vector3i(2, 3, 1)]
+	assert_eq(WaterConditioner.monotone_parts(ends_up), want, "a climb at the end keeps its crest")
+	var downhill := PackedFloat64Array([2.0, 1.0, 1.1, 0.2])
+	want = [Vector3i(0, 3, -1)]
+	assert_eq(WaterConditioner.monotone_parts(downhill), want)
+	assert_eq(WaterConditioner.monotone_parts(PackedFloat64Array()).size(), 0)
+
+
+func test_a_gesture_over_walls_lands_every_part_in_one_entry() -> void:
+	# Card painter-water-climb-2: the author's gesture is not lost. The line over three walls lands
+	# as several streams, each running down from a crest, in ONE history entry.
+	var line := PackedVector2Array([Vector2(0, -13), Vector2(0, 12)])
+	var single := Cases.world(_walls)
+	var one: Dictionary = Cases.add_stroke(single, line, 1.0, WAIST, true)
+	assert_gt((one.report.rest as Array).size(), 1, "the plan lists the line's other parts")
+	for worker in [false, true]:
+		var doc := Cases.world(_walls)
+		var history := AuthoringHistory.new()
+		var editor := _editor(doc, history)
+		editor.water.use_worker = worker
+		var ground := doc.heights.duplicate()
+		var id := editor.water.carve_river(line, PackedFloat32Array([1.0]), WAIST)
+		_settle(editor)
+		assert_gt(id, 0, "carved")
+		assert_eq(history.undo_count(), 1, "one entry for the whole gesture")
+		var strokes := RiverProfile.strokes(doc.water_bodies)
+		var pieces := int(editor.water.last_report.pieces)
+		gut.p(
+			(
+				"walls gesture: %d parts landed, %d strokes, %.1f m dropped, kept %.1f of %.1f m"
+				% [
+					pieces,
+					strokes.size(),
+					float(editor.water.last_report.dropped_m),
+					float(editor.water.last_report.kept_m),
+					float(editor.water.last_report.drawn_m)
+				]
+			)
+		)
+		assert_gt(pieces, 1, "more than the longest part lands")
+		assert_gt(doc.water_bodies.size(), one.bodies.size(), "more water than the one part")
+		assert_eq(_rise(doc), 0.0, "no reach of any part stands over the water upstream of it")
+		assert_eq(_count_events(doc, &"climb"), 0, "the field reports no climb")
+		# No ground cut: nothing is lowered by more than a channel's own depth below the walls.
+		var deepest := 0.0
+		for i in doc.heights.size():
+			deepest = maxf(deepest, ground[i] - doc.heights[i])
+		var alone := 0.0
+		for i in single.heights.size():
+			alone = maxf(alone, ground[i] - single.heights[i])
+		gut.p("deepest carve: the gesture %.2f m, its longest part alone %.2f m" % [deepest, alone])
+		assert_lt(deepest, alone + 0.5, "no part cuts deeper than a fall's own pool: no gorge")
+		# Pools at the feet are one level: every part that ends in a valley ends at the same water.
+		var feet := {}
+		for chain in strokes:
+			var last: WaterBody = chain[chain.size() - 1]
+			var end: Vector2 = last.points[last.points.size() - 1]
+			for z: float in [-8.0, -2.0, 4.0]:
+				if absf(end.y - z) < 2.0:
+					if feet.has(z):
+						assert_almost_eq(last.level_m, float(feet[z]), 0.01, "one pool at z %.0f" % z)
+					feet[z] = last.level_m
+		history.undo()
+		_settle(editor)
+		assert_eq(doc.heights, ground, "one undo restores the ground")
+		assert_true(doc.water_bodies.is_empty(), "and removes every part")
+		history.redo()
+		_settle(editor)
+		assert_eq(RiverProfile.strokes(doc.water_bodies).size(), strokes.size(), "redo lands them")
+
+
 # --- re-fitting a stored document ---------------------------------------------------------------
 
 

@@ -17,9 +17,11 @@ extends RefCounted
 ##    drawn ground, so the stroke was kept as drawn;
 ##  - over_hill: the same, with the deep cut in the middle of the stroke (a stroke over a ridge);
 ##  - stopped_at_rise: a blocked stroke that would climb as drawn (water standing higher than the
-##    water upstream of it) was cut to its longest part that runs downhill; the rest of the line
-##    was not made (card painter-water-climb; `detail.rise_m`, `detail.rises`). It replaces
-##    that stroke's over_hill or blocked_cut hint;
+##    water upstream of it) was split where it rises: each part between a crest and a trough
+##    lands as its own stream running downhill, a climbing part turned round (card
+##    painter-water-climb; `detail.rise_m`, `detail.rises`; WaterEditor.last_report says how
+##    many parts landed, `pieces`, and the metres of parts too short to hold water,
+##    `dropped_m`). It replaces that stroke's over_hill or blocked_cut hint;
 ##  - climb: a STORED stroke climbs (WaterField's `climb` event; a map saved before the rule, or a
 ##    document that was never conditioned): re-fit the water;
 ##  - perched_head: the stroke's head stands above a lower pond or river within snap reach; it was
@@ -58,7 +60,7 @@ const KIND_TEXT := {
 	&"reversed_run": "A river that ran uphill was turned around to run downhill.",
 	&"blocked_cut": "The river was kept as drawn: levelling it would cut a deep gorge.",
 	&"over_hill": "The river crosses a hill and was kept as drawn: levelling it would cut a gorge.",
-	&"stopped_at_rise": "Water cannot climb: the river stops where the ground rises.",
+	&"stopped_at_rise": "Water cannot climb: the line was split so each part runs downhill.",
 	&"climb": "Part of the river stands higher than the water upstream of it.",
 	&"perched_head": "The river starts high above a lower pond and was kept as drawn.",
 	&"end_below_water": "The river ends below water of another level and was kept as drawn.",

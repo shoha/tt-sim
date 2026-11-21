@@ -886,15 +886,19 @@ is kept as drawn, planned as with conditioning off.
 Water does not climb (card painter-water-climb, 2026-11-21; `docs/systems/water_field.md` "Water does
 not climb"). A blocked stroke kept as drawn used to store levels that climb the ridge it crosses
 (the verdict map's river over three walls: 1.30 m, drawn as a wall of water in each pool). Now a
-blocked plan that climbs as drawn is cut to the longest part of the line that runs downhill and
-planned again as its own stroke; the rest is not made, no ground is cut for it, and the hint
-`stopped_at_rise` ("Water cannot climb: the river stops where the ground rises. You can draw the
-rest from the top of the rise, cut the ridge with the Sculpt tool or route the line around the
-hill.") replaces `over_hill`. A blocked plan that only descends is kept as drawn as before.
-`WaterEdit.stop_at_rise = false` gives the old plan for an A/B. The field reports a stored climb
-as a `climb` event. The verdict recipe keeps the river over the walls (it now ends at the first
-wall) and gains a stepped stream that is true: three filled tiers along +z at x = 23, a fall at
-each lip (views `st2_o`, `st2_t`, `st2_w`, `st2pool_z3`).
+blocked plan that climbs as drawn is split at its troughs and crests: every part lands as its own
+stream running downhill (a climbing part is turned round so it runs down from its crest), all in
+ONE history entry (card painter-water-climb-2: `WaterEditor.carve_river` plans the longest part,
+its worker lands the rest, `_compute_rest`); a part too short to hold water is dropped, no ground
+is cut past the conditioner's limit, and the hint `stopped_at_rise` ("Water cannot climb: the line
+was split so each part runs downhill.") replaces `over_hill`. A blocked plan that only descends is
+kept as drawn as before. `WaterEdit.stop_at_rise = false` gives the old plan for an A/B. The field
+reports a stored climb as a `climb` event. The verdict recipe keeps the line over the walls (view
+`walls_w`: it lands in parts) and has a stepped stream that is true: three filled tiers along +z
+at x = 23, a fall at each lip. The stepped-stream views `st_o`, `st_t`, `st_w` and `stpool_z3`
+frame it (the `st2_*` names of the first card are retired). The white hairline that crossed its
+pools was the foot coordinate's seam between two falls, cleared in the field's data
+(`docs/systems/water_field.md` "Foot seams").
 
 **The pond tool (card painter-water-pond).** A pond is dug after the streams beside it as often as
 before them, so `WaterEditor.compute` ("pond", `spec.condition` = `WaterEdit.conditioning_enabled`,

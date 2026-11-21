@@ -156,7 +156,11 @@ func carve_river(
 		last_refusal = REFUSED_IN_WATER if joined.size() < 2 else REFUSED_FULL
 		return -1
 	RiverExits.attach(bodies, split)
-	_start({"kind": "river", "label": "Carve river", "bodies": bodies}, WaterEdit.model_of(doc))
+	var spec := {"kind": "river", "label": "Carve river", "bodies": bodies}
+	if not (report.get("rest", []) as Array).is_empty():
+		# The line crossed a rise: its other parts land after this one, in the same entry.
+		spec.merge({"rest": report.rest, "depth": depth_class, "speed": speed})
+	_start(spec, WaterEdit.model_of(doc))
 	return bodies[0].id
 
 
@@ -474,10 +478,14 @@ static func compute(snapshot: MapDocument, spec: Dictionary, out: Dictionary) ->
 			var bodies: Array[WaterBody] = spec.bodies
 			# The reaches' fall flags (WaterFalls.fall_flags, P4c-2) come from the bodies inside
 			# river_goals, so the worker and the synchronous carve read the same ones.
+			var rest: Array = spec.get("rest", [])
+			var before := PackedFloat32Array() if rest.is_empty() else snapshot.heights.duplicate()
 			var goals := WaterCarve.river_goals(snapshot, bodies, snapshot.heights)
 			out["goals"] = goals
 			lower(snapshot, goals)
 			snapshot.water_bodies = WaterEdit.with_bodies(snapshot, bodies)
+			if not rest.is_empty():
+				_compute_rest(snapshot, spec, before, out)
 		"pond":
 			var id: int = spec.id
 			var conditioned := bool(spec.get("condition", false))
@@ -535,6 +543,59 @@ static func compute(snapshot: MapDocument, spec: Dictionary, out: Dictionary) ->
 	if String(spec.kind) != "dressing":
 		out["owners"] = WaterMeshBuilder.sample_owners(snapshot)
 	out["usec"] = Time.get_ticks_usec() - started
+
+
+## The rest of a gesture that crossed a rise (`spec.rest`, WaterEdit.plan_river's report): each
+## part is planned on `snapshot` as it stands with the parts before it carved (so its ends join
+## their pools), then carved and added in its turn; a part the plan refuses (too short to hold
+## water, in water already) is dropped. `out` gets "bodies" (the document's after all of them),
+## "landed" (the rivers made, the first part's included), "goals" (one carve from `before`, the
+## heights before the first part, to the ground after the last), "pieces" and "dropped_m".
+static func _compute_rest(
+	snapshot: MapDocument, spec: Dictionary, before: PackedFloat32Array, out: Dictionary
+) -> void:
+	var landed: Array[WaterBody] = []
+	landed.assign(spec.bodies)
+	var queue: Array = (spec.rest as Array).duplicate()
+	var step := snapshot.sample_step()
+	var pieces := 1
+	var dropped := 0.0
+	var tries := 0
+	while not queue.is_empty():
+		var piece: Array = queue.pop_front()
+		var report := {}
+		var bodies: Array[WaterBody] = []
+		tries += 1
+		var levels := WaterGeometry.levels(snapshot)
+		if tries <= WaterEdit.MAX_PIECES:
+			bodies = WaterEdit.plan_river(
+				snapshot, piece[0], piece[1], spec.depth, float(spec.speed), true, report
+			)
+			queue.append_array(report.get("rest", []))
+		# A part whose own plan would cut the sculpted ground (a crest levelled to its pool, each
+		# cut under the limit that blocked the whole line) is not made: the walls stay whole.
+		if bodies.is_empty() or float(report.get("max_cut", 0.0)) > WaterEdit.REST_CUT_M:
+			dropped += WaterEdit.polyline_length(piece[0])
+			continue
+		# One pool at the foot: a part that ends in the water of a part before it (in its tapered
+		# tail, where the carved ground is the pool's own surface) takes that water's level.
+		var last: WaterBody = bodies[bodies.size() - 1]
+		var cell := ((last.points[last.points.size() - 1] + snapshot.extent_m() * 0.5) / step).round()
+		var there := levels[snapshot.sample_index(int(cell.x), int(cell.y))]
+		var above := INF if bodies.size() < 2 else bodies[bodies.size() - 2].level_m
+		var gap := there - last.level_m
+		if there != WaterGeometry.DRY and gap > 0.0 and gap < WaterField.LEVEL_GAP_M and there <= above:
+			last.level_m = there
+		lower(snapshot, WaterCarve.river_goals(snapshot, bodies, snapshot.heights))
+		snapshot.water_bodies = WaterEdit.with_bodies(snapshot, bodies)
+		landed.append_array(bodies)
+		pieces += 1
+	var refit: GDScript = load(WaterEdit.REFIT_PATH)
+	out["goals"] = refit.goals_between(before, snapshot.heights, snapshot.samples_x())
+	out["bodies"] = snapshot.water_bodies
+	out["landed"] = landed
+	out["pieces"] = pieces
+	out["dropped_m"] = dropped
 
 
 ## `doc`'s heights lowered to `goals` (WaterCarve goals) exactly as HeightStroke.lower_to
@@ -654,11 +715,19 @@ func _land() -> void:
 	var region := Rect2i()
 	match String(spec.kind):
 		"river":
-			doc.water_bodies = WaterEdit.with_bodies(doc, spec.bodies)
+			var made: Array[WaterBody] = spec.bodies
+			if result.has("landed"):
+				# A gesture over a rise: every part that landed, one entry (_compute_rest).
+				made = result.landed
+				doc.water_bodies = result.bodies
+				last_report["pieces"] = result.pieces
+				last_report["dropped_m"] = result.dropped_m
+			else:
+				doc.water_bodies = WaterEdit.with_bodies(doc, made)
 			stroke = HeightStroke.begin(doc, HeightBrush.LOWER)
 			var goals: Dictionary = result.goals
 			stroke.lower_to(goals.rect, goals.goals)
-			var bounds := WaterEdit.rivers_bounds(spec.bodies, WaterCarve.BANK_REACH_M)
+			var bounds := WaterEdit.rivers_bounds(made, WaterCarve.BANK_REACH_M)
 			region = _sample_rect_of(bounds)
 		"pond":
 			var body := WaterBody.pond(int(spec.id), spec.depth, float(result.level))

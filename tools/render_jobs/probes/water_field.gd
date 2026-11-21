@@ -47,15 +47,14 @@ const CASES := {
 	"f1_z": [45, 10.0, "case", Vector2(-8, -8)],
 	"f1_o8": [45, 8.0, "case", Vector2(-8, -8)],
 	"f1_z16": [45, 16.0, "at", Vector2(-8, -6)],
-	"st_o": [45, 5.0, "case", Vector2(23, -15)],
-	"st_t": [88, 5.0, "case", Vector2(23, -15)],
-	"st_w": [45, 12.0, "at", Vector2(23, -13)],
-	# The stepped stream that is physically true (card painter-water-climb): three filled tiers
-	# that descend along +z, a fall at each lip into the pool of the tier below.
-	"st2_o": [45, 5.0, "case", Vector2(23, 19)],
-	"st2_t": [88, 5.0, "case", Vector2(23, 19)],
-	"st2_w": [45, 12.0, "at", Vector2(23, 18)],
-	"st2pool_z3": [45, 3.0, "at", Vector2(23, 21.5)],
+	# The stepped stream (cards painter-water-climb, -climb-2): three filled tiers that descend
+	# along +z at x = 23, a fall at each lip into the pool of the tier below; `st_o` and `st_t` the
+	# middle fall, `stpool_z3` its pool, `st_w` the stream. `walls_w` is the line drawn over three
+	# walls north of it (what these names framed before): a gesture over rises, landed in parts.
+	"st_o": [45, 5.0, "case", Vector2(23, 19)],
+	"st_t": [88, 5.0, "case", Vector2(23, 19)],
+	"st_w": [45, 12.0, "at", Vector2(23, 18)],
+	"walls_w": [45, 12.0, "at", Vector2(23, -13)],
 	"pond_z8": [45, 8.0, "at", Vector2(9, -2)],
 	"f4up_z8": [45, 8.0, "at", Vector2(9, 7)],
 	"exit_z8": [45, 8.0, "at", Vector2(-26, 25)],
@@ -72,7 +71,7 @@ const CASES := {
 	"eye_f2w": [18, 6.0, "at", Vector2(9, -5), 60.0],
 	"shore_z3": [45, 3.0, "at", Vector2(5.8, 1.5)],
 	"bank_z3": [45, 3.0, "at", Vector2(-3.5, -12.0)],
-	"stpool_z3": [45, 3.0, "at", Vector2(23, -9.0)],
+	"stpool_z3": [45, 3.0, "at", Vector2(23, 21.5)],
 }
 
 static var _case: Dictionary = {}
@@ -117,6 +116,16 @@ static func run(base: Node, step: Dictionary) -> String:
 			ScatterNative.force_gdscript_wfield = bool(step.get("on", false))
 			hostf.rebuild()
 			return "gdscript field %s" % ScatterNative.force_gdscript_wfield
+		"seams":
+			# The foot coordinate's seams cleared (shipped) or kept, the field rebuilt under it: the
+			# hairline across a pool between two falls, in one run (card painter-water-climb-2).
+			var pws := painter_water(base)
+			var hosts: Variant = pws.call("field") if pws != null else null
+			if hosts == null:
+				return "not painted"
+			WaterFieldStroke.foot_seams_cleared = bool(step.get("on", true))
+			hosts.rebuild()
+			return "foot seams cleared %s" % WaterFieldStroke.foot_seams_cleared
 		"tokens":
 			return _tokens(base, step.get("items", []))
 		"cleanup":

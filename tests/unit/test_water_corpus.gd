@@ -145,6 +145,7 @@ func test_field_of_every_map() -> void:
 			var rises := WaterConditioner.climbs(levels, 1e-6).size()
 			assert_eq(rises, 0, "%s: stroke %d climbs %s" % [m.name, chain[0].id, levels])
 		assert_eq(int(r.events.get(&"climb", 0)), 0, "%s: the field reports no climb" % m.name)
+		assert_eq(int(r.get("foot_seams", 0)), 0, "%s: no two falls' feet meet on a seam" % m.name)
 		var known: Array = KNOWN[m.name]
 		var film := int(r.events.get(&"film_run", 0))
 		var bridged := int(r.events.get(&"bridged_run", 0))

@@ -45,6 +45,11 @@ const POND_FIT_PATH := "res://utils/water_pond_fit.gd"
 const COMPRESSION := FileAccess.COMPRESSION_ZSTD
 ## How many times a stroke that climbs is cut to its longest descending part (_descending()).
 const MAX_DESCENT_TRIES := 4
+## The most parts of one gesture over rises that are planned after its first (`report.rest`).
+const MAX_PIECES := 8
+## The deepest cut into the drawn ground a part of `report.rest` may ask of the carve and still
+## land (WaterEditor._compute_rest): what one flat reach spans, far under cut_limit_m.
+const REST_CUT_M := WaterGeometry.REACH_DROP_M
 
 ## The conditioning off switch (card painter-water-condition): plan_river() conditions a stroke
 ## (smooths the course, WaterCourseFit; fits the reach levels, WaterConditioner; joins the ends,
@@ -290,9 +295,14 @@ static func _kept_as_drawn(
 ## through), the stroke becomes the longest part of the line that runs downhill
 ## (WaterConditioner.longest_descent), planned as a stroke of its own: conditioned, its ends
 ## joined or tapered, so the river ends in a pool at the foot of the rise instead of standing up
-## it as a wall of water. The rest of the line is not made, and the hint `stopped_at_rise` says so
-## (`report.stopped` is true, `kept_m` and `drawn_m` the lengths). The author's ground is never
-## cut for it. A part too short to hold water is refused like any short line.
+## it as a wall of water. The hint `stopped_at_rise` says so (`report.stopped` is true, `kept_m`
+## and `drawn_m` the lengths). The author's ground is never cut for it. A part too short to hold
+## water is refused like any short line.
+## The rest of the gesture is not lost: `report.rest` lists the line's other parts between its
+## troughs and crests (WaterConditioner.monotone_parts) as [points, half_widths] lines that each
+## run downhill, a climbing part turned round so it runs down from its crest. plan_river() returns
+## one stroke, so the caller plans each of them on the document as it stands once the parts before
+## it are carved (WaterEditor.compute does, in the same history entry; at most MAX_PIECES).
 static func _descending(
 	doc: MapDocument,
 	points: PackedVector2Array,
@@ -303,10 +313,8 @@ static func _descending(
 	drawn: Array[WaterBody]
 ) -> Array[WaterBody]:
 	var levels := PackedFloat64Array()
-	var lengths := PackedFloat64Array()
 	for body in drawn:
 		levels.append(body.level_m)
-		lengths.append(polyline_length(body.points))
 	var conditioner: GDScript = load(CONDITIONER_PATH)
 	var found: Array[Dictionary] = conditioner.climbs(levels)
 	if not stop_at_rise:
@@ -319,9 +327,32 @@ static func _descending(
 			low = minf(low, body.level_m)
 			body.level_m = low
 		return drawn
-	var run: Vector2i = conditioner.longest_descent(levels, lengths)
 	var rise_at: Vector2 = drawn[int(found[0].from)].points[0]
-	var part := sub_line(points, half_widths, drawn[run.x].points[0], drawn[run.y].points[-1])
+	# The line's parts between its troughs and crests, each as a line that runs downhill (a
+	# climbing part turned round). The longest part that descends as drawn is the stroke planned
+	# here; the others are `report.rest`, for the caller to plan and land after it.
+	var part: Array = []
+	var best := -1.0
+	var rest: Array = []
+	for found_part: Vector3i in conditioner.monotone_parts(levels):
+		var from: Vector2 = drawn[found_part.x].points[0]
+		var piece := sub_line(points, half_widths, from, drawn[found_part.y].points[-1])
+		var length := polyline_length(piece[0])
+		if found_part.z > 0:
+			var turned_points: PackedVector2Array = piece[0]
+			var turned_sizes: PackedFloat32Array = piece[1]
+			turned_points.reverse()
+			turned_sizes.reverse()
+			piece = [turned_points, turned_sizes]
+			# A part as drawn is preferred to any turned one.
+			length *= 1e-3
+		if length > best:
+			if not part.is_empty():
+				rest.append(part)
+			part = piece
+			best = length
+		else:
+			rest.append(piece)
 	var sub := {}
 	var bodies: Array[WaterBody] = []
 	# The part is strictly shorter than the line, so this ends; the guard is for a plan that
@@ -341,6 +372,9 @@ static func _descending(
 	hints.append_array(sub.get("hints", []))
 	for key: Variant in sub:
 		report[key] = sub[key]
+	# The part planned here may have crossed a rise of its own: its rest follows this line's.
+	rest.append_array(sub.get("rest", []))
+	report["rest"] = rest
 	report["hints"] = hints
 	report["stopped"] = true
 	report["drawn_m"] = polyline_length(points)

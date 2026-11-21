@@ -254,6 +254,49 @@ static func longest_descent(
 	return best
 
 
+## A stroke's reach `levels` (flow order) as the parts between its troughs and crests, in order:
+## Vector3i(first reach, last reach, direction), direction -1 for a part that runs downhill as
+## drawn and 1 for one that climbs (to be turned round: it runs down from its crest). A move
+## against a part's direction within `band` does not end it. A crest heads the part that descends
+## from it and a trough ends the part that descends into it, so a climbing part holds only the
+## reaches strictly between the two (none for a single step up), except at the stroke's ends,
+## where it holds the first or the last reach too. Every reach is in exactly one part.
+static func monotone_parts(
+	levels: PackedFloat64Array, band: float = DEAD_BAND_M
+) -> Array[Vector3i]:
+	var out: Array[Vector3i] = []
+	var n := levels.size()
+	if n == 0:
+		return out
+	var first := 0
+	var down := true
+	# The lowest level of a descending part so far; the index of the highest of a climbing one.
+	var low := levels[0]
+	var top := 0
+	for k in range(1, n):
+		if down:
+			if levels[k] - low > band:
+				# A stroke that begins flat and then climbs: the flat start is the climb's foot.
+				if first > 0 or levels[0] - low > band:
+					out.append(Vector3i(first, k - 1, -1))
+					first = k
+				top = k
+				down = false
+			else:
+				low = minf(low, levels[k])
+		elif levels[k] > levels[top]:
+			top = k
+		elif levels[top] - levels[k] > band:
+			if top > first:
+				out.append(Vector3i(first, top - 1, 1))
+			first = top
+			low = levels[k]
+			down = true
+	# A stroke that ends on a rise: the climb is a part up to the end, its crest included.
+	out.append(Vector3i(first, n - 1, -1 if down else 1))
+	return out
+
+
 ## The conditioned levels of a tree of nodes (rivers' reaches and ponds). `parent[i]` is node i's
 ## downstream node (-1 for an outlet); a node must be at most each upstream neighbour (water does
 ## not climb: an outlet is lowered to the lowest water draining into it, and a node over a pond
