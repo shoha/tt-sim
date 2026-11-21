@@ -807,10 +807,10 @@ seeds was not available in one call: `wn_xz` hashes its seed, so a fractional se
 noise every frame.
 The stepped terms, for the next card that hunts a pop: global steps are the two copies of the
 flat's blobs (`flow_blobs_t`, each re-seeded every `CARRY_PERIOD_S` under the other copy: 0
-pixels in both views), the fall's blobs (2.4 s, the same hand-over) and the mist's sway in
-`painter_waterfall.gdshader` (`floor(p_clock * 2)`, about 475 pixels at f1_o, the approved
-falls: left). Per place already: the stroke lattice's cycle (per cell), a token's rings, a mist
-puff's rise. The switches `FRZ_BITE`, `FRZ_DAB`, `FRZ_WRAP`, `FRZ_BLOB` and `FRZ_STROKE` hold
+pixels in both views) and the fall's blobs (2.4 s, the same hand-over). The mist's sway in
+`painter_waterfall.gdshader` stepped for every puff at once on `floor(p_clock * 2)`; since card
+painter-water-edges it steps with the puff's own rise (below). Per place already: the stroke
+lattice's cycle (per cell), a token's rings, a mist puff's rise. The switches `FRZ_BITE`, `FRZ_DAB`, `FRZ_WRAP`, `FRZ_BLOB` and `FRZ_STROKE` hold
 one term's clock at `FRZ_CLOCK` (9.99), so a pair of captures across clock 10.0 shows the
 terms left running alone; all five frozen at 9.99 is 0 pixels from the shipped frame.
 
@@ -824,6 +824,54 @@ while the zone's weight was still 0. The term is now times `foot_near`, which is
 field holds a foot, so a fall draws as before (0 pixels at f1_o, f5_o and f3_t with the lap
 off). Proof by switch: `ABL_NOWHITE` and seams kept (`WaterFieldStroke.foot_seams_cleared`
 false) each remove the line, `ABL_BRINKLINE` puts it back.
+
+**Straight marks, attributed by switch (card painter-water-edges, 2026-11-21, look-pending, NOT
+verified against its own gates: read this before building on it).** Each white or pale term now
+has a switch that zeroes it alone (the list is at `FRZ_CLOCK` in the shader; new: `NORINGCOV`,
+`NOWAKE`, `NOPOOLFLOOR`, `NOFILMA`, `NOVEIL`, `NOSMOOTH`, `NOSTEEP`). Three rules changed, and a
+switch puts each back as it was (all three back is 0 pixels from main at trib_z8):
+
+- *A token's wake* (`ABL_WAKEBANDS`). The pale vertical bands below a rock in a pond were not the
+  rock's wrap: `ABL_NOWAKE` removed them and `ABL_NOEDGE`, `ABL_NORINGCOV` did not. They were the
+  wake of the token standing upstream. Each dash pulsed on a phase hashed from
+  `floor(across * 5.0)`, a 0.2 m column in the flow's frame, so a column pulsed whole. The phase
+  is now the same noise read smoothly across the flow. Result: at clock 13.3 the bars are
+  tapering streaks; at clock 10.0 a pale bar with near-straight sides still stands. The dash's
+  own noise is stretched 4:1 along the flow (`across * 6.0, along * 1.4`) and is the likely rest
+  of the cause; no switch has separated it.
+- *The lap's start* (`ABL_LAPNOTCH`). On a steep bank the lap's distance is broken by a noise of
+  up to 0.25 m (`steep_n`), and the lap's start (`smoothstep(0.0, 0.03, d + 0.02)`) was cut on
+  that broken distance: where the break pushed it under zero the lap stopped on a hard 3 cm edge
+  and left a notch of bare thin water between the straight waterline and itself. `ABL_NOSTEEP`
+  repainted 453 of the 504 pixels of one such notch on the corpus pond; no other switch touched
+  it. The start now reads the distance before the break; a fall's zone keeps the old cut. Whether
+  this notch is the "rectangular step" that card's item 2 describes is not established: a ruled
+  pale-teal band (the wash's shallow band where the pool floor engages) runs along the same shore
+  and is unchanged. An averaging of the steep share along the shore was tried first and removed:
+  it did not touch the notch.
+- *The rim follows the room* (`ABL_NOROOM`). The lap's full width (reach up to 0.27 m, a steep
+  bank's soft edge 0.35 m and break 0.25 m, on a distance the smoothing lowers where the far bank
+  is inside its taps) is more than the half-width of a pool a metre across, which drew white from
+  bank to bank (`ABL_NORIBBON` removed all of it, `ABL_NOWHITE` none). `room` is the largest shore
+  distance at the fragment, at the smoothing's four taps and at one more tap `ROOM_FAR_M` (0.9 m)
+  towards the open water, fetched only by a fragment that draws some lap and has found less than
+  `ROOM_FULL_M` (0.8 m); `room / ROOM_FULL_M` (at least `ROOM_MIN`) scales the reach, the soft edge
+  and the break and takes the distance back to the exact one. An open shore finds its own
+  distance plus 0.9 m and draws as before (0 pixels on the corpus pond). The side pool at trib_z8
+  now shows blue along its whole length. The rule is not limited to closed pools: a stream about
+  1.3 m across has its rim narrowed along its whole length (f3_t, 23257 pixels).
+- *The mist's sway* steps on `floor((p_clock / MIST_CYCLE_S + COLOR.b) * MIST_STEPS)`, the count
+  of the puff's own rise steps, in place of `floor(p_clock * 2.0)`.
+
+What the card's gates measured (1920x1080, clock 10.0, pixels over 8/255 against main, the mist
+change off): f1_o 1795, f5_o 14912, f3_t 24088. The gate was 0. In the mask the curtain, the
+foot and the pool's white are clean and the changed pixels lie on banks beside the falls, some of
+them at the brink's corner; f5_o's are all the lap's start, f3_t's nearly all the room rule. Cost,
+in-run A/B against main, two runs: f1_o +0.007 and -0.002 ms, f1_o8 +0.021 and +0.007 ms (the
+first is 0.001 over the +0.02 line, inside that run's 0.147 ms spread), wide +0.006 and +0.002 ms.
+Not done: the per-view look at the other verdict views, the mist's fixed-clock look and its
+frame-to-frame count in isolation, the Classic frame. Detail and capture notes:
+`docs/plans/handoffs/painter-water-edges.md`.
 
 **One frame, one velocity (card painter-water-frames, look-pending).** On the field surface every
 pattern is in the world frame, and what moves is carried by one vector: the flow map's
