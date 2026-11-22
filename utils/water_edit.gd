@@ -520,7 +520,7 @@ static func _plan(
 	ground = oriented[2]
 	# The fall plan (WaterFallPlan): lips, plunge points and the subdivision of other steep
 	# segments, on the ground sampled every sample step along the line.
-	var ground_of := func(p: Vector2) -> float: return water_ground_at(doc, p, courses)
+	var ground_of := WaterGeometry.water_ground_reader(doc, courses)
 	var step := minf(doc.sample_step().x, doc.sample_step().y)
 	var profile := WaterFallPlan.fine_profile(course, step, ground_of)
 	# Over a rise, falls and reaches are planned on the ground the cut leaves (plan_on_cut).
@@ -700,16 +700,16 @@ static func join_line(
 		widths.fill(half_widths[0] if not half_widths.is_empty() else WaterBody.MIN_HALF_WIDTH_M)
 	if doc.water_bodies.is_empty() or points.size() < 2:
 		return [points, widths]
-	# A fall's face counts as dry rock whatever is_wet_at says: level_at has no flush cut at a
-	# reach's end, so within the half-width plus the bank of the lip the face reads the upper
-	# pool's level, and an end there would join that pool over the rock.
+	# A fall's face is dry rock whatever is_wet_at says: level_at has no flush cut at a reach's end,
+	# so the face reads the upper pool's level, and an end there would join it over the rock.
 	var falls := WaterFalls.falls(doc)
+	var wet_of := WaterGeometry.wet_reader(doc)
 	var wet := PackedByteArray()
 	wet.resize(points.size())
 	var dry_first := -1
 	var dry_last := -1
 	for i in points.size():
-		if WaterGeometry.is_wet_at(doc, points[i]) and _face_of(doc, falls, points[i]) < 0:
+		if wet_of.call(points[i]) and _face_of(doc, falls, points[i]) < 0:
 			wet[i] = 1
 		elif dry_first < 0:
 			dry_first = i
@@ -723,12 +723,12 @@ static func join_line(
 	# The joining point just past the other water's edge, however far apart the drawn points;
 	# a dry end (the first or last drawn point) on a fall's face joins the pool below it.
 	if wet[first] == 1:
-		line[0] = _junction(doc, points[first], points[first + 1])
+		line[0] = _junction(wet_of, points[first], points[first + 1])
 	else:
 		line[0] = _face_junction(doc, falls, points[first])
 	if last > first:
 		if wet[last] == 1:
-			line[-1] = _junction(doc, points[last], points[last - 1])
+			line[-1] = _junction(wet_of, points[last], points[last - 1])
 		else:
 			line[-1] = _face_junction(doc, falls, points[last])
 	return [line, widths.slice(first, last + 1)]
@@ -753,14 +753,14 @@ static func _face_of(doc: MapDocument, falls: Array[Dictionary], p: Vector2) -> 
 	return -1
 
 
-## Where the segment from `wet` (a point in water) to `dry` enters the water, found by
-## bisection, moved JOIN_INSET_M into it (never past `wet`).
-static func _junction(doc: MapDocument, wet: Vector2, dry: Vector2) -> Vector2:
+## Where the segment from `wet` (a point in water) to `dry` enters the water (`wet_of`,
+## WaterGeometry.wet_reader()), found by bisection, moved JOIN_INSET_M into it (never past `wet`).
+static func _junction(wet_of: Callable, wet: Vector2, dry: Vector2) -> Vector2:
 	var inside := wet
 	var outside := dry
 	for _step in 12:
 		var middle := (inside + outside) * 0.5
-		if WaterGeometry.is_wet_at(doc, middle):
+		if wet_of.call(middle):
 			inside = middle
 		else:
 			outside = middle

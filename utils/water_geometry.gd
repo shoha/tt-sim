@@ -38,6 +38,8 @@ const RIVER_BANK_M := 1.0
 const FREEBOARD_M := 0.15
 ## Most ground height one flat river reach spans along its centreline.
 const REACH_DROP_M := 0.5
+## The square tiles (map metres) a level_reader() cuts the river courses to, once per tile.
+const READER_TILE_M := 8.0
 ## The level of a sample no water covers.
 const DRY := -INF
 ## Two river ends closer than this (squared metres) are one shared point (flush_ends()).
@@ -302,7 +304,6 @@ static func fed_ponds(doc: MapDocument) -> Dictionary:
 static func level_at(
 	doc: MapDocument, p: Vector2, exclude_id: int = -1, courses: Dictionary = {}
 ) -> float:
-	var best := DRY
 	var pond := 0
 	if doc.pond_mask.size() == doc.sample_count() and doc.sample_count() > 0:
 		var s := doc.world_to_sample(p).round()
@@ -310,7 +311,21 @@ static func level_at(
 		var z := clampi(int(s.y), 0, doc.samples_z() - 1)
 		pond = doc.pond_mask[doc.sample_index(x, z)]
 	var fed := fed_ponds(doc) if pond != 0 else {}
-	for body in doc.water_bodies:
+	return _level_among(doc.water_bodies, p, exclude_id, courses, pond, fed)
+
+
+## level_at()'s answer over `bodies` once the pond under `p` (its mask id, 0 for none) and the
+## fed ponds (fed_ponds(), read only when `pond` is not 0) are known.
+static func _level_among(
+	bodies: Array[WaterBody],
+	p: Vector2,
+	exclude_id: int,
+	courses: Dictionary,
+	pond: int,
+	fed: Dictionary
+) -> float:
+	var best := DRY
+	for body in bodies:
 		if body.id == exclude_id or body.level_m <= best:
 			continue
 		if not body.is_river():
@@ -347,6 +362,93 @@ static func river_courses(doc: MapDocument, near: Rect2 = Rect2()) -> Dictionary
 			course = _course_near(course, near)
 		out[body.id] = course
 	return out
+
+
+## level_at(doc, p, exclude_id, courses) as a Callable(p: Vector2) -> float, the same value for
+## every point at a fraction of the cost, for a caller asking many points of one document (a
+## stroke's line, its fall profile; card painter-release-frame: the release asked every river's
+## whole course, smoothed again, per point). `courses` (river_courses(), possibly cut; empty:
+## every river of `doc`, smoothed once here) is cut once per READER_TILE_M tile a point falls in
+## to the run of each course near that tile (_course_near(): a point of the tile is nearer one of
+## the segments kept than any left out, or in none of that river's area, whatever the course, so
+## level_at() answers the same). A river `courses` leaves out is smoothed per point, as level_at()
+## does. The pond mask's sample and the fed ponds are read as level_at() reads them, with the grid
+## and fed_ponds() taken once. The document must not change while the reader is used.
+static func level_reader(
+	doc: MapDocument, exclude_id: int = -1, courses: Dictionary = {}
+) -> Callable:
+	var all := courses if not courses.is_empty() else river_courses(doc)
+	var tiles := {}
+	var has_ponds := doc.pond_mask.size() == doc.sample_count() and doc.sample_count() > 0
+	var mask := doc.pond_mask
+	var half := doc.extent_m() * 0.5
+	var step := doc.sample_step()
+	var columns := doc.samples_x()
+	var last := Vector2i(columns - 1, doc.samples_z() - 1)
+	var fed := fed_ponds(doc) if has_ponds else {}
+	var bodies := doc.water_bodies
+	return func(p: Vector2) -> float:
+		var key := Vector2i((p / READER_TILE_M).floor())
+		if not tiles.has(key):
+			var box := Rect2(Vector2(key) * READER_TILE_M, Vector2.ONE * READER_TILE_M)
+			var near := {}
+			for id: int in all:
+				var course: Array = all[id]
+				near[id] = _course_near(course, box) if not course.is_empty() else []
+			tiles[key] = near
+		var pond := 0
+		if has_ponds:
+			var s := ((p + half) / step).round()
+			pond = mask[clampi(int(s.y), 0, last.y) * columns + clampi(int(s.x), 0, last.x)]
+		return _level_among(bodies, p, exclude_id, tiles[key], pond, fed)
+
+
+## ground_at(doc, p) as a Callable(p: Vector2) -> float, the same values (grounds_at()'s
+## arithmetic), with the grid read once.
+static func ground_reader(doc: MapDocument) -> Callable:
+	var half := doc.extent_m() * 0.5
+	var step := doc.sample_step()
+	var width := doc.samples_x()
+	var last := Vector2(width - 1, doc.samples_z() - 1)
+	var h := doc.heights
+	return func(p: Vector2) -> float:
+		var sample := ((p + half) / step).clamp(Vector2.ZERO, last)
+		var x0 := mini(int(sample.x), int(last.x) - 1)
+		var z0 := mini(int(sample.y), int(last.y) - 1)
+		var fx := sample.x - x0
+		var fz := sample.y - z0
+		var top := lerpf(h[z0 * width + x0], h[z0 * width + x0 + 1], fx)
+		var bottom := lerpf(h[(z0 + 1) * width + x0], h[(z0 + 1) * width + x0 + 1], fx)
+		return lerpf(top, bottom, fz)
+
+
+## is_wet_at(doc, p, exclude_id, courses) as a Callable(p: Vector2) -> bool, through a
+## level_reader() and a ground_reader() (the same answers).
+static func wet_reader(
+	doc: MapDocument, exclude_id: int = -1, courses: Dictionary = {}
+) -> Callable:
+	var level_of := level_reader(doc, exclude_id, courses)
+	var ground_of := ground_reader(doc)
+	var sized := doc.heights.size() == doc.sample_count()
+	return func(p: Vector2) -> bool:
+		if not sized:
+			return false
+		var level: float = level_of.call(p)
+		return level != DRY and ground_of.call(p) < level
+
+
+## WaterEdit.water_ground_at(doc, p, courses) as a Callable(p: Vector2) -> float: the ground at
+## map point `p`, or under existing water that water's level plus FREEBOARD_M, through a
+## level_reader() and a ground_reader() (the same values).
+static func water_ground_reader(doc: MapDocument, courses: Dictionary = {}) -> Callable:
+	var level_of := level_reader(doc, -1, courses)
+	var ground_of := ground_reader(doc)
+	return func(p: Vector2) -> float:
+		var ground: float = ground_of.call(p)
+		var level: float = level_of.call(p)
+		if level != DRY and ground < level:
+			return level + FREEBOARD_M
+		return ground
 
 
 ## level_at() at every point of `points` (`courses` as level_at(), which must hold every river

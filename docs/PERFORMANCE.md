@@ -2916,6 +2916,44 @@ river preview) and frames of 33-36 ms after it, where the preview (17 ms) meets 
 the height work. `ident.json`'s digests, now with the shading field's bytes, equal main's at every
 step. Evidence: `D:/dev/tabletop/docs/research/2026-11-22-terraform-audit/today_attrib/land_frame/`.
 
+Release frame (card painter-release-frame, 2026-11-22). Measured again with named timers, the
+second river's release (115-116 ms) was `WaterEdit.join_line` 34.3, `WaterBrush.through_rises` 34.4,
+`WaterCourseFit.condition` 13.1, `WaterFallPlan.fine_profile` 8.3, the end decisions 2.9, the rest
+of the plan 2.6 and the river preview 16.5; the first river's (89-90) the same parts, its plan run
+twice (a joined end). Two causes, neither an algorithm: `join_line` (`is_wet_at`) and the brush's
+ground reader (`water_ground_at`) asked `level_at` with no `courses`, so every point of the line
+Chaikin-smoothed every river of the map again and scanned its whole course; and the preview's 2288
+ground points a frame each went through `AuthoringEditor.ground_height_at`, about twenty GDScript
+calls and two `global_transform` reads per point. Now `WaterGeometry.level_reader` (with
+`wet_reader`, `ground_reader`, `water_ground_reader`) smooths each river once per reader and cuts
+the courses once per 8 m tile to the segments near it (`_course_near`, exact: a point of the tile is
+nearer a kept segment than any dropped one, or in none of that river's area), reading the pond mask
+and `fed_ponds` once; `join_line`, the brush and the fall profile ask through it. The preview reads
+the ground through `LineRibbon.height_reader` (the transforms, heights and grid read once). Every
+reader returns its original's value bit for bit (`test_water_release_readers.gd`, on the bench's
+dumped second river: 17,400 points, `join_line`, `through_rises`, `fine_profile`). Per part, second
+river: `join_line` 34.3 to 6.4, `through_rises` 34.4 to 6.3, preview 16.5 to 6.6, `fine_profile`
+8.3 to 7.0 (instrumented run; headless on the dump, after the inlined pond read, join 42 to 3.2 and
+the ground reads 44 to 2.0). Interleaved A/B, bench job, main cffa6899 against the branch, `game` ms:
+
+| | main | branch |
+| --- | --- | --- |
+| first river, release frame | 90.5, 90.4, 88.4 | 29.2, 28.9, 27.3 |
+| first river, frames over 33 ms (sum) | 3 (162.9), 3 (159.4), 2 (132.1) | 0, 0, 0 |
+| second river, release frame | 118.8, 115.4, 118.3 | 38.0, 38.3, 37.7 |
+| second river, frames over 33 ms (sum) | 3 (192.0), 3 (183.5), 3 (189.0) | 2 (71.7), 2 (72.1), 2 (71.8) |
+| river held, pressed median / p95 | 6.92 / 16.35, 7.19 / 16.58, 6.83 / 15.63 | 3.75 / 7.40, 3.69 / 7.41, 3.93 / 7.16 |
+| held raise dry, pressed median / p95 | 4.03 / 10.56, 3.76 / 10.27, 3.92 / 10.56 | 3.63 / 10.08, 3.74 / 10.48, 3.82 / 10.34 |
+| held raise over a river, median / p95 | 3.96 / 10.28, 3.77 / 10.44, 3.81 / 10.24 | 3.74 / 10.92, 3.96 / 10.36, 3.89 / 10.25 |
+| wall placement frame | 189.5, 191.8, 192.6 | 200.0, 191.6, 203.0 |
+| path, pressed median / max | 47.2 / 358.2, 45.5 / 87.8, 45.9 / 103.0 | 46.3 / 88.4, 46.1 / 87.9, 45.6 / 88.5 |
+
+The river preview costs half per held frame (the same reader). What is drawn is unchanged: the same
+heights and the same plan, so no look pair was taken. The wall frame is within the spread earlier
+cards measured on main (177-208). The second release's 38 ms is now the course fit (13), the fall
+profile (7), the two readers (6 each) and the preview (7). `ident.json`'s digests equal main's at
+every step. Evidence: `D:/dev/tabletop/docs/research/2026-11-22-terraform-audit/today_attrib/release_frame/`.
+
 ### Held strokes (card painter-held-stroke, 2026-11-22)
 
 A held sculpt stroke paid two followers every frame: the water field's update (any ground edit

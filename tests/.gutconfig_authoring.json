@@ -11,6 +11,7 @@
 		"res://tests/unit/test_dressing_edit_rect.gd",
 		"res://tests/unit/test_painter_held_stroke.gd",
 		"res://tests/unit/test_painter_land_frame.gd",
+		"res://tests/unit/test_water_release_readers.gd",
 		"res://tests/unit/test_painter_edit_hitch2.gd",
 		"res://tests/unit/test_painter_ground_siblings.gd",
 		"res://tests/unit/test_ground_shade_field.gd",

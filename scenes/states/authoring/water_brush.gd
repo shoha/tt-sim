@@ -146,9 +146,11 @@ static func flow_line(line: PackedVector2Array, ground_of: Callable) -> PackedVe
 ## (WaterEdit.water_ground_at: under existing water, that water's level plus the freeboard),
 ## so the ribbon and the carve agree on which way a stroke runs.
 static func ground_reader(editor: AuthoringEditor) -> Callable:
+	# WaterGeometry.water_ground_reader: the same values, each river smoothed once per reader, not
+	# per point (a release's through_rises() asks every point of the line).
+	var ground_of := WaterGeometry.water_ground_reader(editor.document)
 	return func(xz: Vector2) -> float:
-		var at := editor.to_map_xz(Vector3(xz.x, 0.0, xz.y))
-		return WaterEdit.water_ground_at(editor.document, at)
+		return ground_of.call(editor.to_map_xz(Vector3(xz.x, 0.0, xz.y)))
 
 
 ## A drawn river `line` (world XZ) with its points on a rise moved to where the author pointed
