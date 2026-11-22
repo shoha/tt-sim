@@ -156,8 +156,9 @@ func test_over_hill_and_perched_head_are_flagged_never_blocking() -> void:
 	var hill := Cases.make("over_hill", true)
 	assert_gt(hill.water_bodies.size(), 0, "the stroke is still made")
 	var kinds := _kinds(Cases.hints)
-	# The rule (card painter-water-cut): the river is cut through the ridge and says so.
-	assert_true(kinds.has(&"cut_through"), "cut_through: %s" % [kinds])
+	# The rule (card painter-water-cut): the river is cut through the ridge, and it is not said
+	# (card painter-water-cutband: the owner found the hint unwanted).
+	assert_false(WaterHints.worth_saying(Cases.hints), "a cut is not said: %s" % [kinds])
 	assert_false(Cases.blocked, "nothing blocks a cut")
 	assert_eq(_rise(hill), 0.0, "and the water never climbs")
 	# With the line split at its rises (card painter-water-climb) it is made up to the rise.
@@ -244,7 +245,7 @@ func test_editor_carve_stores_the_conditioned_reaches_and_undoes() -> void:
 	assert_eq(results[1][1], results[0][1], "and carves the same ground")
 
 
-func test_editor_says_the_hints_and_never_blocks() -> void:
+func test_editor_cuts_through_a_hill_quietly_and_never_blocks() -> void:
 	var ridge := func(p: Vector2) -> float: return -0.05 * p.x + 2.5 * exp(-pow(p.x / 2.5, 2.0))
 	var doc := Cases.world(ridge)
 	var editor := _editor(doc, AuthoringHistory.new())
@@ -253,11 +254,10 @@ func test_editor_says_the_hints_and_never_blocks() -> void:
 	)
 	_settle(editor)
 	assert_gt(id, 0, "a stroke over a hill is still carved")
-	var said := _kinds(editor.water.last_hints)
-	assert_true(said.has(&"cut_through"), "%s" % [editor.water.last_hints])
-	assert_true(bool(editor.water.last_report.cut))
-	assert_true(WaterHints.worth_saying(editor.water.last_hints), "worth a toast")
-	assert_true(WaterHints.toast_text(editor.water.last_hints).contains("cut through"))
+	assert_true(bool(editor.water.last_report.cut), "the report records the cut")
+	# The owner (2026-11-22): "The hint is unwanted". Nothing is said for a cut.
+	assert_false(WaterHints.worth_saying(editor.water.last_hints), "%s" % [editor.water.last_hints])
+	assert_eq(WaterHints.toast_text(editor.water.last_hints), "")
 
 
 # --- water does not climb (card painter-water-climb) --------------------------------------------
@@ -443,8 +443,51 @@ func test_a_line_over_rises_is_one_river_cut_through_them() -> void:
 		assert_true(bool(report.cut), "%s: the report says it cut" % label)
 		assert_gt(float(report.rise_cut), 1.4, "%s: the rise it cut through" % label)
 		var text: String = WaterHints.toast_text(report.hints)
-		assert_true(text.contains("cut through"), "%s: the toast says so: %s" % [label, text])
+		assert_eq(text, "", "%s: a cut is not said (card painter-water-cutband)" % label)
 		assert_almost_eq(made.bodies[0].points[0].y, -13.0, 0.01, "%s: drawn direction" % label)
+
+
+## The widest over the narrowest half-width of a stroke's reaches.
+func _width_spread(bodies: Array[WaterBody]) -> float:
+	var low := INF
+	var high := 0.0
+	for body in bodies:
+		for hw in body.half_widths:
+			low = minf(low, hw)
+			high = maxf(high, hw)
+	return high / low
+
+
+func test_below_a_cut_the_river_keeps_its_width_and_has_no_crest_at_the_foot() -> void:
+	# Card painter-water-cutband: planned on the drawn ground, a rise's downstream face was a fall
+	# whose lip stayed a reach boundary once the fit levelled it (a riffle crest 5 cm under the
+	# water at the rise's foot: a pale bar across the river) and whose plunge point widened the
+	# river below by WaterFallPlan.PLUNGE_WIDEN. Planned on the ground the cut leaves, neither.
+	var line := PackedVector2Array([Vector2(0, -13), Vector2(0, 12)])
+	var grounds := {
+		"one wall": func(p: Vector2) -> float: return -0.03 * p.y + _wall(p, 0.0, 1.6),
+		"mound": func(p: Vector2) -> float: return -0.03 * p.y + 2.0 * exp(-p.length_squared() / 9.0),
+	}
+	for label: String in grounds:
+		var made := _cut_through(grounds[label], line, label)
+		var bodies: Array[WaterBody] = []
+		bodies.assign(made.bodies)
+		assert_lt(_width_spread(bodies), 1.01, "%s: one width all along" % label)
+		# No fall is planned on a rise's face: its reaches step only where the cut ground does.
+		for flag in WaterFalls.fall_flags(bodies):
+			assert_eq(int(flag), 0, "%s: no fall on the rise's face" % label)
+		# The switch brings the old plan back: the plunge point widens the river below the rise.
+		WaterEdit.plan_on_cut = false
+		var old: Dictionary = Cases.add_stroke(Cases.world(grounds[label]), line, 1.0, WAIST, true)
+		WaterEdit.plan_on_cut = true
+		var old_bodies: Array[WaterBody] = []
+		old_bodies.assign(old.bodies)
+		assert_gt(_width_spread(old_bodies), 1.1, "%s: drawn-ground plan widened" % label)
+	var bumpy := PackedFloat32Array([1.0, 0.5, 2.0, 0.4, 0.6])
+	assert_eq(WaterFallPlan.cut_ground(bumpy, 0.25), PackedFloat32Array([1.0, 0.5, 0.5, 0.4, 0.4]))
+	assert_true(WaterFallPlan.cut_ground(bumpy, 1.5).is_empty(), "no rise over 1.5 m: none")
+	var falling := PackedFloat32Array([1.0, 0.8, 0.8, 0.1])
+	assert_true(WaterFallPlan.cut_ground(falling, 0.0).is_empty(), "a falling line: none")
 
 
 func test_a_rise_at_the_map_edge_is_cut_and_the_river_runs_off() -> void:
@@ -525,7 +568,7 @@ func test_cut_banks_stand_sloped_and_uneven_and_leave_other_strokes_alone() -> v
 	assert_eq(with.goals, without.goals, "bit for bit the ordinary carve")
 
 
-func test_a_cut_is_one_history_entry_and_says_so_when_it_lands() -> void:
+func test_a_cut_is_one_history_entry_and_lands_quietly() -> void:
 	for worker in [false, true]:
 		var doc := Cases.world(_walls)
 		var history := AuthoringHistory.new()
@@ -537,7 +580,7 @@ func test_a_cut_is_one_history_entry_and_says_so_when_it_lands() -> void:
 		_settle(editor)
 		assert_gt(id, 0, "carved")
 		assert_signal_emitted(editor.water, "river_hints_landed")
-		assert_true(_kinds(editor.water.last_hints).has(&"cut_through"))
+		assert_false(WaterHints.worth_saying(editor.water.last_hints), "a cut is not said")
 		assert_eq(history.undo_count(), 1, "one entry for the river and its cut")
 		assert_eq(RiverProfile.strokes(doc.water_bodies).size(), 1, "one river")
 		assert_eq(_rise(doc), 0.0)
@@ -682,7 +725,7 @@ func test_refit_document_cleans_the_canonical_map() -> void:
 	assert_eq(int(fit.after.rises), 0, "none after")
 	assert_eq(int(fit.reversed), 0, "a re-fit never turns a stream round")
 	assert_gte(int(fit.cut), 1, "the chains stored rising downstream are cut through instead")
-	assert_true(_kinds(fit.hints).has(&"cut_through"), "and said: %s" % [_kinds(fit.hints)])
+	assert_false(WaterHints.worth_saying(fit.hints), "and not said: %s" % [_kinds(fit.hints)])
 	assert_eq(fit.bodies.size(), doc.water_bodies.size(), "no body added or lost")
 	for i in doc.water_bodies.size():
 		if not doc.water_bodies[i].is_river():

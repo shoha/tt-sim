@@ -51,13 +51,16 @@ const MAX_PIECES := 8
 ## of `report.rest` may ask of the carve and still land (WaterEditor._compute_rest), what one flat
 ## reach spans. A line that is cut through its rises (cut_through, the rule) has no such parts.
 const REST_CUT_M := WaterGeometry.REACH_DROP_M
-## A rise deeper than this cut through by a stroke is said (the hint `cut_through`): where the
-## carve's banks become a cut's (WaterCarve.CUT_FROM_M).
+## A rise deeper than this cut through by a stroke sets `report.cut`: where the carve's banks
+## become a cut's (WaterCarve.CUT_FROM_M).
 const CUT_SAID_M := WaterCarve.CUT_FROM_M
 ## An end is not joined to the water beside it when the joined line would cut this much deeper
 ## through a rise than the line as drawn (plan_river(): a head on a plateau beside a pond at its
 ## foot would dig a canal through the plateau).
 const JOIN_CUT_M := WaterGeometry.REACH_DROP_M
+## plan_on_cut applies over a rise higher than this (the conditioner's dead band).
+const CUT_PLAN_FROM_M := 0.25
+const REACH_DROP := WaterGeometry.REACH_DROP_M
 
 ## The conditioning off switch (card painter-water-condition): plan_river() conditions a stroke
 ## (smooths the course, WaterCourseFit; fits the reach levels, WaterConditioner; joins the ends,
@@ -70,6 +73,10 @@ static var conditioning_enabled: bool = true
 ## On in every build. False brings back the cut limit (cut_limit_m): a plan that would cut deeper
 ## is blocked, and stop_at_rise says what a blocked plan becomes.
 static var cut_through: bool = true
+## With cut_through on, falls and reach boundaries are planned on the ground the cut leaves
+## (WaterFallPlan.cut_ground; card painter-water-cutband, docs/systems/water_field.md): a rise's
+## face is no fall, no riffle crest bar at its foot, no plunge widening. False: as drawn (A/B).
+static var plan_on_cut: bool = true
 ## With cut_through off: the deepest cut into the drawn ground a conditioned plan may ask of the
 ## carve before it is blocked (WaterConditioner.CUT_LIMIT_M); a test or probe may change it.
 static var cut_limit_m: float = 1.5
@@ -175,7 +182,7 @@ static func resample(
 ## water beside it when that would dig through a rise the line does not cross (JOIN_CUT_M).
 ## `report` (filled when given) says what happened: {"conditioned", "max_disp" (metres the course
 ## moved), "max_cut", "rise_cut" (the deepest rise cut through, metres, at "rise_pos"), "cut"
-## (that passes CUT_SAID_M: the hint `cut_through`), "level_moved" (metres a reach level moved),
+## (that passes CUT_SAID_M; not said to the author), "level_moved" (metres a reach level moved),
 ## "blocked" (only with cut_through off), "hints" (WaterHints records)}. Pure: conditioning runs
 ## here once, on the authoring peer; the result is stored in the WaterBody list and never
 ## recomputed.
@@ -251,13 +258,9 @@ static func plan_river(
 			hint.kind = &"perched_head" if at_head else &"end_near_water_below"
 			hint.fixes = [&"carve_fall", &"move_head", &"keep"] as Array[StringName]
 		hints.append(hint)
-	var rise: float = report.get("rise_cut", 0.0)
-	report["cut"] = rise > CUT_SAID_M
-	if rise > CUT_SAID_M:
-		# The line crossed a rise and was cut through it: one river, downhill all the way.
-		var fixes: Array[StringName] = [&"reroute", &"keep"]
-		var where: Vector2 = report.get("rise_pos", points[0])
-		hints.append(load(HINTS_PATH).make(&"cut_through", where, fixes, {"cut_m": rise}))
+	# A line cut through a rise is not said (the owner, 2026-11-22: "The hint is unwanted"); the
+	# report still records it.
+	report["cut"] = float(report.get("rise_cut", 0.0)) > CUT_SAID_M
 	report["hints"] = hints
 	return bodies
 
@@ -520,6 +523,11 @@ static func _plan(
 	var ground_of := func(p: Vector2) -> float: return water_ground_at(doc, p, courses)
 	var step := minf(doc.sample_step().x, doc.sample_step().y)
 	var profile := WaterFallPlan.fine_profile(course, step, ground_of)
+	# Over a rise, falls and reaches are planned on the ground the cut leaves (plan_on_cut).
+	var on_cut := condition and cut_through and plan_on_cut
+	var cut := WaterFallPlan.cut_ground(profile.ground, CUT_PLAN_FROM_M if on_cut else INF)
+	on_cut = not cut.is_empty()
+	profile["ground"] = cut if on_cut else profile.ground
 	var free_ends := Vector2i(
 		0 if WaterGeometry.is_wet_at(doc, course[0]) else 1,
 		0 if WaterGeometry.is_wet_at(doc, course[-1]) else 1
@@ -531,9 +539,8 @@ static func _plan(
 	course = shaped.points
 	widths = shaped.widths
 	ground = shaped.ground
-	var ranges := WaterGeometry.reach_ranges(
-		ground, WaterGeometry.REACH_DROP_M, shaped.forced, shaped.free
-	)
+	var split := WaterFallPlan.cut_ground(ground, -1.0) if on_cut else ground
+	var ranges := WaterGeometry.reach_ranges(split, REACH_DROP, shaped.forced, shaped.free)
 	var fitted := PackedFloat64Array()
 	if condition:
 		# The conditioning probe (WaterConditioner): levels that never climb, reaches pooled
@@ -563,6 +570,10 @@ static func _plan(
 		report["max_cut"] = float(fit.max_cut)
 		report["blocked"] = bool(fit.blocked)
 		report["level_moved"] = 0.0 if fit.blocked else float(fit.moved)
+		if on_cut:
+			# The note `rise_removed` counts the drawn reaches' climb (a cut ground's never climb).
+			var drawn := WaterGeometry.reach_ranges(ground, REACH_DROP, shaped.forced, shaped.free)
+			fit.merge(WaterFallPlan.drawn_rises(ground, drawn), true)
 		report["fit_hints"] = load(HINTS_PATH).plan_hints(course, fit, {}, {})
 	var rivers := 0
 	for body in doc.water_bodies:
