@@ -553,7 +553,10 @@ wall, or under a token's feet, and no trunk or stone was darker where it met the
   a third; a rock's, log's or stump's oriented box rounded by its narrower half, from the scatter's
   instance transforms; a structure's own plan, below), g a CORE (the seam at a trunk's foot, 0.3 m +
   2.5 % of its height, `trunk_seam`; a rock's base 0.22 m, a wall's 0.45 m; card
-  painter-tree-ground halved the trunk's and widened the wall's). Each footprint
+  painter-tree-ground halved the trunk's and widened the wall's). On an authored terrain a tree,
+  like every scatter body, now writes neither into the field: its trunk is a dab site of the
+  trunk's own radius and its crown has no pool (card painter-trunk-contact, "One contact rule for
+  every body" below); a tree's pool and seam above are a GLB map's only. Each footprint
   is a coverage whose 0.5 contour is its nominal edge (`cover`), the texels keep the maximum. The
   painted ground shader reads it with one fetch (a no-op branch when off) and thresholds it through
   its own brush noise, so a pool is a flat stroke-edged shape, not a blur. The pool was the ground's
@@ -576,7 +579,8 @@ wall, or under a token's feet, and no trunk or stone was darker where it met the
   the ground is in shade (the cast shadow, or turned from the sun): what stands on the ground shuts
   out the sky, not the sun, so each shadow is darkest at its root and sunlit ground stays lit.
   `occ-pool` went from 0.42 to 0.85 since it now only deepens shade. The seam keeps 0.6 of its
-  weight in the sun (`SEAM_LIT`), full in the shade; a trunk's seam was halved (a metre-wide seam in
+  weight in the sun (`SEAM_LIT`), full in the shade (on an authored terrain trees have neither pool
+  nor seam since card painter-trunk-contact); a trunk's seam was halved (a metre-wide seam in
   the sun was still a grey plate at zoom 16), a wall's widened to 0.45 m (weak at the walls at zoom
   16 through the yard's wash), and both shaders read the field 0.3 m toward
   the sun (`foliage_sun`, `SEAM_LEAN_M`), so a seam sits more on the side its shadow falls; still
@@ -2950,8 +2954,9 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
   rock of a group and a log get the small stones' mark (the measured foot grown by a sliver, a
   third of the body on the side away from the sun) and write NOTHING into the contact field. A
   boulder of 0.9 m and over used to keep the field's all-round ring (pool and seam, 0.25 m
-  texels: an olive oval round it in sun); that ring is gone. What stays in the field: the pool and
-  seam of trees (crown pool, trunk seam disc), bushes, structures and tokens. `radius()` and
+  texels: an olive oval round it in sun); that ring is gone. What stays in the field on an
+  authored terrain: bushes, structures and tokens (trees left it with card painter-trunk-contact,
+  below: a trunk is a site, a crown has no pool). `radius()` and
   `holds()` (the 0.45 m limit) stay for a GLB map only, which has no heightfield to lay a dab on:
   a larger body there keeps its box (pool, seam, foot height).
   - **A long body** (a log) is told by its sections, not its box (the sawn log lies askew in its
@@ -2983,7 +2988,17 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
     third of a trunk), so the foot is grounded by the trunk's own cast shadow, as a boulder's is.
     Winter's heaped snow at the foot is unchanged. Field bake (44 trees, 5 test views, whole):
     9.2 to 9.5 ms on main, 4.5 to 4.9 ms now (114 marks against 202); dabs 1.0 ms to 1.5 ms (133
-    sites against 89).
+    sites against 89). Verdict captures (round 2, `trunks_main_build.png`, main | build): at zoom
+    16 the forest edge and the orchard read the same; close, main's seam is a translucent grey disc
+    round the foot (in the lit grass, on a slope's flank, and plainly a stain on winter snow) where
+    the build's foot is grounded by its own cast shadow, as a boulder's is. The trunk's mark itself
+    hardly shows: its away third lies inside that shadow. So the mark was left at the rule, not
+    widened. In winter (bare crowns) a tree and a boulder side by side read as one family, both
+    grounded by a blue shadow from the foot; in summer an oak's foot stays under its own low crown
+    even at a 65 degree pitch, and what main adds there is the crown pool's deeper pocket in the
+    crown's shade, which the build no longer has. In-run GPU A/B against main 067a817d, build
+    minus main, twice each: forest +0.005 / 0.000 ms, orchard +0.001 / -0.041 ms, wide +0.010 /
+    +0.006 ms.
   - **Cost** (in-run A/B against main f8dc0562, twice each, measured with the shade line on,
     build minus main): torture wide -0.027 / -0.014 ms, torture edge 0.000 / +0.018 ms, falls
     f1_o -0.025 / -0.016 ms, falls wide -0.016 / -0.024 ms. A whole bake of the field falls from
