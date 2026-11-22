@@ -9,8 +9,9 @@ frozen, and two peers holding the same list derive the same bits.
 
 Phase 1 lands the core beside today's path and changes nothing the game draws or does. Card 1
 (terraform-p1-native) moved the derive from the spike `terraform-s2-cpu` into `native/src`; nothing
-in the game calls it yet. Later phase 1 cards add the stage table, the terrain section of
-`map.ttmap` (format 6), the kind registry, the derived record and `TerraSession` behind a switch.
+in the game calls it yet. Card 2 (terraform-p1-stages) made the chain one loop over a stage table.
+Later phase 1 cards add the terrain section of `map.ttmap` (format 6), the kind registry, the
+derived record and `TerraSession` behind a switch.
 
 ## Files
 
@@ -18,12 +19,14 @@ in the game calls it yet. Later phase 1 cards add the stage table, the terrain s
 |---|---|
 | `native/src/terra_core.h` | `Grid`, `Rect`, `Dirty` (one sub-rect per 64-sample tile), `Prim`, `Line`, resample, Chaikin, block pruning, `reads_hit` |
 | `native/src/terra_math.h` | `det_exp`, `det_log`, `det_pow`, `det_atan`: the only transcendentals the derive uses |
-| `native/src/terra_stages.h` | the stage functions' declarations and the opinionated constants (metres) and halos (samples) |
-| `native/src/terra_kernels.h`, `terra_compose.cpp` | stage 1: the compose kernels (plane, hill, ridge, stroke) in a table |
+| `native/src/terra_stage_table.{h,cpp}` | `STAGES[]` and `ARRAYS[]`: every stage's reads, writes, halo (samples) and reach (metres), the body parameters the halos come from, and `stage_region`; the only place a halo is declared |
+| `native/src/terra_stages.h` | the stage functions' declarations and the water rules' constants (metres) |
+| `native/src/terra_pool.h` | the worker pool a stage splits its tiles over |
+| `native/src/terra_kernels.h`, `terra_compose.cpp` | stages 1 and 1b: the compose kernels (plane, hill, ridge, stroke) in a table, `compose_rect`, `smooth_rect` |
 | `native/src/terra_water.cpp` | stage 2 and 3: river and pond geometry, topology, solves, the carve |
 | `native/src/terra_paths.cpp` | stages 3b and 4: paths and walls (line solves, then per-sample rects), paint coats |
 | `native/src/terra_fields.cpp` | stages 5 and 6: slope, capped distances, the look field, the ground rules |
-| `native/src/terra_derive.{h,cpp}` | the GDCLASS `TerraDerive`: setup, primitives, rules, derive, queries, digests |
+| `native/src/terra_derive.{h,cpp}` | the GDCLASS `TerraDerive`: setup, primitives and their seeds, rules, the stage loop, the three solves and the rect bodies' dispatch, queries, digests |
 | `utils/terraform/terra_core.gd` | `TerraCore`: `native_available()`, `NATIVE_VERSION`, the kind ids, `grid_for(doc)`, `make_derive(doc)`, `load_rules()`, `enabled()` (off) |
 | `utils/terraform/rules/ground_rules.json` | the ground table (12 classes, 11 rows) and the look parameters the Painted cards read |
 
@@ -67,24 +70,40 @@ only the new dabs' bounds.
 ## The stage chain
 
 `derive()` runs the stages over what the pending edits dirtied; `derive_full()` over the whole map.
-A stage's region is the change in its reads, grown by its halo, plus its own seeds; each stage
-snapshots its outputs per tile and diffs them bit for bit (memcmp, so -0 and +0 differ), so the
-next stage sees only real change. Every stage is a per-sample pure function of whole-map inputs
-with a fixed summation order, so a rect gives the same bits as the whole map: update equals build.
+It is one loop over `STAGES[]` (`terra_stage_table.h`), whose rows declare each stage's shape,
+reads, writes and halo; nothing else names a halo. The arrays are inputs (the primitive groups and
+the ground table, changed where the pending edits seeded them), per-sample arrays and one solved
+record (the water levels). A rect stage's region is the change in its per-sample reads grown by its
+halo, plus the change in its input and record reads, plus the seeds its own line solve added. The
+loop snapshots each per-sample write per tile, runs the body and diffs each write bit for bit
+(memcmp, so -0 and +0 differ), so the next stage sees only real change, array by array. A solve
+tests its read points against the change in its per-sample reads, ungrown. Every stage is a
+per-sample pure function of whole-map inputs with a fixed summation order, so a rect gives the
+same bits as the whole map: update equals build. A `static_assert` (`table_ok`) proves the order:
+each read is an input or an earlier stage's write, and each array has one writer.
 
-| # | Stage | Reads | Writes | Halo |
-|---|---|---|---|---|
-| 1 | compose | compose prims | Hraw, SW | 0 (each kind's bounds) |
-| 1b | smooth | Hraw, SW | H0 | `SMOOTH_R` 8 |
-| 2 | water solve | H0 at each body's read points | levels, fall records | exact read hit (`reads_hit`) |
-| 3 | carve | H0, levels | H1, WL | 0; a moved level dirties its arc bbox + `hw + BANK_REACH + 0.5` m |
-| 3b | paths | H1, WL | Hp, PM | 0; a moved profile dirties `hw + 1.7` m |
-| 4 | footprints | Hp, WL | H2, FM, WM | 0; a moved pad dirties `thick + 2` m |
-| 5a | slope | H2 | SL | 1 |
-| 5b | distances | WM, PM, FM | DW, DP, DF | `DIST_HALO` 48 |
-| 5c | look | H2 | HB, CV | `LOOK_WIDE` 14 |
-| 5d | paint | paint prims | PI, PW | 0 |
-| 6 | rules | the fields, the ground table | CT | 0 |
+| # | Stage (`name`) | Shape | Reads | Writes | Halo (samples) |
+|---|---|---|---|---|---|
+| 1 | compose | rect | compose prims | Hraw, SW | 0 (each kind's bounds seed it) |
+| 1b | smooth | rect | Hraw, SW | H0 | `SMOOTH_R` 8 |
+| 2 | water_solve | graph | H0 at each body's read points, water prims | levels | exact read hit (`reads_hit`) |
+| 3 | carve | rect | H0, levels | H1, WL | 0; a moved level marks its arc bbox + `hw + CARVE_REACH_M` (5.5 m) as changed levels |
+| 3b | paths | line + rect | H1, WL, path prims | Hp, PM | 0; a moved profile seeds `hw + PATH_REACH_M` (1.7 m) |
+| 4 | pads (footprints) | line + rect | Hp, WL, wall prims | H2, FM, WM | 0; a moved pad seeds `thick + PAD_REACH_M` (2 m) |
+| 5a | slope | rect | H2 | SL | `SLOPE_R` 1 |
+| 5b | distance | rect | WM, PM, FM | DW, DP, DF | the largest cap, 48 (caps 48 / 24 / 24) |
+| 5c | look | rect | H2 | HB, CV | `LOOK_WIDE` 14 |
+| 5d | paint | rect | paint prims | PI, PW | 0 |
+| 6 | rules | rect | H2 WL SL DW DP DF PW PM PI CV, ground table | CT | 0 |
+
+`derive()` returns `usec` and `work` (tiles run) per stage name, `work.water_solved` (bodies
+solved), and the changed tiles per layer. Card 2 kept every body as it was; the regions follow the
+declared reads, so pads no longer re-run where only H1 or PM changed and rules no longer where only
+H1 or HB did (their bodies never read them), and CT's change is the samples that changed rather
+than the whole tile rect. The golden digests did not move.
+
+A new stage is a row in `STAGES[]` (and an array in `ARRAYS[]` for each new output), a body in
+`TerraDerive::rect_body` or a solve, and nothing in the loop.
 
 H2 is the ground, WL the water level (H1 - 1 where dry), CT four control bytes a sample (base
 class, overlay class, blend, wetness). The worker pool splits a stage by tile; the bits never
@@ -108,12 +127,16 @@ set (null without the library). Then `set_prim(id, kind, floats)`, `append_dabs`
 `derive()` or `derive_full()`, and the queries: `height_at`, `water_at`, `raycast`, `falls()` (7
 floats a record), `walls()`, `water_records()`, `tile_bytes(tile, kind)`, `tile_collision(tile,
 stride)` (heights in metres and their step), `grid()`, `digests()` (FNV-1a of every array and record
-list). C++ stages built on a derive read `derived()`, a view of every array.
+list). C++ stages built on a derive read `derived()`, a view of every array. For tests and this
+doc: `stages()` (the table: name, shape, reads, writes, halo, reach_m), `arrays()` (name, kind,
+bytes a sample), `array_bytes(name)` (a per-sample array's whole-map bytes) and
+`debug_set_sample(name, i, j, value, dirty_all)` (sets one sample outside the chain and marks it,
+or the whole array, changed for the next `derive()`).
 
 ## Versions and the library
 
-`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 1 core`; later cards step it
-("terra 2 stages", "terra 3 kinds", "terra 4 cache"). The scatter library's string carries `terra`
+`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 2 stages`; later cards step it
+("terra 3 kinds", "terra 4 cache"), and the golden fixture's `version` follows it. The scatter library's string carries `terra`
 (`ttscatter 10 curves water chunk fields wfield2 terra`), so a stale DLL fails
 `test_scatter_native`. After pulling a change here, rebuild `native/` (AGENTS.md "Testing").
 Without the library every terra test is pending with "the native library is not built", which CI
@@ -127,6 +150,7 @@ treats as a failure.
 | `test_terra_determinism.gd` | two runs of one instance, serial against 1 and 8 workers, two instances deriving at once |
 | `test_terra_water_laws.gd` | no level climbs downstream, the tributary joins and falls, the wall opens at the river, the pond holds water |
 | `test_terra_golden.gd` | `version()`, and the corpus on a 40 x 40 and a 40 x 48 cell map against `tests/fixtures/terra_corpus_digests.json` |
+| `test_terra_stage_table.gd` | the table's order (each read an input or an earlier write, one writer per array); halo honesty: one H2 sample (then one FM sample) of a built map set outside the chain, every downstream stage re-run over the whole map, and each array changes only within the reach the table declares from it (the halos summed along the way), with the incremental derive giving the same bytes. A halo one sample short fails it (checked 2026-11-22 with the look row at 13) |
 
 `tests/unit/terra_corpus.gd` (`TerraCorpus`) is the spike's test scene placed on a map document's
 frame. `.github/native/parity.sh` runs `test_terra_golden` on every platform CI builds, debug and

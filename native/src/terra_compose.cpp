@@ -3,8 +3,49 @@
 // a weight the smooth pass reads), so a dab only changes the samples under it. Positions are in the
 // map document's centred frame (terra_core.h Grid); a plane's base is its height at the map centre.
 #include "terra_kernels.h"
+#include "terra_stages.h"
 
 namespace terra {
+
+void compose_rect(const std::vector<const Prim *> &prims, const std::vector<const ComposeKernel *> &kinds,
+		const std::vector<Rect> &bounds, const Grid &g, const Rect &r, float *Hraw, float *SW) {
+	for (int j = r.y0; j < r.y1; j++) {
+		for (int i = r.x0; i < r.x1; i++) {
+			Hraw[int64_t(j) * g.w + i] = 0.0f;
+			SW[int64_t(j) * g.w + i] = 0.0f;
+		}
+	}
+	for (size_t k = 0; k < prims.size(); k++) {
+		Rect b = bounds[k].inter(r);
+		if (!b.empty()) {
+			kinds[k]->apply(*prims[k], g, b, Hraw, SW);
+		}
+	}
+}
+
+void smooth_rect(const Grid &g, const Rect &r, const float *Hraw, const float *SW, float *H0) {
+	for (int j = r.y0; j < r.y1; j++) {
+		for (int i = r.x0; i < r.x1; i++) {
+			int64_t o = int64_t(j) * g.w + i;
+			float sw = SW[o];
+			if (sw <= 0.0f) {
+				H0[o] = Hraw[o];
+				continue;
+			}
+			int ja = std::max(0, j - SMOOTH_R), jb = std::min(g.h - 1, j + SMOOTH_R);
+			int ia = std::max(0, i - SMOOTH_R), ib = std::min(g.w - 1, i + SMOOTH_R);
+			double s = 0.0;
+			for (int y = ja; y <= jb; y++) {
+				for (int x = ia; x <= ib; x++) {
+					s += Hraw[int64_t(y) * g.w + x];
+				}
+			}
+			double mean = s / double((jb - ja + 1) * (ib - ia + 1));
+			double w = std::min(double(sw), 1.0);
+			H0[o] = float(Hraw[o] + (mean - Hraw[o]) * w);
+		}
+	}
+}
 
 bool dab_bounds(const Prim &p, int stride, double &x0, double &z0, double &x1, double &z1) {
 	x0 = z0 = 1e30;
