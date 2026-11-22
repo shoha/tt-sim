@@ -440,6 +440,19 @@ func finish_work() -> void:
 	_at_once = false
 
 
+## The landing of water another writer already put into the document (TerraBridge, the core's
+## derived bodies and pond mask; card terraform-p2-bridge-water): _land(), _settle() and _finish()
+## without the plan and the carve (the height editor lands the bridge's heights). The dressing and
+## owners are computed as an edit's, then the surface, the ground's layers, the wet rocks over
+## `rect` (document samples), the followers and the regrowth. Nothing is recorded: `record` (the
+## caller's gesture entry; "water_before" set by the caller) gets _finish()'s keys, "bytes" and
+## "landed" true as the landing finishes, perhaps frames later.
+func land_external(rect: Rect2i, record: Dictionary) -> void:
+	finish_work()
+	var spec := {"kind": "external", "label": "", "region": rect, "record": record}
+	_start(spec, record.get("water_before", {}))
+
+
 ## Waits for a computing edit and drops it, landed or not (the map is closing).
 func release() -> void:
 	if not _job.is_empty() and int(_job.task) >= 0:
@@ -751,6 +764,9 @@ func _land() -> void:
 		"erase":
 			doc.water_bodies = result.bodies
 			region = _sample_rect_of(spec.area)
+		"external":
+			# The bridge wrote the water and the heights (land_external).
+			region = spec.region
 		"refit":
 			doc.water_bodies = result.bodies
 			last_hints = result.hints
@@ -838,8 +854,8 @@ func _finish(
 	var started_props := e.heights.props_started()
 	for cell in started_props:
 		record.props_before[cell] = (started_props[cell] as Dictionary).duplicate(true)
-	var keep := _wet_rock_rule(job.result.owners)
-	_drop_wet_rocks(region, keep, record)
+	var keep := WaterWetRocks.rule(e, job.result.owners)
+	WaterWetRocks.drop(e, region, keep, record)
 	var props_bytes := 0
 	for cell in record.props_before:
 		record.props_after[cell] = e.props.cell_rows(cell).duplicate(true)
@@ -860,6 +876,14 @@ func _finish(
 	bytes += WaterEdit.model_bytes(before) + WaterEdit.model_bytes(after)
 	bytes += (record.dressing_before.data as PackedByteArray).size()
 	bytes += (record.dressing_after.data as PackedByteArray).size()
+	if job.spec.has("record"):
+		# An external landing (land_external): the caller's gesture entry holds the record.
+		var target: Dictionary = job.spec.record
+		target.merge(record, true)
+		target["bytes"] = bytes
+		target["landed"] = true
+		e.edited.emit()
+		return
 	(
 		e
 		. history
@@ -921,71 +945,6 @@ func _land_edit(record: Dictionary, redo: bool) -> void:
 	if is_instance_valid(e.map_root):
 		AuthoredWater.refresh_map(e.map_root, doc)
 	e.heights.regenerate(record.region)
-
-
-## WaterCarve.keeps_rock() for the document's water as it is now, as Callable(asset id,
-## row) -> bool: the level and channel width at the row's sample (its owning body, `owners`:
-## WaterMeshBuilder.sample_owners of the document after the edit).
-func _wet_rock_rule(owners: PackedInt32Array) -> Callable:
-	var doc := _editor().document
-	var root := _editor().palette_root
-	return func(asset_id: String, row: PackedFloat32Array) -> bool:
-		var p := Vector2(row[0], row[2])
-		var s := doc.world_to_sample(p).round()
-		var x := clampi(int(s.x), 0, doc.samples_x() - 1)
-		var z := clampi(int(s.y), 0, doc.samples_z() - 1)
-		var at := doc.sample_index(x, z)
-		var owner := owners[at] if at < owners.size() else -1
-		if owner < 0 or owner >= doc.water_bodies.size():
-			return true
-		var body := doc.water_bodies[owner]
-		var channel := 0.0
-		if body.is_river():
-			var course := WaterGeometry.river_course(body)
-			var near := WaterGeometry.nearest_on_polyline(course[0], p)
-			if near.y >= 0:
-				channel = 2.0 * WaterGeometry.width_at(course[1], int(near.y), near.z)
-		var size: Variant = PaletteLibrary.asset(asset_id, root).get("dimensions_m")
-		var tall: float = (size as Vector3).y if size is Vector3 else 0.5
-		var radius := RockKeep.footprint_radius(asset_id, root)
-		return WaterCarve.keeps_rock(row, tall, radius, body.level_m, channel)
-
-
-## Removes the rock props of the cells over `region` (samples) that `keep` refuses (they
-## shrink away), recording each changed cell's rows before in `record.props_before` (unless
-## a snap already did).
-func _drop_wet_rocks(region: Rect2i, keep: Callable, record: Dictionary) -> void:
-	var e := _editor()
-	if not is_instance_valid(e.props) or not region.has_area():
-		return
-	var rock_rules := {}
-	var world := MaskBrush.sample_rect_to_world(e.document, region)
-	for cell in ScatterGenerator.cells_in_bounds(world):
-		var rows: Dictionary = e.props.cell_rows(cell).duplicate(true)
-		var changed := false
-		for asset_id: String in rows.keys():
-			if not rock_rules.has(asset_id):
-				rock_rules[asset_id] = RockKeep.is_rock(e.rule_for_asset(asset_id))
-			if not rock_rules[asset_id]:
-				continue
-			var flat: PackedFloat32Array = rows[asset_id]
-			var kept := PackedFloat32Array()
-			@warning_ignore("integer_division")
-			for r in flat.size() / MapDocument.ROW_STRIDE:
-				var row := PropRows.row_at(flat, r)
-				if keep.call(asset_id, row):
-					kept.append_array(row)
-			if kept.size() != flat.size():
-				changed = true
-				if kept.is_empty():
-					rows.erase(asset_id)
-				else:
-					rows[asset_id] = kept
-		if not changed:
-			continue
-		if not record.props_before.has(cell):
-			record.props_before[cell] = e.props.cell_rows(cell).duplicate(true)
-		e.props.set_cells({cell: rows}, true)
 
 
 ## The sample rectangle covering map rectangle `area` (clipped to the grid).
