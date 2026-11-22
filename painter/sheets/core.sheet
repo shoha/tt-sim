@@ -54,9 +54,10 @@
 
   /* The plants: the N.L where the shade, middle and lit steps meet; grass kept at 60 % and
      flowers at 80 % in groups of a slow world noise (1/m; painter-flowers: at 40 % a flowery
-     meadow read empty), a drift of blooms stepped lighter or darker by a slower one. */
+     meadow read empty), a drift of blooms stepped lighter or darker by a slower one. The fallen
+     leaves and twigs (the litter scatter) all kept, but under winter's snow (keep-litter). */
   tone-lo: -0.08;  tone-hi: 0.48;
-  keep-grass: 0.6;  keep-flower: 0.8;  keep-freq-grass: 0.12;  keep-freq-flower: 0.15;
+  keep-grass: 0.6;  keep-flower: 0.8;  keep-litter: 1;  keep-freq-grass: 0.12;  keep-freq-flower: 0.15;
   flower-mix: 0.09;
   /* The flowers' painted marks (painter_flower_marks.gdshaderinc, card painter-flower-marks): each
      head one view-facing six-petal rosette flower-head metres wide (never under flower-floor
@@ -462,7 +463,10 @@
      green (painter-a2a3: phase 1 keeps the leaves, and the spike's grey-violet bare-crown tone
      read as lavender trees). Grass and flowers stand as dry stalks over the snow. */
   :world {
-    floor: oklch(0.82 0.030 255);  shore: oklch(0.72 0.025 250);
+    /* The forest floor is snow too, a step under the open snow (thinner under the crowns), a clean
+       cool white (card painter-winter-ground: at 0.82 0.030 255 most of a forest map read as a
+       grey-lavender, the ground shader paints the sheet's tone as it is). */
+    floor: oklch(0.90 0.024 240);  shore: oklch(0.72 0.025 250);
     /* Snow bases: the seam is the snow's own blue shade, no soil, no green lean. */
     occ-soil: 0;  occ-cool: 0;  occ-dark: 0.84;  occ-shade: 0.85;
     /* Grass and flowers as dry straw over the snow (painter-trees-fix2: a pale straw under the full
@@ -473,7 +477,12 @@
        fix3): a russet and a pale straw, so a tuft's dabs are never one tan. */
     grass: oklch(0.67 0.062 72);  grass-lit-lift: 0.08;  grass-shade-keep: 1.8;
     grass-hue-spread: 22;  grass-value-spread: 0.06;
-    keep-grass: 0.45;  keep-flower: 0.25;  field-snow: 0.75;
+    keep-grass: 0.15;  keep-flower: 0.25;  field-snow: 0.75;
+    /* The snow buries what lies on the ground (card painter-winter-ground: brown leaves lay on the
+       fresh snow like scattered dirt): no litter scatter, no fallen-leaf marks on the floor, and only
+       a few groups of straw stand above it (keep-grass was 0.45: seen from above, its marks read as
+       brown curls strewn over the snow). */
+    keep-litter: 0;  litter-marks: 0;
     drift: oklch(0.95 0.015 240);  litter: oklch(0.62 0.040 60);
     flower-gold: oklch(0.74 0.060 85);  flower-rose: oklch(0.62 0.060 20);
     flower-violet: oklch(0.58 0.050 300);  flower-white: oklch(0.95 0.015 240);
@@ -520,15 +529,17 @@
     sky: oklch(0.84 0.030 240);  horizon: oklch(0.94 0.022 235);
     ambient: oklch(0.90 0.025 255);  ambient-energy: 0.6;
     haze: oklch(0.93 0.020 262);
-    ground: oklch(0.88 0.040 250);  leaf: oklch(0.67 0.066 154);  bark: oklch(0.42 0.045 50);
+    ground: oklch(0.93 0.026 240);  leaf: oklch(0.67 0.066 154);  bark: oklch(0.42 0.045 50);
     stone: oklch(0.62 0.015 250);  path: oklch(0.80 0.030 248);
-    /* The snow's ground block (painter-look-winter; the prototype's S19: a periwinkle white, soft
-       blue-lavender shade). The default lit pull (0.45 toward the sun's hue 95) carried the blue
-       ground through green to a mint (the short way round the hue wheel), so the daylight snow takes
-       no pull and a small lift, a wider hue spread (the lit variants run sky blue to lavender in
-       patches), and a lighter, less electric shade. The low key keeps the :world values (the rose
-       lit step of a low sun is unchanged). Also the ramp of the snow on plants and roofs (drift). */
-    ground-lit-pull: 0;  ground-lit-lift: 0.03;  ground-hue-spread: 13;  ground-value-spread: 0.022;
+    /* The snow's ground block (painter-look-winter; the prototype's S19). The default lit pull (0.45
+       toward the sun's hue 95) carried the blue ground through green to a mint (the short way round
+       the hue wheel), so the daylight snow takes no pull and a small lift, and a lighter, less
+       electric shade. Card painter-winter-ground: the periwinkle white (0.88 0.040 250, its lit
+       variants spread 13 degrees to a lavender 263) read grey-lavender, so the snow is a luminous
+       cool white (lit 0.96) whose variants stay sky blue (spread 7) and whose shade is a clean blue.
+       The low key keeps the :world values (the rose lit step of a low sun is unchanged). Also the
+       ramp of the snow on plants and roofs (drift). */
+    ground-lit-pull: 0;  ground-lit-lift: 0.03;  ground-hue-spread: 7;  ground-value-spread: 0.022;
     ground-shade-pull: 0.55;  ground-shade-depth: 0.86;
     roof-clay: oklch(0.52 0.110 36);  roof-slate: oklch(0.50 0.030 255);  roof-shingle: oklch(0.48 0.050 45);
     roof-turf: oklch(0.60 0.060 140);  roof-thatch: oklch(0.66 0.060 85);

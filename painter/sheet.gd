@@ -90,7 +90,8 @@ const DEFAULT_ROLES: Array[String] = [
 ## Numbers a keyframe may leave to a `:world` default. The tone ramp (PainterTones.ramp: how a
 ## role's shade and lit colours are drawn from it, the ground's own ramp under `ground-`), the
 ## plants' light steps (tone-lo, tone-hi, N.L thresholds), the thinning of grass and flowers in
-## groups (keep-*: the share kept, keep-freq-*: 1/m of the world noise that groups them), the
+## groups (keep-*: the share kept, keep-freq-*: 1/m of the world noise that groups them; keep-litter
+## the fallen leaves' and twigs' share, 0 under winter's snow, grouped by the grass's noise), the
 ## camera pitch in degrees below which a meadow tuft keeps its cards rather than its painted mark
 ## (grass-mark-pitch, PainterGrassMarks: 0 marks at every pitch), the
 ## flowers' value drifts (flower-mix, 1/m), the flowers' painted marks
@@ -180,6 +181,7 @@ const DEFAULT_NUMBERS: Array[String] = [
 	"tone-hi",
 	"keep-grass",
 	"keep-flower",
+	"keep-litter",
 	"keep-freq-grass",
 	"keep-freq-flower",
 	"grass-mark-pitch",

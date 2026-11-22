@@ -86,6 +86,11 @@ uniform vec4 sw_k = vec4(1.0, 0.0, 0.0, 1.0);
 uniform vec4 sw_seed = vec4(0.0);
 // A stone's seam: how much darker the gap between cobbles, plates, tiles and boards is.
 const float SEAM_DARK = 0.38;
+// A path under snow (path_dust): the trodden track's packed snow, the ground's snow times these
+// (linear: darker and bluer), and the glimpse noise's level above which its earth shows through.
+const vec3 TROUGH_LIT = vec3(0.68, 0.77, 0.92);
+const vec3 TROUGH_SHD = vec3(0.80, 0.86, 0.95);
+const float EARTH_AT = 0.67;
 // The strata bands' height (m) on a cliff face.
 const float STRATA_H = 0.6;
 // The terminator (light()): ground facing the sun under this share of what level ground does is
@@ -591,13 +596,23 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float
 		lit = mix(mix(lit, mix(sw_lit[0], sw_lit[1], v), gold), mix(sw_lit[2], sw_lit[3], v), moss);
 		shd = mix(mix(shd, mix(sw_shd[0], sw_shd[1], v), gold), mix(sw_shd[2], sw_shd[3], v), moss);
 	}
-	// Under snow a path's edge beside the snowy meadow or floor is dusted white, in two steps (a
-	// stone's hash moves the line, so it follows the stones).
+	// Under snow a path is a trodden track (card painter-winter-ground; the whole band in the snow's
+	// tone erased it): packed snow, the snow of the ground it crosses a step darker and bluer
+	// (TROUGH_LIT, TROUGH_SHD), with the slot's earth or stones (PainterGroundPaths.earth) showing in
+	// a few soft glimpses along its middle, where a slow noise and the band's depth are high (a mark
+	// takes it at its middle, so a glimpse is whole strokes). Its edge beside the snowy meadow or
+	// floor is dusted white, in two steps (a stone's hash moves the line, so it follows the stones).
 	if (role == 2 && path_dust > 0.0 && under <= 1) {
+		vec3 snow_lit = role_col(true, under, variant);
+		vec3 snow_shd = role_col(false, under, variant);
+		float g = p_noise(p * vec3(0.55, 1.0, 0.55) + 91.0) + (pv - 1.0) * 0.4 + j * 0.3;
+		float bare = step(EARTH_AT, g);
+		lit = mix(snow_lit * TROUGH_LIT, lit, bare);
+		shd = mix(snow_shd * TROUGH_SHD, shd, bare);
 		float e = (pv - 0.46 + (pat.z - 0.5) * 0.1) / (0.25 * path_dust);
 		float dust = floor((1.0 - smoothstep(0.35, 1.0, e)) * 2.0 + 0.5) * 0.42;
-		lit = mix(lit, role_col(true, under, variant), dust);
-		shd = mix(shd, role_col(false, under, variant), dust);
+		lit = mix(lit, snow_lit, dust);
+		shd = mix(shd, snow_shd, dust);
 	}
 	lit = mix(lit, lit * vec3(1.45, 0.78, 0.4), scorch_rim * 0.65);
 	shd = mix(shd, shd * vec3(1.35, 0.8, 0.5), scorch_rim * 0.65);
