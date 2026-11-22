@@ -227,6 +227,11 @@ var mass_anchors: Dictionary[String, PackedFloat32Array] = {}
 ## script graph (test_boot_graph.gd) does not compile the terraform scripts: cast it
 ## (`doc.terra as TerraDoc`) where it is used.
 var terra: RefCounted = null
+## A terrain section this build refused on read (made by a newer version, or damaged), kept as
+## read: {entry name: its bytes}, terrain/prims.bin and terrain/derived.bin when present; empty
+## otherwise. While `terra` is null a save writes these bytes back untouched in format 6, so
+## opening and saving a map never drops its terrain silently (MapTerrainIO.serialize).
+var terra_kept: Dictionary = {}
 ## Derived, never saved: the wet dressing field (WaterDressing.compute(), RGBA8 per sample:
 ## bed, shore, depth) of the current heights and water, kept here so scatter jobs and the
 ## ground read one copy. Empty when there is no wet sample. Whoever changes the water or the

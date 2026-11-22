@@ -40,6 +40,11 @@ var pond_ids: Dictionary = {}
 ## document's object lists. A document that breaks a rule comes back with `error` set.
 static func capture(doc: MapDocument) -> MapDocumentSnapshot:
 	var snap := MapDocumentSnapshot.new()
+	# An attached terrain session (TerraSession) refreshes the derived record first, so the save
+	# writes the record of the derive it holds (or drops a stale one: MapTerrainIO.serialize).
+	var terra: Variant = doc.terra
+	if terra != null and (terra.before_save as Callable).is_valid():
+		(terra.before_save as Callable).call()
 	snap.error = MapDocumentIO.capture_problem(doc)
 	if snap.error != "":
 		return snap
@@ -89,6 +94,7 @@ static func copy_document(doc: MapDocument) -> MapDocument:
 	# A TerraDoc, untyped here so the start-up graph does not compile it (MapDocument.terra).
 	var terra: Variant = doc.terra
 	copy.terra = terra.duplicate() if terra != null else null
+	copy.terra_kept = doc.terra_kept.duplicate()
 	return copy
 
 
@@ -118,7 +124,7 @@ func encode() -> Dictionary:
 	if MapDocumentIO.has_fire(doc.fire_mask):
 		out[MapDocumentIO.FIRE_ENTRY] = MapDocumentIO._png(doc.fire_mask, doc, Image.FORMAT_L8)
 	MapAnchorsIO.serialize(doc, out)
-	if doc.terra != null:
+	if doc.terra != null or not doc.terra_kept.is_empty():
 		MapDocumentIO.terrain_io().serialize(doc, out)
 	error = _caps_problem(out)
 	if error != "":

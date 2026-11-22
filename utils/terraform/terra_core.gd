@@ -13,11 +13,14 @@ extends RefCounted
 ## the document's n, corner-aligned and centred, so every second derive sample is a document
 ## sample. Primitive positions are world metres in that frame (the origin is the map centre).
 ##
-## Phase 1: nothing in the game calls the core yet. The switch that attaches it to a loaded map
-## (enabled()) reads off until the session card adds its project setting.
+## Phase 1: the core runs in the game only behind its switch (enabled(): the project setting
+## SWITCH_SETTING, default off), and then only as a TerraSession on a map that has a terrain
+## section; nothing reads the session yet (docs/systems/terraform.md "The session").
 
 ## The native class's name, for ClassDB only.
 const CLASS_NAME := "TerraDerive"
+## The project setting that turns the core on for loaded maps (default false).
+const SWITCH_SETTING := "tt_sim/terrain/core"
 ## What TerraDerive.version() must return; a library built from older sources fails the tests.
 const NATIVE_VERSION := "terra 4 cache"
 ## The ground rule table (rows of [field, lo, hi, soft] terms, later rows over earlier ones).
@@ -49,6 +52,12 @@ const PATH := 6
 const WALL := 7
 const PAINT := 8
 
+## The tests' override of the switch: null reads SWITCH_SETTING, true or false forces it.
+static var switch_override: Variant = null
+## TerraDerive instances made by make_derive_grid() since start-up (tests: the switch-off
+## contract is that a load makes none).
+static var derives_made := 0
+
 
 ## True when the native library holds TerraDerive at this version.
 static func native_available() -> bool:
@@ -58,10 +67,12 @@ static func native_available() -> bool:
 	return probe.call("version") == NATIVE_VERSION
 
 
-## The switch that attaches the core to a loaded map. Off: phase 1 adds the core beside today's
-## path, and the session card adds the project setting that turns it on.
+## The switch that attaches the core to a loaded map (MapSourceLoader.add_terra_session): the
+## project setting SWITCH_SETTING, default false, unless a test set switch_override.
 static func enabled() -> bool:
-	return false
+	if switch_override is bool:
+		return switch_override
+	return bool(ProjectSettings.get_setting(SWITCH_SETTING, false))
 
 
 ## The derive grid of a map document: {"size": Vector2i samples per axis, "extent": Vector2
@@ -83,6 +94,7 @@ static func make_derive_grid(size: Vector2i, extent: Vector2) -> RefCounted:
 	if not native_available():
 		return null
 	var n: RefCounted = ClassDB.instantiate(CLASS_NAME)
+	derives_made += 1
 	n.call("setup", size.x, size.y, extent)
 	n.call("set_rules", load_rules())
 	return n

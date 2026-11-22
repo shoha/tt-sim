@@ -40,6 +40,9 @@ const AUTHORED_MAP_LIGHTING := {
 const SCATTER_NODE := "AuthoredScatter"
 ## The AuthoredScatter holding hand-placed props, when separate_props is on.
 const PROPS_NODE := "AuthoredProps"
+## The terraforming core's switch and session scripts (add_terra_session), by path.
+const TERRA_CORE := "res://utils/terraform/terra_core.gd"
+const TERRA_SESSION := "res://utils/terraform/terra_session.gd"
 
 ## False starts a load's ground-layer prebake where the terrain is built (as card sysbake did)
 ## instead of as soon as the document is read, and a new map's at the build instead of before its
@@ -338,6 +341,25 @@ static func add_fire_field(root: Node3D, doc: MapDocument) -> FireField:
 	return field
 
 
+## Adds a TerraSession (the terraforming core on this map; docs/systems/terraform.md "The
+## session") to a map root and attaches it to `doc`, only when the switch is on
+## (TerraCore.enabled(), the project setting tt_sim/terrain/core, default off), the document has
+## a terrain section and the native library is built. Returns the node or null. With the switch
+## off nothing of the core runs: a map without a section never even loads its scripts, which are
+## found by path (TERRA_CORE, TERRA_SESSION) to keep them out of the start-up script graph.
+static func add_terra_session(root: Node3D, doc: MapDocument) -> Node:
+	if doc == null or doc.terra == null:
+		return null
+	var core: GDScript = load(TERRA_CORE)
+	if not core.call("enabled") or not core.call("native_available"):
+		return null
+	var session: Node = (load(TERRA_SESSION) as GDScript).new()
+	session.name = "TerraSession"
+	root.add_child(session)
+	session.call("attach", doc)
+	return session
+
+
 static func authored_root_shell() -> Node3D:
 	var root := Node3D.new()
 	root.name = "LevelMap"
@@ -406,6 +428,9 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	# again by the prep (AuthoredLoadPrep.FLOW); the water's nodes and the painter read it.
 	WaterFlowBaker.store(doc, prepared.get(AuthoredLoadPrep.FLOW, {}))
 	var root := authored_root_shell()
+	# Behind its switch: the terraforming core's full derive runs on a worker while the chunks
+	# build below.
+	add_terra_session(root, doc)
 	var terrain := AuthoredTerrain.create(doc, PaletteLibrary.DEFAULT_ROOT, false, prepared)
 	_prepared_water = prepared.get(AuthoredLoadPrep.WATER, {})
 	root.add_child(terrain)
