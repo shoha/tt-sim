@@ -127,6 +127,7 @@ const LAYOUT_MANNER: Array[int] = [
 	Mesh.ARRAY_COLOR,
 	Mesh.ARRAY_TEX_UV2,
 	Mesh.ARRAY_CUSTOM0,
+	Mesh.ARRAY_CUSTOM1,
 	Mesh.ARRAY_INDEX
 ]
 ## The falls' mesh (WaterFallMesh: curtain, ring and mist in one surface) and the authored water
@@ -150,8 +151,12 @@ const LAYOUT_WATER: Array[int] = [
 	Mesh.ARRAY_CUSTOM1,
 	Mesh.ARRAY_INDEX
 ]
-## What the manner meshes carry in CUSTOM0 (PainterMannerMesh.FORMAT).
-const MANNER_FLAGS := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
+## What the manner meshes carry in CUSTOM0 and CUSTOM1 (PainterMannerMesh.FORMAT: CUSTOM1 one float,
+## the ledge width).
+const MANNER_FLAGS := (
+	(Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT)
+	| (Mesh.ARRAY_CUSTOM_R_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
+)
 ## What the dabs carry in CUSTOM3 (PainterDabs.FORMAT).
 const DAB_FLAGS := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM3_SHIFT
 ## What the water surface and the falls carry in CUSTOM0 and CUSTOM1 (WaterFallFrames.FORMAT).
@@ -319,8 +324,10 @@ static func release() -> void:
 	_kept.clear()
 
 
-## The tiny triangle with a layout's slots filled: `slots` are Mesh.ARRAY_* indices.
-static func triangle(slots: Array[int]) -> Array:
+## The tiny triangle with a layout's slots filled: `slots` are Mesh.ARRAY_* indices, `flags` the
+## surface's format flags (a CUSTOM1 of one float, MANNER_FLAGS, takes three floats; every other
+## custom slot four a vertex).
+static func triangle(slots: Array[int], flags: int = 0) -> Array:
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
 	var three := PackedVector3Array([Vector3.ZERO, Vector3.RIGHT, Vector3.FORWARD])
@@ -335,6 +342,11 @@ static func triangle(slots: Array[int]) -> Array:
 				arrays[slot] = PackedColorArray([Color.WHITE, Color.WHITE, Color.WHITE])
 			Mesh.ARRAY_TEX_UV, Mesh.ARRAY_TEX_UV2:
 				arrays[slot] = uv
+			Mesh.ARRAY_CUSTOM1 when (
+				(flags >> Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT) & Mesh.ARRAY_FORMAT_CUSTOM_MASK
+				== Mesh.ARRAY_CUSTOM_R_FLOAT
+			):
+				arrays[slot] = PackedFloat32Array([0.0, 0.0, 0.0])
 			Mesh.ARRAY_CUSTOM0, Mesh.ARRAY_CUSTOM1, Mesh.ARRAY_CUSTOM3:
 				arrays[slot] = PackedFloat32Array([0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0])
 			Mesh.ARRAY_INDEX:
@@ -369,9 +381,9 @@ static func collect(bare: bool) -> Array[Dictionary]:
 	_add(samples, "tree_blockin_fast", TREE_BLOCKIN_FAST, LAYOUT_TREE, 0)
 	_add(samples, "tree_stroke_burn", TREE_STROKE_BURN, LAYOUT_TREE, 0)
 	_add(samples, "tree_blockin_burn", TREE_BLOCKIN_BURN, LAYOUT_TREE, 0)
-	_add(samples, "structure", STRUCTURE, LAYOUT_LIT, 0)
-	# A street row's wood carries its house flags in UV2 (WallGeometry.house_flags).
-	_add(samples, "structure_row_wood", STRUCTURE, LAYOUT_GLOW, 0)
+	# Every structure surface carries UV2 (StructureGeometry.with_ledges: the ledge widths, and a
+	# street row's house flags, WallGeometry.house_flags): the glow's layout.
+	_add(samples, "structure", STRUCTURE, LAYOUT_GLOW, 0)
 	_add(samples, "ivy_contact", IVY_CONTACT, LAYOUT_LIT, 0)
 	_add(samples, "yard", YARD, LAYOUT_YARD, 0)
 	_add(samples, "yard_ground", YARD_GROUND, LAYOUT_YARD, 0)
@@ -391,7 +403,7 @@ static func _add(
 		{
 			"name": sample_name,
 			"primitive": Mesh.PRIMITIVE_TRIANGLES,
-			"arrays": triangle(layout),
+			"arrays": triangle(layout, flags),
 			"material": GraphicsWarmup.material_for(load(path) as Shader),
 			"multimesh": false,
 			"flags": flags,

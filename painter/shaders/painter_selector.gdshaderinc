@@ -57,9 +57,10 @@ uniform float base_dark = 0.0;
 // The mesh's half size in its own units (PainterSurfaces sets it from its AABB): a tuft's rim
 // reads it.
 uniform vec3 selector_extent = vec3(0.5);
-// Snow on the plants (the sheet's crown-deposit, 0 but in winter): the share of a plant's up side
-// (a tuft's top) under snow, and the snow's lit and shaded colours (the drift role on the ground's
-// ramp, LINEAR), so a plant's snow is the snow it stands in.
+// Snow on the plants (the sheet's crown-deposit, 0 but in winter): above 0 the snow law is on for
+// leaf masses, bushes, ivy, rocks and logs (snow_on), and its amount is the share of a tuft's top
+// under snow (tuft_dab's bury line and caps); and the snow's lit and shaded colours (the drift role
+// on the ground's ramp, LINEAR), so a plant's snow is the snow it stands in.
 uniform float frost = 0.0;
 uniform vec3 c_frost_lit = vec3(0.9);
 uniform vec3 c_frost_shd = vec3(0.5);
@@ -246,7 +247,7 @@ vec4 tuft_dab(vec2 uv, vec2 card) {
 			// A dab's cap: a crescent over its top (the body's texels sit below every line).
 			float top = sqrt(max(1.0 - own.z * own.z, 0.0));
 			float line = top * (1.0 - TUFT_CAP * frost);
-			snow = own.y > line ? (own.y > line + 0.15 * top ? 1.0 : 0.75) : 0.0;
+			snow = own.y > line ? (own.y > line + 0.15 * top ? 1.0 : -1.0) : 0.0;
 		} else {
 			float s2 = fract(p.x * 1.43 + card.y);
 			snow = p.y > 1.0 - 0.3 * frost + 0.64 * s2 * (1.0 - s2) - 0.08 ? 1.0 : 0.0;
@@ -329,10 +330,17 @@ vec4 ivy_dab(vec2 q) {
 	return vec4(best, best_h);
 }
 
-// Whether snow lies on a plant point whose lit normal's up part is `up` (a bush's lobe, a rock's
-// face): the crowns' frost law (painter_tree_blockin's deposit), patchy by a world noise.
-bool frost_up(float up, vec3 wp) {
-	return frost * smoothstep(0.1, 0.55, up) > 0.3 + 0.35 * p_noise(wp * 0.6 + 3.0);
+// Snow on a plant or solid point whose lit normal is `n` (a leaf mass's form, a bush's lobe, a
+// rock's or a log's form, an ivy dab) at world point `wp`: the snow law (card snow-one-law; it
+// replaced frost_up, the crowns' binary frost line), so a boulder's cap and a bush's agree with a
+// roof's and a bench's. The snow is on wherever the sheet's frost is (`frost`, winter). The cover,
+// 0 to 1, soft at its edge, and negative where it lies on the law's rim (the cap's own edge and a
+// rounded form's shoulder: light() keeps it part way to the shade, as a tuft cap's lower rim).
+#include "res://painter/shaders/painter_snow_law.gdshaderinc"
+
+float snow_on(vec3 n, vec3 wp) {
+	vec4 law = snow_law(frost > 0.0 ? 1.0 : 0.0, n.y, wp, n, SNOW_NO_TOP, 0.0);
+	return law.z > 0.5 ? -law.x : law.x;
 }
 
 // The per-fragment choices light() reads: the normal it lights, the variant, the height shading,
@@ -353,7 +361,7 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 		vec3 mid = origin + vec3(0.0, 0.45 * selector_height * scale, 0.0);
 		n = normalize(mix(n * 0.25, normalize(wp - mid), 0.75));
 		mul = mix(0.86, 1.0, smoothstep(0.0, 0.35, h));
-		snow = frost > 0.0 && frost_up(n.y, wp) ? 1.0 : 0.0;
+		snow = frost > 0.0 ? snow_on(n, wp) : 0.0;
 	} else if (kind == 4) {
 		// A bush: its lobes' domes over the rounded form, each lobe a little its own colour.
 		vec3 n0 = normalize(wp - bush_mid(origin, scale));
@@ -361,7 +369,7 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 		n = normalize(n0 + BUSH_TILT * lobe.xyz);
 		variant = mix(variant, lobe.w, 0.5);
 		mul = mix(0.9, 1.0, smoothstep(0.0, 0.3, h));
-		snow = frost > 0.0 && frost_up(n.y, wp) ? 1.0 : 0.0;
+		snow = frost > 0.0 ? snow_on(n, wp) : 0.0;
 	} else if (kind == 1 || kind == 3) {
 		n = vec3(0.0, 1.0, 0.0);
 		// Darker at the base and toward the tuft's rim, and each tuft a step lighter or darker than
@@ -392,7 +400,7 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 		variant = mix(variant, dab.z, 0.6 * near);
 		float rim = smoothstep(0.22, 0.55, length(dab.xy));
 		mul = (1.0 - IVY_TUCK * near * rim) * mix(1.0, mix(0.9, 1.08, dab.w), near);
-		snow = frost > 0.0 && frost_up(n.y, wp) ? 1.0 : 0.0;
+		snow = frost > 0.0 ? snow_on(n, wp) : 0.0;
 	} else {
 #ifdef SELECTOR_SOLID
 		// painter_solid: solid_form() gives the normal, the plane and the plane's variant, and the
@@ -412,7 +420,8 @@ void selector_fragment(vec3 wp, vec3 wn, vec3 origin, float scale, float h, vec4
 		float on_form = smoothstep(0.5, 0.9, length(off / vec3(across, half_m.y, across)));
 		n = normalize(mix(n, round_n, SOLID_ROUND * on_form));
 		variant = mix(variant, p_noise(wp * 0.9 + 17.0), 0.5);
-		snow = frost > 0.0 && frost_up(n.y - 0.3, wp) ? 1.0 : 0.0;
+		// The law asks the rounded form's up, as a bush's (the rock's own 0.3 offset is gone).
+		snow = frost > 0.0 ? snow_on(n, wp) : 0.0;
 		// A stone or a log grows out of the ground: a step darker over its foot (PainterOcclusion).
 		mul = mix(1.0 - base_dark, 1.0, smoothstep(0.0, 0.45, h));
 #endif
@@ -560,12 +569,16 @@ void light() {
 			}
 		}
 		float mul = f_mul;
-		if (f_frost > 0.5) {
-			// Snow takes the snow's own two steps (lit by the same law as the plant's tone); a tuft
-			// cap's lower rim (f_frost 0.75) stays part way to the shade, so the cap reads as a form.
-			col = mix(c_frost_shd, c_frost_lit, smoothstep(0.3, 0.7, t) * (f_frost > 0.9 ? 1.0 : 0.55));
-			shd = c_frost_shd;
-			mul = 1.0;
+		float frost_cover = abs(f_frost);
+		if (frost_cover > 0.0) {
+			// Snow takes the snow's own two steps (lit by the same law as the plant's tone), laid over
+			// the plant's or the rock's colour by the snow law's soft cover; its rim (a tuft cap's lower
+			// rim, a rounded cap's shoulder: f_frost negative) stays part way to the shade, so the cap
+			// reads as a form.
+			vec3 s_col = mix(c_frost_shd, c_frost_lit, smoothstep(0.3, 0.7, t) * (f_frost > 0.0 ? 1.0 : 0.55));
+			col = mix(col, s_col, frost_cover);
+			shd = mix(shd, c_frost_shd, frost_cover);
+			mul = mix(mul, 1.0, frost_cover);
 		}
 		DIFFUSE_LIGHT += mix(col, shd, cast * 0.94) * mul;
 	}

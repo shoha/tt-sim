@@ -2255,9 +2255,9 @@ with more body", "why don't these share an implementation for snow coverage?", t
 - **One implementation.** `painter/shaders/painter_snow.gdshaderinc` is the only roof snow: the
   hand-drawn blanket (code 10) and the roof pieces under it, the hand-drawn roofs with no record
   (round and Taper roofs, and every roof while `PainterMannerHost.snow_body` is off), the A3b roofs
-  of the street lots, wall rows and boundaries, and the props' up faces all call it. `snow_hold` (a
-  face's share by its slope), `snow_cover_of` (whole, none, or long soft streaks down a steep run,
-  never a veil), `snow_gap` (a few short soft gaps along the ridge: the only bare roof),
+  of the street lots, wall rows and boundaries, and the props' up faces all call it. Where the
+  layer lies is the snow law (since card snow-one-law; "One snow law for faces with no record"
+  below; it replaced `snow_hold` and `snow_cover_of`), `snow_gap` (a few short soft gaps along the ridge: the only bare roof),
   `snow_paint` (the blanket's broad washes, swells and hollows and the dabs that move the light's
   turn, now shared), `snow_roll` (for a layer with no mesh: the shading normal rolls over the eave
   in a lip, a 0.2 m front in the blue shade under a lit roll, a lit heap at the ridge, a slow
@@ -2324,7 +2324,7 @@ street read-back of "Roof round 3" to "Roof round 5" below (`PainterStreetSnow` 
   moves with the asset, nothing is built again.
 - **No amount.** `roof-snow` is a switch (winter 1, every other mood 0): `PainterBuildings.snow_on()`
   replaces `snow_amount()`, the shaders' `snow` is 1 or 0 (`PainterBuildings.snow_switch`, also the
-  village props'), and `snow_hold` / `snow_cover_roof` and the A3b, yard and manner uses of
+  village props'), and the law (now `snow_law`, card snow-one-law) and the A3b, yard and manner uses of
   `snow * 2.2` read `snow` as is (winter's 0.45 * 2.2 was 0.99, so the law is unchanged within 1 %).
   The law stays for faces with no record (spires, library props, the props not yet listed).
   Ground, trees, weather and sky keep their own numbers.
@@ -2397,6 +2397,65 @@ bend; nothing to remove).
   +0.036 at the table (the wider edge band is the difference).
 - Tests: `test_painter_snow_tops.gd` (the cone's rows have the ring's corners and follow the eave
   polygon, a real hut's snow has its roof's corners, the calm uniforms' defaults).
+
+## One snow law for faces with no record (card snow-one-law, 2026-11-21; look-pending)
+
+Owner: "a unifying system for determining coverage and accumulation for snow". The bodies were one
+already (the builder above); the painted snow on faces WITHOUT a record had five rules (`frost_up`
+for rocks, logs, leaf masses, bushes and ivy, binary, with a `- 0.3` offset for solids; the props'
+`snow_hold` + `snow_cover_of`; the roofs' `snow_cover_roof` + `snow_edge`; the yard's own
+threshold). Now one include, `painter/shaders/painter_snow_law.gdshaderinc` (ported from spike 1's
+`ad3f4b1e`, on/off in place of its amount), answers which faces hold snow and how the cover's edge
+looks; each family keeps its own paint.
+
+- **The law.** `snow_law(on, up, wp, n, top, seed)` returns cover, hold, rim and a cap's lower edge.
+  `snow_hold(on, up)` = on * smoothstep(0.2, 0.44, up), one curve for every family (the roofs' cap
+  curve; a steeper 0.3 to 0.55 left the wizard tower's spire with only tongues at its tip, round 1).
+  A face that knows its top (`top` = a roof's h) keeps a partial hold at the top: the cap of uneven
+  drifts by facet and thin toward the sun (`snow_cap_edge`, the old `snow_edge` with its `f.x`
+  computed from wp and n), from up 0.08. Any other face (`SNOW_NO_TOP`) breaks a partial hold in a
+  few bold soft shapes of one world noise (0.55 per metre, about 2 m shapes, a 0.1 soft band, about
+  0.15 m), never a stipple; its rim is the band just inside that edge or where a rounded form turns
+  from the sky (`snow_turn`, the props' old 0.5 to 0.85). No textures, no derivatives (callers branch
+  around it). It declares the `foliage_sun` global, guarded by `PAINTER_SNOW_LAW`.
+- **The ledge** (rounds 3 and 4). A structure's level, non-roof face narrower than a ledge holds no
+  snow: `snow_ledge(width)` = smoothstep(`SNOW_LEDGE_LO` 0.08, `SNOW_LEDGE_HI` 0.12, width), 1 where
+  the width is 0 (wide, or no level face). The width is the face's shortest edge, written per vertex
+  by `StructureGeometry.with_ledges` (every structure surface carries UV2; y is the widest level
+  face's shortest edge under 0.25 m, else 0) and read as UV2.y by `painter_structure`; the hand-drawn
+  houses' meshes carry it in CUSTOM1 (`PainterMannerMesh.FORMAT`: one float, copied from the source's
+  UV2.y through the cut; `PainterMannerSnow.build`'s strips write 0). Measured faces on the street
+  row: shutter battens 5 to 7.7 cm, a casing jamb's end 7.8 cm and a door case head 6.5 cm (under it:
+  they drew white ladder bars on every open shutter and a white line down each casing's edge), a
+  frame head 15 cm, a lintel 16 cm, a sill 19 cm (kept). The warm-up's structure sample is the UV2
+  layout and its manner sample carries the one-float CUSTOM1 (`PainterWarmup.triangle(slots, flags)`).
+- **Callers.** `painter_snow.gdshaderinc` includes it (structure, manner, prop shaders);
+  `painter_structure.gdshader` asks it on every face: a roof with its h (cap), any other face (a
+  wall's coping, a fence or boundary top, a sill, a lintel, a step, a deck) with its flat face up
+  from wp's derivatives, in the props' world frame (1.6 times); `painter_structure_manner.gdshader`'s
+  no-record branch is every leftover face where it is a roof or holds (round and Taper roofs, sills,
+  steps, chimney tops), and such a face's shade takes the sky shade (`law_laid`); `painter_prop`
+  (rim = the law's); `painter_yard` (asked with its lobe-and-seam up); `painter_selector` (`snow_on(n,
+  wp)` for leaf masses, bushes, ivy and rocks, `painter_solid` from the form's normal, the rock's
+  offset gone): `f_frost` is now a soft cover, negative on the rim, and light() lays the snow over
+  the plant's or rock's colour by it (a tuft cap's lower rim is -1, was 0.75). The selector's law is on
+  wherever the sheet's `crown-deposit` (`frost`) is above 0; tufts keep `frost` as their amount.
+- **Not the law's.** Snow bodies and cells on records, the crowns' deposit and conifers'
+  `needle-snow`, grass tufts' bury line and caps, ground snow, Classic. Spike 1's vertex lift on solids
+  was not ported.
+- **Seen** (`docs/research/2026-11-09-prototypes/compare/painter_final138_snow_one_law/verdict/`,
+  main | build at 1920x1080): roofs, the spire's cap and the round hut unchanged; the boundary walls
+  and fence lines gain white tops at zoom 16, sills, lintels, door steps and chimney tops at zoom 6;
+  boulders keep grey sides with slightly larger soft caps. Round 4 (`verdict_r4/`, the ledge in both
+  structure shaders): no white bars on any shutter (the cottages' red ones as the street's), no line
+  down the casings, frame heads, lintels and sills white; a boundary wall's coping and a fence's wide
+  top board turn white at zoom 16 (their line gets faint against snowy ground), a thin rail keeps its
+  dark line.
+- **Cost** (in-run swap, vsync off, half-size viewport, M B B M): table zoom 16 +0.013 / +0.023 ms
+  (two runs), street close +0.003 / +0.016, rocks -0.001 / +0.011.
+- Tests: `test_painter_buildings.gd` (`test_one_snow_law_for_every_painted_family`: the include, its
+  guard and signature, every family includes or calls it, `frost_up` and the replaced rules gone, no
+  includer declares `foliage_sun` again).
 
 ## Round roofs, ruin roofs, ivy (card painter-roofs-ivy, 2026-11-18; look-pending)
 

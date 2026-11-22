@@ -113,6 +113,36 @@ func test_the_mesh_build_is_deterministic_cut_and_keeps_the_shadow_topology() ->
 	assert_between(teeth, 19 * 3, 20 * 3, "about twenty teeth along the 4 m eave")
 
 
+## Card snow-one-law round 4: the source's ledge width (UV2.y, StructureGeometry.with_ledges) rides
+## in CUSTOM1, one float a vertex, through the cut and the teeth (none: 0).
+func test_the_ledge_width_rides_in_custom1() -> void:
+	var quad := _quad()
+	quad[Mesh.ARRAY_TEX_UV2] = PackedVector2Array(
+		[Vector2(0, 0.06), Vector2(0, 0.06), Vector2(0, 0.06), Vector2(0, 0.06)]
+	)
+	var table := PackedStringArray(["roof/slope0"])
+	var built := PainterMannerMesh.build(
+		quad, PackedInt32Array([0, 0, 0, 0]), table, {"roof/slope0": _roof()}, _opts()
+	)
+	var ledge: PackedFloat32Array = built.draw[Mesh.ARRAY_CUSTOM1]
+	var custom: PackedFloat32Array = built.draw[Mesh.ARRAY_CUSTOM0]
+	var verts: PackedVector3Array = built.draw[Mesh.ARRAY_VERTEX]
+	assert_eq(ledge.size(), verts.size(), "one width a vertex")
+	for k in verts.size():
+		var tooth := custom[k * 4 + 2] == float(PainterMannerMesh.CODE_FRINGE)
+		assert_almost_eq(ledge[k], 0.0 if tooth else 0.06, 1e-6, "vertex %d" % k)
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(
+		Mesh.PRIMITIVE_TRIANGLES, built.draw, [], {}, PainterMannerMesh.FORMAT
+	)
+	assert_eq(mesh.get_surface_count(), 1, "the arrays make FORMAT's surface")
+	var plain := PainterMannerMesh.build(
+		_quad(), PackedInt32Array([0, 0, 0, 0]), table, {"roof/slope0": _roof()}, _opts()
+	)
+	for w in plain.draw[Mesh.ARRAY_CUSTOM1] as PackedFloat32Array:
+		assert_eq(w, 0.0, "no UV2: wide everywhere")
+
+
 ## The parts build_one makes, minus what the records may change (the tags) and the records.
 func _comparable(parts: Dictionary) -> Dictionary:
 	var meshes: Array = []

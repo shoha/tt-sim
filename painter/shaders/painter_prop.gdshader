@@ -36,8 +36,8 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled;
 // LINEAR [shade0, mid0, lit0, shade1, mid1, lit1] for each of the eight tones: 0 timber, 1 wall
 // stone, 2 thatch, 3 clay, 4 turf, 5 slate, 6 plaster, 7 spare (the thatch's again).
 uniform vec3 ramps[48];
-// The share of the up faces under snow (the sheet's roof-snow) and the snow's LINEAR [shade, mid,
-// lit].
+// The structure snow's switch (1 in winter, PainterBuildings.snow_switch) and the snow's LINEAR
+// [shade, mid, lit].
 uniform float snow = 0.0;
 uniform vec3 snow_ramp[3];
 // The N.L where the shade, middle and lit steps meet (sheet tone-lo, tone-hi).
@@ -136,16 +136,18 @@ void fragment() {
 	// Snow on what faces up (winter): the roofs' shared layer (painter_snow.gdshaderinc), a soft
 	// thick cap: its top lit and swelling, the light turning over it in soft dabs, and where a part
 	// curves away from the sky (a haystack's shoulder, a barrel's rim) its edge rounds off into the
-	// blue shade, never a scalloped patch. A prop is small: the layer's frame is the world's at 1.6
-	// times, so a swell is a crate's size.
+	// blue shade, never a scalloped patch. Where it lies, and its rim, is the snow law (card
+	// snow-one-law), as on a roof, a coping and a boulder. A prop is small: the layer's frame is the
+	// world's at 1.6 times, so a swell is a crate's size.
 	float cover = 0.0;
 	vec4 sp = vec4(0.0, 0.0, 0.5, 0.0);
 	float rim = 0.0;
-	if (snow > 0.0) {
+	if (snow > 0.0 && snow_hold(snow, n.y) > 0.0) {
 		vec2 sf = wp.xz * 1.6;
-		cover = snow_cover_of(snow_hold(snow, n.y), sf);
+		vec4 law = snow_law(snow, n.y, wp, n, SNOW_NO_TOP, 0.0);
+		cover = law.x;
 		sp = snow_paint(sf, 1.0);
-		rim = cover * (1.0 - smoothstep(0.5, 0.85, n.y));
+		rim = law.z;
 		vec3 roll = snow_roll(SNOW_FAR, SNOW_FAR, sf);
 		vec2 flat_n = n.xz;
 		vec2 away = length(flat_n) > 0.05 ? normalize(flat_n) : vec2(0.7071);
