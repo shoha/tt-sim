@@ -132,8 +132,14 @@ static func inputs_for(
 ## and
 ## the biggest part of the host's per-building work), so the main thread only makes meshes. It is
 ## not part of digest_of; the plan carries the info's `sig` and is made again when that moved.
+## `with_manner` keeps procgen's manner records in "manner" whatever manner_records says (a
+## settlement's prop variants, whose pads the snow body is built from).
 static func build_one(
-	doc: MapDocument, structure: Structure, decor: bool = false, info: Dictionary = {}
+	doc: MapDocument,
+	structure: Structure,
+	decor: bool = false,
+	info: Dictionary = {},
+	with_manner: bool = false
 ) -> Dictionary:
 	var parts := _empty(structure)
 	var reason := MapStructureIO.structure_problem(structure, doc.extent_m())
@@ -152,7 +158,7 @@ static func build_one(
 	parts.decor = decor
 	var evaluator := StructureProcgen.new_evaluator(recipe.registry)
 	var inputs := inputs_for(doc, structure, recipe)
-	var records := manner_records
+	var records := manner_records or with_manner
 	inputs.manner = records
 	var plant: Variant = evaluator.evaluate_structure(recipe, inputs, true)
 	if plant == null or not evaluator.errors.is_empty():

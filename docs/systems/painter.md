@@ -2258,6 +2258,51 @@ with more body", "why don't these share an implementation for snow coverage?", t
   coverage left), `test_painter_manner.gd` (no veil, grain or bare strokes), `test_painter_coverage.gd`
   (`Wood` is `lot_wood`, its middle the props' honey at 0.85 chroma in three moods).
 
+## One snow builder (card snow-tops-builder, 2026-11-21; look-pending)
+
+The owner's choice (2026-11-22): every asset declares its snow-holding tops as records and ONE
+builder makes each asset's snow body from them; structure snow is on or off. Supersedes the
+street read-back of "Roof round 3" to "Roof round 5" below (`PainterStreetSnow` is deleted).
+
+- **The records** are procgen's (pin ee079ea; `docs/ASSET_PIPELINE.md` "snow_tops"): roof planes
+  (unchanged), `roof_cone` (Round Roof node), `coping_line` (Stone Wall node, a street's yard
+  walls), `pad` (barrel, crate stack, bench, hand cart, farm wagon), and a street row keeps every
+  lot's records (each with its `lot`). They own no triangles and change no mesh.
+- **The builder** is `PainterMannerSnow.build` (`painter/buildings/manner_snow.gd`): `source()` now
+  also collects cones, coping runs, pads and the wall faces' openings (`windows`), and `build()` lays
+  them through `PainterSnowForms` (`painter/snow/snow_forms.gd`): the cone as one grid round the axis
+  up the record's own profile (`wall_y + rise * (1 - s^power)`, pinned to the eave ring and apex;
+  ported from the spike's H3b `lay_cone`, no facets, so no tone step per facet), the coping as a
+  five-point rounded strip along the run's points, a pad as a dome of four rings and a crown with
+  rounded normals. Every eave lip (the blanket's three lip rows, the strips' `_lip`, the cone's rim)
+  is lifted to 5 cm over the top of any opening within 0.9 m in plan (`PainterSnowForms.above_windows`;
+  a window more than 0.4 m over the lip, a gable's, lifts nothing).
+- **The hosts.** Structures keep `PainterMannerHost` (their records come with their build); a
+  structure whose only records are snow tops (a round hut's cone: `PainterMannerSource.dressable`
+  false) keeps the A3b look and gets only its body. Walls and cells go through `PainterSnowTops`
+  (`painter/snow/snow_tops.gd`): a street row or stone wall (`AuthoredWalls`, not fences) is
+  evaluated again on a worker with the manner data on (`WallGeometry.build_one(doc, wall, true)`,
+  `snow_tops_of` keeping the snow kinds, wall faces and building records, less dropped lots), split
+  per lot (`PainterMannerSource.feeds_by_lot`): one `SnowTops` body per lot, plus one for a
+  free-standing wall's runs. A settlement cell carries its props' pads, placed by the bake
+  (`SettlementBake.pads_of`, meta `AuthoredSettlements.SNOW_TOPS_META`; the variants are built with
+  `StructureGeometry.build_one(..., with_manner = true)`), and gets one body. Every body is a child
+  of its asset in the asset's frame, casts no shadow and draws with the manner snow material: it
+  moves with the asset, nothing is built again.
+- **No amount.** `roof-snow` is a switch (winter 1, every other mood 0): `PainterBuildings.snow_on()`
+  replaces `snow_amount()`, the shaders' `snow` is 1 or 0 (`PainterBuildings.snow_switch`, also the
+  village props'), and `snow_hold` / `snow_cover_roof` and the A3b, yard and manner uses of
+  `snow * 2.2` read `snow` as is (winter's 0.45 * 2.2 was 0.99, so the law is unchanged within 1 %).
+  The law stays for faces with no record (spires, library props, the props not yet listed).
+  Ground, trees, weather and sky keep their own numbers.
+- **Still open.** Props without pads (well, lamp post, stall awning, haystack, the modern set) keep
+  the shader law alone; crate stacks' lower lids lie partly under the crate above; the paint on the
+  bodies is today's (the calm paint is the next card); chimney cushions and sills on street lots are
+  not made (no meshes come with a lot's records).
+- Tests: `test_painter_snow_tops.gd` (a body per kind, the cone's profile and apex, one body per
+  lot, a real street's and stone wall's records with the mesh unchanged, the round hut's cone, a
+  moved cell keeps its body, no switch no body, the eave over a window).
+
 ## Round roofs, ruin roofs, ivy (card painter-roofs-ivy, 2026-11-18; look-pending)
 
 Owner, 2026-11-18: "Fix ivy and roofs next", and of the grimdark streets "why is everything so

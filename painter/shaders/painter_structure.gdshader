@@ -269,7 +269,7 @@ void fragment() {
 		// A gable end clad in the roof's material and the slab's edges stand upright: no snow on
 		// them but a little drift along their foot, and a touch of the snow's cool light
 		// (snow_upright, snow_foot).
-		cool = clamp(snow * 2.2, 0.0, 1.0) * snow_upright(up);
+		cool = clamp(snow, 0.0, 1.0) * snow_upright(up);
 		cover = max(cover, cool * snow_foot(fr.z, fr.x));
 		sp = snow_paint(fr.xy, broad);
 		roll = snow_roll(snow_edge_m(up, h, fr.xy, fr.z, n, 0.0), fr.w, fr.xy);

@@ -494,8 +494,8 @@ func test_round5_caps_drift_by_facet_and_gables_stay_bare() -> void:
 	assert_string_contains(a3b, "instance uniform float scour")
 	assert_string_contains(a3b, "snow_gap(fr.xy, fr.w) * scour")
 	assert_string_contains(a3b, "snow_foot(fr.z, fr.x)")
-	var street := FileAccess.get_file_as_string("res://painter/buildings/street_snow.gd")
-	assert_string_contains(street, "part.set_instance_shader_parameter(&\"scour\", 0.0)")
+	var tops := FileAccess.get_file_as_string("res://painter/snow/snow_tops.gd")
+	assert_string_contains(tops, "set_instance_shader_parameter(&\"scour\", 0.0)")
 
 
 func test_a_hand_sinks_its_eave_trim_under_the_roof() -> void:

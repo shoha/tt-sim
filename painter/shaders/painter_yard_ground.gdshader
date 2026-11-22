@@ -67,7 +67,7 @@ void fragment() {
 	METALLIC = 0.0;
 	vec3 wp = v_wp;
 	float edge = v_a + (p_noise(wp * 1.6 + 3.0) - 0.5) * 0.45 + (p_noise(wp * 5.5 + 11.0) - 0.5) * 0.12;
-	ALPHA = smoothstep(0.46, 0.52, edge) * wash * (1.0 - clamp(snow * 2.2, 0.0, 1.0) * 0.85);
+	ALPHA = smoothstep(0.46, 0.52, edge) * wash * (1.0 - clamp(snow, 0.0, 1.0) * 0.85);
 	float variant = smoothstep(0.35, 0.65, p_noise(wp * 0.9 + 7.0));
 	f_shd = mix(ramps[0], ramps[3], variant);
 	f_mid = mix(ramps[1], ramps[4], variant);

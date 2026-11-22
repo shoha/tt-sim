@@ -70,6 +70,12 @@ const ROOF_MESH_KINDS: Dictionary = {
 const KIND_SCALE := 8.0
 ## Record kinds whose edges carry snow.
 const ROOF_KINDS: Array[String] = ["roof_slope", "roof_part", "roof_flat"]
+## The snow-top record kinds that own no triangles (docs/ASSET_PIPELINE.md "snow_tops"): a round
+## roof, a stone wall's coping run and a prop's level top (PainterSnowForms lays each).
+const CONE_KIND := "roof_cone"
+const COPING_KIND := "coping_line"
+const PAD_KIND := "pad"
+const TOP_KINDS: Array[String] = [CONE_KIND, COPING_KIND, PAD_KIND]
 ## Mesh name prefixes that may hold chimney caps and sills.
 const TOP_MESHES: Array[String] = ["chimney_", "trim_", "opening_"]
 
@@ -86,11 +92,30 @@ static func source(
 	records: Dictionary, meshes: Dictionary, table: PackedStringArray, opts: Dictionary
 ) -> Dictionary:
 	var roofs: Array = []
+	var cones: Array = []
+	var copings: Array = []
+	var tops: Array = []
 	var tones := _roof_tones(records, meshes, table)
 	for rec: Dictionary in records.values():
-		if not ROOF_KINDS.has(str(rec["kind"])):
+		var kind := str(rec["kind"])
+		if kind == CONE_KIND:
+			var cone := rec.duplicate()
+			cone["tone"] = _cone_tone(rec, meshes, table)
+			cones.append(cone)
+			continue
+		if kind == COPING_KIND:
+			copings.append(rec)
+			continue
+		if kind == PAD_KIND:
+			tops.append(rec)
+			continue
+		if not ROOF_KINDS.has(kind):
 			continue
 		var tone: Color = tones.get(str(rec["id"]), Color.WHITE)
+		if meshes.is_empty():
+			# A street lot's records come without its meshes: the roof's kind from its material.
+			var mk := int(ROOF_MESH_KINDS.get("roof_" + str(rec.get("material", "")), 1))
+			tone = Color(1.0, 1.0, 1.0, float(mk) / KIND_SCALE)
 		if not (rec.get("edges", []) as Array).is_empty():
 			var toned := rec.duplicate()
 			toned["tone"] = tone
@@ -100,7 +125,43 @@ static func source(
 			if not framed.is_empty():
 				framed["tone"] = tone
 				roofs.append(framed)
-	return {"roofs": roofs, "pads": _pads(records, meshes, table, opts), "opts": opts}
+	return {
+		"roofs": roofs,
+		"cones": cones,
+		"copings": copings,
+		"tops": tops,
+		"windows": PainterSnowForms.windows_of(records),
+		"pads": _pads(records, meshes, table, opts),
+		"opts": opts
+	}
+
+
+## Whether `src` (source()) holds anything to lay snow on. Pure.
+static func has_tops(src: Dictionary) -> bool:
+	for key in ["roofs", "cones", "copings", "tops", "pads"]:
+		if not (src.get(key, []) as Array).is_empty():
+			return true
+	return false
+
+
+## The tone a round roof's snow carries (as _roof_tones'): the paint of the first vertex of a roof
+## mesh whose tag is the cone's node's (the record owns no triangles of its own), its kind in the
+## alpha; white with the record material's kind when no mesh holds one. Pure.
+static func _cone_tone(rec: Dictionary, meshes: Dictionary, table: PackedStringArray) -> Color:
+	var node := str(rec["id"]).get_base_dir() + "/"
+	for mesh_name: String in ROOF_MESH_KINDS:
+		if not meshes.has(mesh_name):
+			continue
+		var mesh: Dictionary = meshes[mesh_name]
+		var tags: PackedInt32Array = mesh.tags
+		var cols: Variant = mesh.arrays[Mesh.ARRAY_COLOR]
+		for k in tags.size():
+			var tag := tags[k]
+			if tag >= 0 and tag < table.size() and table[tag].begins_with(node):
+				var c := (cols as PackedColorArray)[k] if cols != null else Color.WHITE
+				return Color(c.r, c.g, c.b, float(ROOF_MESH_KINDS[mesh_name]) / KIND_SCALE)
+	var kind := int(ROOF_MESH_KINDS.get("roof_" + str(rec.get("material", "")), 1))
+	return Color(1.0, 1.0, 1.0, float(kind) / KIND_SCALE)
 
 
 ## The tone each roof record's snow carries in its vertex colour: {record id: Color}, the colour's
@@ -161,16 +222,18 @@ static func _framed(rec: Dictionary) -> Dictionary:
 ## "by_kind": {blanket, lip, cap, pad}}; "arrays" empty when there is nothing to lay snow on. Pure.
 static func build(src: Dictionary) -> Dictionary:
 	var g := Strips.new()
-	var counts := {"blanket": 0, "lip": 0, "cap": 0, "pad": 0}
+	var counts := {"blanket": 0, "lip": 0, "cap": 0, "pad": 0, "cone": 0, "coping": 0, "top": 0}
 	var opts: Dictionary = src.get("opts", {})
 	var phase: Vector3 = opts.get("phase", Vector3.ZERO)
 	var seed := int(phase.x * 1000.0)
+	var windows: Array = src.get("windows", [])
 	var caps: Array = []
 	var lays: Dictionary = {}
 	for roof: Dictionary in src.get("roofs", []):
 		var hold := float(HOLD.get(str(roof.get("material", "")), DEFAULT_HOLD))
 		var lay := PainterMannerBlanket.layout(roof) if blanket else {}
 		if not lay.is_empty():
+			lay["windows"] = windows
 			lays[roof["id"]] = lay
 		var n: Vector3 = roof["n"]
 		var mid := _mid(roof)
@@ -193,7 +256,7 @@ static func build(src: Dictionary) -> Dictionary:
 			elif LIP_KINDS.has(kind) and lay.is_empty():
 				var s := 1.0 if kind == "eave" else VERGE_SCALE
 				var seg := SEG_EAVE_M if kind == "eave" else SEG_VERGE_M
-				_lip(g, e["a"], e["b"], n, mid, hold * s, seg, seed + before)
+				_lip(g, e["a"], e["b"], n, mid, hold * s, seg, seed + before, windows)
 				counts.lip += (g.idx.size() - before) / 3
 	for roof: Dictionary in src.get("roofs", []):
 		if not lays.has(roof["id"]):
@@ -229,6 +292,15 @@ static func build(src: Dictionary) -> Dictionary:
 		if str(pad["kind"]) == "chimney":
 			_collar(g, pad, src.get("roofs", []), lays, phase)
 	counts.pad = (g.idx.size() - before_pads) / 3
+	for cone: Dictionary in src.get("cones", []):
+		var hold := float(HOLD.get(str(cone.get("material", "")), DEFAULT_HOLD))
+		g.tone = cone.get("tone", Color.WHITE)
+		counts.cone += PainterSnowForms.lay_cone(g, cone, hold, phase, seed + g.pos.size(), windows)
+		g.tone = Color.WHITE
+	for run: Dictionary in src.get("copings", []):
+		counts.coping += PainterSnowForms.lay_coping(g, run, seed + g.pos.size())
+	for top: Dictionary in src.get("tops", []):
+		counts.top += PainterSnowForms.lay_pad(g, top)
 	if g.idx.is_empty():
 		return {"arrays": [], "triangles": 0, "by_kind": counts}
 	for k in g.pos.size():
@@ -313,9 +385,19 @@ static func outward(a: Vector3, b: Vector3, n: Vector3, mid: Vector3) -> Vector3
 	return o if o.dot((a + b) * 0.5 - mid) >= 0.0 else -o
 
 
-## A lip along edge a-b of a slope with normal `n` (four profile steps: inner, top, nose, under).
+## A lip along edge a-b of a slope with normal `n` (four profile steps: inner, top, nose, under),
+## its nose and underside kept above the top of each of `windows` under it
+## (PainterSnowForms.above_windows).
 static func _lip(
-	g: Strips, a: Vector3, b: Vector3, n: Vector3, mid: Vector3, hold: float, seg: float, seed: int
+	g: Strips,
+	a: Vector3,
+	b: Vector3,
+	n: Vector3,
+	mid: Vector3,
+	hold: float,
+	seg: float,
+	seed: int,
+	windows: Array = []
 ) -> void:
 	var length := a.distance_to(b)
 	if length < 0.2:
@@ -337,8 +419,10 @@ static func _lip(
 		var droop := LIP_DROOP_M * hold * scallop(s, seed) * end
 		g.add(p - o * reach - n * 0.015, n, s, 0.0, size, acc)
 		g.add(p - o * reach * 0.3 + n * t, n + o * 0.35, s, 1.0, size, acc)
-		g.add(p + o * over + n * t * 0.3 - Vector3.UP * droop * 0.5, o + n * 0.25, s, 2.0, size, acc)
-		g.add(p + o * over * 0.4 - n * t * 0.3 - Vector3.UP * droop, o * 0.4 - n, s, 3.0, size, acc)
+		var nose := p + o * over + n * t * 0.3 - Vector3.UP * droop * 0.5
+		var under := p + o * over * 0.4 - n * t * 0.3 - Vector3.UP * droop
+		g.add(PainterSnowForms.above_windows(windows, nose), o + n * 0.25, s, 2.0, size, acc)
+		g.add(PainterSnowForms.above_windows(windows, under), o * 0.4 - n, s, 3.0, size, acc)
 	for i in count:
 		g.band(first + i * 4, first + (i + 1) * 4, 4)
 	g.end_cap(first, 4, -along)

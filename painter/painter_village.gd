@@ -319,9 +319,7 @@ func _tone_prop(material: ShaderMaterial, sheet: Dictionary) -> void:
 		)
 	ramps.resize(RAMP_SLOTS)
 	material.set_shader_parameter(&"ramps", ramps)
-	material.set_shader_parameter(
-		&"snow", PainterSheet.number(sheet, mood, PainterBuildings.SNOW_NUMBER, elevation)
-	)
+	material.set_shader_parameter(&"snow", PainterBuildings.snow_switch(sheet, mood, elevation))
 	material.set_shader_parameter(&"snow_ramp", PainterBuildings.snow_ramp(sheet, mood, elevation))
 	material.set_shader_parameter(&"tone_lo", PainterSheet.number(sheet, mood, "tone-lo", elevation))
 	material.set_shader_parameter(&"tone_hi", PainterSheet.number(sheet, mood, "tone-hi", elevation))

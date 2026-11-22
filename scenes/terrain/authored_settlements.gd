@@ -32,6 +32,9 @@ const PART_META := &"tt_part"
 ## Set on a cell's standing-surface body: the settlement's id.
 const STAND_META := &"tt_stand"
 const STAND_PREFIX := "Stand_"
+## Set on each cell mesh: the `pad` snow-top records of its props, placed as their meshes are
+## (SettlementBake.pads_of), which the painted look's snow body is built from (PainterSnowTops).
+const SNOW_TOPS_META := &"tt_snow_tops"
 
 ## ref -> {"surfaces": [...]} of the built variants (shared by every map: a library's recipes
 ## do not change under a running game; tests clear it).
@@ -505,8 +508,12 @@ func _build_variant(ref: String) -> void:
 	var surfaces: Array = []
 	var size := _default_size(ref)
 	var parts := StructureGeometry.build_one(
-		_flat, Structure.make(1, ref, ProcgenProps.footprint(size), 5)
+		_flat, Structure.make(1, ref, ProcgenProps.footprint(size), 5), false, {}, true
 	)
+	var pads: Array = []
+	for rec: Dictionary in parts.get("manner", []):
+		if str(rec.get("kind", "")) == "pad":
+			pads.append(rec)
 	for mesh: Dictionary in parts.get("meshes", []):
 		(
 			surfaces
@@ -528,7 +535,7 @@ func _build_variant(ref: String) -> void:
 				"arrays": mesh["arrays"],
 			}
 		)
-	_variants[ref] = {"surfaces": surfaces}
+	_variants[ref] = {"surfaces": surfaces, "pads": pads}
 
 
 ## The default footprint of the prop `ref` (its index entry's default_size_m).
@@ -570,6 +577,7 @@ func _bake_cell(cell: Dictionary) -> void:
 	if has_glow:
 		node.extra_cull_margin = StructureGlow.CULL_MARGIN_M
 	node.set_meta(META, int(cell["settlement"]))
+	node.set_meta(SNOW_TOPS_META, SettlementBake.pads_of(placed_items, _variants))
 	add_child(node)
 	_add_stand(cell)
 	_keys[cell_name] = cell["key"]

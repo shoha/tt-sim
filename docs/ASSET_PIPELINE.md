@@ -2225,3 +2225,50 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
   tt-sim's `StructureGeometry` with its pinned digest, a token stands on its roof, and the map
   saves and reloads with the same fingerprint (`test_structure_build.gd` does all three for the
   starter set).
+
+### snow_tops (contract 2026-11-21, procgen ee079ea)
+
+A procgen structure evaluated with the manner data on (`ProcgenStructureInputs.manner = true`)
+declares where snow lies on it as manner records in `PlantGeometry.manner`, beside the mesh,
+read by no digest, mesh or GLB. A host that lays snow builds ONE snow body per asset from them
+(tt-sim: the builder in `PainterMannerSnow` / `painter/snow/`); every face no record covers gets
+the painted snow law alone, with no body. All points are in the structure's own frame (the
+geometry's, as its vertices), metres, y up. Every record has `id` (a provenance path, stamped like
+the tags: `roof_round_3/cone`), `kind`, `material` (the surface kind), `slot`, and after the
+evaluation `wander` and `accent`. Records of the kinds below own no triangles: their id is in no
+tag_table. Without the manner data none is made and the mesh is the same either way.
+
+- **Roof plane** (`roof_slope`, `roof_flat`, `roof_part`; `ProcgenManner`, gable, hip, flat and
+  profile roofs, dormers, porch hoods): a frame `origin`, `u`, `v`, `n`, `u_len`, `v_len`,
+  `thickness`, and `edges` (`{a, b, kind}`, kinds `eave`, `ridge`, `verge`, `hip`); a roof part
+  without edges is framed by the host (its lowest side the eave). These own triangles (the id is
+  their tag). The `building` record (`id` "" for a lone building) carries every opening's `side`,
+  `u`, `width`, `sill` and `top`, which limit an eave's lip over a window.
+- **Cone** (`roof_cone`; the Round Roof node: round huts, yurts, trulli, towers, tapered bodies):
+  `base` (the plan middle at the eave ring's mean height; also `origin`), `apex` (the top face's
+  point, or the flat top's middle), `axis` (up), `ring` (the eave ring's corners on the top face,
+  overhang included), `sides`, `radius` and `apothem` (the ring's mean corner and side distance),
+  `wall_y`, `wall_apothem`, `rise` and `power` (the top face's height at scale s of the walls'
+  ring is `wall_y + rise * (1 - s^power)`: 1 a straight cone, over 1 a dome, under 1 a bell),
+  `cap` (the flat top's share, 0 for a point), `overhang`, `thickness`, `fringe` (thatch teeth
+  below the eave, metres), `shape`, `up` (the mean facet normal's y), and `edges` (the ring's
+  sides, kind `eave`). A spire (`up` under 0.5), a ring roof, a round slab and a broken ruin roof
+  declare none.
+- **Coping line** (`coping_line`; the Stone Wall node and a street's stone yard walls; a
+  building's walls declare none, their coping is under the eave): one per wall run, split where a
+  ruin leaves a gap over 0.12 m or a step over 0.15 m (ids `<path>/coping_line/run<k>`, then
+  `_1`, `_2`). `points` (the middle of the coping's top face at each slab's two ends, in run order:
+  a modelled wall on a slope steps, a textured wall's slabs ramp), `u` (the run's direction),
+  `width` (across the coping, thickness times 1.1), `height` (the slab's own), `length`, `edges`
+  (the legs, kind `ridge`).
+- **Pad** (`pad`; props through `ProcgenPropParts.pad`: barrel heads and lids, crate lids, bench
+  seats, cart and wagon beds): a level top, `shape` `rect` or `disc`, `centre` (the top face's
+  middle), `origin` (its minimum corner in u, v), `u`, `v` (level unit axes), `n` (up), `u_len`,
+  `v_len`, and for a disc `radius`. Ids `<prop node>/prop/<name>/top<k>`.
+- **Street rows**: a Street Row node keeps every lot's records (all the kinds above), each id
+  stamped with the lot's path (`row_2/left/lot3/roof_gable_4/slope/v0/s1`) and carrying `lot`
+  (the lot's path, `left/lot3`, before the row node's prefix); each lot's building record has the
+  lot's path as its id. The lots are built in the row's frame, so no transform is needed.
+- **Fallback**: an asset with no record (library GLB props, rocks, logs, a prop not yet listed, a
+  spire) gets the painted law on its faces and no body. A library asset that wants a body would
+  carry a `snow_tops` catalog extra (deferred; not in the first cards).

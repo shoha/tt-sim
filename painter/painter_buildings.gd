@@ -127,8 +127,8 @@ const PAINT_REF_MOOD := "summer"
 ## The role a chimney's brick and pots, and a slate roof's ridge cap, take (the third ramp).
 const BRICK_ROLE := "roof-clay"
 ## The role the roofs' snow takes its colour from (winter's is the snow's white, under the
-## ground's ramp numbers: snow_ramp) and the number that says how deep it lies (0 in every mood
-## but winter; above 0 the hand-drawn manner also builds its strips, PainterMannerSnow).
+## ground's ramp numbers: snow_ramp) and the switch that lays it (0 in every mood but winter;
+## above 0 the snow is on and every asset's snow body is built, snow_on: no amount).
 const SNOW_ROLE := "drift"
 const SNOW_NUMBER := "roof-snow"
 ## The sheet role of the moss and lichen on stone and slate (the second ramp of such a material).
@@ -204,13 +204,16 @@ static var paint_yard := true
 var applied: Dictionary = {}
 ## The hand-drawn manner's host, made on the first dress while hand_drawn is set.
 var manner: PainterMannerHost = null
-## The wall layers' roof blankets in a mood with roof snow (card painter-roof-round3).
-var street_snow := PainterStreetSnow.new()
+## The snow bodies of the wall layers (streets, stone walls) and the settlement cells in a mood
+## with roof snow (card snow-tops-builder).
+var snow_tops := PainterSnowTops.new()
 
 var _map: Node3D = null
 var _structures: Node = null
 ## The map's wall layers now followed (WALL_LAYERS).
 var _wall_layers: Array[Node] = []
+## The map's settlement layer now followed (AuthoredSettlements), or null.
+var _cells: Node = null
 ## `<role>_<kind>` -> the shared stand-in.
 var _materials: Dictionary = {}
 ## Node instance id -> [node, the material_override it had].
@@ -239,6 +242,7 @@ func paint(map: Node3D, state: Dictionary) -> bool:
 		_bind(_map.get_node_or_null(STRUCTURES))
 		for layer_name in WALL_LAYERS:
 			_bind_walls(_map.get_node_or_null(layer_name))
+		_bind_cells(_map.get_node_or_null(AuthoredSettlements.NODE_NAME))
 	_retone()
 	return true
 
@@ -249,7 +253,8 @@ func release() -> void:
 		_map.child_entered_tree.disconnect(_on_map_child)
 	_unbind()
 	_unbind_walls()
-	street_snow.clear()
+	_unbind_cells()
+	snow_tops.clear()
 	if manner != null:
 		manner.restore_all()
 	for id: int in _swapped:
@@ -350,6 +355,36 @@ func _on_map_child(node: Node) -> void:
 		_bind(node)
 	elif WALL_LAYERS.has(str(node.name)):
 		_bind_walls(node)
+	elif str(node.name) == AuthoredSettlements.NODE_NAME:
+		_bind_cells(node)
+
+
+## Follows the settlement layer `layer` (null: nothing): lays its cells' snow bodies now and each
+## cell's baked later, while the mood lays roof snow.
+func _bind_cells(layer: Node) -> void:
+	if layer == null or _cells == layer:
+		return
+	_unbind_cells()
+	_cells = layer
+	layer.child_entered_tree.connect(_snow_cell)
+	for child in layer.get_children():
+		_snow_cell(child)
+
+
+func _unbind_cells() -> void:
+	if is_instance_valid(_cells) and _cells.child_entered_tree.is_connected(_snow_cell):
+		_cells.child_entered_tree.disconnect(_snow_cell)
+	_cells = null
+
+
+## Lays a settlement cell's snow body (its props' pads) while the mood lays roof snow, drawn with
+## the hand-drawn manner's snow material.
+func _snow_cell(cell: Node) -> void:
+	if applied.is_empty() or not hand_drawn or not snow_on():
+		return
+	if manner == null:
+		manner = PainterMannerHost.new(self)
+	snow_tops.dress_cell(cell, manner.snow_material())
 
 
 ## Follows wall layer `layer` (null: nothing): dresses its walls now and each one built later.
@@ -393,15 +428,15 @@ func _dress_wall(wall: Node) -> void:
 	_snow_wall(wall)
 
 
-## Lays blankets on a wall's roofs while the mood lays roof snow (PainterStreetSnow), drawn with the
-## hand-drawn manner's snow material, so only while hand_drawn is set (the A3b-only A/B keeps the
-## shader's snow).
+## Lays a wall's snow bodies (a street's lots, a stone wall's copings: PainterSnowTops) while the
+## mood lays roof snow, drawn with the hand-drawn manner's snow material, so only while hand_drawn
+## is set (the A3b-only A/B keeps the shader's snow).
 func _snow_wall(wall: Node) -> void:
-	if not hand_drawn or snow_amount() <= 0.0:
+	if not hand_drawn or not snow_on():
 		return
 	if manner == null:
 		manner = PainterMannerHost.new(self)
-	street_snow.dress(wall, manner.snow_material())
+	snow_tops.dress_wall(wall, manner.snow_material())
 
 
 func _bind(structures: Node) -> void:
@@ -493,8 +528,11 @@ func _retone() -> void:
 		_tone(_materials[key], kind_of(key), sheet)
 	if manner != null:
 		manner.retone(sheet)
-	if snow_amount() <= 0.0:
-		street_snow.clear()
+	if not snow_on():
+		snow_tops.clear()
+	elif is_instance_valid(_cells):
+		for cell in _cells.get_children():
+			_snow_cell(cell)
 	if is_instance_valid(_structures):
 		for child in _structures.get_children():
 			_dress(child)
@@ -548,9 +586,7 @@ func _tone(material: ShaderMaterial, kind: Array, sheet: Dictionary) -> void:
 		var refs := paint_refs(sheet, mood, roles, elevation)
 		refs.resize(MANNER_RAMP_SLOTS / 6 if manner else PICK_ROLES.size())
 		material.set_shader_parameter(&"paint_ref", refs)
-	material.set_shader_parameter(
-		&"snow", PainterSheet.number(sheet, mood, SNOW_NUMBER, elevation)
-	)
+	material.set_shader_parameter(&"snow", snow_switch(sheet, mood, elevation))
 	material.set_shader_parameter(&"snow_ramp", snow_ramp(sheet, mood, elevation))
 	material.set_shader_parameter(
 		&"tone_lo", PainterSheet.number(sheet, mood, "tone-lo", elevation)
@@ -560,13 +596,20 @@ func _tone(material: ShaderMaterial, kind: Array, sheet: Dictionary) -> void:
 	)
 
 
-## How much snow lies on the roofs now (the sheet's roof-snow in the applied mood; 0 while
-## nothing is painted or the mood lays none).
-func snow_amount() -> float:
+## Whether snow lies on the structures now: the sheet's roof-snow above 0 in the applied mood
+## (false while nothing is painted). Structure snow has no amount (card snow-tops-builder): it is
+## on or off, the bodies are built whole and the shaders' `snow` is 1 or 0 (snow_switch).
+func snow_on() -> bool:
 	if applied.is_empty():
-		return 0.0
+		return false
 	var sheet := PainterSheet.load_sheet(applied["sheet"])
-	return PainterSheet.number(sheet, applied["mood"], SNOW_NUMBER, applied["elevation"])
+	return snow_switch(sheet, applied["mood"], applied["elevation"]) > 0.0
+
+
+## The structure shaders' `snow` in `mood`: 1.0 where the sheet's roof-snow is above 0, else 0.0.
+## Pure.
+static func snow_switch(sheet: Dictionary, mood: String, elevation: float) -> float:
+	return 1.0 if PainterSheet.number(sheet, mood, SNOW_NUMBER, elevation) > 0.0 else 0.0
 
 
 ## The roofs' snow as three LINEAR colours [shade, mid, lit]: the drift role's white under the

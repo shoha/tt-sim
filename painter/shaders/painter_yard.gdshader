@@ -130,7 +130,7 @@ void fragment() {
 		float cap = up - seam * 0.25 + (p_noise(wp * 4.0 + 9.0) - 0.5) * 0.3;
 		// A bloom is small: snow takes most of it, leaving a red base (card painter-look-houses: bare
 		// red cones in a snowed yard read as stray objects).
-		cover = smoothstep(0.42, 0.48, cap + (bloom ? 0.4 : 0.0)) * clamp(snow * 2.2, 0.0, 1.0);
+		cover = smoothstep(0.42, 0.48, cap + (bloom ? 0.4 : 0.0)) * clamp(snow, 0.0, 1.0);
 	}
 	int base = tone * 6;
 	vec3 shd = mix(ramps[base], ramps[base + 3], variant);

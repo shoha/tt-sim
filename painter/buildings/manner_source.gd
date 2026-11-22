@@ -82,6 +82,33 @@ static func of_parts(parts: Dictionary) -> Dictionary:
 	return feed
 
 
+## Whether `feed` holds records the hand-drawn manner dresses a mesh by: any kind but the snow tops
+## (PainterMannerSnow.TOP_KINDS) and the building record. A round hut whose only records are its
+## cone keeps the A3b look and gets only its snow body. Pure.
+static func dressable(feed: Dictionary) -> bool:
+	for rec: Dictionary in (feed.get("records", {}) as Dictionary).values():
+		if not PainterMannerSnow.TOP_KINDS.has(str(rec["kind"])):
+			return true
+	return false
+
+
+## The snow-top records of a wall layer's build (a street row's lots, a stone wall's runs), each
+## lot's on its own: {lot path ("" for records of no lot, a free-standing wall's copings): feed
+## (as _feed's, no meshes)}. A row lot's building record (its id the lot's path) is that lot's.
+## Pure.
+static func feeds_by_lot(manner: Array) -> Dictionary:
+	var by_lot: Dictionary = {}
+	for rec: Dictionary in manner:
+		var lot := str(rec.get("lot", ""))
+		if not by_lot.has(lot):
+			by_lot[lot] = []
+		(by_lot[lot] as Array).append(rec)
+	var out: Dictionary = {}
+	for lot: String in by_lot:
+		out[lot] = _feed([], PackedStringArray(), by_lot[lot])
+	return out
+
+
 static func _feed(meshes: Array, table: PackedStringArray, manner: Array) -> Dictionary:
 	var by_name: Dictionary = {}
 	for mesh: Dictionary in meshes:

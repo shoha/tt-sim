@@ -37,10 +37,11 @@ const float SNOW_FAR = 99.0;
 // facing it (snow_edge).
 global uniform vec4 foliage_sun;
 
-// How much snow a face holds (0 to 1): `snow` the sheet's roof-snow (winter 0.45), `up` the
-// face's normal Y. All of it from a moderate pitch, none on a spire's steep run.
+// How much snow a face holds (0 to 1): `snow` the structure snow's switch (1 on, 0 off: no amount
+// since card snow-tops-builder; PainterBuildings.snow_switch), `up` the face's normal Y. All of it
+// from a moderate pitch, none on a spire's steep run: the law for faces with no snow body.
 float snow_hold(float snow, float up) {
-	return clamp(snow * 2.2, 0.0, 1.0) * smoothstep(0.24, 0.42, up);
+	return clamp(snow, 0.0, 1.0) * smoothstep(0.24, 0.42, up);
 }
 
 // The layer's cover (0 to 1) where a face holds `hold`, at frame point `f` (metres along the eave,
@@ -101,7 +102,7 @@ float snow_foot(float above, float along) {
 // streaks of a half hold and the steep cap's thin ledges are gone). A face near vertical (a slab's
 // edge, a finial) or facing down holds none (a street roof's upright faces, snow_upright).
 float snow_cover_roof(float snow, float up, float h, vec2 f, vec3 n, float seed) {
-	float amount = clamp(snow * 2.2, 0.0, 1.0) * smoothstep(0.08, 0.16, up);
+	float amount = clamp(snow, 0.0, 1.0) * smoothstep(0.08, 0.16, up);
 	float edge = snow_edge(up, f, n, seed);
 	return amount * smoothstep(edge - 0.025, edge + 0.025, h);
 }

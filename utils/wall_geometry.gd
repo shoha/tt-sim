@@ -38,6 +38,11 @@ const YARD_TAG := "/yard"
 ## the houses and its crown does not hang over the street (a crown is 2 to 4 m wide).
 const STREET_CLEAR_EXTRA_M := 2.0
 
+## The manner record kinds snow_tops_of keeps.
+const SNOW_TOP_KINDS: Array[String] = [
+	"roof_slope", "roof_part", "roof_flat", "roof_cone", "coping_line", "pad", "wall_face", "building"
+]
+
 ## True: a wall carries its courses in the masonry texture (MasonryTextures), the coping modelled,
 ## a fraction of the triangles; false: modelled blocks. A static for comparing the two.
 static var textured := true
@@ -134,8 +139,10 @@ static func row_plan(doc: MapDocument, wall: Wall) -> Array[Dictionary]:
 
 ## One wall's parts: {"id", "kind", "style", "stone": mesh arrays or [], "wood": mesh arrays or
 ## [], "collision": PackedVector3Array, "top": float (NONE when empty)}. Empty parts when the
-## recipe is missing or fails.
-static func build_one(doc: MapDocument, wall: Wall) -> Dictionary:
+## recipe is missing or fails. With `snow_tops` the recipe is evaluated with procgen's manner data
+## on and the parts carry "snow_tops": the records the snow body is built from (snow_tops_of; the
+## mesh is the same either way, docs/ASSET_PIPELINE.md "snow_tops").
+static func build_one(doc: MapDocument, wall: Wall, snow_tops: bool = false) -> Dictionary:
 	var parts := {
 		"id": wall.id,
 		"kind": wall.kind,
@@ -153,15 +160,22 @@ static func build_one(doc: MapDocument, wall: Wall) -> Dictionary:
 	if recipe == null or wall.points.size() < Wall.MIN_POINTS:
 		return parts
 	var evaluator := StructureProcgen.new_evaluator(recipe.registry)
-	var plant: Variant = evaluator.evaluate_structure(recipe, inputs_for(doc, wall))
+	var inputs := inputs_for(doc, wall)
+	inputs.manner = snow_tops
+	var plant: Variant = evaluator.evaluate_structure(recipe, inputs)
 	if plant == null or not evaluator.errors.is_empty():
 		return parts
 	var geometry: PlantGeometry = plant["lods"][0]
+	if snow_tops and not wall.is_row():
+		parts["snow_tops"] = snow_tops_of(geometry.manner, {})
 	if wall.is_row():
 		# The recipe builds every lot of the plan: the ones on water or a crossing come out again.
 		var plan := row_plan(doc, wall)
 		var lots := VillageDryGround.dry_lots(doc, wall, plan)
-		geometry = VillageDryGround.without_lots(geometry, VillageDryGround.dropped(plan, lots))
+		var dropped := VillageDryGround.dropped(plan, lots)
+		if snow_tops:
+			parts["snow_tops"] = snow_tops_of(geometry.manner, dropped)
+		geometry = VillageDryGround.without_lots(geometry, dropped)
 		_row_surfaces(parts, doc, wall, geometry, lots)
 	else:
 		for surface in geometry.merged_by_kind():
@@ -169,6 +183,25 @@ static func build_one(doc: MapDocument, wall: Wall) -> Dictionary:
 	parts.collision = geometry.collision
 	parts.top = geometry.top if geometry.triangle_count() > 0 else NONE
 	return parts
+
+
+## The records of `manner` (a wall build's PlantGeometry.manner) a snow body is built from: the
+## roof planes, cones, coping runs and pads, and the wall faces and building records whose openings
+## an eave keeps clear of (PainterSnowForms.windows_of), less those of the lots in `dropped`
+## (VillageDryGround.dropped's keys). Each record without the evaluator's private keys (`_surface`
+## and the like). Pure.
+static func snow_tops_of(manner: Array, dropped: Dictionary) -> Array:
+	var out: Array = []
+	for rec: Dictionary in manner:
+		var kind := str(rec.get("kind", ""))
+		if not SNOW_TOP_KINDS.has(kind) or dropped.has(str(rec.get("lot", ""))):
+			continue
+		var kept := {}
+		for key: String in rec:
+			if not key.begins_with("_"):
+				kept[key] = rec[key]
+		out.append(kept)
+	return out
 
 
 ## A street's surfaces in `parts`, painted like a Structure (card S6): the roofs split off the

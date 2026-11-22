@@ -570,7 +570,7 @@ void fragment() {
 				// A thatch tooth: strands down it, a darker tip.
 				// (Under snow the tip is not darkened: a dark ragged row read as bunting.)
 				dark += p_line(f.x / 0.05, 0.3) * 0.4
-					+ smoothstep(-0.05, -0.25, f.y) * 0.3 * (1.0 - clamp(snow * 2.2, 0.0, 1.0));
+					+ smoothstep(-0.05, -0.25, f.y) * 0.3 * (1.0 - clamp(snow, 0.0, 1.0));
 			}
 		}
 		if (code == 4 || code == 6) {
