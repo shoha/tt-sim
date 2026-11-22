@@ -38,7 +38,9 @@ func test_every_documented_subset_has_a_config() -> void:
 
 
 ## The pre-run hook resets the painter's process-wide state before every script
-## (tests/gut_pre_run.gd, PainterStateReset): a config without it lets a leak cross scripts.
+## (tests/gut_pre_run.gd, PainterStateReset): a config without it lets a leak cross scripts. A
+## config may name a hook that extends it (.gutconfig_terra_on.json's, which also turns the
+## terrain core on).
 func test_every_config_names_the_pre_run_hook() -> void:
 	assert_true(FileAccess.file_exists(PRE_RUN_HOOK), PRE_RUN_HOOK + " exists")
 	var configs := _subset_configs()
@@ -47,8 +49,13 @@ func test_every_config_names_the_pre_run_hook() -> void:
 		var config: Variant = JSON.parse_string(
 			FileAccess.get_file_as_string(TESTS_DIR + file_name)
 		)
-		if config is Dictionary:
-			assert_eq(config.get("pre_run_script", ""), PRE_RUN_HOOK, file_name)
+		if not config is Dictionary:
+			continue
+		var hook := String(config.get("pre_run_script", ""))
+		if hook != PRE_RUN_HOOK and ResourceLoader.exists(hook):
+			var base := (load(hook) as Script).get_base_script()
+			hook = base.resource_path if base != null else hook
+		assert_eq(hook, PRE_RUN_HOOK, file_name)
 
 
 func test_every_config_names_the_post_run_hook() -> void:
@@ -73,6 +80,9 @@ func test_every_listed_script_exists() -> void:
 		)
 		assert_typeof(config, TYPE_DICTIONARY, file_name + " parses to an object")
 		if not config is Dictionary:
+			continue
+		if not (config.get("dirs", []) as Array).is_empty():
+			# A variant of the full run (.gutconfig_terra_on.json): every script under its dirs.
 			continue
 		var scripts: Array = config.get("tests", [])
 		assert_gt(scripts.size(), 0, file_name + " lists scripts")

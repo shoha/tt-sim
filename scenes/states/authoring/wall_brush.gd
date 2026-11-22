@@ -300,6 +300,10 @@ func reset() -> void:
 
 ## Starts a side, or with Ctrl erases the wall under the press (a miss says why).
 func press(brush: BrushTool) -> bool:
+	if not brush.editor.terra.begin_wall_edit():
+		# The terrain core's refusal (the switch off on a primitives map, or not yet routed).
+		brush.refused.emit(brush.editor.terra.last_refusal)
+		return false
 	if not brush.press_ctrl:
 		begin(brush.hit)
 	elif not erase_at(brush.editor, brush.hit):
