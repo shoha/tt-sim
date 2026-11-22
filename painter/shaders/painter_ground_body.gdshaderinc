@@ -87,10 +87,12 @@ uniform vec4 sw_seed = vec4(0.0);
 // A stone's seam: how much darker the gap between cobbles, plates, tiles and boards is.
 const float SEAM_DARK = 0.38;
 // A path under snow (path_dust): the trodden track's packed snow, the ground's snow times these
-// (linear: darker and bluer), and the glimpse noise's level above which its earth shows through.
-const vec3 TROUGH_LIT = vec3(0.68, 0.77, 0.92);
-const vec3 TROUGH_SHD = vec3(0.80, 0.86, 0.95);
-const float EARTH_AT = 0.67;
+// (linear: darker and bluer; lit about 0.62 of the luminance, an OKLab step of about 0.13, so the
+// band reads at zoom 16, where 0.77 did not), and the glimpse noise's level above which its earth
+// shows through.
+const vec3 TROUGH_LIT = vec3(0.52, 0.62, 0.86);
+const vec3 TROUGH_SHD = vec3(0.66, 0.74, 0.90);
+const float EARTH_AT = 0.74;
 // The strata bands' height (m) on a cliff face.
 const float STRATA_H = 0.6;
 // The terminator (light()): ground facing the sun under this share of what level ground does is
@@ -600,16 +602,20 @@ void ground_at(vec2 q, float slope, float h, float mk, float vo, float px, float
 	// tone erased it): packed snow, the snow of the ground it crosses a step darker and bluer
 	// (TROUGH_LIT, TROUGH_SHD), with the slot's earth or stones (PainterGroundPaths.earth) showing in
 	// a few soft glimpses along its middle, where a slow noise and the band's depth are high (a mark
-	// takes it at its middle, so a glimpse is whole strokes). Its edge beside the snowy meadow or
-	// floor is dusted white, in two steps (a stone's hash moves the line, so it follows the stones).
-	if (role == 2 && path_dust > 0.0 && under <= 1) {
+	// takes it at its middle, so a glimpse is whole strokes). A 1 m brush's band runs pv 0.46 at its
+	// edge to about 0.8 at its middle (measured, card round 2), so the glimpses lean on pv about 0.7.
+	// Its edge beside the snowy ground is dusted white, in two narrow steps (a stone's hash moves the
+	// line, so it follows the stones): over a quarter of path_dust's depth the white rim ate the band.
+	// Any ground but the char takes the track: across the shore or a biome's second ground the band
+	// was the earth tone end to end, a long brown blot.
+	if (role == 2 && path_dust > 0.0 && under != 8) {
 		vec3 snow_lit = role_col(true, under, variant);
 		vec3 snow_shd = role_col(false, under, variant);
-		float g = p_noise(p * vec3(0.55, 1.0, 0.55) + 91.0) + (pv - 1.0) * 0.4 + j * 0.3;
+		float g = p_noise(p * vec3(0.55, 1.0, 0.55) + 91.0) + (pv - 0.7) * 0.6 + j * 0.3;
 		float bare = step(EARTH_AT, g);
 		lit = mix(snow_lit * TROUGH_LIT, lit, bare);
 		shd = mix(snow_shd * TROUGH_SHD, shd, bare);
-		float e = (pv - 0.46 + (pat.z - 0.5) * 0.1) / (0.25 * path_dust);
+		float e = (pv - 0.46 + (pat.z - 0.5) * 0.05) / (0.11 * path_dust);
 		float dust = floor((1.0 - smoothstep(0.35, 1.0, e)) * 2.0 + 0.5) * 0.42;
 		lit = mix(lit, snow_lit, dust);
 		shd = mix(shd, snow_shd, dust);

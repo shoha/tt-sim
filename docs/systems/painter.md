@@ -376,8 +376,15 @@ Causes and fixes:
   edge still dusted white. The glimpse's tone is `PainterGroundPaths.earth`: the slot's tone moved
   `path-dust` * 1.5 of the way to the surface's own chroma and hue in OKLab (packed dirt's when it has
   none), `path-dust` * 0.35 darker and its chroma toward 0.75. Seen: the earth glimpses read (a dull
-  brown under the 13 h sun, brown on the rose snow at 6.5 h); the trough itself is still faint at
-  zoom 9 and 5, so the path reads by its glimpses more than by its track (open).
+  brown under the 13 h sun, brown on the rose snow at 6.5 h). Round 2: a debug render showed a 1 m
+  brush's band runs pv 0.46 at its edge to about 0.8 at its middle, so the old white rim (a quarter of
+  `path-dust` deep in pv) covered most of it; the rim now spans 0.11 * `path-dust` (two narrow steps).
+  `TROUGH_LIT` deepened to 0.52 0.62 0.86 (`TROUGH_SHD` 0.66 0.74 0.90): a lit track pixel measured
+  (162,189,228) against the snow's (231,248,255). The glimpses lean on pv about 0.7 (`EARTH_AT` 0.74).
+  The track now takes any ground but the char: across the shore and a biome's second ground the band
+  had been the earth tone end to end (long brown blots by the stream and the river). Still open: at
+  zoom 9 and 16 the track's blue is the snow shade's hue, so beside tree shadows it reads as shade
+  more than as a trodden path.
 - **Grey-lavender snow.** The ground shader paints the sheet's ramp as it is (linear tonemap,
   `DIFFUSE_LIGHT` = the ramp colour; the lo-fi pass did not change the pixels), so the tones were the
   cause: winter's forest `floor` (0.82 0.030 255; most of a forest map's open ground) and the high key's
