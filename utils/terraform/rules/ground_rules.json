@@ -1,0 +1,49 @@
+{
+	"comment": "The ground rule table and the look (spike terraform-s2-cpu, round 3). Rows in order; a later row paints over the earlier ones with its weight. A term is [field, lo, hi, soft]: weight smoothstep(lo - soft, lo + soft) times 1 - smoothstep(hi - soft, hi + soft); null means unbounded. class -1 is the painted surface. Fields: depth, slope (deg), dist_water, dist_path, dist_foot (m), wetness, paint, height, path_cov, curv (m: the wide minus the narrow blur of the height, positive in a hollow). Classes carry a lit and a shade colour (sRGB); the sections after the rows are shader parameters by name (TerraLook).",
+	"classes": [
+		{"name": "meadow", "lit": [0.47, 0.72, 0.29], "shade": [0.20, 0.43, 0.40]},
+		{"name": "shore", "lit": [0.50, 0.62, 0.36], "shade": [0.24, 0.38, 0.40]},
+		{"name": "bed", "lit": [0.58, 0.60, 0.42], "shade": [0.32, 0.40, 0.44]},
+		{"name": "scree", "lit": [0.84, 0.78, 0.60], "shade": [0.50, 0.52, 0.62]},
+		{"name": "path", "lit": [0.89, 0.77, 0.54], "shade": [0.55, 0.50, 0.56]},
+		{"name": "rock", "lit": [0.78, 0.74, 0.68], "shade": [0.42, 0.44, 0.58]},
+		{"name": "flowers", "lit": [0.96, 0.84, 0.42], "shade": [0.58, 0.54, 0.46]},
+		{"name": "dark_grass", "lit": [0.33, 0.58, 0.27], "shade": [0.15, 0.35, 0.34]},
+		{"name": "sand", "lit": [0.92, 0.84, 0.62], "shade": [0.56, 0.55, 0.62]},
+		{"name": "earth", "lit": [0.74, 0.62, 0.42], "shade": [0.46, 0.42, 0.42]},
+		{"name": "lip", "lit": [0.56, 0.77, 0.32], "shade": [0.25, 0.47, 0.41]},
+		{"name": "hollow", "lit": [0.42, 0.68, 0.30], "shade": [0.19, 0.41, 0.39]}
+	],
+	"rows": [
+		{"name": "meadow", "class": "meadow", "terms": []},
+		{"name": "hollow", "class": "hollow", "terms": [["curv", 0.08, null, 0.05], ["dist_water", 1.5, null, 0.5]]},
+		{"name": "wall foot", "class": "dark_grass", "terms": [["dist_foot", null, 0.7, 0.3]]},
+		{"name": "earth bank", "class": "earth", "terms": [["slope", 37, null, 5]]},
+		{"name": "scree drift", "class": "scree", "terms": [["curv", 0.15, null, 0.05], ["slope", 9, 34, 4], ["dist_water", 1.2, null, 0.4]]},
+		{"name": "grass lip", "class": "lip", "terms": [["curv", null, -0.08, 0.04], ["slope", null, 38, 6]]},
+		{"name": "paint", "class": -1, "terms": [["paint", 0.45, null, 0.2]]},
+		{"name": "path", "class": "path", "terms": [["path_cov", 0.5, null, 0.25]]},
+		{"name": "rock", "class": "rock", "terms": [["slope", 50, null, 4]]},
+		{"name": "shore", "class": "shore", "terms": [["dist_water", null, 0.7, 0.4]]},
+		{"name": "bed", "class": "bed", "terms": [["depth", 0.04, null, 0.03]]}
+	],
+	"scene": {
+		"sky": [0.55, 0.76, 0.95], "horizon": [0.86, 0.92, 0.94], "far_ground": [0.56, 0.68, 0.52],
+		"ambient": [0.80, 0.86, 0.95], "ambient_energy": 0.5,
+		"sun": [1.0, 0.97, 0.88], "sun_energy": 1.05, "sun_pitch": -48.0, "sun_yaw": -35.0
+	},
+	"ground": {
+		"brush_freq": 1.9, "brush_reach": 0.5, "edge_soft": 0.14,
+		"turn": 0.12, "relief": 0.22, "relief_steps": 3.0,
+		"curv_tone": 1.0, "curv_max": 0.12,
+		"wash": 0.07, "wet_edge": 0.5, "wet_tint": [0.76, 0.81, 0.88]
+	},
+	"skirt": {"far_col": [0.56, 0.68, 0.52], "skirt_fade": 0.75},
+	"water": {
+		"shallow": [0.58, 0.88, 0.82], "mid": [0.28, 0.68, 0.82], "deep": [0.18, 0.50, 0.78],
+		"stroke_lit": [0.78, 0.94, 0.96], "foam": [0.97, 0.99, 0.98],
+		"band_1": 0.12, "band_2": 0.45, "strokes": 0.5, "lap_w": 0.05,
+		"rapid_lo": 0.04, "rapid_hi": 0.2, "foam_len": 1.8
+	},
+	"fall": {"lip_col": [0.40, 0.76, 0.86], "body_col": [0.62, 0.86, 0.92], "foam": [0.97, 0.99, 0.98]}
+}

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Parity of the native scatter library with GDScript on this platform: runs
-# tests/unit/test_scatter_native.gd and the landform files (about 2 minutes) under the given Godot command, with the
+# tests/unit/test_scatter_native.gd and the landform files (about 2 minutes), then the terraforming
+# derive's golden digests (test_terra_golden.gd, seconds), under the given Godot command, with the
 # template_debug library the editor loads and with the template_release library exports ship,
 # the latter by pointing the extension's debug entries at the release files for that run.
 # PARITY_TARGETS picks the libraries (default both). Fails if a run fails or the test is pending
@@ -30,7 +31,24 @@ run() {
   echo "parity with the $1 library: passed"
 }
 
+# The terraforming derive's golden digests (tests/unit/test_terra_golden.gd): the same bits on
+# every platform, so a platform whose maths disagrees fails here (fix native/src/terra_math.h,
+# never the fixture). Fails if the test is pending or did not report its matched digests.
+golden() {
+  local log
+  log=$(mktemp)
+  "${godot[@]}" --headless --path . --script res://addons/gut/gut_cmdln.gd -- \
+    -gconfig=tests/.gutconfig.json -gselect=test_terra_golden 2>&1 | tee "$log"
+  if grep -q 'the native library is not built' "$log" \
+    || ! grep -qE 'terra golden: [1-9][0-9]* digests matched' "$log"; then
+    echo "::error::$1: test_terra_golden was pending or did not match the fixture"
+    exit 1
+  fi
+  echo "terra golden with the $1 library: passed"
+}
+
 for target in $targets; do
   sed "s/template_debug/$target/g" "$saved" > "$extension"
   run "$target"
+  golden "$target"
 done
