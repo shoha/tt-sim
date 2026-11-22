@@ -339,7 +339,7 @@ vec4 ivy_dab(vec2 q) {
 #include "res://painter/shaders/painter_snow_law.gdshaderinc"
 
 float snow_on(vec3 n, vec3 wp) {
-	vec4 law = snow_law(frost > 0.0 ? 1.0 : 0.0, n.y, wp, n, SNOW_NO_TOP, 0.0);
+	vec3 law = snow_law(frost > 0.0 ? 1.0 : 0.0, n.y, wp, false);
 	return law.z > 0.5 ? -law.x : law.x;
 }
 

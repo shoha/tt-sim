@@ -715,7 +715,9 @@ void fragment() {
 		// the piece's code: it reads screen derivatives) and how broad a metre is on it.
 		vec4 fr = snow_frame(wp, n, h);
 		float fbroad = 1.0 - smoothstep(0.08, 0.16, length(fwidth(fr.xy)));
-		if (code == 10 || (snow_body && code > 0 && roofy && code != 7)) {
+		// (A roof piece steeper than the law sheds at has no blanket, PainterMannerSnow.ROOF_UP_MIN:
+		// it asks the law below, which leaves it bare, card snow-steep-roofs.)
+		if (code == 10 || (snow_body && code > 0 && roofy && code != 7 && up >= SNOW_SHED_LO)) {
 			// The blanket (code 10, PainterMannerBlanket), or a roof piece under it (its own
 			// marks hidden whole: dashes through the snow read as dirt, cards
 			// painter-buildings-fix and -fix2): all snow, with broad brush washes, lighter or
@@ -794,18 +796,17 @@ void fragment() {
 			// off, a sill, a step, a chimney's top. The shared layer painted on its face
 			// (painter_snow.gdshaderinc, as the street lots' A3b roofs), its frame from the face and
 			// h, its body in its rolled shading normal. Where it lies is the snow law (card
-			// snow-one-law): a roof knows its top (h), so a spire too steep for the whole layer
-			// keeps one cap over its upper part whose lower edge rolls over like an eave's lip
-			// (snow_edge_m); any other face takes the law's broad shapes and its rim, and none on a
-			// level face narrower than a ledge (snow_ledge: a shutter's batten tops, card snow-one-law
-			// round 4).
-			float seed = v_bld.x * 23.0;
-			vec4 law = snow_law(snow, roofy ? up : face_up, wp, n, roofy ? h : SNOW_NO_TOP, seed);
+			// snow-one-law): a roof sheds it above 60 degrees (card snow-steep-roofs: a spire's
+			// painted cap read as a smudge), so a spire reads clean in its own colour and a bell
+			// roof's flatter flare keeps a few broad soft shapes; any other face takes the law's
+			// broad shapes and its rim, and none on a level face narrower than a ledge (snow_ledge: a
+			// shutter's batten tops, card snow-one-law round 4).
+			vec3 law = snow_law(snow, roofy ? up : face_up, wp, roofy);
 			cover = law.x * (roofy ? 1.0 - snow_gap(fr.xy, fr.w) : snow_ledge(v_ledge));
 			hide = roofy ? 1.0 : hide;
 			vec4 sp = snow_paint(fr.xy, fbroad);
 			vec3 roll = roofy
-				? snow_roll(snow_edge_m(law.w, h, fr.z), fr.w, fr.xy)
+				? snow_roll(fr.z, fr.w, fr.xy)
 				: snow_roll(SNOW_FAR, SNOW_FAR, fr.xy);
 			roll.y = max(roll.y, law.z);
 			vec2 sm = snow_marks(cover, sp, roll.y, roll.z);

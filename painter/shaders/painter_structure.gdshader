@@ -263,9 +263,9 @@ void fragment() {
 	// Snow (winter): the shared layer of painter_snow.gdshaderinc, as the hand-drawn houses' and
 	// the props' (one soft thick cushion: a lit top, a lip rolling over the eave with a blue
 	// underside, a crest at the ridge, a few soft gaps along it). No record here. Where it lies is
-	// the snow law on every face (card snow-one-law): a roof knows its top (h), so a steep one keeps
-	// a cap; a wall's coping, a rail, a deck or a step takes the law's broad shapes in the props'
-	// world frame.
+	// the snow law on every face (card snow-one-law): a roof sheds it above 60 degrees (card
+	// snow-steep-roofs); a wall's coping, a rail, a deck or a step takes the law's broad shapes in
+	// the props' world frame.
 	float cover = 0.0;
 	float cool = 0.0;
 	vec4 sp = vec4(0.0, 0.0, 0.5, 0.0);
@@ -274,7 +274,7 @@ void fragment() {
 		vec4 fr = snow_frame(wp, n, h);
 		float broad = 1.0 - smoothstep(0.08, 0.16, length(fwidth(fr.xy)));
 		bool roofed = pattern >= 5;
-		vec4 law = snow_law(snow, roofed ? up : face_up, wp, n, roofed ? h : SNOW_NO_TOP, 0.0);
+		vec3 law = snow_law(snow, roofed ? up : face_up, wp, roofed);
 		if (roofed) {
 			// A street roof under a blanket keeps no crest gaps (`scour` 0, as its blanket: card
 			// painter-roof-round5, the short bare slashes along the market's ridges by the chimneys).
@@ -285,7 +285,7 @@ void fragment() {
 			cool = clamp(snow, 0.0, 1.0) * snow_upright(up);
 			cover = max(cover, cool * snow_foot(fr.z, fr.x));
 			sp = snow_paint(fr.xy, broad);
-			roll = snow_roll(snow_edge_m(law.w, h, fr.z), fr.w, fr.xy);
+			roll = snow_roll(fr.z, fr.w, fr.xy);
 		} else if (law.y > 0.0) {
 			vec2 sf = wp.xz * 1.6;
 			// No snow on a level face narrower than a ledge (snow_ledge).
