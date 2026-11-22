@@ -236,10 +236,30 @@ func begin_water_erase() -> bool:
 	return _not_yet("Water erase")
 
 
-## Wall (card terraform-p2-walls): a Wall press may go on (its WallEditor edit and the wall sync's
-## splice then make one group).
+## Wall (card terraform-p2-walls): a Wall press may go on. Its WallEditor edit and the wall sync's
+## splice (sync_walls()) then make one AuthoringHistory group.
 func begin_wall() -> bool:
-	return _not_yet("Wall")
+	last_refusal = ""
+	return true
+
+
+## The wall sync of a WallEditor edit labelled `label` (card terraform-p2-walls): while active(),
+## TerraWallSync.sync's splice as one gesture whose ground record refreshes the walls once the
+## pads land (on do, undo and redo; `area` is the edit's map rect). WallEditor calls it after
+## recording the list change, inside the same history group. Returns the gesture, or {} when the
+## wall primitives already mirror the list (a street row) or the core is not active.
+func sync_walls(label: String, area: Rect2) -> Dictionary:
+	if not active():
+		return {}
+	var change := TerraWallSync.sync(_editor().document)
+	if change.is_empty():
+		return {}
+	begin_gesture()
+	if edit(change) < 0:
+		_open = {}
+		push_warning("TerraEditor: the session refused the wall sync")
+		return {}
+	return end_gesture(label, {"walls": {"area": area}})
 
 
 func _not_yet(tool: String) -> bool:

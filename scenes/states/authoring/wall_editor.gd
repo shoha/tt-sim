@@ -344,7 +344,11 @@ func _current() -> Array[Wall]:
 	return out
 
 
-## Sets the document's walls to `after`, refreshes around `touched`, and records it.
+## Sets the document's walls to `after`, refreshes around `touched`, and records it. Every wall
+## edit (place, extend, reroll, remove, a street split) comes through here. With the terrain core
+## on, the wall primitives follow the list (TerraEditor.sync_walls: the pads) in the same history
+## group, so one undo takes back the wall and its pad; undo, redo and a live walls edit run
+## apply_list() alone, since the group's terrain part carries the pads.
 func _change(label: String, after: Array[Wall], touched: Array[Wall]) -> void:
 	var e := _editor()
 	e.commit_prop_edit()
@@ -353,6 +357,10 @@ func _change(label: String, after: Array[Wall], touched: Array[Wall]) -> void:
 	e.finish_height_work()
 	var before := _current()
 	var area := _area_of(touched)
+	# A street split already holds a group open: the pads join it.
+	var grouped := e.terra.active() and not e.history.is_grouping()
+	if grouped:
+		e.history.begin_group()
 	apply_list(after, area)
 	(
 		e
@@ -366,7 +374,12 @@ func _change(label: String, after: Array[Wall], touched: Array[Wall]) -> void:
 			}
 		)
 	)
-	e.edited.emit()
+	# The gesture's record emits `edited` itself; once is enough.
+	var synced := not e.terra.sync_walls(label, area).is_empty()
+	if grouped:
+		e.history.end_group(label)
+	if not synced:
+		e.edited.emit()
 
 
 ## Puts `walls` into the document and refreshes the nodes (and the scatter over `area`, map
