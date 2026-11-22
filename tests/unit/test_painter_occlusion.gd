@@ -199,15 +199,72 @@ func test_a_tree_the_painter_does_not_grow_gets_a_round_pool() -> void:
 	var field := _field(host)
 	# Its foot at the origin, its crown's middle 1 m along x: the pool is a disc round (0.5, 0).
 	var marks: Array = []
-	host._tree(marks, Vector3.ZERO, Vector3(1.0, 3.0, 0.0), 2.0, 6.0)
+	var sites: Array = []
+	host._tree(marks, sites, Vector3.ZERO, Vector3(1.0, 3.0, 0.0), 2.0, 6.0, 0.2)
 	_lay(host, field, marks)
 	assert_eq(_at(host, field, 0.3, 0.3), 1.0)
 	var along := _at(host, field, 1.8, 0.1)
 	var across := _at(host, field, 0.6, 1.3)
 	assert_gt(along, 0.0)
 	assert_almost_eq(along, across, 0.001, "as far along as across: round, not a box")
+	# A GLB map (no heightfield for a dab) keeps the trunk's seam disc in the field.
+	assert_true(sites.is_empty())
 	assert_gt(_at(host, field, 0.1, 0.1, CORE), 0.5, "a seam at the trunk's foot")
 	assert_eq(_at(host, field, 1.3, 0.3, CORE), 0.0, "the seam stays at the foot, under the pool")
+
+
+func test_a_trunk_is_a_site_of_its_own_radius_and_leaves_no_seam_in_the_field() -> void:
+	# Card painter-trunk-contact: on an authored terrain a trunk's foot is under the one contact
+	# rule, a site of the trunk's own radius, and the tree writes nothing into the field (no seam,
+	# no crown pool: the cast shadow grounds it).
+	var host := PainterOcclusion.new()
+	host.all_sites = true
+	var field := _field(host)
+	var marks: Array = []
+	var sites: Array = []
+	host._tree(marks, sites, Vector3(0.5, 5.0, -0.5), Vector3(1.5, 8.0, -0.5), 2.0, 6.0, 0.22)
+	assert_eq(sites.size(), 1, "the trunk is a site")
+	var site: Array = sites[0]
+	assert_almost_eq(float(site[PainterSites.X]), 0.5, 1.0e-5)
+	assert_almost_eq(float(site[PainterSites.Z]), -0.5, 1.0e-5)
+	assert_almost_eq(float(site[PainterSites.RADIUS]), 0.22, 1.0e-5, "the trunk's radius")
+	assert_almost_eq(float(site[PainterSites.AT]), 5.0, 1.0e-5, "standing at its foot")
+	assert_true(bool(site[PainterSites.UPRIGHT]))
+	assert_true(marks.is_empty(), "no seam disc and no crown pool")
+	_lay(host, field, marks)
+	assert_eq(_at(host, field, 0.5, -0.5, CORE), 0.0, "the field holds no trunk seam")
+	assert_eq(_at(host, field, 1.0, -0.5), 0.0, "nor a crown pool")
+	# Its outline on level ground: the foot is the trunk's own disc, not FOOT_SHARE of it.
+	var grid := _grid(9, 0.0)
+	grid.fill(5.0)
+	var own := PainterSites.outline(site, grid, 9, 9, Vector2(0.5, 0.5), Vector2(2.0, 2.0))
+	assert_eq(own.size(), PainterSites.OUTLINE_FLOATS)
+	assert_almost_eq(own[2], 0.22, 1.0e-5, "the foot is the trunk's disc")
+	assert_almost_eq(own[3], 0.22, 1.0e-5, "and the mark's radius the trunk's")
+	# A tree whose trunk is not known still gets a site, by its height.
+	sites.clear()
+	host._tree(marks, sites, Vector3.ZERO, Vector3(1.0, 3.0, 0.0), 2.0, 8.0, 0.0)
+	var guessed := PainterOcclusion.TRUNK_SHARE * 8.0
+	assert_almost_eq(float(sites[0][PainterSites.RADIUS]), guessed, 1.0e-5, "by its height")
+
+
+func test_a_scatter_trees_trunk_is_read_from_its_lowest_ring() -> void:
+	# A trunk of radius 0.3 at (0.4, -0.2) and a crown far above it: the ring is the trunk's.
+	var trunk := CylinderMesh.new()
+	trunk.top_radius = 0.3
+	trunk.bottom_radius = 0.3
+	trunk.height = 4.0
+	trunk.radial_segments = 32
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.append_from(trunk, 0, Transform3D(Basis(), Vector3(0.4, 2.0, -0.2)))
+	var crown := Transform3D(Basis().scaled(Vector3.ONE * 3.0), Vector3(0, 5, 0))
+	st.append_from(SphereMesh.new(), 0, crown)
+	var ring := PainterBodies.trunk_of(st.commit())
+	assert_almost_eq(ring.x, 0.4, 0.02)
+	assert_almost_eq(ring.y, -0.2, 0.02)
+	assert_almost_eq(ring.z, 0.3, 0.03, "the trunk's radius at the ground")
+	assert_eq(PainterBodies.trunk_of(BoxMesh.new()), Vector3.ZERO, "not an ArrayMesh: unknown")
 
 
 func test_a_small_stone_takes_a_mark_of_its_own_size_at_its_foots_height() -> void:
@@ -725,15 +782,15 @@ func test_a_mesh_of_three_stones_is_three_islands() -> void:
 		_tetra(st, at, 0.2)
 	# A shell inside the first stone: the same footprint, not a fourth.
 	_tetra(st, Vector3(0.02, 0, 0.02), 0.1)
-	var bodies := PainterOcclusion.islands(st.commit())
+	var bodies := PainterBodies.islands(st.commit())
 	assert_eq(bodies.size(), 3)
 	for body: AABB in bodies:
 		assert_lt(maxf(body.size.x, body.size.z), 0.5, "each its own stone's size")
 	var one := SurfaceTool.new()
 	one.begin(Mesh.PRIMITIVE_TRIANGLES)
 	_tetra(one, Vector3.ZERO, 1.0)
-	assert_eq(PainterOcclusion.islands(one.commit()).size(), 1)
-	assert_eq(PainterOcclusion.islands(BoxMesh.new()).size(), 1, "not an ArrayMesh: its box")
+	assert_eq(PainterBodies.islands(one.commit()).size(), 1)
+	assert_eq(PainterBodies.islands(BoxMesh.new()).size(), 1, "not an ArrayMesh: its box")
 
 
 func test_stones_set_side_by_side_stay_apart_though_their_boxes_overlap() -> void:
@@ -743,16 +800,16 @@ func test_stones_set_side_by_side_stay_apart_though_their_boxes_overlap() -> voi
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for at: Vector3 in [Vector3(0, 0, 0), Vector3(0.5, 0, 0.5), Vector3(0.5, 0, -0.1)]:
 		_tetra(st, at, 0.3)
-	var bodies := PainterOcclusion.islands(st.commit())
+	var bodies := PainterBodies.islands(st.commit())
 	assert_eq(bodies.size(), 3)
 	for body: AABB in bodies:
 		assert_almost_eq(body.size.x, 0.6, 0.001, "each its own stone's box")
 	var a := Rect2(0.0, 0.0, 1.0, 1.0)
-	assert_false(PainterOcclusion.nested(a, Rect2(0.8, 0.8, 1.0, 1.0)), "a corner's overlap")
-	assert_false(PainterOcclusion.nested(a, Rect2(2.0, 0.0, 1.0, 1.0)), "apart")
-	assert_true(PainterOcclusion.nested(a, Rect2(0.2, 0.2, 0.4, 0.4)), "a shell inside")
-	assert_true(PainterOcclusion.nested(a, Rect2(0.7, 0.2, 0.5, 0.4)), "a chip, more in than out")
-	assert_true(PainterOcclusion.nested(a, Rect2(0.5, 0.0, 0.0, 1.0)), "a flat sheet inside")
+	assert_false(PainterBodies.nested(a, Rect2(0.8, 0.8, 1.0, 1.0)), "a corner's overlap")
+	assert_false(PainterBodies.nested(a, Rect2(2.0, 0.0, 1.0, 1.0)), "apart")
+	assert_true(PainterBodies.nested(a, Rect2(0.2, 0.2, 0.4, 0.4)), "a shell inside")
+	assert_true(PainterBodies.nested(a, Rect2(0.7, 0.2, 0.5, 0.4)), "a chip, more in than out")
+	assert_true(PainterBodies.nested(a, Rect2(0.5, 0.0, 0.0, 1.0)), "a flat sheet inside")
 
 
 ## A tetrahedron of half size `r` standing at `at`, as four unshared triangles (a flat-shaded mesh).
