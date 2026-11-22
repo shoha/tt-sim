@@ -217,6 +217,7 @@
 		"res://tests/unit/test_terra_session.gd",
 		"res://tests/unit/test_terra_stage_table.gd",
 		"res://tests/unit/test_terra_update_equals_build.gd",
+		"res://tests/unit/test_terra_water_bridge.gd",
 		"res://tests/unit/test_terra_water_laws.gd",
 		"res://tests/unit/test_terrain_collision.gd",
 		"res://tests/unit/test_terrain_events.gd",

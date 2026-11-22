@@ -34,7 +34,8 @@ loaded map behind a switch, off by default ("The session").
 | `utils/terraform/terra_core.gd` | `TerraCore`: `native_available()`, `NATIVE_VERSION`, the built-in kind ids, `grid_for(doc)`, `make_derive(doc)`, `load_rules()`, `enabled()` (the switch: `tt_sim/terrain/core`, default off; `switch_override` for tests) |
 | `utils/terraform/terra_cache.gd` | `TerraCache`: the derived record (`terrain/derived.bin`, digests only): `make_record`, `prepare`, `derive_for`, `check`, `derive_and_check`, `encode` / `decode` |
 | `utils/terraform/terra_session.gd` | `TerraSession`, a Node: the core attached to a loaded map (see "The session") |
-| `utils/terraform/terra_bridge.gd` | `TerraBridge`: the session's derived ground written into `MapDocument.heights` (see "The bridge"); `seed_new_map` |
+| `utils/terraform/terra_bridge.gd` | `TerraBridge`: the session's derived ground and water written into `MapDocument.heights`, `water_bodies` and `pond_mask` (see "The bridge"); `seed_new_map` |
+| `utils/terraform/terra_water_bridge.gd` | `TerraWaterBridge`: `water_records()` and `falls()` as `WaterBody` reaches and ponds and the pond mask; the signature, the changed region |
 | `scenes/states/authoring/terra_editor.gd` | `TerraEditor` (`AuthoringEditor.terra`): gestures as history entries, the inverse builder, the shared landing, the tool routes and the peers' apply (see "The editor") |
 | `native/src/terra_bridge.cpp` | `TerraDerive.doc_heights()` and `doc_heights_diff()`: H2 at the document's samples, whole or as the tight differing rect |
 | `utils/terraform/terra_kinds.gd` | `TerraKinds`: the GDScript registry, one preload line per kind; `script_for(id)`, `name_of`, `ids()`, `table()`, `problem(id, data)` |
@@ -268,8 +269,9 @@ phase 1; phase 2's first card writes its derived heights into `MapDocument` (the
 Card terraform-p2-bridge (phase 2 card 1, 2026-11-22; plan `phase2_plan.md` section 2). With the
 switch on, on a map with a terrain section, the core is the ground truth: `TerraBridge` writes the
 session's derived ground H2 into today's `MapDocument.heights` (document sample (a, b) is derive
-sample (2a, 2b)), and the game's own consumers build from it unchanged. The bridge law
-(`test_terra_bridge_law.gd`): after every landing `doc.heights == derive.doc_heights()` bit for bit.
+sample (2a, 2b)) and its water into `water_bodies` and `pond_mask`, and the game's own consumers
+build from them unchanged. The bridge law (`test_terra_bridge_law.gd`): after every landing
+`doc.heights == derive.doc_heights()` bit for bit, and the bodies and mask equal `water_of(derive)`.
 
 - **Load.** `MapSourceLoader._create_authored_root_async` adds the session first, waits for the
   attach's derive a frame at a time (`TerraSession.attaching()` / `poll()`), makes the bridge and
@@ -285,8 +287,31 @@ sample (2a, 2b)), and the game's own consumers build from it unchanged. The brid
 - **Held frames.** `TerraBridge.held(edit)`: `TerraSession.apply_held` tells the derive and runs
   `derive()` synchronously when nothing is in flight (else it queues as `apply` does), then
   `land(true)` writes heights only. Releases, undo and live ops use `apply` (async); `settled`
-  lands them with `land(false)`. The water half (`water_of`: bodies and pond mask) is card
-  terraform-p2-bridge-water's; here a stub.
+  lands them with `land(false)`, heights then water.
+- **Water** (card terraform-p2-bridge-water). `TerraWaterBridge.bodies(records, falls, doc)`
+  (`TerraBridge.water_of(derive, doc)`) turns `water_records()` into today's model: one
+  `WaterBody.river` per run of equal levels (a flat reach), consecutive reaches sharing the
+  midpoint of the segment their level steps across (where WL changes level, and where a fall
+  record sits, so `WaterFalls` finds the same lips), every 4th point of the 0.25 m line kept
+  (WaterGeometry smooths it again); the record's half-width; the depth class nearest the
+  primitive's depth, ties deeper (so `WaterMeshBuilder.hold_depth` never calls the carved bed
+  perched); points past the map edge as the first reach's `beyond_up` and the last one's
+  `beyond` (`RiverExits.split_line`). Ponds: the record's level, the outline rounded as the derive
+  rounds it (Chaikin x3, closed) and rasterised into `pond_mask`. Ids: rivers in document order,
+  their reaches downstream, then ponds, from 1, so a reload or a late joiner derives the same.
+  Past `MAX_RIVERS` or `MAX_WATER_BODIES` it returns an error and the bridge leaves the water as
+  it was (warned), never truncating; the tools check the caps first (card terraform-p2-water).
+  Written only when `TerraWaterBridge.signature` (the water digest, the fall records, the water
+  primitives' floats) moves, never on a held frame: at load by `swap_water` before
+  `AuthoredLoadPrep` (so the dressing, flow and water build from it), and on `settled`, where the
+  changed region (`TerraWaterBridge.region`: changed rivers' bounds, changed mask samples) goes to
+  `WaterEditor.land_external(rect, record)`: an edit's `_land` / `_settle` / `_finish` without
+  plan and carve (dressing, AuthoredWater, wet rocks through `WaterWetRocks`, followers,
+  regrowth), filling `record` (`TerraBridge.last_water_record`) instead of the history; without
+  an editor the bridge refreshes the dressing and AuthoredWater itself. Measured on the corpus at
+  200 ft: 80 of 4677 derive-wet samples differ from today's wet set, all on the shoreline; the
+  fall's lip, top and bottom equal the record's. A switch-on new map now has no water until card
+  terraform-p2-landforms (`seed_new_map` writes the plane's, none).
 - **HeightEditor hooks** for later cards: `begin_external` / `external_rect` / `end_external` (a
   stroke whose heights another writer puts in; returns the ground record instead of recording)
   and `apply_ground(rect, before, record, redo, spread)` (`apply_diff` without the heights diff).
@@ -398,7 +423,8 @@ treats as a failure.
 | `test_terra_cache.gd` | the derived record: with a matching key a fresh derive gives the recorded digests through the map document (the record reads back bit for bit, under 512 bytes); the snapshot's copy; a stale record is not written; each key change (grid, core version, a mute, a moved float) misses quietly while an add and its undo keep the key; one H2 sample set outside the chain gives `mismatch` naming only H2 with one warning; every truncation, a trailing byte, the entry cap, bad magic, a newer version, too many digests, names out of order or malformed are refused while the terrain still loads; a map without terrain is unaffected |
 | `test_terra_session.gd` | the session through `MapSourceLoader`: switch off makes no session and no `TerraDerive` and the fingerprint equals the stripped map's (but `terra`); switch on without a section makes none; the setting's default; switch on, the digests equal a fresh `derive_full`, the save writes the record, and a reload through `load_async` matches it with equal digests; every edit op (one queued during the attach, some back to back) lands equal to a fresh derive; closing mid-attach and mid-`derive_async` parks and later lets go; a refused section is kept and saved back untouched in format 6 |
 | `test_terra_bridge.gd` | `doc_rect`; `doc_heights` is H2 at the even samples and `doc_heights_diff` the tight rect (bits, clipping, another grid refused); a load with the switch on swaps in the derived ground and the collision equals `height_at` at 200 random samples; a new map with the switch on has a one-plane section, derived heights and a matching record, with it off none |
-| `test_terra_bridge_law.gd` | the bridge law over a 40-dab held raise through `TerraBridge.held` across the corpus rivers, every frame derived at once, then an async release; the collision equals the bridged heights, which equal a build |
+| `test_terra_bridge_law.gd` | the bridge law over a 40-dab held raise through `TerraBridge.held` across the corpus rivers, every frame derived at once, then an async release; the collision equals the bridged heights, which equal a build; the water half (bodies with their ids and the pond mask equal `water_of`) after the load, the press and the release, none written on a held frame; a pond added and removed lands through `WaterEditor.land_external` (the record filled, the dressing and AuthoredWater follow) |
+| `test_terra_water_bridge.gd` | runs and depth classes; the corpus as one body per run of equal levels and one per pond (ids from 1, valid for the writer); the wet set of `WaterGeometry.levels` against WL > H2 at even samples (only shoreline samples differ: 80 of 4677 at 200 ft); `WaterFalls.falls` against the fall records (exact); a river past the edge keeps its drawn course; the river cap refused, not truncated; ids and mask equal after a reload and a late join (each re-derived); AuthoredWater, the flow and the Painted water field build |
 | `test_terra_editor.gd` | a scripted add / append / remove / splice gesture is one entry whose undo and redo return `TerraDoc.digest()` and every derived digest (and the bridged heights) to their before and after values; a redo pressed before the undo lands queues and lands after it; the inverse builder and the splice restore the encoded section exactly, and a refused splice changes nothing; switch off on a map with a section: every ground tool refuses naming the switch and the fingerprint is unchanged; without a section today's routes; switch on, each route refuses until its card |
 | `test_terra_live_edits.gd` | host and peer through bytes: after the gesture, a second gesture, both undos and a redo, equal documents, digests and `MapFingerprint`, and the peer's own check agrees; a `terra_check` op agrees, and a wrong digest is reported naming H2; malformed `terra` ops (unknown op, NaN, a short or unknown kind, a reserved flag, bad ids, next_id, digests, arity, direction) and a map without a section are refused |
 | `test_terra_stage_table.gd` | the table's order (each read an input or an earlier write, one writer per array); halo honesty: one H2 sample (then one FM sample) of a built map set outside the chain, every downstream stage re-run over the whole map, and each array changes only within the reach the table declares from it (the halos summed along the way), with the incremental derive giving the same bytes. A halo one sample short fails it (checked 2026-11-22 with the look row at 13) |
