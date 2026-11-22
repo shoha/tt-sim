@@ -72,4 +72,6 @@ func test_with_ledges_keeps_uv2_x_and_gives_every_surface_uv2() -> void:
 	_quad(Vector3.ZERO, Vector3(1.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.5), wide)
 	var plain := _arrays(wide)
 	StructureGeometry.with_ledges(plain)
-	assert_eq(plain[Mesh.ARRAY_TEX_UV2], PackedVector2Array([Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]))
+	var zero := PackedVector2Array()
+	zero.resize(4)
+	assert_eq(plain[Mesh.ARRAY_TEX_UV2], zero, "UV2 on a surface with no narrow level face, all 0")
