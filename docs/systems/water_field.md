@@ -503,9 +503,11 @@ parts. Switch `WaterEdit.cut_through` (true in every build; false brings back th
   and the note `rise_removed` counts the drawn reaches' climb (`WaterFallPlan.drawn_rises`). Every cut row of the
   cuts level is now one reach (1 m, 3 m, 8 m, the mound, the edge; the hill two) at one width, with
   no bar (`band_main_build.png`). A line with no such rise plans exactly as before. What it changes
-  besides: on the verdict map the line over three walls lost the 1.25 m fall at its head (the head
-  stood on the skirt of the wall behind it, inside the lip's end clearance on the cut ground), so
-  its head is dug down to the valley's level (`walls_main_build.png`, top row).
+  besides: in one build of the verdict map the line over three walls lost the 1.25 m fall at its head
+  (the head stood on the skirt of the wall behind it, inside the lip's end clearance on the cut
+  ground), so its head was dug down to the valley's level (`walls_main_build.png`, top row). A
+  rebuild (`walls_main_build_final.png`) had no head fall in main's plan either: the walls there are
+  drawn with the pointer, and whether the head falls depends on where the drawn walls end.
 - **No hint.** The owner (2026-11-22): "The hint is unwanted". A cut is not said: the `cut_through`
   hint is removed from `WaterHints`, `plan_river` and `WaterRefit.refit`; `report.cut` and
   `report.rise_cut` still record it, and `refit`'s `cut` still counts the strokes. Every other river
