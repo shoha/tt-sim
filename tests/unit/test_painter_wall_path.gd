@@ -133,29 +133,86 @@ func test_bind_with_presence_sets_what_the_full_pass_sets() -> void:
 				_dab(doc, _rng.randi_range(0, 3), _rng.randi_range(0, 255))
 			elif round % 3 == 1:
 				_scatter(doc, 30, 0.4, 3)
-			var fast := ShaderMaterial.new()
-			var full := ShaderMaterial.new()
-			var ids_fast := PainterGroundPaths.bind([fast], doc, true, presence)
-			var ids_full := PainterGroundPaths.bind([full], doc, true)
-			var label := "%s round %d" % [base, round]
-			assert_eq(ids_fast, ids_full, label)
-			assert_eq(
-				fast.get_shader_parameter(&"path_only"), full.get_shader_parameter(&"path_only"), label
-			)
-			assert_eq(
-				fast.get_shader_parameter(&"path_map_present"),
-				full.get_shader_parameter(&"path_map_present"),
-				label
-			)
-			var a: Variant = fast.get_shader_parameter(&"path_map")
-			var b: Variant = full.get_shader_parameter(&"path_map")
-			assert_eq(a == null, b == null, label + ": a slot map on both or neither")
-			if a != null and b != null:
-				assert_eq(
-					(a as ImageTexture).get_image().get_data(),
-					(b as ImageTexture).get_image().get_data(),
-					label + ": slot map bytes"
-				)
+			_assert_bind_equal(presence, doc, "%s round %d" % [base, round])
+
+
+## Binds `doc` with `presence` and with the full pass and checks every value is the same; returns
+## whether a slot map was bound.
+func _assert_bind_equal(presence: PainterPathPresence, doc: MapDocument, label: String) -> bool:
+	var fast := ShaderMaterial.new()
+	var full := ShaderMaterial.new()
+	var ids_fast := PainterGroundPaths.bind([fast], doc, true, presence)
+	var ids_full := PainterGroundPaths.bind([full], doc, true)
+	assert_eq(ids_fast, ids_full, label)
+	assert_eq(fast.get_shader_parameter(&"path_only"), full.get_shader_parameter(&"path_only"), label)
+	assert_eq(
+		fast.get_shader_parameter(&"path_map_present"),
+		full.get_shader_parameter(&"path_map_present"),
+		label
+	)
+	var a: Variant = fast.get_shader_parameter(&"path_map")
+	var b: Variant = full.get_shader_parameter(&"path_map")
+	assert_eq(a == null, b == null, label + ": a slot map on both or neither")
+	if a != null and b != null:
+		assert_eq(
+			(a as ImageTexture).get_image().get_data(),
+			(b as ImageTexture).get_image().get_data(),
+			label + ": slot map bytes"
+		)
+	return a != null
+
+
+## Card painter-path-many: with several path surfaces painted the slot map is redone over the
+## changed rows; through dabs (edges included), erasing, scatter, a new surface appended, a slot
+## list reordered under paint, a path base, a new document and a resize it binds the full pass's
+## bytes, kept across frames where it can be.
+func test_the_slot_map_equals_the_full_pass_with_many_path_surfaces() -> void:
+	var presence := PainterPathPresence.new()
+	var doc := _doc()
+	var maps := 0
+	for round in 72:
+		match round:
+			0:
+				# Broad paint: the first slot map is built whole; the new document at 50 from spans.
+				_scatter(doc, 200, 0.6, 3)
+			18:
+				var ids := doc.surface_ids
+				ids.append("gravel_sandstone")
+				doc.surface_ids = ids
+			30:
+				doc.base_surface = "dirt_road_packed"
+			40:
+				var ids := doc.surface_ids
+				ids.reverse()
+				doc.surface_ids = ids
+			50:
+				doc.base_surface = "grass_meadow"
+				var other := _doc()
+				_dab(other, 1, 255)
+				_dab(other, 2, 180)
+				doc = other
+			60:
+				var small := MapDocument.create_flat(Vector2i(6, 5), "flagstone", "test", 3)
+				small.surface_ids = PackedStringArray(IDS)
+				var weights := PackedByteArray()
+				weights.resize(small.sample_count() * MapDocument.SURFACE_BYTES)
+				small.surface_weights = weights
+				doc = small
+		var top := doc.surface_ids.size() - 1
+		match round % 4:
+			0, 1:
+				_dab(doc, _rng.randi_range(0, top), _rng.randi_range(1, 255))
+			2:
+				_dab(doc, _rng.randi_range(0, top + 1), 0 if _rng.randf() < 0.5 else 255)
+			3:
+				_scatter(doc, _rng.randi_range(1, 20), 0.5, top + 1)
+		if _assert_bind_equal(presence, doc, "round %d" % round):
+			maps += 1
+	assert_gt(maps, 40, "most rounds bind a slot map")
+	assert_lt(presence.slot_map.starts, 12, "and most of those keep the planes")
+	assert_gt(presence.slot_map.whole_builds, 0, "a broadly painted start is built whole")
+	assert_gt(presence.slot_map.starts, presence.slot_map.whole_builds, "a sparse one from spans")
+	gut.p("slot maps %d, starts from zero %d" % [maps, presence.slot_map.starts])
 
 
 # --- WallWarmup ----------------------------------------------------------------------------

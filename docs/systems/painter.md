@@ -2443,16 +2443,30 @@ threshold). Now one include, `painter/shaders/painter_snow_law.gdshaderinc` (por
 `ad3f4b1e`, on/off in place of its amount), answers which faces hold snow and how the cover's edge
 looks; each family keeps its own paint.
 
-- **The law.** `snow_law(on, up, wp, n, top, seed)` returns cover, hold, rim and a cap's lower edge.
-  `snow_hold(on, up)` = on * smoothstep(0.2, 0.44, up), one curve for every family (the roofs' cap
-  curve; a steeper 0.3 to 0.55 left the wizard tower's spire with only tongues at its tip, round 1).
-  A face that knows its top (`top` = a roof's h) keeps a partial hold at the top: the cap of uneven
-  drifts by facet and thin toward the sun (`snow_cap_edge`, the old `snow_edge` with its `f.x`
-  computed from wp and n), from up 0.08. Any other face (`SNOW_NO_TOP`) breaks a partial hold in a
-  few bold soft shapes of one world noise (0.55 per metre, about 2 m shapes, a 0.1 soft band, about
-  0.15 m), never a stipple; its rim is the band just inside that edge or where a rounded form turns
+- **The law.** `snow_law(on, up, wp, roof)` returns cover, hold and rim. `snow_hold(on, up)` = on *
+  smoothstep(0.2, 0.44, up) for every face but a roof's; a roof asks `snow_shed(on, up)` = on *
+  smoothstep(`SNOW_SHED_LO` 0.5, `SNOW_SHED_HI` 0.62, up): none steeper than 60 degrees, all from
+  about 52 (card snow-steep-roofs, below). A partial hold breaks in a few bold soft shapes of one
+  world noise (0.55 per metre, about 2 m shapes, a 0.1 soft band, about 0.15 m), never a stipple; its
+  rim is the band just inside that edge or, on a face that is not a roof, where a rounded form turns
   from the sky (`snow_turn`, the props' old 0.5 to 0.85). No textures, no derivatives (callers branch
   around it). It declares the `foliage_sun` global, guarded by `PAINTER_SNOW_LAW`.
+- **Steep roofs shed** (card snow-steep-roofs, 2026-11-22; look-pending). Owner: steep-sloped
+  buildings like towers kept "the smudgy painted texture": the wizard tower's Taper spire (66 to 76
+  degrees) has no snow body (procgen's `ProcgenSnowTops.CONE_UP_MIN` 0.5 declares no cone record for
+  it), so its white was the law's painted cap (a roof's h as its top: a cap down from the tip in
+  drifts by facet, `snow_cap_edge`, held down to up 0.08). The cap is gone (`snow_cap_edge`,
+  `SNOW_STAND`, `SNOW_NO_TOP`, `snow_edge_m`): a roof asks the same law with its own steepness
+  response, so a spire, a chapel's or a keep's steep spire and a gatehouse's steep hip read clean in
+  their own colour, and a bell roof's flatter flare would keep broad soft shapes. Roofs with records
+  agree: `PainterMannerSnow.ROOF_UP_MIN` 0.5 drops a slope steeper than 60 degrees from the snow
+  source (no blanket, lip, cap or collar; `holds_snow`), and the manner shader's blanket branch takes
+  a roof piece only from `SNOW_SHED_LO`. One threshold, 60 degrees, for the law, the slopes' bodies
+  and procgen's cones: a roof at 52 to 60 degrees with a body (a keep's turret cone at 58) wears the
+  body whole, and the law's partial paint under it is hidden. One curve for every surface no longer
+  fits: a cap on a boulder's shoulder or a barrel's bevel (up 0.2 to 0.44) is how snow sits on a
+  small rounded form, but a long smooth slope of tile or slate sheds it. Cottage roofs (36 to 50
+  degrees), terraces, the village and guild rows keep their whole layer.
 - **The ledge** (rounds 3 and 4). A structure's level, non-roof face narrower than a ledge holds no
   snow: `snow_ledge(width)` = smoothstep(`SNOW_LEDGE_LO` 0.08, `SNOW_LEDGE_HI` 0.12, width), 1 where
   the width is 0 (wide, or no level face). The width is the face's shortest edge, written per vertex
@@ -2465,7 +2479,7 @@ looks; each family keeps its own paint.
   frame head 15 cm, a lintel 16 cm, a sill 19 cm (kept). The warm-up's structure sample is the UV2
   layout and its manner sample carries the one-float CUSTOM1 (`PainterWarmup.triangle(slots, flags)`).
 - **Callers.** `painter_snow.gdshaderinc` includes it (structure, manner, prop shaders);
-  `painter_structure.gdshader` asks it on every face: a roof with its h (cap), any other face (a
+  `painter_structure.gdshader` asks it on every face: a roof as a roof (`snow_shed`), any other face (a
   wall's coping, a fence or boundary top, a sill, a lintel, a step, a deck) with its flat face up
   from wp's derivatives, in the props' world frame (1.6 times); `painter_structure_manner.gdshader`'s
   no-record branch is every leftover face where it is a roof or holds (round and Taper roofs, sills,
@@ -2626,7 +2640,8 @@ Owner verdicts on the roof-polish frames, taken one by one (evidence:
   the ledges (`SNOW_LEDGE_M`, `snow_steep`); `snow_cover_roof(snow, up, h, f)` lays one cap down from
   the top to an edge (`snow_edge`: low on a steep face, a slow sway and tongues along it), and
   `snow_edge_m` gives the lip's roll its distance to that edge, so the cap ends in the same rolled lip
-  an eave has. Both roof shaders (A3b and the manner's no-record branch) call the one pair.
+  an eave has. Both roof shaders (A3b and the manner's no-record branch) call the one pair. (Gone
+  since card snow-steep-roofs: a steep roof sheds its snow instead.)
 - **Street roofs wear the blanket** (l45_snow, "More body"): `PainterStreetSnow`
   (`painter/buildings/street_snow.gd`) reads a wall layer's roof part back into manner roof records
   (up faces, joined into slopes by shared edges in one plane, the outline's sides named eave, ridge,

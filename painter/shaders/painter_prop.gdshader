@@ -144,7 +144,7 @@ void fragment() {
 	float rim = 0.0;
 	if (snow > 0.0 && snow_hold(snow, n.y) > 0.0) {
 		vec2 sf = wp.xz * 1.6;
-		vec4 law = snow_law(snow, n.y, wp, n, SNOW_NO_TOP, 0.0);
+		vec3 law = snow_law(snow, n.y, wp, false);
 		cover = law.x;
 		sp = snow_paint(sf, 1.0);
 		rim = law.z;

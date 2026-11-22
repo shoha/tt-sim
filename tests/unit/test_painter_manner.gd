@@ -502,6 +502,25 @@ func test_snow_strips_stand_proud_along_the_edges_and_are_pure() -> void:
 	assert_true((none.arrays as Array).is_empty())
 
 
+func test_a_roof_steeper_than_sixty_degrees_sheds_its_snow_body() -> void:
+	# Card snow-steep-roofs (owner, 2026-11-22: steep roofs lose the smudgy painted snow): a slope
+	# steeper than the law sheds at gets no blanket, lip or cap, at the number procgen gives a cone.
+	assert_almost_eq(PainterMannerSnow.ROOF_UP_MIN, ProcgenSnowTops.CONE_UP_MIN, 0.0001)
+	var still := {"amp": 0.0, "phase": Vector3.ZERO, "foot": 0.0, "eave": 2.0}
+	var kept := _roof()
+	assert_true(PainterMannerSnow.holds_snow(kept), "the test slope holds snow")
+	var src := PainterMannerSnow.source({"roof/slope0": kept}, {}, PackedStringArray(), still)
+	assert_eq((src.roofs as Array).size(), 1)
+	var steep := _roof()
+	steep["n"] = Vector3(0.0, cos(deg_to_rad(66.0)), sin(deg_to_rad(66.0)))
+	assert_false(PainterMannerSnow.holds_snow(steep), "a spire's 66 degrees")
+	src = PainterMannerSnow.source({"roof/slope0": steep}, {}, PackedStringArray(), still)
+	assert_true((src.roofs as Array).is_empty(), "no slope to lay snow on")
+	assert_eq(int(PainterMannerSnow.build(src).triangles), 0, "no blanket, lip or cap")
+	var shader := FileAccess.get_file_as_string(PainterMannerHost.SHADER)
+	assert_string_contains(shader, "code != 7 && up >= SNOW_SHED_LO)", "its pieces ask the law")
+
+
 func test_a_blanket_carries_its_roofs_kind_and_paint_in_its_vertex_colour() -> void:
 	# card painter-look-roofs-winter: the snow's shader takes the roof's ramp from the blanket's
 	# colour (rgb the roof's paint, alpha its kind in eighths); a strip keeps white.
