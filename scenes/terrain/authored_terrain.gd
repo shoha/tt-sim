@@ -815,10 +815,9 @@ func has_unsettled_chunks() -> bool:
 
 
 ## Queues a rebuild of every chunk edited in place since the last call (the end of a sculpt
-## stroke, an undo), which process_heights() runs after the in-place work. The rebuilt
-## chunk is the same geometry; what changes is the mesh's AABB, exact again for the bounds
-## walks, and the chunk's shadow casting, which a flattened chunk turns off.
-##
+## stroke, an undo, a landing), which process_heights() runs: the same geometry, with the mesh's
+## AABB exact again for the bounds walks and the shadow casting a flattened chunk turns off. A
+## chunk still queued for an in-place update skips it for the rebuild (its vertex copy goes).
 ## It also brings the rule fields up to date for everything queued since the last call (one
 ## TerrainRules.sample_fields pass over the edit grown by CURVATURE_RADIUS_M) and queues the
 ## rebuild of every chunk they changed, which carries them in UV2; vertex copies kept for
@@ -857,6 +856,11 @@ func settle_heights() -> void:
 	for cell in _edited:
 		_settling[cell] = true
 	_edited.clear()
+	for cell in _dirty_heights:
+		_mirrors.erase(cell)
+		if _chunks.has(cell):
+			_settling[cell] = true
+	_dirty_heights.clear()
 
 
 ## The lowest and highest ground height (Vector2(min, max), map frame) over every chunk:

@@ -184,6 +184,21 @@ static func refresh(doc: MapDocument) -> PackedByteArray:
 	return field
 
 
+## A dressing field ZSTD-packed for history: {"data", "size"} (WaterEditor's edit records).
+static func pack(field: PackedByteArray) -> Dictionary:
+	if field.is_empty():
+		return {"data": PackedByteArray(), "size": 0}
+	return {"data": field.compress(WaterEdit.COMPRESSION), "size": field.size()}
+
+
+## The field pack() packed.
+static func unpack(packed: Dictionary) -> PackedByteArray:
+	var size: int = packed.get("size", 0)
+	if size <= 0:
+		return PackedByteArray()
+	return (packed.data as PackedByteArray).decompress(size, WaterEdit.COMPRESSION)
+
+
 ## The sample rect (grid coordinates) where field `after` differs from field `before` on a grid of
 ## `columns` x `rows` samples: the bounds of every changed sample, empty when the bytes are equal,
 ## the whole grid when the fields' sizes differ (water appeared or went). The rows are compared as

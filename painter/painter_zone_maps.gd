@@ -36,15 +36,24 @@ extends RefCounted
 ## first version waited for the group in finish(), cancel() and the predelete, and such a wait lasts
 ## as long as every pool thread is taken (a probe: 4.0 s under a 4 s hold of the pool); on CI's
 ## 4-core runner the unit tests stalled in the first-water test, which closes its map with the
-## build still in flight when it has not landed in three frames, until the job was killed. Now a build
-## that has not completed is abandoned, never waited for: finish() builds the snapshot on the main
-## thread itself (the same functions, so the same bytes) and cancel() just lets go; an abandoned
-## group is waited for, as Godot needs once per group, only after it has completed (_reap(), polled
-## once a frame while any is left).
+## build still in flight when it has not landed in three frames, until the job was killed. Now a
+## build that has not completed is abandoned, never waited for: finish() builds the snapshot on the
+## main thread itself (the same functions, so the same bytes) and cancel() just lets go; an
+## abandoned group is waited for, as Godot needs once per group, only after it has completed
+## (_reap(), polled once a frame while any is left).
+##
+## The worker update (card painter-land-frame). An edit's rect of ASYNC_SAMPLES or more on the
+## maps' plan (a river landing's, 31 ms on the main thread) runs the same way over its rows alone
+## (update_async()), and its landing blits the region into the kept images: the bytes update() would
+## have written when it started.
 
 ## The share of the grid an edit's rect must cover before wants_whole() sends it to the worker
 ## (an update of a rect that size costs about a whole build).
 const WORKER_SHARE := 0.5
+## The samples (the rect grown by the blur) from which an edit's update runs on a worker
+## (wants_worker(), update_async()): about 6 ms of GDScript on the main thread (a held stroke's
+## every-third-frame rect, about 2100 samples, stays synchronous).
+const ASYNC_SAMPLES := 4096
 ## The worker build's row bands, one pool task each: at least BAND_ROWS rows a band, at most
 ## MAX_BANDS bands (a 200 ft map: 8 bands of about 25 rows, so the build takes about an eighth of
 ## its single-thread time on a machine with the threads free).
@@ -116,7 +125,12 @@ func update(doc: MapDocument, rect: Rect2i) -> void:
 		build(doc, p)
 		return
 	var grid := Rect2i(0, 0, p["sx"], p["sz"])
-	var out := rect.grow(PainterSurfaces.ZONE_BLUR).intersection(grid)
+	_write_region(doc, p, rect.grow(PainterSurfaces.ZONE_BLUR).intersection(grid))
+
+
+## Writes the texels of the region `out` (grid coordinates) of `doc` on plan `p`, the maps' own
+## plan, into the kept images and uploads them.
+func _write_region(doc: MapDocument, p: Dictionary, out: Rect2i) -> void:
 	last_whole = false
 	last_rect = out
 	if not out.has_area():
@@ -145,6 +159,40 @@ func wants_whole(doc: MapDocument, rect: Rect2i) -> bool:
 ## the kept images and textures stay until poll() or finish() lands it. A build already in flight
 ## is dropped first (cancel()).
 func build_async(doc: MapDocument) -> void:
+	var p := plan(doc)
+	_start(doc, p, Rect2i(0, 0, p["sx"], p["sz"]), true)
+
+
+## Whether update() of `rect` is large enough to run on a worker (update_async()): the region grown
+## by the blur holds ASYNC_SAMPLES samples or more, and the maps are built on the same plan (else
+## the update is a whole build: wants_whole()).
+func wants_worker(doc: MapDocument, rect: Rect2i) -> bool:
+	var p := plan(doc)
+	if zone == null or p != _plan:
+		return false
+	var out := rect.grow(PainterSurfaces.ZONE_BLUR).intersection(Rect2i(0, 0, p["sx"], p["sz"]))
+	return out.get_area() >= ASYNC_SAMPLES
+
+
+## update() of `rect` on a worker (card painter-land-frame: a river landing's rect cost 31 ms of
+## its frame): the region functions run over a snapshot of `doc` as it is now, and poll() or
+## finish() blits the result into the kept images on a later frame, the bytes update() would have
+## written now. The caller keeps the edits that arrive meanwhile, as for build_async(). A plan that
+## differs from the maps' builds whole, synchronously (update()).
+func update_async(doc: MapDocument, rect: Rect2i) -> void:
+	var p := plan(doc)
+	if zone == null or p != _plan:
+		update(doc, rect)
+		return
+	var out := rect.grow(PainterSurfaces.ZONE_BLUR).intersection(Rect2i(0, 0, p["sx"], p["sz"]))
+	if not out.has_area():
+		cancel()
+		return
+	_start(doc, p, out, false)
+
+
+## Starts the worker job over the region `out` of `doc` on plan `p` (`whole`: a whole build).
+func _start(doc: MapDocument, p: Dictionary, out: Rect2i, whole: bool) -> void:
 	cancel()
 	# Copies (about 0.7 MB on a 200 ft map, well under a millisecond): a packed array is shared by
 	# assignment in GDScript, so a kept reference would see, mid-read, an edit made meanwhile
@@ -154,13 +202,12 @@ func build_async(doc: MapDocument) -> void:
 	snapshot.biome_density = doc.biome_density.duplicate()
 	snapshot.surface_weights = doc.surface_weights.duplicate()
 	snapshot.water_dressing = doc.water_dressing.duplicate()
-	var p := plan(doc)
 	@warning_ignore("integer_division")
-	var count := clampi(int(p["sz"]) / BAND_ROWS, 1, MAX_BANDS)
+	var count := clampi(out.size.y / BAND_ROWS, 1, MAX_BANDS)
 	var bands: Array[Dictionary] = []
 	for k in count:
 		bands.append({})
-	_job = {"doc": snapshot, "plan": p, "bands": bands}
+	_job = {"doc": snapshot, "plan": p, "bands": bands, "out": out, "whole": whole}
 	async_starts += 1
 	# The script's static function, not a method of this object: the task never calls into a maps
 	# object that was freed meanwhile (the predelete abandons it). High priority: a frame waits on
@@ -192,7 +239,10 @@ func finish() -> bool:
 		return _land()
 	var job := _job
 	cancel()
-	build(job["doc"], job["plan"])
+	if job["whole"]:
+		build(job["doc"], job["plan"])
+	else:
+		_write_region(job["doc"], job["plan"], job["out"])
 	return true
 
 
@@ -251,7 +301,7 @@ func _land() -> bool:
 	_job = {}
 	var p: Dictionary = job["plan"]
 	var grid := Rect2i(0, 0, p["sx"], p["sz"])
-	# Full-width row bands in order: their bytes concatenate into the whole image's.
+	# The region's row bands in order: their bytes concatenate into the region's.
 	var maps: Array = []
 	for key: String in ["zone", "char", "biome"]:
 		var bytes := PackedByteArray()
@@ -259,6 +309,18 @@ func _land() -> bool:
 			if band[key] != null:
 				bytes.append_array(band[key])
 		maps.append(bytes)
+	if not job["whole"]:
+		# update_async(): the maps are on the job's plan (a build or a plan change since cancels it).
+		var out: Rect2i = job["out"]
+		last_whole = false
+		last_rect = out
+		_blit(zone, Image.FORMAT_RGBA8, maps[0], out)
+		if char_map != null:
+			_blit(char_map, Image.FORMAT_R8, maps[1], out)
+		if biome != null:
+			_blit(biome, Image.FORMAT_RGBA8, maps[2], out)
+		_upload()
+		return true
 	zone = _image_of(grid, Image.FORMAT_RGBA8, maps[0])
 	char_map = _image_of(grid, Image.FORMAT_R8, maps[1]) if p["char_any"] else null
 	biome = _image_of(grid, Image.FORMAT_RGBA8, maps[2]) if p["biome_present"] else null
@@ -270,17 +332,20 @@ func _land() -> bool:
 	return true
 
 
-## The workers' half of build_async(): band `index` of the job's snapshot (full-width rows, the
-## bands splitting the grid's rows evenly), each map's bytes over it as the region functions make
-## them, into the band's own dictionary (no two workers write one object).
+## The workers' half of build_async() and update_async(): band `index` of the job's snapshot (rows
+## of the job's region, the whole grid for a build, the bands splitting them evenly), each map's
+## bytes over it as the region functions make them, into the band's own dictionary (no two workers
+## write one object).
 @warning_ignore("integer_division")
 static func _run_band(index: int, job: Dictionary) -> void:
 	var doc: MapDocument = job["doc"]
 	var p: Dictionary = job["plan"]
 	var bands: Array[Dictionary] = job["bands"]
-	var sz: int = p["sz"]
-	var top := sz * index / bands.size()
-	var out := Rect2i(0, top, p["sx"], sz * (index + 1) / bands.size() - top)
+	var region: Rect2i = job["out"]
+	var rows := region.size.y
+	var top := region.position.y + rows * index / bands.size()
+	var bottom := region.position.y + rows * (index + 1) / bands.size()
+	var out := Rect2i(region.position.x, top, region.size.x, bottom - top)
 	var band := bands[index]
 	band["zone"] = zone_region(doc, p, out)
 	band["char"] = char_region(doc, p, out) if p["char_any"] else null

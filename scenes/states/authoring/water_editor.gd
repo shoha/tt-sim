@@ -66,6 +66,8 @@ var _job: Dictionary = {}
 ## The second half of a landed edit (Callable), run by step() on a later frame, or none.
 var _follow: Callable = Callable()
 var _follow_frame: int = -1
+## Whether finish_work() is landing the edit (every part at once) rather than step() frame by frame.
+var _at_once := false
 ## The editor (weak: it owns this object).
 var _owner: WeakRef = null
 
@@ -428,12 +430,14 @@ func step() -> void:
 
 ## Lands the edit in progress at once, every part (waiting for its worker).
 func finish_work() -> void:
+	_at_once = true
 	if not _job.is_empty():
 		_land()
 	while _follow.is_valid():
 		var follow := _follow
 		_follow = Callable()
 		follow.call()
+	_at_once = false
 
 
 ## Waits for a computing edit and drops it, landed or not (the map is closing).
@@ -760,7 +764,9 @@ func _land() -> void:
 	if stroke != null:
 		e.heights.begin_snap(stroke.start_heights, true)
 		e.heights.queue_heights(stroke.take_pending())
-		e.heights.work(true)
+		# Within the frame budgets (card painter-land-frame: 54-73 ms at once); step() drains the rest,
+		# _settle() rebuilds the chunks still queued and _finish() waits for the snap.
+		e.heights.work(_at_once)
 		diff = stroke.finish()
 		region = region.merge(stroke.changed) if stroke.changed.has_area() else region
 	timings["ground"] = Time.get_ticks_usec() - t0
@@ -794,13 +800,19 @@ func _settle(
 	_then(_finish.bind(label, stroke, diff, job, region))
 
 
-## Landing, third frame: the dressing texture (the first water on a map re-plans the ground's
-## layers too), rocks, the scatter regeneration, and the history entry.
+## Landing, third frame or the first after the plants' snap has drained (its start rows go into
+## the history entry): the dressing texture (the first water on a map re-plans the ground's layers
+## too), rocks, the scatter regeneration, and the history entry.
 func _finish(
 	label: String, stroke: HeightStroke, diff: Dictionary, job: Dictionary, region: Rect2i
 ) -> void:
 	var e := _editor()
 	var doc := e.document
+	if e.heights.snapping():
+		if not _at_once:
+			_then(_finish.bind(label, stroke, diff, job, region))
+			return
+		e.heights.work(true)
 	var t0 := Time.get_ticks_usec()
 	if is_instance_valid(e.terrain):
 		e.terrain.refresh_water_dressing()
@@ -815,8 +827,8 @@ func _finish(
 		"kept": {},
 		"water_before": before,
 		"water_after": after,
-		"dressing_before": _pack(dressing_before),
-		"dressing_after": _pack(doc.water_dressing),
+		"dressing_before": WaterDressing.pack(dressing_before),
+		"dressing_after": WaterDressing.pack(doc.water_dressing),
 		"region": region,
 		# Crossings follow their water and banks, in this edit's entry (P4b-2).
 		"crossings": e.crossings.follow(MaskBrush.sample_rect_to_world(doc, region)),
@@ -863,20 +875,6 @@ func _finish(
 	e.edited.emit()
 
 
-## A dressing field ZSTD-packed for history: {"data", "size"}.
-static func _pack(field: PackedByteArray) -> Dictionary:
-	if field.is_empty():
-		return {"data": PackedByteArray(), "size": 0}
-	return {"data": field.compress(WaterEdit.COMPRESSION), "size": field.size()}
-
-
-static func _unpack(packed: Dictionary) -> PackedByteArray:
-	var size: int = packed.get("size", 0)
-	if size <= 0:
-		return PackedByteArray()
-	return (packed.data as PackedByteArray).decompress(size, WaterEdit.COMPRESSION)
-
-
 ## Undo (`redo` false) or redo of a water edit (_finish()'s record): the heights, the water
 ## model and its dressing, props as recorded, kept rocks swapped, then the surface and plants.
 ## All at once, or with `spread` (a live edit) the heights' work is queued for
@@ -916,7 +914,8 @@ func _land_edit(record: Dictionary, redo: bool) -> void:
 	e.rock_keeper.swap(record.kept, redo)
 	if is_instance_valid(e.terrain):
 		e.terrain.settle_heights()
-	doc.water_dressing = _unpack(record.dressing_after if redo else record.dressing_before)
+	var dressing: Dictionary = record.dressing_after if redo else record.dressing_before
+	doc.water_dressing = WaterDressing.unpack(dressing)
 	if is_instance_valid(e.terrain):
 		e.terrain.refresh_water_dressing()
 	if is_instance_valid(e.map_root):
