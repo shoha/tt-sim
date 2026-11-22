@@ -15,7 +15,10 @@ extends RefCounted
 ## "props" set_prop_cell, "height" HeightEditor.apply_diff, "water" WaterEditor.apply_edit,
 ## "crossings" CrossingEditor.apply_list, "walls" WallEditor.apply_list, "structures"
 ## StructureEditor.apply_list (the whole list as JSON forms, like walls), "settlements"
-## SettlementEditor.apply_list (likewise; the furnishings are derived, never sent). One side of
+## SettlementEditor.apply_list (likewise; the furnishings are derived, never sent), "terra"
+## TerraEditor.apply_edits (a terrain gesture's edits for one side, its ground side and the
+## host's digests after it, which the peer checks once landed; docs/systems/terraform.md "The
+## editor") and "terra_check" TerraEditor.apply_check (the digests alone). One side of
 ## an entry travels: a redo (and a fresh
 ## record) its after side, diffs with their "after" blocks and records with their *_after
 ## fields; an undo its before side ("redo" false), diffs with their "before" blocks and records
@@ -55,10 +58,20 @@ const CHUNK_BYTES := 64 * 1024
 ## Most chunks one op takes (MAX_BYTES / CHUNK_BYTES).
 const MAX_CHUNKS := 64
 const KINDS: Array[String] = [
-	"mask", "surface", "height", "water", "crossings", "walls", "structures", "props", "settlements"
+	"mask",
+	"surface",
+	"height",
+	"water",
+	"crossings",
+	"walls",
+	"structures",
+	"props",
+	"settlements",
+	"terra",
+	"terra_check",
 ]
 ## Kinds whose apply method takes the side to apply (redo true: after; false: before).
-const SIDED: Array[String] = ["mask", "surface", "height", "water"]
+const SIDED: Array[String] = ["mask", "surface", "height", "water", "terra"]
 
 
 ## History entry `entry` ({"label", "undo", "redo"}) recorded by `editor` (the host's) as an
@@ -89,6 +102,8 @@ static func op_of(entry: Dictionary, editor: RefCounted, undo: bool = false) -> 
 			key = "structures." + key
 		&"SettlementEditor":
 			key = "settlements." + key
+		&"TerraEditor":
+			key = "terra." + key
 		&"AuthoringEditor":
 			pass
 		_:
@@ -114,7 +129,40 @@ static func op_of(entry: Dictionary, editor: RefCounted, undo: bool = false) -> 
 			return _op("structures", [_structures_json(args[0]), args[1]])
 		"settlements.apply_list":
 			return _op("settlements", [_settlements_json(args[0]), args[1]])
+		"terra.redo_gesture":
+			return _op("terra", _terra_side(args[0], true), true)
+		"terra.undo_gesture":
+			return _op("terra", _terra_side(args[0], false), false)
 	return {}
+
+
+## A terrain gesture (TerraEditor's record) as one side's op arguments: [the edits that side
+## applies (its edits, or for an undo its inverse), the ground record's side, TerraDoc.digest
+## after that side, and that side's settled digests (TerraEditor.CHECKED)]. The host's landing
+## has filled the digests: op_of() finishes the height work, the terrain's landings included.
+static func _terra_side(gesture: Dictionary, redo: bool) -> Array:
+	var ground: Dictionary = gesture.get("ground", {})
+	return [
+		(gesture.edits if redo else gesture.inverse).duplicate(true),
+		{} if ground.is_empty() else _record_side(ground, redo),
+		String(gesture.doc_digest if redo else gesture.digest_before),
+		(gesture.digests_after if redo else gesture.digests_before).duplicate(),
+	]
+
+
+## The host's settled terrain digests alone, as a "terra_check" op (`editor` the host's
+## AuthoringEditor), or {} when its terrain is not active or not settled.
+static func terra_check_op(editor: RefCounted) -> Dictionary:
+	editor.finish_height_work()
+	var terra: RefCounted = editor.get("terra")
+	if terra == null or not terra.call("active"):
+		return {}
+	var session: Node = terra.call("session")
+	var doc: MapDocument = editor.get("document")
+	if not session.call("is_ready"):
+		return {}
+	var digests: Dictionary = terra.call("checked_digests", session)
+	return _op("terra_check", [String(doc.terra.call("digest_for", doc)), digests])
 
 
 ## History entry `entry` as its ops, in the order a peer applies them: op_of()'s one op, or for
@@ -203,6 +251,11 @@ static func apply(op: Dictionary, editor: RefCounted) -> void:
 			editor.settlements.apply_list(args[0], args[1])
 		"props":
 			editor.set_prop_cell(args[0], args[1])
+		"terra":
+			var check := {"doc_digest": args[2], "digests": args[3]}
+			editor.terra.apply_edits(args[0], args[1], redo, true, check)
+		"terra_check":
+			editor.terra.apply_check({"doc_digest": args[0], "digests": args[1]})
 
 
 static func _op(kind: String, args: Array, redo: bool = true) -> Dictionary:

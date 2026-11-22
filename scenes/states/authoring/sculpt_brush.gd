@@ -86,6 +86,9 @@ func press(brush: BrushTool) -> bool:
 		target_y = tier.y
 		_stroke_level = tier.level
 	if not editor.begin_height_stroke(op, target_y):
+		# The terrain core's refusal (the switch off on a primitives map, or not yet routed).
+		if editor.terra.last_refusal != "":
+			brush.refused.emit(editor.terra.last_refusal)
 		return false
 	_stroke_op = op
 	_stroke_target_y = target_y

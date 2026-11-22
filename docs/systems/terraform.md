@@ -35,6 +35,7 @@ loaded map behind a switch, off by default ("The session").
 | `utils/terraform/terra_cache.gd` | `TerraCache`: the derived record (`terrain/derived.bin`, digests only): `make_record`, `prepare`, `derive_for`, `check`, `derive_and_check`, `encode` / `decode` |
 | `utils/terraform/terra_session.gd` | `TerraSession`, a Node: the core attached to a loaded map (see "The session") |
 | `utils/terraform/terra_bridge.gd` | `TerraBridge`: the session's derived ground written into `MapDocument.heights` (see "The bridge"); `seed_new_map` |
+| `scenes/states/authoring/terra_editor.gd` | `TerraEditor` (`AuthoringEditor.terra`): gestures as history entries, the inverse builder, the shared landing, the tool routes and the peers' apply (see "The editor") |
 | `native/src/terra_bridge.cpp` | `TerraDerive.doc_heights()` and `doc_heights_diff()`: H2 at the document's samples, whole or as the tight differing rect |
 | `utils/terraform/terra_kinds.gd` | `TerraKinds`: the GDScript registry, one preload line per kind; `script_for(id)`, `name_of`, `ids()`, `table()`, `problem(id, data)` |
 | `utils/terraform/kinds/<name>/<name>_kind.gd` | one script per kind (layout, `validate`, `bounds`, label, defaults); `kinds/kind_layout.gd` holds the checks they share |
@@ -306,6 +307,76 @@ sample (2a, 2b)), and the game's own consumers build from it unchanged. The brid
   0.01 ms and row writes 0.01 to 0.09 ms median (0.6 ms p95 over the river). Today's chunk work
   after it is the consumers' cost, not the core's.
 
+## The editor
+
+Card terraform-p2-editor (phase 2 card 3, 2026-11-22; plan `phase2_plan.md` section 4).
+`TerraEditor` (`scenes/states/authoring/terra_editor.gd`, `AuthoringEditor.terra`, part of the editor
+like `HeightEditor`) is the spine from a gesture to the primitives. `active()` is true when the switch is
+on, the document has a terrain section and the map has its `TerraSession`; `create` connects to the
+session's `settled` and sets the bridge's editor (`TerraBridge.set_editor`), so the bridge's written
+rects go to the editor's height queue.
+
+- **One entry per gesture.** `begin_gesture()`, `edit(change, held)` per change (applied at once through
+  `TerraSession.apply`, or `TerraBridge.held` for a held frame; its inverse built first from the document
+  as it stood), `end_gesture(label, ground, land)`; a caller that applied its own edits calls
+  `record_gesture(label, edits, inverse, ground)`. The history entry is `{"label", "undo":
+  undo_gesture.bind(g), "redo": redo_gesture.bind(g), "bytes"}`; the gesture `g` holds `edits`,
+  `inverse`, `ground` (the `HeightEditor` ground record), `doc_digest` and `digest_before`
+  (`TerraDoc.digest`), and `digests_after` / `digests_before` (`TerraEditor.CHECKED`: H2, WL, CT, falls,
+  walls, water), filled when each side lands. `compact()` folds an add's appends into it, and an append
+  or replace of a primitive the gesture already added or restored records no inverse, so a held stroke
+  is one edit each way.
+- **The inverse builder** (`TerraEditor.inverse_of(terra, change)`, pure): add gives a splice that
+  removes the new id and puts `next_id` back; append and replace a replace with the floats before;
+  remove a splice inserting the primitive back at its position with its id; mute and unmute the other;
+  move a move back; a splice a splice removing what it inserted (and `next_id` back), then one splice per
+  removed primitive at its old position, ascending. So undo returns `TerraDoc.digest()` and every derived
+  digest to their values before (`test_terra_editor`).
+- **The splice** (`TerraSession.apply({"op": "splice", "remove", "insert", "at", "next_id"})`,
+  `TerraSession.splice`, `TerraDoc.splice`): all or nothing, ids, order, flags and `next_id` restored
+  exactly; the derive re-sets the primitives from the first inserted one's position on (it has no
+  insert). For undo now, folding (card 4) and the wall sync (card 9).
+- **One landing.** Do (with `land`), undo, redo and a peer's op share it: the edits go through the
+  session (async); on `settled`, after the bridge wrote the heights (it connects first), the written
+  document rect is `doc_heights_diff` of the settled derive against the heights before the apply, and
+  `HeightEditor.apply_ground(rect, before, ground, redo, spread)` lands the ground record (props,
+  followers, kept rocks, settle, water refresh, regeneration). An apply that arrives while a landing is
+  pending waits and runs on that landing: a redo pressed before its undo lands queues, never
+  interleaves (`test_a_redo_before_the_undo_lands_queues`: the undo lands on the digests before, then
+  the redo). `has_work()` joins `AuthoringEditor.has_height_work`, so the live-edit sender and a peer's
+  queue wait for landings; `finish_work()` (in `finish_height_work`) polls the session until they land.
+- **Peers.** `LiveEditCodec` kind `"terra"`: `args = [the side's edits (its edits, or for an undo its
+  inverse), the ground record's side, TerraDoc.digest after it, its CHECKED digests]`, from
+  `op_of` on `TerraEditor.redo_gesture` / `undo_gesture`. The host's digests ride in the op itself:
+  `op_of` finishes the height work, the landings included, so the side has settled. A peer applies it
+  through `TerraEditor.apply_edits` (spread), and once landed compares (`last_check`; a mismatch warns
+  once, naming the arrays; resync is phase 6). `"terra_check"` (`LiveEditCodec.terra_check_op`,
+  `TerraEditor.apply_check`) carries the digests alone. `LiveEditReader` checks every edit: the session's
+  ops only, ids in 1..`MAX_ID`, finite floats within the caps, each added or inserted primitive against
+  `TerraKinds.problem` (loaded by path: the reader is on the start-up graph), no reserved flag, digests
+  as 64 hex digits and a short name table; a map without a terrain section refuses both kinds.
+- **The refusal.** With the switch off on a map with a terrain section (or the core on but not built),
+  `refusal()` refuses Sculpt, River, Pond, Paint and Wall with a toast naming the switch
+  (`SWITCH_OFF`), and nothing changes (`test_switch_off_refuses_every_ground_tool_and_changes_nothing`:
+  the fingerprint before and after are equal, no entry, no derive). A map without a section takes
+  today's routes untouched.
+
+### Tools
+
+`AuthoringEditor`'s stroke entry points, and the water and wall hooks on `TerraEditor` itself (the
+brushes call them; `AuthoringEditor` is at its public-method cap), route each tool to a `TerraEditor`
+op while `active()` and to today's editor otherwise; each op refuses with `NOT_YET` ("... is not on
+terrain primitives yet") until its card lands, so those cards edit only their op in `terra_editor.gd`
+(and this row), never `authoring_editor.gd`.
+
+| Tool | Route | `TerraEditor` op | Card | State |
+|---|---|---|---|---|
+| Sculpt | `AuthoringEditor.begin_height_stroke`, `height_dab`, `stroke_dab`, `flush`, `end_stroke`, `cancel_stroke` | `begin_sculpt`, `dab`, `flush`, `end_stroke`, `cancel_stroke` | terraform-p2-sculpt (6) | refuses |
+| River | `TerraEditor.carve_river` (WaterBrush.carve) | `river` | terraform-p2-water (7) | refuses |
+| Pond, Water erase | `TerraEditor.paint_pond_begin`, `erase_water_begin` (WaterBrush.begin), then the stroke routes | `begin_pond`, `begin_water_erase` | terraform-p2-water (7) | refuses |
+| Paint | `AuthoringEditor.begin_surface_stroke`, `surface_refusal`, the stroke routes | `begin_paint`, `paint_refusal` | terraform-p2-paint-path (8) | refuses |
+| Wall | `TerraEditor.begin_wall_edit` (WallBrush.press) | `begin_wall` | terraform-p2-walls (9) | refuses |
+
 ## Versions and the library
 
 `TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 5 bridge` (the bridge's reads
@@ -328,10 +399,16 @@ treats as a failure.
 | `test_terra_session.gd` | the session through `MapSourceLoader`: switch off makes no session and no `TerraDerive` and the fingerprint equals the stripped map's (but `terra`); switch on without a section makes none; the setting's default; switch on, the digests equal a fresh `derive_full`, the save writes the record, and a reload through `load_async` matches it with equal digests; every edit op (one queued during the attach, some back to back) lands equal to a fresh derive; closing mid-attach and mid-`derive_async` parks and later lets go; a refused section is kept and saved back untouched in format 6 |
 | `test_terra_bridge.gd` | `doc_rect`; `doc_heights` is H2 at the even samples and `doc_heights_diff` the tight rect (bits, clipping, another grid refused); a load with the switch on swaps in the derived ground and the collision equals `height_at` at 200 random samples; a new map with the switch on has a one-plane section, derived heights and a matching record, with it off none |
 | `test_terra_bridge_law.gd` | the bridge law over a 40-dab held raise through `TerraBridge.held` across the corpus rivers, every frame derived at once, then an async release; the collision equals the bridged heights, which equal a build |
+| `test_terra_editor.gd` | a scripted add / append / remove / splice gesture is one entry whose undo and redo return `TerraDoc.digest()` and every derived digest (and the bridged heights) to their before and after values; a redo pressed before the undo lands queues and lands after it; the inverse builder and the splice restore the encoded section exactly, and a refused splice changes nothing; switch off on a map with a section: every ground tool refuses naming the switch and the fingerprint is unchanged; without a section today's routes; switch on, each route refuses until its card |
+| `test_terra_live_edits.gd` | host and peer through bytes: after the gesture, a second gesture, both undos and a redo, equal documents, digests and `MapFingerprint`, and the peer's own check agrees; a `terra_check` op agrees, and a wrong digest is reported naming H2; malformed `terra` ops (unknown op, NaN, a short or unknown kind, a reserved flag, bad ids, next_id, digests, arity, direction) and a map without a section are refused |
 | `test_terra_stage_table.gd` | the table's order (each read an input or an earlier write, one writer per array); halo honesty: one H2 sample (then one FM sample) of a built map set outside the chain, every downstream stage re-run over the whole map, and each array changes only within the reach the table declares from it (the halos summed along the way), with the incremental derive giving the same bytes. A halo one sample short fails it (checked 2026-11-22 with the look row at 13) |
 
 `tests/unit/terra_corpus.gd` (`TerraCorpus`) is the spike's test scene placed on a map document's
-frame. `.github/native/parity.sh` runs `test_terra_golden` on every platform CI builds, debug and
+frame; `tests/unit/terra_rig.gd` (`TerraRig`) loads it through `MapSourceLoader` with an editor over it.
+Phase 2's cards also run the gate once with the switch on: `godot --headless --path <checkout> --script
+res://tools/gut_shards.gd -- -gconfig=tests/.gutconfig_terra_on.json` (its pre-run hook,
+`tests/gut_pre_run_terra_on.gd`, sets `tt_sim/terrain/core` in memory, so every test that leaves
+`switch_override` null runs with the core on). `.github/native/parity.sh` runs `test_terra_golden` on every platform CI builds, debug and
 release, and fails if it is pending or does not report its matched digests. A platform that
 disagrees is a bug in `terra_math.h`, never in the fixture. A deliberate change to the derive (a
 stage, a constant, the ground rules) regenerates the fixture: the failing test prints the new

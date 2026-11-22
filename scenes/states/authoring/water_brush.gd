@@ -209,18 +209,21 @@ func radius(brush_radius: float) -> float:
 ## stroke began (BrushTool dabs it); false otherwise: a river line began (`drawing`), or the
 ## press was refused, with the reason in the return of refusal().
 func begin(editor: AuthoringEditor, erase: bool, hit: Vector3) -> bool:
-	_refusal = ""
+	# The terrain core's refusal first: the switch off on a primitives map.
+	_refusal = editor.terra.refusal()
+	if _refusal != "":
+		return false
 	if erase:
-		if not editor.water.erase_water_begin():
-			_refusal = NOTHING
+		if not editor.terra.erase_water_begin():
+			_refusal = editor.terra.last_refusal if editor.terra.last_refusal != "" else NOTHING
 			return false
 		return true
 	if not editor.water.can_carve():
 		_refusal = NO_CARVE
 		return false
 	if shape == Shape.POND:
-		if not editor.water.paint_pond_begin(depth as WaterBody.Depth, hit):
-			_refusal = FULL
+		if not editor.terra.paint_pond_begin(depth, hit):
+			_refusal = editor.terra.last_refusal if editor.terra.last_refusal != "" else FULL
 			return false
 		pond_dabs = PackedVector3Array()
 		return true
@@ -263,9 +266,10 @@ func carve(editor: AuthoringEditor, half_width: float, slant_of: Callable = Call
 	if line.is_empty():
 		return true
 	line = through_rises(line, ground_reader(editor), slant_of, editor.map_scale())
-	var id := editor.water.carve_river(
-		line, PackedFloat32Array([half_width]), depth as WaterBody.Depth, speed
-	)
+	var id := editor.terra.carve_river(line, PackedFloat32Array([half_width]), depth, speed)
+	if id < 0 and editor.terra.last_refusal != "":
+		_refusal = editor.terra.last_refusal
+		return false
 	if id < 0:
 		var reasons := {
 			WaterEditor.REFUSED_NO_CARVE: NO_CARVE,

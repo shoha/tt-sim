@@ -32,6 +32,13 @@ extends RefCounted
 ## crossings (P4b-1): `crossings` (CrossingEditor), following sculpt and water edits (P4b-2).
 ## Fire: `fire` (FireEditor) lays and puts out persistent ground fire (begin_fire_stroke, then
 ## stroke_dab etc.), drawn by the map's FireField (refresh_fire).
+##
+## Terrain primitives (docs/systems/terraform.md "The editor"): on a map with a terrain section the
+## ground tools' entry points (begin_height_stroke, height_dab, begin_surface_stroke, stroke_dab,
+## flush, end_stroke, cancel_stroke; the water and wall hooks are TerraEditor's carve_river,
+## paint_pond_begin, erase_water_begin and begin_wall_edit) ask terra.refusal() first (the core
+## off: refused, naming the switch) and, while `terra` (TerraEditor) is active(), route to its ops;
+## a map without a section takes today's routes untouched.
 
 ## Emitted after every change to the map (strokes, props, undo, redo), for dirty tracking.
 signal edited
@@ -67,6 +74,8 @@ var structures: StructureEditor = null
 ## The fire edits, and the map's fire drawing (null without one).
 var fire: FireEditor = null
 var fire_field: FireField = null
+## The terrain document's edits (the terraforming core's routes; see the header), made by create().
+var terra: TerraEditor = null
 
 var _stroke: MaskStroke = null
 var _stroke_label: String = ""
@@ -109,6 +118,7 @@ static func create(
 	editor.structures = StructureEditor.create(editor)
 	editor.settlements = SettlementEditor.create(editor)
 	editor.fire = FireEditor.create(editor)
+	editor.terra = TerraEditor.create(editor)
 	editor._rng.randomize()
 	return editor
 
@@ -149,6 +159,7 @@ func begin_stroke(mode: int, biome_id: String = "") -> bool:
 func is_stroking() -> bool:
 	return (
 		_stroke != null
+		or terra.is_stroking()
 		or heights.is_sculpting()
 		or _surface != null
 		or water.is_stroking()
@@ -160,6 +171,9 @@ func is_stroking() -> bool:
 ## `seconds`, for whichever stroke is in progress (mask, height, surface, or water's pond or
 ## erase). Call flush() once after the frame's dabs.
 func stroke_dab(from: Vector3, to: Vector3, radius: float, seconds: float) -> void:
+	if terra.is_stroking():
+		terra.dab(from, to, radius, seconds)
+		return
 	if water.is_stroking():
 		water.dab(from, to, radius)
 		return
@@ -184,6 +198,9 @@ func stroke_dab(from: Vector3, to: Vector3, radius: float, seconds: float) -> vo
 ## Pushes this frame's changes to their consumers: mask changes to the ground, the scatter
 ## and the Blender scatter; height changes to the terrain, collision, plants and props.
 func flush() -> void:
+	if terra.is_stroking():
+		terra.flush()
+		return
 	if fire.is_stroking():
 		fire.flush()
 		return
@@ -200,6 +217,8 @@ func flush() -> void:
 
 ## Ends the stroke and records it for undo. True when it changed anything.
 func end_stroke() -> bool:
+	if terra.is_stroking():
+		return terra.end_stroke()
 	if water.is_stroking():
 		return water.end_stroke()
 	if fire.is_stroking():
@@ -232,6 +251,9 @@ func end_stroke() -> bool:
 
 ## Abandons the stroke in progress, putting every sample back.
 func cancel_stroke() -> void:
+	if terra.is_stroking():
+		terra.cancel_stroke()
+		return
 	if water.is_stroking():
 		water.cancel_stroke()
 		return
@@ -312,8 +334,13 @@ func can_paint() -> bool:
 ## tooltip and the toast a refused press shows): the map cannot be painted, or every slot
 ## holds paint (SurfaceStroke.slot_refusal).
 func surface_refusal(surface: String) -> String:
+	var why := terra.refusal()
+	if why != "":
+		return why
 	if not can_paint():
 		return AuthoringPanel.PAINT_UNAVAILABLE_TOOLTIP
+	if terra.active():
+		return terra.paint_refusal(surface)
 	return SurfaceStroke.slot_refusal(document, surface)
 
 
@@ -324,9 +351,11 @@ func begin_surface_stroke(surface: String, erase: bool) -> bool:
 	commit_prop_edit()
 	if is_stroking():
 		end_stroke()
-	if not can_paint():
+	if not _terra_allows() or not can_paint():
 		return false
 	finish_height_work()
+	if terra.active():
+		return terra.begin_paint(surface, erase)
 	_surface = SurfaceStroke.begin(document, surface, erase)
 	if _surface == null:
 		return false
@@ -463,13 +492,36 @@ func begin_height_stroke(op: int, target_y: float = 0.0) -> bool:
 	commit_prop_edit()
 	if is_stroking():
 		end_stroke()
+	if not _terra_allows():
+		return false
+	if terra.active():
+		return terra.begin_sculpt(op, target_y)
 	return heights.begin(op, target_y)
 
 
 ## One frame's exposure of the sculpt stroke (as stroke_dab(), which forwards here while a
 ## height stroke is in progress). Call flush() once after the frame's dabs.
 func height_dab(from: Vector3, to: Vector3, radius: float, seconds: float) -> void:
+	if terra.is_stroking():
+		terra.dab(from, to, radius, seconds)
+		return
 	heights.dab(from, to, radius, seconds)
+
+
+# ============================================================================
+# Terrain primitives (TerraEditor's routes)
+# ============================================================================
+
+
+## The water and wall hooks live on `terra` (TerraEditor.carve_river, paint_pond_begin,
+## erase_water_begin, begin_wall_edit: this class is at its public-method cap). terra.refusal() is
+## why a ground tool refuses any press on this map.
+
+
+## Sets terra.last_refusal to terra.refusal() (the switch off on a primitives map): true when a
+## press may go on.
+func _terra_allows() -> bool:
+	return terra.allows()
 
 
 ## True while a sculpt (height) stroke is in progress.
@@ -542,17 +594,20 @@ func tier_target(point: Vector3, radius: float, down: bool) -> Dictionary:
 ## True while height work from a sculpt stroke, its undo, a water edit or a live edit is still
 ## being spread over frames (HeightEditor.has_work).
 func has_height_work() -> bool:
-	return heights.has_work()
+	return terra.has_work() or heights.has_work()
 
 
 ## One frame's share of the height work, at most once per frame whoever calls (tick(), and
-## AuthoringController every frame; HeightEditor.step).
+## AuthoringController every frame; HeightEditor.step), after a terrain landing that is ready.
 func step_height_work() -> void:
+	terra.step()
 	heights.step()
 
 
-## Does every piece of height work still waiting at once (HeightEditor.finish_work).
+## Does every piece of height work still waiting at once (TerraEditor.finish_work, which waits for
+## the core's derives, then HeightEditor.finish_work).
 func finish_height_work() -> void:
+	terra.finish_work()
 	heights.finish_work()
 
 

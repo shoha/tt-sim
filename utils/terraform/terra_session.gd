@@ -18,7 +18,9 @@ extends Node
 ## append_dabs, remove_prim; a muted primitive is left out, since the derive has no flags), then
 ## starts derive_async(), the incremental derive on the derive's own thread. An edit that arrives
 ## while a derive runs (the attach task or an async derive) is queued, in order, and told to the
-## derive when it lands, followed by the next derive_async(). The derive is never touched while it
+## derive when it lands, followed by the next derive_async(). A splice (undo's op: ids, order and
+## next_id put back exactly) re-sets the primitives from its insertion on, as unmute and move do.
+## The derive is never touched while it
 ## runs: queries, digests and the record wait for is_ready() (the plan's ready(): a Node already
 ## has a member of that name, its signal).
 ##
@@ -133,11 +135,13 @@ func digests() -> Dictionary:
 
 
 ## Applies one edit to the document and the derive (see the header). `edit` is {"op": one of
-## "add", "replace", "append", "remove", "mute", "unmute", "move", "id", "kind", "data", "flags",
-## "to"} as the op needs: add takes kind, data and flags; replace and append id and data; remove,
-## mute and unmute id; move id and to (a document position). Returns the primitive's id (add: the
-## new one), or -1 when refused (no such primitive, a cap, or data its kind refuses), with nothing
-## changed.
+## "add", "replace", "append", "remove", "mute", "unmute", "move", "splice", "id", "kind", "data",
+## "flags", "to", "remove", "insert", "at", "next_id"} as the op needs: add takes kind, data and
+## flags; replace and append id and data; remove, mute and unmute id; move id and to (a document
+## position); splice remove (ids), insert ([{id, kind, flags, data}]), at (a position after the
+## removal) and optionally next_id (TerraDoc.splice: ids, order and next_id restored exactly, for
+## undo, folding and the wall sync). Returns the primitive's id (add: the new one; splice: 0), or
+## -1 when refused (no such primitive, a cap, or data its kind refuses), with nothing changed.
 func apply(edit: Dictionary) -> int:
 	if terra == null:
 		return -1
@@ -187,10 +191,33 @@ func apply(edit: Dictionary) -> int:
 				return -1
 			terra.move(id, int(edit.get("to", 0)))
 			_tell(_resync_from.bind(-1))
+		"splice":
+			var removed: Array = edit.get("remove", [])
+			var inserted: Array = edit.get("insert", [])
+			for q: Variant in inserted:
+				if not q is Dictionary or not q.get("data") is PackedFloat32Array:
+					return -1
+				if TerraKinds.problem(int(q.get("kind", -1)), q["data"]) != "":
+					return -1
+			var at := int(edit.get("at", terra.prims.size()))
+			if not terra.splice(removed, inserted, at, int(edit.get("next_id", -1))):
+				return -1
+			var ids: Array[int] = []
+			for q: Dictionary in inserted:
+				ids.append(int(q["id"]))
+			_tell(_splice_derive.bind(removed.duplicate(), ids))
+			id = 0
 		_:
 			return -1
 	_record_current = false
 	return id
+
+
+## apply() of a splice edit (see apply()): `remove` ids go, `insert` ([{id, kind, flags, data}])
+## goes in at position `at`, and next_id becomes `next_id` when 1 or more. True when applied.
+func splice(remove: Array, insert: Array, at: int, next_id := -1) -> bool:
+	var edit := {"op": "splice", "remove": remove, "insert": insert, "at": at, "next_id": next_id}
+	return apply(edit) >= 0
 
 
 ## apply() for a held frame of a gesture (the bridge's held path): when no derive is in flight the
@@ -327,6 +354,21 @@ func _start() -> void:
 func _set_prim(id: int, kind: int, data: PackedFloat32Array) -> void:
 	if not _derive.call("set_prim", id, kind, data):
 		push_warning("TerraSession: the core refused primitive %d of kind %d" % [id, kind])
+
+
+## Tells the derive a splice: the removed ids go, then every primitive from the first inserted
+## one's position on (read when told, so a queued splice sees the document as it is then) is
+## re-set in document order, since set_prim appends a new id at the end.
+func _splice_derive(removed: Array, inserted: Array[int]) -> void:
+	for id: Variant in removed:
+		_derive.call("remove_prim", int(id))
+	var from := terra.prims.size()
+	for id in inserted:
+		var at := terra.index_of(id)
+		if at >= 0:
+			from = mini(from, at)
+	if from < terra.prims.size():
+		_resync_from(int(terra.prims[from]["id"]))
 
 
 ## Re-tells the derive the document's order from primitive `id` on (from the start for -1): the
