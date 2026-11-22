@@ -548,7 +548,7 @@ static func run(frozen: MapDocument, work: Dictionary, cancel: Semaphore = null)
 	for biome_id in work:
 		if ScatterGenerator.cancelled(cancel):
 			break
-		var entry: Dictionary = work[biome_id]
+		var entry := own_rules(work[biome_id])
 		# The native generator when it is built and covers the job (ScatterNative), with
 		# rows equal to GDScript's; otherwise the whole biome runs in GDScript.
 		var rows: Variant = ScatterNative.run_biome(frozen, biome_id, entry, anchors)
@@ -748,10 +748,24 @@ func _new_work(info: Dictionary) -> Dictionary:
 	for _s in info.species.size():
 		var none: Array[Vector2i] = []
 		cells_by_species.append(none)
+	# The biome's registered rules (set_biome's private copy, replaced whole and never written), shared
+	# by every job; run() deep-copies them on its worker (a copy per job here cost 1 to 1.5 ms of main
+	# thread a job, 5 to 7 ms a dispatch frame: terraform-s2-cpu round 8).
+	return {"species_master": info.species, "cells_by_species": cells_by_species, "depth": 0.0}
+
+
+## A work entry whose rules are still the biome's shared ones ("species_master", _new_work) with a
+## copy of its own in "species" (run(), on the worker); any other entry as it is.
+static func own_rules(entry: Dictionary) -> Dictionary:
+	if not entry.has("species_master"):
+		return entry
+	var out := entry.duplicate()
 	var species: Array = []
-	for rule in info.species:
+	for rule in entry["species_master"]:
 		species.append((rule as Dictionary).duplicate(true))
-	return {"species": species, "cells_by_species": cells_by_species, "depth": 0.0}
+	out["species"] = species
+	out.erase("species_master")
+	return out
 
 
 static func _cells_rect(cells: Array[Vector2i]) -> Rect2:

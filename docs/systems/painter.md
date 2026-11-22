@@ -254,10 +254,24 @@ numbers in `PERFORMANCE.md` "The painted look after a water or height edit", Rou
   erases by a per-cell key index (`_cell_keys`, rebuilt by every whole `sync()`) and hides only
   those cells' GLB chunk nodes. The same trees grow and go as a whole sync would; a source without
   cells (the field plants) syncs whole. The pure listing and the row map and occluder tables are
-  `PainterTreeRows` (`painter/trees/tree_rows.gd`); the tables are still rebuilt whole when a tree
-  goes. `test_painter_edit_hitch2.gd` covers the zone build count and that a cell's listing is
-  its share of the whole listing; `test_painter_fire.gd` caught a landing that erased nothing when
-  the index was built lazily.
+  `PainterTreeRows` (`painter/trees/tree_rows.gd`). `test_painter_edit_hitch2.gd` covers the zone
+  build count and that a cell's listing is its share of the whole listing; `test_painter_fire.gd`
+  caught a landing that erased nothing when the index was built lazily.
+- The tree tables build on a worker (card painter-plant-landing, 2026-11-22; from terraform-s2-cpu
+  round 8). `PainterTreeTables` (`painter/trees/tree_tables.gd`) owns the row map and the occluder
+  table: a whole `PainterTreeRows.tables` pass (19 to 48 ms of GDScript at 300 trees, once per
+  landing frame and per install frame before) runs on the WorkerThreadPool over a shallow copy of
+  the trees, one pass at a time, latest wins; each tree installed since the pass started gets its
+  own role rows (variant 0) and occluder at once and no neighbour crowns, so it draws toned from
+  its first frame and gains its neighbours' shading when the pass lands (3 to 8 frames in the
+  bench). Settled, the tables equal a whole build; `complete()` builds whole on the main thread; a
+  pass is never waited for unfinished (release lets it go, a static reaper collects it, the zone
+  maps' rule). `is_growing()` stays true until the tables settle. The mass texture array is sized
+  for every wanted tree at the installed trees' mean size plus a quarter, so an edit that adds
+  trees seldom regrows it (8.6 to 10.8 ms a regrow). A landing re-runs the stand-in and grass-mark
+  passes (`_paint_species`, `_tone_new`, `PainterGrassMarks.sync`) only when the plant sources'
+  resolved species count changed (2 to 3 ms a landing frame before); the placed props' landings
+  still mark their nodes. Tests: `test_plant_landing.gd`.
 
 Path surfaces and cliffs (card painter-ground-surfaces, 2026-11-18; look-pending). Under the path
 role every path surface painted alike, one sand-coloured stroked band, and cliff faces were the stone
