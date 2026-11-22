@@ -116,17 +116,39 @@ static func edge_surface(doc: MapDocument) -> int:
 	for z in range(1, last_z):
 		edge.append(doc.sample_index(0, z))
 		edge.append(doc.sample_index(last_x, z))
+	# One walk over the edge for every slot (card painter-path-first): a walk per slot cost about
+	# 1 ms a painted surface at 320 ft on every new surface's first dab. Each slot takes what
+	# MapDocument.surface_weight reads, its first entry of nonzero weight in each sample.
+	var totals := PackedInt64Array()
+	totals.resize(slots)
+	if doc.has_surface_entries():
+		var w := doc.surface_weights
+		var n4 := doc.sample_count() * MapDocument.SURFACE_CHANNELS
+		for i in edge:
+			var at := i * MapDocument.SURFACE_CHANNELS
+			for e in MapDocument.SURFACE_ENTRIES:
+				var weight := w[n4 + at + e]
+				var slot := w[at + e]
+				if weight == 0 or slot >= slots or _earlier(w, n4, at, e, slot):
+					continue
+				totals[slot] += weight
 	var best := -1
 	var best_mean := EDGE_SURFACE_SHARE * 255.0
 	for slot in slots:
-		var total := 0
-		for i in edge:
-			total += doc.surface_weight(i, slot)
-		var mean := float(total) / maxf(edge.size(), 1.0)
+		var mean := float(totals[slot]) / maxf(edge.size(), 1.0)
 		if mean >= best_mean:
 			best_mean = mean
 			best = slot
 	return best
+
+
+## Whether an entry before entry `e` of the sample at index-plane byte `at` holds `slot` with a
+## nonzero weight (MapDocument.surface_weight reads that one instead). Pure.
+static func _earlier(w: PackedByteArray, n4: int, at: int, e: int, slot: int) -> bool:
+	for f in e:
+		if w[n4 + at + f] != 0 and w[at + f] == slot:
+			return true
+	return false
 
 
 ## The skirt's mesh from `arrays` (RiverExitMesh.skirt_parts() "skirt") drawn with `skirt_material`.

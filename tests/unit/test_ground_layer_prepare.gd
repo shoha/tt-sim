@@ -70,6 +70,11 @@ func _unbound(terrain: AuthoredTerrain, skip: PackedStringArray = []) -> String:
 	return ""
 
 
+func _built(surface: String) -> bool:
+	var entry: Dictionary = PaletteLibrary.surfaces(PaletteLibrary.DEFAULT_ROOT).get(surface, {})
+	return String(entry.get("role", "")) == "built"
+
+
 func test_a_prepared_surface_is_bound_before_its_first_dab() -> void:
 	var terrain := _terrain()
 	var binding := terrain.layer_binding()
@@ -80,7 +85,8 @@ func test_a_prepared_surface_is_bound_before_its_first_dab() -> void:
 	var routing := _routing(terrain)
 	terrain.prepare_surfaces(PackedStringArray([surface, surface, before[0], "no_such_surface"]))
 	assert_true(binding.is_preparing())
-	assert_eq(_finish(binding), GroundLayerArrays.KINDS.size(), "one step per map")
+	var steps := GroundLayerArrays.KINDS.size() + (1 if _built(surface) else 0)
+	assert_eq(_finish(binding), steps, "one step per map, and one for a built surface's colour")
 	var prepared := before.duplicate()
 	prepared.append(surface)
 	assert_eq(terrain.ground_layers(), prepared, "appended once, after the bound list")

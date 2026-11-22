@@ -142,7 +142,12 @@ static func bind(
 		spans = presence.update(doc)
 		painted = presence.painted_slots(doc, ids)
 	if presence != null and painted.size() < 2:
-		presence.slot_map.invalidate()
+		# No slot map to bind, but its planes kept in step for the second surface's first dab (card
+		# painter-path-first).
+		if PainterPathSlotMap.supports(doc):
+			presence.slot_map.follow(doc, ids, presence, spans, kept, painted)
+		else:
+			presence.slot_map.invalidate()
 		only = painted[0] if painted.size() == 1 else -1
 	elif presence != null and PainterPathSlotMap.supports(doc):
 		# Two or more: the slot map redone over the changed rows (card painter-path-many).

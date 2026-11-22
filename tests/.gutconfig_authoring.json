@@ -12,6 +12,7 @@
 		"res://tests/unit/test_painter_held_stroke.gd",
 		"res://tests/unit/test_painter_land_frame.gd",
 		"res://tests/unit/test_painter_wall_path.gd",
+		"res://tests/unit/test_painter_path_first.gd",
 		"res://tests/unit/test_water_release_readers.gd",
 		"res://tests/unit/test_painter_edit_hitch2.gd",
 		"res://tests/unit/test_painter_ground_siblings.gd",
