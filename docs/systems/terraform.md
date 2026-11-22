@@ -9,9 +9,10 @@ frozen, and two peers holding the same list derive the same bits.
 
 Phase 1 lands the core beside today's path and changes nothing the game draws or does. Card 1
 (terraform-p1-native) moved the derive from the spike `terraform-s2-cpu` into `native/src`; nothing
-in the game calls it yet. Card 2 (terraform-p1-stages) made the chain one loop over a stage table.
-Later phase 1 cards add the terrain section of `map.ttmap` (format 6), the kind registry, the
-derived record and `TerraSession` behind a switch.
+in the game calls it yet. Card 2 (terraform-p1-stages) made the chain one loop over a stage table,
+card 3 (terraform-p1-document) added the terrain section of `map.ttmap` (format 6), and card 4
+(terraform-p1-kinds) the kind registry. Later phase 1 cards add the derived record and
+`TerraSession` behind a switch.
 
 ## Files
 
@@ -22,12 +23,16 @@ derived record and `TerraSession` behind a switch.
 | `native/src/terra_stage_table.{h,cpp}` | `STAGES[]` and `ARRAYS[]`: every stage's reads, writes, halo (samples) and reach (metres), the body parameters the halos come from, and `stage_region`; the only place a halo is declared |
 | `native/src/terra_stages.h` | the stage functions' declarations and the water rules' constants (metres) |
 | `native/src/terra_pool.h` | the worker pool a stage splits its tiles over |
-| `native/src/terra_kernels.h`, `terra_compose.cpp` | stages 1 and 1b: the compose kernels (plane, hill, ridge, stroke) in a table, `compose_rect`, `smooth_rect` |
-| `native/src/terra_water.cpp` | stage 2 and 3: river and pond geometry, topology, solves, the carve |
-| `native/src/terra_paths.cpp` | stages 3b and 4: paths and walls (line solves, then per-sample rects), paint coats |
+| `native/src/terra_kinds.{h,cpp}` | the kind registry: `KindDef`, the self-registering `TERRA_KIND(...)`, `kind_def(id)` (see "Kinds") |
+| `native/src/kinds/terra_kind_<name>.cpp` | one kind each: plane, hill, ridge, stroke, terrace (compose stamps), paint (the paint stamp), path and wall (the line kinds' geometry, solve and rect) |
+| `native/src/terra_compose.cpp` | stages 1, 1b and 5d: `stamp_rect` (a stamp stage's primitives applied by their kinds in document order), `smooth_rect` |
+| `native/src/terra_water.cpp` | stage 2 and 3: river and pond geometry, topology, solves, the carve; the two water kinds register here |
+| `native/src/terra_paths.cpp` | the line kinds' shared maths: `line_from`, `window_mean`, `grade`, `nearest_seg` |
 | `native/src/terra_fields.cpp` | stages 5 and 6: slope, capped distances, the look field, the ground rules |
 | `native/src/terra_derive.{h,cpp}` | the GDCLASS `TerraDerive`: setup, primitives and their seeds, rules, the stage loop, the three solves and the rect bodies' dispatch, queries, digests |
-| `utils/terraform/terra_core.gd` | `TerraCore`: `native_available()`, `NATIVE_VERSION`, the kind ids, `grid_for(doc)`, `make_derive(doc)`, `load_rules()`, `enabled()` (off) |
+| `utils/terraform/terra_core.gd` | `TerraCore`: `native_available()`, `NATIVE_VERSION`, the built-in kind ids, `grid_for(doc)`, `make_derive(doc)`, `load_rules()`, `enabled()` (off) |
+| `utils/terraform/terra_kinds.gd` | `TerraKinds`: the GDScript registry, one preload line per kind; `script_for(id)`, `name_of`, `ids()`, `table()`, `problem(id, data)` |
+| `utils/terraform/kinds/<name>/<name>_kind.gd` | one script per kind (layout, `validate`, `bounds`, label, defaults); `kinds/kind_layout.gd` holds the checks they share |
 | `utils/terraform/rules/ground_rules.json` | the ground table (12 classes, 11 rows) and the look parameters the Painted cards read |
 
 `utils/terraform/` is kept apart from `utils/terrain/` (today's shade field and back caster) so the
@@ -63,9 +68,45 @@ built in, 9 to 15 reserved (one for phase 2's consolidated sculpt raster), new k
 | 6 | path | width, then x, z per point |
 | 7 | wall | height, thickness, then x, z per point |
 | 8 | paint | per dab cx, cz, radius, surface id |
+| 16 | terrace | per dab cx, cz, radius, tier_m, softness (the riser's share of a tier, 0 to 1) |
 
-Document order is the order compose applies. `append_dabs` grows a stroke or paint coat and dirties
-only the new dabs' bounds.
+Document order is the order compose applies. `append_dabs` grows a stroke, terrace or paint coat
+and dirties only the new dabs' bounds. The terrace is not additive: it pulls the height composed so
+far toward its tiers, so a terrace after a hill steps that hill.
+
+## Kinds
+
+Every kind is registered twice, once per side, and `test_terra_kinds` fails when the two disagree on
+an id, name, stage, shape, header or stride (card terraform-p1-kinds, 2026-11-22).
+
+- **Native:** `native/src/kinds/terra_kind_<name>.cpp` holds the kernel and ends in one line,
+  `TERRA_KIND(16, "terrace", STAGE_COMPOSE, 0, 5, terrace_bounds, terrace_apply);`: a static
+  registrar that runs when the library loads (SCons links every object file of `src/` and
+  `src/kinds/`), so no table names a kind. `bounds` is the world box an edit can change, reaches
+  included (a river's carve, a path's bench, a wall's pad), which is what the edit seeds; `apply` is
+  a stamp's per-sample kernel (null for a line or water kind). The table is kept sorted by id and
+  every lookup is by id, so nothing depends on the order the linker ran the registrars in (tested by
+  `debug_kinds_in_order`); a repeated id is counted (`kind_conflicts()`, 0 in a sound build). A kind's
+  stage decides its shape (a rect stage: stamp, a line stage: line, the graph stage: water) and the
+  input its edits seed. `set_prim` refuses an unregistered id (returns false, nothing changes).
+- **GDScript:** `utils/terraform/kinds/<name>/<name>_kind.gd` declares `NAME`, `ID`, `STAGE` (the
+  native stage's name), `SHAPE`, `HEADER`, `STRIDE`, `MIN_ITEMS`, `LABEL`, `DEFAULTS` and static
+  `validate(data) -> bool`, `bounds(data) -> Rect2` (the native box, empty for the whole map) and
+  `describe()`; `TerraKinds.KINDS` lists one preload line per kind. The map reader and writer
+  (`MapTerrainIO`) take kind names and validation from it: an unknown id refuses the whole section
+  ("made by a newer version"), a primitive its kind's `validate` refuses is dropped.
+
+| Shape | Kinds | How the stage runs it |
+|---|---|---|
+| stamp | plane, hill, ridge, stroke, terrace (compose); paint (paint) | `stamp_rect`: zero the stage's outputs over the rect, then each primitive whose bounds meet it, in document order |
+| line | path (paths), wall (pads) | the stage's solve builds and grades each line, then its rect body |
+| water | river, pond (water_solve) | one graph solve over every body (`terra_water.cpp`) |
+
+A new tool is one kind folder, one kernel file and one registry line, plus a rebuild: the terrace
+was added that way (its folder, its kernel and the `KINDS` line; the test corpus, the golden case
+and the update equals build step are tests). A water kind is the exception: water is one graph
+solve, so a new one (a spring, say) is an edit of `terra_water.cpp`. A new rule is one row in
+`ground_rules.json`; a new stage is a `StageDef` row and its body.
 
 ## The stage chain
 
@@ -131,12 +172,14 @@ list). C++ stages built on a derive read `derived()`, a view of every array. For
 doc: `stages()` (the table: name, shape, reads, writes, halo, reach_m), `arrays()` (name, kind,
 bytes a sample), `array_bytes(name)` (a per-sample array's whole-map bytes) and
 `debug_set_sample(name, i, j, value, dirty_all)` (sets one sample outside the chain and marks it,
-or the whole array, changed for the next `derive()`).
+or the whole array, changed for the next `derive()`). The registry: `kinds()` (per kind id, name,
+stage, shape, header, stride, ascending id), `kind_bounds(kind, floats)` (a primitive's world box),
+`kind_conflicts()` and `debug_kinds_in_order(order)`.
 
 ## Versions and the library
 
-`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 2 stages`; later cards step it
-("terra 3 kinds", "terra 4 cache"), and the golden fixture's `version` follows it. The scatter library's string carries `terra`
+`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 3 kinds`; the cache card steps it
+("terra 4 cache"), and the golden fixture's `version` follows it. The scatter library's string carries `terra`
 (`ttscatter 10 curves water chunk fields wfield2 terra`), so a stale DLL fails
 `test_scatter_native`. After pulling a change here, rebuild `native/` (AGENTS.md "Testing").
 Without the library every terra test is pending with "the native library is not built", which CI
@@ -146,10 +189,11 @@ treats as a failure.
 
 | Test | Covers |
 |---|---|
-| `test_terra_update_equals_build.gd` | the corpus added one primitive at a time, a 40-dab held raise across both rivers, smooth, lower, an undone hill, a moved wall, an async river landing: every digest equals a fresh `derive_full` |
+| `test_terra_update_equals_build.gd` | the corpus added one primitive at a time, a 40-dab held raise across both rivers, smooth, lower, an undone hill, a moved wall, a 12-dab held terrace, an async river landing: every digest equals a fresh `derive_full` |
+| `test_terra_kinds.gd` | the two registries agree; ids and names unique, none in 9 to 15; registration order never changes the table; each kind accepts the corpus (and the terraced corpus) and refuses a short, long, too-few-items, NaN, Inf or out-of-range layout and its own field ranges; GDScript and native bounds agree; `set_prim` and the map reader refuse an unknown id |
 | `test_terra_determinism.gd` | two runs of one instance, serial against 1 and 8 workers, two instances deriving at once |
 | `test_terra_water_laws.gd` | no level climbs downstream, the tributary joins and falls, the wall opens at the river, the pond holds water |
-| `test_terra_golden.gd` | `version()`, and the corpus on a 40 x 40 and a 40 x 48 cell map against `tests/fixtures/terra_corpus_digests.json` |
+| `test_terra_golden.gd` | `version()`, and the corpus on a 40 x 40 and a 40 x 48 cell map, plus the terraced corpus on 40 x 40, against `tests/fixtures/terra_corpus_digests.json` |
 | `test_terra_stage_table.gd` | the table's order (each read an input or an earlier write, one writer per array); halo honesty: one H2 sample (then one FM sample) of a built map set outside the chain, every downstream stage re-run over the whole map, and each array changes only within the reach the table declares from it (the halos summed along the way), with the incremental derive giving the same bytes. A halo one sample short fails it (checked 2026-11-22 with the look row at 13) |
 
 `tests/unit/terra_corpus.gd` (`TerraCorpus`) is the spike's test scene placed on a map document's

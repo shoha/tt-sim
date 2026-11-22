@@ -23,7 +23,9 @@ Export("env")
 env = SConscript("godot-cpp/SConstruct", {"api_version": "4.7"})
 
 env.Append(CPPPATH=["src/", "thirdparty/"])
-sources = Glob("src/*.cpp")
+# src/kinds/ holds one file per terrain kind (terra_kinds.h): each registers itself at load, so a
+# new kind is a new file here and no table edit.
+sources = Glob("src/*.cpp") + Glob("src/kinds/*.cpp")
 
 NAME = "libttscatter"
 if env["platform"] == "macos":

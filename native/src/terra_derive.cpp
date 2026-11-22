@@ -11,21 +11,23 @@
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/packed_string_array.hpp>
 
-#include "terra_kernels.h"
+#include "terra_kinds.h"
 #include "terra_pool.h"
 
 namespace terra {
 
 /// One derive's state: where each array changed (inputs: the pending edits' seeds), each stage's
-/// own seeds from its solve, the primitives grouped by stage, and the solves' flags.
+/// own seeds from its solve, the primitives grouped by stage (in document order, with their kinds
+/// and influence rects; the water stage's split into rivers and ponds), and the solves' flags.
 struct Pass {
 	bool full = false;
 	Dirty changed[A_COUNT];
 	Dirty own[S_COUNT];
 	Dirty hit; // the current solve's per-sample reads' change
-	std::vector<const Prim *> compose_p, river_p, pond_p, paint_p;
-	std::vector<const ComposeKernel *> compose_k;
-	std::vector<Rect> compose_r;
+	std::vector<const Prim *> stage_p[S_COUNT];
+	std::vector<const KindDef *> stage_k[S_COUNT];
+	std::vector<Rect> stage_r[S_COUNT];
+	std::vector<const Prim *> river_p, pond_p;
 	bool falls_changed = false, walls_changed = false;
 	int solved = 0;
 };
@@ -141,7 +143,7 @@ Dictionary TerraDerive::tile_collision(int64_t tile, int64_t stride) const {
 }
 
 String TerraDerive::version() const {
-	return "terra 2 stages";
+	return "terra 3 kinds";
 }
 
 Dictionary TerraDerive::grid() const {
@@ -197,76 +199,34 @@ int TerraDerive::find(int id) const {
 	return -1;
 }
 
-static void line_box(const std::vector<float> &d, int skip, double grow, double &x0, double &z0, double &x1,
-		double &z1) {
-	x0 = z0 = 1e30;
-	x1 = z1 = -1e30;
-	for (size_t k = skip; k + 1 < d.size(); k += 2) {
-		x0 = std::min(x0, double(d[k]) - grow);
-		z0 = std::min(z0, double(d[k + 1]) - grow);
-		x1 = std::max(x1, double(d[k]) + grow);
-		z1 = std::max(z1, double(d[k + 1]) + grow);
-	}
-}
-
 Rect TerraDerive::influence(const Prim &p) const {
+	const KindDef *k = kind_def(p.type);
 	double x0 = 0, z0 = 0, x1 = 0, z1 = 0;
-	if (p.d.empty()) {
+	if (!k || p.d.empty()) {
 		return Rect{};
 	}
-	switch (p.type) {
-		case P_RIVER:
-			line_box(p.d, 2, p.d[0] * 0.5 + CARVE_REACH_M, x0, z0, x1, z1);
-			break;
-		case P_POND:
-			line_box(p.d, 1, POND_REACH + 0.5, x0, z0, x1, z1);
-			break;
-		case P_PATH:
-			line_box(p.d, 1, p.d[0] * 0.5 + PATH_REACH_M, x0, z0, x1, z1);
-			break;
-		case P_WALL:
-			line_box(p.d, 2, p.d.size() > 1 ? p.d[1] + PAD_REACH_M : PAD_REACH_M, x0, z0, x1, z1);
-			break;
-		case P_PAINT:
-			dab_bounds(p, 4, x0, z0, x1, z1);
-			break;
-		default: {
-			const ComposeKernel *k = compose_kernel(p.type);
-			if (!k) {
-				return Rect{};
-			}
-			if (!k->bounds(p, x0, z0, x1, z1)) {
-				return g.all();
-			}
-		}
+	if (!k->bounds(p, x0, z0, x1, z1)) {
+		return g.all();
 	}
 	return g.rect_world(x0, z0, x1, z1);
 }
 
+// An edit seeds its kind's stage input; a line or water body's solve also re-solves it by id.
 void TerraDerive::seed(const Prim &p, const Rect &r) {
-	switch (p.type) {
-		case P_RIVER:
-		case P_POND:
-			seeds[A_WATER_PRIMS].add(r, g);
-			changed_ids.insert(p.id);
-			break;
-		case P_PATH:
-			seeds[A_PATH_PRIMS].add(r, g);
-			changed_ids.insert(p.id);
-			break;
-		case P_WALL:
-			seeds[A_WALL_PRIMS].add(r, g);
-			changed_ids.insert(p.id);
-			break;
-		case P_PAINT:
-			seeds[A_PAINT_PRIMS].add(r, g);
-			break;
-		default:
-			seeds[A_COMPOSE_PRIMS].add(r, g);
+	const KindDef *k = kind_def(p.type);
+	if (!k) {
+		return;
+	}
+	seeds[k->input()].add(r, g);
+	if (k->shape() != KIND_STAMP) {
+		changed_ids.insert(p.id);
 	}
 }
 
-void TerraDerive::set_prim(int64_t id, int64_t type, const PackedFloat32Array &data) {
+bool TerraDerive::set_prim(int64_t id, int64_t type, const PackedFloat32Array &data) {
+	if (type < 0 || type > 0xFFFF || !kind_def(int(type))) {
+		return false;
+	}
 	Prim np;
 	np.id = int(id);
 	np.type = int(type);
@@ -280,6 +240,7 @@ void TerraDerive::set_prim(int64_t id, int64_t type, const PackedFloat32Array &d
 		prims.push_back(np);
 	}
 	seed(np, influence(np));
+	return true;
 }
 
 void TerraDerive::append_dabs(int64_t id, const PackedFloat32Array &data) {
@@ -486,8 +447,9 @@ void TerraDerive::solve_paths(Pass &ps) {
 	const double reach = STAGES[S_PATHS].reach_m;
 	std::vector<PathL> old_paths = std::move(paths);
 	paths.clear();
-	for (const Prim &p : prims) {
-		if (p.type == P_PATH && p.d.size() >= 5) {
+	for (const Prim *pp : ps.stage_p[S_PATHS]) {
+		const Prim &p = *pp;
+		if (p.d.size() >= 5) {
 			PathL pl;
 			path_geometry(pl, p, g);
 			if (pl.l.n() >= 2) {
@@ -524,8 +486,9 @@ void TerraDerive::solve_walls(Pass &ps) {
 	const bool full = ps.full;
 	std::vector<Wall> old_walls = std::move(walls);
 	walls.clear();
-	for (const Prim &p : prims) {
-		if (p.type == P_WALL && p.d.size() >= 6) {
+	for (const Prim *pp : ps.stage_p[S_FOOTPRINTS]) {
+		const Prim &p = *pp;
+		if (p.d.size() >= 6) {
 			Wall wl;
 			wall_geometry(wl, p, g);
 			if (wl.l.n() >= 2) {
@@ -606,9 +569,13 @@ uint8_t *TerraDerive::array_data(int a) {
 
 void TerraDerive::rect_body(int stage, const Rect &r, const Pass &ps) {
 	switch (stage) {
-		case S_COMPOSE:
-			compose_rect(ps.compose_p, ps.compose_k, ps.compose_r, g, r, Hraw.data(), SW.data());
+		case S_COMPOSE: {
+			StampOut out;
+			out.H = Hraw.data();
+			out.SW = SW.data();
+			stamp_rect(ps.stage_p[S_COMPOSE], ps.stage_k[S_COMPOSE], ps.stage_r[S_COMPOSE], g, r, out);
 			break;
+		}
 		case S_SMOOTH:
 			smooth_rect(g, r, Hraw.data(), SW.data(), H0.data());
 			break;
@@ -632,9 +599,13 @@ void TerraDerive::rect_body(int stage, const Rect &r, const Pass &ps) {
 		case S_LOOK:
 			look_rect(g, r, H2.data(), HB.data(), CV.data());
 			break;
-		case S_PAINT:
-			paint_rect(ps.paint_p, g, r, PI.data(), PW.data());
+		case S_PAINT: {
+			StampOut out;
+			out.PI = PI.data();
+			out.PW = PW.data();
+			stamp_rect(ps.stage_p[S_PAINT], ps.stage_k[S_PAINT], ps.stage_r[S_PAINT], g, r, out);
 			break;
+		}
 		case S_RULES: {
 			FieldInputs in{ H2.data(), WL.data(), SL.data(), DW.data(), DP.data(), DF.data(), PW.data(), PM.data(),
 				PI.data(), CV.data() };
@@ -687,16 +658,17 @@ Dictionary TerraDerive::derive() {
 		d.init(g);
 	}
 	for (const Prim &p : prims) {
-		if (p.type == P_RIVER) {
+		const KindDef *k = kind_def(p.type);
+		if (!k) {
+			continue;
+		}
+		ps.stage_p[k->stage].push_back(&p);
+		ps.stage_k[k->stage].push_back(k);
+		ps.stage_r[k->stage].push_back(k->shape() == KIND_STAMP ? influence(p) : Rect{});
+		if (p.type == KIND_RIVER) {
 			ps.river_p.push_back(&p);
-		} else if (p.type == P_POND) {
+		} else if (p.type == KIND_POND) {
 			ps.pond_p.push_back(&p);
-		} else if (p.type == P_PAINT) {
-			ps.paint_p.push_back(&p);
-		} else if (const ComposeKernel *k = compose_kernel(p.type)) {
-			ps.compose_p.push_back(&p);
-			ps.compose_k.push_back(k);
-			ps.compose_r.push_back(influence(p));
 		}
 	}
 	Dirty all;
@@ -973,6 +945,57 @@ Array TerraDerive::arrays() const {
 	return out;
 }
 
+static Dictionary kind_dict(const KindDef &k) {
+	static const char *SHAPES[] = { "stamp", "line", "water" };
+	Dictionary d;
+	d["id"] = k.id;
+	d["name"] = k.name;
+	d["stage"] = STAGES[k.stage].name;
+	d["shape"] = SHAPES[k.shape()];
+	d["header"] = k.header;
+	d["stride"] = k.stride;
+	return d;
+}
+
+Array TerraDerive::kinds() const {
+	Array out;
+	for (const KindDef &k : kind_defs()) {
+		out.push_back(kind_dict(k));
+	}
+	return out;
+}
+
+int64_t TerraDerive::kind_conflicts() const {
+	return terra::kind_conflicts();
+}
+
+Rect2 TerraDerive::kind_bounds(int64_t kind, const PackedFloat32Array &data) const {
+	const KindDef *k = kind < 0 || kind > 0xFFFF ? nullptr : kind_def(int(kind));
+	Prim p;
+	p.type = int(kind);
+	p.d.assign(data.ptr(), data.ptr() + data.size());
+	double x0 = 0, z0 = 0, x1 = 0, z1 = 0;
+	if (!k || p.d.empty() || !k->bounds(p, x0, z0, x1, z1)) {
+		return Rect2();
+	}
+	return Rect2(real_t(x0), real_t(z0), real_t(x1 - x0), real_t(z1 - z0));
+}
+
+Array TerraDerive::debug_kinds_in_order(const PackedInt32Array &order) const {
+	const std::vector<KindDef> &all = kind_defs();
+	std::vector<KindDef> t;
+	for (int64_t q = 0; q < order.size(); q++) {
+		if (order[q] >= 0 && order[q] < int(all.size())) {
+			insert_kind(t, all[order[q]]);
+		}
+	}
+	Array out;
+	for (const KindDef &k : t) {
+		out.push_back(kind_dict(k));
+	}
+	return out;
+}
+
 PackedByteArray TerraDerive::array_bytes(const String &name) {
 	PackedByteArray out;
 	int a = array_id(name);
@@ -1115,6 +1138,10 @@ void TerraDerive::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("stages"), &TerraDerive::stages);
 	ClassDB::bind_method(D_METHOD("arrays"), &TerraDerive::arrays);
 	ClassDB::bind_method(D_METHOD("array_bytes", "name"), &TerraDerive::array_bytes);
+	ClassDB::bind_method(D_METHOD("kinds"), &TerraDerive::kinds);
+	ClassDB::bind_method(D_METHOD("kind_conflicts"), &TerraDerive::kind_conflicts);
+	ClassDB::bind_method(D_METHOD("kind_bounds", "kind", "data"), &TerraDerive::kind_bounds);
+	ClassDB::bind_method(D_METHOD("debug_kinds_in_order", "order"), &TerraDerive::debug_kinds_in_order);
 	ClassDB::bind_method(
 			D_METHOD("debug_set_sample", "name", "i", "j", "value", "dirty_all"), &TerraDerive::debug_set_sample);
 }

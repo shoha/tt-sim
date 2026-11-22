@@ -102,6 +102,18 @@ struct Wall {
 	std::vector<double> rx, rz;
 };
 
+// The line kinds' shared maths (terra_paths.cpp).
+/// A primitive's points after `skip` header floats, Chaikin-rounded `rounding` times and
+/// resampled every `ds` metres.
+void line_from(const Prim &prim, int skip, double ds, Line &out, int rounding = 0);
+/// The window mean of v over +-half samples (fixed order, clamped at the ends).
+std::vector<double> window_mean(const std::vector<double> &v, int half);
+/// The mean of the largest and smallest m-Lipschitz profiles under and over v: graded to m.
+std::vector<double> grade(const std::vector<double> &v, double m);
+/// The segment of `segs` nearest (x, z), its distance d and parameter t; -1 when segs is empty.
+int nearest_seg(const Line &l, const std::vector<int> &segs, double x, double z, double &d, double &t);
+
+// The path and wall kinds' stage bodies (src/kinds/terra_kind_path.cpp, terra_kind_wall.cpp).
 void path_geometry(PathL &p, const Prim &prim, const Grid &g);
 /// Grades a path to its maximum slope (stairs where a bench would cut or fill too much).
 void solve_path(PathL &p, const Grid &g, const float *H1);
@@ -116,11 +128,13 @@ void solve_wall(Wall &w, const Grid &g, const float *Hp, const float *WL);
 void pad_rect(const std::vector<Wall> &walls, const Grid &g, const Rect &r, const float *Hp, const float *WL,
 		float *H2, uint8_t *FM, uint8_t *WM);
 
-/// Composes Hraw and SW over a rect: zero, then each compose primitive whose influence meets the
-/// rect, in document order (`kinds` beside `prims`, `bounds` their influence rects).
-struct ComposeKernel;
-void compose_rect(const std::vector<const Prim *> &prims, const std::vector<const ComposeKernel *> &kinds,
-		const std::vector<Rect> &bounds, const Grid &g, const Rect &r, float *Hraw, float *SW);
+/// A stamp stage over a rect (compose into Hraw and SW, paint into PI and PW): its outputs zeroed,
+/// then each of its primitives whose influence meets the rect applied by its kind, in document
+/// order (`kinds` beside `prims`, `bounds` their influence rects).
+struct KindDef;
+struct StampOut;
+void stamp_rect(const std::vector<const Prim *> &prims, const std::vector<const KindDef *> &kinds,
+		const std::vector<Rect> &bounds, const Grid &g, const Rect &r, const StampOut &out);
 /// Smooths Hraw into H0 over a rect: each sample moves toward its (2 SMOOTH_R + 1) squared box mean
 /// by its weight SW (clamped to 1); a sample of weight 0 copies Hraw.
 void smooth_rect(const Grid &g, const Rect &r, const float *Hraw, const float *SW, float *H0);
@@ -157,8 +171,5 @@ struct FieldInputs {
 /// Stage 6 over a rect: the packed control map, 4 bytes per sample (base class,
 /// overlay class, blend, wetness), from the rule table over the fields; later rows paint over.
 void rules_rect(const std::vector<Rule> &rules, const Grid &g, const Rect &r, const FieldInputs &in, uint8_t *CT);
-
-/// Paint over a rect: the newest coat per sample (PI id, PW weight).
-void paint_rect(const std::vector<const Prim *> &paints, const Grid &g, const Rect &r, uint8_t *PI, float *PW);
 
 } // namespace terra
