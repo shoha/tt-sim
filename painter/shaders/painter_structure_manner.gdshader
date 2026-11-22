@@ -108,6 +108,9 @@ instance uniform float scour = 1.0;
 varying flat vec2 v_bld;
 varying vec2 v_fuv;
 varying vec4 v_rec;
+// A narrow level face's width in metres (CUSTOM1, PainterMannerMesh.FORMAT: the source's UV2.y,
+// StructureGeometry.with_ledges; 0 wide or not level).
+varying float v_ledge;
 // A roof piece with no record (a round or Taper roof): the turn of its ramp to its recipe's paint
 // (painter_structure_common's paint_turn); z 0: none.
 varying flat vec4 v_turn;
@@ -233,6 +236,7 @@ void vertex() {
 	}
 	v_fuv = UV2;
 	v_rec = CUSTOM0;
+	v_ledge = CUSTOM1.x;
 	v_turn = vec4(1.0, 0.0, 0.0, 1.0);
 	if (pattern >= 5 && pick <= 2 && CUSTOM0.z < 0.5) {
 		// A roof piece with no record (round and Taper roofs: a roundhouse, a wizard tower's spire,
@@ -792,10 +796,12 @@ void fragment() {
 			// h, its body in its rolled shading normal. Where it lies is the snow law (card
 			// snow-one-law): a roof knows its top (h), so a spire too steep for the whole layer
 			// keeps one cap over its upper part whose lower edge rolls over like an eave's lip
-			// (snow_edge_m); any other face takes the law's broad shapes and its rim.
+			// (snow_edge_m); any other face takes the law's broad shapes and its rim, and none on a
+			// level face narrower than a ledge (snow_ledge: a shutter's batten tops, card snow-one-law
+			// round 4).
 			float seed = v_bld.x * 23.0;
 			vec4 law = snow_law(snow, roofy ? up : face_up, wp, n, roofy ? h : SNOW_NO_TOP, seed);
-			cover = law.x * (roofy ? 1.0 - snow_gap(fr.xy, fr.w) : 1.0);
+			cover = law.x * (roofy ? 1.0 - snow_gap(fr.xy, fr.w) : snow_ledge(v_ledge));
 			hide = roofy ? 1.0 : hide;
 			vec4 sp = snow_paint(fr.xy, fbroad);
 			vec3 roll = roofy

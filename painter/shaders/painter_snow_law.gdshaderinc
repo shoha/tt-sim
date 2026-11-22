@@ -27,7 +27,10 @@
  *                boulder's shoulder and a barrel's bevel break the same way and never in a stipple
  *                or a hard frost line;
  *   the rim      where the layer turns away from the sky (a rounded top's shoulder) or ends at its
- *                own soft edge, its paint rounds into the shade (snow_turn and the edge's inside).
+ *                own soft edge, its paint rounds into the shade (snow_turn and the edge's inside);
+ *   the ledge    a structure's level face narrower than a ledge holds none (snow_ledge, from the
+ *                face's width the mesh carries: UV2.y on a street lot, CUSTOM1 on a hand-drawn
+ *                house): a shutter's batten tops and a casing's jamb ends drew white ladders.
  * The edge is soft in metres (about 0.15 m on the broad shapes, 2.5 percent of a roof's run on a
  * cap). Needs painter_noise.gdshaderinc first (p_noise, p_n2). No texture reads, no derivatives
  * (callers branch around it per fragment).
@@ -55,6 +58,19 @@ global uniform vec4 foliage_sun;
 // How much snow a face whose normal's up is `up` holds (0 to 1), with the snow on (`on` 1) or off.
 float snow_hold(float on, float up) {
 	return clamp(on, 0.0, 1.0) * smoothstep(SNOW_HOLD_LO, SNOW_HOLD_HI, up);
+}
+
+// The ledge (card snow-one-law rounds 3 and 4): a level face narrower than SNOW_LEDGE_LO metres
+// holds no snow, one from SNOW_LEDGE_HI holds it all. A shutter's batten tops (5 to 7.7 cm), a
+// window casing's jamb end (7.8 cm), a door case's head (6.5 cm) and a thin timber's top fall under
+// it; a frame head (15 cm), a lintel (16 cm) and a sill (19 cm) keep their snow.
+const float SNOW_LEDGE_LO = 0.08;
+const float SNOW_LEDGE_HI = 0.12;
+
+// The share of the law's cover a structure's non-roof face keeps for its level face's `width`
+// (StructureGeometry.with_ledges; 0: wide, or no level face).
+float snow_ledge(float width) {
+	return width > 0.0 ? smoothstep(SNOW_LEDGE_LO, SNOW_LEDGE_HI, width) : 1.0;
 }
 
 // Where a rounded form turns away from the sky (0 to 1), just above the whole hold: there a cap's

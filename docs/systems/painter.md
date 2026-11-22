@@ -2404,6 +2404,17 @@ looks; each family keeps its own paint.
   0.15 m), never a stipple; its rim is the band just inside that edge or where a rounded form turns
   from the sky (`snow_turn`, the props' old 0.5 to 0.85). No textures, no derivatives (callers branch
   around it). It declares the `foliage_sun` global, guarded by `PAINTER_SNOW_LAW`.
+- **The ledge** (rounds 3 and 4). A structure's level, non-roof face narrower than a ledge holds no
+  snow: `snow_ledge(width)` = smoothstep(`SNOW_LEDGE_LO` 0.08, `SNOW_LEDGE_HI` 0.12, width), 1 where
+  the width is 0 (wide, or no level face). The width is the face's shortest edge, written per vertex
+  by `StructureGeometry.with_ledges` (every structure surface carries UV2; y is the widest level
+  face's shortest edge under 0.25 m, else 0) and read as UV2.y by `painter_structure`; the hand-drawn
+  houses' meshes carry it in CUSTOM1 (`PainterMannerMesh.FORMAT`: one float, copied from the source's
+  UV2.y through the cut; `PainterMannerSnow.build`'s strips write 0). Measured faces on the street
+  row: shutter battens 5 to 7.7 cm, a casing jamb's end 7.8 cm and a door case head 6.5 cm (under it:
+  they drew white ladder bars on every open shutter and a white line down each casing's edge), a
+  frame head 15 cm, a lintel 16 cm, a sill 19 cm (kept). The warm-up's structure sample is the UV2
+  layout and its manner sample carries the one-float CUSTOM1 (`PainterWarmup.triangle(slots, flags)`).
 - **Callers.** `painter_snow.gdshaderinc` includes it (structure, manner, prop shaders);
   `painter_structure.gdshader` asks it on every face: a roof with its h (cap), any other face (a
   wall's coping, a fence or boundary top, a sill, a lintel, a step, a deck) with its flat face up
@@ -2421,9 +2432,11 @@ looks; each family keeps its own paint.
 - **Seen** (`docs/research/2026-11-09-prototypes/compare/painter_final138_snow_one_law/verdict/`,
   main | build at 1920x1080): roofs, the spire's cap and the round hut unchanged; the boundary walls
   and fence lines gain white tops at zoom 16, sills, lintels, door steps and chimney tops at zoom 6;
-  boulders keep grey sides with slightly larger soft caps. Open: the street houses' window and door
-  casings carry a thin full-height white line on one jamb (structure non-roof faces: a probe with
-  that branch off removes it; asking with the flat face up did not, so the casing's faces tilt up).
+  boulders keep grey sides with slightly larger soft caps. Round 4 (`verdict_r4/`, the ledge in both
+  structure shaders): no white bars on any shutter (the cottages' red ones as the street's), no line
+  down the casings, frame heads, lintels and sills white; a boundary wall's coping and a fence's wide
+  top board turn white at zoom 16 (their line gets faint against snowy ground), a thin rail keeps its
+  dark line.
 - **Cost** (in-run swap, vsync off, half-size viewport, M B B M): table zoom 16 +0.013 / +0.023 ms
   (two runs), street close +0.003 / +0.016, rocks -0.001 / +0.011.
 - Tests: `test_painter_buildings.gd` (`test_one_snow_law_for_every_painted_family`: the include, its

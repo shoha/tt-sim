@@ -7,7 +7,8 @@ extends GutTest
 const MEASURED_GROUND := 0x800001037
 const MEASURED_LIT := 0x80000101f
 const MEASURED_TREE := 0x800001031
-const MEASURED_MANNER := 0x80000f06f
+## CUSTOM1 one float (the ledge width) since card snow-one-law round 4.
+const MEASURED_MANNER := 0x80004f0ef
 const MEASURED_YARD := 0x80000100f
 
 
@@ -111,6 +112,17 @@ func test_the_layouts_match_the_real_producers() -> void:
 	var water := AuthoredWater.warmup_samples()
 	assert_eq(_format_of(_sample_named("water_framed")), _format_of(water[0]), "water surface")
 	assert_eq(_format_of(_sample_named("waterfall")), _format_of(water[1]), "falls")
+	# A manner mesh drawn from a structure surface (PainterMannerMesh.build, its ledge widths).
+	var quad := StructureWarmup.quad_arrays()
+	var tags := PackedInt32Array()
+	tags.resize((quad[Mesh.ARRAY_VERTEX] as PackedVector3Array).size())
+	tags.fill(-1)
+	var manner := PainterMannerMesh.build(quad, tags, PackedStringArray(), {}, {})
+	assert_eq(
+		_format_of(_sample_named("manner")),
+		_format_of({"arrays": manner.draw, "flags": PainterMannerMesh.FORMAT}),
+		"manner mesh"
+	)
 	# A cell of the small stones' dabs (PainterDabs, its own shader).
 	var map := Node3D.new()
 	add_child_autofree(map)
