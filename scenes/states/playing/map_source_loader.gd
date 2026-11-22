@@ -378,8 +378,9 @@ static func authored_root_shell() -> Node3D:
 func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	var root := authored_root_shell()
 	# Behind its switch, on a map with a terrain section: the core's load-time derive runs on a
-	# worker, and its ground replaces the document's heights before anything is built from them
-	# (the bridge's whole swap, TerraBridge; about 40 ms at 320 ft, waited a frame at a time).
+	# worker, and its ground and water replace the document's heights, water bodies and pond mask
+	# before anything is built from them (the bridge's whole swap, TerraBridge; about 40 ms at
+	# 320 ft, waited a frame at a time).
 	var session := add_terra_session(root, doc)
 	if session != null:
 		while session.call("attaching"):
@@ -391,6 +392,7 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 		var bridge: RefCounted = (load(TERRA_BRIDGE) as GDScript).new()
 		bridge.call("attach", session)
 		bridge.call("swap_heights")
+		bridge.call("swap_water")
 	var prep := AuthoredLoadPrep.start(doc)
 	var pending: Array[String] = []
 	# Under the headless dummy renderer the material loads them in place instead

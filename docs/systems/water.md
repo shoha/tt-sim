@@ -93,6 +93,12 @@ Phase 4, P4-1 is data and algorithms only; the surface, carve and tool follow. P
   point), each its own river body; a step of 0.75 m or more between reaches is a waterfall
   ([waterfalls.md](waterfalls.md)). A pond's level is the lowest ground on the rim of its
   area minus the freeboard (`pond_rim_level()`).
+- **From the terraforming core** (card terraform-p2-bridge-water; switch `tt_sim/terrain/core` on,
+  a map with a terrain section): the bodies and the pond mask are not authored here but derived,
+  written by `TerraBridge` from the core's solved water (`TerraWaterBridge`: one river body per
+  flat reach, reaches sharing the step's midpoint, ponds from their outlines, ids in document
+  order), so everything in this section reads them unchanged. Rules and numbers:
+  [terraform.md](terraform.md) "The bridge".
 - **Waterfalls:** the fall-or-riffle rule (`WaterFalls`, `WaterFallPlan`), the lips the plan
   inserts as forced reach boundaries, the face points freed of the reach rule
   (`WaterGeometry.reach_ranges(ground, max_drop, forced, free)`) and everything derived from
@@ -511,7 +517,7 @@ editor API the Water tool (P4-4) calls.
   terrain changes). Generated rocks the carve's regeneration would remove are kept as props
   as after a sculpt stroke (`RockKeeper.start(..., dressing_before, keep)`, the rule deciding
   which), and placed rock props in the area are re-bedded by the snap and then dropped by the
-  same rule (`WaterEditor._drop_wet_rocks`); undo brings them all back.
+  same rule (`WaterWetRocks.drop`); undo brings them all back.
 - **The Water tool** (`WaterBrush`, its `BrushMode`: River and Pond tiles, the depth
   tiles, the ribbon preview and Ctrl erase) is documented in `UI_SYSTEMS.md` (authoring
   drawer, Water; "Brushes and gestures").
