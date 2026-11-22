@@ -213,6 +213,35 @@ func test_the_surfaces_build_a_first_water_on_the_worker_and_land_it_by_themselv
 	surfaces.release()
 
 
+## A water swap re-adds the skirt for the river exits (AuthoredTerrain.apply_river_exits), which
+## made the surfaces rebuild the zone maps whole on the swap frame: 144.5 ms on the attrib bench
+## (card painter-river-release). On the document the maps already show, that build runs on the
+## worker and lands the same bytes.
+func test_a_skirt_re_add_never_builds_the_zone_maps_on_the_main_thread() -> void:
+	var doc := MapDocument.create_flat(Vector2i(12, 12), "grass_meadow", "test", 7)
+	var pair := _painted(doc)
+	var surfaces: PainterSurfaces = pair[0]
+	var terrain: AuthoredTerrain = pair[1]
+	var builds := surfaces.zones().builds
+	var old := surfaces.zones().zone.get_data()
+	var skirt_id := terrain.get_skirt().get_instance_id()
+	terrain._build_skirt()
+	assert_ne(terrain.get_skirt().get_instance_id(), skirt_id, "a new skirt")
+	surfaces._rebuild_zone()
+	assert_true(surfaces.zones().building(), "the whole build runs on the worker")
+	assert_eq(surfaces.zones().builds, builds, "no synchronous whole build")
+	assert_eq(surfaces.zones().zone.get_data(), old, "the ground draws the maps it had")
+	var frames := 0
+	while surfaces.zones().building() and frames < 240:
+		await get_tree().process_frame
+		frames += 1
+	await get_tree().process_frame
+	assert_false(surfaces.zones().building(), "landed within %d frames" % frames)
+	assert_eq(surfaces.zones().builds, builds + 1, "one whole build, landed")
+	assert_eq(surfaces.zones().zone.get_data(), PainterZoneMaps.zone_image(doc).get_data())
+	surfaces.release()
+
+
 func test_a_map_closed_while_a_build_runs_drops_it() -> void:
 	var doc := MapDocument.create_flat(Vector2i(12, 12), "grass_meadow", "test", 7)
 	var pair := _painted(doc)

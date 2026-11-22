@@ -2821,6 +2821,43 @@ river release's worst frame (about 300 ms) are not in the plant landing path and
 they are the next thing to attribute. A forest-edge capture after the river and the wall is the
 same by eye before and after (every crown toned).
 
+### River release (card painter-river-release, 2026-11-22)
+
+The stroke attribution (`D:/dev/tabletop/docs/research/2026-11-22-terraform-audit/today_attrib/attrib.md`)
+named the river release's two largest costs; both are fixed with results unchanged:
+
+- `WaterCourseFit.condition` took 188.6 ms on the second river (1.1 on the first, a straight line
+  the smoothing leaves alone). The first river on the map plays no part: the cap checks (`hold_cap`, `max_excess`,
+  `deviation`) sample the fitted line every 5 cm and measured each sample against all of the
+  302 drawn pointer samples, about 0.5 M segment tests for a 90 m bent line. `nearest_from()`
+  answers the same query, bit for bit, from the segments near the point (an arc-length bound
+  skips the rest): 12.4 ms headless on the bench's own dumped input, the same result bytes
+  (`tests/fixtures/course_fit_bent_river.json`).
+- A water swap with river exits re-adds the terrain's skirt (`apply_river_exits`), and
+  `PainterSurfaces` took the skirt for a new document and rebuilt the zone maps whole on the
+  main thread (144.5 ms on the swap frame, and the 180 ms frame of the held raise's regrow). On
+  the document the maps already show, that build now runs on the worker (`build_async`) and
+  lands the same bytes a few frames later; a new document still builds at once.
+
+Windowed, quiet (lane held), the card's worktree, the attrib job (320 ft hilltop forest, seed
+1234; rec cpu, ms). Before = main 573fe57e, after = the branch, one run each:
+
+| | before | after |
+| --- | --- | --- |
+| first river: release, land, swap | 88.8, 155.1, 228.4 | 90.0, 153.8, 81.0 |
+| first river, frames over 33 ms (sum) | 4 (523.7) | 4 (378.2) |
+| second river: release, land, flush, swap | 302.9, 155.6, 106.8, 286.8 | 116.1, 153.2, 111.7, 147.7 |
+| second river, frames over 33 ms (sum) | 6 (953.5) | 6 (629.3) |
+| held raise over a river, pressed p95 / max | 30.9 / 31.9 | 29.8 / 34.6 |
+| held raise over a river, regrow swap | 182.6 | 34.9 |
+
+`ident.json`'s digests (heights, water bodies, dressing, zone maps, the water field, the
+scatter's rows) equal main's at every step. Left: the land frame (unbudgeted chunk rebuild,
+shade field and zone rect, about 155 ms), the water field's two updates per landing (about 100
+ms each), the second swap's `_finish_task` (about 130 ms: the field update and a StaticBody per
+body), `join_line` and `through_rises` (about 33 ms each) and the river preview (17 ms on the
+release frame).
+
 ## In-game authoring phase 4 (water): pinned performance pass (2026-09-27)
 
 The phase 4 pass: authored maps with water in play against the same maps without it, the

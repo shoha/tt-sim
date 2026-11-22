@@ -18,6 +18,14 @@ extends RefCounted
 ## would move less than the clean tolerance is
 ## returned unchanged bit for bit, so condition() of its own output is the identity in practice
 ## (measured in tests/unit/test_water_conditioner.gd).
+##
+## Cost. The cap checks (hold_cap(), max_excess(), deviation()) sample the result every few cm and
+## ask for the nearest point of the DRAWN line, a few hundred pointer samples: measured against
+## every drawn segment that was 0.5 M segment tests for a 90 m bent river and 188.6 ms of its
+## release frame (card painter-river-release; a straight line, which the smoothing leaves alone,
+## never reaches them). nearest_from() answers the same query bit for bit from the few segments
+## near the point (an arc-length bound skips the rest), so the fit costs in proportion to the
+## stroke's length.
 
 const MIN_POINT_GAP_M := 0.1
 const DP_PER_HALF_WIDTH := 0.15
@@ -45,6 +53,9 @@ const HOLD_TOLERANCE_M := 0.005
 const HOLD_SAMPLE_M := 0.05
 const HOLD_SLACK_M := 0.002
 const HOLD_PULL := 0.95
+## nearest_from()'s allowance for rounding in its arc-length bound (map coordinates are float32:
+## about 1e-5 m at a 100 m map's edge).
+const ARC_SLACK_M := 1.0e-3
 
 
 ## `points` (map XZ, upstream first, one half-width per point in `widths`) conditioned (see the
@@ -159,11 +170,15 @@ static func condition(
 ## how far the clean line leaves the drawn one.
 static func deviation(a: PackedVector2Array, b: PackedVector2Array) -> float:
 	var worst := 0.0
+	var arc := arc_lengths(b)
+	var hint := -1
 	for i in a.size() - 1:
 		var count := maxi(1, ceili(a[i].distance_to(a[i + 1]) / 0.25))
 		for s in count + 1:
 			var p := a[i].lerp(a[i + 1], float(s) / count)
-			worst = maxf(worst, WaterGeometry.nearest_on_polyline(b, p).x)
+			var near := nearest_from(b, arc, p, hint)
+			hint = int(near.y)
+			worst = maxf(worst, near.x)
 	return worst
 
 
@@ -181,7 +196,9 @@ static func hold_cap(
 ) -> Array:
 	var pts := stations.duplicate()
 	var ws := widths
+	var arc := arc_lengths(drawn)
 	_clamp_to_drawn(pts, drawn, ws, per_width)
+	var hint := -1
 	for _pass in HOLD_PASSES:
 		var next_pts := PackedVector2Array([pts[0]])
 		var next_ws := PackedFloat32Array([ws[0]])
@@ -196,7 +213,8 @@ static func hold_cap(
 			for s in range(1, count):
 				var t := float(s) / count
 				var p := a.lerp(b, t)
-				var near := WaterGeometry.nearest_on_polyline(drawn, p)
+				var near := nearest_from(drawn, arc, p, hint)
+				hint = int(near.y)
 				var cap := per_width * lerpf(ws[i], ws[i + 1], t)
 				if near.y < 0.0 or near.x - cap <= worst:
 					continue
@@ -226,11 +244,14 @@ static func max_excess(
 	per_width: float
 ) -> float:
 	var worst := 0.0
+	var arc := arc_lengths(drawn)
+	var hint := -1
 	for i in pts.size() - 1:
 		var count := maxi(1, ceili(pts[i].distance_to(pts[i + 1]) / HOLD_SAMPLE_M))
 		for s in count + 1:
 			var t := float(s) / count
-			var near := WaterGeometry.nearest_on_polyline(drawn, pts[i].lerp(pts[i + 1], t))
+			var near := nearest_from(drawn, arc, pts[i].lerp(pts[i + 1], t), hint)
+			hint = int(near.y)
 			worst = maxf(worst, near.x - per_width * lerpf(ws[i], ws[i + 1], t))
 	return worst
 
@@ -243,14 +264,66 @@ static func _clamp_to_drawn(
 	widths: PackedFloat32Array,
 	per_width: float
 ) -> void:
+	var arc := arc_lengths(drawn)
+	var hint := -1
 	for i in stations.size():
-		var near := WaterGeometry.nearest_on_polyline(drawn, stations[i])
+		var near := nearest_from(drawn, arc, stations[i], hint)
+		hint = int(near.y)
 		var cap := per_width * widths[i]
 		if near.y < 0.0 or near.x <= cap:
 			continue
 		var segment := int(near.y)
 		var foot := drawn[segment].lerp(drawn[segment + 1], near.z)
 		stations[i] = foot + (stations[i] - foot).normalized() * cap
+
+
+## The arc length of the polyline `points` at each of its points, from the first (nearest_from()).
+static func arc_lengths(points: PackedVector2Array) -> PackedFloat64Array:
+	var arc := PackedFloat64Array()
+	arc.resize(points.size())
+	for i in range(1, points.size()):
+		arc[i] = arc[i - 1] + points[i - 1].distance_to(points[i])
+	return arc
+
+
+## WaterGeometry.nearest_on_polyline(`points`, `p`), the same Vector3 bit for bit, from the segments
+## that can hold it: `arc` is arc_lengths(`points`), `hint` a segment likely near `p` (the last
+## answer, or -1). The scan runs in segment order as the full one does, but from a point at
+## distance d of `p` every segment that ends less than d - `bound` further along the line lies more
+## than `bound` from `p` (a polyline cannot get closer than its length allows), so it jumps past
+## them; `bound` is the hint's distance or the best so far. A skipped segment is further than the
+## answer, so it could never have been the first strict minimum the full scan keeps. The hint only
+## speeds the scan; the answer does not depend on it.
+static func nearest_from(
+	points: PackedVector2Array, arc: PackedFloat64Array, p: Vector2, hint: int
+) -> Vector3:
+	var best := Vector3(INF, -1, 0)
+	var n := points.size()
+	var bound := INF
+	if hint >= 0 and hint < n - 1:
+		var ha := points[hint]
+		var hseg := points[hint + 1] - ha
+		var hlen := hseg.length_squared()
+		if hlen > 1e-12:
+			bound = p.distance_to(ha + hseg * clampf((p - ha).dot(hseg) / hlen, 0.0, 1.0))
+	var s := 0
+	while s < n - 1:
+		var a := points[s]
+		var reach := p.distance_to(a) - minf(bound, best.x) - ARC_SLACK_M
+		if reach > arc[s + 1] - arc[s]:
+			# Every segment from s that ends before arc[s] + reach is further than the bound.
+			s = maxi(s + 1, arc.bsearch(arc[s] + reach) - 1)
+			continue
+		# The full scan's arithmetic, unchanged (WaterGeometry.nearest_on_polyline).
+		var segment := points[s + 1] - a
+		var length_sq := segment.length_squared()
+		if length_sq > 1e-12:
+			var t := clampf((p - a).dot(segment) / length_sq, 0.0, 1.0)
+			var distance := p.distance_to(a + segment * t)
+			if distance < best.x:
+				best = Vector3(distance, s, t)
+		s += 1
+	return best
 
 
 ## Indices of the points Douglas-Peucker keeps of `points` at tolerance `eps` (both ends always).

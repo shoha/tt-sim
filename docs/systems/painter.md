@@ -242,7 +242,10 @@ numbers in `PERFORMANCE.md` "The painted look after a water or height edit", Rou
   first-water test): `finish` lands a completed task or builds the same snapshot itself, and a
   dropped task is waited for only once it has completed (`PainterZoneMaps._reap`, polled on
   `process_frame`). A first paint and a terrain build stay synchronous (no maps to show yet, or another
-  map's). The first river: 60 ms off its frame, landed 2 frames later.
+  map's). The first river: 60 ms off its frame, landed 2 frames later. The skirt a water swap
+  re-adds for its river exits (`AuthoredTerrain.apply_river_exits`) builds whole on the worker
+  too when the document is the one the maps show (same instance and size; card
+  painter-river-release: 144.5 ms off the swap frame); a skirt on another document builds at once.
 - The water field (`PainterWaterField`) merges the rects of consecutive ground edits and redoes
   them once (`_flush_dirty`, on `process_frame`): in the first frame after one with no edit, and
   at most `FLUSH_WAIT` (4) frames after the first edit. A landing's carve, settle and dressing
