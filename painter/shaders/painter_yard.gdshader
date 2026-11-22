@@ -19,9 +19,10 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled;
  *            in the shadow pass, from the light, so the shadow is round too;
  *   light    the light's three steps on the smooth radial normal, turned a little by a slow noise
  *            and pulled darker along the seams, so the steps break into a few rounded dabs;
- *   snow     in winter (`snow`, the sheet's roof-snow) what faces up wears the roof snow's ramp:
- *            a blob's top in a cap with a scalloped edge, a stone, a lid or a step whole, a tuft's
- *            blades in patches; the snow takes the light's steps as the roofs' blanket does.
+ *   snow     in winter (`snow`, the structure snow's switch) what faces up wears the roof snow's
+ *            ramp where the snow law lays it (painter_snow_law.gdshaderinc): a blob's top in a cap
+ *            with a scalloped edge, a stone, a lid or a step whole, a tuft's blades in patches; the
+ *            snow takes the light's steps as the roofs' blanket does.
  * A lighter or darker variant lies in broad patches. Flat pieces (tufts, stepping stones, slabs,
  * blooms) keep their outline. No per-frame work: everything is the fragment's own position.
  *
@@ -30,6 +31,7 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled;
 
 #include "res://painter/shaders/painter_noise.gdshaderinc"
 #include "res://painter/shaders/painter_structure_common.gdshaderinc"
+#include "res://painter/shaders/painter_snow_law.gdshaderinc"
 
 uniform vec3 ramps[24];
 uniform float snow = 0.0;
@@ -129,8 +131,10 @@ void fragment() {
 		}
 		float cap = up - seam * 0.25 + (p_noise(wp * 4.0 + 9.0) - 0.5) * 0.3;
 		// A bloom is small: snow takes most of it, leaving a red base (card painter-look-houses: bare
-		// red cones in a snowed yard read as stray objects).
-		cover = smoothstep(0.42, 0.48, cap + (bloom ? 0.4 : 0.0)) * clamp(snow, 0.0, 1.0);
+		// red cones in a snowed yard read as stray objects). Where it lies is the snow law (card
+		// snow-one-law), asked with the piece's up moved by its lobes and seams, so its cap keeps
+		// their scalloped outline.
+		cover = snow_law(snow, cap + (bloom ? 0.4 : 0.0), wp, n, SNOW_NO_TOP, 0.0).x;
 	}
 	int base = tone * 6;
 	vec3 shd = mix(ramps[base], ramps[base + 3], variant);

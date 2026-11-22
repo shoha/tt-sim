@@ -59,7 +59,8 @@ void fragment() {
 	selector_fragment(v_wp, v_wn, v_o, v_scale, v_h, tex, n, variant, mul, wob, petal, snow);
 	vec3 plane;
 	n = solid_form(v_wp, v_wn, v_o, v_scale, v_turn, plane, variant);
-	snow = frost > 0.0 && frost_up(n.y - 0.3, v_wp) ? 1.0 : 0.0;
+	// The snow law on the form's normal (painter_selector's snow_on), as a bush's and a roof's.
+	snow = frost > 0.0 ? snow_on(n, v_wp) : 0.0;
 	f_n = n;
 	f_plane = plane;
 	f_variant = variant;

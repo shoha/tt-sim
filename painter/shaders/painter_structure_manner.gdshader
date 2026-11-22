@@ -425,6 +425,12 @@ void fragment() {
 	vec2 down = flat_len > 0.02 ? flat_n / flat_len : vec2(0.0, 1.0);
 	vec2 across = vec2(-down.y, down.x);
 	float up = n.y;
+	// The face's own up (its flat normal from the position's derivatives, taken outside every
+	// branch), which the snow law asks on a face with no roof: a trim board's smoothed normals tilt
+	// up along its whole side, and asked with them the law laid a white stripe down a door jamb
+	// (card snow-one-law round 1).
+	vec3 face_n = normalize(cross(dFdx(wp), dFdy(wp)));
+	float face_up = dot(face_n, n) < 0.0 ? -face_n.y : face_n.y;
 	float u = dot(wp.xz, across);
 	float h = clamp(v_h, 0.0, 1.0);
 	// A metre's pixel footprint on the piece: fine marks fade from 4 cm a pixel, broad ones from
@@ -698,6 +704,8 @@ void fragment() {
 	float snow_mark = 0.0;
 	// The painted layer's rounded underside on a roof with no record (snow_roll's y).
 	float snow_under = 0.0;
+	// 1 where the snow law laid the layer (a face with no record), whose shade faces the sky.
+	float law_laid = 0.0;
 	if (snow > 0.0) {
 		// The shared layer's frame on a face with no record (taken here, outside the branches on
 		// the piece's code: it reads screen derivatives) and how broad a metre is on it.
@@ -777,21 +785,28 @@ void fragment() {
 			cover = max(cover, 0.5 * smoothstep(0.3, 0.7, rag));
 			hide = 0.6;
 			soft = 0.06;
-		} else if (roofy) {
-			// A roof with no record (a round or Taper roof, or any roof while snow_body is off): the
-			// shared layer painted on its face (painter_snow.gdshaderinc, as the street lots' A3b
-			// roofs), its frame from the face and h, its body in its rolled shading normal; on a
-			// spire too steep for the whole layer, one cap over its upper part whose lower edge rolls
-			// over like an eave's lip (snow_cover_roof, snow_edge_m).
+		} else if (roofy || snow_hold(snow, face_up) > 0.0) {
+			// Every face left with no record: a round or Taper roof, any roof while snow_body is
+			// off, a sill, a step, a chimney's top. The shared layer painted on its face
+			// (painter_snow.gdshaderinc, as the street lots' A3b roofs), its frame from the face and
+			// h, its body in its rolled shading normal. Where it lies is the snow law (card
+			// snow-one-law): a roof knows its top (h), so a spire too steep for the whole layer
+			// keeps one cap over its upper part whose lower edge rolls over like an eave's lip
+			// (snow_edge_m); any other face takes the law's broad shapes and its rim.
 			float seed = v_bld.x * 23.0;
-			cover = snow_cover_roof(snow, up, h, fr.xy, n, seed) * (1.0 - snow_gap(fr.xy, fr.w));
-			hide = 1.0;
+			vec4 law = snow_law(snow, roofy ? up : face_up, wp, n, roofy ? h : SNOW_NO_TOP, seed);
+			cover = law.x * (roofy ? 1.0 - snow_gap(fr.xy, fr.w) : 1.0);
+			hide = roofy ? 1.0 : hide;
 			vec4 sp = snow_paint(fr.xy, fbroad);
-			vec3 roll = snow_roll(snow_edge_m(up, h, fr.xy, fr.z, n, seed), fr.w, fr.xy);
+			vec3 roll = roofy
+				? snow_roll(snow_edge_m(law.w, h, fr.z), fr.w, fr.xy)
+				: snow_roll(SNOW_FAR, SNOW_FAR, fr.xy);
+			roll.y = max(roll.y, law.z);
 			vec2 sm = snow_marks(cover, sp, roll.y, roll.z);
 			snow_dark = sm.x;
 			snow_light = sm.y;
 			snow_under = roll.y;
+			law_laid = 1.0;
 			swell = sp.w * cover;
 			wob = mix(wob, sp.z, cover);
 			soft = mix(0.01, 0.06, cover);
@@ -943,7 +958,7 @@ void fragment() {
 		// roof's own shade takes some of the mid tone, its lip's front and underside stay blue.
 		float sky = clamp(n.y, 0.0, 1.0) * (1.0 - clamp(course_m / 0.9, 0.0, 1.0));
 		f_shd = snow_sky_shade(f_shd, f_mid, sky);
-	} else if (roofy && cover > 0.0 && snow > 0.0) {
+	} else if (law_laid > 0.0 && cover > 0.0) {
 		f_shd = mix(f_shd, snow_sky_shade(f_shd, f_mid, clamp(up, 0.0, 1.0) * (1.0 - snow_under)), cover);
 	}
 	// A varying cannot be an inout argument: the burn works on copies.

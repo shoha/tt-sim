@@ -60,9 +60,8 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled, world_vert
 #include "res://shaders/wind_foliage_grow.gdshaderinc"
 #include "res://painter/shaders/painter_selector.gdshaderinc"
 
-// The sun's direction (FoliageLight.publish_sun; the wind include declares it only for its painted
-// light).
-global uniform vec4 foliage_sun;
+// The sun's direction (FoliageLight.publish_sun) is the foliage_sun global the selector's snow law
+// declares (painter_snow_law.gdshaderinc; the wind include declares it only for its painted light).
 // 1 on the hand-placed props' layer (PainterPlantTone.mark_placed): never thinned.
 instance uniform float painter_placed = 0.0;
 // The look's numbers below are tuned by the look cards' render-job probes (PainterGrassMarks leaves

@@ -8,6 +8,8 @@ extends GutTest
 ## touched; a tile roof chooses among the sheet's roof tones and every tone is the sheet's.
 
 const STATE := {"sheet": "core", "mood": "summer", "elevation": 60.0}
+## The snow law every painted family's faces with no record ask (card snow-one-law).
+const LAW := "res://painter/shaders/painter_snow_law.gdshaderinc"
 const HOUSES: Array[String] = [
 	"core:thatched_cottage", "core:stone_house", "core:half_timber_house"
 ]
@@ -101,8 +103,9 @@ func test_every_roof_and_prop_shares_one_snow_layer() -> void:
 	# none keeps a coverage of its own (snow_cover's patches, roof_snow_body, the scalloped cap).
 	var include := "res://painter/shaders/painter_snow.gdshaderinc"
 	var snow := FileAccess.get_file_as_string(include)
-	for fn in ["float snow_hold(", "vec4 snow_paint(", "vec3 snow_roll(", "vec4 snow_frame("]:
+	for fn in ["vec4 snow_paint(", "vec3 snow_roll(", "vec4 snow_frame("]:
 		assert_string_contains(snow, fn)
+	assert_string_contains(snow, '#include "res://painter/shaders/painter_snow_law.gdshaderinc"')
 	assert_false(snow.contains("texture("), "the layer reads no texture")
 	var common := FileAccess.get_file_as_string(
 		"res://painter/shaders/painter_structure_common.gdshaderinc"
@@ -465,19 +468,83 @@ func test_a_steep_roof_holds_one_bodied_cap() -> void:
 	# Card painter-roof-polish: a spire (up 0.25 to 0.35) held no snow, or long streaks that read
 	# as a glossy highlight. Card painter-roof-round3 (owner: "streaky and weird"): both roof shaders
 	# take one cover whose lower edge rises up a steeper face, a cap that rolls over its own edge as a
-	# lip; no ledges and no streaks on a roof. The props keep the layer by slope.
+	# lip; no ledges and no streaks on a roof. Card snow-one-law: the cap is the snow law's, asked
+	# with the roof's h as the face's top; the props ask the same law with no top.
 	var snow := FileAccess.get_file_as_string("res://painter/shaders/painter_snow.gdshaderinc")
-	for fn in ["float snow_edge(", "float snow_cover_roof(", "float snow_edge_m("]:
-		assert_string_contains(snow, fn)
-	assert_false(snow.contains("SNOW_LEDGE_M"), "no ledges")
-	assert_false(snow.contains("float snow_steep("), "no separate steep model")
+	var law := FileAccess.get_file_as_string(LAW)
+	assert_string_contains(law, "float snow_cap_edge(")
+	assert_string_contains(snow, "float snow_edge_m(")
+	for code: String in [snow, law]:
+		assert_false(code.contains("SNOW_LEDGE_M"), "no ledges")
+		assert_false(code.contains("float snow_steep("), "no separate steep model")
 	for path: String in [PainterBuildings.SHADER, PainterMannerHost.SHADER]:
 		var code := FileAccess.get_file_as_string(path)
-		assert_string_contains(code, "snow_cover_roof(snow, up, h,", path)
-		assert_string_contains(code, "snow_roll(snow_edge_m(up, h, fr.xy, fr.z, n,", path)
-		assert_false(code.contains("snow_cover_of(snow_hold("), "%s: no bare slope hold" % path)
+		assert_string_contains(code, " ? up : face_up, wp, n, ", path)
+		assert_string_contains(code, "float face_up = ", path)
+		assert_string_contains(code, "snow_roll(snow_edge_m(law.w, h, fr.z), fr.w, fr.xy)", path)
 	var prop := FileAccess.get_file_as_string(PainterVillage.PROP_SHADER)
-	assert_string_contains(prop, "snow_cover_of(snow_hold(snow, n.y)")
+	assert_string_contains(prop, "snow_law(snow, n.y, wp, n, SNOW_NO_TOP, 0.0)")
+
+
+func test_one_snow_law_for_every_painted_family() -> void:
+	# Card snow-one-law (owner: "a unifying system for determining coverage and accumulation for
+	# snow"): one include says which faces hold snow and how the cover's edge looks, on a switch,
+	# not an amount; every painted family's faces with no record ask it, and the per-family rules
+	# it replaced are gone (frost_up's binary frost line, the props' and roofs' own holds).
+	var law := FileAccess.get_file_as_string(LAW)
+	assert_string_contains(law, "#ifndef PAINTER_SNOW_LAW")
+	assert_string_contains(law, "vec4 snow_law(float on, float up, vec3 wp, vec3 n, float top,")
+	assert_string_contains(law, "float snow_hold(float on, float up)")
+	assert_false(law.contains("texture("), "the law reads no texture")
+	assert_false(law.contains("fwidth(") or law.contains("dFdx("), "no derivatives: callers branch")
+	assert_false(law.contains("float amount"), "on or off, no amount")
+	assert_eq(law.count("{"), law.count("}"), "the law's braces balance")
+	assert_eq(law.count("("), law.count(")"), "the law's parentheses balance")
+	assert_eq(law.count("#ifndef"), law.count("#endif"), "the guard closes")
+	var include := '#include "%s"' % LAW
+	var users := {
+		"res://painter/shaders/painter_snow.gdshaderinc": include,
+		"res://painter/shaders/painter_yard.gdshader": include,
+		"res://painter/shaders/painter_selector.gdshaderinc": include,
+		PainterBuildings.SHADER: "snow_law(",
+		PainterMannerHost.SHADER: "snow_law(",
+		PainterVillage.PROP_SHADER: "snow_law(",
+		"res://painter/shaders/painter_solid.gdshader": "snow_on(n, v_wp)",
+	}
+	for path: String in users:
+		assert_string_contains(FileAccess.get_file_as_string(path), users[path], path)
+	assert_string_contains(
+		FileAccess.get_file_as_string("res://painter/shaders/painter_yard.gdshader"), "snow_law("
+	)
+	var selector := FileAccess.get_file_as_string(
+		"res://painter/shaders/painter_selector.gdshaderinc"
+	)
+	assert_eq(selector.count("snow_on(n, wp)"), 4, "leaf masses, bushes, ivy and rocks ask the law")
+	var gone := [
+		"frost_up(",
+		"float snow_hold(float snow",
+		"float snow_cover_of(",
+		"float snow_cover_roof(",
+		"float snow_edge(",
+	]
+	var dir := "res://painter/shaders/"
+	for file: String in DirAccess.get_files_at(dir):
+		if not (file.ends_with(".gdshader") or file.ends_with(".gdshaderinc")):
+			continue
+		var code := FileAccess.get_file_as_string(dir + file)
+		for old: String in gone:
+			assert_false(code.contains(old), "%s still has %s" % [file, old])
+		# The law declares the foliage_sun global: no includer may declare it again.
+		var includes_law := (
+			code.contains("painter_selector.gdshaderinc")
+			or code.contains("painter_snow.gdshaderinc")
+			or code.contains("painter_snow_law.gdshaderinc")
+		)
+		if includes_law and file != "painter_snow_law.gdshaderinc":
+			assert_false(
+				code.contains("global uniform vec4 foliage_sun"),
+				"%s declares the law's global again" % file
+			)
 
 
 func test_round5_caps_drift_by_facet_and_gables_stay_bare() -> void:
@@ -488,8 +555,9 @@ func test_round5_caps_drift_by_facet_and_gables_stay_bare() -> void:
 	var snow := FileAccess.get_file_as_string("res://painter/shaders/painter_snow.gdshaderinc")
 	assert_false(snow.contains("snow_gable"), "no snow on a gable")
 	assert_false(snow.contains("snow_cap_probe"), "the probe switch is gone")
-	for fn in ["float snow_upright(", "float snow_foot(", "global uniform vec4 foliage_sun"]:
+	for fn in ["float snow_upright(", "float snow_foot("]:
 		assert_string_contains(snow, fn)
+	assert_string_contains(FileAccess.get_file_as_string(LAW), "global uniform vec4 foliage_sun")
 	var a3b := FileAccess.get_file_as_string(PainterBuildings.SHADER)
 	assert_string_contains(a3b, "instance uniform float scour")
 	assert_string_contains(a3b, "snow_gap(fr.xy, fr.w) * scour")
