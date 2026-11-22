@@ -87,7 +87,7 @@ public:
 	TerraDerive();
 	~TerraDerive();
 
-	/// "terra 3 kinds": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
+	/// "terra 4 cache": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
 	String version() const;
 	/// Allocates a w x h sample grid over a map of `extent` metres, centred on the origin (sample
 	/// (0, 0) at -extent / 2), and forgets the document. TerraCore passes 2 (n - 1) + 1 per axis of
@@ -141,7 +141,8 @@ public:
 	/// "level"}]}.
 	Dictionary water_records() const;
 	/// FNV-1a digests of every derived array and record list, for update-equals-build and the
-	/// golden fixture.
+	/// golden fixture and the derived record's load check (TerraCache). The arrays hash in parallel
+	/// on the pool, one FNV chain each, unless an async derive holds it.
 	Dictionary digests() const;
 	int64_t memory_bytes() const;
 	/// The stage table in run order: per stage {"name", "shape" ("rect", "graph", "line_rect"),

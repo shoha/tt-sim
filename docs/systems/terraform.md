@@ -11,8 +11,8 @@ Phase 1 lands the core beside today's path and changes nothing the game draws or
 (terraform-p1-native) moved the derive from the spike `terraform-s2-cpu` into `native/src`; nothing
 in the game calls it yet. Card 2 (terraform-p1-stages) made the chain one loop over a stage table,
 card 3 (terraform-p1-document) added the terrain section of `map.ttmap` (format 6), and card 4
-(terraform-p1-kinds) the kind registry. Later phase 1 cards add the derived record and
-`TerraSession` behind a switch.
+(terraform-p1-kinds) the kind registry, card 5 (terraform-p1-cache) the derived record ("The
+derived record"). The last phase 1 card adds `TerraSession` behind a switch.
 
 ## Files
 
@@ -31,6 +31,7 @@ card 3 (terraform-p1-document) added the terrain section of `map.ttmap` (format 
 | `native/src/terra_fields.cpp` | stages 5 and 6: slope, capped distances, the look field, the ground rules |
 | `native/src/terra_derive.{h,cpp}` | the GDCLASS `TerraDerive`: setup, primitives and their seeds, rules, the stage loop, the three solves and the rect bodies' dispatch, queries, digests |
 | `utils/terraform/terra_core.gd` | `TerraCore`: `native_available()`, `NATIVE_VERSION`, the built-in kind ids, `grid_for(doc)`, `make_derive(doc)`, `load_rules()`, `enabled()` (off) |
+| `utils/terraform/terra_cache.gd` | `TerraCache`: the derived record (`terrain/derived.bin`, digests only): `make_record`, `derive_for`, `check`, `derive_and_check`, `encode` / `decode` |
 | `utils/terraform/terra_kinds.gd` | `TerraKinds`: the GDScript registry, one preload line per kind; `script_for(id)`, `name_of`, `ids()`, `table()`, `problem(id, data)` |
 | `utils/terraform/kinds/<name>/<name>_kind.gd` | one script per kind (layout, `validate`, `bounds`, label, defaults); `kinds/kind_layout.gd` holds the checks they share |
 | `utils/terraform/rules/ground_rules.json` | the ground table (12 classes, 11 rows) and the look parameters the Painted cards read |
@@ -168,7 +169,8 @@ set (null without the library). Then `set_prim(id, kind, floats)`, `append_dabs`
 `derive()` or `derive_full()`, and the queries: `height_at`, `water_at`, `raycast`, `falls()` (7
 floats a record), `walls()`, `water_records()`, `tile_bytes(tile, kind)`, `tile_collision(tile,
 stride)` (heights in metres and their step), `grid()`, `digests()` (FNV-1a of every array and record
-list). C++ stages built on a derive read `derived()`, a view of every array. For tests and this
+list; the arrays hash in parallel on the pool, one chain each, unless an async derive holds it).
+C++ stages built on a derive read `derived()`, a view of every array. For tests and this
 doc: `stages()` (the table: name, shape, reads, writes, halo, reach_m), `arrays()` (name, kind,
 bytes a sample), `array_bytes(name)` (a per-sample array's whole-map bytes) and
 `debug_set_sample(name, i, j, value, dirty_all)` (sets one sample outside the chain and marks it,
@@ -176,10 +178,46 @@ or the whole array, changed for the next `derive()`). The registry: `kinds()` (p
 stage, shape, header, stride, ascending id), `kind_bounds(kind, floats)` (a primitive's world box),
 `kind_conflicts()` and `debug_kinds_in_order(order)`.
 
+## The derived record
+
+Card terraform-p1-cache (2026-11-22). Digests only, never the arrays (owner, 2026-11-22: "we can go
+with teh checksum approach"; plan Q1): a derive takes tens of milliseconds, the arrays would add
+megabytes to every map and its late-join transfer, and the three-platform golden shows the derive
+agrees everywhere CI builds. `TerraCache` (`utils/terraform/terra_cache.gd`) makes and checks it;
+`MapTerrainIO` writes it as `terrain/derived.bin` beside `terrain/prims.bin` (format 6 only; bytes in
+map_document.md "Terrain section (format 6)"), and `TerraDoc.derived` holds it in memory (`{}` for
+none).
+
+- **The key** is `TerraDoc.derive_key(size, extent)`: SHA-256 over the canonical `prims.bin` bytes with
+  `next_id` written as 0, the derive grid (`TerraDoc.grid_bytes`) and `NATIVE_VERSION`. `next_id` is
+  left out because the derive never reads it (it reads ids, kinds, flags, floats and order, all still
+  covered), so an add and its undo keep the key; `TerraDoc.digest()` keeps `next_id`, because peers
+  must agree on the id the next add takes. The record also stores the grid bytes and the core
+  version, so `miss_reason` can say which part moved ("version", "grid" or "primitives").
+- **The digests** (`TerraCache.DIGESTS`, 22): FNV-1a 64 of each per-sample array (Hraw SW H0 H1 WL
+  Hp H2 SL DW DP DF PW HB CV PM FM WM PI CT), of the fall records (`falls`) and of the wall pads and
+  openings (`walls`), all from `digests()`; and `water`, the first 8 bytes of SHA-256 over
+  `water_records()` (river ids, receivers, half widths, fall counts, levels and lines; pond ids and
+  levels), hashed in GDScript since the records are small. The intermediates are kept beside the
+  arrays the game reads (H2, WL, CT, the water, falls and pads) because a mismatch that names the
+  first diverging stage is the useful report.
+- **At load** (`derive_and_check(terra, doc)`, which card 6's session calls): `derive_for` sets every
+  primitive that is not muted in document order and runs `derive_full`, then `check` compares. A key
+  that misses is quiet (status `miss`: the map simply re-derives); equal digests are `match`; any
+  digest that differs is `mismatch`, warned once (one line naming every differing array and the
+  count), the cross-machine determinism check peers rely on. The derive is handed back for reuse.
+- **At save** `MapTerrainIO.serialize` writes the record only while its key matches the document, so
+  an edit after the record was made drops it rather than saving it stale.
+- **Size and time** (headless, indicative, 2026-11-22, the terraced corpus): the record is 331 bytes
+  at every map size. Derive plus compare: 17.5 ms at 200 ft (489 x 489 samples: derive 15.3 ms,
+  compare 2.1 ms) and 37.7 ms at 320 ft (781 x 781: 33.1 ms and 5.2 ms). With `digests()` serial the
+  compare was 13.7 ms and 34.8 ms, as much as the derive at 320 ft, which is why it now runs on the
+  pool (same values; the golden is unchanged).
+
 ## Versions and the library
 
-`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 3 kinds`; the cache card steps it
-("terra 4 cache"), and the golden fixture's `version` follows it. The scatter library's string carries `terra`
+`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 4 cache` (the parallel
+`digests()`), and the golden fixture's `version` follows it. The scatter library's string carries `terra`
 (`ttscatter 10 curves water chunk fields wfield2 terra`), so a stale DLL fails
 `test_scatter_native`. After pulling a change here, rebuild `native/` (AGENTS.md "Testing").
 Without the library every terra test is pending with "the native library is not built", which CI
@@ -194,6 +232,7 @@ treats as a failure.
 | `test_terra_determinism.gd` | two runs of one instance, serial against 1 and 8 workers, two instances deriving at once |
 | `test_terra_water_laws.gd` | no level climbs downstream, the tributary joins and falls, the wall opens at the river, the pond holds water |
 | `test_terra_golden.gd` | `version()`, and the corpus on a 40 x 40 and a 40 x 48 cell map, plus the terraced corpus on 40 x 40, against `tests/fixtures/terra_corpus_digests.json` |
+| `test_terra_cache.gd` | the derived record: with a matching key a fresh derive gives the recorded digests through the map document (the record reads back bit for bit, under 512 bytes); the snapshot's copy; a stale record is not written; each key change (grid, core version, a mute, a moved float) misses quietly while an add and its undo keep the key; one H2 sample set outside the chain gives `mismatch` naming only H2 with one warning; every truncation, a trailing byte, the entry cap, bad magic, a newer version, too many digests, names out of order or malformed are refused while the terrain still loads; a map without terrain is unaffected |
 | `test_terra_stage_table.gd` | the table's order (each read an input or an earlier write, one writer per array); halo honesty: one H2 sample (then one FM sample) of a built map set outside the chain, every downstream stage re-run over the whole map, and each array changes only within the reach the table declares from it (the halos summed along the way), with the incremental derive giving the same bytes. A halo one sample short fails it (checked 2026-11-22 with the look row at 13) |
 
 `tests/unit/terra_corpus.gd` (`TerraCorpus`) is the spike's test scene placed on a map document's

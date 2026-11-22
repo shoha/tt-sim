@@ -34,6 +34,7 @@ extends RefCounted
 ##                          never written all zero, and an all-zero one reads as none
 ##   mass_anchors.bin       grass-mass anchors, (dx, dz) per scatter row   (MapAnchorsIO)
 ##   terrain/prims.bin      the terrain primitive list, format 6 only      (MapTerrainIO)
+##   terrain/derived.bin    the derived record (digests), beside it only   (TerraCache)
 ## Unknown entries are ignored (_known_entries and _extract_entries only look at
 ## KNOWN_ENTRIES), so the surfaces, water, crossings, fire and anchors entries needed no
 ## format bump: an older build reads a document with water as if it had none, and one with
@@ -98,6 +99,8 @@ const SURFACES_WEIGHT_ENTRY := "surfaces_weight.png"
 const FIRE_ENTRY := "fire.png"
 ## The terrain section (format 6), read and written by MapTerrainIO through terrain_io().
 const TERRAIN_ENTRY := "terrain/prims.bin"
+## The derived record beside it (TerraCache, through MapTerrainIO): digests only, format 6 only.
+const TERRAIN_DERIVED_ENTRY := "terrain/derived.bin"
 ## Every entry this format reads, in the order they are written and read.
 const KNOWN_ENTRIES: Array[String] = [
 	MANIFEST_ENTRY,
@@ -120,6 +123,7 @@ const KNOWN_ENTRIES: Array[String] = [
 	FIRE_ENTRY,
 	MapAnchorsIO.ENTRY,
 	TERRAIN_ENTRY,
+	TERRAIN_DERIVED_ENTRY,
 ]
 const TEMP_SUFFIX := ".tmp"
 ## The modification time stamped on every entry (Unix seconds; 0 would mean "now" to
@@ -159,6 +163,7 @@ const ENTRY_CAPS := {
 	FIRE_ENTRY: 4 * 1024 * 1024,
 	MapAnchorsIO.ENTRY: 16 * 1024 * 1024,
 	TERRAIN_ENTRY: MapDocument.MAX_TERRA_SECTION_BYTES,
+	TERRAIN_DERIVED_ENTRY: MapDocument.MAX_TERRA_DERIVED_BYTES,
 }
 const MAX_TOTAL_BYTES := 64 * 1024 * 1024
 ## The archive file itself, checked before it is opened.
@@ -620,7 +625,8 @@ static func _parse_document(entries: Dictionary, warn_log: _WarningLog) -> MapDo
 		var fire := _parse_mask(blobs[FIRE_ENTRY], doc, Image.FORMAT_L8, FIRE_ENTRY, warn_log)
 		doc.fire_mask = fire if has_fire(fire) else PackedByteArray()
 	MapAnchorsIO.parse(blobs, doc, warn_log)
-	if meta["format"] >= MapDocument.FORMAT_TERRAIN or blobs.has(TERRAIN_ENTRY):
+	var terrain_entries := blobs.has(TERRAIN_ENTRY) or blobs.has(TERRAIN_DERIVED_ENTRY)
+	if meta["format"] >= MapDocument.FORMAT_TERRAIN or terrain_entries:
 		terrain_io().parse(blobs, doc, meta["format"], warn_log)
 	return doc
 

@@ -19,7 +19,7 @@ extends RefCounted
 ## The native class's name, for ClassDB only.
 const CLASS_NAME := "TerraDerive"
 ## What TerraDerive.version() must return; a library built from older sources fails the tests.
-const NATIVE_VERSION := "terra 3 kinds"
+const NATIVE_VERSION := "terra 4 cache"
 ## The ground rule table (rows of [field, lo, hi, soft] terms, later rows over earlier ones).
 const RULES_PATH := "res://utils/terraform/rules/ground_rules.json"
 ## Rule term fields by name, in the order of the native Field enum (terra_stages.h).

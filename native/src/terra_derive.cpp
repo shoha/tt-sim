@@ -143,7 +143,7 @@ Dictionary TerraDerive::tile_collision(int64_t tile, int64_t stride) const {
 }
 
 String TerraDerive::version() const {
-	return "terra 3 kinds";
+	return "terra 4 cache";
 }
 
 Dictionary TerraDerive::grid() const {
@@ -1022,30 +1022,52 @@ void TerraDerive::debug_set_sample(const String &name, int64_t i, int64_t j, dou
 	seeds[a].add(dirty_all ? g.all() : Rect{ int(i), int(j), int(i) + 1, int(j) + 1 }, g);
 }
 
+// One FNV-1a chain per array, so the arrays hash in parallel on the pool (one job each) with the
+// same values as one after another; the derived record's load check (card terraform-p1-cache)
+// hashes every array once per load, which serially cost about as much as the derive at 320 ft.
 Dictionary TerraDerive::digests() const {
-	Dictionary out;
-	auto put = [&](const char *name, const auto &v) {
-		out[name] = int64_t(fnv(v.data(), v.size() * sizeof(v[0])));
+	struct Job {
+		const char *name;
+		const void *data;
+		size_t bytes;
 	};
-	put("Hraw", Hraw);
-	put("SW", SW);
-	put("H0", H0);
-	put("H1", H1);
-	put("WL", WL);
-	put("Hp", Hp);
-	put("H2", H2);
-	put("SL", SL);
-	put("DW", DW);
-	put("DP", DP);
-	put("DF", DF);
-	put("PW", PW);
-	put("HB", HB);
-	put("CV", CV);
-	put("PM", PM);
-	put("FM", FM);
-	put("WM", WM);
-	put("PI", PI);
-	put("CT", CT);
+	std::vector<Job> jobs;
+	auto add = [&](const char *name, const auto &v) {
+		jobs.push_back(Job{ name, v.data(), v.size() * sizeof(v[0]) });
+	};
+	add("Hraw", Hraw);
+	add("SW", SW);
+	add("H0", H0);
+	add("H1", H1);
+	add("WL", WL);
+	add("Hp", Hp);
+	add("H2", H2);
+	add("SL", SL);
+	add("DW", DW);
+	add("DP", DP);
+	add("DF", DF);
+	add("PW", PW);
+	add("HB", HB);
+	add("CV", CV);
+	add("PM", PM);
+	add("FM", FM);
+	add("WM", WM);
+	add("PI", PI);
+	add("CT", CT);
+	std::vector<uint64_t> h(jobs.size());
+	auto hash = [&](int k) { h[k] = fnv(jobs[k].data, jobs[k].bytes); };
+	// An async derive owns the pool (and is writing the arrays): hash on the caller alone then.
+	if (pool && !is_busy()) {
+		pool->run(int(jobs.size()), hash);
+	} else {
+		for (int k = 0; k < int(jobs.size()); k++) {
+			hash(k);
+		}
+	}
+	Dictionary out;
+	for (size_t k = 0; k < jobs.size(); k++) {
+		out[jobs[k].name] = int64_t(h[k]);
+	}
 	PackedFloat32Array f = falls();
 	out["falls"] = int64_t(fnv(f.ptr(), size_t(f.size()) * 4));
 	uint64_t wh = 1469598103934665603ull;

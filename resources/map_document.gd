@@ -143,6 +143,10 @@ const MAX_TERRA_PRIMS := 4096
 const MAX_TERRA_FLOATS_PER_PRIM := 262144
 const MAX_TERRA_FLOATS := 4194304
 const MAX_TERRA_SECTION_BYTES := 64 * 1024 + MAX_TERRA_PRIMS * 12 + MAX_TERRA_FLOATS * 4
+## The derived record (TerraCache, terrain/derived.bin): digests it may hold, and its entry's cap
+## (the header and MAX_TERRA_DIGESTS of the longest name fit in under 3 KB).
+const MAX_TERRA_DIGESTS := 64
+const MAX_TERRA_DERIVED_BYTES := 4096
 
 var palette_version: String = ""
 ## The content libraries this map used when it was saved: [{id, version, hash}], one per

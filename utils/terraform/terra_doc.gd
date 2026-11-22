@@ -23,7 +23,13 @@ extends RefCounted
 ##
 ## digest() is the key the derived cache and peer agreement use: SHA-256 over the canonical
 ## prims.bin bytes (MapTerrainIO.encode), the derive grid (samples per axis and the steps as
-## float64 bits) and TerraCore.NATIVE_VERSION.
+## float64 bits) and TerraCore.NATIVE_VERSION. derive_key() is the same hash with next_id written
+## as 0: the derived result depends on the primitives (ids, kinds, flags, floats, order), never on
+## the id the next add would take, so an add followed by its undo keeps the derived record's key.
+##
+## `derived` is the derived record read with the map (TerraCache, terrain/derived.bin): the
+## digests of the derived arrays keyed by derive_key(), or {} for none. It is not part of the
+## document (no digest covers it) and is written only while its key matches the document.
 
 ## Flag bit 0: the primitive is kept but not derived.
 const MUTED := 1
@@ -36,6 +42,8 @@ const MAX_ID := 0x7FFFFFFF
 var prims: Array[Dictionary] = []
 ## The id the next add() takes; always above every id in the list.
 var next_id := 1
+## The derived record (see the header; TerraCache.make_record's form), or {}.
+var derived: Dictionary = {}
 
 
 ## Adds a primitive at the end of the document and returns its id, or -1 when the document
@@ -133,6 +141,7 @@ func float_count() -> int:
 func duplicate() -> TerraDoc:
 	var copy := TerraDoc.new()
 	copy.next_id = next_id
+	copy.derived = derived.duplicate(true)
 	for p in prims:
 		# Deep: a shallow duplicate would share the packed array, appends included (probed on
 		# 4.7.2, MapDocumentSnapshot's header); a packed array's own duplicate() is the O(1) copy.
@@ -173,24 +182,50 @@ func problem() -> String:
 ## The digest of this document on a derive grid of `size` samples over `extent` metres (see
 ## the header), as 64 hex digits.
 func digest(size: Vector2i, extent: Vector2) -> String:
-	var ctx := HashingContext.new()
-	ctx.start(HashingContext.HASH_SHA256)
-	ctx.update(MapTerrainIO.encode(self))
-	var grid := PackedByteArray()
-	grid.resize(24)
-	grid.encode_u32(0, size.x)
-	grid.encode_u32(4, size.y)
-	grid.encode_double(8, float(extent.x) / float(maxi(size.x - 1, 1)))
-	grid.encode_double(16, float(extent.y) / float(maxi(size.y - 1, 1)))
-	ctx.update(grid)
-	ctx.update(TerraCore.NATIVE_VERSION.to_utf8_buffer())
-	return ctx.finish().hex_encode()
+	return _hash(MapTerrainIO.encode(self), size, extent, TerraCore.NATIVE_VERSION)
 
 
 ## The digest on the derive grid of map document `doc` (TerraCore.grid_for).
 func digest_for(doc: MapDocument) -> String:
 	var grid := TerraCore.grid_for(doc)
 	return digest(grid["size"], grid["extent"])
+
+
+## The derived record's key (see the header): digest() with next_id as 0, for core `version`
+## (the running core's by default; a test passes another to stand for an older build).
+func derive_key(size: Vector2i, extent: Vector2, version := TerraCore.NATIVE_VERSION) -> String:
+	return _hash(MapTerrainIO.encode(self, false), size, extent, version)
+
+
+## The derived record's key on the derive grid of map document `doc`.
+func derive_key_for(doc: MapDocument) -> String:
+	var grid := TerraCore.grid_for(doc)
+	return derive_key(grid["size"], grid["extent"])
+
+
+## SHA-256 over the section bytes, the grid (u32 samples per axis, the steps as float64 bits)
+## and the core version, as 64 hex digits.
+static func _hash(
+	bytes: PackedByteArray, size: Vector2i, extent: Vector2, version: String
+) -> String:
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_SHA256)
+	ctx.update(bytes)
+	ctx.update(grid_bytes(size, extent))
+	ctx.update(version.to_utf8_buffer())
+	return ctx.finish().hex_encode()
+
+
+## The 24 bytes a digest and the derived record hold for a derive grid of `size` samples over
+## `extent` metres: u32 samples per axis, then extent / (n - 1) per axis as float64. Pure.
+static func grid_bytes(size: Vector2i, extent: Vector2) -> PackedByteArray:
+	var grid := PackedByteArray()
+	grid.resize(24)
+	grid.encode_u32(0, size.x)
+	grid.encode_u32(4, size.y)
+	grid.encode_double(8, float(extent.x) / float(maxi(size.x - 1, 1)))
+	grid.encode_double(16, float(extent.y) / float(maxi(size.y - 1, 1)))
+	return grid
 
 
 ## True when a primitive of `floats` floats, replacing one of `old` floats, stays within the
