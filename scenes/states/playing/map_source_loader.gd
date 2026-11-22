@@ -402,6 +402,9 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	var prepared := prep.finish()
 	if is_superseded.call():
 		return null
+	# A flow map the document was written without, or one baked from other inputs, was baked
+	# again by the prep (AuthoredLoadPrep.FLOW); the water's nodes and the painter read it.
+	WaterFlowBaker.store(doc, prepared.get(AuthoredLoadPrep.FLOW, {}))
 	var root := authored_root_shell()
 	var terrain := AuthoredTerrain.create(doc, PaletteLibrary.DEFAULT_ROOT, false, prepared)
 	_prepared_water = prepared.get(AuthoredLoadPrep.WATER, {})

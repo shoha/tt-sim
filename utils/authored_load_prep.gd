@@ -15,6 +15,11 @@ extends RefCounted
 ##   DRESSING         WaterDressing.field_of (AuthoredTerrain stores it in the document)
 ##   WATER            WaterMeshBuilder.build (AuthoredWater's geometry, the waterfalls'
 ##                    included), only with water
+##   FLOW             WaterFlowBaker.refreshed: {} when the stored flow map is fresh (its stamp
+##                    matches), else the flow baked again (a level written without one, saved
+##                    by an older build or edited outside the editor); the loader stores it in
+##                    the document (WaterFlowBaker.store) before the water's nodes. Only with
+##                    water or a stored flow
 ##   FIELDS, CHUNKS   TerrainMeshBuilder.grid_fields, then every chunk's mesh arrays with them
 ##   SKIRT            RiverExitMesh.skirt_parts: the skirt's arrays, and the channel and
 ##                    water of the rivers that leave the map (P6-1)
@@ -27,6 +32,7 @@ extends RefCounted
 
 const DRESSING := "dressing"
 const WATER := "water"
+const FLOW := "flow"
 const FIELDS := "fields"
 const CHUNKS := "chunks"
 const SKIRT := "skirt"
@@ -44,6 +50,8 @@ static func start(doc: MapDocument) -> AuthoredLoadPrep:
 	var parts: Array[String] = [DRESSING, FIELDS, SKIRT]
 	if not doc.water_bodies.is_empty():
 		parts.append(WATER)
+	if _needs_flow(doc):
+		parts.append(FLOW)
 	if not doc.crossings.is_empty():
 		parts.append(CROSSINGS)
 	if not doc.walls.is_empty():
@@ -90,8 +98,10 @@ static func compute(doc: MapDocument) -> Dictionary:
 	var out := {}
 	if not doc.structures.is_empty():
 		StructureRecipes.ensure_served()
-	for part in [DRESSING, FIELDS, SKIRT, WATER, CROSSINGS, WALLS, STRUCTURES]:
+	for part in [DRESSING, FIELDS, SKIRT, WATER, FLOW, CROSSINGS, WALLS, STRUCTURES]:
 		if part == WATER and doc.water_bodies.is_empty():
+			continue
+		if part == FLOW and not _needs_flow(doc):
 			continue
 		if part == CROSSINGS and doc.crossings.is_empty():
 			continue
@@ -110,6 +120,8 @@ static func work(doc: MapDocument, part: String, out: Dictionary, with_info: boo
 			out[DRESSING] = WaterDressing.field_of(doc)
 		WATER:
 			out[WATER] = WaterMeshBuilder.build(doc)
+		FLOW:
+			out[FLOW] = WaterFlowBaker.refreshed(doc)
 		CROSSINGS:
 			out[CROSSINGS] = CrossingGeometry.build(doc)
 		WALLS:
@@ -130,3 +142,8 @@ static func work(doc: MapDocument, part: String, out: Dictionary, with_info: boo
 				AuthoredTerrain.SKIRT_FADE_M,
 				AuthoredTerrain.SKIRT_WOBBLE
 			)
+
+
+## True when the load checks the flow map: the document has water or a stored flow.
+static func _needs_flow(doc: MapDocument) -> bool:
+	return not doc.water_bodies.is_empty() or not doc.water_flow.is_empty()
