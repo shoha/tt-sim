@@ -120,7 +120,8 @@ static func bake(placed: Array[Dictionary], sources: Dictionary) -> Array[Dictio
 
 ## The `pad` snow-top records of `placed` (as bake's) against `sources` (each may carry "pads",
 ## records in the prop's own frame), each moved by its placement's transform: `centre` and
-## `origin` placed, `u`, `v` and `n` turned (unit), `u_len`, `v_len` and `radius` scaled. Pure.
+## `origin` placed, `u`, `v` and `n` turned (unit), `u_len`, `v_len`, `radius` and a `hole`
+## scaled. Pure.
 static func pads_of(placed: Array[Dictionary], sources: Dictionary) -> Array:
 	var out: Array = []
 	for item in placed:
@@ -140,6 +141,9 @@ static func pads_of(placed: Array[Dictionary], sources: Dictionary) -> Array:
 			moved["u_len"] = float(rec.get("u_len", 0.0)) * u.length()
 			moved["v_len"] = float(rec.get("v_len", 0.0)) * v.length()
 			moved["radius"] = float(rec.get("radius", 0.0)) * (u.length() + v.length()) * 0.5
+			if rec.has("hole"):
+				var hole: Vector2 = rec["hole"]
+				moved["hole"] = Vector2(hole.x * u.length(), hole.y * v.length())
 			out.append(moved)
 	return out
 
