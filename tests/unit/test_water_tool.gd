@@ -794,3 +794,23 @@ func test_an_uphill_stroke_previews_its_flow_downhill() -> void:
 	assert_almost_eq(float(reader.call(Vector2(0, 8))), expected, 1e-4, "the water's level")
 	var uphill := WaterBrush.flow_line(_line([[6, 6], [6, -8]]), reader)
 	assert_eq(uphill[0], Vector2(6, -8), "a stroke up the tier runs down it")
+
+
+## The editor's batch readers (card painter-release-frame) answer as their per-point originals:
+## LineRibbon.height_reader as ground_height_at (the ribbon's ground), the brush's ground_reader as
+## WaterEdit.water_ground_at at the map point, over the tier, the river and the pool below it.
+func test_the_editor_readers_answer_as_the_per_point_calls() -> void:
+	var made := _tier_fall_edited()
+	var doc: MapDocument = made[0]
+	var editor: AuthoringEditor = made[1]
+	var height_of := LineRibbon.height_reader(editor)
+	var reader := WaterBrush.ground_reader(editor)
+	var differ := 0
+	for j in 41:
+		for i in 41:
+			var p := Vector3(-15.3 + i * 0.77, 0.0, -15.1 + j * 0.76)
+			differ += 0 if height_of.call(p) == editor.ground_height_at(p) else 1
+			var xz := Vector2(p.x, p.z)
+			var at := editor.to_map_xz(p)
+			differ += 0 if reader.call(xz) == WaterEdit.water_ground_at(doc, at) else 1
+	assert_eq(differ, 0, "every point the same")

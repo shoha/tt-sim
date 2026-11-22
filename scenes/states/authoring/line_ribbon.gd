@@ -209,12 +209,38 @@ static func draw_shape(canvas: Control, shape: Dictionary, fill_item: RID = RID(
 
 
 ## The ribbon's `ground`: a world XZ point to the screen, on `editor`'s ground there (lifted
-## 5 cm), seen by `camera`.
+## 5 cm), seen by `camera`. One per frame: it reads the ground through height_reader() (the same
+## heights, the grid read once).
 static func on_ground(camera: Camera3D, editor: AuthoringEditor) -> Callable:
+	var height_of := height_reader(editor)
 	return func(xz: Vector2) -> Vector2:
 		var p := Vector3(xz.x, 0.0, xz.y)
-		p.y = editor.ground_height_at(p) + 0.05
+		p.y = height_of.call(p) + 0.05
 		return camera.unproject_position(p)
+
+
+## `editor`'s ground_height_at() as a Callable(point: Vector3) -> float, the same values, for
+## many points asked at once (a ribbon asks a few thousand a frame, about 5 us each through the
+## editor; card painter-release-frame): the map root's transforms, the heights and the sample
+## grid are read once, not per point. The document and the map root must not change while it is
+## used.
+static func height_reader(editor: AuthoringEditor) -> Callable:
+	var root := editor.map_root
+	if not is_instance_valid(root):
+		return editor.ground_height_at
+	var doc := editor.document
+	var to_world_t := root.global_transform
+	var to_map_t := to_world_t.affine_inverse()
+	var ground := TerrainMeshBuilder.collision_heights(doc)
+	var columns := doc.samples_x()
+	var rows := doc.samples_z()
+	var half := doc.extent_m() * 0.5
+	var step := doc.sample_step()
+	return func(point: Vector3) -> float:
+		var local := to_map_t * point
+		var at := (Vector2(local.x, local.z) + half) / step
+		var y := ScatterGenerator.triangle_height(ground, columns, rows, at)
+		return (to_world_t * Vector3(local.x, y, local.z)).y
 
 
 ## The light `style`'s ribbon takes under the published `sun` (scene_light() at its
