@@ -1831,6 +1831,26 @@ The look (`painter_water.gdshader`, no screen texture):
   function (coverage, id) another source can replace (card painter-water-c2 prototypes a baked
   atlas). A second, longer layer and the sun-side glint ticks (`water-glints`, kept where a
   stroke's own small tilt reflects the sun) are skipped under the Low water quality.
+- **Calm water (card painter-water-still, 2026-11-22, look-pending).** Where the flow map is still
+  (`flow_k` 0: a pond or a lake, since ponds add no flow) the strokes calm: `CALM_SHARE` 0.4 of the
+  river's share, `CALM_LEN` 1.45 times longer, `CALM_THICK` 1.35 times broader, within
+  `CALM_JITTER` (0.45 rad, about 13 degrees either way) of the wind, drifting `CALM_DRIFT` 0.06 m/s
+  along it; the dark layer keeps `CALM_DARK_SHARE` 0.35 (rivers 0.8) at `CALM_DARK_K` 0.55 strength,
+  and the glints `CALM_GLINTS` 0.6 of their share. Each is a mix by `calm = 1 - flow_k`, so moving
+  water (flow_k 1) is the same expression as before, pixel for pixel. Cause (the artifact sweep's
+  finding 5, a lake "covered in confetti"): still water took 1.9 times the river's share (0.95, nearly
+  every 2.4 m cell) at up to 32 degrees off the wind, in a light and a dark layer of about equal
+  number. Now a lake carries about half the strokes, broad soft lenses laid along the wind, few
+  dark; two frames 0.5 s apart show them holding and sliding slightly, glints twinkling. The longer
+  strokes stay inside the 2 x 2 cells `stroke_layer` looks at (half-length plus drift under 0.8 of a
+  cell: 1.67 of 1.92 m, layer B 2.03 of 2.17). Sheet:
+  `docs/research/2026-11-09-prototypes/compare/painter_final145_water_still/sheet.png` (rows 1-2 the
+  frozen pond, 3-4 the lake, 5 a river, unchanged, 6 the pond at a low sun; 7 and 8 the lake's motion
+  pair, main then build; columns main | build). Cost (in-run A/B, main's shader text against this
+  one on the shared material, the lakeshore lake at zoom 16 filling most of a 1920x1080 frame,
+  summer 13 h, vsync off, six rounds of A B B A alternating, the first dropped, GPU medians): main
+  3.367 ms [3.325-3.465], this 3.269 [3.222-3.352], -0.098 ms, cheaper in every round (fewer cells
+  pass the density test). The ice's two noises replace a nine-cell Voronoi loop; not timed.
 - **The shore lap.** An iso-depth ribbon of `water-foam-width` m from the depth buffer's column
   gradient (the slope is floored at 0.06; a steep bed, a fall lip, can still thin it, and the
   speckle the C2 prototype saw there did not show in the fall frames).
@@ -1847,9 +1867,17 @@ The look (`painter_water.gdshader`, no screen texture):
   take the wash toward `p_shade_mul`, which is `SHADE_SHARE` (0.55) of the ground's own shade-to-lit
   ratio, so the water cools with the ground beside it.
 - **Winter ice.** `ice-over` (winter: 1) freezes SLOW water (a pond, a lake, not a river or a fall)
-  to the `water-ice` wash with a few long cracks, open round every disturbance point, so a token
-  never stands on ice. It is visual only: the float and drown rules are unchanged (the report's open
-  question; see the card's report).
+  to the `water-ice` wash, open round every disturbance point, so a token never stands on ice. It is
+  visual only: the float and drown rules are unchanged (the report's open question; see the card's
+  report). The lid is one soft surface with two broad shapes on it (card painter-water-still,
+  look-pending): a patch of clearer ice turned `ICE_CLEAR_TINT` 0.4 toward the lit water's blue
+  (a value noise at `ICE_CLEAR_F` 0.21 per m over `ICE_CLEAR_LO` 0.5) and a drift lifted
+  `ICE_DRIFT_LIFT` 0.45 toward white (0.33 per m over 0.56), both soft over `ICE_SOFT` 0.18 of the
+  noise and skipped under the Low water quality. Cause of the artifact sweep's finding 4 (a polygon
+  grid on a frozen pond): the cracks were a Voronoi edge network (1.9 m cells) gated by a 2.5 m noise
+  that was on over about half the lid, so every cell edge drew a thin dark line, a hexagon and
+  triangle wireframe at every zoom. It was neither the mesh nor its normals (the lid is lit only
+  through the shadow selector). The snow law on the ground, roofs and plants is untouched.
 - **The wet band.** The painted ground darkens and cools in a brushed band along the water's
   edge (`painter_ground.gdshader`, `ground_at`, `WET_EDGE`), from the water weights texture the
   ground already binds.
