@@ -121,7 +121,9 @@ static func _only_of(planes: Array[PackedFloat32Array]) -> int:
 ## painted surfaces did not change since: a sculpt step), which skips its pass over every sample.
 ## `presence` (the caller's, kept across calls) answers which slots are painted from the rows that
 ## changed: with fewer than two the slot map is null and `path_only` alone is bound, with no pass
-## over the samples (a path stroke's frame, card painter-wall-path); the same values as without it.
+## over the samples (a path stroke's frame, card painter-wall-path); with two or more its slot map
+## (PainterPathSlotMap) is redone over those rows alone (card painter-path-many). The same values as
+## without it.
 static func bind(
 	materials: Array, doc: MapDocument, slot_map := true, presence: PainterPathPresence = null
 ) -> PackedStringArray:
@@ -133,12 +135,21 @@ static func bind(
 	var texture: ImageTexture = null
 	var only := -1
 	var painted := PackedInt32Array()
+	var spans := PackedInt32Array()
+	var kept := false
 	if presence != null:
-		presence.update(doc)
+		kept = presence.slot_map.keeps(doc, ids, presence)
+		spans = presence.update(doc)
 		painted = presence.painted_slots(doc, ids)
 	if presence != null and painted.size() < 2:
+		presence.slot_map.invalidate()
 		only = painted[0] if painted.size() == 1 else -1
+	elif presence != null and PainterPathSlotMap.supports(doc):
+		# Two or more: the slot map redone over the changed rows (card painter-path-many).
+		texture = presence.slot_map.texture(doc, ids, presence, spans, kept)
 	else:
+		if presence != null:
+			presence.slot_map.invalidate()
 		var planes := _planes(doc, ids)
 		var image := _slot_image_of(doc, planes)
 		texture = null if image == null else ImageTexture.create_from_image(image)
