@@ -2662,6 +2662,62 @@ field held a stale copy of the heights a shape edit changed, which the branch ke
 branch's captures differ from main's by fewer pixels (318-732, scattered) than main's own two runs
 do (1250-1462), so a 0 px check needs a capture that is deterministic on main first.
 
+### Round 2 (card painter-edit-hitch2, 2026-11-21)
+
+Three of the causes left over above, fixed without changing a result:
+
+- **The first water's two whole zone builds.** The carve's frame changed the plan's wet flag (a
+  whole build) and the re-table then marked the whole grid (a second). `PainterSurfaces._rebuild_zone`
+  now keeps its dirty mark while `AuthoredTerrain.water_dressing_pending()` is true (the document's
+  dressing and the bound one differ in size: the re-table has not landed), so the refresh's whole
+  mark makes the one build. `PainterZoneMaps.builds` counts them: one per first river (was two).
+- **The water field's flush in every landing frame.** A river landing edits the ground three frames
+  running (carve, settle, dressing refresh), each frame already holding the zone maps' rect update.
+  `PainterWaterField` merges the edits' rects and redoes them once, in the first frame after one
+  with no edit, at most `FLUSH_WAIT` (4) frames after the first. A held sculpt stroke beside water
+  pays the redo every fourth frame instead of every frame (torture map: 6.5-7 ms frames with a
+  12 ms one every fourth, main 12-13 ms every frame).
+- **The whole tree sync on every scatter landing.** `PainterTrees.sync_cells(scatter, cells)`
+  (bound per scatter to its `cells_applied`) lists only the landed cells' rows, erases by a per-cell
+  key index built by every whole sync, and hides only those cells' GLB chunk nodes; the listing
+  and the tables moved to `painter/trees/tree_rows.gd` (`PainterTreeRows`). A landing's tree work:
+  15-16 ms on main, 10-12 ms here (the tables are still rebuilt whole when a tree goes: 8-10 ms
+  for about 130 trees).
+
+Same session, windowed `hitch.json` (200 ft forest map, a 3 m wall, painted, vsync off, the
+real-pointer river probe; worst of the 120 frames after each release), main e0531ce7 in a
+worktree of its own against the branch twice; `torture.json` and `ident.json` once each:
+
+| Stroke | main | branch (two runs) |
+| --- | --- | --- |
+| river, first on the map | 86.2 (3 frames over 33) | 83.0, 83.4 (2 over) |
+| river 2, 3 | 34.5, 42.4 | 36.6, 22.6; 35.0, 24.5 |
+| river through the wall 1-3 | 31.1, 38.9, 40.9 | 29.3, 36.9, 41.4; 29.8, 35.9, 41.0 |
+| raise (3 strokes) | 30.1, 30.7, 17.3 | 33.2, 24.5, 13.1; 25.5, 25.4, 11.2 |
+| paint (3 strokes) | 11.7-12.6 | 11.8-14.5; 12.4-12.5 |
+| placed boulder (3) | 21.9, 17.1, 16.3 | 19.6, 15.4, 17.6; 16.7, 11.5, 12.5 |
+| boulder by the API after raises (`ident.json`) | 47.2, 49.0 | 41.3 |
+| torture map: river / raise beside its pond | 46.6 / 14.6 | 32.5 / 21.3 |
+
+Frames over 33 ms in the hitch job: main 13, branch 6 and 5. Those left, by cause:
+
+- River 1, release frame: 58-64 ms of node processing (`C`), no pipeline compile; later releases
+  stay under 35. First use of something in the release path, not attributed.
+- River 1, +13: the single whole zone build (D 63 ms), once per map.
+- River through the wall, release frame: 29-34 ms of node processing, the same on main.
+- River 2, about +79: the water surface's refresh (`_on_water_refreshed`, field 13 ms) and an
+  untagged 15-19 ms node job land in one frame; on main they land in one frame or two by chance
+  (main's river 3 at +83, 39.1 ms, is the same pair).
+- Raise 1 (one run of two): a landing that erased trees rebuilt the tree tables (16.1 ms; 9.9 ms
+  in the other run).
+
+The torture raise's release frame (21.3 against 14.6) took the stroke's last deferred field redo;
+it is the fourth-frame cadence's phase, under 33 ms. Results are unchanged: `ident.json`'s
+digests (heights, water bodies, dressing, zone maps, the water field's arrays and the scatter's
+rows) equal main's after every step. Its captures are no longer pixel-deterministic on main
+itself since the painted ground change merged with this card (main against main 450-462 k
+pixels differ, the branch against the two main runs 397-731 k), and read the same by eye.
+
 ## In-game authoring phase 4 (water): pinned performance pass (2026-09-27)
 
 The phase 4 pass: authored maps with water in play against the same maps without it, the
