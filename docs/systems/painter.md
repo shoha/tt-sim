@@ -3401,6 +3401,29 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
   the fringe: keep the sun's filter and remove the dither inside the ground's own read, for
   example a firm step of an attenuation the ground filters itself, or a per-material narrow
   filter if the engine offers one; any wobble of the lookup must be gated off steep faces.
+- **Shadow-edge fringe: parked** (card painter-shade-fringe, three rounds, 2026-11-21; branch
+  `painter-shade-fringe`, unmerged; evidence
+  `docs/research/2026-11-09-prototypes/compare/painter_final131_shade_fringe/`). Round 1 built a 2x2
+  quad mean of the shadow factor before every painted step (a shader cannot read the shadow map, so
+  the mean is over the pixel quad), `shadow_blur` 0.5, the ground lookup wobbled 0.25 m in the
+  ground's plane and the caster push scaled by -N.L: the hatch went, frames got cheaper, but f1_o
+  drew dark streaks left of the fall. Round 2: the streaks are the -N.L push scaling (a face barely
+  turned from the sun gets almost no push, so its self-shadow test sits at the margin); with main's
+  full push they go, but at blur 0.5 the push overreaches behind thin column crests and draws dark
+  beads along the cliff creases at 6.5 h. Main's blur 1.0 hides both faults, and the hatch with them.
+  Round 3 compared three candidates, each with the full push, the quad mean and the wobble (sheets
+  `r3_candidates_a__...png`, `r3_candidates_b__...png`, `r3_followup__...png`). All remove the hatch on
+  ground edges, the boulder and the ridge; none is free of an artifact main lacks:
+  - A, blur 0.75: soft hatched beads on both cliffs at 6.5 h, a hatched column on the rock cliff, a
+    main-like hatched patch left of the fall, a faint grey tuft line on the cottage wall.
+  - B, the engine's slope-scaled normal offset (`shadow_normal_bias`, k 1 to 4) at blur 0.5: firm
+    dark beads on the cliffs, dark patches on the ridge crest, crisp blade lines on the wall; k 4
+    thins the beads but removes real shade (a rock's cast shadow disappears).
+  - C, an 8192 directional atlas at blur 0.5: long dark vertical bands on both cliffs (the worst);
+    atlas memory 128 MiB against 32 MiB, engine-wide.
+  Open idea: a receiver-side test that knows the caster's thickness along the sun's ray (a thin
+  crest should not shade its own back), which one shadow pass does not give. Until then the painted
+  look keeps blur 1.0 and its hatch.
 
 ## Verification
 
