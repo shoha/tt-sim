@@ -1011,7 +1011,17 @@ flow present, main showed no hooked or sheared stroke at the probe views in the 
 (sheets, strips, `perf/`, the jobs and `jobs/probe_variants.diff`).
 
 Fixed by card painter-water-flowbake (2026-11-21): the corpus build bakes the flow, and every load
-rebakes a missing or stale one (Model, "The flow is derived data with a stamp").
+rebakes a missing or stale one (Model, "The flow is derived data with a stamp"). Its retake with the
+flow (6 frames over 2 s, clock frozen; evidence
+`D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final135_water_flowbake/`):
+strokes now lie along the current at t_y_join, t_meander, t_straight and below st_o's foot, and
+travel downstream (t_straight, st_o). Real flow artifacts left for the next card: white at t_y_join
+arrives in bursts (blobs and an S streak that pop and grow between frames 0.4 s apart) more than it
+travels; white bank crests curl into the channel at the join and at t_meander's inner shelf
+(hook-like), with a few small hooked ticks; the teal shallow shelves end in a crisp two-tone step
+(t_y_join, t_meander); dark oval glints at a join's bank corner and on t_straight; golden dashes in
+st_o's pool lie across the current; white blobs pop at st_o's lip. The owner frames f1_o, f5_o,
+st_o and bank_z3 loaded fresh and loaded rebaked match within 3 of 255 per channel (0 px over 8).
 
 ## The water field (combined branch painter-water-field-v2, look-pending, unmerged)
 
