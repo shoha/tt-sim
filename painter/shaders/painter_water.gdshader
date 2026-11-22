@@ -455,6 +455,11 @@ const float EDGE_FRONT_MIN_M = 0.12;
 const int RING_COUNT = 3;
 const float RING_STEPS = 7.0;
 const float RING_CYCLE_S = 2.1;
+// The arcs of tokens near each other merge (a smooth minimum of the distances, m: the bridge
+// between two tokens s apart forms at s / 2 - ln 2 * RING_MERGE_M), and the reach past the ring
+// within which a token still adds to the minimum (m).
+const float RING_MERGE_M = 0.12;
+const float RING_MERGE_REACH = 0.6;
 
 
 vec2 rot2(vec2 v, float c, float s) {
@@ -879,6 +884,14 @@ if (fieldv && (shade_opt & 4) != 0) {
 	float wake_cov = 0.0;
 	float open_water = 1.0;
 	float ring_r = max(disturbance_ripple_radius, 0.3);
+	// The tokens' arcs are drawn once, round all of them: each token adds exp(-d / RING_MERGE_M) and
+	// its direction (weighted alike), and the arcs are contours of the smooth minimum of the
+	// distances, -RING_MERGE_M * log(sum). One token alone draws as before (the sum of one term is
+	// its own distance and direction); tokens closer than about two radii share one set of arcs, a
+	// soft peanut round the pair or the group, instead of three rings each crossing the others'
+	// (card painter-water-rings; ABL_RINGSTACK puts each token's own rings back).
+	float ring_e = 0.0;
+	vec2 ring_dir = vec2(0.0);
 #ifdef ABL_NORINGS
 	for (int i = 0; i < 0; i++) {
 #elif defined(RED_I)
@@ -900,9 +913,17 @@ if (fieldv && (shade_opt & 4) != 0) {
 			sdist = length(vec2(stretched, across));
 		}
 		open_water *= smoothstep(0.45, 0.95, sdist);
+#ifndef ABL_RINGSTACK
+		if (sdist < ring_r + RING_MERGE_REACH) {
+			float e = exp(-sdist / RING_MERGE_M);
+			ring_e += e;
+			ring_dir += e * to_point / max(dist, 1e-4);
+		}
+#endif
 		if (sdist > ring_r) {
 			continue;
 		}
+#ifdef ABL_RINGSTACK
 		float ang = atan(to_point.y, to_point.x);
 		for (int k = 0; k < RING_COUNT; k++) {
 			float cyc = wt() / RING_CYCLE_S + float(k) / float(RING_COUNT);
@@ -922,6 +943,7 @@ if (fieldv && (shade_opt & 4) != 0) {
 			float body = 1.0 - smoothstep(0.035, 0.07 + world_units_per_pixel, abs(sdist - rr));
 			ring_cov = max(ring_cov, body * arc * (1.0 - stepped));
 		}
+#endif
 		if (flow_speed > 0.0 && along > 0.0) {
 			// The wake downstream, in the flow's frame: WAKE_LANES soft streaks, each a lens that
 			// tapers to a point at both ends, in lanes that fan out from the thing's sides. A streak
@@ -954,6 +976,26 @@ if (fieldv && (shade_opt & 4) != 0) {
 			streak *= WAKE_PEAK * smoothstep(0.0, 0.6, sin(life * 3.14159));
 			wake_cov = max(wake_cov, streak * start * (1.0 - smoothstep(0.6, 1.0, sdist / ring_r)));
 #endif
+		}
+	}
+	if (ring_e > 0.0) {
+		float sdist = -RING_MERGE_M * log(ring_e);
+		// The direction is the weighted mean, not normalised: where two tokens' pulls cancel (the
+		// saddle between them) it shrinks towards the noise's centre instead of jumping, so the gap
+		// pattern stays continuous across the join.
+		vec2 gap_dir = ring_dir / ring_e;
+		for (int k = 0; k < (sdist < ring_r ? RING_COUNT : 0); k++) {
+			float cyc = wt() / RING_CYCLE_S + float(k) / float(RING_COUNT);
+			float ph = fract(cyc);
+			float stepped = floor(ph * RING_STEPS) / RING_STEPS;
+			float rr = mix(0.3, ring_r, stepped);
+			// Broken: a gap pattern round a circle of the noise (the direction, not the angle: on
+			// the angle it had a seam where atan wraps, card painter-water-edges-2) that changes with
+			// each expansion.
+			float gap = be_n2(gap_dir * 1.7 + vec2(float(k) * 9.1, floor(cyc) * 3.7 + float(k)));
+			float arc = smoothstep(0.32, 0.45, gap);
+			float body = 1.0 - smoothstep(0.035, 0.07 + world_units_per_pixel, abs(sdist - rr));
+			ring_cov = max(ring_cov, body * arc * (1.0 - stepped));
 		}
 	}
 #ifdef ABL_NORINGCOV
