@@ -191,13 +191,14 @@ is typed `RefCounted` and `MapDocumentIO.terrain_io()` loads `MapTerrainIO` by p
 compiles none of the terraform scripts; cast with `doc.terra as TerraDoc` where it is used.
 
 - **Primitive.** `{"id", "kind", "flags", "data": PackedFloat32Array}`. Ids are stable and never
-  reused (`next_id` only grows); kinds are TerraCore's stable ids (0 to 8 built in, 9 to 15 reserved,
-  16 up for new kinds). Flag bit 0 is `TerraDoc.MUTED` (kept, not derived); the other bits are
-  reserved and must be 0. List order is document order, the order compose applies. The float
-  layouts sit in the provisional `TerraDoc.LAYOUT` (header floats, item stride, minimum items,
-  positive and enum fields) until the kind registry (card terraform-p1-kinds) moves each into its
-  kind folder; `TerraDoc.validate(kind, data)` checks the count, finiteness, `|v| <= 1e5` and the
-  fields.
+  reused (`next_id` only grows); kinds are the kind registry's stable ids (`TerraKinds`, 0 to 8
+  built in, 16 the terrace, 9 to 15 reserved, 16 up for new kinds). Flag bit 0 is
+  `TerraDoc.MUTED` (kept, not derived); the other bits are reserved and must be 0. List order is
+  document order, the order compose applies. Each kind's script
+  (`utils/terraform/kinds/<name>/<name>_kind.gd`, docs/systems/terraform.md "Kinds") holds its float
+  layout (header floats, item stride, minimum items) and `validate(data)`, which checks the count,
+  finiteness, `|v| <= 1e5` and its fields; `TerraKinds.problem(kind, data)` names the cause, and
+  the kind table's names come from the same scripts.
 - **Caps** (`MapDocument`): `MAX_TERRA_PRIMS` 4096, `MAX_TERRA_FLOATS_PER_PRIM` 262144 and
   `MAX_TERRA_FLOATS` 4194304 (16 MB). `TerraDoc.add` returns -1 and `append` / `replace` false past a
   cap, so a session cannot build a document the writer refuses for its size.

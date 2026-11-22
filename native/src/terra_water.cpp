@@ -2,6 +2,7 @@
 // levels monotone downstream with drops gathered into riffles or fall records, a join at the
 // receiving body's level) and the carve (one composed bed: every body's cut, the lowest wins, and a
 // bank fill so a level is always held; the controlling body's level is the water surface).
+#include "terra_kinds.h"
 #include "terra_stages.h"
 
 namespace terra {
@@ -392,5 +393,18 @@ void carve_rect(const Water &w, const Grid &g, const Rect &r, const float *H0, f
 	}
 	});
 }
+
+// The water kinds: one graph stage solves every body together, so they are registered here rather
+// than in src/kinds/ (a new water kind is an edit of this file; terra_kinds.h).
+static bool river_bounds(const Prim &p, double &x0, double &z0, double &x1, double &z1) {
+	return line_bounds(p, 2, p.d[0] * 0.5 + CARVE_REACH_M, x0, z0, x1, z1);
+}
+
+static bool pond_bounds(const Prim &p, double &x0, double &z0, double &x1, double &z1) {
+	return line_bounds(p, 1, POND_REACH + 0.5, x0, z0, x1, z1);
+}
+
+TERRA_KIND(KIND_RIVER, "river", STAGE_WATER, 2, 2, river_bounds, nullptr);
+TERRA_KIND(KIND_POND, "pond", STAGE_WATER, 1, 2, pond_bounds, nullptr);
 
 } // namespace terra

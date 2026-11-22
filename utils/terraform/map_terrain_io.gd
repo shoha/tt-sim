@@ -23,7 +23,7 @@ extends RefCounted
 ## - a kind this version does not know (or knows by another name), a version above VERSION or a
 ##   reserved flag bit set: the section is refused with a warning that says it was made by a newer
 ##   version, so no save of this build can drop part of its primitives without the author told;
-## - a primitive that fails its kind's TerraDoc.validate() or repeats an id: that primitive is
+## - a primitive that fails its kind's validate() (TerraKinds) or repeats an id: that primitive is
 ##   dropped, with one warning counting the dropped primitives and naming the first cause.
 
 ## The entry's name, owned by MapDocumentIO (which reads this script by path, on first use).
@@ -75,7 +75,7 @@ static func encode(terra: TerraDoc) -> PackedByteArray:
 	_put_u16(out, kind_ids.size())
 	for kind: int in kind_ids:
 		_put_u16(out, kind)
-		_put_name(out, String(TerraDoc.LAYOUT[kind]["name"]) if TerraDoc.LAYOUT.has(kind) else "")
+		_put_name(out, TerraKinds.name_of(kind))
 	for p in terra.prims:
 		var data: PackedFloat32Array = p["data"]
 		_put_u32(out, int(p["id"]))
@@ -174,7 +174,7 @@ static func _decode(r: _Reader) -> TerraDoc:
 		if r.left() < floats * 4:
 			return r.fail("truncated in primitive %d's floats" % id)
 		var data := r.take(floats * 4).to_float32_array()
-		var reason := TerraDoc.validate(kind, data)
+		var reason := TerraKinds.problem(kind, data)
 		if reason == "" and (id < 1 or id > TerraDoc.MAX_ID or seen.has(id)):
 			reason = "id %d is out of range or repeated" % id
 		if reason != "":
@@ -202,7 +202,7 @@ static func _kind_table(r: _Reader, kind_count: int) -> Dictionary:
 		if kinds.has(kind):
 			r.fail("kind %d listed twice" % kind)
 			return {}
-		if not TerraDoc.LAYOUT.has(kind) or TerraDoc.LAYOUT[kind]["name"] != kind_name:
+		if not TerraKinds.has(kind) or TerraKinds.name_of(kind) != kind_name:
 			r.fail("kind '%s' (%d) is unknown here, %s" % [kind_name.c_escape(), kind, NEWER])
 			return {}
 		kinds[kind] = true

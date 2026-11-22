@@ -15,6 +15,8 @@ const CELLS := 40
 ## Every terra test's pending reason without the library: CI greps the shard logs for its
 ## first words, so a library that did not load fails CI rather than passing quietly.
 const NO_LIBRARY := "the native library is not built (AGENTS.md Testing): no current TerraDerive"
+## The terrace kind's id (utils/terraform/kinds/terrace/).
+const TERRACE := 16
 
 var map_doc: MapDocument
 ## The corpus's terrain document (also set as map_doc.terra).
@@ -64,6 +66,22 @@ static func build(cells := Vector2i(CELLS, CELLS), with_extras := true) -> Terra
 		stroke.append([38.0 + k * 0.6, 8.0, 2.5, 0.12, 0])
 	c.add(TerraCore.STROKE, c.dabs(stroke))
 	return c
+
+
+## The corpus with a terrace stroke (kind 16, the registry's proof kind) stepping the east hill,
+## last in the document so it reads the hill and the plane under it.
+static func build_terraced(cells := Vector2i(CELLS, CELLS)) -> TerraCorpus:
+	var c := build(cells)
+	c.add(TERRACE, c.dabs(terrace_dabs(8, 0)))
+	return c
+
+
+## `count` terrace dabs from dab `from` of the stroke across the east hill (layout metres).
+static func terrace_dabs(count: int, from: int) -> Array:
+	var out: Array = []
+	for k in range(from, from + count):
+		out.append([43.0 + k * 0.9, 15.0 + k * 0.5, 4.0, 0.6, 0.35])
+	return out
 
 
 ## A TerraDerive on this corpus's grid with every primitive set, not yet derived (null without

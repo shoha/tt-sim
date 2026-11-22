@@ -9,12 +9,23 @@ extends GutTest
 ## the fixture: the failure prints the new cases as JSON, which replace the file's "cases".
 
 const FIXTURE := "res://tests/fixtures/terra_corpus_digests.json"
-## The cases: name -> map size in cells (x, z).
-const CASES := {"square_40": Vector2i(40, 40), "wide_40x48": Vector2i(40, 48)}
+## The cases: name -> map size in cells (x, z). A "terraced_" case is the corpus with the terrace
+## stroke (TerraCorpus.build_terraced), the registry's proof kind; the built-in cases never move
+## when a kind is added.
+const CASES := {
+	"square_40": Vector2i(40, 40),
+	"wide_40x48": Vector2i(40, 48),
+	"terraced_40": Vector2i(40, 40),
+}
 
 
-func _digests(cells: Vector2i) -> Dictionary:
-	var n := TerraCorpus.build(cells).make_derive()
+func _digests(name: String, cells: Vector2i) -> Dictionary:
+	var c := (
+		TerraCorpus.build_terraced(cells)
+		if name.begins_with("terraced_")
+		else TerraCorpus.build(cells)
+	)
+	var n := c.make_derive()
 	n.call("derive_full")
 	var d: Dictionary = n.call("digests")
 	var out := {}
@@ -41,7 +52,7 @@ func test_golden_digests() -> void:
 	var matched := 0
 	var bad: Array = []
 	for name: String in CASES:
-		got[name] = _digests(CASES[name])
+		got[name] = _digests(name, CASES[name])
 		var w: Dictionary = want.get(name, {})
 		for k: String in got[name]:
 			if w.get(k) == got[name][k]:

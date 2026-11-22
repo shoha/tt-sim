@@ -256,10 +256,10 @@ func test_a_bad_primitive_is_dropped_with_one_counted_warning() -> void:
 
 
 func test_an_unknown_kind_refuses_the_whole_section() -> void:
-	var prims := [[1, 0, 0, [1.0, 0.0, 0.0]], [2, 16, 0, [1.0, 2.0, 3.0, 4.0, 5.0]]]
-	var read := _read(_section(prims, [[0, "plane"], [16, "terrace"]]))
+	var prims := [[1, 0, 0, [1.0, 0.0, 0.0]], [2, 99, 0, [1.0, 2.0, 3.0, 4.0, 5.0]]]
+	var read := _read(_section(prims, [[0, "plane"], [99, "spring"]]))
 	assert_null(read["terra"])
-	assert_true(_warned(read, "terrace"))
+	assert_true(_warned(read, "spring"))
 	assert_true(_warned(read, MapTerrainIO.NEWER))
 	var renamed := _read(_section([[1, 0, 0, [1.0, 0.0, 0.0]]], [[0, "slab"]]))
 	assert_null(renamed["terra"], "a known id under another name")

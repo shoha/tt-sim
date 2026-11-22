@@ -3,7 +3,7 @@ extends GutTest
 ## tile derives must hold exactly the bits of a fresh whole-map derive of the final document, for
 ## every derived array and record list (TerraDerive.digests()). Each edit kind is one step: the
 ## corpus added one primitive at a time, a held raise across both rivers, smooth, lower, an undone
-## hill, a moved wall, and a river landing derived on the worker thread.
+## hill, a moved wall, a held terrace, and a river landing derived on the worker thread.
 
 
 func _check_same(n: RefCounted, c: TerraCorpus, label: String) -> void:
@@ -69,6 +69,15 @@ func test_update_equals_build() -> void:
 			n.call("set_prim", p["id"], TerraCore.WALL, moved)
 	n.call("derive")
 	_check_same(n, c, "smooth, lower, undo, moved wall")
+	# A held terrace (kind 16, added through the registry), one dab per derive, over the east hill.
+	var tier := _edit(n, c, TerraCorpus.TERRACE, c.dabs(TerraCorpus.terrace_dabs(1, 0)))
+	n.call("derive")
+	for k in range(1, 12):
+		var dab := c.dabs(TerraCorpus.terrace_dabs(1, k))
+		c.append(tier, dab)
+		n.call("append_dabs", tier, dab)
+		n.call("derive")
+	_check_same(n, c, "held terrace")
 	# A river landing derived on the worker thread (the release path).
 	_edit(n, c, TerraCore.RIVER, c.line([2.0, 0.5], [55, 4, 50, 30, 44, 58]))
 	n.call("derive_async")

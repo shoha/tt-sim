@@ -20,6 +20,7 @@
 #include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
 #include <godot_cpp/variant/packed_int32_array.hpp>
+#include <godot_cpp/variant/rect2.hpp>
 #include <godot_cpp/variant/vector2.hpp>
 #include <godot_cpp/variant/vector3.hpp>
 
@@ -86,7 +87,7 @@ public:
 	TerraDerive();
 	~TerraDerive();
 
-	/// "terra 2 stages": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
+	/// "terra 3 kinds": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
 	String version() const;
 	/// Allocates a w x h sample grid over a map of `extent` metres, centred on the origin (sample
 	/// (0, 0) at -extent / 2), and forgets the document. TerraCore passes 2 (n - 1) + 1 per axis of
@@ -95,8 +96,9 @@ public:
 	/// Worker threads beside the caller (0: every stage runs on the caller); the bits never depend
 	/// on it.
 	void set_threads(int64_t n);
-	/// Adds or replaces a primitive (document order is insertion order).
-	void set_prim(int64_t id, int64_t type, const PackedFloat32Array &data);
+	/// Adds or replaces a primitive (document order is insertion order). False, and nothing
+	/// changed, when `type` is not a registered kind (kinds()).
+	bool set_prim(int64_t id, int64_t type, const PackedFloat32Array &data);
 	/// Appends floats (whole dabs) to a primitive; only the new dabs' bounds are dirtied.
 	void append_dabs(int64_t id, const PackedFloat32Array &data);
 	void remove_prim(int64_t id);
@@ -148,6 +150,17 @@ public:
 	Array stages() const;
 	/// Every array the stages name: {"name", "kind" ("input", "samples", "record"), "bytes" a sample}.
 	Array arrays() const;
+	/// The kind registry (terra_kinds.h), sorted by id: per kind {"id", "name", "stage" (a stage's
+	/// name), "shape" ("stamp", "line", "water"), "header", "stride"}.
+	Array kinds() const;
+	/// Ids registered twice when the library loaded (0 in a sound build).
+	int64_t kind_conflicts() const;
+	/// The world box (x, z) a primitive of `kind` with `data` can change, reaches included; an
+	/// empty Rect2 for the whole map, an unknown kind or no data.
+	Rect2 kind_bounds(int64_t kind, const PackedFloat32Array &data) const;
+	/// Tests only: the table the registry's insert builds from its own kinds taken in `order`
+	/// (indices into kinds()), as kinds() gives it; equal to kinds() for every order.
+	Array debug_kinds_in_order(const PackedInt32Array &order) const;
 	/// A per-sample array's whole-map bytes, row-major (empty for an input, a record or a bad name).
 	PackedByteArray array_bytes(const String &name);
 	/// Tests only (halo honesty): sets one sample of a per-sample array outside the chain and marks
