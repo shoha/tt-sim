@@ -2297,11 +2297,41 @@ street read-back of "Roof round 3" to "Roof round 5" below (`PainterStreetSnow` 
   Ground, trees, weather and sky keep their own numbers.
 - **Still open.** Props without pads (well, lamp post, stall awning, haystack, the modern set) keep
   the shader law alone; crate stacks' lower lids lie partly under the crate above; the paint on the
-  bodies is today's (the calm paint is the next card); chimney cushions and sills on street lots are
+  bodies is the calm paint (next section); chimney cushions and sills on street lots are
   not made (no meshes come with a lot's records).
 - Tests: `test_painter_snow_tops.gd` (a body per kind, the cone's profile and apex, one body per
   lot, a real street's and stone wall's records with the mesh unchanged, the round hut's cone, a
   moved cell keeps its body, no switch no body, the eave over a window).
+
+## The calm paint on the snow bodies (card snow-calm-cells, 2026-11-21; look-pending)
+
+The owner's pick of spike 8's three calm paints (2026-11-22): **cells**. Every snow body (roof
+blankets, the hut's cone, wall copings, prop pads: all code 10 in the manner shader) and the roof
+pieces under a blanket paint the shared `snow_paint` through `calm_paint`
+(`painter_structure_manner.gdshader`), replacing the plain `snow_paint(sf)` (main had no spike-7
+bend; nothing to remove).
+
+- **The model.** The body's plan, keyed to the asset's own plan point (`v_ap`, the mesh's
+  `VERTEX.xz`: a body is its asset's child, so the paint rides with it), is cut into jittered cells
+  (`calm_cell` 2.2 m across the wind, 1/0.6 times longer along it; a 3x3 search, since the 0.7
+  jitter puts nearer points outside a 2x2 block and a 2x2 block's switch draws a seam). Each cell
+  shifts the washes by its own constant (up to `calm_shift` 1.8 m along the eave, 0.45 of it up the
+  slope), turns them by up to `calm_turn` 0.4 rad and takes its own tone (`calm_cell_tone` 0.22);
+  the washes are `calm_wash` 1.35 times as strong. Within `calm_edge` 0.5 (of a cell) of an edge the
+  two nearest cells' PAINT is cross-faded (a second `snow_paint` only where the second's share
+  passes 1 %); blending their frames instead sheared the washes into thin straight creases (spike 8
+  round 2). The owner's verdict settings were edge 0.3, turn 0.6, tone 0.35; this card's one tuning
+  round softened them because the cells read as flat angular planes at zoom 16 and at low sun.
+- **The hut's rim.** `PainterSnowForms.cone_columns` puts a column at every corner of the
+  `roof_cone` record's `ring` and along each side; `lay_cone` lays each ring as that polygon scaled
+  toward the axis, so the lip follows the eave's sides and corners (the round body left a wedge of
+  the roof's top at every corner). Its normals come from the same grid drawn round at the mean
+  radius and its paint frame is the round one, so the sides draw no facet tone steps.
+- **Cost** (in-run, vsync off, 1920x1080, B M M B 4 s windows, main's shader swapped in place):
+  table (zoom 30) +0.044 ms, close (zoom 6, the hut) +0.015 ms; the verdict settings measured
+  +0.036 at the table (the wider edge band is the difference).
+- Tests: `test_painter_snow_tops.gd` (the cone's rows have the ring's corners and follow the eave
+  polygon, a real hut's snow has its roof's corners, the calm uniforms' defaults).
 
 ## Round roofs, ruin roofs, ivy (card painter-roofs-ivy, 2026-11-18; look-pending)
 

@@ -7,11 +7,14 @@ extends RefCounted
 ## from one builder:
 ##   cone     a round roof (`roof_cone`): one grid round the axis and up the roof's own profile
 ##            (`wall_y + rise * (1 - s^power)`, so a dome and a bell are followed, not a straight
-##            cone), closed in one point over the apex, at the gable blanket's depth, round the
-##            ring's apothem, its soft lip a few centimetres past the eave and never lower than a
-##            share of the roof's thickness under it, so the snow sits on the roof and its edge
-##            shows (round 1's lip, the blanket's, swallowed the thatch). One grid, no facets:
-##            facets drew a tone step per facet under any paint (spike 8). Ported from the spike's
+##            cone), closed in one point over the apex, at the gable blanket's depth, each ring
+##            the eave's polygon scaled toward the axis (its sides and corners, card
+##            snow-calm-cells: a round body left a wedge of the roof's top at every corner), its
+##            soft lip a few centimetres past the eave and never lower than a share of the roof's
+##            thickness under it, so the snow sits on the roof and its edge shows (round 1's lip,
+##            the blanket's, swallowed the thatch). Shaded round the axis, no facets: facets drew a
+##            tone step per facet under any paint (spike 8), so the normals come from the same grid
+##            drawn round at the mean radius. Ported from the spike's
 ##            PainterSnowBaked.lay_cone (H3b), with the record's numbers in place of a mesh read;
 ##   coping   a stone wall's run (`coping_line`): a rounded strip along the coping's top points,
 ##            a lit crown between two shaded shoulders, its depth swelling slowly along the run;
@@ -192,6 +195,45 @@ static func cone_profile(rec: Dictionary, d: float) -> Vector2:
 	return Vector2(minf(y, apex.y), maxf((y - y2) / h, 0.0))
 
 
+## The columns of round roof `rec`'s snow, as plan offsets from its axis (`base`) in the order a
+## circle's angle runs (x then z): "points" every corner of its eave ring (the record's `ring`) and
+## the points between them along each side, a side cut in cells of about CONE_CELL_M; "u" each
+## point's metres along the ring from the first corner, "perimeter" the ring's length. A record
+## with no ring takes a circle round its apothem. Pure.
+static func cone_columns(rec: Dictionary) -> Dictionary:
+	var base: Vector3 = rec["base"]
+	var radius := maxf(float(rec["radius"]), 0.01)
+	var corners := PackedVector2Array()
+	var ring: Array = rec.get("ring", [])
+	for p: Variant in ring:
+		if p is Vector3:
+			corners.append(Vector2(p.x - base.x, p.z - base.z))
+	if corners.size() < 3:
+		corners.clear()
+		var inset := clampf(float(rec.get("apothem", radius)) / radius, 0.8, 1.0)
+		var n := maxi(12, ceili(TAU * radius / CONE_CELL_M))
+		for i in n:
+			corners.append(Vector2.from_angle(TAU * i / n) * radius * inset)
+	var area := 0.0
+	for i in corners.size():
+		area += corners[i].cross(corners[(i + 1) % corners.size()])
+	if area < 0.0:
+		corners.reverse()
+	var points := PackedVector2Array()
+	var us := PackedFloat32Array()
+	var u := 0.0
+	for i in corners.size():
+		var a := corners[i]
+		var b := corners[(i + 1) % corners.size()]
+		var side := a.distance_to(b)
+		var cuts := maxi(1, ceili(side / CONE_CELL_M))
+		for j in cuts:
+			points.append(a.lerp(b, float(j) / cuts))
+			us.append(u + side * j / cuts)
+		u += side
+	return {"points": points, "u": us, "perimeter": u}
+
+
 ## Lays the snow of round roof `rec` (a `roof_cone` record) into `g`: one grid round its axis,
 ## from the eave lip up its profile, closed in one point over the apex. `hold` the roof
 ## material's, `phase` the structure's field phase, `windows` (windows_of) the openings the lip
@@ -215,8 +257,10 @@ static func lay_cone(
 	var whole := PainterMannerBlanket.depth({"n": Vector3(0.0, up_n, 0.0)}, hold)
 	var eave_lo := minf(PainterMannerBlanket.EAVE_T_M * hold / maxf(whole, 0.01), 1.0)
 	var rim_low := RIM_SHARE * float(rec.get("thickness", THICKNESS_M))
-	var inset := clampf(float(rec.get("apothem", radius)) / radius, 0.8, 1.0)
-	var nc := maxi(12, ceili(TAU * radius / CONE_CELL_M))
+	var centre := Vector3(base.x, 0.0, base.z)
+	var columns := cone_columns(rec)
+	var cols: PackedVector2Array = columns["points"]
+	var nc := cols.size()
 	var t_st := PainterMannerBlanket.stations(slant, EDGE, TOP, CONE_CELL_M)
 	var rows: Array = [[0.0, 3], [0.0, 2], [0.0, 1]]
 	for k in t_st.size():
@@ -224,10 +268,14 @@ static func lay_cone(
 	var nr := rows.size()
 	var stride := nc + 1
 	var pos := PackedVector3Array()
+	# The same grid drawn round (each column at the mean radius): its normals shade the body, so
+	# the polygon's flat sides draw no tone step at the corners.
+	var round_pos := PackedVector3Array()
 	var nor := PackedVector3Array()
 	var shade := PackedFloat32Array()
 	var fixed := PackedByteArray()
 	pos.resize(stride * nr)
+	round_pos.resize(stride * nr)
 	nor.resize(stride * nr)
 	shade.resize(stride * nr)
 	fixed.resize(stride * nr)
@@ -236,15 +284,19 @@ static func lay_cone(
 		var t := float(rows[ri][0])
 		var rk := int(rows[ri][1])
 		for ci in stride:
-			var a := TAU * float(ci % nc) / nc
-			var out := Vector3(cos(a), 0.0, sin(a))
+			var col := cols[ci % nc]
+			var out := Vector3(col.x, 0.0, col.y).normalized()
+			var a := atan2(out.z, out.x)
 			var d := radius * (1.0 - t)
 			var prof := cone_profile(rec, d)
+			# Smoothed round the axis: the mean radius's slope, the same at a corner as mid-side.
 			var n := (out * prof.y + Vector3.UP).normalized()
 			var down := (out - Vector3.UP * prof.y).normalized()
-			# Drawn round the ring's apothem at the profile's heights: a circle through the corners
-			# would bow past every side of a polygonal roof and hang over its edge there.
-			var base_p := Vector3(apex.x, prof.x, apex.z) + out * d * inset
+			# Each ring the eave's polygon scaled toward the axis (as the roof's own rings are), at
+			# the profile's heights, so the snow covers the roof to its corners and its lip follows
+			# the eave's sides (a round body showed a wedge of the roof's top at every corner).
+			var base_p := centre + Vector3(col.x, prof.x, col.y) * Vector3(1.0 - t, 1.0, 1.0 - t)
+			var round_p := centre + Vector3(0.0, prof.x, 0.0) + out * d
 			var plan := Vector2(base_p.x, base_p.z)
 			var top_m := (1.0 - t) * slant
 			var eave := PainterMannerBlanket.taper(
@@ -286,6 +338,7 @@ static func lay_cone(
 				dn = Vector3.UP
 			var k := ri * stride + ci
 			pos[k] = at
+			round_pos[k] = round_p + (at - base_p)
 			nor[k] = dn
 			shade[k] = sh
 			fixed[k] = 1 if dn != Vector3.ZERO else 0
@@ -296,10 +349,13 @@ static func lay_cone(
 				continue
 			var right := ri * stride + (ci % nc + 1) % nc
 			var left := ri * stride + (ci % nc + nc - 1) % nc
-			var tu := pos[right] - pos[left]
-			var tv := pos[mini(ri + 1, nr - 1) * stride + ci] - pos[maxi(ri - 1, 0) * stride + ci]
+			var tu := round_pos[right] - round_pos[left]
+			var tv := (
+				round_pos[mini(ri + 1, nr - 1) * stride + ci]
+				- round_pos[maxi(ri - 1, 0) * stride + ci]
+			)
 			var c := tu.cross(tv)
-			var out := Vector3(pos[k].x - apex.x, 0.0, pos[k].z - apex.z).normalized()
+			var out := Vector3(pos[k].x - centre.x, 0.0, pos[k].z - centre.z).normalized()
 			var cone_n := (out * rise + Vector3.UP * radius) / slant
 			if c.length_squared() < 1e-10:
 				nor[k] = cone_n
@@ -307,14 +363,21 @@ static func lay_cone(
 				nor[k] = (c if c.dot(cone_n) > 0.0 else -c).normalized()
 	# The frame's length up the slope is given long: the shader's crest gaps would gather into one
 	# bare blot at the apex, where every column meets.
+	# The paint's frame is the round one (metres round the axis at the mean radius, and up the slant
+	# by the plan distance), smooth across the corners: a frame along the polygon's rings kinked
+	# there, and its washes drew a faint straight line up from every corner (round 1, hut_rim).
 	var size := Vector2(TAU * radius, slant + 10.0)
 	var acc := float(seed % 1000) / 1000.0
 	var first := g.pos.size()
+	var a0 := cols[0].angle()
 	for ri in nr:
 		var t := float(rows[ri][0])
 		for ci in stride:
 			var k := ri * stride + ci
-			var uv := Vector2(TAU * float(ci) / nc * radius, t * slant)
+			var col := cols[ci % nc]
+			var turn := TAU if ci == nc else wrapf(col.angle() - a0, 0.0, TAU)
+			var reach := col.length() * (1.0 - t) / radius
+			var uv := Vector2(turn * radius, (1.0 - reach) * slant)
 			var data := PackedFloat32Array([size.x, size.y, float(CODE) + 0.9 * shade[k], acc])
 			g.put(pos[k], nor[k], uv, data)
 	var before := g.idx.size()
