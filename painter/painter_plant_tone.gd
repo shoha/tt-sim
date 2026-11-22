@@ -9,6 +9,9 @@ extends RefCounted
 
 ## The instance uniform that keeps a node's plants from the sheet's thinning (painter_plant).
 const PLACED := &"painter_placed"
+## The tone role of the ground's litter scatter (PainterPlantRoles: leaves, twigs, needles), thinned
+## by the sheet's keep-litter.
+const LITTER_ROLE := "litter"
 
 
 ## Marks every drawn node of the hand-placed props' layer (the scatter named
@@ -108,6 +111,10 @@ static func tone(
 		PainterPlantRoles.KIND_FLOWER:
 			keep = PainterSheet.number(sheet, mood, "keep-flower", elevation)
 			freq = PainterSheet.number(sheet, mood, "keep-freq-flower", elevation)
+	# Fallen leaves and twigs lie under the snow (card painter-winter-ground): winter keeps none.
+	if str(entry["role"]) == LITTER_ROLE:
+		keep = PainterSheet.number(sheet, mood, "keep-litter", elevation)
+		freq = PainterSheet.number(sheet, mood, "keep-freq-grass", elevation)
 	if bool(entry.get("crop", false)):
 		keep = 1.0
 	material.set_shader_parameter(&"keep", keep)

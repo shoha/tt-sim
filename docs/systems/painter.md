@@ -324,10 +324,10 @@ role's shade, which the ground's full violet pull swings to dark purple. `Painte
   the way to its shade, a middle value under the lit top (lip and foot alone left a pale sandstone
   face a cream band on the badlands' orange). Under snow (`cliff-snow`, winter 0.85) the lip is a
   cap in the meadow's snow (a wider band, curvature 0.35 to 0.65, in two steps, so its lower edge
-  scallops down the face). A path under snow (`path-dust`, winter 0.6) is lifted 0.3 of the way to
-  the snow's lightness (`PainterGroundPaths.dusted`; cobble, flagstone and tiles read heavy mid
-  grey), its seams 30 % shallower, and its edge beside a snowy meadow or floor dusted with the
-  snow in two steps (a stone's hash moves the line).
+  scallops down the face). A path under snow (`path-dust`, winter 0.6) is a trodden track (card
+  painter-winter-ground, below; it was lifted toward the snow's lightness, `dusted`, and read as no
+  path at all), its seams 30 % shallower, and its edge beside a snowy meadow or floor dusted with
+  the snow in two steps (a stone's hash moves the line).
 - Cost: one slot-map fetch on path pixels only (and one for a winning path mark), the pattern's
   hashes there, the curvature's four derivatives everywhere (the polish adds two derivatives of
   the slope and, under snow, one noise); the CPU slot map only when two path surfaces are painted
@@ -353,6 +353,52 @@ owner twice found the patches too strong; round 4's probe sheet showed 0.35, 0.5
 map's seed moves the field and each edge (`seed_of`, bound with the path slots), so maps differ.
 Winter's shares are 0 (no swathes on the snow). Cost: two 2D noises on meadow pixels, no fetch; not
 timed.
+
+Winter ground (card painter-winter-ground, 2026-11-22; look-pending). The artifact sweep's finding
+10: brown leaves lay on the fresh snow, the authored path vanished, and the snow read grey-lavender.
+Causes and fixes:
+
+- **Litter on the snow.** Three things drew on top of the snow, none gated by it: the litter scatter
+  (`Litter_*`, `PainterPlantRoles` kind solid, role `litter`, `painter_solid`; the snow law frosted
+  its up faces into white leaf stars), the forest floor's small fallen-leaf marks
+  (`painter_ground_body` layer 2 in `litter_col`, the sheet's `litter-marks`), and the meadow grass's
+  marks (`painter_grass_mark`, winter's dry straw kept at `keep-grass` 0.45, times its 1.2 top-view
+  boost: from above, brown curls strewn over the tier tops). The sheet now buries them: a new number
+  `keep-litter` (1, winter 0) thins the litter scatter through the selector's group noise
+  (`PainterPlantTone.tone`, `selector_keep`), winter's `litter-marks` is 0, and winter's `keep-grass`
+  is 0.15 (a few groups of straw still stand above the snow). Hand-placed litter stays
+  (`painter_solid` honours `painter_placed`, as the plant shader does).
+- **The path under snow.** Winter's `path` tone is the snow's blue (0.80 0.030 248) and `path-dust`
+  lifted it further toward the snow, so the band matched the ground. Now the ground shader paints
+  the band as a trodden track: the snow of the ground it crosses times `TROUGH_LIT` / `TROUGH_SHD`
+  (darker and bluer, linear), with the slot's earth showing through in a few glimpses along its middle
+  (a 0.55 m^-1 noise plus the band's depth over `EARTH_AT`; a mark decides at its middle), and the
+  edge still dusted white. The glimpse's tone is `PainterGroundPaths.earth`: the slot's tone moved
+  `path-dust` * 1.5 of the way to the surface's own chroma and hue in OKLab (packed dirt's when it has
+  none), `path-dust` * 0.35 darker and its chroma toward 0.75. Seen: the earth glimpses read (a dull
+  brown under the 13 h sun, brown on the rose snow at 6.5 h). Round 2: a debug render showed a 1 m
+  brush's band runs pv 0.46 at its edge to about 0.8 at its middle, so the old white rim (a quarter of
+  `path-dust` deep in pv) covered most of it; the rim now spans 0.11 * `path-dust` (two narrow steps).
+  `TROUGH_LIT` deepened to 0.52 0.62 0.86 (`TROUGH_SHD` 0.66 0.74 0.90): a lit track pixel measured
+  (162,189,228) against the snow's (231,248,255). The glimpses lean on pv about 0.7 (`EARTH_AT` 0.74).
+  The track now takes any ground but the char: across the shore and a biome's second ground the band
+  had been the earth tone end to end (long brown blots by the stream and the river). Still open: at
+  zoom 9 and 16 the track's blue is the snow shade's hue, so beside tree shadows it reads as shade
+  more than as a trodden path.
+- **Grey-lavender snow.** The ground shader paints the sheet's ramp as it is (linear tonemap,
+  `DIFFUSE_LIGHT` = the ramp colour; the lo-fi pass did not change the pixels), so the tones were the
+  cause: winter's forest `floor` (0.82 0.030 255; most of a forest map's open ground) and the high key's
+  `ground` (0.88 0.040 250) with `ground-hue-spread` 13 (lit variants to hue 263-268). A lit snow
+  pixel measured L 0.86, C 0.03, hue 264. Now `floor` 0.90 0.024 240, `ground` 0.93 0.026 240 and the
+  spread 7: lit about L 0.96, a cool blue white, and the shade a clean blue. The low key's rose light
+  and lilac shade, the night key, the snow law's coverage and every other mood are unchanged; the
+  drift role (roof and plant snow) reads the ground's spread, so its variants are a little closer.
+- Frames: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final146_winter_ground/`
+  (`sheet.png`: rows 1-6 winter at 13 h zoom 16, 9 and 5, the forest floor and the 6.5 h low sun, row 7
+  summer; columns main | build; `main/` and `build/` full size). A/B (the path block hot-swapped in
+  one run, zoom 9 on the path, vsync off, palindrome): within noise (0.00 to +0.03 ms on 2.3-2.45 ms
+  as the GPU drifted).
+- Tests: `test_painter_ground_paths.gd` (`earth`, and winter's buried litter and white snow tones).
 
 A collapsing building's ember cracks (`painter_building_burn.gdshaderinc` `building_embers`, round 3
 and 4): the contour of a warped two-octave field, tapered by a slow gate, never rings; a crack's half
