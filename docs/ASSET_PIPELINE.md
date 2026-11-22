@@ -2261,10 +2261,20 @@ tag_table. Without the manner data none is made and the mesh is the same either 
   a modelled wall on a slope steps, a textured wall's slabs ramp), `u` (the run's direction),
   `width` (across the coping, thickness times 1.1), `height` (the slab's own), `length`, `edges`
   (the legs, kind `ridge`).
-- **Pad** (`pad`; props through `ProcgenPropParts.pad`: barrel heads and lids, crate lids, bench
-  seats, cart and wagon beds): a level top, `shape` `rect` or `disc`, `centre` (the top face's
-  middle), `origin` (its minimum corner in u, v), `u`, `v` (level unit axes), `n` (up), `u_len`,
-  `v_len`, and for a disc `radius`. Ids `<prop node>/prop/<name>/top<k>`.
+- **Pad** (`pad`; props through `ProcgenPropParts.pad`, every level top at least 0.09 m across
+  (procgen 468fa17, card snow-prop-tops): barrel heads and lids, crate lids, bench seats, cart and
+  wagon beds, a hand cart's crate load, a wagon's seat and barrel load (a covered wagon's bed has
+  none), hay bales, the woodpile's chopping block, an open well's curb, a stone trough's rim, the
+  stone and cross shrines' plinths, slabs and arms, gate post caps, the skep bench, a flat bollard
+  head, the cube litter bin's lid, the phone box's roof steps, the barrel bus shelter's crown,
+  planter rims and the parked car's roof): a level top, `shape` `rect` or `disc`, `centre` (the top
+  face's middle), `origin` (its minimum corner in u, v), `u`, `v` (level unit axes), `n` (up),
+  `u_len`, `v_len`, for a disc `radius`, and optionally `hole` (u, v across, about the same middle;
+  a disc's `hole.x` its inner diameter): an opening the snow leaves bare, so the top is a ring (the
+  well's shaft) or a frame (the trough's water). Ids `<prop node>/prop/<name>/top<k>`. Pointed,
+  domed, sloped and cloth tops (lamp and signpost caps, skeps, hay mounds, awnings, roofs on
+  props) and tops under a roof or an awning (a market stall's counter, a roofed well's curb)
+  declare none.
 - **Street rows**: a Street Row node keeps every lot's records (all the kinds above), each id
   stamped with the lot's path (`row_2/left/lot3/roof_gable_4/slope/v0/s1`) and carrying `lot`
   (the lot's path, `left/lot3`, before the row node's prefix); each lot's building record has the
