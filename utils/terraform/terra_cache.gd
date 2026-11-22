@@ -117,13 +117,26 @@ static func water_digest(records: Dictionary) -> int:
 ## A TerraDerive on `doc`'s grid with every primitive of `terra` that is not muted set in
 ## document order, after derive_full(); null without the library.
 static func derive_for(terra: TerraDoc, doc: MapDocument) -> RefCounted:
+	var derive := prepare(terra, doc)
+	if derive != null:
+		derive.call("derive_full")
+	return derive
+
+
+## A TerraDerive on `doc`'s grid with every primitive of `terra` that is not muted set in
+## document order, not yet derived; null without the library. A primitive the native registry
+## refuses (set_prim false: the two registries disagree, which test_terra_kinds rules out) is
+## left out with one warning counting them.
+static func prepare(terra: TerraDoc, doc: MapDocument) -> RefCounted:
 	var derive := TerraCore.make_derive(doc)
 	if derive == null:
 		return null
+	var refused := 0
 	for p in terra.prims:
-		if not TerraDoc.is_muted(p):
-			derive.call("set_prim", p["id"], p["kind"], p["data"])
-	derive.call("derive_full")
+		if not TerraDoc.is_muted(p) and not derive.call("set_prim", p["id"], p["kind"], p["data"]):
+			refused += 1
+	if refused > 0:
+		push_warning("terrain: the core refused %d primitives of kinds it does not know" % refused)
 	return derive
 
 

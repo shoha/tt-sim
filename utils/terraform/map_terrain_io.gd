@@ -27,6 +27,9 @@ extends RefCounted
 ##   version, so no save of this build can drop part of its primitives without the author told;
 ## - a primitive that fails its kind's validate() (TerraKinds) or repeats an id: that primitive is
 ##   dropped, with one warning counting the dropped primitives and naming the first cause.
+## A refused section is kept as read (MapDocument.terra_kept, with its derived record), and a save
+## of the map writes those bytes back untouched in format 6: opening a newer map in this build and
+## saving it never drops its terrain (card terraform-p1-session).
 
 ## The entry's name, owned by MapDocumentIO (which reads this script by path, on first use).
 const ENTRY := MapDocumentIO.TERRAIN_ENTRY
@@ -48,10 +51,13 @@ const NEWER := "made by a newer version"
 
 ## Adds the entry to `entries` when `doc` has a terrain document, and the derived record
 ## (TerraCache, DERIVED_ENTRY) when it has one whose key matches the document now: a record left
-## from before an edit is dropped rather than written stale. Run after `doc` passed problem(); any
-## thread.
+## from before an edit is dropped rather than written stale. A document without one that kept a
+## refused section (MapDocument.terra_kept) writes those bytes back untouched. Run after `doc`
+## passed problem(); any thread.
 static func serialize(doc: MapDocument, entries: Dictionary) -> void:
 	if doc.terra == null:
+		for entry: String in doc.terra_kept:
+			entries[entry] = doc.terra_kept[entry]
 		return
 	var terra := doc.terra as TerraDoc
 	entries[ENTRY] = encode(terra)
@@ -117,6 +123,11 @@ static func parse(
 	for line: String in read["warnings"]:
 		warn_log.add(line)
 	doc.terra = read["terra"]
+	if doc.terra == null:
+		# Refused: kept as read, so a save of this map writes it back rather than dropping it.
+		for entry: String in [ENTRY, DERIVED_ENTRY]:
+			if blobs.has(entry):
+				doc.terra_kept[entry] = blobs[entry]
 	if doc.terra != null and blobs.has(DERIVED_ENTRY):
 		var record := TerraCache.decode(blobs[DERIVED_ENTRY])
 		for line: String in record["warnings"]:
@@ -132,7 +143,12 @@ static func decode(bytes: PackedByteArray) -> Dictionary:
 	var warnings := PackedStringArray()
 	var terra := _decode(r)
 	if terra == null:
-		warnings.append("%s refused: %s; the map has no terrain" % [ENTRY, r.error])
+		warnings.append(
+			(
+				"%s refused: %s; the map has no terrain here, and a save keeps the section as read"
+				% [ENTRY, r.error]
+			)
+		)
 	elif r.dropped > 0:
 		warnings.append(
 			(

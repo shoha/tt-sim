@@ -12,7 +12,8 @@ Phase 1 lands the core beside today's path and changes nothing the game draws or
 in the game calls it yet. Card 2 (terraform-p1-stages) made the chain one loop over a stage table,
 card 3 (terraform-p1-document) added the terrain section of `map.ttmap` (format 6), and card 4
 (terraform-p1-kinds) the kind registry, card 5 (terraform-p1-cache) the derived record ("The
-derived record"). The last phase 1 card adds `TerraSession` behind a switch.
+derived record"), and card 6 (terraform-p1-session) the `TerraSession` that attaches the core to a
+loaded map behind a switch, off by default ("The session").
 
 ## Files
 
@@ -30,8 +31,9 @@ derived record"). The last phase 1 card adds `TerraSession` behind a switch.
 | `native/src/terra_paths.cpp` | the line kinds' shared maths: `line_from`, `window_mean`, `grade`, `nearest_seg` |
 | `native/src/terra_fields.cpp` | stages 5 and 6: slope, capped distances, the look field, the ground rules |
 | `native/src/terra_derive.{h,cpp}` | the GDCLASS `TerraDerive`: setup, primitives and their seeds, rules, the stage loop, the three solves and the rect bodies' dispatch, queries, digests |
-| `utils/terraform/terra_core.gd` | `TerraCore`: `native_available()`, `NATIVE_VERSION`, the built-in kind ids, `grid_for(doc)`, `make_derive(doc)`, `load_rules()`, `enabled()` (off) |
-| `utils/terraform/terra_cache.gd` | `TerraCache`: the derived record (`terrain/derived.bin`, digests only): `make_record`, `derive_for`, `check`, `derive_and_check`, `encode` / `decode` |
+| `utils/terraform/terra_core.gd` | `TerraCore`: `native_available()`, `NATIVE_VERSION`, the built-in kind ids, `grid_for(doc)`, `make_derive(doc)`, `load_rules()`, `enabled()` (the switch: `tt_sim/terrain/core`, default off; `switch_override` for tests) |
+| `utils/terraform/terra_cache.gd` | `TerraCache`: the derived record (`terrain/derived.bin`, digests only): `make_record`, `prepare`, `derive_for`, `check`, `derive_and_check`, `encode` / `decode` |
+| `utils/terraform/terra_session.gd` | `TerraSession`, a Node: the core attached to a loaded map (see "The session") |
 | `utils/terraform/terra_kinds.gd` | `TerraKinds`: the GDScript registry, one preload line per kind; `script_for(id)`, `name_of`, `ids()`, `table()`, `problem(id, data)` |
 | `utils/terraform/kinds/<name>/<name>_kind.gd` | one script per kind (layout, `validate`, `bounds`, label, defaults); `kinds/kind_layout.gd` holds the checks they share |
 | `utils/terraform/rules/ground_rules.json` | the ground table (12 classes, 11 rows) and the look parameters the Painted cards read |
@@ -214,6 +216,50 @@ none).
   compare was 13.7 ms and 34.8 ms, as much as the derive at 320 ft, which is why it now runs on the
   pool (same values; the golden is unchanged).
 
+## The session
+
+Card terraform-p1-session (2026-11-22). `TerraSession` (`utils/terraform/terra_session.gd`, a Node
+named `TerraSession` under the map root) is the core attached to a loaded map. Nothing reads it in
+phase 1; phase 2's first card writes its derived heights into `MapDocument` (the S4 bridge).
+
+- **The switch.** `TerraCore.enabled()` reads the project setting `tt_sim/terrain/core` (default
+  false; `TerraCore.switch_override` forces it in tests). `MapSourceLoader.add_terra_session(root,
+  doc)` is called from `_create_authored_root_async` right after the root shell is made, and adds a
+  session only when the document has a terrain section, the switch is on and the library is built.
+  Play and authoring open authored maps through that one function (`AuthoringController` and
+  `LevelLoader` both call `build_async` / `load_async`). The loader finds the terraform scripts by
+  path, so a map without a section never loads them and the start-up script graph is unchanged.
+  Switch off: no node, no `TerraDerive` (`TerraCore.derives_made` counts them), no signal; the built
+  map's `MapFingerprint` equals the stripped map's in every key but `terra` (which reports the
+  section).
+- **Attach.** `attach(doc)` runs `TerraCache.derive_and_check` on a copy of the terrain document on a
+  WorkerThreadPool task and keeps the derive it returns, so the full derive (about 33 ms at 320 ft,
+  plus 5 ms of digests) overlaps the chunk build. `check` holds the result (status none, miss, match
+  or mismatch, warned once).
+- **Edits.** `apply(edit)` (`{"op": add | replace | append | remove | mute | unmute | move, ...}`)
+  changes `doc.terra` at once and tells the derive the same change (`set_prim`, checked;
+  `append_dabs`; `remove_prim`; a muted primitive is left out, since the derive has no flags; unmute
+  and move re-set the primitives from that position, since the derive has no move), then starts
+  `derive_async()`. An edit while a derive runs is queued and told on the landing. Returns the
+  primitive's id, or -1 with nothing changed.
+- **Queries.** `is_ready()` (the plan's `ready()`; a Node already has a `ready` signal) is true when a
+  derive has landed, none runs and no edit waits; `height_at`, `water_at` (NAN until then) and
+  `digests()` (`{}` until then) answer only then, so the derive is never read while it writes.
+  `settled` fires when it turns true.
+- **Polling.** `_process` runs only while a task or derive is in flight and never waits: work is
+  landed only once `is_task_completed` or `not is_busy()`.
+- **Closing.** A session freed mid-derive parks its task or busy derive in a static list, let go once
+  complete (polled on `process_frame`, `PainterZoneMaps`' pattern): `TerraDerive`'s destructor joins
+  its thread, so dropping a busy derive would block.
+- **Saving.** `attach` sets `TerraDoc.before_save` to `capture_for_save()`, which
+  `MapDocumentSnapshot.capture()` calls first: when the session is ready and the record is not the
+  settled derive's, it sets `terra.derived = TerraCache.make_record(...)`. While a derive runs the
+  record is left alone and the writer drops it if stale.
+- **Load A/B** (headless, indicative, 2026-11-22, another card's gate running beside it): a 320 ft
+  flat map with the corpus through `build_async`, 5 rounds after a warm-up. Root ready: switch off
+  median 257 ms (218 to 282), on 230 ms (221 to 284): no difference within the noise. The session
+  landed one frame after the root in every round, a median of 14 ms later.
+
 ## Versions and the library
 
 `TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 4 cache` (the parallel
@@ -233,6 +279,7 @@ treats as a failure.
 | `test_terra_water_laws.gd` | no level climbs downstream, the tributary joins and falls, the wall opens at the river, the pond holds water |
 | `test_terra_golden.gd` | `version()`, and the corpus on a 40 x 40 and a 40 x 48 cell map, plus the terraced corpus on 40 x 40, against `tests/fixtures/terra_corpus_digests.json` |
 | `test_terra_cache.gd` | the derived record: with a matching key a fresh derive gives the recorded digests through the map document (the record reads back bit for bit, under 512 bytes); the snapshot's copy; a stale record is not written; each key change (grid, core version, a mute, a moved float) misses quietly while an add and its undo keep the key; one H2 sample set outside the chain gives `mismatch` naming only H2 with one warning; every truncation, a trailing byte, the entry cap, bad magic, a newer version, too many digests, names out of order or malformed are refused while the terrain still loads; a map without terrain is unaffected |
+| `test_terra_session.gd` | the session through `MapSourceLoader`: switch off makes no session and no `TerraDerive` and the fingerprint equals the stripped map's (but `terra`); switch on without a section makes none; the setting's default; switch on, the digests equal a fresh `derive_full`, the save writes the record, and a reload through `load_async` matches it with equal digests; every edit op (one queued during the attach, some back to back) lands equal to a fresh derive; closing mid-attach and mid-`derive_async` parks and later lets go; a refused section is kept and saved back untouched in format 6 |
 | `test_terra_stage_table.gd` | the table's order (each read an input or an earlier write, one writer per array); halo honesty: one H2 sample (then one FM sample) of a built map set outside the chain, every downstream stage re-run over the whole map, and each array changes only within the reach the table declares from it (the halos summed along the way), with the incremental derive giving the same bytes. A halo one sample short fails it (checked 2026-11-22 with the look row at 13) |
 
 `tests/unit/terra_corpus.gd` (`TerraCorpus`) is the spike's test scene placed on a map document's
