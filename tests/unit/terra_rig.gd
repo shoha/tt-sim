@@ -42,8 +42,11 @@ func session() -> TerraSession:
 func busy() -> bool:
 	var s := session()
 	var scatter := root.get_node_or_null(MapSourceLoader.SCATTER_NODE) as AuthoredScatter
+	var water := root.get_node_or_null(AuthoredWater.NODE_NAME) as AuthoredWater
 	return (
 		editor.has_height_work()
+		or editor.water.is_working()
+		or (water != null and water.is_refreshing())
 		or (s != null and not s.is_ready())
 		or (scatter != null and (scatter.is_regenerating() or scatter.is_growing()))
 	)
