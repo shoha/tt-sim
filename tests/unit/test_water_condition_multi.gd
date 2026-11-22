@@ -15,6 +15,7 @@ const Cases := preload("res://tests/unit/water_condition_cases.gd")
 const FUZZ_SEEDS := 20
 const HALF_WIDTHS := [0.5, 0.8, 1.2, 1.33, 2.0]
 const CAP_SLACK_M := 0.02
+const BENT_RIVER := "res://tests/fixtures/course_fit_bent_river.json"
 
 
 func _flat_world() -> MapDocument:
@@ -123,6 +124,56 @@ func test_hold_cap_keeps_a_line_that_already_holds() -> void:
 	var pulled := WaterCourseFit.hold_cap(far, widths, drawn, 0.5)
 	assert_lte(WaterCourseFit.deviation(pulled[0], drawn), 0.5 + CAP_SLACK_M, "pulled to the cap")
 	assert_eq(pulled[0].size(), pulled[1].size(), "one width per station")
+
+
+## The attrib bench's second river (card painter-river-release): a 90 m bent pointer line whose fit
+## took 188.6 ms when every cap check measured every drawn segment. The fit is the same bytes as
+## before the local nearest query (the digest was taken on the old code).
+func test_the_bent_river_fit_is_unchanged_bit_for_bit() -> void:
+	var text := FileAccess.get_file_as_string(BENT_RIVER)
+	var data: Dictionary = JSON.parse_string(text)
+	var points := Marshalls.base64_to_raw(str(data.points)).to_vector2_array()
+	var widths := Marshalls.base64_to_raw(str(data.widths)).to_float32_array()
+	assert_eq(points.size(), 302, "the drawn line")
+	var fit := WaterCourseFit.condition(points, widths)
+	assert_true(bool(fit.changed), "the fit cleaned it")
+	assert_eq(var_to_bytes(fit).hex_encode().md5_text(), str(data.result_md5), "same bytes")
+
+
+## nearest_from() is WaterGeometry.nearest_on_polyline() bit for bit, whatever the hint: on the
+## bent river, a self-crossing loop and a line with repeated points, at points on, near and far
+## from it.
+func test_nearest_from_equals_the_full_scan() -> void:
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(BENT_RIVER))
+	var repeated := _path([0, 0, 0, 0, 3, 1, 3, 1, 3, 1, 6, -2, 6, -2, 9, 0])
+	var lines := [
+		Marshalls.base64_to_raw(str(data.points)).to_vector2_array(),
+		_drawn_shapes()["loop"],
+		_drawn_shapes()["hairpin"],
+		repeated,
+	]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4021
+	var mismatches := 0
+	var checked := 0
+	for line: PackedVector2Array in lines:
+		var arc := WaterCourseFit.arc_lengths(line)
+		var box := WaterGeometry.bounds(line, 4.0)
+		var hint := -1
+		for k in 600:
+			var p := Vector2(
+				rng.randf_range(box.position.x, box.end.x), rng.randf_range(box.position.y, box.end.y)
+			)
+			if k % 3 == 0:
+				# On the line itself (ties between neighbouring segments at their shared point).
+				p = line[rng.randi_range(0, line.size() - 1)]
+			var want := WaterGeometry.nearest_on_polyline(line, p)
+			for h in [hint, -1, rng.randi_range(-1, line.size())]:
+				checked += 1
+				if WaterCourseFit.nearest_from(line, arc, p, h) != want:
+					mismatches += 1
+			hint = int(want.y)
+	assert_eq(mismatches, 0, "%d queries, every one the full scan's answer" % checked)
 
 
 func test_a_blocked_stroke_is_exactly_the_unconditioned_plan() -> void:

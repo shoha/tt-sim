@@ -123,6 +123,12 @@ var _zones := PainterZoneMaps.new()
 ## next rebuild is whole (a first paint, a new or rebuilt terrain).
 var _zone_dirty := Rect2i()
 var _zone_whole := true
+## Whether the terrain's skirt was added since the last zone rebuild (_on_terrain_child), and the
+## document the maps were last built whole for ([instance id, samples x, samples z]): a skirt on
+## that same document (a water swap re-adds it for the river exits) rebuilds on a worker, any
+## other synchronously.
+var _zone_skirt := false
+var _zone_doc: Array = []
 ## The path slot map's inputs at its last bind: [surface ids, base surface, surface weights, sx, sz]
 ## (copies of the document's arrays).
 var _path_key: Array = []
@@ -217,6 +223,8 @@ func release() -> void:
 	_cell_handlers.clear()
 	_zone_dirty = Rect2i()
 	_zone_whole = true
+	_zone_skirt = false
+	_zone_doc = []
 	_path_key = []
 	applied = {}
 
@@ -320,10 +328,11 @@ func _unbind() -> void:
 func _on_terrain_child(node: Node) -> void:
 	_dress(node)
 	if str(node.name) == AuthoredTerrain.SKIRT_NAME:
-		# The skirt is built last by every AuthoredTerrain.build(): the document may be new.
+		# The skirt is built last by every AuthoredTerrain.build(): the document may be new. A water
+		# swap re-adds it too (apply_river_exits), on the document the maps show: _rebuild_zone.
 		if _occlusion != null:
 			_occlusion.call("ground_edited", Rect2i())
-		_zone_whole = true
+		_zone_skirt = true
 		_queue_zone()
 
 
@@ -601,9 +610,22 @@ func _rebuild_zone() -> void:
 	# One field for the map and the skirt (the texture object is shared, as the zone map's): past
 	# the border the skirt's reads clamp to the border's texel (painter_ground.gdshader).
 	_field.sync(_terrain, siblings())
-	if _zone_whole or _zones.zone == null:
+	var doc_key := [doc.get_instance_id(), doc.samples_x(), doc.samples_z()]
+	var fresh := _zone_whole or _zones.zone == null or (_zone_skirt and doc_key != _zone_doc)
+	if fresh:
 		_zones.build(doc)
 		_zone_whole = false
+		_zone_skirt = false
+		_zone_doc = doc_key
+		_zone_dirty = Rect2i()
+	elif _zone_skirt:
+		# The skirt again on the document the maps show (a water swap's river exits): the whole build
+		# still runs, as a terrain build's would, but on a worker, so the swap frame never waits for it
+		# (it cost 144.5 ms there, card painter-river-release); the ground draws the maps it has until
+		# it lands, and edits meanwhile wait in _zone_dirty as for any worker build.
+		_zones.build_async(doc)
+		_watch_zone_build()
+		_zone_skirt = false
 		_zone_dirty = Rect2i()
 	elif _zones.building():
 		pass  # Edits wait in _zone_dirty for the landing (_on_zone_frame), which queues this again.
