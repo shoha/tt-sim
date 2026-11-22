@@ -438,6 +438,39 @@ func test_a_cache_from_another_engine_is_ignored_and_replaced() -> void:
 	assert_not_null(SurfaceCache.read(path), "and the file now carries this engine")
 
 
+## Card painter-surface-cache: a windowed run compressed normal and ORM maps on the GPU, a headless
+## one on the CPU, to different bytes, and the cache served whichever baked first. The project now
+## turns the GPU encoder off, so every run bakes the same maps.
+func test_every_run_bakes_with_the_cpu_encoder() -> void:
+	assert_false(
+		bool(ProjectSettings.get_setting(SurfaceBake.GPU_SETTING, true)),
+		"project.godot must keep %s off: the GPU's BC1 and BC5 differ from the CPU's" % [
+			SurfaceBake.GPU_SETTING
+		]
+	)
+
+
+func test_a_cache_from_before_the_one_encoder_is_baked_again() -> void:
+	var folder := LIBRARY.path_join("surfaces/slate")
+	assert_true(SurfaceStore.load_set(folder, "surf")["ok"])
+	var path := ""
+	for file in _cache_files():
+		if file.ends_with("slate_normal.ttimg"):
+			path = file
+	assert_ne(path, "")
+	var bytes := FileAccess.get_file_as_bytes(path)
+	assert_not_null(SurfaceCache.decode(bytes), "this version reads its own file")
+	# A version 1 file may hold a GPU bake: never served.
+	bytes[SurfaceCache.MAGIC.length()] = 1
+	_write_bytes(path, bytes)
+	assert_null(SurfaceCache.read(path), "a version 1 cache does not decode")
+	SurfaceStore.reset_stats()
+	assert_true(SurfaceStore.load_set(folder, "surf")["ok"])
+	assert_eq(SurfaceStore.stats["cache_rejects"], 1)
+	assert_eq(SurfaceStore.stats["bakes"], 1, "the old map is baked anew")
+	assert_not_null(SurfaceCache.read(path), "and the file now carries this version")
+
+
 func test_a_damaged_cache_is_refused() -> void:
 	var source := SurfaceBake.bake(
 		Image.load_from_file(
