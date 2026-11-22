@@ -265,6 +265,20 @@ treecube is gone ("The core library"). Step S9 (2026-10-25): per-season override
   surface once per user, to the same pixels; the old folders stay until the cache is cleared). Read with `FileAccess` and `Image.create_from_data` after the
   header, the size the format implies and the digest all check; never a `.res`, never loaded with
   `ResourceLoader` (a `.res` can carry a script). Old hash folders are not pruned yet.
+- **One encoder in every run** (card painter-surface-cache, 2026-11-21). Godot 4.7 compresses BC1
+  and BC5 on the GPU (Betsy) wherever a RenderingDevice exists (a windowed run, the editor) and on
+  the CPU in a headless one (GUT, CI's export, `--import`); BC7 has only the CPU encoder. The two
+  gave different bytes for every core normal and ORM map (39 of 39 each, about one level apart
+  decoded), and the cache served whichever bake came first, so two user folders running the same
+  code drew ground, walls and paving differently (725016 px on one painted view). project.godot
+  sets `rendering/textures/vram_compression/compress_with_gpu=false` (`SurfaceBake.GPU_SETTING`;
+  the setting is read per compress call, measured): a windowed run's normal and ORM bakes are
+  then byte-identical to a headless run's, and the CPU path was the faster one (39 sets, normal
+  plus ORM, windowed: 1.15 s against 1.74 s). TTIMG version 2 retires every older file, which may
+  hold a GPU bake. Albedo bakes still differ in a few flat BC7 blocks run to run (above). The
+  setting also covers the editor's own texture imports, which now match CI's headless export.
+  Probe: `tools/render_jobs/local/painter-surface-cache/probe_encoder.gd` (local, gitignored);
+  test: `test_surface_store.gd` `test_every_run_bakes_with_the_cpu_encoder`.
 - **Exported games cannot compress; core's maps ship baked** (card exportbake, 2026-11-09). Godot
   registers its image compressors in editor builds only: in an exported game every
   `Image.compress` fails with `ERR_UNAVAILABLE` and logs an error (4.7.2 debug template, headless

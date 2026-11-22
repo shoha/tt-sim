@@ -20,7 +20,9 @@ extends RefCounted
 ## (read_shipped) while the format, size and digest still check. A developer run has none.
 
 const MAGIC := "TTIMG"
-const VERSION := 1
+## 2 since card painter-surface-cache: a version 1 file may hold a GPU encoder's normal or ORM
+## bytes (SurfaceBake's class doc), so it is ignored and baked again with the one encoder.
+const VERSION := 2
 const FILE_EXTENSION := "ttimg"
 const HASH_LENGTH := 16
 const MAX_ENGINE_LENGTH := 128

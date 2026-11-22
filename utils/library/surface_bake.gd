@@ -27,8 +27,19 @@ extends RefCounted
 ## normal RG8, the channels BC5 keeps, height L8, full mip chains), which the cache keeps like any
 ## bake. Core never gets there in an export: the export plugin (addons/surface_bake_export) ships
 ## its BC maps in the pack (SurfaceCache.shipped_root); a user library's maps do.
+##
+## One encoder in every run (card painter-surface-cache, 2026-11-21): where a RenderingDevice
+## exists (a windowed run, the editor) Godot 4.7 compresses BC1 and BC5 on the GPU (Betsy) unless
+## GPU_SETTING is off; a headless run (GUT, CI's export, --import) has none and compresses on the
+## CPU. The two give different bytes for every normal and ORM map (39 of 39 core sets each; BC7
+## albedo has no GPU encoder), about one level apart once decoded, so a user folder's ground and
+## walls depended on which kind of run baked its cache first. project.godot turns GPU_SETTING off:
+## every run takes the CPU encoder, whose normal and ORM bytes then match headless and windowed
+## exactly, and which was also faster here (39 sets: 1.15 s against 1.74 s for normal plus ORM).
 
 const KINDS: Array[String] = ["albedo", "normal", "orm", "height"]
+## The project setting that lets Image.compress use the GPU; project.godot keeps it false.
+const GPU_SETTING := "rendering/textures/vram_compression/compress_with_gpu"
 const INFO_KEYS: Array[String] = ["label", "kind", "role", "tile_m", "albedo_mean_linear"]
 const ROLES: Array[String] = ["ground", "cliff", "built"]
 ## Image side caps: a map is at least one block and at most this many pixels a side.
