@@ -2858,6 +2858,39 @@ ms each), the second swap's `_finish_task` (about 130 ms: the field update and a
 body), `join_line` and `through_rises` (about 33 ms each) and the river preview (17 ms on the
 release frame).
 
+### Held strokes (card painter-held-stroke, 2026-11-22)
+
+A held sculpt stroke paid two followers every frame: the water field's update (any ground edit
+within reach of water flushes it, so even the "dry" raise beside the hilltop's generated stream did,
+14 to 20 ms every fourth frame) and the ground's shading field and zone maps (6 ms). While a stroke is
+held (`AuthoredTerrain.stroke_held`, set by `HeightEditor.begin`, cleared before the stroke's last
+edits), `PainterWaterField` runs its update, mesh arrays and texture images on a WorkerThreadPool task
+over a clone of the field and a copy-on-write snapshot of the document and lands the result a frame
+or two later, and `PainterSurfaces` rebuilds the shading field and zone maps every third frame
+(`ZONE_HELD_EVERY`). The stroke's end redoes its whole rect at once, so what lands after a stroke
+is the synchronous result: the `ident.json` digests equal main's at every step.
+
+Windowed, quiet (lane held), the bench job (320 ft hilltop forest, seed 1234), main 1043fd73 in a
+worktree of its own and the branch, interleaved, three runs each (rec cpu, pressed frames, ms;
+`D:/dev/tabletop/docs/research/2026-11-22-terraform-audit/today_attrib/held_stroke/ab/`):
+
+| | main (3 runs) | branch (3 runs) |
+| --- | --- | --- |
+| held raise dry, median / p95 / max | 9.68-10.11 / 24.57-25.65 / 27.10-29.82 | 3.68-3.92 / 10.00-10.65 / 15.44-25.19 |
+| held raise over a river, median / p95 / max | 9.99-10.19 / 28.87-30.74 / 29.90-35.94 | 3.74-3.97 / 10.28-10.31 / 11.33-14.58 |
+| wall placement frame (game) | 190.9, 193.2, 207.8 | 193.4, 198.2, 189.2 |
+
+The wall frame is the `walls.place` call itself and runs none of this card's code; the 128.2 ms of
+the card's first main run was an outlier, not the baseline. The dry stroke's one slow frame (about
+17 ms of a 20-27 ms frame, once per stroke, about frame 96 of 210) is the deferred zone rebuild over
+a 78 x 78-sample rect where the stroke's other rebuilds take 46 x 46 (shading field sync 9.2 ms, zone
+maps 7.2): the stroke's own edit rect grows there for a frame (what makes it grow, and main's cost
+on that frame, are not checked; main's held frames run that rebuild every frame and are slower
+throughout).
+A per-handler timer on every `process_frame` connection put every handler at 0.01 ms in that frame.
+Left: the water field's check rect still includes the rule-field reach (7 samples) that the field does
+not read; the worker takes the cost off the frame, so it was not narrowed.
+
 ## In-game authoring phase 4 (water): pinned performance pass (2026-09-27)
 
 The phase 4 pass: authored maps with water in play against the same maps without it, the

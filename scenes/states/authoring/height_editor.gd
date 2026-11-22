@@ -105,7 +105,16 @@ func begin(op: int, target_y: float = 0.0) -> bool:
 		return false
 	_label = LABELS.get(op, "Sculpt")
 	begin_snap(_stroke.start_heights, true)
+	_set_held(true)
 	return true
+
+
+## Tells the terrain whether a stroke is held (AuthoredTerrain.stroke_held): cleared before the
+## stroke's last edits, so its followers take those, and the settle, exactly.
+func _set_held(held: bool) -> void:
+	var e := _editor()
+	if e != null and is_instance_valid(e.terrain):
+		e.terrain.stroke_held = held
 
 
 ## True while a sculpt stroke is in progress.
@@ -143,6 +152,7 @@ func end_stroke() -> bool:
 	var e := _editor()
 	var stroke := _stroke
 	_stroke = null
+	_set_held(false)
 	# A tier finishes rising onto its goal (a quick stroke leaves a whole tier).
 	stroke.complete()
 	# The last frame's changes, then everything left, the collision included (no stroke now).
@@ -196,6 +206,7 @@ func cancel_stroke() -> void:
 	var e := _editor()
 	var stroke := _stroke
 	_stroke = null
+	_set_held(false)
 	_snap_windows.clear()
 	var rect := stroke.revert()
 	for cell in _snap_start:
