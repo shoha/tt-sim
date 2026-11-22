@@ -2621,6 +2621,47 @@ dressing (it is stored compressed in the entry). A sculpt stroke on a map with w
 recomputed the dressing on the main thread at its release (about 110-175 ms on a 200 ft map,
 `WaterEditor.refresh`); since P4-5 it runs on the same worker (below).
 
+## The painted look after a water or height edit (card painter-edit-hitch, 2026-11-21)
+
+Every river and every sculpt stroke on a map with water was followed by one or two 85-129 ms
+frames in the painted look. Cause (attributed by scoped timers and an A/B, handoff
+`painter-edit-hitch.md`): `AuthoredTerrain.refresh_water_dressing()` emitted `ground_edited`
+over the WHOLE grid after every dressing refresh (a raise reaches it through
+`WaterEditor.refresh` -> `_land_dressing`), so the zone maps rebuilt whole (62-65 ms, the deferred
+`PainterSurfaces._rebuild_zone`) and the water field redid the whole grid (17-38 ms, its
+`process_frame` flush). Now it emits only the samples whose dressing bytes changed
+(`WaterDressing.changed_rect`: row slices compared, a changed row's ends found by halving),
+nothing when none did (a raise away from water), and the whole grid only after a layer re-table
+(the first water on a map). The water field keeps its copy of the heights current for edits away
+from water (it used to be healed by the whole-grid redo), so every update still equals a full
+build (`test_dressing_edit_rect.gd`).
+
+Windowed render job (`local/painter-edit-hitch/hitch2.json`: 200 ft forest map, painted, vsync
+off, the real-pointer river probe; worst frame of the 120 after each release; three runs each,
+main twice in the same session):
+
+| Stroke | main | after |
+| --- | --- | --- |
+| river, first on the map | 84.6, 84.0 | 85.9, 81.8, 85.0 |
+| river, no rise (2nd, 3rd) | 88.8-97.0 | 32.5-37.8 |
+| river through a 3 m wall (3 strokes) | 104.0-123.4 | 28.1-42.0 |
+| terrain raise (3 strokes) | 111.3-114.4 | 11.1-31.6 |
+| paint (3 strokes) | 11.5-13.4 | 10.3-12.5 |
+| placed boulder (3) | 15.3-20.1 | 15.9-21.4 |
+| torture map: river / raise beside its pond (one run) | 72.1 / 66.6 | 41.8 / 14.7 |
+
+Left over 33 ms, separate causes: the river landing's zone rect update (Dq 10-15 ms) and the
+water field's rect flush (B 15-16 ms) fall in one frame (34-40 ms); a scatter landing's
+`PainterTrees.sync` (14.6-15.5 ms a batch) with the rock keeper's landing (`rocks` 22 ms) in one
+frame (37-42 ms); the first river on a map rebuilds the zone maps whole twice (+11 and +13
+frames, 65-72 ms: the plan's wet flag changes on the carve's frame, then the re-table marks the
+whole grid), and the session's first release costs 60 ms in `_process` (first use). Results are
+unchanged: heights, water bodies, dressing, zone maps and the scatter's rows match main after
+every API-driven edit (`ident.json`), the water field from the second river on (before it main's
+field held a stale copy of the heights a shape edit changed, which the branch keeps current); the
+branch's captures differ from main's by fewer pixels (318-732, scattered) than main's own two runs
+do (1250-1462), so a 0 px check needs a capture that is deterministic on main first.
+
 ## In-game authoring phase 4 (water): pinned performance pass (2026-09-27)
 
 The phase 4 pass: authored maps with water in play against the same maps without it, the

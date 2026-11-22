@@ -17,7 +17,10 @@ extends RefCounted
 ## - a water edit: AuthoredWater.refreshed fires; each body's signature (and the pond mask's
 ##   samples) is compared with the last one, and the rects of the changed bodies, as they were
 ##   (kept per body) and as they are (WaterField.rect_of_bodies), are redone;
-## - a ground edit: AuthoredTerrain.ground_edited(rect) near water, redone for that rect.
+## - a ground edit: AuthoredTerrain.ground_edited(rect) near water, redone for that rect; away
+##   from water only the field's copy of the heights is taken (_take_ground), so a later
+##   update that reads them sees what a full build would (the dressing refresh no longer marks the
+##   whole grid after every water or height edit, card painter-edit-hitch).
 ## Ground edits arrive in bursts, so rects are merged and redone once per frame. The mesh is rebuilt
 ## whole from the field after an update (about 50 ms on a 245 x 245 grid: GDScript over the field's
 ## arrays); an update that changed nothing builds nothing.
@@ -305,6 +308,8 @@ func _on_ground_edited(sample_rect: Rect2i) -> void:
 		return
 	var near := sample_rect.grow(GROUND_REACH).intersection(Rect2i(Vector2i.ZERO, field.size))
 	if not _has_water(near):
+		# Nothing to redo, but the field's ground copy follows: a later update near here reads it.
+		_take_ground(field, _terrain.document, near)
 		return
 	_dirty = _merge(_dirty, sample_rect.grow(WaterField.RING_MARGIN))
 	if not _flush_queued:
@@ -312,6 +317,25 @@ func _on_ground_edited(sample_rect: Rect2i) -> void:
 		var tree := Engine.get_main_loop() as SceneTree
 		if tree != null:
 			tree.process_frame.connect(_flush_dirty, CONNECT_ONE_SHOT)
+
+
+## Takes `doc`'s heights into `f`'s copy of the ground over `rect` (inside the grid) without
+## redoing anything: an edit away from water, whose samples a later update reads as unchanged
+## inputs, so the field stays what a full build gives. A rect over an eighth of the grid takes the
+## whole copy (one array copy beats the per-sample loop).
+static func _take_ground(f: WaterField, doc: MapDocument, rect: Rect2i) -> void:
+	var heights := doc.heights
+	if heights.size() != f.ground.size():
+		return
+	if rect.get_area() * 8 > heights.size():
+		f.ground = heights.duplicate()
+		return
+	var ground := f.ground
+	for z in range(rect.position.y, rect.end.y):
+		var row := z * f.size.x
+		for i in range(row + rect.position.x, row + rect.end.x):
+			ground[i] = heights[i]
+	f.ground = ground
 
 
 func _flush_dirty() -> void:

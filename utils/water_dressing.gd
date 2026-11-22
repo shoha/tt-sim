@@ -184,6 +184,75 @@ static func refresh(doc: MapDocument) -> PackedByteArray:
 	return field
 
 
+## The sample rect (grid coordinates) where field `after` differs from field `before` on a grid of
+## `columns` x `rows` samples: the bounds of every changed sample, empty when the bytes are equal,
+## the whole grid when the fields' sizes differ (water appeared or went). The rows are compared as
+## slices and a changed row's ends found by halving, so the cost stays well under a millisecond
+## per hundred changed rows rather than a GDScript loop over the bytes (card painter-edit-hitch:
+## what a dressing refresh marks as edited).
+static func changed_rect(
+	before: PackedByteArray, after: PackedByteArray, columns: int, rows: int
+) -> Rect2i:
+	var grid := Rect2i(0, 0, columns, rows)
+	if before.size() != after.size() or after.size() != columns * rows * CHANNELS:
+		return grid if not (before.is_empty() and after.is_empty()) else Rect2i()
+	if before == after:
+		return Rect2i()
+	var row_bytes := columns * CHANNELS
+	var top := -1
+	var bottom := -1
+	var left := columns
+	var right := -1
+	for z in rows:
+		var a := z * row_bytes
+		var b := a + row_bytes
+		if after.slice(a, b) == before.slice(a, b):
+			continue
+		if top < 0:
+			top = z
+		bottom = z
+		# Only the columns outside the bounds so far can widen them.
+		var l_end := a + left * CHANNELS
+		if l_end > a and after.slice(a, l_end) != before.slice(a, l_end):
+			left = _column_of(_first_difference(before, after, a, l_end) - a)
+		var r_start := a + (right + 1) * CHANNELS
+		if r_start < b and after.slice(r_start, b) != before.slice(r_start, b):
+			right = _column_of(_last_difference(before, after, r_start, b) - a)
+	return Rect2i(left, top, right - left + 1, bottom - top + 1)
+
+
+@warning_ignore("integer_division")
+static func _column_of(byte_offset: int) -> int:
+	return byte_offset / CHANNELS
+
+
+## The first index of [lo, hi) where `a` and `b` differ; they must differ there.
+static func _first_difference(a: PackedByteArray, b: PackedByteArray, lo: int, hi: int) -> int:
+	while hi - lo > 16:
+		var mid := (lo + hi) >> 1
+		if a.slice(lo, mid) != b.slice(lo, mid):
+			hi = mid
+		else:
+			lo = mid
+	while a[lo] == b[lo]:
+		lo += 1
+	return lo
+
+
+## The last index of [lo, hi) where `a` and `b` differ; they must differ there.
+static func _last_difference(a: PackedByteArray, b: PackedByteArray, lo: int, hi: int) -> int:
+	while hi - lo > 16:
+		var mid := (lo + hi) >> 1
+		if a.slice(mid, hi) != b.slice(mid, hi):
+			lo = mid
+		else:
+			hi = mid
+	var i := hi - 1
+	while a[i] == b[i]:
+		i -= 1
+	return i
+
+
 ## refresh()'s field without storing it: reads `doc` only, so a loader's worker can compute
 ## it while other workers read the same document (MapSourceLoader.prepare_authored_work).
 static func field_of(doc: MapDocument) -> PackedByteArray:
