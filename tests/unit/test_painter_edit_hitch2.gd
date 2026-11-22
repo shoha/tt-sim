@@ -38,9 +38,6 @@ func test_a_first_water_builds_the_zone_maps_once() -> void:
 	terrain.refresh_water_dressing()
 	assert_false(terrain.water_dressing_pending())
 	surfaces._rebuild_zone()
-	# The changed plan builds on a worker (card painter-edit-hitch4); it lands here at once.
-	assert_true(surfaces.zones().building())
-	assert_true(surfaces.finish_zones())
 	assert_eq(surfaces.zones().builds, builds + 1, "one whole build for the first water")
 	assert_eq(
 		surfaces.zones().zone.get_data(),

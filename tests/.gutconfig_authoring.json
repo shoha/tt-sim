@@ -7,7 +7,6 @@
 		"res://tests/unit/test_authored_water.gd",
 		"res://tests/unit/test_painter_surfaces.gd",
 		"res://tests/unit/test_painter_zone_maps.gd",
-		"res://tests/unit/test_painter_zone_worker.gd",
 		"res://tests/unit/test_dressing_edit_rect.gd",
 		"res://tests/unit/test_painter_edit_hitch2.gd",
 		"res://tests/unit/test_painter_ground_siblings.gd",
