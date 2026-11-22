@@ -17,6 +17,11 @@ extends RefCounted
 ## The gust field follows the global wind clock instead (autoloads/wind.gd): freeze_wind pins
 ## it at 0 and thaw_wind releases it.
 const WIND_SPEEDS: Array[String] = ["sway_speed", "flutter_speed", "wind_strength"]
+## The lo-fi pass's grain clock (shaders/lofi_canvas.gdshader) and where pin_grain() holds it.
+## On TIME the grain moved 0.67-1.3 million pixels of the window capture by 1-3 levels between two
+## runs of one job, the clock frozen or not (card painter-pixel-noise, 2026-11-22).
+const GRAIN_CLOCK := "grain_clock"
+const GRAIN_PIN := 0.0
 ## Frames in a row the camera must stand still after a framing step placed it (framed()).
 const VIEW_REST_FRAMES := 3
 ## How long (seconds) each of framed()'s waits lasts before the step carries on and logs it.
@@ -50,6 +55,21 @@ static func freeze_wind(root: Node, saved: Dictionary) -> int:
 		for uniform: String in present:
 			material.set_shader_parameter(uniform, 0.0)
 	return frozen
+
+
+## Pins the film grain of the lo-fi material on `container` (the map's viewport container) at
+## GRAIN_PIN, so every capture draws the same grain whatever TIME the run has reached. Returns
+## whether it pinned one (false with no container, no material or a shader without the clock).
+static func pin_grain(container: CanvasItem) -> bool:
+	if container == null or not is_instance_valid(container):
+		return false
+	var material := container.material as ShaderMaterial
+	if material == null or material.shader == null:
+		return false
+	if not _has_uniform(material.shader, GRAIN_CLOCK):
+		return false
+	material.set_shader_parameter(GRAIN_CLOCK, GRAIN_PIN)
+	return true
 
 
 ## The WIND_SPEEDS names `shader` declares.

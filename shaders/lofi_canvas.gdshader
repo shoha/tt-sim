@@ -91,6 +91,10 @@ group_uniforms film_grain;
 uniform float grain_intensity : hint_range(0.0, 0.1) = 0.012;
 uniform float grain_speed : hint_range(0.0, 1.0) = 0.2;
 uniform float grain_scale : hint_range(0.05, 0.5) = 0.12;
+// The grain's clock: negative follows TIME (the game), 0 or more pins it there. Render jobs pin
+// it for every capture (tools/render_jobs/steady.gd pin_grain): on TIME the grain alone moved
+// 0.67-1.3 million pixels by 1-3 levels between two runs of one job (card painter-pixel-noise).
+uniform float grain_clock = -1.0;
 group_uniforms;
 
 // ============================================================================
@@ -241,7 +245,7 @@ void fragment() {
 	// -------------------------------------------------------------------------
 	// EFFECT 5: FILM GRAIN
 	// -------------------------------------------------------------------------
-	float noise = get_grain(FRAGCOORD.xy, TIME, grain_speed, grain_scale);
+	float noise = get_grain(FRAGCOORD.xy, grain_clock >= 0.0 ? grain_clock : TIME, grain_speed, grain_scale);
 	vec3 grain_color = vec3(noise);
 	
 	float pixel_luma = dot(color, vec3(0.299, 0.587, 0.114));

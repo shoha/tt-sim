@@ -924,6 +924,10 @@ func _capture(step: Dictionary) -> bool:
 		if _wind_frozen:
 			# Set before this frame draws, so the frame grabbed below already holds still.
 			Steady.freeze_wind(get_tree().root, _wind_saved)
+		# Every capture: the lo-fi grain at a fixed clock (Steady.pin_grain), so two runs of a
+		# job compare without the grain's TIME phase.
+		var map := gm()
+		Steady.pin_grain(map.viewport_container if map != null else null)
 		RenderingServer.frame_post_draw.connect(_grab.bind(String(step.name)), CONNECT_ONE_SHOT)
 	return _state.phase == 2
 

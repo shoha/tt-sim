@@ -131,6 +131,45 @@ same pixels from the same inputs. Three ops give that (REFERENCE.md "State and m
   `_camera_ss_town` and `_camera_ss_wild` (the `_camera_` prefix is one `water.gd` accepts);
   `streetseam_cleanup` removes every `_camera_*` level.
 
+### Comparing runs and worktrees
+
+Measured on card painter-pixel-noise (2026-11-22; evidence and masks in
+`D:/dev/tabletop/docs/research/2026-11-22-pixel-noise/`): one job (a summer forest, two painted rivers,
+wind frozen, the water's clock pinned, three full-size views) run twice in one worktree and once in a
+second worktree of the same commit.
+
+- **The worktree is not an input.** Two worktrees of one commit, each with its own user folder,
+  `.godot/` import and absolute path, differ no more than two runs in one worktree: a second-worktree
+  run matched a first-worktree run to 0 pixels in two of the three views. No cache, import or path
+  needs swapping before an A/B across worktrees.
+- **The lo-fi film grain was the big number, and every capture now pins it.** The grain
+  (`shaders/lofi_canvas.gdshader`) ran on the engine's `TIME`, which `falls.gd clock {scale: 0}`
+  freezes at whatever the run had reached, so the window captures (`<name>.png`) of two runs differed
+  on 0.67-1.3 million pixels by 1-3 levels while the raw `_sub` captures did not. Every `capture` now
+  sets the grain's own clock (`grain_clock`) to 0 first (`Steady.pin_grain`); the game keeps it
+  on `TIME`. After the fix the window captures of the two worktrees were identical wherever the
+  `_sub` ones were.
+- **What remains: a few hundred isolated pixels per wide view, run to run.** 500-1200 single pixels
+  (0.03-0.06 %, up to 185 levels) on the painted birch crowns' fine strokes and along a river's bank
+  edge flip between runs; at zoom 12 the close views were usually identical (0 px), once 600-1000 px.
+  They do not move when `TIME` moves within one run (two captures 0.7 s of clock apart: 0 px), so
+  they come from how a run built the scene, not from a clock. Suspect, not yet tested: the painted
+  trees install nearest the camera first (`PainterTrees._grow` sorts by the camera's position at that
+  moment) on a per-frame time budget, so the install order, and with it draw order and atlas
+  packing, can differ run to run.
+
+To compare two runs, run the same job with `--out` per arm and diff the folders with
+`capture_diff.gd`, which prints one line per pair and, with a mask folder, writes masks that show
+where the pixels differ:
+
+```
+godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/render_jobs/capture_diff.gd -- <folder a> <folder b> <mask folder or -> pix_f2.png pix_f2_sub.png
+```
+
+Read the result against that floor: a few hundred scattered single pixels on fine foliage or a
+water edge is run noise; a connected region, or thousands of pixels, is a real change. Run one arm
+twice when you need the floor of a particular view.
+
 A species round is then: `wait_title`, `library_dev` (a plantgen library folder as the developer override), `new_map`,
 `wait_ready` (`settle` 0.5), `no_autosave`, `place_seed`, `wind`, the probes' setup, and for
 each view its camera ops, a `settle` and the `capture`. Measured on the alpine bellflower
