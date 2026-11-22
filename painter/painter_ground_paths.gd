@@ -119,16 +119,30 @@ static func _only_of(planes: Array[PackedFloat32Array]) -> int:
 ## (PainterFields.bind) and the meadow swathes' seed (PainterMeadowSwathes.bind); returns the slot
 ## ids. With `slot_map` false the slot map is left as the materials have it (the caller knows the
 ## painted surfaces did not change since: a sculpt step), which skips its pass over every sample.
-static func bind(materials: Array, doc: MapDocument, slot_map := true) -> PackedStringArray:
+## `presence` (the caller's, kept across calls) answers which slots are painted from the rows that
+## changed: with fewer than two the slot map is null and `path_only` alone is bound, with no pass
+## over the samples (a path stroke's frame, card painter-wall-path); the same values as without it.
+static func bind(
+	materials: Array, doc: MapDocument, slot_map := true, presence: PainterPathPresence = null
+) -> PackedStringArray:
 	PainterFields.bind(materials, doc)
 	PainterMeadowSwathes.bind(materials, doc)
 	var ids := slots(doc)
 	if not slot_map:
 		return ids
-	var planes := _planes(doc, ids)
-	var image := _slot_image_of(doc, planes)
-	var texture: ImageTexture = null if image == null else ImageTexture.create_from_image(image)
-	var only := -1 if image != null else _only_of(planes)
+	var texture: ImageTexture = null
+	var only := -1
+	var painted := PackedInt32Array()
+	if presence != null:
+		presence.update(doc)
+		painted = presence.painted_slots(doc, ids)
+	if presence != null and painted.size() < 2:
+		only = painted[0] if painted.size() == 1 else -1
+	else:
+		var planes := _planes(doc, ids)
+		var image := _slot_image_of(doc, planes)
+		texture = null if image == null else ImageTexture.create_from_image(image)
+		only = -1 if image != null else _only_of(planes)
 	for material: ShaderMaterial in materials:
 		material.set_shader_parameter(&"path_map", texture)
 		material.set_shader_parameter(&"path_map_present", texture != null)

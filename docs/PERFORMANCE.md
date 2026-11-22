@@ -2987,6 +2987,50 @@ A per-handler timer on every `process_frame` connection put every handler at 0.0
 Left: the water field's check rect still includes the rule-field reach (7 samples) that the field does
 not read; the worker takes the cost off the frame, so it was not narrowed.
 
+### Walls and paths (card painter-wall-path, 2026-11-22)
+
+Attributed with named timers on the bench map (320 ft hilltop forest, seed 1234, two rivers drawn first):
+
+- **The wall's place frame** (177-208 ms in the earlier cards' bench) was two things. About 95 ms was
+  the render job loading the `walls.gd` probe script in that frame (a bench artifact: the bench now
+  loads it before recording). The rest, 103-106 ms, was a first wall's first use inside
+  `AuthoredWalls._wall_node`: `MasonryTextures.textures()` decoding and mipmapping the baked masonry
+  on the main thread (55.6 ms) and the stone, moss and masonry materials building their shaders as the
+  mesh took them (about 28 ms). The wall's own work is small: `WallGeometry.build_one` 2.7-3.0 ms, the
+  editor's `edited` fan-out 3.4, the scatter request 1.0, the painter's dressing 0.4. `WallWarmup`
+  (started by `WallTool.prepare`, once per map) now decodes the masonry on a worker (polled, never
+  waited on unfinished) and then asks each wall material of the map's styles for its RID, one a frame
+  (`AuthoredWalls.warm_list`: the same cached objects the wall then takes). Those frames cost 15.5-17.3
+  ms each at tool open, under the tool open's own 19-21 ms frame.
+- **A path stroke's pressed frame** (46-48 ms median) was `PainterGroundPaths.bind` -> `_planes`
+  (42 ms): a GDScript pass over every sample's four entries on every frame of a paint stroke, only to
+  learn which slots are painted (with one path surface there is no slot map, only `path_only`).
+  `PainterPathPresence` keeps a count of painted pairs per index byte: each bind compares the weights
+  with its last copy row by row, finds each changed row's span by halving slices, and recounts that
+  span. With fewer than two path slots painted, bind skips the planes (about 1 ms in all); two or more
+  still take the full pass and the slot image (not on this bench).
+
+Windowed, quiet (lane held), interleaved, main 1c1f8aae and the branch, three runs each (game ms;
+`D:/dev/tabletop/docs/research/2026-11-22-terraform-audit/today_attrib/wall_path/bench2_*ab*_frames.jsonl`):
+
+| | main 1/2/3 | branch 1/2/3 |
+| --- | --- | --- |
+| wall place frame | 86.7 / 105.4 / 103.7 | 16.8 / 17.3 / 15.6 |
+| frames over 33 ms after it | 0 / 0 / 0 | 0 / 0 / 0 |
+| Wall tool open, worst frame | 20.4 / 20.9 / 20.1 | 19.2 / 20.3 / 20.5 |
+| path pressed median / p95 | 48.1 / 62.8, 45.8 / 60.6, 46.0 / 60.3 | 4.01 / 7.43, 3.94 / 7.41, 4.00 / 7.72 |
+| path pressed max (its first frame) | 370.5 / 88.6 / 92.5 | 49.8 / 47.9 / 50.1 |
+| path release frame | 17.0 / 16.3 / 16.7 | 15.6 / 15.5 / 16.2 |
+| held raise dry, median / p95 (rec cpu) | 4.08 / 10.65, 3.96 / 10.90, 3.82 / 10.00 | 3.75 / 10.52, 4.09 / 10.60, 4.02 / 10.42 |
+| first river release | 29.4 / 28.8 / 29.7 | 28.0 / 27.8 / 28.6 |
+| second river, frames over 33 ms (sum) | 2 (73.4) / 2 (73.3) / 2 (74.3) | 2 (72.2) / 2 (71.0) / 2 (74.3) |
+
+The path's first frame is left: the first dab of a surface new to the map re-tables the ground layers
+(`AuthoredTerrain.update_ground_region`, 25 ms of layer binding, 35 ms in all). Same bytes: the
+`ident.json` digests equal main's at every step, and `test_painter_wall_path.gd` checks the painted
+slots and every bound path parameter against the full pass through random edits, and a warmed wall's
+meshes and materials against a cold one's.
+
 ## In-game authoring phase 4 (water): pinned performance pass (2026-09-27)
 
 The phase 4 pass: authored maps with water in play against the same maps without it, the

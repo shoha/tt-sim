@@ -139,6 +139,23 @@ func apply(built: Dictionary) -> void:
 	version += 1
 
 
+## The materials a stone wall or a fence of each style in `styles` (biome ids; "" the default)
+## wears, made now through this node's cache, so the walls built later take these objects
+## (WallWarmup asks each for its RID ahead of the first wall). The masonry only once its textures
+## are made (MasonryTextures.made: making it would decode them here).
+func warm_list(styles: PackedStringArray) -> Array[Material]:
+	var out: Array[Material] = []
+	for style in styles:
+		out.append(_stone_material(style))
+		var moss := AuthoredCrossings.moss_amount(style, _palette_root) > 0.0
+		if moss and not out.has(_moss_material()):
+			out.append(_moss_material())
+		if WallGeometry.textured and MasonryTextures.made():
+			out.append(_masonry_material(style))
+		out.append(_wood_material(style))
+	return out
+
+
 ## The key each wall's node was built with (id -> key; tests).
 func keys() -> Dictionary:
 	return _keys.duplicate()
