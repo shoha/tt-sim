@@ -98,6 +98,66 @@ func remove(id: int) -> void:
 		prims.remove_at(at)
 
 
+## Removes the primitives `remove` (ids) and inserts `insert` ([{"id", "kind", "flags", "data"}],
+## in order) at position `at` of the list left after the removal (clamped), then sets next_id to
+## `new_next` when it is 1 or more: undo, folding and the wall sync restore ids and order exactly
+## this way (docs/systems/terraform.md "The editor"). All or nothing: false, and nothing changed,
+## when a removed id is missing or repeated, an inserted id is in use after the removal,
+## repeated, outside 1..MAX_ID or not below the resulting next_id, a flag outside KNOWN_FLAGS is
+## set, a datum is not a float array, a kept id is not below the resulting next_id, or a cap would
+## be passed. Kind layouts are the caller's to check
+## (TerraSession.apply checks each against TerraKinds.problem).
+func splice(remove: Array, insert: Array, at: int, new_next := -1) -> bool:
+	var gone := {}
+	var freed := 0
+	for id: Variant in remove:
+		var p := find(int(id))
+		if p.is_empty() or gone.has(int(id)):
+			return false
+		gone[int(id)] = true
+		freed += (p["data"] as PackedFloat32Array).size()
+	var next := new_next if new_next >= 1 else next_id
+	var seen := {}
+	var added := 0
+	for q: Variant in insert:
+		if not q is Dictionary or not q.get("data") is PackedFloat32Array:
+			return false
+		var id := int(q.get("id", 0))
+		var in_use := index_of(id) >= 0 and not gone.has(id)
+		if id < 1 or id > MAX_ID or id >= next or in_use or seen.has(id):
+			return false
+		if int(q.get("flags", 0)) & ~KNOWN_FLAGS != 0:
+			return false
+		seen[id] = true
+		var size := (q["data"] as PackedFloat32Array).size()
+		if size > MapDocument.MAX_TERRA_FLOATS_PER_PRIM:
+			return false
+		added += size
+	if prims.size() - gone.size() + insert.size() > MapDocument.MAX_TERRA_PRIMS:
+		return false
+	if float_count() - freed + added > MapDocument.MAX_TERRA_FLOATS or next > MAX_ID + 1:
+		return false
+	var kept: Array[Dictionary] = []
+	for p in prims:
+		if not gone.has(int(p["id"])):
+			if int(p["id"]) >= next:
+				return false
+			kept.append(p)
+	var pos := clampi(at, 0, kept.size())
+	for q: Dictionary in insert:
+		var entry := {
+			"id": int(q["id"]),
+			"kind": int(q.get("kind", -1)),
+			"flags": int(q.get("flags", 0)),
+			"data": (q["data"] as PackedFloat32Array).duplicate(),
+		}
+		kept.insert(pos, entry)
+		pos += 1
+	prims = kept
+	next_id = next
+	return true
+
+
 ## Mutes or unmutes a primitive (flag bit 0).
 func set_muted(id: int, muted: bool) -> void:
 	var p := find(id)

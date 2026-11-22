@@ -15,7 +15,9 @@ extends RefCounted
 ## no samples or 4 bytes a sample; water bodies and crossings through MapWaterIO's and
 ## MapCrossingIO's own readers and rules; rows MapDocumentIO.row_ok() accepts, in the cell they
 ## are filed under, that cell on the map, at most MAX_OP_ROWS an op; biome, surface and asset
-## ids the palette has. The palette's id tables are built once per palette and cached
+## ids the palette has; terrain edits against the session's ops, the id range, finite floats, the
+## caps and each added primitive's kind (_terra_edits), on a map with terrain primitives only.
+## The palette's id tables are built once per palette and cached
 ## (palette_ids(); rebuilding them was most of the probe's 1.1 to 2.6 ms per decode).
 
 ## Rows one op may carry, over all its cells.
@@ -41,8 +43,25 @@ const ARITY := {
 	"walls": 2,
 	"structures": 2,
 	"settlements": 2,
-	"props": 2
+	"props": 2,
+	"terra": 4,
+	"terra_check": 2,
 }
+## The terrain kind registry, by path (TerraKinds names the terraform scripts, which the start-up
+## script graph leaves out; MapSourceLoader's TERRA_* likewise).
+const TERRA_KINDS := "res://utils/terraform/terra_kinds.gd"
+## The terrain session edit ops a "terra" op may carry (TerraSession.apply).
+const TERRA_OPS: Array[String] = [
+	"add", "replace", "append", "remove", "mute", "unmute", "move", "splice"
+]
+## Most edits one "terra" op carries (a fold's splice inverse is one edit per primitive).
+const MAX_TERRA_EDITS := MapDocument.MAX_TERRA_PRIMS + 64
+## TerraDoc.MAX_ID and TerraDoc.KNOWN_FLAGS (by value, as TERRA_KINDS is by path).
+const TERRA_MAX_ID := 0x7FFFFFFF
+const TERRA_KNOWN_FLAGS := 1
+## Most digests a "terra" op carries, and the longest name.
+const MAX_TERRA_DIGESTS := 32
+const MAX_DIGEST_NAME := 32
 
 ## palette root -> {"palette": the PaletteLibrary dictionary the tables were built from,
 ## "biomes", "surfaces", "assets": id -> true}.
@@ -126,6 +145,18 @@ func read(kind: String, args: Array, redo: bool = true) -> Array:
 			out = [_settlement_list(args[0]), _area(args[1])]
 		"props":
 			out = [args[0], _cell_rows(args[0], args[1])]
+		"terra":
+			var ground: Variant = args[1]
+			var empty := ground is Dictionary and (ground as Dictionary).is_empty()
+			out = [
+				_terra_edits(args[0]),
+				{} if empty else _record(ground, false),
+				_digest_text(args[2]),
+				_digest_table(args[3]),
+			]
+		"terra_check":
+			_terra_edits([])
+			out = [_digest_text(args[0]), _digest_table(args[1])]
 	return out if problem == "" else []
 
 
@@ -440,4 +471,173 @@ func _cell_rows(cell: Variant, value: Variant) -> Dictionary:
 				_fail("a row is degenerate or outside its cell")
 				return out
 		out[asset_id] = (rows as PackedFloat32Array).duplicate()
+	return out
+
+
+# ============================================================================
+# Terrain edits ("terra", "terra_check")
+# ============================================================================
+
+
+## A fresh copy of a terrain gesture side's session edits (TerraSession.apply's forms), each
+## checked: an op of TERRA_OPS, ids in 1..TERRA_MAX_ID, finite floats within the per-primitive
+## cap and the document's in all, an added or inserted primitive valid for its kind
+## (TerraKinds.problem), no reserved flag, at most MAX_TERRA_EDITS edits. Refused on a map without
+## a terrain section. Whether an id names a primitive is the session's to check when it applies.
+func _terra_edits(value: Variant) -> Array:
+	if _doc.terra == null:
+		_fail("a terrain edit for a map without terrain primitives")
+		return []
+	if not value is Array or (value as Array).size() > MAX_TERRA_EDITS:
+		_fail("terrain edits are not a short list")
+		return []
+	var kinds: GDScript = load(TERRA_KINDS)
+	var out: Array = []
+	var floats := 0
+	for change: Variant in value:
+		if not change is Dictionary or not TERRA_OPS.has(change.get("op")):
+			_fail("a terrain edit is not one of the session's ops")
+			return []
+		var op := String(change.op)
+		var fresh := {"op": op}
+		match op:
+			"add":
+				fresh.merge(_terra_prim(change, kinds, false))
+			"replace", "append":
+				fresh["id"] = _terra_id(change.get("id"))
+				fresh["data"] = _terra_floats(change.get("data"))
+			"remove", "mute", "unmute":
+				fresh["id"] = _terra_id(change.get("id"))
+			"move":
+				fresh["id"] = _terra_id(change.get("id"))
+				fresh["to"] = _terra_count(change.get("to"), MapDocument.MAX_TERRA_PRIMS)
+			"splice":
+				fresh.merge(_terra_splice(change, kinds))
+		if problem != "":
+			return []
+		floats += _terra_float_count(fresh)
+		if floats > MapDocument.MAX_TERRA_FLOATS * 2:
+			_fail("terrain edits carry too many floats")
+			return []
+		out.append(fresh)
+	return out
+
+
+## Floats one checked edit carries (its data, or a splice's inserted primitives').
+static func _terra_float_count(change: Dictionary) -> int:
+	var count := (change.get("data", PackedFloat32Array()) as PackedFloat32Array).size()
+	for q: Dictionary in change.get("insert", []):
+		count += (q.data as PackedFloat32Array).size()
+	return count
+
+
+## A splice's fields: removed ids (distinct), inserted primitives, the position and next_id.
+func _terra_splice(change: Dictionary, kinds: GDScript) -> Dictionary:
+	var removed: Variant = change.get("remove", [])
+	var inserted: Variant = change.get("insert", [])
+	if not removed is Array or not inserted is Array:
+		_fail("a splice needs its id and primitive lists")
+		return {}
+	if (removed as Array).size() + (inserted as Array).size() > MAX_TERRA_EDITS:
+		_fail("a splice past the primitive cap")
+		return {}
+	var ids: Array = []
+	var seen := {}
+	for id: Variant in removed:
+		var checked := _terra_id(id)
+		if seen.has(checked):
+			_fail("a splice removes an id twice")
+		seen[checked] = true
+		ids.append(checked)
+	var prims: Array = []
+	for q: Variant in inserted:
+		prims.append(_terra_prim(q, kinds, true))
+		if problem != "":
+			return {}
+	var next: Variant = change.get("next_id", -1)
+	if not next is int or (next != -1 and (next < 1 or next > TERRA_MAX_ID + 1)):
+		_fail("a splice's next id is out of range")
+		return {}
+	return {
+		"remove": ids,
+		"insert": prims,
+		"at": _terra_count(change.get("at", 0), MapDocument.MAX_TERRA_PRIMS),
+		"next_id": next,
+	}
+
+
+## An added (`with_id` false: kind, flags, data) or inserted (with its id) primitive.
+func _terra_prim(value: Variant, kinds: GDScript, with_id: bool) -> Dictionary:
+	if not value is Dictionary:
+		_fail("a terrain primitive is not an object")
+		return {}
+	var kind: Variant = value.get("kind")
+	var flags: Variant = value.get("flags", 0)
+	var data := _terra_floats(value.get("data"))
+	if not kind is int or not flags is int or int(flags) & ~TERRA_KNOWN_FLAGS != 0:
+		_fail("a terrain primitive's kind or flags are not valid")
+		return {}
+	if problem == "" and String(kinds.call("problem", kind, data)) != "":
+		_fail("a terrain primitive its kind refuses")
+		return {}
+	var out := {"kind": kind, "flags": flags, "data": data}
+	if with_id:
+		out["id"] = _terra_id(value.get("id"))
+	return out
+
+
+func _terra_id(value: Variant) -> int:
+	if not value is int or value < 1 or value > TERRA_MAX_ID:
+		_fail("a terrain primitive id is out of range")
+		return 0
+	return value
+
+
+func _terra_count(value: Variant, most: int) -> int:
+	if not value is int or value < 0 or value > most:
+		_fail("a terrain position is out of range")
+		return 0
+	return value
+
+
+## A copy of float list `value` when it is finite and within the per-primitive cap.
+func _terra_floats(value: Variant) -> PackedFloat32Array:
+	if not value is PackedFloat32Array:
+		_fail("terrain floats are not a float array")
+		return PackedFloat32Array()
+	var floats := value as PackedFloat32Array
+	if floats.size() > MapDocument.MAX_TERRA_FLOATS_PER_PRIM:
+		_fail("terrain floats past the per-primitive cap")
+		return PackedFloat32Array()
+	for f in floats:
+		if not is_finite(f):
+			_fail("terrain floats that are not finite")
+			return PackedFloat32Array()
+	return floats.duplicate()
+
+
+## TerraDoc.digest's text (64 hex digits), or "" for none.
+func _digest_text(value: Variant) -> String:
+	if not value is String:
+		_fail("a terrain digest is not text")
+		return ""
+	var text := value as String
+	if text != "" and (text.length() != 64 or not text.is_valid_hex_number()):
+		_fail("a terrain digest is not 64 hex digits")
+		return ""
+	return text
+
+
+## Digest name -> int (TerraEditor.CHECKED's form), short names, at most MAX_TERRA_DIGESTS.
+func _digest_table(value: Variant) -> Dictionary:
+	if not value is Dictionary or (value as Dictionary).size() > MAX_TERRA_DIGESTS:
+		_fail("terrain digests are not a short table")
+		return {}
+	var out := {}
+	for key: Variant in value:
+		var digest: Variant = value[key]
+		if not key is String or (key as String).length() > MAX_DIGEST_NAME or not digest is int:
+			_fail("a terrain digest is not a named number")
+			return {}
+		out[key] = digest
 	return out

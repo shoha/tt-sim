@@ -21,7 +21,10 @@ func _init() -> void:
 func press(brush: BrushTool) -> bool:
 	if brush.editor.begin_surface_stroke(surface, brush.press_ctrl):
 		return true
-	if not brush.press_ctrl:
+	if brush.editor.terra.last_refusal != "":
+		# The terrain core's refusal (the switch off on a primitives map, or not yet routed).
+		brush.refused.emit(brush.editor.terra.last_refusal)
+	elif not brush.press_ctrl:
 		var reason := brush.editor.surface_refusal(surface)
 		if reason != "":
 			brush.refused.emit(reason)
