@@ -45,8 +45,8 @@ extends RefCounted
 ## hides behind it, has no mark of its own: the owner judged "the cast shadow grounds them" (a
 ## contact line in shade, tried as a switch, drew nothing visible and was removed, card
 ## painter-terrain-dabcost). Only a GLB map (no heightfield to lay a dab on) keeps radius()'s
-## limit: a larger body there keeps its box in the field. Tree trunks still have the field's seam
-## disc.
+## limit: a larger body there keeps its box in the field. A tree's trunk is a site too (card
+## painter-trunk-contact, trunk()): its foot the trunk's own disc, its radius the trunk's.
 ##
 ## The patch (append_dab) is the terrain's surface inside the rectangle the mark can reach
 ## whatever the sun (round_reach() of the foot's line; cells further from it are left out), cut
@@ -66,6 +66,9 @@ enum { X, Z, RADIUS, AT, UP_M, YAW, SCALE, BOTTOM, HEIGHT, UPRIGHT, FEET }
 const HALF_M := 0.45
 const ASPECT := 1.6
 const MIN_M := 0.09
+## Metres a trunk's site (trunk()) reaches up and down from its foot: a slope cuts a trunk at
+## its foot's height within about this.
+const TRUNK_UP_M := 0.4
 ## What a patch's vertex holds in CUSTOM3.x.
 const BASE := 8.0
 ## How far up and down from the ground at the stone a dab shows: UP of the stone's radius past
@@ -161,6 +164,22 @@ static func measured(
 	var bottom := float(plain[AT]) - 0.5 * half_y
 	out.append_array([yaw, scale, bottom, 2.0 * half_y, upright, sections])
 	return out
+
+
+## A tree's trunk as a site (card painter-trunk-contact): round and upright, its foot a disc of
+## the trunk's radius `r` (metres, the stem's at the ground) at world (x, z), standing at height
+## `at`. Its sections are that disc at every height, so outline() gives the trunk's own foot (not
+## FOOT_SHARE of it) and its mark is a boulder's rule at the trunk's size: the sliver round the
+## foot and SHOW of the radius away from the sun. TRUNK_UP_M is how far up and down it reaches.
+static func trunk(x: float, z: float, r: float, at: float) -> Array:
+	var rr := maxf(r, MIN_M)
+	var sections := PackedFloat32Array()
+	sections.resize(SLICES * SLICE_FLOATS)
+	sections.fill(0.0)
+	for s in SLICES:
+		sections[s * SLICE_FLOATS + 2] = rr
+	var plain := site(x, z, rr, at, TRUNK_UP_M)
+	return measured(plain, TRUNK_UP_M, 0.0, 1.0, true, sections)
 
 
 ## The plan sections of one body: `triangles` (three corners each, the mesh's frame) cut at SLICES

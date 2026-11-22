@@ -57,13 +57,6 @@ const FOOT_CH := 2
 const SEAM_M := 0.22
 const SEAM_BODY := 0.5
 const POOL_BODY := 1.0
-## The most bodies of one mesh that get their own footprint (the largest), the largest mesh (in
-## vertices) that is split at all, and the grid (metres) its vertices are welded on.
-const MAX_ISLANDS := 12
-const MAX_SPLIT_VERTICES := 6000
-const WELD_M := 0.002
-## The share of the smaller body's plan that must lie inside another's for the two to be one body.
-const NEST_SHARE := 0.5
 ## Seconds of quiet before a changed map's field is rebuilt (growth installs trees every frame).
 const REBUILD_DELAY_S := 0.3
 ## A change is baked whole, not by its dirty rects, when more than MAX_DIRTY footprints changed or
@@ -96,6 +89,9 @@ const WALL_SEAM_M := 0.45
 ## metre-wide disc that read as a grey plate beside the trunk (card painter-tree-ground).
 const TRUNK_SEAM_M := 0.3
 const TRUNK_SEAM_K := 0.025
+## A tree whose trunk is not known (PainterTreePack's "foot", PainterBodies.trunk_of) takes
+## TRUNK_SHARE of its height as its trunk's radius.
+const TRUNK_SHARE := 0.025
 ## The yard's ground (PainterBuildings' stand-in of `dressing_ground`), which reads the pool too.
 const YARD_KEY := "dressing_ground"
 ## The sheet's numbers read here (all DEFAULT_NUMBERS).
@@ -130,6 +126,8 @@ var _bodies: Dictionary = {}
 ## A scatter mesh's triangles and its small bodies' plan sections (_feet_of), by the same id.
 var _soups: Dictionary = {}
 var _feet: Dictionary = {}
+## A scatter tree mesh's trunk (trunk_of), by the mesh's instance id.
+var _trunks: Dictionary = {}
 ## The field's floats (CHANNELS a texel), the sorted marks it was baked from, and the texel window
 ## the rasterizers may write (the whole field, or one dirty rect).
 var _data := PackedFloat32Array()
@@ -162,6 +160,7 @@ func release() -> void:
 	_bodies.clear()
 	_soups.clear()
 	_feet.clear()
+	_trunks.clear()
 	_held.clear()
 	_marks = []
 	_data = PackedFloat32Array()
@@ -293,7 +292,7 @@ func rebuild() -> void:
 	if all_sites != (terrain != null):
 		all_sites = terrain != null
 		_held.clear()
-	_add_trees(marks)
+	_add_trees(marks, sites)
 	_add_solids(marks, sites)
 	_add_structures(marks)
 	var t1 := Time.get_ticks_usec()
@@ -497,8 +496,8 @@ static func field_layout(extent: Vector2) -> Rect2:
 
 
 ## The painted trees and bushes: a pool under the crown's projection (centre halfway from the
-## trunk to the crown's middle), and a core at the trunk's foot.
-func _add_trees(marks: Array) -> void:
+## trunk to the crown's middle), and the trunk's foot (a site on an authored terrain, `_tree`).
+func _add_trees(marks: Array, sites: Array) -> void:
 	var host: Object = _surfaces.call("trees")
 	if host == null:
 		return
@@ -515,7 +514,17 @@ func _add_trees(marks: Array) -> void:
 			marks.append(disc(POOL_CH, p.x + mid.x, p.z + mid.z, half * 1.35))
 			marks.append(disc(CORE_CH, p.x + mid.x, p.z + mid.z, half * 0.95))
 			continue
-		_tree(marks, p, Vector3(p.x + mid.x, p.y, p.z + mid.z), half, box.size.y)
+		# The trunk's foot and radius from the stem's first point (PainterTreePack's "foot").
+		var foot: Vector3 = (t["d"] as Dictionary).get("foot", Vector3.ZERO)
+		_tree(
+			marks,
+			sites,
+			Vector3(p.x + foot.x, p.y, p.z + foot.y),
+			Vector3(p.x + mid.x, p.y, p.z + mid.z),
+			half,
+			box.size.y,
+			foot.z
+		)
 
 
 ## Rocks, logs and stumps of the scatter: each body of the mesh (`islands`) a box rounded by its
@@ -557,7 +566,7 @@ func _solids_of(mm: MultiMesh, to_world: Transform3D, leafy: bool, sites: Array)
 	var id := mm.mesh.get_instance_id()
 	var box := mm.mesh.get_aabb()
 	if not _bodies.has(id):
-		_bodies[id] = islands(mm.mesh)
+		_bodies[id] = PainterBodies.islands(mm.mesh)
 	var bodies: Array[AABB] = _bodies[id]
 	for i in mm.instance_count:
 		var xf := to_world * mm.get_instance_transform(i)
@@ -565,7 +574,12 @@ func _solids_of(mm: MultiMesh, to_world: Transform3D, leafy: bool, sites: Array)
 		var whole := Vector2(box.size.x * scale.x, box.size.z * scale.z) * 0.5
 		var height := box.size.y * scale.y
 		if leafy or (height > TREE_M and height > TREE_SLENDER * maxf(whole.x, whole.y)):
-			_tree(out, xf.origin, xf * box.get_center(), maxf(whole.x, whole.y), height)
+			if not _trunks.has(id):
+				_trunks[id] = PainterBodies.trunk_of(mm.mesh)
+			var ring: Vector3 = _trunks[id]
+			var at := xf * Vector3(ring.x, box.position.y, ring.y)
+			var r := ring.z * sqrt(scale.x * scale.z)
+			_tree(out, sites, at, xf * box.get_center(), maxf(whole.x, whole.y), height, r)
 			continue
 		var yaw := atan2(xf.basis.x.z, xf.basis.x.x)
 		var upright := xf.basis.y.y > 0.98 * scale.y
@@ -598,7 +612,7 @@ func _feet_of(mesh: Mesh, b: int, body: AABB) -> PackedFloat32Array:
 	if known.has(b):
 		return known[b]
 	if not _soups.has(id):
-		_soups[id] = _soup(mesh)
+		_soups[id] = PainterBodies.soup(mesh)
 	var soup: PackedVector3Array = _soups[id]
 	var inside := body.grow(0.01)
 	var own := PackedVector3Array()
@@ -609,27 +623,6 @@ func _feet_of(mesh: Mesh, b: int, body: AABB) -> PackedFloat32Array:
 			own.append(soup[t + 2])
 	known[b] = PainterSites.feet(own, body)
 	return known[b]
-
-
-## Every triangle of `mesh`, three corners each (nothing for a mesh islands() does not split).
-static func _soup(mesh: Mesh) -> PackedVector3Array:
-	var out := PackedVector3Array()
-	var array_mesh := mesh as ArrayMesh
-	if array_mesh == null:
-		return out
-	for s in array_mesh.get_surface_count():
-		if array_mesh.surface_get_primitive_type(s) != Mesh.PRIMITIVE_TRIANGLES:
-			continue
-		var arrays := array_mesh.surface_get_arrays(s)
-		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-		if out.size() + verts.size() > 6 * MAX_SPLIT_VERTICES:
-			return PackedVector3Array()
-		if arrays[Mesh.ARRAY_INDEX] == null:
-			out.append_array(verts)
-			continue
-		for index: int in arrays[Mesh.ARRAY_INDEX] as PackedInt32Array:
-			out.append(verts[index])
-	return out
 
 
 ## One body of a scatter solid: its middle `c` (world), its turn and its half size (metres). On an
@@ -680,99 +673,27 @@ static func solid_reach(half: Vector2) -> Vector2:
 	)
 
 
-## The separate bodies of `mesh`, as boxes in its own space: its triangles joined where they share
-## a vertex (welded on WELD_M), and bodies whose plans overlap taken as one (a stone built of nested
-## shells, two stones that touch). A mesh that is one body, is not triangles, or is too large to
-## split gives its whole box. At most MAX_ISLANDS, the largest in plan.
-static func islands(mesh: Mesh) -> Array[AABB]:
-	var whole: Array[AABB] = [mesh.get_aabb()]
-	var array_mesh := mesh as ArrayMesh
-	if array_mesh == null:
-		return whole
-	var parent := PackedInt32Array()
-	var points := PackedVector3Array()
-	var ids := {}
-	for s in array_mesh.get_surface_count():
-		if array_mesh.surface_get_primitive_type(s) != Mesh.PRIMITIVE_TRIANGLES:
-			return whole
-		var arrays := array_mesh.surface_get_arrays(s)
-		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-		if points.size() + verts.size() > MAX_SPLIT_VERTICES:
-			return whole
-		var welded := PackedInt32Array()
-		welded.resize(verts.size())
-		for k in verts.size():
-			var key := Vector3i((verts[k] / WELD_M).round())
-			if not ids.has(key):
-				ids[key] = points.size()
-				parent.append(points.size())
-				points.append(verts[k])
-			welded[k] = ids[key]
-		var index := PackedInt32Array()
-		if arrays[Mesh.ARRAY_INDEX] != null:
-			index = arrays[Mesh.ARRAY_INDEX]
-		var indexed := not index.is_empty()
-		var corners := index.size() if indexed else verts.size()
-		for t in range(0, corners - 2, 3):
-			var a := _root(parent, welded[index[t] if indexed else t])
-			var b := _root(parent, welded[index[t + 1] if indexed else t + 1])
-			parent[b] = a
-			var c := _root(parent, welded[index[t + 2] if indexed else t + 2])
-			parent[c] = a
-	var by_root := {}
-	for k in points.size():
-		var root := _root(parent, k)
-		if by_root.has(root):
-			by_root[root] = (by_root[root] as AABB).expand(points[k])
-		else:
-			by_root[root] = AABB(points[k], Vector3.ZERO)
-	var out: Array[AABB] = []
-	out.assign(by_root.values())
-	if out.size() <= 1 or out.size() > 8 * MAX_ISLANDS:
-		return whole
-	# A body that lies mostly inside another's plan is part of it. Stones set side by side stay
-	# apart: their boxes overlap at the corners, and joined on any overlap the core library's
-	# cluster of five was one box again, its mark an oval a metre wide (card
-	# painter-rocks-forms-finish).
-	var merged := true
-	while merged:
-		merged = false
-		var i := 0
-		while i < out.size():
-			for j in range(out.size() - 1, i, -1):
-				if nested(_plan(out[i]), _plan(out[j])):
-					out[i] = out[i].merge(out[j])
-					out.remove_at(j)
-					merged = true
-			i += 1
-	out.sort_custom(func(a: AABB, b: AABB) -> bool: return _plan(a).get_area() > _plan(b).get_area())
-	if out.size() > MAX_ISLANDS:
-		out.resize(MAX_ISLANDS)
-	return out
-
-
-## Whether the smaller of two plans lies mostly (NEST_SHARE of its area) inside the other: a shell
-## nested in a stone, a chip on its top. A plan with no area that touches the other is inside it.
-static func nested(a: Rect2, b: Rect2) -> bool:
-	if not a.intersects(b, true):
-		return false
-	return a.intersection(b).get_area() >= NEST_SHARE * minf(a.get_area(), b.get_area())
-
-
-static func _plan(box: AABB) -> Rect2:
-	return Rect2(box.position.x, box.position.z, box.size.x, box.size.z)
-
-
-static func _root(parent: PackedInt32Array, i: int) -> int:
-	while parent[i] != i:
-		parent[i] = parent[parent[i]]
-		i = parent[i]
-	return i
-
-
-## A tree's pool, as the painted trees' (_add_trees): a disc under the crown's projection, centred
-## halfway from the trunk's foot `foot` to the crown's middle `crown`, and a seam at the trunk.
-func _tree(marks: Array, foot: Vector3, crown: Vector3, half: float, height: float) -> void:
+## A tree, as the painted trees' (_add_trees), its trunk's foot at `foot` of radius `trunk_r`
+## (metres; 0 when unknown), its crown's middle at `crown`. On an authored terrain the foot is a
+## site under the one contact rule (PainterSites.trunk: the trunk's disc grown by a sliver, a third
+## of it away from the sun) and the tree writes NOTHING into the field: the crown's pool is gone
+## (card painter-trunk-contact: the cast shadow grounds the tree, and the pool showed only as a
+## deeper oval inside the shade, detached from the trunk under a low sun). On a GLB map, which has
+## no heightfield to lay a dab on, it keeps the field's pool (a disc under the crown's projection,
+## centred halfway from the foot to the crown's middle) and the seam disc at the foot.
+func _tree(
+	marks: Array,
+	sites: Array,
+	foot: Vector3,
+	crown: Vector3,
+	half: float,
+	height: float,
+	trunk_r: float
+) -> void:
+	if all_sites:
+		var r := trunk_r if trunk_r > 0.0 else TRUNK_SHARE * height
+		sites.append(PainterSites.trunk(foot.x, foot.z, r, foot.y))
+		return
 	marks.append(
 		disc(POOL_CH, (foot.x + crown.x) * 0.5, (foot.z + crown.z) * 0.5, half * 0.5 + 0.5)
 	)

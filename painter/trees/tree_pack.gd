@@ -166,6 +166,9 @@ static func _pack12(
 	var c_hi := Vector3.ONE * -INF
 	var b_lo := Vector3.ONE * INF
 	var b_hi := Vector3.ONE * -INF
+	var foot := Vector3.ONE * INF
+	var foot_r := 0.0
+	var foot_stem := false
 	var leaf_n: int = 0
 	var ever_n: int = 0
 	var leaf_groups: int = 0
@@ -250,6 +253,23 @@ static func _pack12(
 			for q: Vector3 in pts:
 				b_lo = b_lo.min(q)
 				b_hi = b_hi.max(q)
+			# The trunk's foot (card painter-trunk-contact): the stem's first point, else the
+			# lowest-starting strand's (the widest of equals), with its radius there.
+			var r_first: float = (m.params["radii"] as PackedFloat32Array)[0]
+			var is_stem: bool = m.params.has("stem")
+			if (
+				(is_stem and not foot_stem)
+				or (
+					is_stem == foot_stem
+					and (
+						pts[0].y < foot.y - 0.01
+						or (absf(pts[0].y - foot.y) <= 0.01 and r_first > foot_r)
+					)
+				)
+			):
+				foot = pts[0]
+				foot_r = r_first
+				foot_stem = is_stem
 			if (
 				bough_r > 0.0
 				and not m.params.has("stem")
@@ -582,6 +602,9 @@ static func _pack12(
 		"multi": multi,
 		"forms": forms,
 		"aabb": AABB(b_lo, b_hi - b_lo) if n > 0 else AABB(),
+		# The trunk's foot in the tree's frame (x, z) and its radius there (z of the Vector3 is
+		# the radius; zero for a tree with no strand).
+		"foot": Vector3(foot.x, foot.z, foot_r) if foot_r > 0.0 else Vector3.ZERO,
 		"roots": roots_total,
 		"bark_roots": bark_roots,
 		"shadow_full": shadow_total,
