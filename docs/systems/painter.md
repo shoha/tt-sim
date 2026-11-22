@@ -228,17 +228,6 @@ numbers in `PERFORMANCE.md` "The painted look after a water or height edit", Rou
   the bound one: the first water's layer re-table has not landed), so the first river on a map
   makes one whole build, when the refresh marks the whole grid, not two. `PainterZoneMaps.builds`
   counts the whole builds.
-- That whole build, and any whole build an edit causes (`PainterZoneMaps.wants_whole`: a changed
-  plan, or a rect covering half the grid or more), runs on workers (card painter-edit-hitch4,
-  2026-11-21): `build_async` copies the four sample arrays it reads (a packed array is shared by
-  assignment, so a kept reference would see edits mid-read) and runs the region functions over 8
-  bands of full-width rows as one `WorkerThreadPool` group task; their bytes concatenate into the
-  whole image's. The ground draws the maps it has until `PainterSurfaces._on_zone_frame` (on
-  `process_frame`) sees the task done and lands it; edits that arrive meanwhile wait in the dirty
-  mark and update their rect after the landing, so the settled maps equal a synchronous build
-  (`test_painter_zone_worker.gd`). `update` lands a build in flight first, `build` and `release`
-  drop it. A first paint and a terrain build stay synchronous (no maps to show yet, or another
-  map's). The first river: 60 ms off its frame, landed 2 frames later.
 - The water field (`PainterWaterField`) merges the rects of consecutive ground edits and redoes
   them once (`_flush_dirty`, on `process_frame`): in the first frame after one with no edit, and
   at most `FLUSH_WAIT` (4) frames after the first edit. A landing's carve, settle and dressing

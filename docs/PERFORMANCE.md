@@ -2757,38 +2757,6 @@ candidate for a worker or a split over frames), once a 33.3 ms landing ground fr
 river-through-the-wall release (31-43 ms of node time: the plan 17-21 ms and `through_rises`
 6-9 ms, synchronous, as on main). `ident.json`'s digests equal main's at every step.
 
-### Round 4 (card painter-edit-hitch4, 2026-11-21)
-
-Attributed with temporary section timers. River 1's whole zone build (D 64 ms;
-`PainterSurfaces._rebuild_zone` -> `PainterZoneMaps.update`, whose plan changed: the shore reads
-the first dressing -> `build`) is all `zone_region` over the 245-sample grid, about 59 ms: the
-per-sample loop about 36, `PainterFieldBlur.box` of the one touched channel 12, `_write` 8, the
-flat channels' byte fill 3; plan and upload under 1 ms. It now runs on workers (`build_async`, 8
-row bands in one group task; docs/systems/painter.md "Zone maps") and lands 2 frames later (one
-task: 20 frames). The river-through-the-wall release (C 24/33/43 ms for w1/w2/w3) is
-`WaterEditor.carve_river`'s `WaterEdit.plan_river`, 15/18/21 ms, nearly all its first `_plan`
-(water_edit.gd:211: join, course fit, fall plan, reach fit), plus `WaterBrush.through_rises`
-3.5/6.4/9.9 ms (water_brush.gd:263), synchronous; not moved (its ids and hints return in the
-call).
-
-Same session, windowed `hitch.json` (the pixel captures dropped), main 8e15f88d in its own
-worktree against the branch (worst of 120 frames; frames over 33):
-
-| Stroke | main | branch (one task; 8 bands) |
-| --- | --- | --- |
-| river, first on the map | 84.5 (1), 124.8 (2) | 25.6, 24.6; 26.7 |
-| river 2, 3 | 21.7, 23.4; 34.7 (1), 32.7 | 21.1, 23.0; 29.0, 23.3; 25.2, 23.8 |
-| river through the wall 1-3 | 31.4, 41.9, 50.5; 30.6, 39.6, 48.5 | 31.2, 38.8, 50.3; 30.7, 42.9, 51.5; 29.8, 40.3, 48.9 |
-| raise (3) | 11.3-15.8; 12.0-13.3 | 12.3-14.1; 11.3-13.6; 11.6-14.6 |
-| paint (3) | 12.3-13.0; 13.1-13.4 | 12.2-12.7; 11.9-12.9; 11.9-13.0 |
-| placed boulder (3) | 16.0, 13.4, 12.2; 15.6, 12.0, 10.9 | 16.3, 13.3, 11.6; 15.6, 11.3, 11.2; 16.3, 12.3, 12.4 |
-
-Frames over 33 ms: main 3 and 5, branch 2, 2, 2 (the wall rivers 2 and 3). `ident.json`'s
-digests equal main's at every step. A strip of the first river's frames (rec "shots", clock
-frozen, each shot frame about 600 ms by the readback) shows main's banks turn sand and grey in
-the frame the water appears, the one-task branch's a frame later (green banks for that frame);
-at real frame times the 8-band landing is 2 frames (about 10 ms) after the start.
-
 ## In-game authoring phase 4 (water): pinned performance pass (2026-09-27)
 
 The phase 4 pass: authored maps with water in play against the same maps without it, the
