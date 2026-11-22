@@ -191,6 +191,8 @@ func release() -> void:
 		_glb.call("release")
 	_glb_ground.clear()
 	_marks.release()
+	_unwatch_zone_build()
+	_zones.cancel()
 	_unbind()
 	if _ground != null:
 		FireLook.unmirror_glow(_ground)
@@ -590,8 +592,16 @@ func _rebuild_zone() -> void:
 		_zones.build(doc)
 		_zone_whole = false
 		_zone_dirty = Rect2i()
+	elif _zones.building():
+		pass  # Edits wait in _zone_dirty for the landing (_on_zone_frame), which queues this again.
 	elif _zone_dirty.has_area() and not _terrain.water_dressing_pending():
-		_zones.update(doc, _zone_dirty)
+		if _zones.wants_whole(doc, _zone_dirty):
+			# A whole build after an edit (a changed plan, a rect about the whole grid) runs on a
+			# worker; the ground draws the maps it has until it lands (card painter-edit-hitch4).
+			_zones.build_async(doc)
+			_watch_zone_build()
+		else:
+			_zones.update(doc, _zone_dirty)
 		_zone_dirty = Rect2i()
 	# (The first water on a map, or the last one gone, changes the zone plan: the update would build
 	# whole now, and the terrain's dressing refresh two frames on marks the grid for a second whole
@@ -649,6 +659,38 @@ func _bind_wet() -> void:
 ## The zone maps (tests and probes).
 func zones() -> PainterZoneMaps:
 	return _zones
+
+
+## Lands a worker zone build in flight now and applies the edits that waited for it (tests, probes);
+## false when none was in flight.
+func finish_zones() -> bool:
+	if not _zones.finish():
+		return false
+	_unwatch_zone_build()
+	_rebuild_zone()
+	return true
+
+
+## Polls the worker zone build once a frame until it lands (PainterZoneMaps.build_async).
+func _watch_zone_build() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and not tree.process_frame.is_connected(_on_zone_frame):
+		tree.process_frame.connect(_on_zone_frame)
+
+
+func _unwatch_zone_build() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and tree.process_frame.is_connected(_on_zone_frame):
+		tree.process_frame.disconnect(_on_zone_frame)
+
+
+## A frame while the worker zone build runs: once it has landed (its textures uploaded), the edits
+## that arrived meanwhile update their rect and the materials rebind in this frame's zone rebuild.
+func _on_zone_frame() -> void:
+	if _zones.building() and not _zones.poll():
+		return
+	_unwatch_zone_build()
+	_queue_zone()
 
 
 # ---------------------------------------------------------------- the scatter
