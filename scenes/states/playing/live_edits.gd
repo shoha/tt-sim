@@ -93,6 +93,10 @@ static func create(
 	service.editor = AuthoringEditor.create(doc, root, service.history)
 	# Water edits compute on a worker, as the Water tool's do, so none freezes a frame.
 	service.editor.water.use_worker = true
+	if gm_side:
+		# The side that plans a stroke compiles the water conditioner now, not in the first
+		# river's release frame (WaterWarm; card painter-edit-hitch3).
+		WaterWarm.warm()
 	# And a fire op's re-plan (FireField).
 	if is_instance_valid(service.editor.fire_field):
 		service.editor.fire_field.use_worker = true
