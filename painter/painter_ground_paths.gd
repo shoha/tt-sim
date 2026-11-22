@@ -27,8 +27,10 @@ extends RefCounted
 ##
 ## Polish (card painter-ground-polish): the shader's cliff lip takes `cliff-warm` of a gold tint
 ## and, under snow, `cliff-snow` of the meadow's snow as a cap; its foot takes `cliff-foot` of the
-## way to its shade colour. Under snow (`path-dust`) a path's tone is lifted toward the snow's
-## lightness, its seams are shallower and the stones at its edge beside the snow are dusted white.
+## way to its shade colour. Under snow (`path-dust`) a path is a trodden track (card
+## painter-winter-ground): the shader paints its band as packed snow, a step darker and bluer than
+## the snow beside it, with the surface's own earth or stone (earth()) showing in a few glimpses
+## along its middle; its seams are shallower and its edge beside the snow is dusted white.
 
 ## The path slots the shader has (p_lit, p_shd: two variants a slot; p_kind).
 const MAX_SLOTS := 8
@@ -46,8 +48,12 @@ const OWN_L := 0.6
 const OWN_C_POW := 0.8
 const OWN_C := Vector2(0.55, 2.0)
 const OWN_H := 0.5
-## The share of the gap to the snow's lightness a path is lifted at `path-dust` 1 (dusted()).
-const DUST_LIFT := 0.5
+## Under snow (earth()): the share of the way to the surface's own chroma and hue a path's tone goes
+## at `path-dust` 1, how much darker it is there and the share of its chroma it keeps (a wet, dark
+## earth, not the summer road's sandy ochre).
+const EARTH_OWN := 1.5
+const EARTH_DARK := 0.35
+const EARTH_CHROMA := 0.75
 
 
 ## The path-role surfaces of `doc` that take a slot, in slot order: the base surface first when it
@@ -181,11 +187,10 @@ static func tones(
 	var share: float = num.call("path-own")
 	var dust: float = num.call("path-dust")
 	var base := PainterSheet.tone_lch(sheet, mood, "path", elevation)
-	var snow_l := PainterSheet.tone_lch(sheet, mood, "ground", elevation).x
 	for k in MAX_SLOTS:
 		var id := ids[k] if k < ids.size() else ""
 		var own := own_lch(surfaces.get(id, {}))
-		var mid := dusted(base if own.x < 0.0 else moved(base, own, PATH_REF, share), snow_l, dust)
+		var mid := earth(base if own.x < 0.0 else moved(base, own, PATH_REF, share), own, dust)
 		var ramp := PainterTones.ramp(sheet, mood, "path", elevation, "ground-", mid)
 		lit.append_array([PainterTones.linear(ramp[2]), PainterTones.linear(ramp[5])])
 		shade.append_array([PainterTones.linear(ramp[0]), PainterTones.linear(ramp[3])])
@@ -216,11 +221,22 @@ static func set_tones(material: ShaderMaterial, tones: Dictionary) -> void:
 			material.set_shader_parameter(key, values[key])
 
 
-## A path's middle tone `lch` (OKLCH) under snow: lifted `dust` * DUST_LIFT of the way to the snow's
-## lightness `snow_l`, so a stone path on snow reads light, not a heavy grey strip. Pure; `dust` 0
-## returns it as it is.
-static func dusted(lch: Vector3, snow_l: float, dust: float) -> Vector3:
-	return Vector3(lch.x + maxf(snow_l - lch.x, 0.0) * dust * DUST_LIFT, lch.y, lch.z)
+## A path's middle tone `lch` (OKLCH) under snow, as the bare earth or stone that shows through the
+## trodden track's few glimpses (the shader paints the rest of the band as packed snow): moved
+## `dust` * EARTH_OWN of the way to the surface's own chroma and hue `own` in OKLab (ab_mix; a
+## winter path tone is the snow's blue, so a dirt road's glimpse would read blue-grey) and `dust` *
+## EARTH_DARK darker, so it reads against the snow at tabletop zoom. Pure; `dust` 0 returns it as
+## it is.
+static func earth(lch: Vector3, own: Vector3, dust: float) -> Vector3:
+	if dust <= 0.0:
+		return lch
+	var bare := own if own.x >= 0.0 else PATH_REF
+	var out := ab_mix(lch, bare, clampf(dust * EARTH_OWN, 0.0, 1.0))
+	return Vector3(
+		clampf(out.x - dust * EARTH_DARK, 0.05, 0.98),
+		out.y * lerpf(1.0, EARTH_CHROMA, clampf(dust, 0.0, 1.0)),
+		out.z
+	)
 
 
 ## The cliff stone's middle tone (OKLCH) in `mood` at `elevation` for a map whose cliff surface is

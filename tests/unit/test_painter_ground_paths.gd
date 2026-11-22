@@ -118,19 +118,36 @@ func test_a_winter_cliff_is_bare_warm_rock_not_the_blue_stone() -> void:
 	assert_lt(grey.y, 0.01, "opposite hues meet at a grey, not through a third hue")
 
 
-func test_under_snow_a_path_is_lifted_toward_the_snow() -> void:
+func test_under_snow_a_path_shows_its_own_earth_in_the_track() -> void:
 	var sheet := PainterSheet.load_sheet("core")
 	var ids := PackedStringArray(["cobblestone"])
 	var winter := PainterGroundPaths.tones(sheet, "winter", 24.0, ids)
 	var uniforms: Dictionary = winter["uniforms"]
-	assert_gt(float(uniforms[&"path_dust"]), 0.0, "winter dusts its paths")
+	assert_gt(float(uniforms[&"path_dust"]), 0.0, "winter treads its paths")
 	assert_true(uniforms.has(&"cliff_snow") and uniforms.has(&"sw_k"), "the shader numbers ride")
-	var cobble := Vector3(0.6, 0.02, 250.0)
-	var dusted := PainterGroundPaths.dusted(cobble, 0.9, 0.6)
-	assert_gt(dusted.x, cobble.x + 0.05, "lifted toward the snow")
-	assert_eq(PainterGroundPaths.dusted(cobble, 0.9, 0.0), cobble, "no dust, no change")
+	var blue := Vector3(0.8, 0.03, 248.0)
+	var dirt := Vector3(0.55, 0.06, 70.0)
+	var earth := PainterGroundPaths.earth(blue, dirt, 0.6)
+	assert_lt(earth.x, blue.x - 0.05, "the earth reads darker than the snow-blue path tone")
+	assert_between(earth.z, 40.0, 110.0, "a dirt road's glimpse is warm earth, not the snow's blue")
+	var plain := PainterGroundPaths.earth(blue, Vector3(-1.0, 0.0, 0.0), 0.6)
+	assert_between(plain.z, 40.0, 110.0, "an unmeasured surface takes the packed dirt's hue")
+	assert_eq(PainterGroundPaths.earth(blue, dirt, 0.0), blue, "no snow, no change")
 	var summer: Dictionary = PainterGroundPaths.tones(sheet, "summer", 60.0, ids)["uniforms"]
-	assert_eq(float(summer[&"path_dust"]), 0.0, "summer paths are not dusted")
+	assert_eq(float(summer[&"path_dust"]), 0.0, "summer paths are not under snow")
+
+
+func test_winter_buries_the_litter_and_keeps_it_in_summer() -> void:
+	var sheet := PainterSheet.load_sheet("core")
+	assert_eq(PainterSheet.number(sheet, "winter", "keep-litter", 24.0), 0.0, "scatter buried")
+	assert_eq(PainterSheet.number(sheet, "winter", "litter-marks", 24.0), 0.0, "no leaf marks")
+	for mood: String in ["summer", "dusk", "autumn", "grimdark"]:
+		assert_eq(PainterSheet.number(sheet, mood, "keep-litter", 60.0), 1.0, mood + " keeps it")
+	var snow := PainterSheet.tone_lch(sheet, "winter", "ground", 60.0)
+	var floor_snow := PainterSheet.tone_lch(sheet, "winter", "floor", 60.0)
+	for tone: Vector3 in [snow, floor_snow]:
+		assert_gt(tone.x, 0.89, "the daylight snow is a luminous white")
+		assert_between(tone.z, 225.0, 250.0, "a cool blue white, not lavender")
 
 
 func test_the_meadow_takes_gold_and_moss_swathes_but_not_under_snow() -> void:

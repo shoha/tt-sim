@@ -28,10 +28,17 @@ varying float v_h;
 varying flat float v_scale;
 // The rock's own turn of its plane lattice (cosine, sine): solid_form().
 varying flat vec2 v_turn;
+// 1 on the hand-placed props' layer (PainterPlantTone.mark_placed): never thinned, so litter an
+// author places stays on winter's snow while the scattered litter is buried (keep-litter).
+instance uniform float painter_placed = 0.0;
 
 void vertex() {
 	v_h = VERTEX.y / max(selector_height, 0.01);
-	VERTEX *= selector_keep(MODEL_MATRIX[3].xyz, IN_SHADOW_PASS);
+	float kept = selector_keep(MODEL_MATRIX[3].xyz, IN_SHADOW_PASS);
+	if (painter_placed > 0.5 && !IN_SHADOW_PASS) {
+		kept = 1.0;
+	}
+	VERTEX *= kept;
 	v_o = MODEL_MATRIX[3].xyz;
 	v_scale = length(MODEL_MATRIX[1].xyz);
 	float turn = p_hash(floor(v_o * 10.0) + vec3(5.0, 9.0, 2.0)) * 6.2832;
