@@ -40,7 +40,8 @@ render_mode blend_mix, depth_draw_opaque, cull_back, specular_disabled, ambient_
  *   holds, and recedes from the tail, then the cell draws another elsewhere (a painter's boil):
  *   the seed changes only when the envelope is 0, so nothing pops, nothing scrolls and nothing
  *   swims when the camera orbits. On a river each lies along the flow and drifts downstream while
- *   it lives (a second or two, so none shears); on a lake each fans about the wind.
+ *   it lives (a second or two, so none shears); on still water they calm: half as many,
+ *   longer, almost parallel to the wind and drifting gently with it, the dark layer thinned.
  *   The whites, all brush marks: a ragged lap ribbon along the waterline with a few detached
  *   dashes outside it (in the iso-depth frame of the depth buffer), dashes on fast shallow water
  *   (riffles), a wrap round rocks and wading tokens (Classic's depth-slope detector, thresholded),
@@ -68,9 +69,10 @@ render_mode blend_mix, depth_draw_opaque, cull_back, specular_disabled, ambient_
  *   The glints. A third lattice of short bright ticks, kept only where a stroke's own small tilt
  *   would reflect the sun toward the camera (the sun is the foliage_sun global): a ragged column
  *   toward the sun, gold at dusk, silver under the moon. Placed, not computed from a normal.
- *   Winter ice. Slow water (a pond) freezes to a pale periwinkle wash with a few long thin cracks
- *   (a Voronoi edge); a river freezes only at its rim; open water is punched round each wading
- *   token, so a token never stands on ice.
+ *   Winter ice. Slow water (a pond) freezes to one pale lid in the sheet's ice colour with two
+ *   broad soft shapes on it, a patch of clearer blue ice and a whiter drift (slow noises, metres
+ *   across); a river freezes only at its rim; open water is punched round each wading token, so a
+ *   token never stands on ice.
  *
  * Classic's uniforms that Motion keys and the network drive (wave_speed, flow_strength,
  * foam_strength, the disturbance points, the flow map, the skirt fade) keep their names; the
@@ -83,7 +85,7 @@ render_mode blend_mix, depth_draw_opaque, cull_back, specular_disabled, ambient_
  * glints are emission, so white water stays white in a shadow.
  *
  * Water Quality Low (water_quality_skip_fine_detail) drops the second stroke layer, the glints
- * and the cracks.
+ * and the ice's patches and drifts.
  */
 
 #include "res://painter/shaders/painter_noise.gdshaderinc"
@@ -440,6 +442,30 @@ const float LATTICE_C = 0.9004;
 const float LATTICE_S = 0.4350;
 const float CELL = 2.4;
 const float GLINT_CELL = 0.9;
+// Calm water (flow_k 0, a pond or a lake; card painter-water-still): the share of the river's stroke
+// share it keeps, the jitter (radians, the whole spread about the wind), the length factor, the
+// thickness factor (broader, so a long stroke reads as a soft swell, not a streak of rain), the drift
+// along the wind (m/s), the dark layer's share and strength, and the glints' share. A stroke's reach stays inside
+// the 2 x 2 cells stroke_layer looks at: half-length plus drift under 0.8 of a cell (layer A 1.67 of
+// 1.92 m, layer B 2.03 of 2.17).
+const float CALM_SHARE = 0.4;
+const float CALM_JITTER = 0.45;
+const float CALM_LEN = 1.45;
+const float CALM_THICK = 1.35;
+const float CALM_DRIFT = 0.06;
+const float CALM_DARK_SHARE = 0.35;
+const float CALM_DARK_K = 0.55;
+const float CALM_GLINTS = 0.6;
+// The frozen lid's shapes: the clear-ice patches' noise frequency (per m) and threshold, the drifts',
+// the soft edge (noise units), how far a patch turns toward the lit water's blue and how far a drift
+// lifts toward white.
+const float ICE_CLEAR_F = 0.21;
+const float ICE_CLEAR_LO = 0.5;
+const float ICE_DRIFT_F = 0.33;
+const float ICE_DRIFT_LO = 0.56;
+const float ICE_SOFT = 0.18;
+const float ICE_CLEAR_TINT = 0.4;
+const float ICE_DRIFT_LIFT = 0.45;
 // Below this decoded magnitude a flow texel is still water; above the valid maximum it is an
 // unbound sampler (water.gdshader).
 const float FLOW_DEAD_ZONE = 0.02;
@@ -1035,7 +1061,11 @@ if (fieldv && (shade_opt & 4) != 0) {
 
 	// ---- Ice --------------------------------------------------------------------------------
 	float ice_k = 0.0;
-	float crack = 0.0;
+	// The lid's two soft shapes (card painter-water-still): where the snow thins to clear ice, and a
+	// drift. What stood here was a Voronoi crack network (1.9 m cells, gated by a 2.5 m noise over
+	// about half the lid): every cell's edge drew, so a frozen pond read as a polygon wireframe.
+	float ice_clear = 0.0;
+	float ice_drift = 0.0;
 #ifdef ABL_NOICE
 	if (false) {
 #else
@@ -1047,36 +1077,27 @@ if (fieldv && (shade_opt & 4) != 0) {
 		float edge_noise = (wn_xz(p * 0.7, 1.0) - 0.5) * 0.3;
 		ice_k = smoothstep(0.35, 0.55, want + edge_noise) * open_water;
 		if (fine && ice_k > 0.01) {
-			vec2 q = p / 1.9;
-			vec2 qi = floor(q);
-			float f1 = 8.0;
-			float f2 = 8.0;
-			for (int j = -1; j <= 1; j++) {
-				for (int i = -1; i <= 1; i++) {
-					vec2 cc = qi + vec2(float(i), float(j));
-					vec2 pt = cc + vec2(be_hash(cc), be_hash(cc + 7.7));
-					float dd = length(q - pt);
-					if (dd < f1) {
-						f2 = f1;
-						f1 = dd;
-					} else if (dd < f2) {
-						f2 = dd;
-					}
-				}
-			}
-			float local = smoothstep(0.45, 0.62, wn_xz(p * 0.4, 5.0));
-			crack = (1.0 - smoothstep(0.0, 0.035 + world_units_per_pixel * 0.7, (f2 - f1) * 1.9)) * local;
+			ice_clear = smoothstep(ICE_CLEAR_LO, ICE_CLEAR_LO + ICE_SOFT, wn_xz(p * ICE_CLEAR_F, 5.0));
+			ice_drift = smoothstep(ICE_DRIFT_LO, ICE_DRIFT_LO + ICE_SOFT, wn_xz(p * ICE_DRIFT_F, 9.0));
 		}
 	}
 
 	// ---- Strokes ----------------------------------------------------------------------------
-	vec3 x = mix(wash, p_ice, ice_k);
+	vec3 ice_col = mix(p_ice, mix(p_ice, p_lit, ICE_CLEAR_TINT), ice_clear);
+	ice_col = mix(ice_col, p_foam, ice_drift * ICE_DRIFT_LIFT);
+	vec3 x = mix(wash, ice_col, ice_k);
 	float a = mix(wash_a, 0.96, ice_k);
 	float live = (1.0 - ice_k) * smoothstep(0.08, 0.4, column) * (1.0 - curtain);
 	float px = world_units_per_pixel;
-	float jitter = mix(1.1, 0.4, flow_k);
-	// Still water (a pond) takes more strokes than a river: its wash has no flow to carry the eye.
-	float share = p_strokes * (1.0 + 0.9 * (1.0 - flow_k));
+	// Still water calms (card painter-water-still): fewer, longer strokes laid almost parallel to the
+	// wind, drifting gently with it, and the dark layer thinned. It took 1.9 times the river's share
+	// at up to 32 degrees off the wind, two layers, light and dark: nearly every 2.4 m cell held a
+	// dash, and a lake read as confetti. Moving water (flow_k 1) is unchanged.
+	float calm = 1.0 - flow_k;
+	float jitter = mix(CALM_JITTER, 0.4, flow_k);
+	float share = p_strokes * mix(1.0, CALM_SHARE, calm);
+	vec2 stroke_flow = flow_ws + wind_flat * (CALM_DRIFT * calm);
+	float thick = mix(1.0, CALM_THICK, calm);
 	// Where nothing of a stroke shows (live 0: the wet edge, a fall's face) no layer is looked at.
 #ifdef RED_E
 	bool live_on = live > 0.0;
@@ -1087,10 +1108,10 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// A stroke shortens to nothing where the flow map's direction is a blend that cancels (two
 	// rivers meeting head on), so no stroke is drawn along a direction that does not exist. Inside
 	// a fall's zone the strokes are the approved fall's, unchanged.
-	float len_in = p_stroke_len * mix(dir_k, 1.0, fz);
+	float len_in = p_stroke_len * mix(dir_k, 1.0, fz) * mix(1.0, CALM_LEN, calm);
 #ifndef ABL_NOSTROKE_A
 	if (live_on) {
-		la = stroke_layer(p, dir, jitter, flow_ws, 1.0, CELL, share, len_in, 0.11, p_boil, px, vec3(0.0));
+		la = stroke_layer(p, dir, jitter, stroke_flow, 1.0, CELL, share, len_in, 0.11 * thick, p_boil, px, vec3(0.0));
 	}
 #endif
 	x = mix(x, p_lit, la.x * live);
@@ -1100,11 +1121,14 @@ if (fieldv && (shade_opt & 4) != 0) {
 #else
 	if (fine && live_on) {
 #endif
-		vec2 lb = stroke_layer(p, dir, jitter, flow_ws, 9.0, CELL * 1.13, share * 0.8, len_in * 1.2, 0.13, p_boil * 1.3, px, vec3(0.0));
-		x = mix(x, p_shade, lb.x * live * 0.85);
-		a = max(a, lb.x * live * 0.95);
+		vec2 lb = stroke_layer(
+			p, dir, jitter, stroke_flow, 9.0, CELL * 1.13, share * mix(0.8, CALM_DARK_SHARE, calm), len_in * 1.2,
+			0.13 * thick, p_boil * 1.3, px, vec3(0.0)
+		);
+		float lbk = lb.x * live * mix(1.0, CALM_DARK_K, calm);
+		x = mix(x, p_shade, lbk * 0.85);
+		a = max(a, lbk * 0.95);
 	}
-	x = mix(x, p_shade, crack * 0.7);
 	// The plunge's wash: aerated water, a milky glaze over the lower face and the pool below the foot,
 	// strongest at the foot and gone by FOOT_VEIL_M, the same coordinate the glass colour uses. It
 	// tints and thickens the water but never covers it: the pool's blue stays under it.
@@ -1532,14 +1556,16 @@ if (fieldv && (shade_opt & 4) != 0) {
 		vec3 reflected = normalize(vec3(view_dir.x, -view_dir.y, view_dir.z));
 		vec2 perp = normalize(vec2(-reflected.z, reflected.x) + vec2(1e-4, 0.0));
 		vec2 lg = vec2(0.0);
+		// Calm water keeps fewer glints (card painter-water-still): a few soft sparks, not a scatter.
+		float glint_share = p_glints * mix(1.0, CALM_GLINTS, calm);
 #ifdef RED_M
 		// A cell's tilt turns the reflected direction by at most asin(0.7071) = 45 degrees and the sun's
 		// cone ends at acos(0.82) = 34.9 degrees: past 80 degrees from the sun no cell draws.
 		if (dot(reflected, normalize(foliage_sun.xyz)) >= 0.17) {
-			lg = stroke_layer(p, perp, 0.4, flow_ws, 21.0, GLINT_CELL, p_glints, 0.34, 0.035, 1.4, px, reflected);
+			lg = stroke_layer(p, perp, 0.4, flow_ws, 21.0, GLINT_CELL, glint_share, 0.34, 0.035, 1.4, px, reflected);
 		}
 #else
-		lg = stroke_layer(p, perp, 0.4, flow_ws, 21.0, GLINT_CELL, p_glints, 0.34, 0.035, 1.4, px, reflected);
+		lg = stroke_layer(p, perp, 0.4, flow_ws, 21.0, GLINT_CELL, glint_share, 0.34, 0.035, 1.4, px, reflected);
 #endif
 		glint = lg.x * live;
 		a = max(a, glint);
