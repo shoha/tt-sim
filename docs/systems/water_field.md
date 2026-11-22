@@ -484,12 +484,35 @@ parts. Switch `WaterEdit.cut_through` (true in every build; false brings back th
   foot, would have dug a canal through the plateau.
 - **Undo.** One stroke, one history entry (the height diff and the water model), as every carve.
   Erasing a river never restored its carve, and a cut is the same: the erased river leaves its cut.
-- **The hint.** `cut_through`, said when the stroke has landed (`WaterEditor.river_hints_landed`;
-  the Water tool listens as it does for a pond), so every river hint is now said after the worker
-  has finished, not at plan time.
+- **Planned on the cut ground** (card painter-water-cutband, look-pending; switch
+  `WaterEdit.plan_on_cut`). The owner (2026-11-22): "The pale band below each rise is wrong". Switched
+  off one term at a time (`attr_sheet.png`: the white, the lap, the pool floor, the film and bank
+  shares, the veil, the steep softening, at two clocks), every shader term left the band as it was;
+  the field dump says what drew it: the fall plan ran on the DRAWN ground, so a rise's downstream
+  face was a fall whose lip stayed a reach boundary after the fit levelled the reach to the running
+  minimum. The 0.4 m step left there is a riffle whose crest stands `CREST_M` (5 cm) under the water
+  (depth 0.05 m over 1 m at the 3 m wall's foot, 0.9 m either side): shallow water reads pale teal,
+  a bar across the river, and the bar's waterline is narrower (wet 2.13 m against 2.63). The plunge
+  point planned below that lip widened the river by `PLUNGE_WIDEN` (half-width 1.33 to 1.68 about
+  3.4 m on: "wider below"). On the mound the lip had been set back to the rise's upstream foot, so
+  the bar stood above it. Now a line whose ground rises more than `WaterEdit.CUT_PLAN_FROM_M` (0.25 m,
+  the dead band) over the lowest ground upstream plans its falls (`WaterFallPlan.plan_lips` on the fine
+  profile) and its reach boundaries (`reach_ranges`) on `WaterFallPlan.cut_ground`, the running minimum:
+  a rise's faces are neither a fall nor a boundary, and the plan steps only where the cut ground
+  does. The conditioner still fits on the drawn ground, so `max_cut` and `rise_cut` are unchanged,
+  and the note `rise_removed` counts the drawn reaches' climb (`WaterFallPlan.drawn_rises`). Every cut row of the
+  cuts level is now one reach (1 m, 3 m, 8 m, the mound, the edge; the hill two) at one width, with
+  no bar (`band_main_build.png`). A line with no such rise plans exactly as before. What it changes
+  besides: on the verdict map the line over three walls lost the 1.25 m fall at its head (the head
+  stood on the skirt of the wall behind it, inside the lip's end clearance on the cut ground), so
+  its head is dug down to the valley's level (`walls_main_build.png`, top row).
+- **No hint.** The owner (2026-11-22): "The hint is unwanted". A cut is not said: the `cut_through`
+  hint is removed from `WaterHints`, `plan_river` and `WaterRefit.refit`; `report.cut` and
+  `report.rise_cut` still record it, and `refit`'s `cut` still counts the strokes. Every other river
+  hint is said when the stroke has landed (`WaterEditor.river_hints_landed`), as before.
 - **Re-fit.** `WaterRefit.refit` no longer reverses a run of climbing reaches: the tree solve lowers
   them onto the water above (the running minimum) and the re-carve cuts the rise; `reversed` is
-  always 0, `cut` counts the strokes, hint `cut_through`.
+  always 0, `cut` counts the strokes (not said).
 - **The pointer.** The pointer's ray meets the TOP of a rise, short of where it meets the ground the
   cut leaves (by the rise times the ray's slant: 2.5 m per metre in the authoring view), so the
   river as carved would leave the line on the screen at every wall. `WaterBrush.through_rises`
@@ -498,10 +521,13 @@ parts. Switch `WaterEdit.cut_through` (true in every build; false brings back th
   instead, so a job that must land a straight line over a rise uses `water.gd carve`.
 - **Left.** Reaches that the fit levelled keep their boundaries at the old lips (the verdict map's
   line over the walls is four reaches at one level); the up-face of a rise is subdivided like a
-  drop (many points); the stretch below a rise steps down in a pale riffle band; `through_rises`
-  has no end-to-end capture with a real pointer.
+  drop (many points); `through_rises` has no end-to-end capture with a real pointer; any reach
+  step of 0.3 m or more in a waist river is still a riffle with a 5 cm crest (a pale bar), now only
+  where the cut ground itself steps; a head inside a fall's end clearance of a rise is dug down
+  rather than falling (above).
 
-Evidence: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final124_water_cut/`.
+Evidence: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final124_water_cut/`
+and `.../painter_final129_water_cutband/`.
 
 ## Water does not climb (card painter-water-climb, look-pending)
 

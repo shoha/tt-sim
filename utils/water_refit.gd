@@ -6,8 +6,8 @@ extends RefCounted
 ## works on a snapshot of the document and returns what the document would become; nothing is
 ## changed until the caller (WaterEditor.refit_water, one undoable history entry; a render job)
 ## lands it. In order:
-##  1. a stroke whose stored levels climb downstream (WaterConditioner.climbs) is noted (the hint
-##     `cut_through`): it is resolved as the plan resolves a drawn line over a rise (card
+##  1. a stroke whose stored levels climb downstream (WaterConditioner.climbs) is counted (`cut`,
+##     not said to the author): it is resolved as the plan resolves a drawn line over a rise (card
 ##     painter-water-cut), by cutting. No part of a stream is ever turned round (until that card a
 ##     run of climbing reaches was reversed, which left a stream flowing two ways from a crest);
 ##  2. the river and pond tree (WaterPorts.graph) is solved (WaterConditioner.solve_tree): water
@@ -27,8 +27,8 @@ const REVERSE_MIN_M := 0.3
 ## document's order), "heights" (the ground after the strokes' new carve), "reversed" (always 0:
 ## no stroke is turned round), "cut" (strokes whose stored climb is cut through), "changed"
 ## (bodies whose level moved), "moved" (largest level change, metres),
-## "hints" (WaterHints records: cut_through per such stroke), "before" and "after" (the
-## WaterPorts.audit of the document and of the result)}.
+## "hints" (WaterHints records; none since the cut-through hint was removed), "before" and
+## "after" (the WaterPorts.audit of the document and of the result)}.
 static func refit(doc: MapDocument) -> Dictionary:
 	var work := WaterMeshBuilder.snapshot(doc)
 	var before: Dictionary = WaterPorts.audit(doc)
@@ -43,12 +43,9 @@ static func refit(doc: MapDocument) -> Dictionary:
 		# A stored stroke that climbs is resolved as the plan resolves a drawn one (WaterEdit
 		# cut_through): its direction stays, the solve below lowers the climbing reaches onto the
 		# water above them and the re-carve cuts the rise.
-		var found: Array[Dictionary] = WaterConditioner.climbs(levels)
-		if not found.is_empty():
+		# Not said (the owner, 2026-11-22: the cut-through hint is unwanted); `cut` counts them.
+		if not WaterConditioner.climbs(levels).is_empty():
 			cut += 1
-			var detail := {"cut_m": float(found[0].rise), "rises": found.size()}
-			var at: Vector2 = typed[int(found[0].from)].points[0]
-			hints.append(WaterHints.make(&"cut_through", at, [] as Array[StringName], detail))
 	var solved: Dictionary = WaterPorts.condition_doc(work)
 	var levels: PackedFloat64Array = solved.levels
 	var originals := doc.water_bodies
