@@ -67,6 +67,10 @@ func update(doc: MapDocument, rect: Rect2i) -> Rect2i:
 		bake(doc)
 		return Rect2i(0, 0, width, depth)
 	var grid := Rect2i(0, 0, width, depth)
+	if rect.encloses(grid) and doc.heights == _raw:
+		# The whole grid and not a height changed (a water swap re-adds the terrain's skirt): one
+		# native compare instead of the sample loop (8.6 ms on a 320 ft map, card painter-river-landing).
+		return Rect2i()
 	var changed := _read_heights(doc, rect.intersection(grid))
 	if not changed.has_area():
 		return Rect2i()

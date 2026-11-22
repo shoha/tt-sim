@@ -149,8 +149,12 @@ func _settle() -> void:
 	# A whole zone build after an edit runs on a worker (card painter-edit-hitch4) and may not have
 	# landed in three frames on a slow machine: land it, and the edits that waited for it, now
 	# (bounded: a landing's follow-up may start one more).
+	# A water field flush over PainterWaterField.ASYNC_SAMPLES runs on a worker too (card
+	# painter-river-landing): landed here, it must equal the synchronous update.
 	for k in 4:
-		if _surfaces == null or not _surfaces.finish_zones():
+		var landed := _field != null and _field.finish_update()
+		var zoned := _surfaces != null and _surfaces.finish_zones()
+		if not (landed or zoned):
 			break
 
 

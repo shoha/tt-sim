@@ -2858,6 +2858,35 @@ ms each), the second swap's `_finish_task` (about 130 ms: the field update and a
 body), `join_line` and `through_rises` (about 33 ms each) and the river preview (17 ms on the
 release frame).
 
+Landing (card painter-river-landing, 2026-11-22). The second water field update was redundant:
+`WaterEditor._land` puts the new bodies and the carve in the document in one frame, so the ground
+flush that follows already reads the new bodies, and the swap's `refreshed` redid the changed
+bodies' rect over the same inputs (about 95 ms on the second river). The flush now also redoes the
+changed bodies' rect and notes their signatures, so `refreshed` finds nothing to redo; and a flush
+or water edit of 4096 samples or more (`PainterWaterField.ASYNC_SAMPLES`) runs on the held stroke's
+worker path and lands a few frames later with the same bytes. A whole-grid shade field update on
+unchanged heights (the skirt re-add) is one native compare. Interleaved A/B, bench job (the attrib
+job plus wall and path), main 15a65acf against the branch, three runs each, `game` ms:
+
+| | main | branch |
+| --- | --- | --- |
+| first river, frames over 33 ms (sum) | 5 (442.3), 5 (436.1), 5 (432.8) | 3 (293.5), 3 (294.9), 3 (296.5) |
+| first river, worst frame (the land frame) | 158.7, 154.0, 154.3 | 153.0, 151.7, 155.9 |
+| second river, frames over 33 ms (sum) | 6 (624.8), 6 (605.4), 6 (607.9) | 5 (397.3), 5 (399.3), 5 (403.3) |
+| second river, worst frame (the land frame) | 156.1, 150.0, 149.9 | 152.3, 152.7, 156.2 |
+| second river, flush frame | 107.1, 105.3, 107.7 | none over 33 |
+| second river, swap frame | 140.1, 138.0, 137.6 | 33.3, 33.4, 33.9 |
+| held raise dry, pressed cpu median / p95 | 4.02 / 10.60, 3.80 / 10.52, 3.72 / 10.21 | 4.05 / 10.64, 3.65 / 10.03, 3.75 / 10.30 |
+| held raise over a river, median / p95 | 3.87 / 10.26, 4.21 / 10.78, 3.98 / 10.37 | 3.84 / 10.39, 3.75 / 10.45, 3.99 / 10.14 |
+| wall placement frame | 183.3, 194.8, 193.1 | 186.0, 204.6, 199.8 |
+| path, pressed median / max | 47.8 / 371.6, 46.3 / 92.1, 46.6 / 91.2 | 47.1 / 89.3, 46.5 / 90.7, 47.6 / 97.4 |
+
+`ident.json`'s digests equal main's at every step. The land frame (about 153 ms: 30 chunks in
+place, shade field and zone rects, the snap) is left: its zone rect is about a fifth of a 320 ft
+map's grid, under `PainterZoneMaps.WORKER_SHARE`, and budgeting the chunks would leave chunks
+edited in place after the landing's `settle_heights`. Evidence:
+`D:/dev/tabletop/docs/research/2026-11-22-terraform-audit/today_attrib/river_landing/`.
+
 ### Held strokes (card painter-held-stroke, 2026-11-22)
 
 A held sculpt stroke paid two followers every frame: the water field's update (any ground edit
