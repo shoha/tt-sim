@@ -70,6 +70,20 @@ func test_an_edit_that_changes_no_height_rewrites_nothing() -> void:
 	assert_true(field.bytes() == before)
 
 
+## A whole-grid update (a water swap re-adds the terrain's skirt) on unchanged heights takes the
+## one-compare path and rewrites nothing; with a height changed it still equals a full bake.
+func test_a_whole_update_on_unchanged_heights_rewrites_nothing() -> void:
+	var doc := _document(_hills)
+	var field := _baked(doc)
+	var before := field.bytes().duplicate()
+	var grid := Rect2i(0, 0, doc.samples_x(), doc.samples_z())
+	assert_eq(field.update(doc, grid), Rect2i(), "nothing changed")
+	assert_true(field.bytes() == before)
+	doc.heights[doc.sample_index(40, 33)] += 0.9
+	assert_true(field.update(doc, grid).has_area(), "one height changed")
+	assert_true(field.bytes() == _baked(doc).bytes(), "equal to a full bake")
+
+
 func test_a_document_of_another_size_is_baked_whole() -> void:
 	var field := _baked(_document(_hills))
 	var small := MapDocument.create_flat(Vector2i(20, 20), "", "", 0)

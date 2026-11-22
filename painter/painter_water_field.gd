@@ -30,10 +30,17 @@ extends RefCounted
 ## over a clone of the field and a copy-on-write snapshot of the document, with the mesh arrays and
 ## texture images; the result lands on the first frame after the task completes (to_mesh and the
 ## texture upload stay here), and the next flush, held or not, waits for it. The main thread never
-## waits on an unfinished task: an update that cannot wait (a water edit, a probe) drops the job and
-## redoes its rect with its own. The stroke's end edits its whole rect once more, so what lands
-## after a stroke is the synchronous result (card painter-held-stroke: 14 to 20 ms every fourth
-## held frame before).
+## waits on an unfinished task: an update that cannot wait (a small water edit, a probe) drops the
+## job and redoes its rect with its own. The stroke's end edits its whole rect once more, so what
+## lands after a stroke is the synchronous result (card painter-held-stroke: 14 to 20 ms every
+## fourth held frame before).
+##
+## A water landing (card painter-river-landing). Its document takes the new bodies and the carve
+## in one frame, so the ground flush that follows also redoes the changed bodies' rect and notes
+## their signatures; the swap's refreshed signal then finds nothing changed (the field was updated
+## twice per landing before, about 95 ms each on a second river, over the same inputs). A flush or
+## water edit over ASYNC_SAMPLES or more runs on the worker path above, held or not, and lands a
+## few frames later with the bytes a synchronous update gives.
 
 ## The mesh's custom bounds margin: a surface is never above its tallest sample.
 const MARGIN_M := 0.5
@@ -46,6 +53,10 @@ const DEPTH_FLOOR := -0.3
 ## The most frames a ground edit near water waits for its flush while edits keep coming (a stroke
 ## beside water redoes the field every FLUSH_WAIT frames, not every frame).
 const FLUSH_WAIT := 4
+## A flush or water edit whose rect holds at least this many samples runs on a worker, as a held
+## stroke's does (about 3 ms of update per thousand samples: a river's landing redoes about 32
+## thousand); a smaller one runs at once.
+const ASYNC_SAMPLES := 4096
 ## WaterField's packed arrays, copied by clone_field().
 const _CLONED: Array[StringName] = [
 	&"ground", &"w", &"ew", &"depth", &"energy", &"steep", &"shore", &"lateral", &"spill", &"calm",
@@ -329,7 +340,11 @@ func _on_water_refreshed() -> void:
 	var rect := _changed_rect(doc)
 	_remember(doc)
 	if rect.has_area():
-		update_rect(rect)
+		if _dirty.has_area():
+			# A ground flush still waiting is redone with this rect (its callback finds nothing).
+			rect = _merge(rect, _dirty)
+			_dirty = Rect2i()
+		_redo(rect)
 	_apply_visibility()
 
 
@@ -456,10 +471,29 @@ func _flush_dirty() -> void:
 	_dirty = Rect2i()
 	if field == null or not rect.has_area():
 		return
+	# A water landing's ground edits arrive with its bodies already in the document: redo their rect
+	# here too, so the refreshed signal of the swap that follows finds nothing left to redo.
+	var doc := _terrain.document
+	var bodies := _changed_rect(doc)
+	if bodies.has_area():
+		rect = _merge(rect, bodies)
+		_remember(doc)
 	if held:
 		_start_job(rect)
 	else:
+		_redo(rect)
+
+
+## Redoes `rect` now when it holds fewer than ASYNC_SAMPLES samples, else on a worker like a held
+## stroke's flush (a job in flight is dropped and its rect redone with this one).
+func _redo(rect: Rect2i) -> void:
+	if rect.get_area() < ASYNC_SAMPLES:
 		update_rect(rect)
+		return
+	if _task >= 0:
+		rect = _merge(rect, _job["rect"])
+		_cancel_job()
+	_start_job(rect)
 
 
 func _held() -> bool:
@@ -484,7 +518,7 @@ func _start_job(rect: Rect2i) -> void:
 
 ## What WaterField.update() reads of `doc` (the grid, the heights, the pond mask, the water bodies
 ## and the seed), copied: packed arrays copy-on-write, so a later edit never reaches the copy.
-## Nothing else is shared, so the stroke's edits of the scatter rows meanwhile copy nothing.
+## Nothing else is shared, so a stroke's edits of the scatter rows meanwhile copy nothing.
 static func _snapshot(doc: MapDocument) -> MapDocument:
 	var s := MapDocument.new()
 	s.map_seed = doc.map_seed
@@ -494,7 +528,11 @@ static func _snapshot(doc: MapDocument) -> MapDocument:
 	s.tier_height_m = doc.tier_height_m
 	s.heights = doc.heights.duplicate()
 	s.pond_mask = doc.pond_mask.duplicate()
-	s.water_bodies = doc.water_bodies.duplicate()
+	# Copies (a few bodies, cheap): a water edit or its undo lands while a release's job runs.
+	var bodies: Array[WaterBody] = []
+	for body in doc.water_bodies:
+		bodies.append(body.copy())
+	s.water_bodies = bodies
 	return s
 
 
