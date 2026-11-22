@@ -52,8 +52,11 @@ main checkout. Set it up once, in this order:
 
 1. `git -C D:/dev/tabletop/tt-sim worktree add D:/dev/tabletop/worktrees/tt-sim-<topic> -b <topic>`
 2. The procgen junction (the submodule path is empty): PowerShell `New-Item -ItemType Junction
-   -Path D:/dev/tabletop/worktrees/tt-sim-<topic>/procgen -Target D:/dev/tabletop/procgen` (or the
-   procgen worktree the card names). Remove it ONLY with `(Get-Item <link>).Delete()`, before any
+   -Path D:/dev/tabletop/worktrees/tt-sim-<topic>/procgen -Target D:/dev/tabletop/worktrees/procgen-pin`
+   (a procgen checkout at tt-sim's pin; `git -C D:/dev/tabletop/tt-sim ls-tree main procgen` prints the
+   pin and `git -C D:/dev/tabletop/worktrees/procgen-pin rev-parse HEAD` must match it; or the procgen
+   worktree the card names). Never target `D:/dev/tabletop/procgen` itself: its main runs ahead of the
+   pin, and a gate on it failed 273 tests (2026-11-22). Remove it ONLY with `(Get-Item <link>).Delete()`, before any
    git command that touches the worktree and before removing it; never `rm -rf`,
    `Remove-Item -Recurse` or `git clean` (2026-11-03: a recursive delete followed the link and
    emptied the real procgen repo).
