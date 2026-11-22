@@ -6,9 +6,9 @@ extends RefCounted
 ## 61 m square drawn from (0, 0) and placed on a map document's centred frame (scaled to its
 ## extent), so the same corpus serves every map size.
 ##
-## A primitive is {"id": int, "type": int (TerraCore kinds), "data": PackedFloat32Array}. The
-## document card replaces this list with TerraDoc; the tests only use add, append, replace and
-## remove.
+## The primitives are a TerraDoc (`terra`, card terraform-p1-document), so the corpus is also a
+## real terrain document: the map document IO tests save it and read it back. add, append,
+## replace, remove and find are the TerraDoc's; make_derive skips muted primitives.
 
 ## The 200 ft map the layout was drawn on (40 cells of 5 ft).
 const CELLS := 40
@@ -17,8 +17,8 @@ const CELLS := 40
 const NO_LIBRARY := "the native library is not built (AGENTS.md Testing): no current TerraDerive"
 
 var map_doc: MapDocument
-var prims: Array[Dictionary] = []
-var next_id := 1
+## The corpus's terrain document (also set as map_doc.terra).
+var terra := TerraDoc.new()
 ## Metres of map per metre of the 61 m layout, and the layout's origin in world metres.
 var scale := 1.0
 var origin := Vector2.ZERO
@@ -31,6 +31,8 @@ static func build(cells := Vector2i(CELLS, CELLS), with_extras := true) -> Terra
 	var c := TerraCorpus.new()
 	c.map_doc = MapDocument.new()
 	c.map_doc.size_cells = cells
+	c.map_doc.heights.resize(c.map_doc.sample_count())
+	c.map_doc.terra = c.terra
 	var ext := c.map_doc.extent_m()
 	c.scale = ext.x / 61.0
 	c.origin = -Vector2(61.0, 61.0) * c.scale * 0.5
@@ -69,8 +71,9 @@ static func build(cells := Vector2i(CELLS, CELLS), with_extras := true) -> Terra
 func make_derive() -> RefCounted:
 	var n := TerraCore.make_derive(map_doc)
 	if n != null:
-		for p in prims:
-			n.call("set_prim", p["id"], p["type"], p["data"])
+		for p in terra.prims:
+			if not TerraDoc.is_muted(p):
+				n.call("set_prim", p["id"], p["kind"], p["data"])
 	return n
 
 
@@ -101,41 +104,26 @@ func dabs(list: Array) -> PackedFloat32Array:
 	return out
 
 
-## Adds a primitive at the end of the document and returns its id.
-func add(type: int, data: PackedFloat32Array) -> int:
-	var id := next_id
-	next_id += 1
-	prims.append({"id": id, "type": type, "data": data})
-	return id
+## Adds a primitive at the end of the document and returns its id (TerraDoc.add).
+func add(kind: int, data: PackedFloat32Array) -> int:
+	return terra.add(kind, data)
 
 
-## Appends floats (whole dabs) to a primitive.
+## Appends floats (whole dabs) to a primitive (TerraDoc.append).
 func append(id: int, data: PackedFloat32Array) -> void:
-	var p := find(id)
-	if not p.is_empty():
-		var d: PackedFloat32Array = p["data"]
-		d.append_array(data)
-		p["data"] = d
+	terra.append(id, data)
 
 
-## Replaces a primitive's floats, keeping its place in the order.
+## Replaces a primitive's floats, keeping its place in the order (TerraDoc.replace).
 func replace(id: int, data: PackedFloat32Array) -> void:
-	var p := find(id)
-	if not p.is_empty():
-		p["data"] = data
+	terra.replace(id, data)
 
 
-## Removes a primitive.
+## Removes a primitive (TerraDoc.remove).
 func remove(id: int) -> void:
-	for i in prims.size():
-		if int(prims[i]["id"]) == id:
-			prims.remove_at(i)
-			return
+	terra.remove(id)
 
 
-## The primitive with `id`, or an empty Dictionary.
+## The primitive with `id`, or an empty Dictionary (TerraDoc.find).
 func find(id: int) -> Dictionary:
-	for p in prims:
-		if int(p["id"]) == id:
-			return p
-	return {}
+	return terra.find(id)

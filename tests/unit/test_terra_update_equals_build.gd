@@ -34,8 +34,8 @@ func test_update_equals_build() -> void:
 	var n := c.make_derive()
 	n.call("derive_full")
 	# The rest of the corpus, one primitive and one derive at a time.
-	for p in final.prims.slice(c.prims.size()):
-		_edit(n, c, p["type"], p["data"])
+	for p in final.terra.prims.slice(c.terra.prims.size()):
+		_edit(n, c, p["kind"], p["data"])
 		n.call("derive")
 	_check_same(n, c, "corpus added one by one")
 	# A held raise stroke, one dab per derive, across the tributary and the main river.
@@ -58,12 +58,12 @@ func test_update_equals_build() -> void:
 	var lo := c.at(31.0, 37.0)
 	_edit(n, c, TerraCore.STROKE, PackedFloat32Array([lo.x, lo.y, 2.5, 0.5, 1]))
 	n.call("derive")
-	var hill_id := int(c.prims[3]["id"])
+	var hill_id := int(c.terra.prims[3]["id"])
 	c.remove(hill_id)
 	n.call("remove_prim", hill_id)
 	n.call("derive")
-	for p in c.prims:
-		if p["type"] == TerraCore.WALL:
+	for p in c.terra.prims:
+		if p["kind"] == TerraCore.WALL:
 			var moved := c.line([1.2, 0.5], [22, 34, 40, 40])
 			c.replace(p["id"], moved)
 			n.call("set_prim", p["id"], TerraCore.WALL, moved)

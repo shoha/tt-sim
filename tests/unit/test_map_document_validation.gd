@@ -96,7 +96,8 @@ func test_a_pre_binary_format_is_refused_with_a_clear_message() -> void:
 		assert_null(result["document"], "format %d" % format)
 		assert_eq(result["warnings"].size(), 1, str(result["warnings"]))
 		assert_true(Fixtures.has_warning(result, "format %d is from an older version" % format))
-		assert_true(Fixtures.has_warning(result, "formats 4 to 5"))
+		var readable := "formats %d to %d" % [MapDocument.MIN_FORMAT, MapDocument.MAX_FORMAT]
+		assert_true(Fixtures.has_warning(result, readable))
 
 
 func test_geometry_out_of_range_is_rejected() -> void:
