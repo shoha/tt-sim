@@ -146,6 +146,12 @@ func _settle() -> void:
 		_water().finish_refresh()
 	for i in 3:
 		await get_tree().process_frame
+	# A whole zone build after an edit runs on a worker (card painter-edit-hitch4) and may not have
+	# landed in three frames on a slow machine: land it, and the edits that waited for it, now
+	# (bounded: a landing's follow-up may start one more).
+	for k in 4:
+		if _surfaces == null or not _surfaces.finish_zones():
+			break
 
 
 func _grid() -> Rect2i:
