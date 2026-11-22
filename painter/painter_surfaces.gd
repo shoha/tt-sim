@@ -92,6 +92,8 @@ var _overrides: Dictionary = {}
 var _swapped: Array = []
 ## Mesh instance id -> true for every species looked at (painted or left Classic).
 var _seen: Dictionary = {}
+## The scatters' resolved species count at the last landing's stand-in pass (_on_cells_applied).
+var _species_seen := -1
 var _zone_queued := false
 ## The painted trees (a PainterTrees), made on the first paint().
 var _trees: RefCounted = null
@@ -208,6 +210,7 @@ func release() -> void:
 			mesh.surface_set_material(entry[1], entry[2])
 	_swapped.clear()
 	_seen.clear()
+	_species_seen = -1
 	_map = null
 	_terrain = null
 	_scatters.clear()
@@ -333,16 +336,26 @@ func _on_ground_edited(rect: Rect2i) -> void:
 	_queue_occlusion()
 
 
-## A landing of `cells` of `scatter`: the painted trees follow those cells alone.
+## A landing of `cells` of `scatter`: the painted trees follow those cells alone. The stand-in and
+## grass-mark passes run only when the scatters' resolved species changed (a landing of known
+## species alone cost 2 to 3 ms of them: terraform-s2-cpu round 8); a rebuilt or new node keeps or
+## catches its stand-in and mark by itself. The placed props' nodes are marked on every landing of
+## theirs (PainterPlantTone.mark_placed).
 func _on_cells_applied(cells: Array[Vector2i], scatter: Node) -> void:
-	_tone_new(_paint_species())
-	_marks.sync(self)
+	var count := _species_count()
+	if count != _species_seen:
+		_species_seen = count
+		_tone_new(_paint_species())
+		_marks.sync(self)
+	elif str(scatter.name) == MapSourceLoader.PROPS_NODE:
+		PainterPlantTone.mark_placed([scatter])
 	if _trees != null:
 		_trees.call("sync_cells", scatter, cells)
 	_queue_occlusion()
 
 
 func _on_species_added(_materials: Array[ShaderMaterial]) -> void:
+	_species_seen = _species_count()
 	_tone_new(_paint_species())
 	_marks.sync(self)
 	if _trees != null:
@@ -694,6 +707,20 @@ func _on_zone_frame() -> void:
 
 
 # ---------------------------------------------------------------- the scatter
+
+
+## How many species the plant sources have resolved (the field plants, with no count of their own,
+## by their short resolved list).
+func _species_count() -> int:
+	var count := 0
+	for scatter in _scatters:
+		if not is_instance_valid(scatter):
+			continue
+		if scatter.has_method("resolved_species_count"):
+			count += int(scatter.call("resolved_species_count"))
+		else:
+			count += (scatter.call("resolved_species") as Dictionary).size()
+	return count
 
 
 ## Paints every resolved species not looked at yet; returns the new [mesh, surface, original,

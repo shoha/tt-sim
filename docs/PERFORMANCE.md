@@ -2789,6 +2789,38 @@ frozen, each shot frame about 600 ms by the readback) shows main's banks turn sa
 the frame the water appears, the one-task branch's a frame later (green banks for that frame);
 at real frame times the 8-band landing is 2 frames (about 10 ms) after the start.
 
+### Plant landing (card painter-plant-landing, 2026-11-22)
+
+The terraform spike's round 8 (`D:/dev/tabletop/docs/research/2026-11-22-terraform-audit/s8_landing/s8.md`)
+named the game's own landing costs; three are now the default (docs/systems/painter.md
+"Surfaces"): the painted trees' row map and occluder tables on a worker (`PainterTreeTables`;
+`PainterTreeRows.tables` was 19-48 ms a landing or install frame), one shared copy of each biome's
+rules per job with the deep copy on the worker (`ScatterRegen._new_work` / `own_rules`; 5-7 ms a
+dispatch frame), and the stand-in and grass-mark passes only when a species is new (2-3 ms a
+landing frame). The painted trees' mass array is also sized from the wanted trees. Not ported:
+the spike's hold of wet landings while a stroke is held (today's game already regrows only after
+the release) and its species loads at build (a spike-only headless cost).
+
+Windowed, quiet (lane held), the card's worktree, the s6 bench job (`today_job.json` with a
+recorder that adds the tables' lag): 320 ft hilltop forest, seed 1234, 250-298 painted trees.
+Main thread from the frame's first callback to `frame_pre_draw`, ms; held strokes median / p95 /
+max while pressed; releases summed above idle (worst frame). Before = main 926d1eba (the code
+stashed), after = the branch, one run each.
+
+| | before | after |
+| --- | --- | --- |
+| held raise, dry | 10.2 / 25.4 / 32.0 | 10.3 / 25.6 / 29.0 |
+| held raise over a river | 10.3 / 30.0 / 34.5 | 10.2 / 29.5 / 31.4 |
+| first river, release | 1672 (256) | 1365 (226) |
+| second river, release | 2068 (305) | 1824 (303) |
+| stone wall across it | 154 (27.6) | 104 (10.7) |
+| path, release | 202 (25.5) | 162 (20.6) |
+
+Neighbour shading lags the trees by 3 to 8 frames after each edit. The held strokes and the
+river release's worst frame (about 300 ms) are not in the plant landing path and did not move;
+they are the next thing to attribute. A forest-edge capture after the river and the wall is the
+same by eye before and after (every crown toned).
+
 ## In-game authoring phase 4 (water): pinned performance pass (2026-09-27)
 
 The phase 4 pass: authored maps with water in play against the same maps without it, the

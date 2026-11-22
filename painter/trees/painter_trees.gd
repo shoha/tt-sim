@@ -107,9 +107,8 @@ var _tree_cap := 256
 var _tree_data := PackedFloat32Array()
 var _tree_tex: ImageTexture = null
 var _tree_dirty := false
-## The row map and the occluder table (_tables), updated in place while their size holds.
-var _row_map: ImageTexture = null
-var _occ_tex: ImageTexture = null
+## The row map and the occluder table (_tables), built on a worker (PainterTreeTables).
+var _tables_host := PainterTreeTables.new(trees, MAP_W, NEAR_M, _bind_tables)
 var _layers: Array[Dictionary] = []
 var _dirty_layers: Dictionary = {}
 var _mass_tex: Texture2DArray = null
@@ -313,6 +312,7 @@ func _hide_cell(scatter: Node, cell: Vector2i, by_asset: Dictionary) -> void:
 ## Frees every painted node, shows the GLB nodes it hid and forgets the map.
 func release() -> void:
 	_wait_all()
+	_tables_host.release()
 	_batches.clear()
 	_pending.clear()
 	_want = {}
@@ -359,15 +359,23 @@ func is_active() -> bool:
 	return _map != null
 
 
-## Whether rows are still growing or waiting to be installed.
+## Whether rows are still growing or waiting to be installed, or the tables have not caught up with
+## them (PainterTreeTables: the neighbour shading lags the trees by a few frames).
 func is_growing() -> bool:
-	return not _batches.is_empty()
+	return not _batches.is_empty() or _tables_host.is_busy()
 
 
-## Grows and installs everything pending at once (tests and render jobs).
+## Grows and installs everything pending at once, and builds the tables whole (tests and render
+## jobs).
 func complete() -> void:
 	_wait_all()
 	_install_some(INF)
+	_tables_host.finish()
+
+
+## The tables host (tests).
+func tables_host() -> PainterTreeTables:
+	return _tables_host
 
 
 ## The materials every cell node draws with (0, 1 block-in; 2..4 the stroke levels).
@@ -585,7 +593,7 @@ func _step() -> void:
 	if _map == null:
 		return
 	_install_some(INSTALL_MS * 1000.0)
-	if is_growing():
+	if not _batches.is_empty():
 		_queue_step()
 
 
@@ -644,6 +652,7 @@ func _install_tree(key: Vector3i, w: Dictionary, d: Dictionary, dirty: Dictionar
 	trees[key] = {
 		"row": row, "d": d, "pos": p, "cell": cell, "species": w["species"], "bush": bush
 	}
+	_tables_host.note(key)
 
 
 func _erase_tree(key: Vector3i, dirty: Dictionary) -> void:
@@ -753,7 +762,9 @@ func _tree_image() -> Image:
 func _flush() -> void:
 	if not _dirty_layers.is_empty():
 		if _layers.size() > _tex_layers or _mass_tex == null:
-			_tex_layers = _layers.size() + maxi(2, _layers.size() / 4)
+			# Sized for every wanted tree with room to spare, so an edit that adds trees seldom
+			# regrows the array (each regrow rebuilds every layer: 8.6 to 10.8 ms at 300 trees).
+			_tex_layers = maxi(_layers.size() + maxi(2, _layers.size() / 4), _layers_for_want())
 			var images: Array[Image] = []
 			for l in _tex_layers:
 				images.append(_layer_image(l))
@@ -769,23 +780,27 @@ func _flush() -> void:
 		_tree_dirty = false
 
 
-## The row map (each tree's role rows and its eight nearest crowns) and the occluder table.
+## The mass layers the last sync's wanted trees fill at the installed trees' mean size, a quarter
+## over and one more (0 before a tree is installed).
+func _layers_for_want() -> int:
+	if trees.is_empty():
+		return 0
+	var used := 0
+	for layer: Dictionary in _layers:
+		used += int(layer["used"])
+	var mean := float(used) / float(trees.size())
+	return ceili(maxf(_want.size(), trees.size()) * mean * 1.25 / PainterTreePack.LAYER_TEXELS) + 1
+
+
+## The row map (each tree's role rows and its eight nearest crowns) and the occluder table: the new
+## trees' lines now, the whole tables on a worker (PainterTreeTables).
 func _tables() -> void:
-	var lines := maxi(_tree_cap, _rows.size())
-	var built := PainterTreeRows.tables(trees, lines, MAP_W, NEAR_M)
-	var rows: PackedFloat32Array = built.rows
-	var occ: PackedFloat32Array = built.occ
-	var map_image := Image.create_from_data(MAP_W, lines, false, Image.FORMAT_RF, rows.to_byte_array())
-	var occ_image := Image.create_from_data(lines, 2, false, Image.FORMAT_RGBAF, occ.to_byte_array())
-	# Updated in place while the size holds (a new texture per landing cost a texture creation).
-	if _row_map != null and _row_map.get_height() == lines:
-		_row_map.update(map_image)
-		_occ_tex.update(occ_image)
-	else:
-		_row_map = ImageTexture.create_from_image(map_image)
-		_occ_tex = ImageTexture.create_from_image(occ_image)
-		_set_all(&"row_map", _row_map)
-		_set_all(&"occ_tex", _occ_tex)
+	_tables_host.update(maxi(_tree_cap, _rows.size()))
+
+
+func _bind_tables(row_map: ImageTexture, occ_tex: ImageTexture) -> void:
+	_set_all(&"row_map", row_map)
+	_set_all(&"occ_tex", occ_tex)
 
 
 ## The slots of tree data `d` a stroke node runs now: every slot in a bare season (or with
