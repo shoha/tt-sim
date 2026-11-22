@@ -222,8 +222,11 @@ compiles none of the terraform scripts; cast with `doc.terra as TerraDoc` where 
   knows by another name), a version above 1 or a reserved flag set refuse it with a warning that
   says "made by a newer version". A primitive that fails `validate` or repeats an id is dropped,
   with one warning counting them and naming the first. `next_id` is raised above every id read.
-  A save after a refused section writes the map without terrain: the warning is the author's
-  notice.
+  A refused section is kept as read (`MapDocument.terra_kept`: `terrain/prims.bin` and, when present,
+  `terrain/derived.bin`), and while `terra` stays null a save writes those bytes back untouched in
+  format 6 (`MapTerrainIO.serialize`, the snapshot copies them), so opening a newer map in this build
+  and saving it never drops its terrain (card terraform-p1-session; `test_terra_session.gd`). A
+  document that gets a `terra` of its own writes that instead.
 - **Writing.** `MapTerrainIO.problem` (`TerraDoc.problem`: caps, ids, flags, every primitive valid)
   runs in `data_problem`, so the writer refuses with `ERR_INVALID_DATA` anything the reader would
   drop; a written section reads back bit for bit.

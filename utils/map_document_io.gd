@@ -334,11 +334,12 @@ static func _write_zip(path: String, entries: Dictionary) -> Error:
 
 ## The manifest. `libraries` is recomputed from the document's ids (MapLibraries.record_for, the
 ## versions as the registry serves them now). The format is 6 when the document has a terrain
-## section, else 5 when any library is not core, else 4.
+## section (or keeps a refused one, MapDocument.terra_kept), else 5 when any library is not
+## core, else 4.
 static func _manifest(doc: MapDocument) -> Dictionary:
 	var libraries := MapLibraries.record_for(doc)
 	var format := MapLibraries.format_for(libraries)
-	if doc.terra != null:
+	if doc.terra != null or not doc.terra_kept.is_empty():
 		format = MapDocument.FORMAT_TERRAIN
 	var manifest := {
 		"format": format,

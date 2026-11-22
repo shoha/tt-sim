@@ -44,6 +44,11 @@ var prims: Array[Dictionary] = []
 var next_id := 1
 ## The derived record (see the header; TerraCache.make_record's form), or {}.
 var derived: Dictionary = {}
+## Called by MapDocumentSnapshot.capture() before it copies this document, on the main thread:
+## the attached TerraSession refreshes `derived` there (TerraSession.capture_for_save). Not part
+## of the document: duplicate() leaves the copy's empty, and a callable whose session was freed
+## is no longer valid.
+var before_save := Callable()
 
 
 ## Adds a primitive at the end of the document and returns its id, or -1 when the document
