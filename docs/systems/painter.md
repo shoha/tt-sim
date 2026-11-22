@@ -220,6 +220,30 @@ a path and a forest are painted (paths 26.5 of it); a held sculpt stroke's frame
 painted), a water edit (`refresh_water_dressing` emits the whole grid), a new surface or biome, a
 dominant biome won or lost, and the path slot map on every Paint edit of surfaces (14 ms painted).
 
+After an edit, three follow-ups wait for the edit to settle (card painter-edit-hitch2, 2026-11-21;
+numbers in `PERFORMANCE.md` "The painted look after a water or height edit", Round 2):
+
+- The zone maps' deferred rebuild (`PainterSurfaces._rebuild_zone`) keeps its dirty mark while
+  `AuthoredTerrain.water_dressing_pending()` is true (the document's dressing differs in size from
+  the bound one: the first water's layer re-table has not landed), so the first river on a map
+  makes one whole build, when the refresh marks the whole grid, not two. `PainterZoneMaps.builds`
+  counts the whole builds.
+- The water field (`PainterWaterField`) merges the rects of consecutive ground edits and redoes
+  them once (`_flush_dirty`, on `process_frame`): in the first frame after one with no edit, and
+  at most `FLUSH_WAIT` (4) frames after the first edit. A landing's carve, settle and dressing
+  refresh flush once; a held sculpt stroke beside water redoes the field every fourth frame. The
+  rects are merged and the inputs read at flush time, so the field matches main's per-edit redo
+  (the round's `ident.json` water field digests, after every step).
+- The painted trees follow a scatter landing by cell: PainterSurfaces binds each scatter's
+  `cells_applied` to `PainterTrees.sync_cells(scatter, cells)`, which lists only those cells' rows,
+  erases by a per-cell key index (`_cell_keys`, rebuilt by every whole `sync()`) and hides only
+  those cells' GLB chunk nodes. The same trees grow and go as a whole sync would; a source without
+  cells (the field plants) syncs whole. The pure listing and the row map and occluder tables are
+  `PainterTreeRows` (`painter/trees/tree_rows.gd`); the tables are still rebuilt whole when a tree
+  goes. `test_painter_edit_hitch2.gd` covers the zone build count and that a cell's listing is
+  its share of the whole listing; `test_painter_fire.gd` caught a landing that erased nothing when
+  the index was built lazily.
+
 Path surfaces and cliffs (card painter-ground-surfaces, 2026-11-18; look-pending). Under the path
 role every path surface painted alike, one sand-coloured stroked band, and cliff faces were the stone
 role's shade, which the ground's full violet pull swings to dark purple. `PainterGroundPaths`
@@ -706,8 +730,9 @@ vsync off, GPU medians: forest tokens summer +0.45 against +0.45 on main in the 
 summer +0.07 to +0.12 against +0.06.
 
 - The host, `PainterTrees` (`painter/trees/painter_trees.gd`), is made by PainterSurfaces (by
-  path) and driven by its events: paint() on a Painted state, sync() on the scatter's
-  `cells_applied` and `species_added`, release() on leaving. It hides the mapped species' GLB chunk
+  path) and driven by its events: paint() on a Painted state, sync_cells() on the scatter's
+  `cells_applied` (the landed cells only; "Surfaces" above), sync() on `species_added`, release()
+  on leaving. It hides the mapped species' GLB chunk
   nodes (and any built later, by `child_entered_tree`) and shows exactly those again. New rows grow
   on the WorkerThreadPool in chunks of 12, nearest the camera first, and install about 2 ms a frame
   through one-shot `process_frame` callbacks; an erase frees the tree's row at once. The only value

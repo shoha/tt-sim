@@ -544,6 +544,14 @@ func get_water_texture() -> ImageTexture:
 	return _water_texture
 
 
+## Whether the document's wet dressing gained or lost its field since the last upload (the first
+## water on a map, or the last one gone) and refresh_water_dressing() has not run yet: that refresh
+## re-tables the layers and marks the whole grid, so a follower of ground_edited that reads the
+## dressing can wait for it rather than rebuild whole now and again then (card painter-edit-hitch2).
+func water_dressing_pending() -> bool:
+	return document != null and document.water_dressing.size() != _bound_dressing.size()
+
+
 func _has_water() -> bool:
 	return document != null and not document.water_dressing.is_empty()
 

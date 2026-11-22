@@ -21,9 +21,10 @@ extends RefCounted
 ##   from water only the field's copy of the heights is taken (_take_ground), so a later
 ##   update that reads them sees what a full build would (the dressing refresh no longer marks the
 ##   whole grid after every water or height edit, card painter-edit-hitch).
-## Ground edits arrive in bursts, so rects are merged and redone once per frame. The mesh is rebuilt
-## whole from the field after an update (about 50 ms on a 245 x 245 grid: GDScript over the field's
-## arrays); an update that changed nothing builds nothing.
+## Ground edits arrive in bursts, so rects are merged and redone once the burst pauses (a frame with
+## no edit, at most FLUSH_WAIT frames on: a water landing's three edits flush once). The mesh is
+## rebuilt whole from the field after an update (about 50 ms on a 245 x 245 grid: GDScript over the
+## field's arrays); an update that changed nothing builds nothing.
 
 ## The mesh's custom bounds margin: a surface is never above its tallest sample.
 const MARGIN_M := 0.5
@@ -33,6 +34,9 @@ const GROUND_REACH := 8
 ## The lowest depth the textures hold: a buried or dry sample must not drag a bicubic fetch of the
 ## waterline down by metres.
 const DEPTH_FLOOR := -0.3
+## The most frames a ground edit near water waits for its flush while edits keep coming (a stroke
+## beside water redoes the field every FLUSH_WAIT frames, not every frame).
+const FLUSH_WAIT := 4
 
 ## The field, null until a map is attached.
 var field: WaterField = null
@@ -53,6 +57,9 @@ var _rects: Dictionary = {}
 var _pond_mask: PackedByteArray = PackedByteArray()
 var _dirty: Rect2i = Rect2i()
 var _flush_queued: bool = false
+## The frames of the first and the latest ground edit merged into _dirty.
+var _dirty_since: int = 0
+var _dirty_last: int = 0
 var _tex_a: ImageTexture = null
 var _tex_b: ImageTexture = null
 
@@ -312,11 +319,12 @@ func _on_ground_edited(sample_rect: Rect2i) -> void:
 		_take_ground(field, _terrain.document, near)
 		return
 	_dirty = _merge(_dirty, sample_rect.grow(WaterField.RING_MARGIN))
+	var frame := Engine.get_process_frames()
+	_dirty_last = frame
 	if not _flush_queued:
 		_flush_queued = true
-		var tree := Engine.get_main_loop() as SceneTree
-		if tree != null:
-			tree.process_frame.connect(_flush_dirty, CONNECT_ONE_SHOT)
+		_dirty_since = frame
+		_queue_flush()
 
 
 ## Takes `doc`'s heights into `f`'s copy of the ground over `rect` (inside the grid) without
@@ -338,7 +346,21 @@ static func _take_ground(f: WaterField, doc: MapDocument, rect: Rect2i) -> void:
 	f.ground = ground
 
 
+func _queue_flush() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null:
+		tree.process_frame.connect(_flush_dirty, CONNECT_ONE_SHOT)
+
+
+## Redoes the merged rect once the edits pause: a frame with no ground edit since the last one, or
+## FLUSH_WAIT frames after the first. A water landing edits the ground three frames running (the
+## carve, the settle, the dressing refresh), each frame already holding the zone maps' update;
+## one flush after them replaces three in those frames (card painter-edit-hitch2).
 func _flush_dirty() -> void:
+	var frame := Engine.get_process_frames()
+	if frame - _dirty_last < 2 and frame - _dirty_since < FLUSH_WAIT:
+		_queue_flush()
+		return
 	_flush_queued = false
 	var rect := _dirty
 	_dirty = Rect2i()

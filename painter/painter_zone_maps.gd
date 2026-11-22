@@ -29,6 +29,8 @@ var biome: Image = null
 var last_rect := Rect2i()
 ## Whether the last call rebuilt whole (tests, probes).
 var last_whole := false
+## How many whole builds ran (tests, probes: a first water on a map builds once).
+var builds := 0
 
 var _plan: Dictionary = {}
 var _zone_texture: ImageTexture = null
@@ -52,6 +54,7 @@ func build(doc: MapDocument, plan_now: Dictionary = {}) -> void:
 	_plan = p
 	last_rect = grid
 	last_whole = true
+	builds += 1
 	_upload()
 
 

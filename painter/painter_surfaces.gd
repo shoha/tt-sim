@@ -80,6 +80,8 @@ var _map: Node3D = null
 var _terrain: AuthoredTerrain = null
 ## The plant sources: AuthoredScatter and AuthoredFieldPlants (answers like a scatter; untyped).
 var _scatters: Array = []
+## scatter instance id -> its cells_applied handler (_on_cells_applied bound to the scatter).
+var _cell_handlers: Dictionary = {}
 var _ground: ShaderMaterial = null
 var _skirt: ShaderMaterial = null
 ## The small stones' dabs' material (DAB_SHADER), every ground parameter the ground's (siblings()).
@@ -207,6 +209,7 @@ func release() -> void:
 	_map = null
 	_terrain = null
 	_scatters.clear()
+	_cell_handlers.clear()
 	_zone_dirty = Rect2i()
 	_zone_whole = true
 	_path_key = []
@@ -266,7 +269,9 @@ static func _is_plant_source(node: Node) -> bool:
 func _bind_scatter(scatter: Node) -> void:
 	if scatter in _scatters:
 		return
-	scatter.cells_applied.connect(_on_cells_applied)
+	var on_cells := _on_cells_applied.bind(scatter)
+	_cell_handlers[scatter.get_instance_id()] = on_cells
+	scatter.cells_applied.connect(on_cells)
 	scatter.species_added.connect(_on_species_added)
 	scatter.visibility_changed.connect(_on_scatter_shown)
 	_scatters.append(scatter)
@@ -298,8 +303,9 @@ func _unbind() -> void:
 	for scatter in _scatters:
 		if not is_instance_valid(scatter):
 			continue
-		if scatter.cells_applied.is_connected(_on_cells_applied):
-			scatter.cells_applied.disconnect(_on_cells_applied)
+		var on_cells: Callable = _cell_handlers.get(scatter.get_instance_id(), Callable())
+		if on_cells.is_valid() and scatter.cells_applied.is_connected(on_cells):
+			scatter.cells_applied.disconnect(on_cells)
 		if scatter.species_added.is_connected(_on_species_added):
 			scatter.species_added.disconnect(_on_species_added)
 		if scatter.visibility_changed.is_connected(_on_scatter_shown):
@@ -325,11 +331,12 @@ func _on_ground_edited(rect: Rect2i) -> void:
 	_queue_occlusion()
 
 
-func _on_cells_applied(_cells: Array[Vector2i]) -> void:
+## A landing of `cells` of `scatter`: the painted trees follow those cells alone.
+func _on_cells_applied(cells: Array[Vector2i], scatter: Node) -> void:
 	_tone_new(_paint_species())
 	_marks.sync(self)
 	if _trees != null:
-		_trees.call("sync")
+		_trees.call("sync_cells", scatter, cells)
 	_queue_occlusion()
 
 
@@ -581,10 +588,14 @@ func _rebuild_zone() -> void:
 	_field.sync(_terrain, siblings())
 	if _zone_whole or _zones.zone == null:
 		_zones.build(doc)
-	elif _zone_dirty.has_area():
+		_zone_whole = false
+		_zone_dirty = Rect2i()
+	elif _zone_dirty.has_area() and not _terrain.water_dressing_pending():
 		_zones.update(doc, _zone_dirty)
-	_zone_whole = false
-	_zone_dirty = Rect2i()
+		_zone_dirty = Rect2i()
+	# (The first water on a map, or the last one gone, changes the zone plan: the update would build
+	# whole now, and the terrain's dressing refresh two frames on marks the grid for a second whole
+	# build. The edit waits in _zone_dirty for that mark: one build, card painter-edit-hitch2.)
 	var extent := doc.extent_m()
 	for material: ShaderMaterial in siblings():
 		material.set_shader_parameter(&"zone_map", _zones.zone_texture())

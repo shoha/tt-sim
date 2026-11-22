@@ -88,6 +88,8 @@ var cells: Dictionary = {}
 var bush_cells: Dictionary = {}
 ## The crown masses' camera material (PainterTreeFast; null before the first paint), kept in step.
 var fast_material: ShaderMaterial = null
+## How many rows the last sync (or sync_cells) listed: the map's trees, or the landed cells'.
+var last_listed := 0
 
 var _map: Node3D = null
 ## The plant sources drawn: AuthoredScatter and AuthoredFieldPlants (same duck-typed API).
@@ -105,6 +107,9 @@ var _tree_cap := 256
 var _tree_data := PackedFloat32Array()
 var _tree_tex: ImageTexture = null
 var _tree_dirty := false
+## The row map and the occluder table (_tables), updated in place while their size holds.
+var _row_map: ImageTexture = null
+var _occ_tex: ImageTexture = null
 var _layers: Array[Dictionary] = []
 var _dirty_layers: Dictionary = {}
 var _mass_tex: Texture2DArray = null
@@ -115,6 +120,8 @@ var _batches: Array[Dictionary] = []
 var _pending: Dictionary = {}
 ## The rows of the last sync (wanted()).
 var _want: Dictionary = {}
+## scatter instance id -> {cell -> the keys of its mapped rows} (_cell_index; sync_cells).
+var _cell_keys: Dictionary = {}
 var _step_queued := false
 var _watching := false
 var _lod := -99.0
@@ -219,6 +226,7 @@ func sync() -> void:
 		return
 	_hide_glb()
 	_want = wanted(_scatters, _doc, PainterGlbMap.rows_on(_map))
+	last_listed = _want.size()
 	var dirty := {}
 	for key: Vector3i in trees.keys():
 		# (An event's tree stays until the event lets go of it: drop() erases it then.)
@@ -231,6 +239,75 @@ func sync() -> void:
 	_rebuild(dirty)
 	if not todo.is_empty():
 		_grow(todo, _want)
+	# The index of the rows as they are now: a later landing's sync_cells reads what its cells held
+	# before it (an index listed after the landing would hold the new rows and erase nothing).
+	_cell_keys.clear()
+	for scatter in _scatters:
+		if is_instance_valid(scatter) and scatter.has_method("cell_keys"):
+			_cell_index(scatter)
+
+
+## sync() for the rows of `cells` of `scatter` alone (its cells_applied: a landing replaced those
+## cells' rows and left every other cell's), so the cost follows the landed area, not the map's
+## trees (card painter-edit-hitch2): the same trees grow and go as a whole sync would. A source
+## without cells (the field plants, an empty list) or not drawn here syncs whole.
+func sync_cells(scatter: Node, cells: Array[Vector2i]) -> void:
+	if _map == null:
+		return
+	if cells.is_empty() or not scatter.has_method("cell_keys") or not _scatters.has(scatter):
+		sync()
+		return
+	var index := _cell_index(scatter)
+	var fresh := {}
+	var old: Array = []
+	for cell: Vector2i in cells:
+		var by_asset: Dictionary = scatter.cell_rows(cell)
+		_hide_cell(scatter, cell, by_asset)
+		old.append_array(index.get(cell, []))
+		var one := {}
+		if scatter.visible:
+			PainterTreeRows.want_rows(one, by_asset, scatter, _doc)
+		fresh.merge(one, true)
+		index[cell] = PainterTreeRows.keys_of(by_asset)
+	var dirty := {}
+	for key: Vector3i in old:
+		if fresh.has(key) or not _want.has(key):
+			continue
+		_want.erase(key)
+		# (An event's tree stays until the event lets go of it: drop() erases it then.)
+		if trees.has(key) and not _held.has(key):
+			_erase_tree(key, dirty)
+	var todo: Array = []
+	for key: Vector3i in fresh:
+		_want[key] = fresh[key]
+		if not trees.has(key) and not _pending.has(key):
+			todo.append(key)
+	last_listed = fresh.size()
+	_rebuild(dirty)
+	if not todo.is_empty():
+		_grow(todo, _want)
+
+
+## The keys of `scatter`'s mapped rows by cell (PainterTreeRows.keys_of), listed by each whole sync
+## and kept by each sync_cells after it.
+func _cell_index(scatter: Node) -> Dictionary:
+	var id := scatter.get_instance_id()
+	if not _cell_keys.has(id):
+		var index := {}
+		for cell: Vector2i in scatter.cell_keys():
+			index[cell] = PainterTreeRows.keys_of(scatter.cell_rows(cell))
+		_cell_keys[id] = index
+	return _cell_keys[id]
+
+
+## _hide_glb() for the chunk nodes of one cell of `scatter` (rows `by_asset`).
+func _hide_cell(scatter: Node, cell: Vector2i, by_asset: Dictionary) -> void:
+	for asset_id: String in by_asset:
+		if PainterTreeSpecies.species_for(asset_id) == "":
+			continue
+		_hide_node(scatter.get_cell_node(cell, asset_id))
+		for node: Node in scatter.get_growing_nodes(cell, asset_id):
+			_hide_node(node)
 
 
 ## Frees every painted node, shows the GLB nodes it hid and forgets the map.
@@ -239,6 +316,7 @@ func release() -> void:
 	_batches.clear()
 	_pending.clear()
 	_want = {}
+	_cell_keys.clear()
 	for key: Vector3i in _held:
 		var pivot: Node = _held[key]["pivot"]
 		if is_instance_valid(pivot):
@@ -356,51 +434,12 @@ func held_count() -> int:
 ## bush's also "box" (PainterTreeBush.box_of; a bush whose asset has not resolved is left out)
 ## (pure in the rows, the document and the resolved meshes); `glb` adds a GLB map's rows.
 static func wanted(scatters: Array, doc: MapDocument, glb := {}) -> Dictionary:
-	var out := PainterGlbMap.wanted(glb, doc)
-	var stride := MapDocument.ROW_STRIDE
-	for scatter in scatters:
-		# A hidden scatter (the eye view's rim in the orbit view) draws nothing, painted or not.
-		if not is_instance_valid(scatter) or not scatter.visible:
-			continue
-		var by_asset: Dictionary = scatter.rows_by_asset()
-		var resolved := {}
-		for asset_id: String in by_asset:
-			var species := PainterTreeSpecies.species_for(asset_id)
-			if species == "":
-				continue
-			var aabb := AABB()
-			if PainterTreeSpecies.is_bush(species):
-				if resolved.is_empty():
-					resolved = scatter.resolved_species()
-				var mesh: Mesh = (resolved.get(asset_id, {}) as Dictionary).get("mesh")
-				if mesh == null:
-					continue
-				aabb = mesh.get_aabb()
-			var rows: PackedFloat32Array = by_asset[asset_id]
-			for i in rows.size() / stride:
-				var p := Vector3(rows[i * stride], rows[i * stride + 1], rows[i * stride + 2])
-				var key := PainterTreeSpecies.key_of(p)
-				var scale := rows[i * stride + PainterTreeSpecies.SCALE_AT]
-				out[key] = {
-					"pos": p,
-					"species": species,
-					"asset": asset_id,
-					"cx": PainterTreeSpecies.context(asset_id, scale, p, density_at(doc, p)),
-					"seed": PainterTreeSpecies.seed_of(key)
-				}
-				if PainterTreeSpecies.is_bush(species):
-					out[key]["box"] = PainterTreeBush.box_of(aabb, scale)
-	return out
+	return PainterTreeRows.wanted(scatters, doc, glb)
 
 
 ## The document's biome density (0..1) at the sample nearest `p`, 0.5 without one.
 static func density_at(doc: MapDocument, p: Vector3) -> float:
-	if doc == null or doc.biome_density.size() != doc.sample_count():
-		return 0.5
-	var s := doc.world_to_sample(Vector2(p.x, p.z))
-	var x := clampi(roundi(s.x), 0, doc.samples_x() - 1)
-	var z := clampi(roundi(s.y), 0, doc.samples_z() - 1)
-	return doc.biome_density[doc.sample_index(x, z)] / 255.0
+	return PainterTreeRows.density_at(doc, p)
 
 
 # ---------------------------------------------------------------- materials
@@ -733,73 +772,20 @@ func _flush() -> void:
 ## The row map (each tree's role rows and its eight nearest crowns) and the occluder table.
 func _tables() -> void:
 	var lines := maxi(_tree_cap, _rows.size())
-	var rows := PackedFloat32Array()
-	rows.resize(MAP_W * lines)
-	rows.fill(-1.0)
-	var occ := PackedFloat32Array()
-	occ.resize(lines * 8)
-	var grid := {}
-	var conifers := {}
-	for key: Vector3i in trees:
-		var t: Dictionary = trees[key]
-		if t["bush"]:
-			# (A bush is no tree's neighbouring form: the eight a tree lists stay its trees.)
-			continue
-		if PainterTreeTones.has_variants(t["species"]):
-			conifers[key] = t["pos"]
-		var gc := Vector2i(floori(t["pos"].x / 9.0), floori(t["pos"].z / 9.0))
-		if not grid.has(gc):
-			grid[gc] = []
-		grid[gc].append(t)
-	# Each conifer's needle variant (painter-look-taiga): its seed's pick, none shared by near trees.
-	var variants := PainterConiferVariants.assign(conifers)
-	for key: Vector3i in trees:
-		var t: Dictionary = trees[key]
-		var p: Vector3 = t["pos"]
-		var row: int = t["row"]
-		var line := PainterTreeTones.role_rows(t["species"], int(variants.get(key, 0)))
-		for r in line.size():
-			rows[row * MAP_W + r] = float(line[r])
-		var near: Array = []
-		var gc := Vector2i(floori(p.x / 9.0), floori(p.z / 9.0))
-		for dz in range(-2, 3):
-			for dx in range(-2, 3):
-				for q: Dictionary in grid.get(gc + Vector2i(dx, dz), []):
-					var dist := (q["pos"] as Vector3).distance_to(p)
-					if q != t and dist < NEAR_M:
-						near.append(Vector2(dist, float(q["row"])))
-		near.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
-		for k in mini(near.size(), 8):
-			rows[row * MAP_W + 9 + k] = (near[k] as Vector2).y
-		_occluder(occ, lines, row, p, (t["d"] as Dictionary)["forms"])
+	var built := PainterTreeRows.tables(trees, lines, MAP_W, NEAR_M)
+	var rows: PackedFloat32Array = built.rows
+	var occ: PackedFloat32Array = built.occ
 	var map_image := Image.create_from_data(MAP_W, lines, false, Image.FORMAT_RF, rows.to_byte_array())
-	_set_all(&"row_map", ImageTexture.create_from_image(map_image))
 	var occ_image := Image.create_from_data(lines, 2, false, Image.FORMAT_RGBAF, occ.to_byte_array())
-	_set_all(&"occ_tex", ImageTexture.create_from_image(occ_image))
-
-
-static func _occluder(
-	occ: PackedFloat32Array, lines: int, row: int, p: Vector3, forms: Array
-) -> void:
-	var ow := row * 4
-	if forms.is_empty():
-		occ[ow] = p.x
-		occ[ow + 1] = -50.0
-		occ[ow + 2] = p.z
-		occ[ow + 3] = 1.0
-		for k in 3:
-			occ[lines * 4 + ow + k] = 0.1
-		return
-	var form: Dictionary = forms[0]
-	var c: Vector3 = form["c"]
-	var r: Vector3 = (form["r"] as Vector3) * 0.85
-	occ[ow] = p.x + c.x
-	occ[ow + 1] = p.y + c.y
-	occ[ow + 2] = p.z + c.z
-	occ[ow + 3] = float(form["kind"])
-	occ[lines * 4 + ow] = r.x
-	occ[lines * 4 + ow + 1] = r.y
-	occ[lines * 4 + ow + 2] = r.z
+	# Updated in place while the size holds (a new texture per landing cost a texture creation).
+	if _row_map != null and _row_map.get_height() == lines:
+		_row_map.update(map_image)
+		_occ_tex.update(occ_image)
+	else:
+		_row_map = ImageTexture.create_from_image(map_image)
+		_occ_tex = ImageTexture.create_from_image(occ_image)
+		_set_all(&"row_map", _row_map)
+		_set_all(&"occ_tex", _occ_tex)
 
 
 ## The slots of tree data `d` a stroke node runs now: every slot in a bare season (or with

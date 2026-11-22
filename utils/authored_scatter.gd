@@ -382,6 +382,11 @@ func rows_by_asset() -> Dictionary[String, PackedFloat32Array]:
 	return flat
 
 
+## The cells that hold rows now (any order).
+func cell_keys() -> Array:
+	return _cells.keys()
+
+
 ## The rows of one cell (asset id -> flat rows), or {}.
 func cell_rows(cell: Vector2i) -> Dictionary:
 	return _cells.get(cell, {})
