@@ -4,7 +4,7 @@ extends GutTest
 ## speeds of the plant materials AND the painted trees' `wind_strength`, so two frames of one state
 ## are pixel-identical outside animated tokens (card painter-perf-cold; the painted trees have no
 ## speeds, they read TIME times the global wind times wind_strength, and used to move under a
-## frozen wind).
+## frozen wind). And the lo-fi grain's clock every capture pins (card painter-pixel-noise).
 
 const Steady := preload("res://tools/render_jobs/steady.gd")
 const TREE_SHADERS: Array[String] = [
@@ -75,6 +75,24 @@ func test_freeze_still_zeroes_the_plant_speeds() -> void:
 	Steady.thaw_wind(_saved)
 	assert_eq(float(plant.get_shader_parameter("sway_speed")), 1.0)
 	assert_eq(float(plant.get_shader_parameter("flutter_speed")), 2.0)
+
+
+func test_the_lofi_shader_declares_the_grain_clock_on_time_by_default() -> void:
+	var shader := load("res://shaders/lofi_canvas.gdshader") as Shader
+	assert_true(Steady._has_uniform(shader, Steady.GRAIN_CLOCK))
+	assert_string_contains(shader.code, "uniform float grain_clock = -1.0;", "the game follows TIME")
+
+
+func test_pin_grain_holds_the_lofi_grain_clock_for_a_capture() -> void:
+	var container := Control.new()
+	var lofi := _material("res://shaders/lofi_canvas.gdshader")
+	container.material = lofi
+	assert_true(Steady.pin_grain(container))
+	assert_eq(float(lofi.get_shader_parameter(Steady.GRAIN_CLOCK)), Steady.GRAIN_PIN)
+	container.material = null
+	assert_false(Steady.pin_grain(container), "no material")
+	assert_false(Steady.pin_grain(null), "no container")
+	container.free()
 
 
 func test_a_material_without_wind_uniforms_is_left_alone() -> void:
