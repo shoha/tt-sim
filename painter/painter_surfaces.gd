@@ -141,6 +141,8 @@ var _zone_doc: Array = []
 ## The path slot map's inputs at its last bind: [surface ids, base surface, surface weights, sx, sz]
 ## (copies of the document's arrays).
 var _path_key: Array = []
+## Which surfaces are painted anywhere, kept from the rows each bind finds changed.
+var _path_presence := PainterPathPresence.new()
 
 
 ## Follows `manager`'s painted_look_changed for the map under `map_container`; called again with
@@ -701,7 +703,7 @@ func _rebuild_zone() -> void:
 		doc.surface_ids, doc.base_surface, doc.surface_weights, doc.samples_x(), doc.samples_z()
 	]
 	var paths_changed := path_key != _path_key
-	var ids := PainterGroundPaths.bind(siblings(), doc, paths_changed)
+	var ids := PainterGroundPaths.bind(siblings(), doc, paths_changed, _path_presence)
 	if paths_changed:
 		# Copies: a packed array is shared by assignment (measured, Godot 4.7), so a kept reference
 		# would follow the document's own array and never differ.

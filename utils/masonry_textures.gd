@@ -22,6 +22,11 @@ static func available() -> bool:
 	return FileAccess.file_exists(FOLDER + "albedo.png")
 
 
+## Whether the textures are made (textures() then costs nothing).
+static func made() -> bool:
+	return not _set.is_empty()
+
+
 ## {"albedo", "normal", "orm"}: ImageTextures with mipmaps (empty when the files are missing).
 static func textures() -> Dictionary:
 	if not _set.is_empty():
@@ -30,7 +35,7 @@ static func textures() -> Dictionary:
 
 
 ## The three images, decoded and mipmapped ({} when a file is missing). Pure and safe on any
-## thread: StructureWarmup decodes them on a worker so the first wall does not.
+## thread: StructureWarmup and WallWarmup decode them on a worker so the first wall does not.
 static func decode() -> Dictionary:
 	var images := {}
 	for key in ["albedo", "normal", "orm"]:

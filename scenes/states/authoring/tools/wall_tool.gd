@@ -12,6 +12,8 @@ extends ToolDescriptor
 const ID := &"wall"
 const LABEL := "Wall"
 const UNAVAILABLE_TOOLTIP := "Wall: not on a Blender map, whose ground is the map file's"
+## Set on the map's AuthoredWalls once its warm-up has started (prepare).
+const WARM_META := &"tt_wall_warm"
 
 
 func _init() -> void:
@@ -54,6 +56,18 @@ func _init() -> void:
 ## The tool's mode on `brush`.
 static func of(brush: BrushTool) -> WallBrush:
 	return brush.mode_for(ToolRegistry.find(ID)) as WallBrush
+
+
+## Once per map, as the tool opens: the first wall's masonry and materials warm up now
+## (WallWarmup), not in the frame it lands.
+func prepare(controller: AuthoringController) -> void:
+	if controller.editor == null or not is_instance_valid(controller.map_root):
+		return
+	var walls := AuthoredWalls.of_map(controller.map_root)
+	if walls.has_meta(WARM_META):
+		return
+	walls.set_meta(WARM_META, true)
+	WallWarmup.start(walls, controller.document.biome_ids)
 
 
 ## Only where the ground is the document's (a wall follows the document's heights).
