@@ -586,7 +586,7 @@ func test_no_roof_snow_adds_nothing_and_winter_adds_strips_that_cast_no_shadow()
 	assert_eq(float(host.stats[0].snow_ms), 0.0, "nothing built for them either")
 	var sheet := PainterSheet.load_sheet("core")
 	buildings.applied = {"sheet": "core", "mood": "winter", "elevation": 20.0}
-	assert_gt(buildings.snow_amount(), 0.0, "winter lays roof snow")
+	assert_true(buildings.snow_on(), "winter lays roof snow")
 	host.retone(sheet)
 	await wait_until(
 		func() -> bool: return node.get_node_or_null(PainterMannerHost.SNOW) != null, 10.0

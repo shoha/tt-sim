@@ -285,6 +285,7 @@ static func lay_into(
 	var o_right := PainterMannerSnow.outward(p1, q1, n, mid)
 	var o_top := -o_eave if lay["top"] == "apex" else PainterMannerSnow.outward(q0, q1, n, mid)
 	var w0 := float(full["w0"])
+	var windows: Array = lay.get("windows", [])
 	# Columns: [s, kind] with kind 0 field, 1 a verge's roll, 2 its tuck, 3 a hip's crest; rows:
 	# [t, kind] with kind 0 field, 1-3 the eave lip's round, front and tuck, 4 the ridge's crest,
 	# 5 the close of a ridge with no other half.
@@ -373,6 +374,8 @@ static func lay_into(
 					at += o_eave * over * 0.3 - n * he * 1.5 - Vector3.UP * droop
 					dn += -n * 0.8 + o_eave * 0.2
 					sh = maxf(sh, 0.85)
+				# The lip never hangs over a window's top (card snow-tops-builder).
+				at = PainterSnowForms.above_windows(windows, at)
 				bent = true
 			elif rk == 4:
 				var m := (n + (ridge_n as Vector3)).normalized()

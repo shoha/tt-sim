@@ -22,7 +22,7 @@ extends RefCounted
 ##   a Classic part (panes, door metal) takes the wandered mesh in place so it stays in its hole;
 ##   the structure's collision shape is replaced by its faces under the same field
 ##   (PainterMannerMesh.collider), so a click and a standing token meet the leaning house;
-##   while the sheet lays snow on roofs (PainterBuildings.snow_amount above 0) a child (SNOW)
+##   while the sheet lays snow on roofs (PainterBuildings.snow_on) a child (SNOW)
 ##   draws the structure's snow strips (PainterMannerSnow) and casts no shadow. Built with the
 ##   parts when the mood already has snow, else on a worker when a re-tone brings it (from the
 ##   dress job kept per structure); freed when a re-tone takes it away. No snow, nothing added.
@@ -208,7 +208,7 @@ func retone(sheet: Dictionary) -> void:
 ## Whether the strips are wanted now: snow_body on and the owner's mood lays roof snow.
 func _snow_wanted() -> bool:
 	var owner := _owner_ref.get_ref() as PainterBuildings
-	return snow_body and owner != null and owner.snow_amount() > 0.0
+	return snow_body and owner != null and owner.snow_on()
 
 
 ## The building's own two numbers (0 to 1, from its structure id) for the shader's per-building
@@ -247,6 +247,12 @@ func _work(job: Dictionary) -> void:
 		return
 	var records: Dictionary = feed.records
 	var opts := _field(feed, job.structure)
+	if not PainterMannerSource.dressable(feed):
+		# Only snow tops (a round hut's cone): the parts keep the A3b look, the snow is the body.
+		if bool(job.get("snow", false)):
+			_snow_of(feed, opts, out)
+		_arrived.call_deferred(out)
+		return
 	var table: PackedStringArray = feed.table
 	for part_name: String in job.parts:
 		var mesh: Variant = feed.meshes.get(part_name)
@@ -503,7 +509,7 @@ static func _bytes(arrays: Array, stride: int) -> int:
 
 
 ## The material the snow strips and blankets draw with (shared, toned with the rest), which the
-## wall layers' blankets (PainterStreetSnow) take too.
+## wall layers' and settlement cells' bodies (PainterSnowTops) take too.
 func snow_material() -> ShaderMaterial:
 	return _surface_material(SNOW_KEY)
 

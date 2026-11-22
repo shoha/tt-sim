@@ -118,6 +118,32 @@ static func bake(placed: Array[Dictionary], sources: Dictionary) -> Array[Dictio
 	return out
 
 
+## The `pad` snow-top records of `placed` (as bake's) against `sources` (each may carry "pads",
+## records in the prop's own frame), each moved by its placement's transform: `centre` and
+## `origin` placed, `u`, `v` and `n` turned (unit), `u_len`, `v_len` and `radius` scaled. Pure.
+static func pads_of(placed: Array[Dictionary], sources: Dictionary) -> Array:
+	var out: Array = []
+	for item in placed:
+		var source: Variant = sources.get(item["variant"])
+		if not source is Dictionary:
+			continue
+		var transform: Transform3D = item["transform"]
+		for rec: Dictionary in (source as Dictionary).get("pads", []):
+			var moved := rec.duplicate()
+			moved["centre"] = transform * (rec["centre"] as Vector3)
+			moved["origin"] = transform * (rec.get("origin", rec["centre"]) as Vector3)
+			var u := transform.basis * (rec.get("u", Vector3.RIGHT) as Vector3)
+			var v := transform.basis * (rec.get("v", Vector3.BACK) as Vector3)
+			moved["u"] = u.normalized()
+			moved["v"] = v.normalized()
+			moved["n"] = (transform.basis * (rec.get("n", Vector3.UP) as Vector3)).normalized()
+			moved["u_len"] = float(rec.get("u_len", 0.0)) * u.length()
+			moved["v_len"] = float(rec.get("v_len", 0.0)) * v.length()
+			moved["radius"] = float(rec.get("radius", 0.0)) * (u.length() + v.length()) * 0.5
+			out.append(moved)
+	return out
+
+
 ## The triangles of baked `surfaces`.
 static func triangle_count(surfaces: Array[Dictionary]) -> int:
 	var total := 0
