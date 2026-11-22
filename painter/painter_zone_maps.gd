@@ -20,6 +20,40 @@ extends RefCounted
 ## Textures. One ImageTexture per map, shared by every material that reads it (the ground and the
 ## skirt), updated in place (ImageTexture.update uploads the whole image: Godot 4.7 has no partial
 ## upload); a new one only when the size or format changes (another map) or a map appears.
+##
+## The worker build (card painter-edit-hitch4). A whole build of a 200 ft map is about 60 ms of
+## GDScript (the zone map's sample loop about 36, the blur 12, the byte writes 8), which stalled
+## the frame of a map's first water (its plan changes: the shore reads the dressing). build_async()
+## runs the same region functions over a snapshot of the document (copies of the four sample arrays
+## it reads, so later edits never reach the workers) on a WorkerThreadPool group task, one task per
+## band of full-width rows (a region is the whole build over its rows, and the bands' bytes
+## concatenate into the whole image's),
+## and the kept images and textures stay as they were until poll() lands the result on a later
+## frame. The caller keeps every edit that arrives meanwhile and updates its rect after the landing,
+## so the settled maps equal a synchronous build of the document bit for bit.
+##
+## The main thread never blocks on a band task that has not run (card painter-edit-hitch4b). The
+## first version waited for the group in finish(), cancel() and the predelete, and such a wait lasts
+## as long as every pool thread is taken (a probe: 4.0 s under a 4 s hold of the pool); on CI's
+## 4-core runner the unit tests stalled in the first-water test, which closes its map with the
+## build still in flight when it has not landed in three frames, until the job was killed. Now a build
+## that has not completed is abandoned, never waited for: finish() builds the snapshot on the main
+## thread itself (the same functions, so the same bytes) and cancel() just lets go; an abandoned
+## group is waited for, as Godot needs once per group, only after it has completed (_reap(), polled
+## once a frame while any is left).
+
+## The share of the grid an edit's rect must cover before wants_whole() sends it to the worker
+## (an update of a rect that size costs about a whole build).
+const WORKER_SHARE := 0.5
+## The worker build's row bands, one pool task each: at least BAND_ROWS rows a band, at most
+## MAX_BANDS bands (a 200 ft map: 8 bands of about 25 rows, so the build takes about an eighth of
+## its single-thread time on a machine with the threads free).
+const BAND_ROWS := 16
+const MAX_BANDS := 8
+
+## The group tasks let go of before they completed (cancel(), finish(), the predelete), waited for
+## once each has (_reap()); process wide, since a maps object may be gone by then.
+static var _abandoned := PackedInt64Array()
 
 ## The images now (null for a map the plan has none of; zone is null before the first build).
 var zone: Image = null
@@ -29,17 +63,27 @@ var biome: Image = null
 var last_rect := Rect2i()
 ## Whether the last call rebuilt whole (tests, probes).
 var last_whole := false
-## How many whole builds ran (tests, probes: a first water on a map builds once).
+## How many whole builds ran (tests, probes: a first water on a map builds once; a worker build
+## counts when it lands).
 var builds := 0
+## How many worker builds were started (probes: the frames between a start and its landing).
+var async_starts := 0
 
 var _plan: Dictionary = {}
 var _zone_texture: ImageTexture = null
 var _char_texture: ImageTexture = null
 var _biome_texture: ImageTexture = null
+## The worker build in flight (build_async): its task id (-1 for none) and the job it fills
+## ({"doc" snapshot, "plan", then "zone", "char", "biome"}; only the worker touches it until the
+## task completes).
+var _task := -1
+var _job: Dictionary = {}
 
 
-## Rebuilds every map of `doc` whole and uploads them.
+## Rebuilds every map of `doc` whole and uploads them (a worker build in flight is dropped: this
+## one is newer).
 func build(doc: MapDocument, plan_now: Dictionary = {}) -> void:
+	cancel()
 	var p := plan_now if not plan_now.is_empty() else plan(doc)
 	var grid := Rect2i(0, 0, p["sx"], p["sz"])
 	zone = _image_of(grid, Image.FORMAT_RGBA8, zone_region(doc, p, grid))
@@ -60,8 +104,10 @@ func build(doc: MapDocument, plan_now: Dictionary = {}) -> void:
 
 ## Brings the maps up to `doc` after an edit of the samples in `rect` (grid coordinates, the
 ## ground_edited rectangle: it covers every sample changed since the last call); rebuilds whole
-## when the plan changed or nothing was built yet.
+## when the plan changed or nothing was built yet. A worker build in flight lands first (finish()),
+## so `rect` then covers the samples changed since build_async().
 func update(doc: MapDocument, rect: Rect2i) -> void:
+	finish()
 	var p := plan(doc)
 	if zone == null or p != _plan or PainterSurfaces.ZONE_BLUR != 1 or mini(p["sx"], p["sz"]) < 2:
 		# The region form relies on the three-tap blur (PainterFieldBlur.box at radius 1 on a field
@@ -81,6 +127,164 @@ func update(doc: MapDocument, rect: Rect2i) -> void:
 	if biome != null:
 		_blit(biome, Image.FORMAT_RGBA8, biome_region(doc, p, out), out)
 	_upload()
+
+
+## Whether bringing the maps up to `doc` after an edit of `rect` costs a whole build: nothing is
+## built yet, the plan changed (update() would rebuild whole), or `rect` grown by the blur covers
+## WORKER_SHARE of the grid or more.
+func wants_whole(doc: MapDocument, rect: Rect2i) -> bool:
+	var p := plan(doc)
+	if zone == null or p != _plan:
+		return true
+	var grid := Rect2i(0, 0, p["sx"], p["sz"])
+	var out := rect.grow(PainterSurfaces.ZONE_BLUR).intersection(grid)
+	return out.get_area() >= int(grid.get_area() * WORKER_SHARE)
+
+
+## Starts a whole build of `doc` as it is now on a worker (the class header's "The worker build");
+## the kept images and textures stay until poll() or finish() lands it. A build already in flight
+## is dropped first (cancel()).
+func build_async(doc: MapDocument) -> void:
+	cancel()
+	# Copies (about 0.7 MB on a 200 ft map, well under a millisecond): a packed array is shared by
+	# assignment in GDScript, so a kept reference would see, mid-read, an edit made meanwhile
+	# (test_painter_zone_worker.gd caught it).
+	var snapshot := MapDocument.new()
+	snapshot.biome_slots = doc.biome_slots.duplicate()
+	snapshot.biome_density = doc.biome_density.duplicate()
+	snapshot.surface_weights = doc.surface_weights.duplicate()
+	snapshot.water_dressing = doc.water_dressing.duplicate()
+	var p := plan(doc)
+	@warning_ignore("integer_division")
+	var count := clampi(int(p["sz"]) / BAND_ROWS, 1, MAX_BANDS)
+	var bands: Array[Dictionary] = []
+	for k in count:
+		bands.append({})
+	_job = {"doc": snapshot, "plan": p, "bands": bands}
+	async_starts += 1
+	# The script's static function, not a method of this object: the task never calls into a maps
+	# object that was freed meanwhile (the predelete abandons it). High priority: a frame waits on
+	# it.
+	var run := PainterZoneMaps._run_band.bind(_job)
+	_task = WorkerThreadPool.add_group_task(run, count, -1, true, "PainterZoneMaps.build_async")
+
+
+## Whether a worker build is in flight (started and not landed yet).
+func building() -> bool:
+	return _task >= 0
+
+
+## Lands the worker build when its task has completed: swaps in its images, uploads them and
+## returns true; false while it runs or when none is in flight.
+func poll() -> bool:
+	if _task < 0 or not WorkerThreadPool.is_group_task_completed(_task):
+		return false
+	return _land()
+
+
+## Lands the worker build in flight now (tests, and a caller that needs the maps now): its result
+## when the task has completed, else a build of the same snapshot on this thread (the task is
+## abandoned, never waited for: the class header); false when none is in flight.
+func finish() -> bool:
+	if _task < 0:
+		return false
+	if WorkerThreadPool.is_group_task_completed(_task):
+		return _land()
+	var job := _job
+	cancel()
+	build(job["doc"], job["plan"])
+	return true
+
+
+## Drops the worker build in flight, if any, without waiting for it (the map closed or a
+## synchronous build supersedes it); its task is reaped once it completes.
+func cancel() -> void:
+	if _task >= 0:
+		_abandon(_task)
+	_task = -1
+	_job = {}
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and _task >= 0:
+		_abandon(_task)
+		_task = -1
+
+
+## How many abandoned group tasks wait to be reaped (tests).
+static func abandoned_count() -> int:
+	return _abandoned.size()
+
+
+static func _abandon(task: int) -> void:
+	_abandoned.append(task)
+	_reap()
+	if _abandoned.is_empty():
+		return
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and not tree.process_frame.is_connected(_reap):
+		tree.process_frame.connect(_reap)
+
+
+## Waits for each abandoned group task that has completed (at once: it has), keeps the rest, and
+## stops polling when none is left.
+static func _reap() -> void:
+	var left := PackedInt64Array()
+	for task in _abandoned:
+		if WorkerThreadPool.is_group_task_completed(task):
+			WorkerThreadPool.wait_for_group_task_completion(task)
+		else:
+			left.append(task)
+	_abandoned = left
+	if not left.is_empty():
+		return
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and tree.process_frame.is_connected(_reap):
+		tree.process_frame.disconnect(_reap)
+
+
+## Lands the completed worker build (the wait returns at once: poll() and finish() check first).
+func _land() -> bool:
+	WorkerThreadPool.wait_for_group_task_completion(_task)
+	var job := _job
+	_task = -1
+	_job = {}
+	var p: Dictionary = job["plan"]
+	var grid := Rect2i(0, 0, p["sx"], p["sz"])
+	# Full-width row bands in order: their bytes concatenate into the whole image's.
+	var maps: Array = []
+	for key: String in ["zone", "char", "biome"]:
+		var bytes := PackedByteArray()
+		for band: Dictionary in job["bands"]:
+			if band[key] != null:
+				bytes.append_array(band[key])
+		maps.append(bytes)
+	zone = _image_of(grid, Image.FORMAT_RGBA8, maps[0])
+	char_map = _image_of(grid, Image.FORMAT_R8, maps[1]) if p["char_any"] else null
+	biome = _image_of(grid, Image.FORMAT_RGBA8, maps[2]) if p["biome_present"] else null
+	_plan = p
+	last_rect = Rect2i(0, 0, p["sx"], p["sz"])
+	last_whole = true
+	builds += 1
+	_upload()
+	return true
+
+
+## The workers' half of build_async(): band `index` of the job's snapshot (full-width rows, the
+## bands splitting the grid's rows evenly), each map's bytes over it as the region functions make
+## them, into the band's own dictionary (no two workers write one object).
+@warning_ignore("integer_division")
+static func _run_band(index: int, job: Dictionary) -> void:
+	var doc: MapDocument = job["doc"]
+	var p: Dictionary = job["plan"]
+	var bands: Array[Dictionary] = job["bands"]
+	var sz: int = p["sz"]
+	var top := sz * index / bands.size()
+	var out := Rect2i(0, top, p["sx"], sz * (index + 1) / bands.size() - top)
+	var band := bands[index]
+	band["zone"] = zone_region(doc, p, out)
+	band["char"] = char_region(doc, p, out) if p["char_any"] else null
+	band["biome"] = biome_region(doc, p, out) if p["biome_present"] else null
 
 
 ## The zone map's texture (null before the first build).
