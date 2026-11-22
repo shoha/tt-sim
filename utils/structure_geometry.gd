@@ -41,6 +41,10 @@ extends RefCounted
 ## Triangles per structure: a warning above the soft limit, a refusal above the hard one.
 const SOFT_TRIANGLES := 12000
 const HARD_TRIANGLES := 25000
+## A narrow ledge (with_ledges): the flat up from which a face is level, and the width from which
+## a level face is wide (its vertices carry 0).
+const LEDGE_LEVEL := 0.9
+const LEDGE_CAP_M := 0.25
 ## The ground under a footprint is sampled this far apart (metres) along its outline and across its
 ## inside for the cache key; a footprint wider than KEY_MAX_SAMPLES of them coarsens the grid.
 const KEY_STEP_M := 0.5
@@ -829,7 +833,8 @@ static func _mesh_of(surface: PlantSurface, role: String, picked: PackedInt32Arr
 
 
 ## The mesh arrays of one structure surface: vertex, normal, UV, colour, index and a tangent for
-## every vertex (textured kinds get quad tangents, the rest +X). StructureWarmup builds its sample
+## every vertex (textured kinds get quad tangents, the rest +X), and UV2 with each narrow level
+## face's width (with_ledges). StructureWarmup builds its sample
 ## through this, so the warm-up's vertex layout cannot drift from a real building's.
 static func surface_arrays(
 	kind: String,
@@ -856,4 +861,57 @@ static func surface_arrays(
 			tangents[k * 4] = 1.0
 			tangents[k * 4 + 3] = 1.0
 		arrays[Mesh.ARRAY_TANGENT] = tangents
+	with_ledges(arrays)
 	return arrays
+
+
+## A structure's narrow ledges, for the painted snow law (card snow-one-law round 3). The law lays
+## snow on every level face, right for a sill, a lintel, a coping or a step and wrong for a
+## shutter's batten tops, a casing's jamb end or a thin timber's top: a strip a few centimetres wide
+## reads as a white ladder bar or a hard white line at tabletop zoom, never as snow. So every
+## structure surface carries UV2 and its y is per vertex the width of the widest level face (flat
+## normal up at or over LEDGE_LEVEL) the vertex belongs to when under LEDGE_CAP_M, else 0 (wide,
+## or on no level face); painter_structure lays no snow on a face under its LEDGE_LO. A face's
+## width is its triangles' shortest edge, exact for procgen's box quads; the widest face at a
+## vertex keeps a sliver inside a wide face wide. `arrays`' UV2.x is kept (a street row's house
+## flags, WallGeometry.house_flags), else 0. One layout for every building surface (the warm-ups').
+static func with_ledges(arrays: Array) -> void:
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var indices: Variant = arrays[Mesh.ARRAY_INDEX]
+	var w := ledge_widths(vertices, indices if indices is PackedInt32Array else PackedInt32Array())
+	var had: Variant = arrays[Mesh.ARRAY_TEX_UV2]
+	var old: PackedVector2Array = had if had is PackedVector2Array else PackedVector2Array()
+	var uv2 := PackedVector2Array()
+	uv2.resize(vertices.size())
+	for v in vertices.size():
+		uv2[v] = Vector2(old[v].x if v < old.size() else 0.0, w[v])
+	arrays[Mesh.ARRAY_TEX_UV2] = uv2
+
+
+## Per vertex of the triangles `indices` over `vertices`: the width of the widest level face it
+## belongs to when under LEDGE_CAP_M, else 0 (with_ledges). Pure.
+static func ledge_widths(
+	vertices: PackedVector3Array, indices: PackedInt32Array
+) -> PackedFloat32Array:
+	var widest := PackedFloat32Array()
+	widest.resize(vertices.size())
+	for t in range(0, indices.size() - 2, 3):
+		var ia := indices[t]
+		var ib := indices[t + 1]
+		var ic := indices[t + 2]
+		var a := vertices[ia]
+		var b := vertices[ib]
+		var c := vertices[ic]
+		var n := (b - a).cross(c - a)
+		var area := n.length()
+		# Either winding: a level face's normal is mostly y.
+		if area <= 0.0 or absf(n.y) < LEDGE_LEVEL * area:
+			continue
+		var w := minf(a.distance_to(b), minf(b.distance_to(c), c.distance_to(a)))
+		widest[ia] = maxf(widest[ia], w)
+		widest[ib] = maxf(widest[ib], w)
+		widest[ic] = maxf(widest[ic], w)
+	for v in vertices.size():
+		if widest[v] >= LEDGE_CAP_M:
+			widest[v] = 0.0
+	return widest

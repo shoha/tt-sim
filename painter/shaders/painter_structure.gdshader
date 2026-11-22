@@ -91,6 +91,9 @@ varying float v_h;
 varying flat int v_tone;
 // A picked roof's turn of its ramp to its paint (painter_structure_common's paint_turn); z 0: none.
 varying flat vec4 v_turn;
+// A narrow level face's width in metres (UV2.y, StructureGeometry.with_ledges; 0 wide or not
+// level).
+varying float v_ledge;
 
 varying vec3 f_n;
 varying vec3 f_shd;
@@ -106,12 +109,12 @@ varying vec4 f_soft;
 // weathering at the foot, never camouflage.
 const float WALL_PATCHES = 0.55;
 const float WALL_DABS = 0.45;
-
 void vertex() {
 	v_wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	v_wn = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	v_h = COLOR.a;
 	v_tone = tone_of(pick, COLOR.rgb);
+	v_ledge = UV2.y;
 	if (house_planks && UV2.x > 0.5) {
 		v_tone = 1;
 	}
@@ -177,6 +180,11 @@ void fragment() {
 	vec2 down = flat_len > 0.02 ? flat_n / flat_len : vec2(0.0, 1.0);
 	vec2 across = vec2(-down.y, down.x);
 	float up = n.y;
+	// The face's own up (its flat normal from the position's derivatives), which the snow law asks
+	// on a face that is not a roof: a trim board's smoothed normals tilt up along its whole side
+	// (card snow-one-law round 1, white stripes down the window frames).
+	vec3 face_n = normalize(cross(dFdx(wp), dFdy(wp)));
+	float face_up = dot(face_n, n) < 0.0 ? -face_n.y : face_n.y;
 	float s = dot(wp.xz, down) / max(up, 0.35);
 	// Across the slope on a roof, along the wall on a wall.
 	float t = dot(wp.xz, across);
@@ -252,27 +260,41 @@ void fragment() {
 	}
 	// The fold line: where the shading normal turns within a pixel (a corner, an eave lip).
 	dark += smoothstep(0.2, 0.6, length(fwidth(NORMAL))) * ink;
-	// Snow on a roof (winter): the shared layer of painter_snow.gdshaderinc, as the hand-drawn
-	// houses' and the props' (one soft thick cushion: a lit top, a lip rolling over the eave with a
-	// blue underside, a crest at the ridge, a few soft gaps along it). No record here: its frame
-	// comes from the face and h.
+	// Snow (winter): the shared layer of painter_snow.gdshaderinc, as the hand-drawn houses' and
+	// the props' (one soft thick cushion: a lit top, a lip rolling over the eave with a blue
+	// underside, a crest at the ridge, a few soft gaps along it). No record here. Where it lies is
+	// the snow law on every face (card snow-one-law): a roof knows its top (h), so a steep one keeps
+	// a cap; a wall's coping, a rail, a deck or a step takes the law's broad shapes in the props'
+	// world frame.
 	float cover = 0.0;
 	float cool = 0.0;
 	vec4 sp = vec4(0.0, 0.0, 0.5, 0.0);
 	vec3 roll = vec3(0.0);
-	if (pattern >= 5 && snow > 0.0) {
+	if (snow > 0.0) {
 		vec4 fr = snow_frame(wp, n, h);
 		float broad = 1.0 - smoothstep(0.08, 0.16, length(fwidth(fr.xy)));
-		// A street roof under a blanket keeps no crest gaps (`scour` 0, as its blanket: card
-		// painter-roof-round5, the short bare slashes along the market's ridges by the chimneys).
-		cover = snow_cover_roof(snow, up, h, fr.xy, n, 0.0) * (1.0 - snow_gap(fr.xy, fr.w) * scour);
-		// A gable end clad in the roof's material and the slab's edges stand upright: no snow on
-		// them but a little drift along their foot, and a touch of the snow's cool light
-		// (snow_upright, snow_foot).
-		cool = clamp(snow, 0.0, 1.0) * snow_upright(up);
-		cover = max(cover, cool * snow_foot(fr.z, fr.x));
-		sp = snow_paint(fr.xy, broad);
-		roll = snow_roll(snow_edge_m(up, h, fr.xy, fr.z, n, 0.0), fr.w, fr.xy);
+		bool roofed = pattern >= 5;
+		vec4 law = snow_law(snow, roofed ? up : face_up, wp, n, roofed ? h : SNOW_NO_TOP, 0.0);
+		if (roofed) {
+			// A street roof under a blanket keeps no crest gaps (`scour` 0, as its blanket: card
+			// painter-roof-round5, the short bare slashes along the market's ridges by the chimneys).
+			cover = law.x * (1.0 - snow_gap(fr.xy, fr.w) * scour);
+			// A gable end clad in the roof's material and the slab's edges stand upright: no snow on
+			// them but a little drift along their foot, and a touch of the snow's cool light
+			// (snow_upright, snow_foot).
+			cool = clamp(snow, 0.0, 1.0) * snow_upright(up);
+			cover = max(cover, cool * snow_foot(fr.z, fr.x));
+			sp = snow_paint(fr.xy, broad);
+			roll = snow_roll(snow_edge_m(law.w, h, fr.z), fr.w, fr.xy);
+		} else if (law.y > 0.0) {
+			vec2 sf = wp.xz * 1.6;
+			// No snow on a level face narrower than a ledge (snow_ledge).
+			cover = law.x * snow_ledge(v_ledge);
+			sp = snow_paint(sf, 1.0);
+			roll = snow_roll(SNOW_FAR, SNOW_FAR, sf);
+			// The layer's own edge and a rounded top's shoulder turn into the shade, as a lip does.
+			roll.y = max(roll.y, law.z);
+		}
 	}
 	// No roof mark shows through the layer (the course dashes read as a grid of ticks on it).
 	dark = clamp(dark * marks * (1.0 - cover), 0.0, 0.85);

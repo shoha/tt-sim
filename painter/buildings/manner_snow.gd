@@ -312,6 +312,10 @@ static func build(src: Dictionary) -> Dictionary:
 	arrays[Mesh.ARRAY_COLOR] = g.col
 	arrays[Mesh.ARRAY_TEX_UV2] = g.uv2
 	arrays[Mesh.ARRAY_CUSTOM0] = g.cus
+	# FORMAT's ledge widths: a strip is no ledge (its code takes the ramp whole).
+	var ledge := PackedFloat32Array()
+	ledge.resize(g.pos.size())
+	arrays[Mesh.ARRAY_CUSTOM1] = ledge
 	arrays[Mesh.ARRAY_INDEX] = g.idx
 	return {"arrays": arrays, "triangles": g.idx.size() / 3, "by_kind": counts}
 

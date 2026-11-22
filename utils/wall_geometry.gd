@@ -262,7 +262,13 @@ static func _row_surfaces(
 			parts[kind] = mesh.arrays
 			if kind == "wood":
 				var arrays: Array = mesh.arrays
-				arrays[Mesh.ARRAY_TEX_UV2] = house_flags(mesh.get("tags", PackedInt32Array()), yards)
+				var flags := house_flags(mesh.get("tags", PackedInt32Array()), yards)
+				# The ledge widths StructureGeometry.surface_arrays set stay in UV2.y.
+				var ledges: Variant = arrays[Mesh.ARRAY_TEX_UV2]
+				if ledges is PackedVector2Array and (ledges as PackedVector2Array).size() == flags.size():
+					for v in flags.size():
+						flags[v].y = (ledges as PackedVector2Array)[v].y
+				arrays[Mesh.ARRAY_TEX_UV2] = flags
 		elif door:
 			# A door's painted wood and metal handle (card streetdoors), drawn as a structure's.
 			extra.append({"kind": kind, "roof": false, "door": true, "arrays": mesh.arrays})
@@ -274,7 +280,8 @@ static func _row_surfaces(
 ## A street row's wood, one UV2 per vertex: x 1 where the vertex is a house's (its plank walls,
 ## frames and trim), 0 where it is a yard's fence (`yards[tag]` 1) or has no tag. Only the Painted
 ## look reads it (painter_structure's `house_planks`: the plank houses' calmer wood, the fences
-## the props' honey); Classic's row material never samples UV2. Pure.
+## the props' honey); Classic's row material never samples UV2. y is 0 here: _row_surfaces carries
+## the ledge widths (StructureGeometry.with_ledges) over into it. Pure.
 static func house_flags(tags: PackedInt32Array, yards: PackedByteArray) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	out.resize(tags.size())
@@ -429,4 +436,6 @@ static func _arrays(surface: PlantSurface) -> Array:
 			tangents[k * 4] = 1.0
 			tangents[k * 4 + 3] = 1.0
 		arrays[Mesh.ARRAY_TANGENT] = tangents
+	# A narrow level face's width for the painted snow law (StructureGeometry.with_ledges).
+	StructureGeometry.with_ledges(arrays)
 	return arrays

@@ -98,7 +98,13 @@ const DOOR_LEAN := 0.045
 ## A collision triangle is cut like a roof when its lowest point is above this share of the way
 ## from the wall foot to the eave (walls, cut nowhere in the draw, stay whole).
 const COLLIDER_CUT_ABOVE := 0.6
-const FORMAT := Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
+## CUSTOM0 the piece's [u_len, v_len, code, accent]; CUSTOM1 (one float) a narrow level face's
+## width in metres, the source's UV2.y (StructureGeometry.with_ledges; 0 wide or not level), which
+## the snow law reads as the structure shader does (card snow-one-law round 4).
+const FORMAT := (
+	(Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT)
+	| (Mesh.ARRAY_CUSTOM_R_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
+)
 ## The shortest wall edge searched for a T (_wall_ts): the wander's bend across a shorter edge opens
 ## under a millimetre or two, and the short reveals and sills are most of a wall's edges.
 const T_EDGE_M := 0.5
@@ -380,10 +386,13 @@ static func build(
 	if index.is_empty():
 		for k in src.size():
 			index.append(k)
+	var ledges := PackedVector2Array()
+	if arrays[Mesh.ARRAY_TEX_UV2] != null:
+		ledges = arrays[Mesh.ARRAY_TEX_UV2]
 	var recs := records_of(tags, table, records)
 	var m := Grow.new()
 	for k in src.size():
-		m.add(src[k], normals[k], colours[k], recs[k])
+		m.add(src[k], normals[k], colours[k], recs[k], ledges[k].y if k < ledges.size() else 0.0)
 	_stand_off(m, opts.get("walls", {}))
 	var cut_idx := PackedInt32Array()
 	var mids: Dictionary = {}
@@ -435,6 +444,7 @@ static func build(
 	draw[Mesh.ARRAY_COLOR] = m.col
 	draw[Mesh.ARRAY_TEX_UV2] = m.uv2
 	draw[Mesh.ARRAY_CUSTOM0] = m.cus
+	draw[Mesh.ARRAY_CUSTOM1] = m.ledge
 	draw[Mesh.ARRAY_INDEX] = cut_idx
 	return {
 		"draw": draw,
@@ -450,15 +460,18 @@ class Grow:
 	var col := PackedColorArray()
 	var uv2 := PackedVector2Array()
 	var cus := PackedFloat32Array()
+	## CUSTOM1: each vertex's ledge width (FORMAT).
+	var ledge := PackedFloat32Array()
 	## The record of each vertex (null where none).
 	var rec: Array = []
 	## Record id -> its CUSTOM0 (z, w) (code_and_accent), made once per piece.
 	var _zw: Dictionary = {}
 
-	func add(p: Vector3, n: Vector3, c: Color, r_in: Variant) -> int:
+	func add(p: Vector3, n: Vector3, c: Color, r_in: Variant, width: float = 0.0) -> int:
 		pos.append(p)
 		nor.append(n)
 		col.append(c)
+		ledge.append(width)
 		rec.append(r_in)
 		var rec_v: Variant = r_in
 		if rec_v == null:
@@ -487,6 +500,7 @@ class Grow:
 		nor.append((nor[a] + nor[b]).normalized())
 		col.append(col[a].lerp(col[b], 0.5))
 		uv2.append((uv2[a] + uv2[b]) * 0.5)
+		ledge.append((ledge[a] + ledge[b]) * 0.5)
 		cus.append_array(cus.slice(a * 4, a * 4 + 4))
 		rec.append(rec[a])
 		mids[key] = pos.size() - 1
