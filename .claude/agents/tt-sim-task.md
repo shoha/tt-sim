@@ -73,7 +73,10 @@ main checkout. Set it up once, in this order:
 ## Gate, before the commit
 
 1. `gdlint` each touched `.gd` by absolute path. Do not run `gdformat`: a hook formats
-   every `.gd` edit.
+   every `.gd` edit. Before a commit that will merge, the WHOLE tree, with the worktree as the
+   working directory (gdlint reads `.gdlintrc` only from there), in PowerShell exactly:
+   `pwsh -NoProfile -WorkingDirectory <worktree> -Command "gdlint autoloads/ scenes/ utils/ resources/ tests/unit/"` (CI's list)
+   (this sets the child's directory; it is not a `cd`). It must print "Success: no problems found".
 2. `godot --headless --path D:/dev/tabletop/tt-sim --quit-after 1` (compile and shader errors).
 3. Full GUT, sharded: `godot --headless --path D:/dev/tabletop/tt-sim --script
    res://tools/gut_shards.gd` (in your own worktree, no lane; the serial `gut_cmdln.gd` run is only for debugging an

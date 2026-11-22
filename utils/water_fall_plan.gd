@@ -64,6 +64,36 @@ static func is_uphill(ground: PackedFloat32Array) -> bool:
 	return ground.size() >= 2 and ground[-1] - ground[0] >= WaterFalls.FALL_MIN_DROP_M
 
 
+## The ground a cut through the rises leaves along a line whose ground is `ground` (flow order):
+## the running minimum, each value no higher than any before it (card painter-water-cutband,
+## WaterEdit.plan_on_cut), or an empty array when no value stands more than `from_m` over it (no
+## rise to cut through; a negative `from_m` always returns it). Pure.
+static func cut_ground(ground: PackedFloat32Array, from_m: float) -> PackedFloat32Array:
+	var out := ground.duplicate()
+	var deepest := 0.0
+	for i in range(1, out.size()):
+		out[i] = minf(out[i], out[i - 1])
+		deepest = maxf(deepest, ground[i] - out[i])
+	return out if deepest > from_m else PackedFloat32Array()
+
+
+## How the reaches `ranges` over `ground` climb downstream as drawn, as
+## WaterConditioner.condition_ranges counts it: {"rises" (reaches over the one before), "rise_m"
+## (their metres), "rise_at" (the first one's first point)}. Pure.
+static func drawn_rises(ground: PackedFloat32Array, ranges: Array[Vector2i]) -> Dictionary:
+	var rises := 0
+	var rise_m := 0.0
+	var rise_at := -1
+	for k in range(1, ranges.size()):
+		var here := WaterGeometry.reach_level(ground, ranges[k])
+		var above := WaterGeometry.reach_level(ground, ranges[k - 1])
+		if here > above + 0.001:
+			rises += 1
+			rise_m += here - above
+			rise_at = ranges[k].x if rise_at < 0 else rise_at
+	return {"rises": rises, "rise_m": rise_m, "rise_at": maxi(rise_at, 0)}
+
+
 ## `points`, `widths` and `ground` reversed when the stroke is uphill (is_uphill()), as
 ## they are otherwise: [PackedVector2Array, PackedFloat32Array, PackedFloat32Array], copies.
 static func orient(

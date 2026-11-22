@@ -1040,9 +1040,12 @@ through the rise at the level of the water above it, the ground's own drops afte
 and falls), and the carve cuts the rise down to it with a cut's banks (`WaterCarve.cut_stations`:
 the bank slope rises from the class's to 1.1 with the depth of the cut, the reach grows with it up
 to 16 m so no bank ends in a slot wall, and the banks wander by the map's value noise so no edge is
-ruled). A stroke that crosses no rise over 0.75 m is planned and carved exactly as before. The
-hint is `cut_through` ("The river cut through the rise in its way, so it runs downhill all the
-way."), said when the stroke lands (`WaterEditor.river_hints_landed`). An end is not joined to
+ruled). A stroke that crosses no rise over 0.75 m is carved exactly as before, and one with no
+rise over 0.25 m is planned exactly as before; over a higher rise the falls and the reach
+boundaries are planned on the ground the cut leaves (`WaterEdit.plan_on_cut`, card
+painter-water-cutband: no fall on a rise's face, so no pale crest bar and no plunge widening
+below it; `water_field.md`). A cut is not said (the owner found the hint unwanted, 2026-11-22);
+`report.cut` records it. An end is not joined to
 water beside it when the joined line would dig through a rise the drawn line does not cross
 (`WaterEdit.JOIN_CUT_M`: a head on a plateau beside the pond at its foot stays as drawn,
 `perched_head`). `WaterRefit` resolves a stored climb the same way and never turns a stream round.
