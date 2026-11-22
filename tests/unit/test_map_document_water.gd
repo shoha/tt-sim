@@ -82,7 +82,14 @@ func test_water_entries_are_written() -> void:
 	assert_eq(data["bodies"][0]["points"].size(), 3)
 	assert_eq(data["bodies"][1], {"id": 7.0, "kind": "pond", "depth": "deep", "level_m": -1.25})
 	var size := WaterFlowBaker.resolution_for(Vector2(20, 20) * 1.524)
-	assert_eq(data["flow"], {"frame": "map_xz", "size": [float(size.x), float(size.y)]})
+	assert_eq(
+		data["flow"],
+		{
+			"frame": "map_xz",
+			"size": [float(size.x), float(size.y)],
+			"stamp": WaterFlowBaker.stamp(_water_doc())
+		}
+	)
 
 
 func test_bodies_without_ponds_or_flow_write_only_splines() -> void:

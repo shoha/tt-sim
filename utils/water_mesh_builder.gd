@@ -824,6 +824,9 @@ static func snapshot(doc: MapDocument) -> MapDocument:
 	copy.size_cells = doc.size_cells
 	copy.cell_size_m = doc.cell_size_m
 	copy.sample_spacing_m = doc.sample_spacing_m
+	# The falls read the tier height (WaterFalls); without it a refresh's falls and flow bake
+	# differ from the load's on a map with a non-default tier.
+	copy.tier_height_m = doc.tier_height_m
 	copy.map_seed = doc.map_seed
 	copy.heights = doc.heights.duplicate()
 	copy.pond_mask = doc.pond_mask.duplicate()

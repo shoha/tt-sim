@@ -14,7 +14,9 @@ extends RefCounted
 ##                            within the ground skirt's reach of the map)
 ##                    pond:  {"id", "kind": "pond", "depth", "level_m"}
 ##                    depth is "ankle", "waist" or "deep"; flow (only with a flow map):
-##                    {"frame": "map_xz", "size": [nx, nz]}
+##                    {"frame": "map_xz", "size": [nx, nz], "stamp": hex}, the stamp of the
+##                    inputs it was baked from (WaterFlowBaker.stamp; a map loads with its flow
+##                    rebaked when the stamp is missing or no longer matches)
 ##   ponds.png        8-bit greyscale on the sample grid: the id of the pond holding each
 ##                    sample, 0 for none. Needs splines.json.
 ##   water_flow.png   the baked flow map (WaterFlowBaker), RG8 stored as an RGB PNG with
@@ -66,7 +68,9 @@ static func serialize_bodies(doc: MapDocument, entries: Dictionary) -> void:
 	var data := {"version": VERSION, "bodies": bodies}
 	if not doc.water_flow.is_empty():
 		var size := doc.water_flow_size
-		data["flow"] = {"frame": FLOW_FRAME, "size": [size.x, size.y]}
+		data["flow"] = {
+			"frame": FLOW_FRAME, "size": [size.x, size.y], "stamp": doc.water_flow_stamp
+		}
 	entries[SPLINES_ENTRY] = JSON.stringify(data, "", false, true).to_utf8_buffer()
 
 
@@ -400,6 +404,12 @@ static func _parse_flow(
 		image.convert(Image.FORMAT_RG8)
 	doc.water_flow = image.get_data()
 	doc.water_flow_size = size
+	# The stamp of the inputs it was baked from (WaterFlowBaker.stamp); a missing or malformed
+	# one reads as "", which no document matches, so the load rebakes it.
+	var stamp: Variant = meta.get("stamp", "")
+	if stamp is String and stamp.length() == WaterFlowBaker.STAMP_LENGTH:
+		if stamp.is_valid_hex_number():
+			doc.water_flow_stamp = stamp
 
 
 static func _flow_size_ok(size: Vector2i) -> bool:

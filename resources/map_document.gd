@@ -55,7 +55,9 @@ extends RefCounted
 ## Water. water_bodies holds the rivers and ponds (WaterBody, flat water per body, stable
 ## ids); pond_mask is one byte per sample naming the pond whose area holds it (0 = none);
 ## water_flow is the baked map-wide flow map (WaterFlowBaker), RG8 pixel data of
-## water_flow_size texels, empty when there is none. One flow map per map because the
+## water_flow_size texels, empty when there is none, derived from the rest and stamped with
+## the inputs it came from (water_flow_stamp; a stale or missing one is rebaked at load). One
+## flow map per map because the
 ## water shader has one flow sampler per level. WaterGeometry derives the wet samples and
 ## per-sample levels. Summary: docs/systems/water.md (Water model and flow bake).
 ##
@@ -175,6 +177,10 @@ var pond_mask: PackedByteArray = PackedByteArray()
 ## at v = (j + 0.5) / water_flow_size.y (WaterFlowBaker documents the frame). Empty = none.
 var water_flow: PackedByteArray = PackedByteArray()
 var water_flow_size: Vector2i = Vector2i.ZERO
+## WaterFlowBaker.stamp() of the inputs water_flow was baked from; "" when unknown. Derived
+## data: a load whose stamp no longer matches the document bakes the flow again
+## (WaterFlowBaker.refreshed), so a flow map is never missing or stale where rivers run.
+var water_flow_stamp: String = ""
 ## Plank bridges and stepping stones over the water (Crossing), at most MAX_CROSSINGS.
 var crossings: Array[Crossing] = []
 ## True when this map's crossings are built by the shared procgen module (ProcgenCrossing.active),

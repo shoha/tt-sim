@@ -4,8 +4,9 @@ extends RefCounted
 ## Bakes the map-wide flow map of a MapDocument's rivers: a port of terrain-paint's
 ## engine/flow_bake.py field (the formulas are in its module and in the phase 4 survey),
 ## with the wet mask read from the document's heights instead of ray casts. Pure and
-## deterministic; the result ships in the document (MapDocument.water_flow), peers never
-## rebake. Summary: docs/systems/water.md (Water model and flow bake).
+## deterministic; the result ships in the document (MapDocument.water_flow), so a peer bakes
+## only a flow that arrives missing or stale (below). Summary: docs/systems/water.md (Water
+## model and flow bake).
 ##
 ## Frame (the contract with water.gdshader's water_flow() for the merged authored water
 ## mesh, which sits at the map origin with an identity transform and map-normalised UVs
@@ -34,6 +35,21 @@ extends RefCounted
 ## the waterfalls (WaterFalls.footprint(), P4c-3), so the bank fade does not cut the flow at
 ## a lip: the pool above runs into the pool below. The curtain itself never reads the map.
 
+##
+## The flow map is derived data, cached in the document with a stamp of its inputs
+## (MapDocument.water_flow_stamp, stamp()): the grid, the tier height, the seed, the heights, the
+## pond mask, the bodies in their saved form and BAKE_VERSION. Every bake records its stamp, and
+## the load bakes again on a worker (refreshed(), AuthoredLoadPrep.FLOW) when the stored one is
+## missing or no longer matches: a level written without a flow, one saved from an older build or
+## edited outside the editor never draws its rivers as still water. A fresh flow costs only the
+## stamp (about 1 ms on a 200 ft map, 3 to 4 ms on a 320 ft one); a rebake about 0.45 s on a
+## 200 ft map and 1 s on a 320 ft one with 27 bodies (2026-11-21).
+
+## Bump whenever bake() gives a different flow for the same document: every stored flow then goes
+## stale and is rebaked at its next load.
+const BAKE_VERSION := 1
+## Hex digits of a stamp.
+const STAMP_LENGTH := 16
 ## Nominal texel size: about the default sample spacing (a 200 ft map bakes 244 x 244).
 const TEXEL_M := 0.25
 const MIN_TEXELS := 8
@@ -79,6 +95,84 @@ static func bake(doc: MapDocument, size: Vector2i = Vector2i.ZERO) -> PackedByte
 		flow_x = _box_mean(flow_x, texels, radius)
 		flow_z = _box_mean(flow_z, texels, radius)
 	return _encode(flow_x, flow_z, fade, texels)
+
+
+## The stamp of everything bake() reads from `doc` (see the header): STAMP_LENGTH hex digits of a
+## SHA-256. Pure, reads only the document, so it runs on any thread.
+static func stamp(doc: MapDocument) -> String:
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_SHA256)
+	var head := PackedFloat64Array(
+		[
+			BAKE_VERSION,
+			doc.size_cells.x,
+			doc.size_cells.y,
+			doc.cell_size_m,
+			doc.sample_spacing_m,
+			doc.tier_height_m,
+			doc.map_seed,
+		]
+	)
+	ctx.update(head.to_byte_array())
+	if not doc.heights.is_empty():
+		ctx.update(doc.heights.to_byte_array())
+	if not doc.pond_mask.is_empty():
+		ctx.update(doc.pond_mask)
+	# The bodies in their saved form, so a saved and reloaded document stamps the same.
+	var bodies: Array = []
+	for body in doc.water_bodies:
+		bodies.append(MapWaterIO.body_json(body))
+	ctx.update(JSON.stringify(bodies, "", false, true).to_utf8_buffer())
+	return ctx.finish().hex_encode().left(STAMP_LENGTH)
+
+
+## True when `doc` has a river (a flow map to bake).
+static func has_river(doc: MapDocument) -> bool:
+	for body in doc.water_bodies:
+		if body.is_river():
+			return true
+	return false
+
+
+## The flow `doc` should carry: {"flow", "size", "stamp"}, the bake at resolution_for() or, with
+## no river, no flow at all.
+static func baked(doc: MapDocument) -> Dictionary:
+	var now := stamp(doc)
+	if not has_river(doc):
+		return {"flow": PackedByteArray(), "size": Vector2i.ZERO, "stamp": now}
+	var size := resolution_for(doc.extent_m())
+	return {"flow": bake(doc, size), "size": size, "stamp": now}
+
+
+## True when the flow `doc` carries is the one baked() would give: its stamp matches and it is
+## present exactly when a river runs. `now` is stamp(doc) when the caller has it.
+static func is_fresh(doc: MapDocument, now: String = "") -> bool:
+	var current := now if now != "" else stamp(doc)
+	return doc.water_flow_stamp == current and doc.water_flow.is_empty() != has_river(doc)
+
+
+## {} when the flow of `doc` is fresh (the stamp's cost only), else baked(doc). Reads the
+## document only, so it runs on a worker (AuthoredLoadPrep.FLOW); store() applies the result.
+static func refreshed(doc: MapDocument) -> Dictionary:
+	if is_fresh(doc, stamp(doc)):
+		return {}
+	return baked(doc)
+
+
+## Writes a baked() or refreshed() result into `doc` (nothing for {}).
+static func store(doc: MapDocument, result: Dictionary) -> void:
+	if result.is_empty():
+		return
+	doc.water_flow = result["flow"]
+	doc.water_flow_size = result["size"]
+	doc.water_flow_stamp = result["stamp"]
+
+
+## refreshed() and store() on the calling thread. True when it baked.
+static func ensure(doc: MapDocument) -> bool:
+	var result := refreshed(doc)
+	store(doc, result)
+	return not result.is_empty()
 
 
 ## The baked data as an Image for the water material (FORMAT_RG8, no mipmaps).
