@@ -7,7 +7,10 @@ extends RefCounted
 ## from one builder:
 ##   cone     a round roof (`roof_cone`): one grid round the axis and up the roof's own profile
 ##            (`wall_y + rise * (1 - s^power)`, so a dome and a bell are followed, not a straight
-##            cone), closed in one point over the apex, an eave lip at its rim. One grid, no facets:
+##            cone), closed in one point over the apex, at the gable blanket's depth, round the
+##            ring's apothem, its soft lip a few centimetres past the eave and never lower than a
+##            share of the roof's thickness under it, so the snow sits on the roof and its edge
+##            shows (round 1's lip, the blanket's, swallowed the thatch). One grid, no facets:
 ##            facets drew a tone step per facet under any paint (spike 8). Ported from the spike's
 ##            PainterSnowBaked.lay_cone (H3b), with the record's numbers in place of a mesh read;
 ##   coping   a stone wall's run (`coping_line`): a rounded strip along the coping's top points,
@@ -25,13 +28,9 @@ const CODE := PainterMannerBlanket.CODE
 const CONE_CELL_M := 0.35
 const EDGE: Array[float] = [0.0, 0.15]
 const TOP: Array[float] = [0.0, 0.3]
-## The cone's middle depth at full hold, the least share of it a steep pitch keeps, how much
-## heavier it lies at the eave (over how many metres up), how much thinner at the apex (over how
-## many metres down), and how much deeper on the lee side.
-const MID_T_M := 0.27
-const STEEP_SHARE := 0.55
-const EAVE_HEAVY := 0.4
-const EAVE_REACH_M := 1.6
+## The cone's depth is the gable blanket's (PainterMannerBlanket.depth in the middle, tapering to
+## its EAVE_T_M over EAVE_R_M at the eave), so a round hut wears the same snow as a cottage. How
+## much thinner it lies at the apex (over how many metres down), and how much deeper on the lee.
 const CONE_THIN := 0.1
 const APEX_REACH_M := 1.3
 const LEE := 0.35
@@ -42,13 +41,17 @@ const ALONG := 0.35
 const RIPPLE_CELL_M := 0.7
 const SWELL_CELL_M := 2.5
 const LOBE_CELL_M := 0.9
-## The ripple's height, the swell's share of the depth, the deepest lobe and the lowest an eave's
-## foot hangs under the eave's edge (metres at full hold), and its tuck under the roof's plane.
+## The ripple's height and the swell's share of the depth; the cone's soft lip past its eave ring
+## (the ring already carries the roof's overhang) and its deepest droop (metres at full hold); the
+## foot's tuck under the roof's plane, and the lowest the rim reaches under the top face's edge as
+## a share of the roof's `thickness`, so the thatch's edge shows as a thin rim under the snow.
 const RIPPLE_M := 0.04
 const SWELL := 0.22
-const SAG_M := 0.3
-const FOOT_MAX_M := 0.3
+const LIP_M := 0.05
+const CONE_DROOP_M := 0.04
 const TUCK := 0.25
+const RIM_SHARE := 0.35
+const THICKNESS_M := 0.12
 ## A coping strip's depth as a share of its width and its bounds (metres), its overhang past each
 ## side, and its station along the run.
 const COPING_T := 0.5
@@ -56,11 +59,12 @@ const COPING_T_MIN_M := 0.05
 const COPING_T_MAX_M := 0.14
 const COPING_OVER_M := 0.025
 const COPING_STEP_M := 0.4
-## A pad's dome: its depth as a share of its narrower width and its bounds (metres), its ring
-## count round a disc, and the superellipse power that keeps a rect's corners.
-const PAD_T := 0.38
-const PAD_T_MIN_M := 0.03
-const PAD_T_MAX_M := 0.14
+## A pad's dome: its depth as a share of its narrower width and its bounds (metres; a low, soft
+## cap, a third of the first cut's, which stood on a barrel like a bun), its ring count round a
+## disc, and the superellipse power that keeps a rect's corners.
+const PAD_T := 0.13
+const PAD_T_MIN_M := 0.02
+const PAD_T_MAX_M := 0.05
 const PAD_SIDES := 20
 const RECT_POWER := 4.0
 ## An eave point within this plan distance of a window's top edge keeps its foot this far above it.
@@ -208,7 +212,10 @@ static func lay_cone(
 		return 0
 	var slant := Vector2(radius, rise).length()
 	var up_n := float(rec.get("up", radius / slant))
-	var whole := MID_T_M * hold * lerpf(STEEP_SHARE, 1.0, smoothstep(0.5, 0.9, up_n))
+	var whole := PainterMannerBlanket.depth({"n": Vector3(0.0, up_n, 0.0)}, hold)
+	var eave_lo := minf(PainterMannerBlanket.EAVE_T_M * hold / maxf(whole, 0.01), 1.0)
+	var rim_low := RIM_SHARE * float(rec.get("thickness", THICKNESS_M))
+	var inset := clampf(float(rec.get("apothem", radius)) / radius, 0.8, 1.0)
 	var nc := maxi(12, ceili(TAU * radius / CONE_CELL_M))
 	var t_st := PainterMannerBlanket.stations(slant, EDGE, TOP, CONE_CELL_M)
 	var rows: Array = [[0.0, 3], [0.0, 2], [0.0, 1]]
@@ -235,35 +242,43 @@ static func lay_cone(
 			var prof := cone_profile(rec, d)
 			var n := (out * prof.y + Vector3.UP).normalized()
 			var down := (out - Vector3.UP * prof.y).normalized()
-			var base_p := Vector3(apex.x, prof.x, apex.z) + out * d
+			# Drawn round the ring's apothem at the profile's heights: a circle through the corners
+			# would bow past every side of a polygonal roof and hang over its edge there.
+			var base_p := Vector3(apex.x, prof.x, apex.z) + out * d * inset
 			var plan := Vector2(base_p.x, base_p.z)
 			var top_m := (1.0 - t) * slant
-			var eave := 1.0 + EAVE_HEAVY * (1.0 - smoothstep(0.0, EAVE_REACH_M, t * slant))
+			var eave := PainterMannerBlanket.taper(
+				t * slant / PainterMannerBlanket.EAVE_R_M, eave_lo
+			)
 			var crown := 1.0 - CONE_THIN * (1.0 - smoothstep(0.0, APEX_REACH_M, top_m))
 			var lee := 1.0 + LEE * Vector2(n.x, n.z).dot(WIND) * smoothstep(0.0, 1.2, top_m)
 			var h := whole * eave * crown * lee * (1.0 + SWELL * swell_at(plan, phase))
 			h = maxf(h + RIPPLE_M * hold * ripple(plan) * crown, 0.01)
-			var at := base_p + n * h
+			# Laid along the normal in the field, straight up at the eave: along the normal a steep
+			# cone's snow would stand out past its ring like a mushroom's cap.
+			var lay := n.lerp(Vector3.UP, 1.0 - smoothstep(0.0, PainterMannerBlanket.EAVE_R_M, t * slant))
+			var at := base_p + lay * h
 			var dn := Vector3.ZERO
 			var sh := 0.0
 			if rk >= 1:
 				# A swell that closes round the rim (the field's is not periodic).
 				var sw := 1.0 + 0.22 * sin(a * 3.0 + ph) + 0.13 * sin(a * 7.0 + ph * 2.3)
-				var over := PainterMannerBlanket.OVER_M * hold * sw
-				var hang := SAG_M * hold * lobe(base_p, phase)
-				var room := maxf(FOOT_MAX_M * hold - TUCK * h * n.y, 0.0)
+				var over := LIP_M * hold * sw
+				var hang := CONE_DROOP_M * hold * lobe(base_p, phase)
 				if rk == 1:
-					at += down * over * 0.65 - n * h * 0.25 - Vector3.UP * minf(hang * 0.12, room)
+					at += down * over * 0.65 - n * h * 0.25 - Vector3.UP * hang * 0.3
 					dn = down * 0.7 + n * 0.6
 					sh = 0.1
 				elif rk == 2:
-					at += down * over - n * h * 0.9 - Vector3.UP * minf(hang, room)
+					at += down * over - n * h * 0.85 - Vector3.UP * hang
 					dn = down - n * 0.1
 					sh = 0.4
 				else:
-					at += down * over * 0.3 - n * h * (1.0 + TUCK) - Vector3.UP * minf(hang, room)
+					at += down * over * 0.3 - n * h * (1.0 + TUCK) - Vector3.UP * hang
 					dn = -n * 0.8 + down * 0.2
 					sh = 0.85
+				# The rim never hides the roof's edge: at most a share of its thickness below it.
+				at.y = maxf(at.y, base_p.y - rim_low)
 				at = above_windows(windows, at)
 			elif ri == nr - 1:
 				# The apex: every column ends in one point straight over it.
@@ -390,11 +405,12 @@ static func lay_pad(g: PainterMannerSnow.Strips, rec: Dictionary) -> int:
 		return 0
 	var t := clampf(PAD_T * 2.0 * minf(hu, hv), PAD_T_MIN_M, PAD_T_MAX_M)
 	# Rings out to in: [plan scale, height share, normal's lean out, shade].
+	# The foot sits just over the lid's edge; the shoulder near it, so the cap reads flat-topped.
 	var rings := [
-		[1.04, -0.12, 0.85, 0.75],
-		[0.97, 0.45, 0.6, 0.3],
-		[0.82, 0.8, 0.35, 0.05],
-		[0.5, 0.97, 0.15, 0.0],
+		[1.02, -0.1, 0.85, 0.7],
+		[0.98, 0.5, 0.55, 0.3],
+		[0.85, 0.85, 0.3, 0.05],
+		[0.5, 0.98, 0.1, 0.0],
 	]
 	var size := Vector2(2.0 * hu, 2.0 * hv)
 	var first := g.pos.size()

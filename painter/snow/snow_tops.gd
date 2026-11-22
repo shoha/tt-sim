@@ -26,6 +26,10 @@ const NODE := "SnowTops"
 ## The wall layer whose walls carry records (AuthoredWalls).
 const WALLS := "AuthoredWalls"
 
+## True (the default) lays the bodies; false lays none and hides the ones laid (an A/B switch for
+## measurements: read when an asset is dressed, and by shown()).
+static var enabled := true
+
 ## Per body built, for a probe and the tests: [{"family" ("street", "wall", "props"), "lot",
 ## "eval_ms", "ms" (the builder), "tris"}].
 var stats: Array = []
@@ -44,7 +48,7 @@ var _material: ShaderMaterial = null
 ## Lays the bodies of wall node `wall` (a child of a wall layer) drawn with `material`: nothing for
 ## a fence, a wall of another layer or one already asked.
 func dress_wall(wall: Node, material: ShaderMaterial) -> void:
-	if material == null or not wall is Node3D or not wall.is_inside_tree():
+	if not enabled or material == null or not wall is Node3D or not wall.is_inside_tree():
 		return
 	var id := wall.get_instance_id()
 	if _asked.has(id):
@@ -61,7 +65,9 @@ func dress_wall(wall: Node, material: ShaderMaterial) -> void:
 ## Lays the body of settlement cell `cell` (a mesh carrying AuthoredSettlements.SNOW_TOPS_META)
 ## drawn with `material`; nothing for a cell with no pads or one already asked.
 func dress_cell(cell: Node, material: ShaderMaterial) -> void:
-	if material == null or not cell is Node3D or not cell.has_meta(AuthoredSettlements.SNOW_TOPS_META):
+	if not enabled or material == null or not cell is Node3D:
+		return
+	if not cell.has_meta(AuthoredSettlements.SNOW_TOPS_META):
 		return
 	var id := cell.get_instance_id()
 	var pads: Array = cell.get_meta(AuthoredSettlements.SNOW_TOPS_META, [])
@@ -87,6 +93,14 @@ func clear() -> void:
 ## Whether a body is still being built.
 func busy() -> bool:
 	return not _tasks.is_empty()
+
+
+## Shows the bodies laid when `enabled`, else hides them (the in-run A/B). Returns how many.
+func shown() -> int:
+	var bodies := laid()
+	for body in bodies:
+		body.visible = enabled
+	return bodies.size()
 
 
 ## The bodies laid now (live nodes).

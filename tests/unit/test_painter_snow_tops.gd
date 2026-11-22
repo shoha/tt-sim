@@ -135,6 +135,20 @@ func test_the_cone_follows_its_profile_and_closes_at_the_apex() -> void:
 	assert_between(top, 4.6, 5.0, "one point a little over the apex")
 
 
+func test_the_cone_sits_on_its_roof_and_shows_its_edge() -> void:
+	var cone := _cone()
+	cone["thickness"] = 0.2
+	var verts: PackedVector3Array = _built([cone]).arrays[Mesh.ARRAY_VERTEX]
+	var reach := 0.0
+	var low := INF
+	for p in verts:
+		reach = maxf(reach, Vector2(p.x, p.z).length())
+		low = minf(low, p.y)
+	# The ring (2.6) already carries the overhang: the lip adds a few centimetres, no cushion.
+	assert_lt(reach, 2.6 + PainterSnowForms.LIP_M * 1.5 + 0.02, "the rim stays at the eave")
+	assert_gt(low, 2.4 - 0.2 * PainterSnowForms.RIM_SHARE - 0.01, "the roof's edge shows under it")
+
+
 func test_a_street_gives_one_body_per_lot() -> void:
 	var records := [
 		_slope("row_1/left/lot0/roof_gable_1/slope/s0", "left/lot0"),
@@ -214,6 +228,17 @@ func test_a_moved_cell_keeps_its_body() -> void:
 	await wait_frames(2)
 	assert_eq(tops.builds, 1, "nothing built again when it moves")
 	assert_eq(cell.get_node_or_null(PainterSnowTops.NODE), body, "the same body rides with it")
+	PainterSnowTops.enabled = false
+	assert_eq(tops.shown(), 1, "the A/B switch reaches the body laid")
+	assert_false(body.visible, "and hides it")
+	var other := MeshInstance3D.new()
+	other.set_meta(AuthoredSettlements.SNOW_TOPS_META, [_pad("disc", Vector3(1, 0.8, 1))])
+	add_child_autofree(other)
+	tops.dress_cell(other, material)
+	assert_false(tops.busy(), "and lays no new one")
+	PainterSnowTops.enabled = true
+	tops.shown()
+	assert_true(body.visible, "on again")
 	tops.clear()
 
 
