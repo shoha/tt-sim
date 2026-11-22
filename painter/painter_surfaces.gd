@@ -71,6 +71,11 @@ const LEVEL_MAP := ^"LevelMap"
 const BIOME_PULL := 1.5
 ## The zone map's blur radius in samples (no sample step of the masks reaches the screen).
 const ZONE_BLUR := 1
+## While a sculpt stroke is held (AuthoredTerrain.stroke_held), the shading field and the zone maps
+## follow its dabs every this many frames, not every frame: the rect of a few frames' dabs costs
+## about what one frame's did (the dabs overlap), and the stroke's end redoes its whole rect exactly
+## (card painter-held-stroke: 6.0 ms of a 10.2 ms held frame).
+const ZONE_HELD_EVERY := 3
 
 ## What is drawn now: {"sheet", "mood", "elevation"}, {} while nothing is painted.
 var applied: Dictionary = {}
@@ -95,6 +100,10 @@ var _seen: Dictionary = {}
 ## The scatters' resolved species count at the last landing's stand-in pass (_on_cells_applied).
 var _species_seen := -1
 var _zone_queued := false
+## The frame of the last zone rebuild while a stroke was held, and whether one waits for a later
+## frame (ZONE_HELD_EVERY).
+var _zone_held_frame := -1000
+var _zone_waiting := false
 ## The painted trees (a PainterTrees), made on the first paint().
 var _trees: RefCounted = null
 ## The painted buildings (a PainterBuildings), made on the first paint().
@@ -596,6 +605,25 @@ func _queue_zone() -> void:
 	_rebuild_zone.call_deferred()
 
 
+## A rebuild while a stroke is held that waits for a later frame (ZONE_HELD_EVERY); the edits wait
+## in the dirty rects meanwhile. The stroke's end queues its own rebuild, which runs at once.
+func _wait_zone() -> void:
+	if _zone_waiting:
+		return
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	_zone_waiting = true
+	if not tree.process_frame.is_connected(_on_zone_wait):
+		tree.process_frame.connect(_on_zone_wait, CONNECT_ONE_SHOT)
+
+
+func _on_zone_wait() -> void:
+	if _zone_waiting:
+		_zone_waiting = false
+		_queue_zone()
+
+
 ## Brings the ground's maps up to the terrain's document, once a frame after an edit: the shading
 ## field (PainterGroundField), the zone maps (PainterZoneMaps: r meadow share, g path, b rock,
 ## a shore, and the char and biome zone maps; whole after a first paint or a terrain build, else
@@ -603,9 +631,17 @@ func _queue_zone() -> void:
 ## step leaves it) and the cliff surface.
 func _rebuild_zone() -> void:
 	_zone_queued = false
-	_queue_occlusion()
 	if not is_instance_valid(_terrain) or _terrain.document == null:
+		_queue_occlusion()
 		return
+	if _terrain.stroke_held:
+		var frame := Engine.get_process_frames()
+		if frame - _zone_held_frame < ZONE_HELD_EVERY:
+			_wait_zone()
+			return
+		_zone_held_frame = frame
+	_zone_waiting = false
+	_queue_occlusion()
 	var doc := _terrain.document
 	# One field for the map and the skirt (the texture object is shared, as the zone map's): past
 	# the border the skirt's reads clamp to the border's texel (painter_ground.gdshader).

@@ -107,6 +107,11 @@ const FALLBACK_META := &"authored_ground_fallback"
 
 var document: MapDocument = null
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
+## True while a sculpt stroke is held (HeightEditor sets it). A follower of ground_edited may then
+## refresh less often or off the main thread: the stroke's end edits the whole stroke once more
+## (settle_heights() emits its rule-field rect), and that edit is followed exactly, at once (card
+## painter-held-stroke).
+var stroke_held: bool = false
 ## Microseconds, for measurement, of the last update_ground_region() call, its broad refresh,
 ## the last process_heights() call (and chunks it updated), the last refresh_skirt(), and the
 ## rule fields the last settle_heights() recomputed.
