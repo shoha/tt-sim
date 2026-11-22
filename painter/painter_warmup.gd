@@ -369,9 +369,9 @@ static func collect(bare: bool) -> Array[Dictionary]:
 	_add(samples, "tree_blockin_fast", TREE_BLOCKIN_FAST, LAYOUT_TREE, 0)
 	_add(samples, "tree_stroke_burn", TREE_STROKE_BURN, LAYOUT_TREE, 0)
 	_add(samples, "tree_blockin_burn", TREE_BLOCKIN_BURN, LAYOUT_TREE, 0)
-	_add(samples, "structure", STRUCTURE, LAYOUT_LIT, 0)
-	# A street row's wood carries its house flags in UV2 (WallGeometry.house_flags).
-	_add(samples, "structure_row_wood", STRUCTURE, LAYOUT_GLOW, 0)
+	# Every structure surface carries UV2 (StructureGeometry.with_ledges: the ledge widths, and a
+	# street row's house flags, WallGeometry.house_flags): the glow's layout.
+	_add(samples, "structure", STRUCTURE, LAYOUT_GLOW, 0)
 	_add(samples, "ivy_contact", IVY_CONTACT, LAYOUT_LIT, 0)
 	_add(samples, "yard", YARD, LAYOUT_YARD, 0)
 	_add(samples, "yard_ground", YARD_GROUND, LAYOUT_YARD, 0)

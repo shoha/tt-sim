@@ -81,7 +81,12 @@ func test_the_layouts_make_the_measured_formats() -> void:
 	assert_eq(_format_of(_sample_named("ground_plain")), _format_of(_sample_named("solid_plain")))
 	assert_eq(_format_of(_sample_named("plant_lit")), MEASURED_LIT)
 	assert_eq(_format_of(_sample_named("solid_lit")), MEASURED_LIT)
-	assert_eq(_format_of(_sample_named("structure")), MEASURED_LIT)
+	# A structure surface's (StructureGeometry.surface_arrays, UV2 included since snow-one-law).
+	assert_eq(
+		_format_of(_sample_named("structure")),
+		_format_of({"arrays": StructureWarmup.quad_arrays()}),
+		"structure"
+	)
 	assert_eq(_format_of(_sample_named("tree_stroke")), MEASURED_TREE)
 	assert_eq(_format_of(_sample_named("tree_stroke_bare")), MEASURED_TREE)
 	assert_eq(_format_of(_sample_named("manner")), MEASURED_MANNER)

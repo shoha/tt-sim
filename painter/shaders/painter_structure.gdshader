@@ -91,6 +91,9 @@ varying float v_h;
 varying flat int v_tone;
 // A picked roof's turn of its ramp to its paint (painter_structure_common's paint_turn); z 0: none.
 varying flat vec4 v_turn;
+// A narrow level face's width in metres (UV2.y, StructureGeometry.with_ledges; 0 wide or not
+// level).
+varying float v_ledge;
 
 varying vec3 f_n;
 varying vec3 f_shd;
@@ -106,12 +109,20 @@ varying vec4 f_soft;
 // weathering at the foot, never camouflage.
 const float WALL_PATCHES = 0.55;
 const float WALL_DABS = 0.45;
+// The law's ledge (card snow-one-law round 3): a level face narrower than LEDGE_LO holds no snow,
+// one from LEDGE_HI holds it all. A shutter's batten tops (5 to 7.7 cm), a window casing's jamb
+// end (7.8 cm), a door case's head (6.5 cm) and a thin timber's top fall under it; a frame head
+// (15 cm), a lintel (16 cm) and a sill (19 cm) keep their snow. The open shutters' batten tops drew
+// a white ladder, their ends a white line down each casing's edge at zoom 6; never snow.
+const float LEDGE_LO = 0.08;
+const float LEDGE_HI = 0.12;
 
 void vertex() {
 	v_wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	v_wn = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	v_h = COLOR.a;
 	v_tone = tone_of(pick, COLOR.rgb);
+	v_ledge = UV2.y;
 	if (house_planks && UV2.x > 0.5) {
 		v_tone = 1;
 	}
@@ -285,7 +296,8 @@ void fragment() {
 			roll = snow_roll(snow_edge_m(law.w, h, fr.z), fr.w, fr.xy);
 		} else if (law.y > 0.0) {
 			vec2 sf = wp.xz * 1.6;
-			cover = law.x;
+			// No snow on a level face narrower than a ledge (LEDGE_LO).
+			cover = law.x * (v_ledge > 0.0 ? smoothstep(LEDGE_LO, LEDGE_HI, v_ledge) : 1.0);
 			sp = snow_paint(sf, 1.0);
 			roll = snow_roll(SNOW_FAR, SNOW_FAR, sf);
 			// The layer's own edge and a rounded top's shoulder turn into the shade, as a lip does.
