@@ -2978,7 +2978,23 @@ Evidence: `docs/research/2026-11-09-prototypes/compare/painter_final117_terrain_
     no visible line, and card painter-terrain-dabcost removed it (the uniform, its shader code,
     `PainterSites.line()` and its term in `round_reach()`). Candidate (c), the away part turned
     down the slope, was dropped (nothing on level ground).
-  - **Trunks** are unchanged (the field's seam disc and the crown's pool).
+  - **Trunks (card painter-trunk-contact, 2026-11-21; look-pending).** A tree's trunk is a site
+    under the same rule (`PainterSites.trunk()`): its foot a disc of the trunk's own radius (a
+    painted tree's stem radius at its first point, the pack's `foot`; a scatter tree's mesh's
+    lowest ring, `PainterBodies.trunk_of`; else 2.5 % of its height), the sliver round it and 0.6
+    of the radius away from the sun. The field's trunk seam disc is gone, and so is the crown's
+    pool: on an authored terrain a tree writes nothing into the field (a GLB map keeps both).
+    Three arms were compared once (`compare/painter_final139_trunk_contact/`): the pool in the
+    field, the pool as a pool-only dab, no pool. The pool only ever showed inside the cast shadow,
+    as a deeper oval that at 18 h sat detached beside the trunk (and as a curved edge in the shade
+    by the boulder); the dab arm moved the same oval further and cost 13 ms of dab building for 44
+    trees. Without it the cast shadow grounds the tree; the forest's shade under the canopy loses
+    a few deeper pockets (a little depth, judged worth the cleaner shade). Main's seam disc read as
+    a grey plate round the foot in the lit grass at 14 h and 18 h; the new trunk mark is small (a
+    third of a trunk), so the foot is grounded by the trunk's own cast shadow, as a boulder's is.
+    Winter's heaped snow at the foot is unchanged. Field bake (44 trees, 5 test views, whole):
+    9.2 to 9.5 ms on main, 4.5 to 4.9 ms now (114 marks against 202); dabs 1.0 ms to 1.5 ms (133
+    sites against 89).
   - **Cost** (in-run A/B against main f8dc0562, twice each, measured with the shade line on,
     build minus main): torture wide -0.027 / -0.014 ms, torture edge 0.000 / +0.018 ms, falls
     f1_o -0.025 / -0.016 ms, falls wide -0.016 / -0.024 ms. A whole bake of the field falls from
