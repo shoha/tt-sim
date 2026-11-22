@@ -25,6 +25,11 @@ extends RefCounted
 ## collision a frame of its own and, on the frame after, lands the rest (after_work: props,
 ## kept rocks, the terrain's settle, the wet dressing, the regeneration). Anything that must see
 ## an edit whole calls finish_work() first; every edit and undo does.
+##
+## With the terraforming core on (docs/systems/terraform.md "The bridge"), another writer puts
+## the heights into the document: an external stroke (begin_external, external_rect,
+## end_external) runs a stroke's ground machinery and returns its record for the caller's
+## gesture entry, and apply_ground() is apply_diff() without the heights diff.
 
 ## Per-frame main-thread budgets of height work: terrain chunk updates, and snapping plants
 ## and props to the new ground (docs/PERFORMANCE.md "Sculpting").
@@ -75,6 +80,11 @@ var _worked_frame: int = -1
 var _landing: Callable = Callable()
 ## The editor (weak: it owns this object).
 var _owner: WeakRef = null
+## An external stroke (begin_external): in progress, the heights it started from, and the
+## document samples it changed so far.
+var _external := false
+var _external_before := PackedFloat32Array()
+var _external_rect := Rect2i()
 
 
 static func create(editor: AuthoringEditor) -> HeightEditor:
@@ -163,28 +173,7 @@ func end_stroke() -> bool:
 		e.terrain.settle_heights()
 	if diff.is_empty():
 		return false
-	var wet := e.document.water_dressing
-	# The props side for history; kept rocks (RockKeeper) join it when their worker lands,
-	# before anything can read it (finish_work); the regeneration waits for them.
-	var record := {"props_before": {}, "props_after": {}, "kept": {}}
-	var props_bytes := 0
-	for cell in _prop_start:
-		record.props_before[cell] = (_prop_start[cell] as Dictionary).duplicate(true)
-		record.props_after[cell] = e.props.cell_rows(cell).duplicate(true)
-		props_bytes += PropRows.rows_bytes(_prop_start[cell]) * 2
-	var area := regenerated_area(stroke.changed)
-	var changed_world := MaskBrush.sample_rect_to_world(e.document, stroke.changed)
-	record["crossings"] = e.crossings.follow(changed_world)
-	record["walls"] = e.walls.follow(changed_world)
-	record["structures"] = e.structures.follow(changed_world)
-	# The water follows the ground (P4-3); rocks and plants wait for its dressing's worker.
-	e.water.refresh(
-		func() -> void:
-			if not e.rock_keeper.start(
-				stroke.start_heights, stroke.changed, area, record, _rocks, wet
-			):
-				regenerate(stroke.changed)
-	)
+	var record := _ground_record(stroke.start_heights, stroke.changed)
 	(
 		e
 		. history
@@ -193,12 +182,103 @@ func end_stroke() -> bool:
 				"label": _label,
 				"undo": apply_diff.bind(diff, false, record),
 				"redo": apply_diff.bind(diff, true, record),
-				"bytes": int(diff.bytes) + props_bytes,
+				"bytes": int(diff.bytes) + int(record["props_bytes"]),
 			}
 		)
 	)
 	e.edited.emit()
 	return true
+
+
+## The ground side of a finished height edit over sample rect `changed` from heights `start`
+## (end_stroke, end_external): the props rows before and after, the crossings, walls and
+## structures that followed the ground, and "props_bytes"; kept rocks (RockKeeper) join it when
+## their worker lands, before anything can read it (finish_work), and the regeneration waits for
+## them, after the water has followed the ground (P4-3).
+func _ground_record(start: PackedFloat32Array, changed: Rect2i) -> Dictionary:
+	var e := _editor()
+	var wet := e.document.water_dressing
+	var record := {"props_before": {}, "props_after": {}, "kept": {}}
+	var props_bytes := 0
+	for cell in _prop_start:
+		record.props_before[cell] = (_prop_start[cell] as Dictionary).duplicate(true)
+		record.props_after[cell] = e.props.cell_rows(cell).duplicate(true)
+		props_bytes += PropRows.rows_bytes(_prop_start[cell]) * 2
+	record["props_bytes"] = props_bytes
+	var area := regenerated_area(changed)
+	var changed_world := MaskBrush.sample_rect_to_world(e.document, changed)
+	record["crossings"] = e.crossings.follow(changed_world)
+	record["walls"] = e.walls.follow(changed_world)
+	record["structures"] = e.structures.follow(changed_world)
+	e.water.refresh(
+		func() -> void:
+			if not e.rock_keeper.start(start, changed, area, record, _rocks, wet):
+				regenerate(changed)
+	)
+	return record
+
+
+# ============================================================================
+# External strokes (the terraforming bridge writes the heights)
+# ============================================================================
+
+
+## Starts a stroke whose heights another writer puts into the document (TerraBridge, from the
+## core's derive; card terraform-p2-bridge): the snap starts from the heights as they are now,
+## and the terrain treats the stroke as held. external_rect() takes each frame's changed rect,
+## end_external() finishes and returns the ground record instead of recording it (the caller's
+## gesture entry holds it). False when the map cannot be sculpted or a stroke is in progress.
+func begin_external() -> bool:
+	var e := _editor()
+	if not e.can_sculpt() or _stroke != null or _external:
+		return false
+	finish_work()
+	_external = true
+	_external_before = e.document.heights.duplicate()
+	_external_rect = Rect2i()
+	begin_snap(_external_before, true)
+	_set_held(true)
+	return true
+
+
+## True between begin_external() and end_external().
+func is_external() -> bool:
+	return _external
+
+
+## One frame of an external stroke: the document samples of `rect` were written; the chunks and
+## the snap follow within the budgets (a sculpt flush's path).
+func external_rect(rect: Rect2i) -> void:
+	if not _external or not rect.has_area():
+		return
+	_external_rect = rect if not _external_rect.has_area() else _external_rect.merge(rect)
+	queue_heights(rect)
+	work()
+
+
+## Ends an external stroke: everything left, the collision included, the terrain settled, the
+## water and the followers updated, and the ground record returned ({} when nothing changed):
+## _ground_record()'s keys plus "rect" (document samples) and "before" (the heights the stroke
+## started from).
+func end_external() -> Dictionary:
+	if not _external:
+		return {}
+	var e := _editor()
+	_external = false
+	_set_held(false)
+	work(true)
+	if is_instance_valid(e.terrain):
+		e.terrain.settle_heights()
+	var rect := _external_rect
+	var before := _external_before
+	_external_rect = Rect2i()
+	_external_before = PackedFloat32Array()
+	if not rect.has_area():
+		return {}
+	var record := _ground_record(before, rect)
+	record["rect"] = rect
+	record["before"] = before
+	return record
 
 
 ## Abandons the stroke, putting every sample, plant and prop back exactly.
@@ -256,6 +336,29 @@ func apply_diff(diff: Dictionary, redo: bool, record: Dictionary, spread: bool =
 	queue_heights(rect)
 	var prop_rows: Dictionary = record.props_after if redo else record.props_before
 	after_work(_land_diff.bind(rect, prop_rows, record.kept, redo))
+	if not spread:
+		work(true)
+
+
+## The landing of an undo, redo or live op whose heights the core's bridge already wrote
+## (TerraBridge; card terraform-p2-bridge): apply_diff() without HeightStroke.apply_diff. `rect`
+## is the document samples written, `before` the heights before the write (the snap's start),
+## `record` the ground side end_external() returned; props take its rows for that side, kept
+## rocks swap, the terrain settles and the scatter regenerates once the water has followed.
+func apply_ground(
+	rect: Rect2i, before: PackedFloat32Array, record: Dictionary, redo: bool, spread := false
+) -> void:
+	finish_work()
+	var e := _editor()
+	e.crossings.restore(record.get("crossings", {}), redo)
+	e.walls.restore(record.get("walls", {}), redo)
+	e.structures.restore(record.get("structures", {}), redo)
+	if not rect.has_area():
+		return
+	begin_snap(before, false)
+	queue_heights(rect)
+	var prop_rows: Dictionary = record.get("props_after" if redo else "props_before", {})
+	after_work(_land_diff.bind(rect, prop_rows, record.get("kept", {}), redo))
 	if not spread:
 		work(true)
 
@@ -320,7 +423,7 @@ func has_work() -> bool:
 	var e := _editor()
 	return (
 		not _snap_windows.is_empty()
-		or (_collision_dirty and _stroke == null)
+		or (_collision_dirty and _stroke == null and not _external)
 		or (is_instance_valid(e.terrain) and e.terrain.has_height_work())
 		or e.rock_keeper.is_running()
 		or e.water.is_working()
@@ -393,6 +496,7 @@ func work(everything: bool = false) -> void:
 	var collide := (
 		_collision_dirty
 		and _stroke == null
+		and not _external
 		and is_instance_valid(e.terrain)
 		and (everything or not busy)
 	)

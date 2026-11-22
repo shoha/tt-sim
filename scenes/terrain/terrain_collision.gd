@@ -130,6 +130,17 @@ func tile_count() -> int:
 	return _shapes.size()
 
 
+## The height (metres) a tile's shape holds at document sample (x, z), from the first tile that
+## has it, or NAN outside the grid (tests and probes: the bridge's collision check).
+func height_at_sample(x: int, z: int) -> float:
+	if x < 0 or z < 0 or x >= _grid.x or z >= _grid.y:
+		return NAN
+	var i := touching(_starts_x, _size, x, x)[0]
+	var j := touching(_starts_z, _size, z, z)[0]
+	var data := _shapes[Vector2i(i, j)].map_data
+	return data[(z - _starts_z[j]) * (_size + 1) + (x - _starts_x[i])]
+
+
 func _layout(grid: Vector2i) -> void:
 	for body in _bodies:
 		remove_child(body)

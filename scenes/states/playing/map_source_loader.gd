@@ -43,6 +43,7 @@ const PROPS_NODE := "AuthoredProps"
 ## The terraforming core's switch and session scripts (add_terra_session), by path.
 const TERRA_CORE := "res://utils/terraform/terra_core.gd"
 const TERRA_SESSION := "res://utils/terraform/terra_session.gd"
+const TERRA_BRIDGE := "res://utils/terraform/terra_bridge.gd"
 
 ## False starts a load's ground-layer prebake where the terrain is built (as card sysbake did)
 ## instead of as soon as the document is read, and a new map's at the build instead of before its
@@ -375,6 +376,21 @@ static func authored_root_shell() -> Node3D:
 ## biome weights, collision and skirt are built in one frame and the chunk meshes within the
 ## per-frame budget. Returns null when superseded.
 func _create_authored_root_async(doc: MapDocument) -> Node3D:
+	var root := authored_root_shell()
+	# Behind its switch, on a map with a terrain section: the core's load-time derive runs on a
+	# worker, and its ground replaces the document's heights before anything is built from them
+	# (the bridge's whole swap, TerraBridge; about 40 ms at 320 ft, waited a frame at a time).
+	var session := add_terra_session(root, doc)
+	if session != null:
+		while session.call("attaching"):
+			await tree.process_frame
+			session.call("poll")
+			if is_superseded.call():
+				root.free()
+				return null
+		var bridge: RefCounted = (load(TERRA_BRIDGE) as GDScript).new()
+		bridge.call("attach", session)
+		bridge.call("swap_heights")
 	var prep := AuthoredLoadPrep.start(doc)
 	var pending: Array[String] = []
 	# Under the headless dummy renderer the material loads them in place instead
@@ -423,14 +439,11 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	BootTrace.mark("load: ground prep and its surface maps ready")
 	var prepared := prep.finish()
 	if is_superseded.call():
+		root.free()
 		return null
 	# A flow map the document was written without, or one baked from other inputs, was baked
 	# again by the prep (AuthoredLoadPrep.FLOW); the water's nodes and the painter read it.
 	WaterFlowBaker.store(doc, prepared.get(AuthoredLoadPrep.FLOW, {}))
-	var root := authored_root_shell()
-	# Behind its switch: the terraforming core's full derive runs on a worker while the chunks
-	# build below.
-	add_terra_session(root, doc)
 	var terrain := AuthoredTerrain.create(doc, PaletteLibrary.DEFAULT_ROOT, false, prepared)
 	_prepared_water = prepared.get(AuthoredLoadPrep.WATER, {})
 	root.add_child(terrain)

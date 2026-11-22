@@ -21,6 +21,7 @@
 #include <godot_cpp/variant/packed_float32_array.hpp>
 #include <godot_cpp/variant/packed_int32_array.hpp>
 #include <godot_cpp/variant/rect2.hpp>
+#include <godot_cpp/variant/rect2i.hpp>
 #include <godot_cpp/variant/vector2.hpp>
 #include <godot_cpp/variant/vector3.hpp>
 
@@ -87,7 +88,7 @@ public:
 	TerraDerive();
 	~TerraDerive();
 
-	/// "terra 4 cache": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
+	/// "terra 5 bridge": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
 	String version() const;
 	/// Allocates a w x h sample grid over a map of `extent` metres, centred on the origin (sample
 	/// (0, 0) at -extent / 2), and forgets the document. TerraCore passes 2 (n - 1) + 1 per axis of
@@ -105,7 +106,8 @@ public:
 	void clear_prims();
 	/// The ground table: rows of [class, term_count, (field, lo, hi, soft) * term_count].
 	void set_rules(const Array &rows);
-	/// Re-derives what the pending edits dirtied; {"usec": {stage: us}, "tiles_height", ...}.
+	/// Re-derives what the pending edits dirtied; {"usec": {stage: us}, "tiles_height", ...,
+	/// "h2_rect": the Rect2i (derive samples) bounding every H2 sample that changed}.
 	Dictionary derive();
 	/// Every stage over the whole map (a first load without a cache).
 	Dictionary derive_full();
@@ -167,6 +169,15 @@ public:
 	/// Tests only (halo honesty): sets one sample of a per-sample array outside the chain and marks
 	/// it changed for the next derive() (or the whole array, with dirty_all), as if its writer had.
 	void debug_set_sample(const String &name, int64_t i, int64_t j, double value, bool dirty_all);
+
+	/// The bridge (terra_bridge.cpp): H2 at the map document's samples (derive sample (2a, 2b) is
+	/// document sample (a, b)), the whole array, row-major (empty before a derive).
+	PackedFloat32Array doc_heights() const;
+	/// H2 at the document's samples over document rect `rect` (clipped), compared bit for bit with
+	/// `heights` (the document's, `doc_w` samples a row): {"rect": the tight Rect2i of samples that
+	/// differ (empty when equal), "values": H2 over that rect, row-major}; plus "error" when the
+	/// heights are not this grid's.
+	Dictionary doc_heights_diff(const PackedFloat32Array &heights, int64_t doc_w, const Rect2i &rect) const;
 
 	/// C++ only: every derived array and record, for stages built on this derive.
 	terra::DerivedView derived() const;

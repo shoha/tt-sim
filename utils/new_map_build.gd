@@ -16,6 +16,10 @@ extends RefCounted
 ## headless dummy renderer (GlbUtils.threaded_loads_safe false) the build stays on the
 ## calling thread, as every other threaded load does there; the document is the same.
 
+## The terraforming core's scripts, by path (MapSourceLoader.TERRA_CORE and TERRA_BRIDGE).
+const TERRA_CORE := "res://utils/terraform/terra_core.gd"
+const TERRA_BRIDGE := "res://utils/terraform/terra_bridge.gd"
+
 var _task: int = -1
 var _out: Dictionary = {}
 
@@ -33,13 +37,35 @@ static func start(
 		seeded["seed"] = NewMap.random_seed()
 	PaletteLibrary.get_palette(root)
 	var out := build._out
+	var bridge := NewMapBuild._terra_bridge()
 	if not threaded:
-		out["doc"] = NewMap.from_spec(seeded, root)
+		out["doc"] = NewMapBuild._build(seeded, root, bridge)
 		return build
 	build._task = WorkerThreadPool.add_task(
-		func() -> void: out["doc"] = NewMap.from_spec(seeded, root), false, "NewMapBuild"
+		func() -> void: out["doc"] = NewMapBuild._build(seeded, root, bridge),
+		false,
+		"NewMapBuild"
 	)
 	return build
+
+
+## The recipe, then (switch on) the terrain section TerraBridge.seed_new_map gives it, its whole
+## height array swapped for the derive's before any terrain is built.
+static func _build(spec: Dictionary, root: String, bridge: GDScript) -> MapDocument:
+	var doc := NewMap.from_spec(spec, root)
+	if bridge != null:
+		bridge.call("seed_new_map", doc)
+	return doc
+
+
+## The bridge script when the terraforming core's switch is on and its library is built, else
+## null (loaded by path on the main thread, as MapSourceLoader does, so the start-up script graph
+## and the switch-off build are unchanged).
+static func _terra_bridge() -> GDScript:
+	var core: GDScript = load(TERRA_CORE)
+	if not core.call("enabled") or not core.call("native_available"):
+		return null
+	return load(TERRA_BRIDGE)
 
 
 ## True when the document is ready.
