@@ -19,7 +19,8 @@ system's map and the rules the code keeps (moved from `AGENTS.md` Key Convention
 | `utils/map_surfaces_io.gd` | `MapSurfacesIO` | The painted-surface entries (format 2 layout) read and write |
 | `utils/surface_entries.gd` | `SurfaceEntries` | The entry byte rules: `canonical()`, `read_sample()`, `write_sample()`, `used_slots()` |
 | `utils/terraform/terra_doc.gd` | `TerraDoc` | The terrain document (`MapDocument.terra`): the primitive list, its caps, `validate()`, `duplicate()`, `digest()` |
-| `utils/terraform/map_terrain_io.gd` | `MapTerrainIO` | The terrain section `terrain/prims.bin` (format 6): `encode()`, `decode()`, `parse()`, `serialize()`, `problem()` |
+| `utils/terraform/map_terrain_io.gd` | `MapTerrainIO` | The terrain section `terrain/prims.bin` (format 6): `encode()`, `decode()`, `parse()`, `serialize()`, `problem()`; and `terrain/derived.bin` beside it |
+| `utils/terraform/terra_cache.gd` | `TerraCache` | The derived record (digests only): `make_record()`, `check()`, `derive_and_check()`, `encode()`, `decode()` |
 | `resources/level_data.gd` | `LevelData` | `map_document` (`""` or `"map.ttmap"`) beside `map_path`; `has_map()` |
 | `scenes/states/playing/level_loader.gd` | `LevelPlayLoader` | `load_map_sources_async`, the play-time load shared by the host and the client download path |
 | `utils/glb_utils.gd` | `GlbUtils` | `load_map_async(..., scatter_filter)` |
@@ -233,9 +234,22 @@ compiles none of the terraform scripts; cast with `doc.terra as TerraDoc` where 
 - **Digest.** `TerraDoc.digest(size, extent)` (and `digest_for(doc)` on `TerraCore.grid_for`) is
   SHA-256, as 64 hex digits, over the canonical bytes, the derive grid (u32 samples per axis, then
   `extent / (n - 1)` per axis as float64 bits) and `TerraCore.NATIVE_VERSION`. It keys the derived
-  cache (card terraform-p1-cache) and later peer agreement; one float, the order, a mute or the grid
-  moves it, and a reload does not. `MapFingerprint` key `terra`: "<primitives> <digest prefix>",
-  "" for none.
+  agreement on the document; one float, the order, a mute, `next_id` or the grid moves it, and a
+  reload does not. `MapFingerprint` key `terra`: "<primitives> <digest prefix>", "" for none.
+- **Derived record** `terrain/derived.bin` (`TerraCache`, "TTDC" version 1, little-endian, canonical;
+  card terraform-p1-cache; model in [terraform.md](terraform.md) "The derived record"): digests only.
+  Magic, u16 version, the 32 raw bytes of the key (`TerraDoc.derive_key`: the digest with `next_id`
+  as 0), the 24 grid bytes (`TerraDoc.grid_bytes`: u32 nx, nz, f64 steps), u8-length ASCII core
+  version, u16 digest count, then per digest in ascending name order u8-length ASCII name
+  (`[A-Za-z0-9_]`, 1 to 32) and its u64; 331 bytes today (22 digests, `TerraCache.DIGESTS`). Caps
+  `MapDocument.MAX_TERRA_DIGESTS` 64 and `MAX_TERRA_DERIVED_BYTES` 4096 (the archive's entry cap
+  too); every count is checked against the bytes left before the loop. A truncated, over-cap,
+  malformed, out-of-order or newer record is refused with one warning ("terrain/derived.bin
+  refused: ...") and the terrain loads without it (`TerraDoc.derived` `{}`). It is read only in
+  format 6 beside `prims.bin` (in 4 or 5 it is ignored with a warning, alone in 6 it is dropped),
+  and written only while its key matches the document, so a stale record is never saved. It is
+  not part of the document: no digest or fingerprint covers it; the snapshot copies it with the
+  terrain.
 
 ## Runtime
 
@@ -269,7 +283,7 @@ hostile input), `test_map_document_water.gd`, `test_map_document_crossings.gd`, 
 the additions in `test_map_document_io.gd` and `test_map_libraries.gd`; the terrain section:
 `test_terra_doc.gd` (edits, caps, layouts, copy-on-write, digest) and `test_map_terrain_io.gd`
 (round trips bit for bit, the format choice, every truncation, caps, NaN, unknown kinds, newer
-versions, the snapshot, the fingerprint key).
+versions, the snapshot, the fingerprint key); the derived record: `test_terra_cache.gd`.
 
 ## Open work
 
@@ -285,4 +299,5 @@ See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".
 - 2026-11-09: formats 4 and 5, rows as binary columns on the 2^-10 grid (perfaudit card
   mapformat); formats 1 to 3 are refused, the format 1 surface migration is gone.
 - 2026-11-22: format 6, the terrain section `terrain/prims.bin` (`TerraDoc`, `MapTerrainIO`;
-  terraform phase 1 card terraform-p1-document), written only by a map that has one.
+  terraform phase 1 card terraform-p1-document), written only by a map that has one; then
+  `terrain/derived.bin`, the derived record's digests (`TerraCache`, card terraform-p1-cache).

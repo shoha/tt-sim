@@ -204,6 +204,7 @@
 		"res://tests/unit/test_surface_ship.gd",
 		"res://tests/unit/test_surface_store.gd",
 		"res://tests/unit/test_surface_webp.gd",
+		"res://tests/unit/test_terra_cache.gd",
 		"res://tests/unit/test_terra_determinism.gd",
 		"res://tests/unit/test_terra_doc.gd",
 		"res://tests/unit/test_terra_golden.gd",

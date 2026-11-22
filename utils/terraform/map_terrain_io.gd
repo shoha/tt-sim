@@ -10,6 +10,8 @@ extends RefCounted
 ##              u32 float count, then that many float32
 ## The bytes are canonical: one document encodes to one byte string (kinds ascending, nothing
 ## optional), so TerraDoc.digest() hashes them.
+##   terrain/derived.bin the derived record (TerraCache: its bytes, caps and refusals), read only
+##              beside prims.bin and written only while its key matches the document
 ##
 ## A document with a section is format 6 (MapDocument.FORMAT_TERRAIN), so a build that knows no
 ## terrain refuses it rather than dropping the section on its next save; one without a section
@@ -28,6 +30,8 @@ extends RefCounted
 
 ## The entry's name, owned by MapDocumentIO (which reads this script by path, on first use).
 const ENTRY := MapDocumentIO.TERRAIN_ENTRY
+## The derived record's entry (TerraCache: digests of the derived arrays, keyed by the document).
+const DERIVED_ENTRY := MapDocumentIO.TERRAIN_DERIVED_ENTRY
 const MAGIC := "TTPR"
 const VERSION := 1
 ## Bytes of one primitive's fixed part (id, kind, flags, float count).
@@ -42,11 +46,17 @@ const MAX_BYTES := MapDocument.MAX_TERRA_SECTION_BYTES
 const NEWER := "made by a newer version"
 
 
-## Adds the entry to `entries` when `doc` has a terrain document. Run after `doc` passed
-## problem(); any thread.
+## Adds the entry to `entries` when `doc` has a terrain document, and the derived record
+## (TerraCache, DERIVED_ENTRY) when it has one whose key matches the document now: a record left
+## from before an edit is dropped rather than written stale. Run after `doc` passed problem(); any
+## thread.
 static func serialize(doc: MapDocument, entries: Dictionary) -> void:
-	if doc.terra != null:
-		entries[ENTRY] = encode(doc.terra as TerraDoc)
+	if doc.terra == null:
+		return
+	var terra := doc.terra as TerraDoc
+	entries[ENTRY] = encode(terra)
+	if not terra.derived.is_empty() and TerraCache.key_matches(terra.derived, terra, doc):
+		entries[DERIVED_ENTRY] = TerraCache.encode(terra.derived)
 
 
 ## The first rule the reader enforces that `doc`'s terrain breaks, or "" (none, or a valid
@@ -59,8 +69,9 @@ static func problem(doc: MapDocument) -> String:
 	return (doc.terra as TerraDoc).problem()
 
 
-## The canonical bytes of `terra` (see the header). Pure.
-static func encode(terra: TerraDoc) -> PackedByteArray:
+## The canonical bytes of `terra` (see the header). Pure. `with_next_id` false writes next_id as 0
+## (TerraDoc.derive_key's bytes; never a section, which the reader refuses for it).
+static func encode(terra: TerraDoc, with_next_id := true) -> PackedByteArray:
 	var kinds := {}
 	for p in terra.prims:
 		kinds[int(p["kind"])] = true
@@ -71,7 +82,7 @@ static func encode(terra: TerraDoc) -> PackedByteArray:
 	_put_u16(out, VERSION)
 	_put_name(out, TerraCore.NATIVE_VERSION)
 	_put_u32(out, terra.prims.size())
-	_put_u32(out, terra.next_id)
+	_put_u32(out, terra.next_id if with_next_id else 0)
 	_put_u16(out, kind_ids.size())
 	for kind: int in kind_ids:
 		_put_u16(out, kind)
@@ -95,8 +106,9 @@ static func parse(
 	doc.terra = null
 	var has_entry := blobs.has(ENTRY)
 	if format < MapDocument.FORMAT_TERRAIN:
-		if has_entry:
-			warn_log.add("%s in a format %d document; ignored" % [ENTRY, format])
+		for entry: String in [ENTRY, DERIVED_ENTRY]:
+			if blobs.has(entry):
+				warn_log.add("%s in a format %d document; ignored" % [entry, format])
 		return
 	if not has_entry:
 		warn_log.add("format %d without a usable %s; the map has no terrain" % [format, ENTRY])
@@ -105,6 +117,11 @@ static func parse(
 	for line: String in read["warnings"]:
 		warn_log.add(line)
 	doc.terra = read["terra"]
+	if doc.terra != null and blobs.has(DERIVED_ENTRY):
+		var record := TerraCache.decode(blobs[DERIVED_ENTRY])
+		for line: String in record["warnings"]:
+			warn_log.add(line)
+		(doc.terra as TerraDoc).derived = record["record"]
 
 
 ## Decodes `bytes` (see the header): {"terra": TerraDoc or null, "warnings": PackedStringArray}.
