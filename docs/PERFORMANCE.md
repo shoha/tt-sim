@@ -2718,6 +2718,45 @@ rows) equal main's after every step. Its captures are no longer pixel-determinis
 itself since the painted ground change merged with this card (main against main 450-462 k
 pixels differ, the branch against the two main runs 397-731 k), and read the same by eye.
 
+### Round 3 (card painter-edit-hitch3, 2026-11-21)
+
+Attributed with section timers (`Time.get_ticks_usec` around the release path's callees, kept
+in Engine metas the recorder reads) and tree-order marker nodes (the node-process time between
+two subtrees), both temporary:
+
+- **River 1's release frame was GDScript compiles.** `WaterEdit.plan_river` loads parts of the
+  conditioner by path on first use (named as classes they would join the start-up graph):
+  `water_ports.gd` 33.5 ms and `water_course_fit.gd` 19.6 ms compiled inside the release (the
+  conditioner and the hints were already loaded); `water_refit.gd` (23.5 ms) and
+  `water_pond_fit.gd` (24.1 ms, on the edit's worker) would compile at their own first use. They
+  are now `BootPrecompile.ROOTS` (compiled behind the title) and `WaterWarm.warm()` loads what that
+  left at a map's opening (authoring, and the play side that plans live water edits), under the
+  loading screen: 125 ms there when the title was skipped at once (the render job), nothing after
+  an idle title. River 1's release frame: 70.4 and 71.6 ms on main, 9.5 and 9.0 here.
+- **River 2's "untagged 15-19 ms node job" was the probe.** The render job driver
+  (`process_priority` -100) ran the river probe's result step (a copy of the heights and a loop
+  over every sample) inside the recorded window, 60 quiet frames after the landing. The job now
+  ends the recording first. The real neighbour, the water surface's refresh (field 12-14 ms),
+  stays under 33 alone.
+
+Same session, windowed `hitch.json` (as round 2, with the probe fix in both arms), main ba9fe9a5
+in its own worktree against the branch, twice each (worst of 120 frames; frames over 33):
+
+| Stroke | main | branch |
+| --- | --- | --- |
+| river, first on the map | 98.2 (2), 94.4 (2) | 83.8 (1), 92.3 (2) |
+| river 2, 3 | 21.1, 25.6; 21.0, 22.6 | 22.3, 21.7; 21.1, 23.0 |
+| river through the wall 1-3 | 49.8, 39.2, 50.5; 30.2, 39.0, 50.5 | 30.9, 38.8, 50.6; 29.8, 37.6, 48.0 |
+| raise (3) | 12.1-13.9; 11.7-13.6 | 12.8-13.3; 11.2-14.9 |
+| paint (3) | 11.0-13.6; 12.5-13.4 | 11.6-12.8; 11.5-12.4 |
+| placed boulder (3) | 15.3, 11.0, 11.6; 17.5, 12.9, 11.5 | 14.9, 12.6, 11.6; 15.7, 11.8, 11.3 |
+
+Frames over 33 ms: main 5 and 4, branch 3 and 4. Left: river 1's single whole zone build (D
+64-65 ms, `PainterZoneMaps.build` from `_rebuild_zone`, deferred, once per map: the next
+candidate for a worker or a split over frames), once a 33.3 ms landing ground frame, and the
+river-through-the-wall release (31-43 ms of node time: the plan 17-21 ms and `through_rises`
+6-9 ms, synchronous, as on main). `ident.json`'s digests equal main's at every step.
+
 ## In-game authoring phase 4 (water): pinned performance pass (2026-09-27)
 
 The phase 4 pass: authored maps with water in play against the same maps without it, the

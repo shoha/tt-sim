@@ -492,6 +492,9 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 		# screen, instead of in the first stroke frame that reaches the map edge
 		# (docs/PERFORMANCE.md "In-game authoring phase 3: pinned performance pass").
 		editor.terrain.refresh_skirt()
+		# The water conditioner's scripts, compiled here unless BootPrecompile did behind the
+		# title, instead of in the first river's release frame (53 ms; card painter-edit-hitch3).
+		WaterWarm.warm()
 
 
 ## The authored terrain of the open map, or null (a dressed GLB map has none).
