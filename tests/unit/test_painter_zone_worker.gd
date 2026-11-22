@@ -10,6 +10,10 @@ extends GutTest
 const STATE := {"sheet": "core", "mood": "summer", "elevation": 45.0}
 const BIOMES := ["temperate_forest_summer_s1", "savanna_summer_s1", "rocky_badlands_summer_s1"]
 const SURFACES := ["dirt_road_packed", "cliff_rock", "sand_beach", "ash"]
+## How long the busy-pool test's blockers hold every pool thread, and the bound each call it times
+## must stay under (a call that waited for the pool takes the whole hold).
+const HOLD_MS := 6000
+const BOUND_MS := 3000
 
 
 ## A painted document of `size` metres (biomes, densities, surfaces with an ash one, wet dressing).
@@ -220,13 +224,80 @@ func test_a_map_closed_while_a_build_runs_drops_it() -> void:
 	surfaces._rebuild_zone()
 	assert_true(surfaces.zones().building())
 	surfaces.release()
-	assert_false(surfaces.zones().building(), "release waits for the task and drops it")
+	assert_false(surfaces.zones().building(), "release drops the build")
 	for _i in 3:
 		await get_tree().process_frame
 	assert_eq(surfaces.zones().builds, builds, "nothing landed after the close")
 	assert_false(surfaces.finish_zones())
-	# A maps object dropped while its build runs waits for the task as it goes.
+	# A maps object dropped while its build runs abandons the task as it goes.
 	var maps := PainterZoneMaps.new()
 	maps.build_async(_doc(Vector2i(14, 10), 1))
 	maps = null
 	assert_null(maps)
+	await _reaped()
+
+
+## A pool with every thread taken (card painter-edit-hitch4b: CI's unit tests hung for 12 minutes
+## with a zone build in flight when the first-water test closed its map). Blockers hold every pool
+## thread, so no band task can run; landing, dropping and closing must not wait for them. Each
+## blocker lets go by itself after HOLD_MS, so a regression fails on the elapsed time instead of
+## hanging the run.
+func test_a_busy_pool_never_blocks_the_main_thread() -> void:
+	# The painted map first: painting uses the pool itself.
+	var doc2 := MapDocument.create_flat(Vector2i(12, 12), "grass_meadow", "test", 7)
+	var pair := _painted(doc2)
+	var surfaces: PainterSurfaces = pair[0]
+	var terrain: AuthoredTerrain = pair[1]
+	_first_water(doc2)
+	terrain.refresh_water_dressing()
+	var release := [false]
+	var deadline := Time.get_ticks_msec() + HOLD_MS
+	var blockers := PackedInt64Array()
+	for i in OS.get_processor_count() + 1:
+		blockers.append(
+			WorkerThreadPool.add_task(_hold.bind(release, deadline), true, "test pool blocker")
+		)
+	var doc := _doc(Vector2i(14, 10), 11)
+	var maps := PainterZoneMaps.new()
+	var started := Time.get_ticks_msec()
+	maps.build_async(doc)
+	var landed := maps.finish()
+	var finish_ms := Time.get_ticks_msec() - started
+	var landed_bytes := _kept_bytes(maps)
+	started = Time.get_ticks_msec()
+	maps.build_async(_doc(Vector2i(14, 10), 12))
+	maps.cancel()
+	var cancel_ms := Time.get_ticks_msec() - started
+	surfaces._rebuild_zone()
+	var in_flight := surfaces.zones().building()
+	started = Time.get_ticks_msec()
+	surfaces.release()
+	var release_ms := Time.get_ticks_msec() - started
+	var held := Time.get_ticks_msec() < deadline
+	# Free the pool before any assert, so a failure cannot leave the run blocked.
+	release[0] = true
+	for task in blockers:
+		WorkerThreadPool.wait_for_task_completion(task)
+	assert_true(held, "the blockers held the pool for every call")
+	assert_true(landed)
+	assert_lt(finish_ms, BOUND_MS, "finish() builds on this thread instead of waiting")
+	assert_eq(landed_bytes, _whole_bytes(doc), "the same bytes as a worker landing")
+	assert_lt(cancel_ms, BOUND_MS, "cancel() lets go without waiting")
+	assert_true(in_flight, "the first water went to the worker")
+	assert_lt(release_ms, BOUND_MS, "closing the map lets go without waiting")
+	assert_gt(PainterZoneMaps.abandoned_count(), 0, "the abandoned tasks wait to be reaped")
+	await _reaped()
+
+
+## Waits (bounded) until every abandoned group task is reaped.
+func _reaped() -> void:
+	var frames := 0
+	while PainterZoneMaps.abandoned_count() > 0 and frames < 240:
+		await get_tree().process_frame
+		frames += 1
+	assert_eq(PainterZoneMaps.abandoned_count(), 0, "reaped within %d frames" % frames)
+
+
+static func _hold(release: Array, deadline: int) -> void:
+	while not release[0] and Time.get_ticks_msec() < deadline:
+		OS.delay_msec(2)

@@ -31,6 +31,16 @@ extends RefCounted
 ## and the kept images and textures stay as they were until poll() lands the result on a later
 ## frame. The caller keeps every edit that arrives meanwhile and updates its rect after the landing,
 ## so the settled maps equal a synchronous build of the document bit for bit.
+##
+## The main thread never blocks on a band task that has not run (card painter-edit-hitch4b). The
+## first version waited for the group in finish(), cancel() and the predelete, and such a wait lasts
+## as long as every pool thread is taken (a probe: 4.0 s under a 4 s hold of the pool); on CI's
+## 4-core runner the unit tests stalled in the first-water test, which closes its map with the
+## build still in flight when it has not landed in three frames, until the job was killed. Now a build
+## that has not completed is abandoned, never waited for: finish() builds the snapshot on the main
+## thread itself (the same functions, so the same bytes) and cancel() just lets go; an abandoned
+## group is waited for, as Godot needs once per group, only after it has completed (_reap(), polled
+## once a frame while any is left).
 
 ## The share of the grid an edit's rect must cover before wants_whole() sends it to the worker
 ## (an update of a rect that size costs about a whole build).
@@ -40,6 +50,10 @@ const WORKER_SHARE := 0.5
 ## its single-thread time on a machine with the threads free).
 const BAND_ROWS := 16
 const MAX_BANDS := 8
+
+## The group tasks let go of before they completed (cancel(), finish(), the predelete), waited for
+## once each has (_reap()); process wide, since a maps object may be gone by then.
+static var _abandoned := PackedInt64Array()
 
 ## The images now (null for a map the plan has none of; zone is null before the first build).
 var zone: Image = null
@@ -129,7 +143,7 @@ func wants_whole(doc: MapDocument, rect: Rect2i) -> bool:
 
 ## Starts a whole build of `doc` as it is now on a worker (the class header's "The worker build");
 ## the kept images and textures stay until poll() or finish() lands it. A build already in flight
-## is waited for and dropped first.
+## is dropped first (cancel()).
 func build_async(doc: MapDocument) -> void:
 	cancel()
 	# Copies (about 0.7 MB on a 200 ft map, well under a millisecond): a packed array is shared by
@@ -149,8 +163,8 @@ func build_async(doc: MapDocument) -> void:
 	_job = {"doc": snapshot, "plan": p, "bands": bands}
 	async_starts += 1
 	# The script's static function, not a method of this object: the task never calls into a maps
-	# object that was freed meanwhile (the predelete still waits for it). High priority: a frame
-	# waits on it.
+	# object that was freed meanwhile (the predelete abandons it). High priority: a frame waits on
+	# it.
 	var run := PainterZoneMaps._run_band.bind(_job)
 	_task = WorkerThreadPool.add_group_task(run, count, -1, true, "PainterZoneMaps.build_async")
 
@@ -168,30 +182,68 @@ func poll() -> bool:
 	return _land()
 
 
-## Waits for the worker build in flight and lands it (tests, and a caller that needs the maps now);
-## false when none is in flight.
+## Lands the worker build in flight now (tests, and a caller that needs the maps now): its result
+## when the task has completed, else a build of the same snapshot on this thread (the task is
+## abandoned, never waited for: the class header); false when none is in flight.
 func finish() -> bool:
 	if _task < 0:
 		return false
-	return _land()
+	if WorkerThreadPool.is_group_task_completed(_task):
+		return _land()
+	var job := _job
+	cancel()
+	build(job["doc"], job["plan"])
+	return true
 
 
-## Waits for the worker build in flight, if any, and drops its result (the map closed or a
-## synchronous build supersedes it).
+## Drops the worker build in flight, if any, without waiting for it (the map closed or a
+## synchronous build supersedes it); its task is reaped once it completes.
 func cancel() -> void:
 	if _task >= 0:
-		WorkerThreadPool.wait_for_group_task_completion(_task)
+		_abandon(_task)
 	_task = -1
 	_job = {}
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE and _task >= 0:
-		# Every pool task is waited for once (Godot keeps it until then).
-		WorkerThreadPool.wait_for_group_task_completion(_task)
+		_abandon(_task)
 		_task = -1
 
 
+## How many abandoned group tasks wait to be reaped (tests).
+static func abandoned_count() -> int:
+	return _abandoned.size()
+
+
+static func _abandon(task: int) -> void:
+	_abandoned.append(task)
+	_reap()
+	if _abandoned.is_empty():
+		return
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and not tree.process_frame.is_connected(_reap):
+		tree.process_frame.connect(_reap)
+
+
+## Waits for each abandoned group task that has completed (at once: it has), keeps the rest, and
+## stops polling when none is left.
+static func _reap() -> void:
+	var left := PackedInt64Array()
+	for task in _abandoned:
+		if WorkerThreadPool.is_group_task_completed(task):
+			WorkerThreadPool.wait_for_group_task_completion(task)
+		else:
+			left.append(task)
+	_abandoned = left
+	if not left.is_empty():
+		return
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and tree.process_frame.is_connected(_reap):
+		tree.process_frame.disconnect(_reap)
+
+
+## Lands the completed worker build (the wait returns at once: poll() and finish() check first).
 func _land() -> bool:
 	WorkerThreadPool.wait_for_group_task_completion(_task)
 	var job := _job

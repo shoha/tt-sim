@@ -237,7 +237,11 @@ numbers in `PERFORMANCE.md` "The painted look after a water or height edit", Rou
   `process_frame`) sees the task done and lands it; edits that arrive meanwhile wait in the dirty
   mark and update their rect after the landing, so the settled maps equal a synchronous build
   (`test_painter_zone_worker.gd`). `update` lands a build in flight first, `build` and `release`
-  drop it. A first paint and a terrain build stay synchronous (no maps to show yet, or another
+  drop it. The main thread never waits for a band task that has not run (card painter-edit-hitch4b:
+  such a wait lasts as long as the pool is busy, and CI's unit tests stalled 12 minutes in the
+  first-water test): `finish` lands a completed task or builds the same snapshot itself, and a
+  dropped task is waited for only once it has completed (`PainterZoneMaps._reap`, polled on
+  `process_frame`). A first paint and a terrain build stay synchronous (no maps to show yet, or another
   map's). The first river: 60 ms off its frame, landed 2 frames later.
 - The water field (`PainterWaterField`) merges the rects of consecutive ground edits and redoes
   them once (`_flush_dirty`, on `process_frame`): in the first frame after one with no edit, and
