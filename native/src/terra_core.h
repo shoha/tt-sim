@@ -175,20 +175,8 @@ struct Dirty {
 	}
 };
 
-enum PrimType {
-	P_PLANE = 0, // [base, slope_x, slope_z]
-	P_HILL = 1, // [cx, cz, height, radius, profile]
-	P_RIDGE = 2, // [height, width, profile, x0, z0, x1, z1, ...]
-	P_STROKE = 3, // dabs [cx, cz, radius, strength, mode(0 raise, 1 lower, 2 smooth)] * n
-	P_RIVER = 4, // [width, depth, x0, z0, ...]
-	P_POND = 5, // [depth, x0, z0, ...] outline
-	P_PATH = 6, // [width, x0, z0, ...]
-	P_WALL = 7, // [height, thickness, x0, z0, ...]
-	P_PAINT = 8, // dabs [cx, cz, radius, surface_id] * n
-	// 9 to 15 are reserved; new kinds start at 16 (the kind registry, a later card).
-};
-
-/// One primitive of the document, as sent from GDScript: an id, a type and its floats.
+/// One primitive of the document, as sent from GDScript: an id, a type (a kind id of the registry,
+/// terra_kinds.h; each kind's file documents its float layout) and its floats.
 struct Prim {
 	int id = 0;
 	int type = 0;

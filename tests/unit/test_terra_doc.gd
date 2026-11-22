@@ -57,40 +57,6 @@ func test_the_caps_refuse_an_edit() -> void:
 	assert_false(u.replace(id, big + PackedFloat32Array([0])), "replace past the cap")
 
 
-func test_each_built_in_kind_validates_its_layout() -> void:
-	var good := {
-		TerraCore.PLANE: [1.0, 0.0, -0.05],
-		TerraCore.HILL: [1.0, 2.0, 3.0, 4.0, 2.0],
-		TerraCore.RIDGE: [-1.0, 6.0, 1.5, 0, 0, 1, 1],
-		TerraCore.STROKE: [0, 0, 2.5, 0.1, 2],
-		TerraCore.RIVER: [2.0, 0.5, 0, 0, 5, 5],
-		TerraCore.POND: [0.7, 0, 0, 1, 0, 0, 1],
-		TerraCore.PATH: [1.6, 0, 0, 3, 3],
-		TerraCore.WALL: [1.2, 0.5, 0, 0, 4, 0],
-		TerraCore.PAINT: [0, 0, 2.0, 6],
-	}
-	for kind: int in good:
-		assert_eq(TerraDoc.validate(kind, PackedFloat32Array(good[kind])), "", "kind %d" % kind)
-	var bad := [
-		[TerraCore.PLANE, [1.0, 0.0], "count"],
-		[TerraCore.HILL, [1.0, 2.0, 3.0, 0.0, 2.0], "positive"],
-		[TerraCore.RIDGE, [1.0, 6.0, 1.5, 0, 0], "two points"],
-		[TerraCore.RIDGE, [1.0, 6.0, 1.5, 0, 0, 1], "partial"],
-		[TerraCore.STROKE, [], "no dab"],
-		[TerraCore.STROKE, [0, 0, 2.5, 0.1, 3], "mode"],
-		[TerraCore.STROKE, [0, 0, 2.5, 0.1, 0.5], "mode not whole"],
-		[TerraCore.POND, [0.7, 0, 0, 1, 0], "three points"],
-		[TerraCore.PAINT, [0, 0, 2.0, 256], "surface"],
-		[TerraCore.WALL, [1.2, 0.0, 0, 0, 4, 0], "thickness"],
-		[TerraCore.PLANE, [NAN, 0.0, 0.0], "NaN"],
-		[TerraCore.PLANE, [INF, 0.0, 0.0], "Inf"],
-		[TerraCore.PLANE, [1e6, 0.0, 0.0], "range"],
-		[16, [1.0], "unknown kind"],
-	]
-	for b: Array in bad:
-		assert_ne(TerraDoc.validate(b[0], PackedFloat32Array(b[1])), "", b[2])
-
-
 func test_problem_names_ids_flags_and_bad_primitives() -> void:
 	var t := TerraDoc.new()
 	t.add(TerraCore.HILL, _hill())

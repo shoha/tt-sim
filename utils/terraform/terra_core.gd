@@ -19,7 +19,7 @@ extends RefCounted
 ## The native class's name, for ClassDB only.
 const CLASS_NAME := "TerraDerive"
 ## What TerraDerive.version() must return; a library built from older sources fails the tests.
-const NATIVE_VERSION := "terra 2 stages"
+const NATIVE_VERSION := "terra 3 kinds"
 ## The ground rule table (rows of [field, lo, hi, soft] terms, later rows over earlier ones).
 const RULES_PATH := "res://utils/terraform/rules/ground_rules.json"
 ## Rule term fields by name, in the order of the native Field enum (terra_stages.h).
@@ -36,8 +36,9 @@ const FIELDS := {
 	"curv": 9,
 }
 
-## Built-in primitive kinds (ids are stable and never reused; 9 to 15 are reserved, new kinds
-## start at 16). The float layout of each is in native/src/terra_core.h (PrimType).
+## The built-in kinds' ids, for code that names one. Each kind's script in the registry
+## (TerraKinds, utils/terraform/kinds/) is its source and holds its float layout; test_terra_kinds
+## checks that each of these equals its script's ID. 9 to 15 are reserved; new kinds start at 16.
 const PLANE := 0
 const HILL := 1
 const RIDGE := 2

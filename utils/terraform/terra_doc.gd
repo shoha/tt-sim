@@ -7,15 +7,15 @@ extends RefCounted
 ##
 ## A primitive is {"id": int, "kind": int, "flags": int, "data": PackedFloat32Array}. Ids are
 ## stable within a document (1 up, never reused while next_id grows); kinds are the stable ids
-## of TerraCore (0 to 8 built in, 9 to 15 reserved, 16 up for new kinds). Flag bit 0 is MUTED:
+## of the kind registry, TerraKinds (0 to 8 built in, 9 to 15 reserved, 16 up for new kinds),
+## and each kind's script holds its float layout and validate(). Flag bit 0 is MUTED:
 ## the primitive stays in the document but the derive skips it, so erase can weaken a
 ## primitive rather than delete it. Other flag bits are reserved and must be 0.
 ##
 ## Bounded: at most MapDocument.MAX_TERRA_PRIMS primitives, MAX_TERRA_FLOATS_PER_PRIM floats in
 ## one and MAX_TERRA_FLOATS in all. The mutators refuse an edit past a cap (add returns -1,
 ## append and replace false), so a session can never build a document the writer refuses for
-## its size. The float layouts sit in the provisional LAYOUT until the kind registry (card
-## terraform-p1-kinds) moves each into its kind folder; validate() reads them.
+## its size.
 ##
 ## Copy-on-write: duplicate() copies the list and each primitive's dictionary, and gives each a
 ## copy-on-write copy of the float array (the live array copies itself on its next write), so
@@ -31,40 +31,6 @@ const MUTED := 1
 const KNOWN_FLAGS := MUTED
 ## Largest primitive id (ids are u32 on disk, kept within a positive int32).
 const MAX_ID := 0x7FFFFFFF
-## A float beyond this is corrupt: positions are metres on a map of at most about 100 m.
-const MAX_ABS_VALUE := 100000.0
-## The float layout of each built-in kind, provisional until card terraform-p1-kinds: `name`
-## (stable, written in the section's kind table), `header` floats, then whole items of `stride`
-## floats, at least `min` of them (stride 0: exactly the header). `positive` header indices and
-## `item_positive` item indices must be > 0; `item_enum` maps an item index to its largest
-## integer value (an integer from 0). Native order is in native/src/terra_core.h (PrimType).
-const LAYOUT := {
-	0: {"name": "plane", "header": 3, "stride": 0, "min": 0},
-	1: {"name": "hill", "header": 5, "stride": 0, "min": 0, "positive": [3]},
-	2: {"name": "ridge", "header": 3, "stride": 2, "min": 2, "positive": [1]},
-	3:
-	{
-		"name": "stroke",
-		"header": 0,
-		"stride": 5,
-		"min": 1,
-		"item_positive": [2],
-		"item_enum": {4: 2},
-	},
-	4: {"name": "river", "header": 2, "stride": 2, "min": 2, "positive": [0]},
-	5: {"name": "pond", "header": 1, "stride": 2, "min": 3},
-	6: {"name": "path", "header": 1, "stride": 2, "min": 2, "positive": [0]},
-	7: {"name": "wall", "header": 2, "stride": 2, "min": 2, "positive": [0, 1]},
-	8:
-	{
-		"name": "paint",
-		"header": 0,
-		"stride": 4,
-		"min": 1,
-		"item_positive": [2],
-		"item_enum": {3: 255},
-	},
-}
 
 ## The primitives in document order (see the header for the form).
 var prims: Array[Dictionary] = []
@@ -175,8 +141,9 @@ func duplicate() -> TerraDoc:
 
 
 ## The first rule of the section that this document breaks, or "": the caps, ids unique within
-## 1..MAX_ID and below next_id, every kind in LAYOUT, no reserved flag set and every
-## primitive valid for its kind. A document that passes reads back the same, bit for bit.
+## 1..MAX_ID and below next_id, every kind registered, no reserved flag set and every
+## primitive valid for its kind (TerraKinds.problem). A document that passes reads back the
+## same, bit for bit.
 func problem() -> String:
 	if prims.size() > MapDocument.MAX_TERRA_PRIMS:
 		return "terrain: %d primitives, over %d" % [prims.size(), MapDocument.MAX_TERRA_PRIMS]
@@ -195,59 +162,11 @@ func problem() -> String:
 		total += data.size()
 		if data.size() > MapDocument.MAX_TERRA_FLOATS_PER_PRIM:
 			return "terrain: primitive %d holds %d floats, over its cap" % [id, data.size()]
-		var reason := validate(int(p["kind"]), data)
+		var reason := TerraKinds.problem(int(p["kind"]), data)
 		if reason != "":
 			return "terrain: primitive %d: %s" % [id, reason]
 	if total > MapDocument.MAX_TERRA_FLOATS:
 		return "terrain: %d floats, over %d" % [total, MapDocument.MAX_TERRA_FLOATS]
-	return ""
-
-
-## Why `data` is not a valid primitive of `kind`, or "": the kind is known, the float count
-## fits its layout, every float is finite and within MAX_ABS_VALUE, and its positive and enum
-## fields hold. Pure.
-static func validate(kind: int, data: PackedFloat32Array) -> String:
-	if not LAYOUT.has(kind):
-		return "unknown kind %d" % kind
-	var layout: Dictionary = LAYOUT[kind]
-	var header: int = layout["header"]
-	var stride: int = layout["stride"]
-	var items := 0
-	if stride == 0:
-		if data.size() != header:
-			return "%s takes %d floats, not %d" % [layout["name"], header, data.size()]
-	else:
-		if data.size() < header or (data.size() - header) % stride != 0:
-			return "%s holds a partial item (%d floats)" % [layout["name"], data.size()]
-		@warning_ignore("integer_division")
-		items = (data.size() - header) / stride
-		if items < int(layout["min"]):
-			return "%s needs at least %d items, has %d" % [layout["name"], layout["min"], items]
-	for v in data:
-		if is_nan(v) or is_inf(v) or absf(v) > MAX_ABS_VALUE:
-			return "%s holds a NaN, Inf or out-of-range value" % layout["name"]
-	for k: int in layout.get("positive", []):
-		if not data[k] > 0.0:
-			return "%s field %d must be positive" % [layout["name"], k]
-	return _items_problem(layout, data, items)
-
-
-static func _items_problem(layout: Dictionary, data: PackedFloat32Array, items: int) -> String:
-	var header: int = layout["header"]
-	var stride: int = layout["stride"]
-	var positive: Array = layout.get("item_positive", [])
-	var enums: Dictionary = layout.get("item_enum", {})
-	if positive.is_empty() and enums.is_empty():
-		return ""
-	for i in items:
-		var at := header + i * stride
-		for k: int in positive:
-			if not data[at + k] > 0.0:
-				return "%s item %d field %d must be positive" % [layout["name"], i, k]
-		for k: int in enums:
-			var v := data[at + k]
-			if v != floorf(v) or v < 0.0 or v > float(enums[k]):
-				return "%s item %d field %d is not 0..%d" % [layout["name"], i, k, enums[k]]
 	return ""
 
 
