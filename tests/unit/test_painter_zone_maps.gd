@@ -246,5 +246,7 @@ func test_the_painted_ground_follows_an_edit_with_its_rect_and_shares_its_textur
 	terrain.ground_edited.emit(Rect2i(0, 0, doc.samples_x(), doc.samples_z()))
 	surfaces._rebuild_zone()
 	assert_eq(ground.get_shader_parameter(&"path_only"), -1, "no path painted now")
+	# An edit of the whole grid builds on the worker (card painter-edit-hitch4); land it now.
+	assert_true(surfaces.finish_zones())
 	assert_eq(_kept_bytes(surfaces.zones()), _whole_bytes(doc))
 	surfaces.release()
