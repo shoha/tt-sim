@@ -30,6 +30,11 @@ const CODE := 9
 ## How much snow a roof material holds (thatch the most); others take DEFAULT_HOLD.
 const HOLD: Dictionary = {"thatch": 1.0, "turf": 0.9, "wood": 0.75, "shingle": 0.75}
 const DEFAULT_HOLD := 0.85
+## A roof slope whose normal's up is under this sheds its snow (card snow-steep-roofs): steeper
+## than 60 degrees (a chapel's or a keep's spire, a gatehouse's steep hip) it gets no blanket, lip,
+## cap or collar, and the manner shader draws it bare (the snow law's SNOW_SHED_LO, the number
+## procgen's ProcgenSnowTops.CONE_UP_MIN gives a round roof).
+const ROOF_UP_MIN := 0.5
 ## Segment lengths along an eave, a verge and a ridge (metres; an eave's carries its scallops).
 const SEG_EAVE_M := 0.3
 const SEG_VERGE_M := 0.5
@@ -109,7 +114,7 @@ static func source(
 		if kind == PAD_KIND:
 			tops.append(rec)
 			continue
-		if not ROOF_KINDS.has(kind):
+		if not ROOF_KINDS.has(kind) or not holds_snow(rec):
 			continue
 		var tone: Color = tones.get(str(rec["id"]), Color.WHITE)
 		if meshes.is_empty():
@@ -134,6 +139,13 @@ static func source(
 		"pads": _pads(records, meshes, table, opts),
 		"opts": opts
 	}
+
+
+## Whether roof record `rec` is flat enough to hold snow (ROOF_UP_MIN; a record with no normal
+## does). Pure.
+static func holds_snow(rec: Dictionary) -> bool:
+	var n: Vector3 = rec.get("n", Vector3.UP)
+	return absf(n.y) >= ROOF_UP_MIN
 
 
 ## Whether `src` (source()) holds anything to lay snow on. Pure.

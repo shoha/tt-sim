@@ -464,26 +464,43 @@ func test_a_pale_paint_lands_on_its_own_lightness() -> void:
 	assert_string_contains(common, "PAINT_KNEE")
 
 
-func test_a_steep_roof_holds_one_bodied_cap() -> void:
-	# Card painter-roof-polish: a spire (up 0.25 to 0.35) held no snow, or long streaks that read
-	# as a glossy highlight. Card painter-roof-round3 (owner: "streaky and weird"): both roof shaders
-	# take one cover whose lower edge rises up a steeper face, a cap that rolls over its own edge as a
-	# lip; no ledges and no streaks on a roof. Card snow-one-law: the cap is the snow law's, asked
-	# with the roof's h as the face's top; the props ask the same law with no top.
+func test_a_steep_roof_sheds_its_snow() -> void:
+	# Card snow-steep-roofs (owner, 2026-11-22: "we should remove the smudgy painted texture on them
+	# and leave them clear of snow entirely, or incorporate them into the new snow system"): the
+	# painted cap a spire wore down from its tip (snow_cap_edge, cards painter-roof-round3 to
+	# snow-one-law) is gone. A roof asks the same law with its own steepness response (snow_shed):
+	# none steeper than 60 degrees, the number procgen declares no snow body for a cone above
+	# (ProcgenSnowTops.CONE_UP_MIN), all of it at a cottage's steepest pitch (50 degrees); every
+	# other face keeps the props' curve.
 	var snow := FileAccess.get_file_as_string("res://painter/shaders/painter_snow.gdshaderinc")
 	var law := FileAccess.get_file_as_string(LAW)
-	assert_string_contains(law, "float snow_cap_edge(")
-	assert_string_contains(snow, "float snow_edge_m(")
 	for code: String in [snow, law]:
+		for gone: String in ["snow_cap_edge(", "snow_edge_m(", "SNOW_STAND", "SNOW_NO_TOP"]:
+			assert_false(code.contains(gone), "the cap is gone: %s" % gone)
 		assert_false(code.contains("SNOW_LEDGE_M"), "no ledges")
-		assert_false(code.contains("float snow_steep("), "no separate steep model")
+	assert_string_contains(law, "float snow_shed(float on, float up)")
+	assert_string_contains(law, "float hold = roof ? snow_shed(on, up) : snow_hold(on, up);")
+	var shed_lo := _law_const(law, "SNOW_SHED_LO")
+	var shed_hi := _law_const(law, "SNOW_SHED_HI")
+	assert_almost_eq(shed_lo, ProcgenSnowTops.CONE_UP_MIN, 0.001, "sheds where a cone has no body")
+	assert_almost_eq(shed_lo, cos(deg_to_rad(60.0)), 0.01, "none steeper than 60 degrees")
+	assert_lt(shed_hi, cos(deg_to_rad(50.0)), "a cottage's steepest roof keeps its whole layer")
+	assert_lt(_law_const(law, "SNOW_HOLD_HI"), shed_lo, "a prop's curve holds steeper than a roof's")
 	for path: String in [PainterBuildings.SHADER, PainterMannerHost.SHADER]:
 		var code := FileAccess.get_file_as_string(path)
-		assert_string_contains(code, " ? up : face_up, wp, n, ", path)
+		assert_string_contains(code, " ? up : face_up, wp, ", path)
 		assert_string_contains(code, "float face_up = ", path)
-		assert_string_contains(code, "snow_roll(snow_edge_m(law.w, h, fr.z), fr.w, fr.xy)", path)
+		assert_string_contains(code, "snow_roll(fr.z, fr.w, fr.xy)", path)
 	var prop := FileAccess.get_file_as_string(PainterVillage.PROP_SHADER)
-	assert_string_contains(prop, "snow_law(snow, n.y, wp, n, SNOW_NO_TOP, 0.0)")
+	assert_string_contains(prop, "snow_law(snow, n.y, wp, false)")
+
+
+## The value of the law's `const float <const_name> = <value>;`.
+func _law_const(law: String, const_name: String) -> float:
+	var key := "const float %s = " % const_name
+	var at := law.find(key)
+	assert_gt(at, -1, const_name)
+	return law.substr(at + key.length(), 12).split(";")[0].strip_edges().to_float()
 
 
 func test_one_snow_law_for_every_painted_family() -> void:
@@ -493,7 +510,7 @@ func test_one_snow_law_for_every_painted_family() -> void:
 	# it replaced are gone (frost_up's binary frost line, the props' and roofs' own holds).
 	var law := FileAccess.get_file_as_string(LAW)
 	assert_string_contains(law, "#ifndef PAINTER_SNOW_LAW")
-	assert_string_contains(law, "vec4 snow_law(float on, float up, vec3 wp, vec3 n, float top,")
+	assert_string_contains(law, "vec3 snow_law(float on, float up, vec3 wp, bool roof)")
 	assert_string_contains(law, "float snow_hold(float on, float up)")
 	assert_false(law.contains("texture("), "the law reads no texture")
 	assert_false(law.contains("fwidth(") or law.contains("dFdx("), "no derivatives: callers branch")

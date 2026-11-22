@@ -134,7 +134,7 @@ void fragment() {
 		// red cones in a snowed yard read as stray objects). Where it lies is the snow law (card
 		// snow-one-law), asked with the piece's up moved by its lobes and seams, so its cap keeps
 		// their scalloped outline.
-		cover = snow_law(snow, cap + (bloom ? 0.4 : 0.0), wp, n, SNOW_NO_TOP, 0.0).x;
+		cover = snow_law(snow, cap + (bloom ? 0.4 : 0.0), wp, false).x;
 	}
 	int base = tone * 6;
 	vec3 shd = mix(ramps[base], ramps[base + 3], variant);
