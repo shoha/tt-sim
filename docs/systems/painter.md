@@ -2306,13 +2306,45 @@ street read-back of "Roof round 3" to "Roof round 5" below (`PainterStreetSnow` 
   `snow * 2.2` read `snow` as is (winter's 0.45 * 2.2 was 0.99, so the law is unchanged within 1 %).
   The law stays for faces with no record (spires, library props, the props not yet listed).
   Ground, trees, weather and sky keep their own numbers.
-- **Still open.** Props without pads (well, lamp post, stall awning, haystack, the modern set) keep
-  the shader law alone; crate stacks' lower lids lie partly under the crate above; the paint on the
-  bodies is the calm paint (next section); chimney cushions and sills on street lots are
-  not made (no meshes come with a lot's records).
+- **Still open.** Props with no level top (pointed caps, domes, slopes, cloth; "Every prop's flat
+  tops" below) keep the shader law alone; crate stacks' lower lids lie partly under the crate above;
+  the paint on the bodies is the calm paint (next section); chimney cushions and sills on street
+  lots are not made (no meshes come with a lot's records).
 - Tests: `test_painter_snow_tops.gd` (a body per kind, the cone's profile and apex, one body per
   lot, a real street's and stone wall's records with the mesh unchanged, the round hut's cone, a
   moved cell keeps its body, no switch no body, the eave over a window).
+
+## Every prop's flat tops (card snow-prop-tops, 2026-11-21; look-pending)
+
+The owner's decision (2026-11-22) carried to the props: every village prop with a level top at
+least 0.09 m across declares it as a `pad` (procgen 468fa17; the list is in
+`docs/ASSET_PIPELINE.md` "snow_tops", Pad), so the one builder lays a cap on it in winter.
+
+- **New in the record.** A pad may carry `hole` (u, v across, about its middle): an open well's
+  curb is a disc with the shaft as its hole, a stone trough's rim a rect with the water as its hole.
+  `PainterSnowForms.lay_pad` lays such a pad as a band (`_lay_band`): seven rings from just over the
+  outer edge to just inside the opening, crown midway, normals leaning out on the outer side and in
+  on the inner, `PAD_T` of the band's width high (2 to 5 cm); a band under `PAD_BAND_MIN_M` 0.09 m
+  holds none. `SettlementBake.pads_of` scales the hole with the placement.
+- **What declares none** (procgen keeps them out, so they keep the shader law): pointed, domed,
+  sloped or cloth tops (lamp and signpost caps, skeps, hay mounds, post boxes, the drum bin's lid,
+  awnings, the wagon's cover, roofs on props, the car's bonnet and boot) and tops sheltered by a roof
+  or an awning (a market stall's counter, goods and crate; a roofed well's curb).
+- **Cost** (in-run, vsync off, 1920x1080, B M M B 4 s windows; M keeps only main's pads, the
+  cells' bodies rebuilt between): the test village's cells hold 33 pads, 32 of them main's (only
+  the skep bench is new there), so the village A/B is small by construction: close (zoom 6)
+  1.352 against 1.355 ms, table (zoom 16) 1.924 against 1.905 ms (+0.019, within the drift of the
+  two M windows, 1.919 and 1.891). The builder on the village: the props' two cell bodies 27.3 ms
+  (33 pads, 4620 triangles, 140 a pad), walls 3.5 ms and streets 33.4 ms (their evaluation 1.47 s
+  on workers), structures 40.6 ms. A band lays 240 triangles. Frames and notes:
+  `docs/research/2026-11-09-prototypes/compare/painter_final137_snow_prop_tops/` (the showcase rows
+  build each padded prop alone in vertex colours, since the village holds few prop kinds).
+- **No mesh read of tops remains.** tt-sim main never shipped the spike's `tops_of_mesh`; every
+  body comes from records, and the only per-face rule left is the shader law for faces no record
+  covers (the contract's fallback).
+- Tests: procgen's `test_snow_tops.gd` (each padded prop over 12 draws: no records off, the same
+  digest on, every pad within 1 cm of a level face of its mesh); tt-sim's `test_painter_snow_tops.gd`
+  (a holed pad lays a band and nothing over its opening, a placed pad scales its hole).
 
 ## The calm paint on the snow bodies (card snow-calm-cells, 2026-11-21; look-pending)
 

@@ -108,8 +108,24 @@ Phase 4, P4-1 is data and algorithms only; the surface, carve and tool follow. P
   texels per metre (`TEXEL_M` 0.25, the default sample spacing), 244 x 244 on a 200 ft
   map; measured ~0.3 s there with three rivers of 40 points (128: 0.12 s, 256: 0.33 s,
   512: 1.2 s), so a bake on stroke release stays interactive. Deterministic; it ships in
-  the document and peers never rebake. A fall's face samples (`WaterFalls.footprint()`) count
-  as wet, so the bank fade does not cut the flow at a lip.
+  the document, so a peer bakes only a flow that arrives missing or stale. A fall's face samples
+  (`WaterFalls.footprint()`) count as wet, so the bank fade does not cut the flow at a lip.
+- **The flow is derived data with a stamp** (card painter-water-flowbake, 2026-11-21): every bake
+  records `WaterFlowBaker.stamp()` of its inputs (grid, tier height, seed, heights, pond mask, the
+  bodies in their saved form, `BAKE_VERSION`) in `MapDocument.water_flow_stamp`, saved in
+  `splines.json`'s `flow` object. Every load checks it on a worker (`AuthoredLoadPrep.FLOW`,
+  `WaterFlowBaker.refreshed()`; `MapSourceLoader` stores the result before the water's nodes, and
+  `AuthoredWater.create()` without prepared geometry, a dressed GLB's, runs `ensure()` in place):
+  a level written without a flow, saved before the stamp, edited outside the editor or baked by
+  an older `BAKE_VERSION` loads with its flow baked again, so no level draws its rivers as still
+  water by mistake. Before this, `water_corpus.gd build` wrote every corpus level without a flow
+  and nothing rebaked it. Cost on the corpus maps (headless, 2026-11-21): a fresh flow costs only
+  the stamp, 1 to 4 ms (200 ft: 0.9 to 2.2 ms; 320 ft with 27 bodies: 2.6 to 4.2 ms); a rebake
+  0.23 to 0.46 s at 200 ft and 0.87 to 1.06 s at 320 ft, in parallel with the other prep parts
+  (whose threaded total was 0.16 to 1.0 s there), once per load until the level is saved again.
+  Always deriving the flow at load was the alternative; at up to 1 s on a large map it would
+  have lengthened every load, so the cached flow stays. Bump `BAKE_VERSION` with any change to
+  the bake's output.
 - **Frame (the contract with `water.gdshader` `water_flow()`):** the authored water mesh
   sits at the map origin with an identity transform and map-normalised UVs,
   u = (x + W/2) / W, v = (z + H/2) / H. Texel (i, j) is Image column i, row j (row 0 is
@@ -993,6 +1009,19 @@ the same in every stroke variant and at every clock, so no stroke frame can remo
 flow present, main showed no hooked or sheared stroke at the probe views in the strips. Evidence:
 `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final133_water_strokes/`
 (sheets, strips, `perf/`, the jobs and `jobs/probe_variants.diff`).
+
+Fixed by card painter-water-flowbake (2026-11-21): the corpus build bakes the flow, and every load
+rebakes a missing or stale one (Model, "The flow is derived data with a stamp"). Its retake with the
+flow (6 frames over 2 s, clock frozen; evidence
+`D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final135_water_flowbake/`):
+strokes now lie along the current at t_y_join, t_meander, t_straight and below st_o's foot, and
+travel downstream (t_straight, st_o). Real flow artifacts left for the next card: white at t_y_join
+arrives in bursts (blobs and an S streak that pop and grow between frames 0.4 s apart) more than it
+travels; white bank crests curl into the channel at the join and at t_meander's inner shelf
+(hook-like), with a few small hooked ticks; the teal shallow shelves end in a crisp two-tone step
+(t_y_join, t_meander); dark oval glints at a join's bank corner and on t_straight; golden dashes in
+st_o's pool lie across the current; white blobs pop at st_o's lip. The owner frames f1_o, f5_o,
+st_o and bank_z3 loaded fresh and loaded rebaked match within 3 of 255 per channel (0 px over 8).
 
 ## The water field (combined branch painter-water-field-v2, look-pending, unmerged)
 

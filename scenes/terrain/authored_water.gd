@@ -76,11 +76,14 @@ var _pending_bake: bool = true
 
 
 ## The water of `doc` with the document's own flow map: the nodes now, from `built`
-## (WaterMeshBuilder.build(doc), which a loader's worker ran: AuthoredLoadPrep) or, when that
-## is empty, from a build on the calling thread.
+## (WaterMeshBuilder.build(doc), which a loader's worker ran: AuthoredLoadPrep, whose FLOW part
+## also rebaked a missing or stale flow) or, when that is empty, from a build on the calling
+## thread, which also rebakes a missing or stale flow there (WaterFlowBaker.ensure).
 static func create(doc: MapDocument, built: Dictionary = {}) -> AuthoredWater:
 	var water := AuthoredWater.new()
 	water.name = NODE_NAME
+	if built.is_empty():
+		WaterFlowBaker.ensure(doc)
 	var geometry := built if not built.is_empty() else WaterMeshBuilder.build(doc)
 	water.apply(geometry, doc.water_flow, doc.water_flow_size)
 	return water
@@ -398,15 +401,7 @@ static func refresh_work(
 	if not bake:
 		return
 	started = Time.get_ticks_usec()
-	var has_river := false
-	for body in snapshot.water_bodies:
-		has_river = has_river or body.is_river()
-	if has_river:
-		out["flow_size"] = WaterFlowBaker.resolution_for(snapshot.extent_m())
-		out["flow"] = WaterFlowBaker.bake(snapshot, out["flow_size"])
-	else:
-		out["flow_size"] = Vector2i.ZERO
-		out["flow"] = PackedByteArray()
+	out["flow"] = WaterFlowBaker.baked(snapshot)
 	out["bake_usec"] = Time.get_ticks_usec() - started
 
 
@@ -420,8 +415,7 @@ func _finish_task() -> void:
 	if work.get("bake", false):
 		last_bake_usec = work.get("bake_usec", 0)
 		if _document != null:
-			_document.water_flow = work["flow"]
-			_document.water_flow_size = work["flow_size"]
+			WaterFlowBaker.store(_document, work["flow"])
 	var flow := _document.water_flow if _document != null else PackedByteArray()
 	var flow_size := _document.water_flow_size if _document != null else Vector2i.ZERO
 	apply(work["built"], flow, flow_size)

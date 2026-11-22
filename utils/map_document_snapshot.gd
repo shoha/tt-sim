@@ -81,6 +81,7 @@ static func copy_document(doc: MapDocument) -> MapDocument:
 	copy.pond_mask = doc.pond_mask.duplicate()
 	copy.water_flow = doc.water_flow.duplicate()
 	copy.water_flow_size = doc.water_flow_size
+	copy.water_flow_stamp = doc.water_flow_stamp
 	copy.fire_mask = doc.fire_mask.duplicate()
 	return copy
 

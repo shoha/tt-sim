@@ -121,6 +121,36 @@ func test_each_record_kind_gets_a_body() -> void:
 	assert_eq(int(_built([tiny]).by_kind.top), 0, "a top too small holds none")
 
 
+func test_a_holed_pad_lays_a_band_round_its_opening() -> void:
+	for shape: String in ["disc", "rect"]:
+		var ring := _pad(shape, Vector3(0, 1, 0))
+		ring["hole"] = Vector2(0.3, 0.26)
+		var built := _built([ring])
+		assert_gt(int(built.by_kind.top), 0, "%s: a band laid" % shape)
+		var verts: PackedVector3Array = (built.arrays as Array)[Mesh.ARRAY_VERTEX]
+		var nearest := INF
+		var highest := -INF
+		for p in verts:
+			nearest = minf(nearest, Vector2(p.x / 0.15, p.z / 0.13).length())
+			highest = maxf(highest, p.y)
+		assert_gt(nearest, 0.9, "%s: nothing over the opening" % shape)
+		assert_between(highest - 1.0, 0.01, 0.06, "%s: a low roll over the top" % shape)
+	var thin := _pad("disc", Vector3.ZERO)
+	thin["hole"] = Vector2(0.5, 0.5)
+	assert_eq(int(_built([thin]).by_kind.top), 0, "a band under the minimum holds none")
+
+
+func test_a_placed_pad_scales_its_hole() -> void:
+	var ring := _pad("disc", Vector3(0, 1, 0))
+	ring["hole"] = Vector2(0.3, 0.3)
+	var placed: Array[Dictionary] = [
+		{"variant": "w", "transform": Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * 2.0), Vector3.ZERO)}
+	]
+	var moved: Array = SettlementBake.pads_of(placed, {"w": {"pads": [ring]}})
+	assert_eq(moved.size(), 1, "one pad placed")
+	assert_eq(moved[0]["hole"], Vector2(0.6, 0.6), "the opening scaled with the prop")
+
+
 func test_the_cone_follows_its_profile_and_closes_at_the_apex() -> void:
 	var cone := _cone()
 	var at_eave := PainterSnowForms.cone_profile(cone, 2.6)

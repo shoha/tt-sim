@@ -70,6 +70,8 @@ const PAD_T_MIN_M := 0.02
 const PAD_T_MAX_M := 0.05
 const PAD_SIDES := 20
 const RECT_POWER := 4.0
+## A holed pad's band (a ring or a frame round an opening) narrower than this holds no snow body.
+const PAD_BAND_MIN_M := 0.09
 ## An eave point within this plan distance of a window's top edge keeps its foot this far above it.
 const WINDOW_REACH_M := 0.9
 const WINDOW_CLEAR_M := 0.05
@@ -466,6 +468,9 @@ static func lay_pad(g: PainterMannerSnow.Strips, rec: Dictionary) -> int:
 	var hv := float(rec.get("radius", 0.0)) if disc else float(rec.get("v_len", 0.0)) * 0.5
 	if minf(hu, hv) < 0.05:
 		return 0
+	var hole: Vector2 = rec.get("hole", Vector2.ZERO)
+	if hole.x > 0.0 and hole.y > 0.0:
+		return _lay_band(g, rec, Vector2(hu, hv), hole * 0.5)
 	var t := clampf(PAD_T * 2.0 * minf(hu, hv), PAD_T_MIN_M, PAD_T_MAX_M)
 	# Rings out to in: [plan scale, height share, normal's lean out, shade].
 	# The foot sits just over the lid's edge; the shoulder near it, so the cap reads flat-topped.
@@ -505,4 +510,60 @@ static func lay_pad(g: PainterMannerSnow.Strips, rec: Dictionary) -> int:
 	var last := first + (rings.size() - 1) * PAD_SIDES
 	for i in PAD_SIDES:
 		g.tri(last + i, crown, last + (i + 1) % PAD_SIDES, up)
+	return (g.idx.size() - before) / 3
+
+
+## Lays a holed pad's band (a well's curb round its shaft, a trough's rim round its water): a
+## low roll across the band from just over the outer edge, `half` (u, v) from the middle, to just
+## inside the opening's, `hole_half`, its crown midway and its normals leaning out on the outer
+## side and in on the inner. Nothing for a band under PAD_BAND_MIN_M.
+static func _lay_band(
+	g: PainterMannerSnow.Strips, rec: Dictionary, half: Vector2, hole_half: Vector2
+) -> int:
+	var band := minf(half.x - hole_half.x, half.y - hole_half.y)
+	if band < PAD_BAND_MIN_M:
+		return 0
+	var c: Vector3 = rec["centre"]
+	var up: Vector3 = (rec.get("n", Vector3.UP) as Vector3).normalized()
+	var u: Vector3 = (rec.get("u", Vector3.RIGHT) as Vector3).normalized()
+	var v: Vector3 = (rec.get("v", Vector3.BACK) as Vector3).normalized()
+	var disc := str(rec.get("shape", "rect")) == "disc"
+	var t := clampf(PAD_T * band, PAD_T_MIN_M, PAD_T_MAX_M)
+	var outer := half * 1.02
+	var inner := hole_half * 0.98
+	# Rings outer to inner: [share across the band, height share, normal's lean out, shade].
+	var rings := [
+		[0.0, -0.1, 0.85, 0.7],
+		[0.12, 0.55, 0.5, 0.3],
+		[0.32, 0.92, 0.2, 0.05],
+		[0.5, 1.0, 0.0, 0.0],
+		[0.68, 0.92, -0.2, 0.05],
+		[0.88, 0.55, -0.5, 0.3],
+		[1.0, -0.1, -0.85, 0.7],
+	]
+	var size := half * 2.0
+	var first := g.pos.size()
+	for ring: Array in rings:
+		var reach := outer.lerp(inner, float(ring[0]))
+		for i in PAD_SIDES:
+			var a := TAU * float(i) / PAD_SIDES
+			var ca := cos(a)
+			var sa := sin(a)
+			if not disc:
+				ca = signf(ca) * pow(absf(ca), 2.0 / RECT_POWER)
+				sa = signf(sa) * pow(absf(sa), 2.0 / RECT_POWER)
+			var flat := u * ca * reach.x + v * sa * reach.y
+			var p := c + flat + up * t * float(ring[1])
+			var n := (up + flat.normalized() * float(ring[2])).normalized()
+			var data := PackedFloat32Array([size.x, size.y, float(CODE) + 0.9 * float(ring[3]), 0.5])
+			g.put(p, n, Vector2(flat.dot(u), flat.dot(v)), data)
+	var before := g.idx.size()
+	for r in rings.size() - 1:
+		var r0 := first + r * PAD_SIDES
+		var r1 := first + (r + 1) * PAD_SIDES
+		for i in PAD_SIDES:
+			var j := (i + 1) % PAD_SIDES
+			var facing := g.nor[r0 + i] + g.nor[r1 + j]
+			g.tri(r0 + i, r1 + i, r1 + j, facing)
+			g.tri(r0 + i, r1 + j, r0 + j, facing)
 	return (g.idx.size() - before) / 3

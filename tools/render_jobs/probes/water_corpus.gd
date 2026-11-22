@@ -3,8 +3,9 @@ extends RefCounted
 ## Render-job probe (`call` op) of the water corpus (tests/unit/water_corpus_cases.gd, docs/systems/
 ## water.md "The water corpus"): builds the corpus maps as test levels, frames each layout and
 ## writes what the frame detectors need beside each capture. step.action:
-##   build {prefix, maps}   builds the named corpus maps (all when `maps` is absent) and writes each
-##                          as the level `<prefix><map>` (no map need be open: run it at the title).
+##   build {prefix, maps}   builds the named corpus maps (all when `maps` is absent), bakes each
+##                          one's flow map and writes it as the level `<prefix><map>` (no map need
+##                          be open: run it at the title).
 ##   view {name, kind}      the camera on layout `name`: "top" (pitch 88) or "obl" (pitch 45).
 ##   aux {name, kind, dir}  writes `<dir>/<name>_<t|o>_aux.png` and `_meta.json` for the view shown:
 ##                          the playing level's WaterField projected through the camera, one pixel
@@ -52,6 +53,9 @@ static func _build(step: Dictionary) -> String:
 			continue
 		var started := Time.get_ticks_msec()
 		var doc: MapDocument = Corpus.build(m).doc
+		# The flow map, as the Water tool bakes it (a level written without one is rebaked at
+		# every load until it is saved again: WaterFlowBaker.refreshed).
+		WaterFlowBaker.ensure(doc)
 		var folder := prefix + String(m.name)
 		DirAccess.make_dir_recursive_absolute(LevelManager.folder_path(folder))
 		var level := AuthoringController.new_level()

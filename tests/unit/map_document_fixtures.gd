@@ -94,6 +94,7 @@ static func add_water(doc: MapDocument) -> void:
 	doc.pond_mask = mask
 	doc.water_flow_size = WaterFlowBaker.resolution_for(doc.extent_m())
 	doc.water_flow = WaterFlowBaker.bake(doc, doc.water_flow_size)
+	doc.water_flow_stamp = WaterFlowBaker.stamp(doc)
 
 
 ## A manifest for a 20 x 20 map at the defaults, with `overrides` merged in.

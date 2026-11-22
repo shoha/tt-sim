@@ -1193,7 +1193,9 @@ rather than in `ASSET_PIPELINE.md`.
   `splines.json` are ignored. The writer refuses any of these (`MapWaterIO.problem`).
   An older build reads only its own `KNOWN_ENTRIES`, so it loads a map with water as a
   map without it. In memory: `MapDocument.water_bodies` (`WaterBody`), `pond_mask`,
-  `water_flow` and `water_flow_size`; `MapWaterIO` (`utils/map_water_io.gd`) writes and
+  `water_flow`, `water_flow_size` and `water_flow_stamp` (the flow is derived data: a load
+  whose stamp no longer matches the document bakes it again, `WaterFlowBaker.refreshed`, in
+  `AuthoredLoadPrep`'s `flow` part); `MapWaterIO` (`utils/map_water_io.gd`) writes and
   validates the entries for `MapDocumentIO`. The model is below ("Water model and flow
   bake").
 - **Crossings (phases 4b and 4d):** `crossings.json` (`{"version": 1, "crossings": [...]}`): each

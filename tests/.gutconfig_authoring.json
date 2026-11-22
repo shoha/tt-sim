@@ -228,6 +228,7 @@
 		"res://tests/unit/test_water_field_mesh.gd",
 		"res://tests/unit/test_water_field_native.gd",
 		"res://tests/unit/test_water_flow_baker.gd",
+		"res://tests/unit/test_water_flow_stamp.gd",
 		"res://tests/unit/test_water_model.gd",
 		"res://tests/unit/test_water_scatter.gd",
 		"res://tests/unit/test_water_tool.gd"
