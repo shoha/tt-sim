@@ -49,11 +49,12 @@ const OWN_C_POW := 0.8
 const OWN_C := Vector2(0.55, 2.0)
 const OWN_H := 0.5
 ## Under snow (earth()): the share of the way to the surface's own chroma and hue a path's tone goes
-## at `path-dust` 1, how much darker it is there and the share of its chroma it keeps (a wet, dark
-## earth, not the summer road's sandy ochre).
+## at `path-dust` 1, how much darker it is there and the share of its chroma it keeps (a damp earth,
+## warmer than the warm grey packed snow around it; card painter-winter-path: 0.28 and 1.15 made a
+## packed dirt glimpse a mustard ochre (174,142,86) even in shade).
 const EARTH_OWN := 1.5
-const EARTH_DARK := 0.35
-const EARTH_CHROMA := 0.75
+const EARTH_DARK := 0.33
+const EARTH_CHROMA := 0.9
 
 
 ## The path-role surfaces of `doc` that take a slot, in slot order: the base surface first when it

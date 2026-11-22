@@ -370,21 +370,30 @@ Causes and fixes:
   (`painter_solid` honours `painter_placed`, as the plant shader does).
 - **The path under snow.** Winter's `path` tone is the snow's blue (0.80 0.030 248) and `path-dust`
   lifted it further toward the snow, so the band matched the ground. Now the ground shader paints
-  the band as a trodden track: the snow of the ground it crosses times `TROUGH_LIT` / `TROUGH_SHD`
-  (darker and bluer, linear), with the slot's earth showing through in a few glimpses along its middle
-  (a 0.55 m^-1 noise plus the band's depth over `EARTH_AT`; a mark decides at its middle), and the
-  edge still dusted white. The glimpse's tone is `PainterGroundPaths.earth`: the slot's tone moved
-  `path-dust` * 1.5 of the way to the surface's own chroma and hue in OKLab (packed dirt's when it has
-  none), `path-dust` * 0.35 darker and its chroma toward 0.75. Seen: the earth glimpses read (a dull
-  brown under the 13 h sun, brown on the rose snow at 6.5 h). Round 2: a debug render showed a 1 m
-  brush's band runs pv 0.46 at its edge to about 0.8 at its middle, so the old white rim (a quarter of
-  `path-dust` deep in pv) covered most of it; the rim now spans 0.11 * `path-dust` (two narrow steps).
-  `TROUGH_LIT` deepened to 0.52 0.62 0.86 (`TROUGH_SHD` 0.66 0.74 0.90): a lit track pixel measured
-  (162,189,228) against the snow's (231,248,255). The glimpses lean on pv about 0.7 (`EARTH_AT` 0.74).
-  The track now takes any ground but the char: across the shore and a biome's second ground the band
-  had been the earth tone end to end (long brown blots by the stream and the river). Still open: at
-  zoom 9 and 16 the track's blue is the snow shade's hue, so beside tree shadows it reads as shade
-  more than as a trodden path.
+  the band as a trodden track: the snow of the ground it crosses times `TRACK_LIT` / `TRACK_SHD`
+  (linear), with the slot's earth showing through in a few glimpses along its middle (a 0.55 m^-1
+  noise plus the band's depth over `EARTH_AT`; a mark decides at its middle), and the edge still
+  dusted white. The glimpse's tone is `PainterGroundPaths.earth`: the slot's tone moved `path-dust` *
+  1.5 of the way to the surface's own chroma and hue in OKLab (packed dirt's when it has none),
+  `path-dust` * `EARTH_DARK` (0.33) darker and its chroma toward `EARTH_CHROMA` (0.9) times its own. A 1 m
+  brush's band runs pv 0.46 at its edge to about 0.8 at its middle (a debug render), so the white rim
+  spans 0.11 * `path-dust` in pv (two narrow steps; a quarter of `path-dust` covered most of the band).
+  The track takes any ground but the char (across the shore and a biome's second ground the band had
+  been the earth tone end to end).
+  The track's hue (card painter-winter-path, owner's direction, board item 40: "warmer, greyer packed
+  snow"). The first track was darker and bluer (0.52 0.62 0.86): it was the hue of the snow's own cast
+  shadows, so beside the trees it read as more shade. It is now a warm grey-beige: `TRACK_LIT` 0.70
+  0.53 0.39 (lit snow (224,242,251) -> about (202,190,168) on screen; 0.84 0.64 0.50 gave a pale sand,
+  (219,206,188), that hardly read), `TRACK_SHD` 1.08 0.74 0.44 (in shade a warm grey, about
+  (139,132,124) against the blue shadow's (122,142,177)), so it separates from shade by hue, not depth.
+  The glimpse counts the band's depth only up to 0.8 (`min(pv, 0.8)`): a stroke's saturated stretch
+  runs pv about 1, where the glimpse covered the whole band. `EARTH_AT` 0.69 (more, smaller glimpses
+  than 0.74). Seen (`painter_final147_winter_path/sheet.png`, main | build): the track reads end to end
+  at zoom 16 and 9 as a soft taupe band beside Eevee and Venusaur, distinct from the blue tree
+  shadows; at 6.5 h a warm peach-tan through the rose snow that stays warm across the blue shadow
+  stripes; the summer row and the other winter rows identical. Still open: a packed dirt glimpse is an
+  ochre (about (160,133,86)), the one tone that can read mustard; the 1 m band is narrow at zoom 9.
+  Cost: within noise (in-run A/B at zoom 9, adjacent pairs -0.013 and +0.012 ms).
 - **Grey-lavender snow.** The ground shader paints the sheet's ramp as it is (linear tonemap,
   `DIFFUSE_LIGHT` = the ramp colour; the lo-fi pass did not change the pixels), so the tones were the
   cause: winter's forest `floor` (0.82 0.030 255; most of a forest map's open ground) and the high key's
