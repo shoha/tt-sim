@@ -296,3 +296,104 @@ func test_the_eave_never_hangs_below_a_window_top() -> void:
 	var strips := _built([slope, face])
 	PainterMannerSnow.blanket = true
 	assert_gte(float(low.call(strips)), 2.95, "nor the strips' lip")
+
+
+## Plan distance from `p` to polygon `poly`'s outline, positive outside it.
+static func _outline_distance(poly: PackedVector2Array, p: Vector2) -> float:
+	var best := INF
+	for i in poly.size():
+		var q := Geometry2D.get_closest_point_to_segment(p, poly[i], poly[(i + 1) % poly.size()])
+		best = minf(best, q.distance_to(p))
+	return -best if Geometry2D.is_point_in_polygon(p, poly) else best
+
+
+## How many of `points` (a closed outline) turn by more than `degrees`.
+static func _corners(points: PackedVector2Array, degrees: float) -> int:
+	var count := 0
+	for i in points.size():
+		var a := points[(i + points.size() - 1) % points.size()]
+		var b := points[i]
+		var c := points[(i + 1) % points.size()]
+		if absf((b - a).angle_to(c - b)) > deg_to_rad(degrees):
+			count += 1
+	return count
+
+
+func test_the_cones_rim_follows_the_eave_polygon() -> void:
+	# Card snow-calm-cells (owner: "The hut's rim needs work"): a round body sat inside the roof's
+	# sides and left a wedge of its top at every corner; each ring now follows the eave's polygon.
+	var cone := _cone()
+	var poly := PackedVector2Array()
+	for p: Vector3 in cone["ring"]:
+		poly.append(Vector2(p.x, p.z))
+	var cols: PackedVector2Array = PainterSnowForms.cone_columns(cone)["points"]
+	assert_eq(_corners(cols, 10.0), int(cone["sides"]), "a column at every corner of the ring")
+	var g := PainterMannerSnow.Strips.new()
+	assert_gt(PainterSnowForms.lay_cone(g, cone, 1.0, Vector3.ZERO, 7), 0)
+	var stride := cols.size() + 1
+	# Rows 0 to 2 the lip (tuck, front, roll), row 3 the eave ring on the roof's top face.
+	for row in 4:
+		var ring := PackedVector2Array()
+		var lo := INF
+		var hi := -INF
+		for ci in cols.size():
+			var p := g.pos[row * stride + ci]
+			ring.append(Vector2(p.x, p.z))
+			var d := _outline_distance(poly, Vector2(p.x, p.z))
+			lo = minf(lo, d)
+			hi = maxf(hi, d)
+		assert_eq(_corners(ring, 10.0), int(cone["sides"]), "row %d has the ring's corners" % row)
+		assert_lt(hi, 0.08, "row %d stays at the eave" % row)
+		# The lip's roll (its outer edge) runs parallel to the eave's sides, a few centimetres off
+		# them; a round row strayed by the corners' reach past the sides (0.2 m here). (The tuck and
+		# the front sit under the roof's edge by the depth, which swells along the ring.)
+		if row >= 2:
+			assert_lt(hi - lo, 0.05, "row %d follows the eave polygon" % row)
+		if row == 3:
+			assert_lt(maxf(absf(lo), absf(hi)), 0.005, "the eave ring lies on the polygon")
+	# Shaded round the axis: neighbouring columns' normals turn smoothly at the corners too (the
+	# polygon's own faces would turn 45 degrees there).
+	var steepest := 0.0
+	for row in range(4, 8):
+		for ci in cols.size():
+			var a := g.nor[row * stride + ci]
+			var b := g.nor[row * stride + (ci + 1) % cols.size()]
+			steepest = maxf(steepest, rad_to_deg(a.angle_to(b)))
+	assert_lt(steepest, 15.0, "no tone step between columns")
+
+
+func test_a_real_huts_cone_has_its_roofs_corners() -> void:
+	StructureRecipes.ensure_served()
+	var doc := MapDocument.create_flat(Vector2i(40, 40), "grass", "v", 9)
+	var plan := PackedVector2Array()
+	for i in 8:
+		plan.append(Vector2.from_angle(TAU * i / 8.0) * 2.5)
+	var feed := PainterMannerSource.evaluate(doc, Structure.make(1, "core:round_hut", plan, 5), false)
+	var cones: Array = PainterMannerSnow.source(feed.records, feed.meshes, feed.table, {}).cones
+	assert_gt(cones.size(), 0, "a cone record")
+	for cone: Dictionary in cones:
+		var cols: PackedVector2Array = PainterSnowForms.cone_columns(cone)["points"]
+		assert_eq(_corners(cols, 5.0), int(cone["sides"]), "the snow has the roof's corners")
+
+
+func test_the_calm_paint_defaults_are_the_owners_pick() -> void:
+	# Card snow-calm-cells: spike 8's cells at the verdict settings the owner saw (2026-11-22: cell
+	# 2.2, shift 1.8, wash 1.35), with the card's one tuning round toward calmer (edge 0.3 -> 0.5,
+	# turn 0.6 -> 0.4, tone 0.35 -> 0.22: the cells read as flat angular planes at zoom 16).
+	var code := (load(PainterMannerHost.SHADER) as Shader).code
+	var want := {
+		"calm_cell": 2.2,
+		"calm_shift": 1.8,
+		"calm_edge": 0.5,
+		"calm_turn": 0.4,
+		"calm_cell_tone": 0.22,
+		"calm_wash": 1.35,
+	}
+	var re := RegEx.create_from_string("uniform float (calm_\\w+) = ([0-9.]+);")
+	var got := {}
+	for m in re.search_all(code):
+		got[m.get_string(1)] = float(m.get_string(2))
+	for key: String in want:
+		assert_almost_eq(float(got.get(key, -1.0)), float(want[key]), 1e-6, key)
+	assert_true(code.contains("vec4 sp = calm_paint(v_ap, sf, broad);"), "the bodies take it")
+	assert_false(code.contains("snow_bend"), "no bend")

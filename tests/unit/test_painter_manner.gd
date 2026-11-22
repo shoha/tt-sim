@@ -309,7 +309,9 @@ func test_the_snow_blanket_is_opaque_soft_snow() -> void:
 	assert_false(code.contains("float grain ="), "no dry-brush grain")
 	assert_false(code.contains("float verge_b"), "no bare stretches at the verges")
 	assert_true(code.contains("snow_gap(sf, vl - f.y)"), "only the shared ridge gaps")
-	assert_true(code.contains("snow_paint(sf, broad)"), "the blanket paints the shared layer")
+	# (Card snow-calm-cells: through the calm paint's cells, which call the shared snow_paint.)
+	assert_true(code.contains("calm_paint(v_ap, sf, broad)"), "the blanket paints the shared layer")
+	assert_true(code.contains("snow_paint(f1.xy, broad)"), "in the cells' frames")
 
 
 func test_the_collider_follows_the_field_and_is_cut_only_above_the_walls() -> void:

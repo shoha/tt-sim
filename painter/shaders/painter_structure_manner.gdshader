@@ -58,6 +58,25 @@ uniform vec3 snow_ramp[3];
 // False draws winter's roofs without their blanket meshes: every roof takes the shared layer
 // painted on its face, as a roof with no record does (an A/B switch, PainterMannerHost.snow_body).
 uniform bool snow_body = true;
+// The snow body's calm paint (card snow-calm-cells, the owner's pick of spike 8's three: cells;
+// owner: "too ripply-swirly", "less oil-slick like"). The body's plan is cut into jittered cells
+// (`calm_cell` metres across the wind, longer along it), keyed to the asset's own plan point (v_ap)
+// so they ride with it and run on over a ridge or round a cone. Each cell shifts the shared washes
+// by its own constant (up to `calm_shift` metres along the eave, 0.45 of it up the slope), turns
+// them by up to `calm_turn` radians and takes its own tone (`calm_cell_tone`), so a roof breaks into
+// a few soft patches of brushwork that do not line up. Within `calm_edge` (of a cell) of an edge the
+// two nearest cells' PAINT is cross-faded (blending their frames sheared the washes into thin
+// straight creases, spike 8 round 2). `calm_wash` the washes' strength (1: as snow_paint lays them).
+// Tuned from the owner's verdict settings (edge 0.3, turn 0.6, tone 0.35) toward calmer (card
+// snow-calm-cells round 1, zoom 16 on the street and low sun): each cell's own tone with a narrow
+// edge read as a flat angular plane, and neighbours' washes crossing steeply as crumpled paper;
+// so a wider edge (0.5), a smaller tone step (0.22) and a smaller turn (0.4).
+uniform float calm_cell = 2.2;
+uniform float calm_shift = 1.8;
+uniform float calm_edge = 0.5;
+uniform float calm_turn = 0.4;
+uniform float calm_cell_tone = 0.22;
+uniform float calm_wash = 1.35;
 uniform float tone_lo = -0.08;
 uniform float tone_hi = 0.48;
 uniform float cast_amount = 0.94;
@@ -92,6 +111,9 @@ varying vec4 v_rec;
 // A roof piece with no record (a round or Taper roof): the turn of its ramp to its recipe's paint
 // (painter_structure_common's paint_turn); z 0: none.
 varying flat vec4 v_turn;
+// The point's plan in the mesh's own space (the asset's: a snow body is its child), what the calm
+// paint's cells key to.
+varying vec2 v_ap;
 
 varying vec3 f_n;
 varying vec3 f_shd;
@@ -115,8 +137,75 @@ varying vec2 f_cast;
 const float WALL_PATCHES = 0.55;
 const float WALL_DABS = 0.45;
 const float WALL_WOBBLE = 0.03;
+// The wind in the plan (PainterSnowForms.WIND): the calm paint's cells run longer along it.
+const vec2 CALM_WIND = vec2(0.8, 0.6);
+
+// The calm paint. Cell `c`'s frame for slope frame point `f`: the washes turned by up to
+// `calm_turn` radians and shifted (metres along the eave and up the slope); z the cell's tone
+// (-1 darker to 1 lighter).
+vec3 calm_cell_frame(vec2 c, vec2 f) {
+	vec2 h = vec2(p_hash(vec3(c, 93.0)), p_hash(vec3(c, 94.0))) * 2.0 - 1.0;
+	float a = (p_hash(vec3(c, 95.0)) * 2.0 - 1.0) * calm_turn;
+	vec2 r = vec2(cos(a) * f.x - sin(a) * f.y, sin(a) * f.x + cos(a) * f.y);
+	return vec3(r + calm_shift * h * vec2(1.0, 0.45), p_hash(vec3(c, 96.0)) * 2.0 - 1.0);
+}
+
+// The calm paint's cells at asset plan point `plan`: the nearest cell (`c1`), the second nearest
+// (`c2`) and the second's share (0 inside a cell, 0.5 on the edge). A 3x3 search: the jitter (0.7
+// of a cell) puts a nearer point outside a 2x2 block, and a 2x2 block's switch at a cell's middle
+// would draw a straight seam.
+float calm_cells(vec2 plan, out vec2 c1, out vec2 c2) {
+	vec2 q = vec2(dot(plan, CALM_WIND) * 0.6, dot(plan, vec2(-CALM_WIND.y, CALM_WIND.x))) / calm_cell;
+	vec2 i = floor(q);
+	vec2 fq = fract(q);
+	float d1 = 9.0;
+	float d2 = 9.0;
+	c1 = i;
+	c2 = i;
+	for (int y = -1; y <= 1; y++) {
+		for (int x = -1; x <= 1; x++) {
+			vec2 o = vec2(float(x), float(y));
+			vec2 c = i + o;
+			vec2 jit = vec2(p_hash(vec3(c, 91.0)), p_hash(vec3(c, 92.0)));
+			vec2 dv = o + 0.15 + 0.7 * jit - fq;
+			float d = dot(dv, dv);
+			if (d < d1) {
+				d2 = d1;
+				c2 = c1;
+				d1 = d;
+				c1 = c;
+			} else if (d < d2) {
+				d2 = d;
+				c2 = c;
+			}
+		}
+	}
+	return 0.5 * (1.0 - smoothstep(0.0, calm_edge, sqrt(d2) - sqrt(d1)));
+}
+
+// The snow body's paint (snow_paint's x, y, z, w) at asset plan point `plan`, slope frame point
+// `f`, `broad` as snow_paint's: the shared paint in the nearest cell's frame, cross-faded with the
+// second's only inside the edge band (where the second's share passes 1 %: below it the paint's
+// step is a few thousandths of a tone), then the washes strengthened and the two cells' tones laid
+// on, cross-faded everywhere (one hash).
+vec4 calm_paint(vec2 plan, vec2 f, float broad) {
+	vec2 c1;
+	vec2 c2;
+	float k = calm_cells(plan, c1, c2);
+	vec3 f1 = calm_cell_frame(c1, f);
+	vec4 sp = snow_paint(f1.xy, broad);
+	if (k > 0.01) {
+		sp = mix(sp, snow_paint(calm_cell_frame(c2, f).xy, broad), k);
+	}
+	float tone = mix(f1.z, p_hash(vec3(c2, 96.0)) * 2.0 - 1.0, k);
+	sp.xy *= calm_wash;
+	sp.x += max(-tone, 0.0) * calm_cell_tone;
+	sp.y += max(tone, 0.0) * calm_cell_tone * 1.5;
+	return sp;
+}
 
 void vertex() {
+	v_ap = VERTEX.xz;
 	v_wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	v_wn = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	v_h = COLOR.a;
@@ -638,9 +727,11 @@ void fragment() {
 			if (code == 10 && under < 0.05 && up > 0.3) {
 				cover = 1.0 - snow_gap(sf, vl - f.y) * step(0.0, vl - f.y) * scour;
 			}
-			// The shared paint: broad washes, swells and hollows wider along the eave than down the
-			// slope, and the dabs that break the light's turn (painter_snow.gdshaderinc).
-			vec4 sp = snow_paint(sf, broad);
+			// The shared paint (broad washes, swells and hollows wider along the eave than down the
+			// slope, and the dabs that break the light's turn, painter_snow.gdshaderinc) in the calm
+			// paint's cells (calm_paint), so a roof is a few soft patches of tone, not one sheet of
+			// washes. (The crest gaps and the bare roof's stroke rows keep the slope's own frame.)
+			vec4 sp = calm_paint(v_ap, sf, broad);
 			swell = sp.w * (1.0 - under);
 			vec2 sm = snow_marks(cover, sp, under, 0.0);
 			snow_dark = sm.x;
