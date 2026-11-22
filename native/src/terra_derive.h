@@ -1,10 +1,11 @@
 // TerraDerive: the derived world of a terraforming document, evaluated on the CPU over dirty tiles
 // (from spike terraform-s2-cpu; production since card terraform-p1-native, 2026-11-22;
-// docs/systems/terraform.md). GDScript sends primitives (set, append dabs, remove); derive() runs
-// the fixed stage chain over what changed and returns the stage timings and the tiles whose data
-// changed. Each stage records which samples actually changed, so the next stage's work is that set
-// grown by its halo, never a guess. GDScript never names the class: utils/terraform/terra_core.gd
-// finds it through ClassDB, so every script parses where the library is absent.
+// docs/systems/terraform.md). GDScript sends primitives (set, append dabs, remove); derive() loops
+// over the stage table (terra_stage_table.h) over what changed and returns the stage timings and
+// the tiles whose data changed. Each stage records which samples of each array it writes actually
+// changed, so the next stage's work is that set grown by its declared halo, never a guess.
+// GDScript never names the class: utils/terraform/terra_core.gd finds it through ClassDB, so every
+// script parses where the library is absent.
 #pragma once
 
 #include <atomic>
@@ -26,6 +27,7 @@
 
 namespace terra {
 class Pool;
+struct Pass;
 
 /// A read-only view of every derived array and record, for C++ stages built on a TerraDerive (the
 /// Painted stages): whole-map arrays of g.w * g.h samples, row-major (CT 4 bytes a sample).
@@ -51,7 +53,8 @@ class TerraDerive : public RefCounted {
 	terra::Water water;
 	std::vector<terra::PathL> paths;
 	std::vector<terra::Wall> walls;
-	terra::Dirty seed_c, seed_w, seed_p, seed_f, seed_paint;
+	// Pending change per array: the edits' seeds on the inputs, and debug_set_sample's samples.
+	terra::Dirty seeds[terra::A_COUNT];
 	bool seed_rules = false;
 	std::set<int> changed_ids;
 	std::unique_ptr<terra::Pool> pool;
@@ -67,6 +70,14 @@ class TerraDerive : public RefCounted {
 	terra::Rect influence(const terra::Prim &p) const;
 	void seed(const terra::Prim &p, const terra::Rect &r);
 	void seed_all();
+	// The stage bodies: the three solves, the rect body of each rect stage, and the loop's rect run
+	// (snapshot the stage's per-sample writes, run the body, diff each write per tile).
+	void solve_water(terra::Pass &ps);
+	void solve_paths(terra::Pass &ps);
+	void solve_walls(terra::Pass &ps);
+	void rect_body(int stage, const terra::Rect &r, const terra::Pass &ps);
+	int run_rect(const terra::StageDef &s, const terra::Dirty &region, terra::Pass &ps);
+	uint8_t *array_data(int a);
 
 protected:
 	static void _bind_methods();
@@ -75,7 +86,7 @@ public:
 	TerraDerive();
 	~TerraDerive();
 
-	/// "terra 1 core": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
+	/// "terra 2 stages": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
 	String version() const;
 	/// Allocates a w x h sample grid over a map of `extent` metres, centred on the origin (sample
 	/// (0, 0) at -extent / 2), and forgets the document. TerraCore passes 2 (n - 1) + 1 per axis of
@@ -131,6 +142,17 @@ public:
 	/// golden fixture.
 	Dictionary digests() const;
 	int64_t memory_bytes() const;
+	/// The stage table in run order: per stage {"name", "shape" ("rect", "graph", "line_rect"),
+	/// "reads", "writes" (array names), "halo" (samples; -1 for a graph stage's exact read points),
+	/// "reach_m" (metres a solved line's change reaches past its half width)}.
+	Array stages() const;
+	/// Every array the stages name: {"name", "kind" ("input", "samples", "record"), "bytes" a sample}.
+	Array arrays() const;
+	/// A per-sample array's whole-map bytes, row-major (empty for an input, a record or a bad name).
+	PackedByteArray array_bytes(const String &name);
+	/// Tests only (halo honesty): sets one sample of a per-sample array outside the chain and marks
+	/// it changed for the next derive() (or the whole array, with dirty_all), as if its writer had.
+	void debug_set_sample(const String &name, int64_t i, int64_t j, double value, bool dirty_all);
 
 	/// C++ only: every derived array and record, for stages built on this derive.
 	terra::DerivedView derived() const;

@@ -185,7 +185,7 @@ After editing files, format them so output matches project style. See `.cursor/r
   the incremental rebuild takes seconds, a first build with godot-cpp about a minute; the result
   is `native/bin/libttscatter.windows.template_debug.x86_64.dll`, whose `version()` must read
   `ttscatter 10 curves water chunk fields wfield2 terra` or `test_scatter_native` fails, and
-  `TerraDerive.version()` must read `TerraCore.NATIVE_VERSION`, `terra 1 core`, or the terra tests
+  `TerraDerive.version()` must read `TerraCore.NATIVE_VERSION`, `terra 2 stages`, or the terra tests
   fail):
   ```
   $env:PATH = "C:/Users/hshore/scoop/apps/mingw-mstorsjo-llvm-msvcrt/current/bin;" + $env:PATH
