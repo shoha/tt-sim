@@ -3031,6 +3031,42 @@ The path's first frame is left: the first dab of a surface new to the map re-tab
 slots and every bound path parameter against the full pass through random edits, and a warmed wall's
 meshes and materials against a cold one's.
 
+**Several path surfaces (card painter-path-many, 2026-11-22).** With two or more path slots painted
+the full pass ran every frame: `_planes` (each slot's weight plane), a box blur of each painted plane
+and the largest slot per texel, 97-120 ms a pressed frame with two to four path surfaces on the
+bench (more than the 42 ms of `_planes` alone, since the blur and pick run too). `PainterPathSlotMap`
+(kept by `PainterPathPresence`) keeps the planes, the blur's horizontal pass, the blurred planes and
+the slot bytes, and redoes them over the rows the presence update found changed: the planes over the
+spans, the horizontal pass one sample wider, the vertical pass and the bytes one row up and down,
+each value by the full pass's own expression, so the bytes are the same. A new surface appended
+keeps the planes (no painted entry changes slot); a new document, a reordered list or the first
+frame with two slots starts from zero, from the painted spans when they cover under an eighth of
+the grid, else whole (`_planes` and every stage over the grid; spans of broad paint cost about
+500 ms here). `bench3.json` (the bench above, then four path strokes: dirt, cobblestone picked as
+the stroke starts, gravel picked a second before, dirt again), interleaved, main a912061b and the
+branch, three runs each (game ms; `today_attrib/path_many/bench3_*ab*_frames.jsonl`):
+
+| | main 1/2/3 | branch 1/2/3 |
+| --- | --- | --- |
+| one surface (dirt): pressed median / p95 | 4.03 / 7.65, 4.08 / 7.42, 4.08 / 7.93 | 4.04 / 7.62, 4.49 / 8.42, 4.01 / 7.49 |
+| one surface: first frame | 321.5 / 47.1 / 50.4 | 49.9 / 52.5 / 48.2 |
+| second (cobble): pressed median / p95 | 96.5 / 106.4, 99.1 / 110.7, 97.7 / 108.5 | 4.34 / 5.15, 4.77 / 5.69, 4.27 / 6.50 |
+| second: first frame | 395.0 / 143.8 / 143.0 | 159.7 / 165.5 / 159.6 |
+| third (gravel, picked ahead): median / first frame | 119.1 / 134.9, 119.8 / 136.4, 120.4 / 138.0 | 4.25 / 25.8, 4.57 / 27.6, 4.45 / 30.8 |
+| dirt again: median / first frame | 118.3 / 132.4, 119.7 / 133.4, 118.7 / 132.5 | 4.29 / 15.7, 4.73 / 16.0, 4.38 / 15.3 |
+| held raise dry / over river, median | 4.68, 4.78, 4.54 / 5.57, 5.34, 5.18 | 4.57, 4.72, 4.75 / 5.23, 5.47, 5.36 |
+| river landing, frames over 33 ms (sum) | 2 (74.7) / 2 (74.0) / 2 (72.7) | 2 (73.2) / 2 (75.3) / 2 (73.0) |
+| wall place frame | 17.4 / 16.6 / 15.5 | 16.1 / 17.0 / 16.6 |
+
+The second surface's first frame is the one place the branch costs more (160-166 against 143-144):
+the start builds every stage whole (planes, blur and pick over the grid) on top of the new layer's
+re-table and upload (the one-surface first frame, about 50 ms). A surface picked a moment before its
+first dab has its layer prepared (`AuthoredTerrain.prepare_surfaces`) and its first frame is 26-31 ms.
+Same bytes: `ident.json` gained deterministic paint edits (dirt, then cobblestone, then gravel and
+dirt) with the bound path map and `path_only` in the digest, all equal to main's;
+`test_painter_wall_path.gd` checks the slot map bytes against the full pass through dabs, erasing,
+scatter, an appended surface, a reordered list, a path base, a new document and a resize.
+
 ## In-game authoring phase 4 (water): pinned performance pass (2026-09-27)
 
 The phase 4 pass: authored maps with water in play against the same maps without it, the
