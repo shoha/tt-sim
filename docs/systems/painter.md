@@ -1844,6 +1844,24 @@ three to five puffs stepped together, so the mist changed in bulk just after eac
 at f1_o, mist-layer pixels changing per eighth of a second were 10183, 17, 0, 0, 12907, 0, ... on
 main (about 12000 at each half second, under 70 between) and 65 to 1973 at every step on the build.
 
+**The plunge pool's wash** (card painter-water-wash, look-pending). Below every fall on the field
+a dark V sat in the pool, pointing downstream (st_o, f1_o, the reach above pond_z8). It was the
+wash, not the strokes: the carve digs a slot below a fall that shallows to the next lip (the field's
+depth along st_o's pool: 1.25 m at the foot's centre, a V across the 2.6 m channel, 0.9 m 2.5 m
+down, 0.2 m at the next lip), the pool floor holds the body at a column of 1.0, and the raw
+column (depth times the view ray's 1.41 at 45 degrees) passed the floor and the deep band's 0.85
+times the wash noise only inside the slot's 0.75 m contour: a posterised wedge in the slot's shape.
+Now, within a fall's foot range below the foot (`foot_near`, the foot coordinate past
+`PLUNGE_IN_M`), the wash reads the floor plus a heart keyed to the distance from the banks
+(`PLUNGE_HEART_LO_M` 0.4 to `_HI_M` 1.3 m) and gated by depth (0.15 to 0.6 m), adding
+`PLUNGE_HEART_COLUMN_M` 0.6 and fading over the foot coordinate's 2.8 to 4.0 (inside the
+coordinate's range, so no seam where it ends). The pool reads one mid-blue body with a faint,
+soft deeper middle. Rivers outside a foot range and ponds keep their wash (pond_z8's pond looks
+the same by eye; not pixel-diffed); `ABL_POOLSLOT` puts the raw column back. Chosen over a blurred depth (it lowers a
+narrow river's centre too, and a 0.75 m blur only rounds the wedge's tip) and the bank-keyed heart
+in every pool (it moves a river's deep stripe). Cost, in-run A/B against main (two runs each):
+st_o +0.011 and -0.004 ms, wide +0.003 and +0.009 ms.
+
 `painter_waterfall.gdshader` is the fall: unshaded, the same vertex contract as Classic's, chunky
 white streaks over the shallow and mid tones, with the sheet's foam. The white over the brink and at
 the foot is shared with the water (`painter_fall_white.gdshaderinc`, from the fall frame in

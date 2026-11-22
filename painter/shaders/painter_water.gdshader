@@ -169,7 +169,8 @@ float wt() {
 // NOSMOOTH the lap's smoothed distance (the exact one instead), NOSTEEP the lap's steep-bank
 // softening. Four put back what card painter-water-edges removed: WAKEBANDS the wake's stretched
 // noise dashes, LAPNOTCH the lap's start cut on the broken distance, NOROOM narrow water's full
-// rim, POOLRULED the pool floor's rim on the plain shore distance.
+// rim, POOLRULED the pool floor's rim on the plain shore distance, POOLSLOT the plunge pool's wash
+// on the carved bed's raw depth (the dark wedge below a fall, card painter-water-wash).
 const float FRZ_CLOCK = 9.99;
 #ifdef FRZ_BITE
 #define WT_BITE FRZ_CLOCK
@@ -344,6 +345,20 @@ const float FALL_FADE_M = 1.0;
 const float POOL_WHITE_K = 0.55;
 // Under option 4: pool tint floor (a column, m) where the shore is far and the water has body.
 const float POOL_COLUMN_M = 1.0;
+// The plunge pool's heart (card painter-water-wash): below a fall's foot the wash reads the pool's
+// body (the floor) plus a heart keyed to the distance from the banks, not the carved bed's raw
+// depth. The heart comes on between PLUNGE_HEART_LO_M and _HI_M from the shore and between
+// _D0_M and _D1_M of depth, and adds PLUNGE_HEART_COLUMN_M of column; the plunge share is whole
+// PLUNGE_IN_M (foot coordinate) below the foot, and the heart fades out over PLUNGE_HEART_END of
+// the foot coordinate, before the coordinate's range ends (WaterFieldStroke.FOOT_RANGE_M of arc,
+// never under 4 in the coordinate: it is the arc over a share of one or less).
+const float PLUNGE_HEART_LO_M = 0.4;
+const float PLUNGE_HEART_HI_M = 1.3;
+const float PLUNGE_HEART_D0_M = 0.15;
+const float PLUNGE_HEART_D1_M = 0.6;
+const float PLUNGE_HEART_COLUMN_M = 0.6;
+const float PLUNGE_IN_M = 0.4;
+const vec2 PLUNGE_HEART_END = vec2(2.8, 4.0);
 const float FOAM_EDGE_SOFT = 0.1;
 
 varying vec3 world_pos;
@@ -824,6 +839,19 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// the floor does not step the lip and thin water by a bank keeps its pale rim.
 #ifndef ABL_NOPOOLFLOOR
 	column = max(column, min(max(fa.x - 0.06, 0.0) * POOL_DEPTH_K, POOL_COLUMN_M) * pool_k);
+#endif
+#ifndef ABL_POOLSLOT
+	// Below a fall the carve digs a slot that shallows to the next lip: its raw depth put the deep
+	// band over the bed as a dark wedge narrowing downstream (card painter-water-wash; the depth
+	// along st_o's pool runs 1.25 m at the foot to 0.2 m at the next lip, and the wedge was its
+	// 0.75 m contour). There the wash reads one body (the floor) and a soft heart away from the
+	// banks, so the pool is one luminous water with a deeper middle, whatever the dig's shape.
+	float plunge = foot_near * smoothstep(0.0, PLUNGE_IN_M, fd) * pool_k;
+	float heart = smoothstep(PLUNGE_HEART_LO_M, PLUNGE_HEART_HI_M, fa.z)
+		* smoothstep(PLUNGE_HEART_D0_M, PLUNGE_HEART_D1_M, fa.x)
+		* (1.0 - smoothstep(PLUNGE_HEART_END.x, PLUNGE_HEART_END.y, fd));
+	float body = min(max(fa.x - 0.06, 0.0) * POOL_DEPTH_K, POOL_COLUMN_M);
+	column = mix(column, body + PLUNGE_HEART_COLUMN_M * heart, plunge);
 #endif
 }
 	// Where a river leaves the map the terrain's bed and the channel patch's meet in a crease: the low
