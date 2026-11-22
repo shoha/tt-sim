@@ -79,6 +79,39 @@ func update(doc: MapDocument, rect: Rect2i) -> Rect2i:
 	return changed.grow(REACH).intersection(grid)
 
 
+## A copy of this field's stages and texels without its texture, for update() on a worker while
+## this one stays as it is (PainterGroundField): the packed arrays are duplicated, copy-on-write,
+## so the worker's writes copy them and never reach this field.
+func clone() -> GroundShadeField:
+	var c := GroundShadeField.new()
+	c.width = width
+	c.depth = depth
+	c.step = step
+	c._raw = _raw.duplicate()
+	c._blur1 = _blur1.duplicate()
+	c._smooth = _smooth.duplicate()
+	c._gx = _gx.duplicate()
+	c._gz = _gz.duplicate()
+	c._ny = _ny.duplicate()
+	c._steep = _steep.duplicate()
+	c._bytes = _bytes.duplicate()
+	return c
+
+
+## Takes the stages and texels of `other` (a clone() updated on a worker, for the same grid) and
+## uploads them to this field's texture.
+func adopt(other: GroundShadeField) -> void:
+	_raw = other._raw
+	_blur1 = other._blur1
+	_smooth = other._smooth
+	_gx = other._gx
+	_gz = other._gz
+	_ny = other._ny
+	_steep = other._steep
+	_bytes = other._bytes
+	_upload()
+
+
 ## Whether this field was baked for a grid of `doc`'s size and step.
 func matches(doc: MapDocument) -> bool:
 	return (

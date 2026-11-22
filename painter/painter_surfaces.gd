@@ -671,6 +671,11 @@ func _rebuild_zone() -> void:
 			# worker; the ground draws the maps it has until it lands (card painter-edit-hitch4).
 			_zones.build_async(doc)
 			_watch_zone_build()
+		elif _zones.wants_worker(doc, _zone_dirty):
+			# A large rect (a river landing's: 31 ms here, card painter-land-frame) on a worker too, the
+			# same bytes a frame or two later.
+			_zones.update_async(doc, _zone_dirty)
+			_watch_zone_build()
 		else:
 			_zones.update(doc, _zone_dirty)
 		_zone_dirty = Rect2i()
@@ -732,14 +737,25 @@ func zones() -> PainterZoneMaps:
 	return _zones
 
 
-## Lands a worker zone build in flight now and applies the edits that waited for it (tests, probes);
-## false when none was in flight.
+## The ground's shading field keeper (tests, probes).
+func ground_field() -> PainterGroundField:
+	return _field
+
+
+## Lands a worker zone build or update and a worker shading update in flight now and applies the
+## edits that waited for them (tests, probes); false when none was in flight.
 func finish_zones() -> bool:
-	if not _zones.finish():
-		return false
-	_unwatch_zone_build()
-	_rebuild_zone()
-	return true
+	var landed := false
+	# The edits that waited may start another worker update; a few rounds settle any queue.
+	for _round in 4:
+		var shaded := _field.finish()
+		var zoned := _zones.finish()
+		if not (shaded or zoned):
+			break
+		landed = true
+		_unwatch_zone_build()
+		_rebuild_zone()
+	return landed
 
 
 ## Polls the worker zone build once a frame until it lands (PainterZoneMaps.build_async).

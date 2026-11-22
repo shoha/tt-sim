@@ -2887,6 +2887,35 @@ map's grid, under `PainterZoneMaps.WORKER_SHARE`, and budgeting the chunks would
 edited in place after the landing's `settle_heights`. Evidence:
 `D:/dev/tabletop/docs/research/2026-11-22-terraform-audit/today_attrib/river_landing/`.
 
+Land frame (card painter-land-frame, 2026-11-22). Three costs left the frame, results unchanged:
+`WaterEditor._land` now does the carve's height work within the sculpt budgets (`work(false)`;
+`finish_work` still lands at once), and `settle_heights` sends the chunks still queued for an
+in-place update straight to their settling rebuild (the same geometry from the document; their stale
+vertex copies are dropped), so none misses it; `_finish` waits for the plants' snap, whose start
+rows its history entry records (`HeightEditor.snapping`). The zone maps' update of a rect of 4096
+samples or more runs on the band worker (`PainterZoneMaps.update_async`, landing by a blit), and the
+shading field's on a WorkerThreadPool task over a copy-on-write clone (`PainterGroundField`, the
+same abandon-never-wait rules). The carve's chunks now arrive over the frames after the landing, the
+shading and zone maps a frame or two after it (not checked by eye). Interleaved A/B, bench job,
+main 923e3795 against the branch, three runs each, `game` ms:
+
+| | main | branch |
+| --- | --- | --- |
+| first river, land frame | 154.9, 155.6, 153.5 | 33.4, 34.0, 33.3 |
+| first river, settle frame | 52.5, 51.6, 51.9 | 34.4, 34.0, 35.5 |
+| first river, frames over 33 ms (sum) | 3 (297.3), 3 (298.3), 3 (296.3) | 3 (156.8), 3 (157.9), 3 (158.6) |
+| second river, land frame | 153.8, 152.9, 153.1 | 34.2, 33.8, 36.4 |
+| second river, frames over 33 ms (sum) | 5 (406.3), 5 (402.4), 5 (402.4) | 3 (183.8), 3 (183.8), 3 (187.9) |
+| held raise dry, pressed median / p95 | 3.90 / 10.28, 3.96 / 10.05, 3.76 / 10.02 | 3.69 / 10.16, 3.69 / 10.41, 3.70 / 10.04 |
+| held raise over a river, median / p95 | 3.90 / 10.09, 3.85 / 10.09, 3.74 / 10.16 | 3.72 / 10.65, 3.83 / 10.46, 3.91 / 10.67 |
+| wall placement frame | 190.8, 200.0, 192.0 | 176.6, 187.5, 188.6 |
+| path, pressed median / max | 46.9 / 366.8, 45.9 / 88.6, 45.6 / 89.5 | 45.9 / 88.2, 47.6 / 100.8, 45.8 / 88.3 |
+
+The frames over 33 ms left per river are the release (89-90 and 115-116 ms: the plan and the
+river preview) and frames of 33-36 ms after it, where the preview (17 ms) meets a budgeted share of
+the height work. `ident.json`'s digests, now with the shading field's bytes, equal main's at every
+step. Evidence: `D:/dev/tabletop/docs/research/2026-11-22-terraform-audit/today_attrib/land_frame/`.
+
 ### Held strokes (card painter-held-stroke, 2026-11-22)
 
 A held sculpt stroke paid two followers every frame: the water field's update (any ground edit

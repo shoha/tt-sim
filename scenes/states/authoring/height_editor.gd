@@ -298,6 +298,11 @@ func props_started() -> Dictionary:
 	return _prop_start
 
 
+## True while queued plant and prop snapping is left (props_started() is complete once it is not).
+func snapping() -> bool:
+	return not _snap_windows.is_empty()
+
+
 ## The rock assets of the current snap (RockKeep.rock_assets).
 func rocks() -> Dictionary:
 	return _rocks
