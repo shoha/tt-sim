@@ -22,7 +22,7 @@ const CLASS_NAME := "TerraDerive"
 ## The project setting that turns the core on for loaded maps (default false).
 const SWITCH_SETTING := "tt_sim/terrain/core"
 ## What TerraDerive.version() must return; a library built from older sources fails the tests.
-const NATIVE_VERSION := "terra 4 cache"
+const NATIVE_VERSION := "terra 5 bridge"
 ## The ground rule table (rows of [field, lo, hi, soft] terms, later rows over earlier ones).
 const RULES_PATH := "res://utils/terraform/rules/ground_rules.json"
 ## Rule term fields by name, in the order of the native Field enum (terra_stages.h).

@@ -110,7 +110,10 @@ static func water_digest(records: Dictionary) -> int:
 		_put_f64(b, float(p["level"]))
 	var ctx := HashingContext.new()
 	ctx.start(HashingContext.HASH_SHA256)
-	ctx.update(b)
+	# A map without water hashes nothing (update() refuses an empty buffer; the digest is the
+	# same SHA-256 of no bytes it gave with the error).
+	if not b.is_empty():
+		ctx.update(b)
 	return ctx.finish().decode_s64(0)
 
 

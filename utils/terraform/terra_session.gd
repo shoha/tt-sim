@@ -5,8 +5,9 @@ extends Node
 ## it, kept current as the document is edited, answering height and water queries, and handing the
 ## save its derived record. Phase 1: it exists only behind the switch (TerraCore.enabled(), the
 ## project setting tt_sim/terrain/core, default off) and only on a map with a terrain section
-## (MapSourceLoader.add_terra_session); nothing reads it yet. Phase 2 moves the tools and the
-## consumers onto it.
+## (MapSourceLoader.add_terra_session). Phase 2: its TerraBridge (`bridge`) writes the derived
+## ground into MapDocument.heights on every landing (take_changed() says where), so today's
+## consumers build from it; apply_held() is a gesture's held frame, derived synchronously.
 ##
 ## Attach. attach() starts the load-time check (TerraCache.derive_and_check: a full derive of a
 ## copy of the document and the comparison with its derived record) on a WorkerThreadPool task and
@@ -51,6 +52,9 @@ var terra: TerraDoc = null
 var check: Dictionary = {}
 ## Derives landed since attach, the attach's full derive included (tests and probes).
 var derives_landed := 0
+## The TerraBridge writing this session's ground into the document (MapSourceLoader sets it), or
+## null.
+var bridge: RefCounted = null
 
 var _derive: RefCounted = null
 ## The attach task's id while it runs, else -1, and its job (the task writes "result").
@@ -62,6 +66,10 @@ var _running := false
 var _queued: Array[Callable] = []
 ## True while terra.derived is the record of the settled derive.
 var _record_current := false
+## The union of the H2 rects the landed derives changed since take_changed() (derive samples).
+var _changed := Rect2i()
+## True while apply_held() runs: a free derive is told and derived synchronously.
+var _held := false
 
 
 func _ready() -> void:
@@ -185,6 +193,44 @@ func apply(edit: Dictionary) -> int:
 	return id
 
 
+## apply() for a held frame of a gesture (the bridge's held path): when no derive is in flight the
+## derive is told and runs derive() synchronously on the calling thread (0.4 to 2 ms for a held
+## brush at 320 ft, design.md 6), so is_ready() holds on return and the bridge can write at once;
+## else the edit queues exactly as apply() does and lands with the next async derive. Returns as
+## apply().
+func apply_held(edit: Dictionary) -> int:
+	_held = true
+	var id := apply(edit)
+	_held = false
+	return id
+
+
+## The union of the H2 sample rects (derive samples) every derive landed since the last call
+## changed, then forgets it: the whole grid after the attach, empty when nothing changed. The
+## bridge halves it to document samples and diffs only there.
+func take_changed() -> Rect2i:
+	var out := _changed
+	_changed = Rect2i()
+	return out
+
+
+## The TerraDerive when is_ready(), else null: read only, on the main thread (the bridge's
+## strided reads), never kept past the frame.
+func settled_derive() -> RefCounted:
+	return _derive if is_ready() else null
+
+
+## True while the attach's load-time derive runs (the loader waits for it).
+func attaching() -> bool:
+	return _task >= 0
+
+
+## Lands whatever has completed (see _poll()), for a session that is not in the tree yet (the
+## loader waits for the attach before the terrain builds; _process runs only in the tree).
+func poll() -> void:
+	_poll()
+
+
 ## Refreshes the document's derived record from the settled derive when it is not current (see
 ## the header); MapDocumentSnapshot.capture() calls it through TerraDoc.before_save. True when
 ## terra.derived is the record of the derive this session holds.
@@ -230,10 +276,13 @@ func _poll() -> void:
 		_record_current = check.get("status") == TerraCache.MATCH and _queued.is_empty()
 		if _derive == null:
 			_queued.clear()
+		else:
+			var grid: Dictionary = _derive.call("grid")
+			_changed = Rect2i(0, 0, int(grid["w"]), int(grid["h"]))
 	elif _running:
 		if _derive.call("is_busy"):
 			return
-		_derive.call("take_result")
+		_note(_derive.call("take_result"))
 		_running = false
 		derives_landed += 1
 	if _derive != null and not _queued.is_empty():
@@ -253,7 +302,18 @@ func _tell(change: Callable) -> void:
 		_queued.append(change)
 		return
 	change.call()
+	if _held:
+		_note(_derive.call("derive"))
+		derives_landed += 1
+		return
 	_start()
+
+
+## Adds a landed derive's changed H2 rect to take_changed()'s union.
+func _note(result: Dictionary) -> void:
+	var r: Rect2i = result.get("h2_rect", Rect2i())
+	if r.has_area():
+		_changed = r if not _changed.has_area() else _changed.merge(r)
 
 
 func _start() -> void:

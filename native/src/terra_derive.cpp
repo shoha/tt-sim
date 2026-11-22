@@ -143,7 +143,7 @@ Dictionary TerraDerive::tile_collision(int64_t tile, int64_t stride) const {
 }
 
 String TerraDerive::version() const {
-	return "terra 4 cache";
+	return "terra 5 bridge";
 }
 
 Dictionary TerraDerive::grid() const {
@@ -759,6 +759,14 @@ Dictionary TerraDerive::derive() {
 	out["falls_changed"] = ps.falls_changed || ps.full;
 	out["walls_changed"] = ps.walls_changed || ps.full;
 	out["changed_samples"] = hz.samples();
+	{
+		// The bridge's changed region (TerraSession.take_changed): every tile's changed H2 sub-rect.
+		Rect u;
+		for (const Rect &c : chg5.t) {
+			u = u.unite(c);
+		}
+		out["h2_rect"] = u.empty() ? Rect2i() : Rect2i(u.x0, u.y0, u.x1 - u.x0, u.y1 - u.y0);
+	}
 	usec["total"] = us_since(t_all);
 	out["usec"] = usec;
 	out["work"] = work;
@@ -1164,6 +1172,8 @@ void TerraDerive::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("kind_conflicts"), &TerraDerive::kind_conflicts);
 	ClassDB::bind_method(D_METHOD("kind_bounds", "kind", "data"), &TerraDerive::kind_bounds);
 	ClassDB::bind_method(D_METHOD("debug_kinds_in_order", "order"), &TerraDerive::debug_kinds_in_order);
+	ClassDB::bind_method(D_METHOD("doc_heights"), &TerraDerive::doc_heights);
+	ClassDB::bind_method(D_METHOD("doc_heights_diff", "heights", "doc_w", "rect"), &TerraDerive::doc_heights_diff);
 	ClassDB::bind_method(
 			D_METHOD("debug_set_sample", "name", "i", "j", "value", "dirty_all"), &TerraDerive::debug_set_sample);
 }

@@ -1,7 +1,13 @@
 // Stages 2 and 3, water (spike terraform-s2-cpu): the solve (pond levels from their rims, river
-// levels monotone downstream with drops gathered into riffles or fall records, a join at the
+// levels as flat reaches downstream, steps of a fall's height as fall records, a join at the
 // receiving body's level) and the carve (one composed bed: every body's cut, the lowest wins, and a
-// bank fill so a level is always held; the controlling body's level is the water surface).
+// bank fill so a level is always held; the controlling body's level is the water surface, one
+// level per reach).
+#include <cmath>
+#include <set>
+#include <utility>
+#include <vector>
+
 #include "terra_kinds.h"
 #include "terra_stages.h"
 
@@ -181,12 +187,105 @@ void solve_pond(Pond &p, const Grid &g, const float *H0) {
 	p.level = float(lo - POND_FREEBOARD);
 }
 
+// The conditioner's comparisons, as WaterConditioner (_EPS, and dead band and fall drop each
+// less it).
+static constexpr double LEVEL_EPS = 1e-9;
+
+/// The nearest lattice level at or under x (WaterConditioner._lattice).
+static double level_lattice(double x) {
+	return std::floor(x / LEVEL_QUANTUM_M + 1e-6) * LEVEL_QUANTUM_M;
+}
+
+/// The dead band swept from the outlet upstream (WaterConditioner._sweep): a level within the
+/// dead band above the final level below it drops onto it, unless that would make a fall of the
+/// step above out of a smaller one.
+static void sweep_levels(std::vector<double> &lv) {
+	const double dead = REACH_DEAD_BAND_M - LEVEL_EPS, fall = FALL_MIN - LEVEL_EPS;
+	for (int i = int(lv.size()) - 2; i >= 0; i--) {
+		double gap = lv[i] - lv[i + 1];
+		if (gap > LEVEL_EPS && gap < dead) {
+			double above = i > 0 ? lv[i - 1] - lv[i] : 0.0;
+			if (i > 0 && above < fall && above + gap >= fall) {
+				continue;
+			}
+			lv[i] = lv[i + 1];
+		}
+	}
+}
+
+/// Every reach shorter than MIN_REACH_M merged into the neighbour it differs from least, the
+/// upper dropping onto the lower, never across a fall-sized step or so as to make one, then the
+/// dead band swept again (WaterConditioner._merge_short, without cuts).
+static void merge_short_reaches(std::vector<double> &lv, const std::vector<double> &len) {
+	const double fall = FALL_MIN - LEVEL_EPS;
+	const int n = int(lv.size());
+	std::set<int> stuck;
+	for (;;) {
+		std::vector<std::pair<int, int>> spans;
+		int first = 0;
+		for (int i = 0; i < n; i++) {
+			if (i == n - 1 || lv[i + 1] != lv[i]) {
+				spans.push_back({ first, i });
+				first = i + 1;
+			}
+		}
+		int pick = -1;
+		double shortest = 1e300;
+		for (int j = 0; j < int(spans.size()); j++) {
+			double length = 0.0;
+			for (int i = spans[j].first; i <= spans[j].second; i++) {
+				length += len[i];
+			}
+			if (spans.size() > 1 && length < MIN_REACH_M && length < shortest && !stuck.count(spans[j].first)) {
+				pick = j;
+				shortest = length;
+			}
+		}
+		if (pick < 0) {
+			return;
+		}
+		int best = -1;
+		double best_step = 1e300;
+		for (int nb : { pick + 1, pick - 1 }) {
+			if (nb < 0 || nb >= int(spans.size())) {
+				continue;
+			}
+			double step = std::abs(lv[spans[pick].first] - lv[spans[nb].first]);
+			if (step >= fall) {
+				continue;
+			}
+			int top = spans[std::min(pick, nb)].first;
+			if (top > 0) {
+				double above = lv[top - 1] - lv[top];
+				if (above < fall && above + step >= fall) {
+					continue;
+				}
+			}
+			if (step < best_step) {
+				best = nb;
+				best_step = step;
+			}
+		}
+		if (best < 0) {
+			stuck.insert(spans[pick].first);
+			continue;
+		}
+		const std::pair<int, int> &upper = spans[std::min(pick, best)];
+		const double to = lv[spans[std::max(pick, best)].first];
+		for (int i = upper.first; i <= upper.second; i++) {
+			lv[i] = to;
+		}
+		sweep_levels(lv);
+		stuck.clear();
+	}
+}
+
 void solve_river(River &r, const Grid &g, const float *H0, double recv_level) {
 	const Line &l = r.l;
 	int n = l.n();
 	std::vector<double> m(n);
 	for (int k = 0; k < n; k++) {
-		double t = g.bilinear(H0, l.x[k], l.z[k]) - RIVER_FREEBOARD;
+		double t = level_lattice(g.bilinear(H0, l.x[k], l.z[k]) - RIVER_FREEBOARD);
 		m[k] = k == 0 ? t : std::min(m[k - 1], t);
 	}
 	bool join = !std::isnan(recv_level);
@@ -197,8 +296,6 @@ void solve_river(River &r, const Grid &g, const float *H0, double recv_level) {
 	}
 	r.level.assign(n, 0.0f);
 	r.falls.clear();
-	double L = m[0];
-	r.level[0] = float(L);
 	auto add_fall = [&](int k, double top, double bottom) {
 		int a = std::max(k - 1, 0), b = std::min(k, n - 1);
 		if (a == b) {
@@ -217,37 +314,47 @@ void solve_river(River &r, const Grid &g, const float *H0, double recv_level) {
 		f.width = r.hw * 2.0;
 		r.falls.push_back(f);
 	};
-	// Round 3: the level follows the running minimum (a sloped reach, rapids on a hillside); a drop
-	// of FALL_MIN within FALL_RUN of arc is a sharp step and becomes a fall record.
-	int k = 1;
+	// Flat reaches (card terraform-p2-bridge), WaterConditioner.fit_levels' rule over the points:
+	// the running minimum on the lattice (m, above), then the dead band swept from the outlet up,
+	// then short reaches merged. Every step is then 0, a riffle or a fall, and water is only ever
+	// lowered, never raised over its banks.
+	std::vector<double> lv(m);
+	if (join) {
+		lv[n - 1] = recv_level;
+	}
+	// The falls first (FALL_RUN, FALL_GAP): a sharp drop's points take the level at its foot, so
+	// the whole drop is one step, which the conditioner below never moves.
 	double last_fall_s = -1e30;
-	while (k < n) {
-		if (m[k] < L) {
+	for (int k = 1; k < n;) {
+		if (lv[k] < lv[k - 1]) {
 			int j = k;
-			while (j + 1 < n && l.s[j + 1] - l.s[k - 1] <= FALL_RUN && m[j + 1] < m[j]) {
+			while (j + 1 < n && l.s[j + 1] - l.s[k - 1] <= FALL_RUN && lv[j + 1] < lv[j]) {
 				j++;
 			}
-			double bottom = m[j];
-			if (L - bottom >= FALL_MIN && l.s[k] - last_fall_s >= FALL_GAP) {
-				add_fall(k, L, bottom);
-				last_fall_s = l.s[j];
-				for (int q = k; q <= j; q++) {
-					r.level[q] = float(bottom);
+			if (lv[k - 1] - lv[j] >= FALL_MIN - LEVEL_EPS && l.s[k] - last_fall_s >= FALL_GAP) {
+				for (int q = k; q < j; q++) {
+					lv[q] = lv[j];
 				}
-				L = bottom;
+				last_fall_s = l.s[j];
 				k = j + 1;
 				continue;
 			}
-			L = m[k];
 		}
-		r.level[k] = float(L);
 		k++;
 	}
-	if (join && L - recv_level >= FALL_MIN) {
-		add_fall(n - 1, L, recv_level);
+	std::vector<double> len(n);
+	for (int i = 0; i < n; i++) {
+		len[i] = (l.s[std::min(i + 1, n - 1)] - l.s[std::max(i - 1, 0)]) * 0.5;
 	}
-	if (join) {
-		r.level[n - 1] = float(recv_level);
+	sweep_levels(lv);
+	merge_short_reaches(lv, len);
+	for (int i = 0; i < n; i++) {
+		r.level[i] = float(lv[i]);
+	}
+	for (int i = 1; i < n; i++) {
+		if (lv[i - 1] - lv[i] >= FALL_MIN - LEVEL_EPS) {
+			add_fall(i, lv[i - 1], lv[i]);
+		}
 	}
 }
 
@@ -328,7 +435,10 @@ void carve_rect(const Water &w, const Grid &g, const Rect &r, const float *H0, f
 				if (bk < 0 || d > rv.hw + BANK_REACH) {
 					continue;
 				}
+				// The bed eases across a step over its one segment; the water stands at the
+				// nearer point's reach, so WL holds one level per reach (the bridge's bodies).
 				double L = rv.level[bk] + (double(rv.level[bk + 1]) - rv.level[bk]) * bt;
+				double Lw = bt < 0.5 ? rv.level[bk] : rv.level[bk + 1];
 				double s = rv.l.s[bk] + (rv.l.s[bk + 1] - rv.l.s[bk]) * bt;
 				double c, f = -1e30;
 				if (d < rv.hw) {
@@ -346,7 +456,7 @@ void carve_rect(const Water &w, const Grid &g, const Rect &r, const float *H0, f
 				fill = std::max(fill, f);
 				if (c < ctrl_c) {
 					ctrl_c = c;
-					ctrl_l = L;
+					ctrl_l = Lw;
 					ctrl = true;
 					ctrl_zone = d < rv.hw;
 				}

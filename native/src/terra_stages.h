@@ -12,15 +12,20 @@ namespace terra {
 // Water rules, in metres (the opinionated constants of the slice).
 constexpr double RIVER_DS = 0.25; // arc spacing of a river's level profile
 constexpr double RIVER_FREEBOARD = 0.15; // level under the drawn ground
-constexpr double RIFFLE_MIN = 0.12; // smaller drops are folded into the reach
-constexpr double FALL_MIN = 0.75; // a drop of at least this is a fall record
-constexpr double DROP_ZONE = 4.0; // a drop is gathered over at most this length
-// Round 3 (look): a fall is a drop of FALL_MIN within FALL_RUN of arc (a sharp step); anywhere
-// else the level follows the running minimum, so a hillside reach is one sloped surface (rapids),
-// not flat reaches and locks.
+constexpr double FALL_MIN = 0.75; // a step of at least this between reaches is a fall record
+// Card terraform-p2-bridge: river levels are flat reaches, today's conditioner rule
+// (WaterConditioner.fit_levels: QUANTUM_M, DEAD_BAND_M, MIN_REACH_M), so every reach converts to
+// one flat WaterBody exactly. The level lattice; a step under the dead band drops onto the level
+// below it; a reach shorter than MIN_REACH_M merges into the neighbour it differs from least.
+// The spike's sloped rapids (round 3) can return once the water field reads WL (phase 3).
+constexpr double LEVEL_QUANTUM_M = 0.05;
+constexpr double REACH_DEAD_BAND_M = 0.25;
+constexpr double MIN_REACH_M = 2.0;
+// A fall is a drop of FALL_MIN within FALL_RUN of arc (a sharp step), pinned as one step before
+// the conditioner runs (which never touches a fall-sized step); after a fall the next one waits
+// FALL_GAP of arc, so a hillside gets one or two confident falls with riffles between, not a stair
+// of locks.
 constexpr double FALL_RUN = 1.5;
-// After a fall the next one waits FALL_GAP of arc (a steep run between is rapids): one or two
-// confident falls on a hillside, not a stair of locks.
 constexpr double FALL_GAP = 6.0;
 // The bank: its slope at the water (plus noise) and how fast it steepens with distance (1/m), and
 // the smooth minimum's width where the cut meets the ground (m).
@@ -73,8 +78,8 @@ void water_geometry(Water &w, const std::vector<const Prim *> &rivers, const std
 /// Flips rivers drawn uphill (from H0 at their ends), finds receivers and the solve order.
 void water_topology(Water &w, const Grid &g, const float *H0);
 void solve_pond(Pond &p, const Grid &g, const float *H0);
-/// Levels monotone downstream, drops gathered into riffles or fall records, a join at the
-/// receiver's level (recv_level, or NAN for a free end).
+/// Levels as flat reaches monotone downstream (the conditioner's rule, above), steps of FALL_MIN
+/// or more as fall records, a join at the receiver's level (recv_level, or NAN for a free end).
 void solve_river(River &r, const Grid &g, const float *H0, double recv_level);
 /// The level of a river at the arc point nearest (x, z).
 double river_level_at(const River &r, double x, double z);

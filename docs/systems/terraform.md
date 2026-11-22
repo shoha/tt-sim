@@ -34,6 +34,8 @@ loaded map behind a switch, off by default ("The session").
 | `utils/terraform/terra_core.gd` | `TerraCore`: `native_available()`, `NATIVE_VERSION`, the built-in kind ids, `grid_for(doc)`, `make_derive(doc)`, `load_rules()`, `enabled()` (the switch: `tt_sim/terrain/core`, default off; `switch_override` for tests) |
 | `utils/terraform/terra_cache.gd` | `TerraCache`: the derived record (`terrain/derived.bin`, digests only): `make_record`, `prepare`, `derive_for`, `check`, `derive_and_check`, `encode` / `decode` |
 | `utils/terraform/terra_session.gd` | `TerraSession`, a Node: the core attached to a loaded map (see "The session") |
+| `utils/terraform/terra_bridge.gd` | `TerraBridge`: the session's derived ground written into `MapDocument.heights` (see "The bridge"); `seed_new_map` |
+| `native/src/terra_bridge.cpp` | `TerraDerive.doc_heights()` and `doc_heights_diff()`: H2 at the document's samples, whole or as the tight differing rect |
 | `utils/terraform/terra_kinds.gd` | `TerraKinds`: the GDScript registry, one preload line per kind; `script_for(id)`, `name_of`, `ids()`, `table()`, `problem(id, data)` |
 | `utils/terraform/kinds/<name>/<name>_kind.gd` | one script per kind (layout, `validate`, `bounds`, label, defaults); `kinds/kind_layout.gd` holds the checks they share |
 | `utils/terraform/rules/ground_rules.json` | the ground table (12 classes, 11 rows) and the look parameters the Painted cards read |
@@ -260,10 +262,54 @@ phase 1; phase 2's first card writes its derived heights into `MapDocument` (the
   median 257 ms (218 to 282), on 230 ms (221 to 284): no difference within the noise. The session
   landed one frame after the root in every round, a median of 14 ms later.
 
+## The bridge
+
+Card terraform-p2-bridge (phase 2 card 1, 2026-11-22; plan `phase2_plan.md` section 2). With the
+switch on, on a map with a terrain section, the core is the ground truth: `TerraBridge` writes the
+session's derived ground H2 into today's `MapDocument.heights` (document sample (a, b) is derive
+sample (2a, 2b)), and the game's own consumers build from it unchanged. The bridge law
+(`test_terra_bridge_law.gd`): after every landing `doc.heights == derive.doc_heights()` bit for bit.
+
+- **Load.** `MapSourceLoader._create_authored_root_async` adds the session first, waits for the
+  attach's derive a frame at a time (`TerraSession.attaching()` / `poll()`), makes the bridge and
+  swaps the whole height array (`swap_heights`) before `AuthoredLoadPrep` and the terrain build,
+  so chunks, collision and skirt are built once, from the derive. A whole swap happens only there
+  and in a new map's build: later swaps would strand the references `AuthoredTerrain` keeps.
+- **Landings.** `TerraSession.take_changed()` is the union of the H2 rects (derive samples, the
+  native `h2_rect` of each derive) since the last call; the bridge halves it (`doc_rect`), asks
+  `doc_heights_diff` for the tight rect whose bits differ and writes it row by row in place. The
+  rect goes to the authoring editor's queue (`HeightEditor.external_rect` during an external
+  stroke, else `queue_heights` and `work`) or, without an editor, to the map's `AuthoredTerrain`
+  (chunks, and the collision and settle on a release).
+- **Held frames.** `TerraBridge.held(edit)`: `TerraSession.apply_held` tells the derive and runs
+  `derive()` synchronously when nothing is in flight (else it queues as `apply` does), then
+  `land(true)` writes heights only. Releases, undo and live ops use `apply` (async); `settled`
+  lands them with `land(false)`. The water half (`water_of`: bodies and pond mask) is card
+  terraform-p2-bridge-water's; here a stub.
+- **HeightEditor hooks** for later cards: `begin_external` / `external_rect` / `end_external` (a
+  stroke whose heights another writer puts in; returns the ground record instead of recording)
+  and `apply_ground(rect, before, record, redo, spread)` (`apply_diff` without the heights diff).
+- **New maps** (`NewMapBuild`, switch on): `TerraBridge.seed_new_map` gives the document one plane
+  at its centre height, derives it in full, swaps in the derived heights and makes the record, so
+  the load's check matches. Until card terraform-p2-landforms the landform's relief is not carried
+  over (its other features stay as the recipe made them).
+- **Flat reaches.** River levels follow today's conditioner (`WaterConditioner.fit_levels`): the
+  running minimum on the 5 cm lattice (`LEVEL_QUANTUM_M`), a sharp drop of `FALL_MIN` (0.75 m)
+  within `FALL_RUN` (1.5 m) pinned as one fall step at most every `FALL_GAP` (6 m), the dead band
+  (`REACH_DEAD_BAND_M` 0.25 m) swept from the outlet up and reaches under `MIN_REACH_M` (2 m)
+  merged. Every step of 0.75 m or more is a fall record; the carve's water stands at the nearer
+  point's reach (the bed eases across the step), so WL holds one level per reach and a reach is
+  one flat `WaterBody` (card 2). The spike's sloped rapids may return in phase 3. The corpus: 18
+  reaches, 1 fall, no step under the dead band; every wet sample at a body's level.
+- **Cost** (headless, indicative, 320 ft corpus, 60 held raise dabs, 2026-11-22): `apply_held`'s
+  derive 2.0 ms median (p95 2.2) dry, 2.2 (p95 5.2) across the main river; the bridge's diff
+  0.01 ms and row writes 0.01 to 0.09 ms median (0.6 ms p95 over the river). Today's chunk work
+  after it is the consumers' cost, not the core's.
+
 ## Versions and the library
 
-`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 4 cache` (the parallel
-`digests()`), and the golden fixture's `version` follows it. The scatter library's string carries `terra`
+`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 5 bridge` (the bridge's reads
+and the flat reaches), and the golden fixture's `version` follows it. The scatter library's string carries `terra`
 (`ttscatter 10 curves water chunk fields wfield2 terra`), so a stale DLL fails
 `test_scatter_native`. After pulling a change here, rebuild `native/` (AGENTS.md "Testing").
 Without the library every terra test is pending with "the native library is not built", which CI
@@ -280,6 +326,8 @@ treats as a failure.
 | `test_terra_golden.gd` | `version()`, and the corpus on a 40 x 40 and a 40 x 48 cell map, plus the terraced corpus on 40 x 40, against `tests/fixtures/terra_corpus_digests.json` |
 | `test_terra_cache.gd` | the derived record: with a matching key a fresh derive gives the recorded digests through the map document (the record reads back bit for bit, under 512 bytes); the snapshot's copy; a stale record is not written; each key change (grid, core version, a mute, a moved float) misses quietly while an add and its undo keep the key; one H2 sample set outside the chain gives `mismatch` naming only H2 with one warning; every truncation, a trailing byte, the entry cap, bad magic, a newer version, too many digests, names out of order or malformed are refused while the terrain still loads; a map without terrain is unaffected |
 | `test_terra_session.gd` | the session through `MapSourceLoader`: switch off makes no session and no `TerraDerive` and the fingerprint equals the stripped map's (but `terra`); switch on without a section makes none; the setting's default; switch on, the digests equal a fresh `derive_full`, the save writes the record, and a reload through `load_async` matches it with equal digests; every edit op (one queued during the attach, some back to back) lands equal to a fresh derive; closing mid-attach and mid-`derive_async` parks and later lets go; a refused section is kept and saved back untouched in format 6 |
+| `test_terra_bridge.gd` | `doc_rect`; `doc_heights` is H2 at the even samples and `doc_heights_diff` the tight rect (bits, clipping, another grid refused); a load with the switch on swaps in the derived ground and the collision equals `height_at` at 200 random samples; a new map with the switch on has a one-plane section, derived heights and a matching record, with it off none |
+| `test_terra_bridge_law.gd` | the bridge law over a 40-dab held raise through `TerraBridge.held` across the corpus rivers, every frame derived at once, then an async release; the collision equals the bridged heights, which equal a build |
 | `test_terra_stage_table.gd` | the table's order (each read an input or an earlier write, one writer per array); halo honesty: one H2 sample (then one FM sample) of a built map set outside the chain, every downstream stage re-run over the whole map, and each array changes only within the reach the table declares from it (the halos summed along the way), with the incremental derive giving the same bytes. A halo one sample short fails it (checked 2026-11-22 with the look row at 13) |
 
 `tests/unit/terra_corpus.gd` (`TerraCorpus`) is the spike's test scene placed on a map document's
