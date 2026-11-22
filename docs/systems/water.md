@@ -962,6 +962,38 @@ the patch and changes shape over seconds (finish evidence `c_travel_strip.png`);
 (a field data matter, with the teal steps there).
 Evidence: `D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final111_water_frames/`.
 
+**Stroke frames probed, nothing taken (card painter-water-strokes, 2026-11-21).** Three structurally
+different stroke frames were probed side by side against main, the look at native crops (st_o's pool,
+t_y_join, t_meander, t_straight) with 6-frame strips over 2 s, the cost in one in-run A/B each (f1_o,
+f1_o8, wide, st_o):
+
+- (a) a curvature-limited frame as DATA: the flow box-smoothed on the CPU (2 passes of radius 1 m)
+  and read for the strokes' direction, drift, jitter, share and length rule, and for the flat
+  white's carry. Cost +0.003 / -0.014 / +0.003 / +0.006 ms even with a second fetch (a channel of
+  the flow map would make it free); CPU about 55 ms in GDScript per 244 x 244 map (135 ms at 391).
+  Look: nearly the same strokes as main at every view; with a 2 m radius the strokes in a tight
+  bend no longer follow the channel and lie across the neck (a new artifact).
+- (b) the two-phase technique for the strokes (two lattices advected 1.6 s each, a fresh seed per
+  phase, cross-faded): +0.088 / +0.091 / +0.055 / +0.086 ms (twice the stroke layers) and
+  translucent doubled strokes in every hand-over. Rejected.
+- (c) rigid strokes that travel (the look of strokes as instances on streamlines, probed as the
+  flow read once at each stroke's centre): +0.045 / +0.102 / +0.038 / +0.068 ms, over budget as
+  on the earlier card; instances would add a sorted transparent pass and a streamline placement per
+  edit on top. Look: no different from main at these views.
+
+What the probe found instead: (1) the corpus test levels (`water_corpus.gd build`, so t_y_join,
+t_meander, t_straight and the other corpus views) carry NO flow map: the corpus document is written
+without `water_flow`, and a level load never rebakes it, so their rivers draw as still water (strokes
+along the wind, the white boiling in place). Built with the flow baked (the card's local
+`build_corpus.gd`), t_y_join's strokes lie along the current and its white travels downstream at
+about 0.6 m/s across the 2 s strip; the "white stands at the join" note above came from that
+flowless level. The corpus build should bake the flow before any further look work reads those
+views. (2) The dark wedge below st_o's foot is the wash's deep band over the plunge pool's dug bed:
+the same in every stroke variant and at every clock, so no stroke frame can remove it. (3) With the
+flow present, main showed no hooked or sheared stroke at the probe views in the strips. Evidence:
+`D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/painter_final133_water_strokes/`
+(sheets, strips, `perf/`, the jobs and `jobs/probe_variants.diff`).
+
 ## The water field (combined branch painter-water-field-v2, look-pending, unmerged)
 
 `WaterField` ([water_field.md](water_field.md)) derives one water height per sample from the
