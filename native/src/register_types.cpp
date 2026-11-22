@@ -1,6 +1,7 @@
-// Registers the native scatter generator with Godot (the extension's one class, TTScatterNative).
-// GDScript never names the class as an identifier: utils/scatter_native.gd finds it through
-// ClassDB, so every script still parses where this library is absent.
+// Registers the extension's classes with Godot: the native scatter generator (TTScatterNative) and
+// the terraforming derive (TerraDerive). GDScript never names either class as an identifier:
+// utils/scatter_native.gd and utils/terraform/terra_core.gd find them through ClassDB, so every
+// script still parses where this library is absent.
 #include <gdextension_interface.h>
 
 #include <godot_cpp/core/class_db.hpp>
@@ -8,6 +9,7 @@
 #include <godot_cpp/godot.hpp>
 
 #include "scatter_native.h"
+#include "terra_derive.h"
 
 using namespace godot;
 
@@ -16,6 +18,7 @@ static void initialize_ttscatter(ModuleInitializationLevel p_level) {
 		return;
 	}
 	GDREGISTER_CLASS(TTScatterNative);
+	GDREGISTER_CLASS(TerraDerive); // docs/systems/terraform.md
 }
 
 static void uninitialize_ttscatter(ModuleInitializationLevel p_level) {

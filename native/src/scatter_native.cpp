@@ -30,7 +30,9 @@ void TTScatterNative::_bind_methods() {
 }
 
 String TTScatterNative::version() const {
-	return String("ttscatter 10 curves water chunk fields wfield2");
+	// `terra`: the library also holds TerraDerive (docs/systems/terraform.md), so a stale build
+	// without it fails test_scatter_native.
+	return String("ttscatter 10 curves water chunk fields wfield2 terra");
 }
 
 Dictionary TTScatterNative::water_spill(const Dictionary &args) const {

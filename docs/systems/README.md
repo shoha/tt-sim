@@ -77,6 +77,9 @@ Documents here:
   response, clumps) and authored scatter (per-cell builds, worker regeneration, warm-up).
 - [authored_terrain.md](authored_terrain.md): the ground of a map without `map.glb`: chunks,
   collision, ground layers, the self-dressing rules, height and ground refresh calls.
+- [terraform.md](terraform.md): the terraforming core (production phase 1, not yet called by the
+  game): `TerraDerive`'s primitives, grid, stage chain over dirty tiles, portable maths and the
+  tests that hold it to update equals build and one golden on every platform.
 - [authoring.md](authoring.md): authoring mode (entry, controller, new maps, save, autosave,
   undo) and the brushes (mask, Paint and Sculpt strokes, flush, history).
 - [fire.md](fire.md): the persistent ground fire: the plan (FireFires, the lattice, the per-fire

@@ -139,9 +139,10 @@ func test_the_library_reports_the_water_capability() -> void:
 	# water field's hot passes (card painter-water-latency; test_water_field_native checks them).
 	# 10 and wfield2: the foot seam pass and the marks' CUSTOM2 in the mesh call (card
 	# painter-water-editcost; test_water_field_native and test_water_field_marks check them).
+	# terra: the library holds TerraDerive (card terraform-p1-native; the terra tests check it).
 	assert_eq(
 		ScatterNative.version(),
-		"ttscatter 10 curves water chunk fields wfield2",
+		"ttscatter 10 curves water chunk fields wfield2 terra",
 		"rebuild native/ (AGENTS.md)"
 	)
 	var wet_rule: Array[Dictionary] = [
