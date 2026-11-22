@@ -207,6 +207,7 @@
 		"res://tests/unit/test_terra_determinism.gd",
 		"res://tests/unit/test_terra_doc.gd",
 		"res://tests/unit/test_terra_golden.gd",
+		"res://tests/unit/test_terra_stage_table.gd",
 		"res://tests/unit/test_terra_update_equals_build.gd",
 		"res://tests/unit/test_terra_water_laws.gd",
 		"res://tests/unit/test_terrain_collision.gd",

@@ -1,6 +1,6 @@
 {
 	"comment": "Golden digests of TerraDerive over tests/unit/terra_corpus.gd (test_terra_golden.gd). Every platform must derive exactly these; regenerate only when the derive changes on purpose.",
-	"version": "terra 1 core",
+	"version": "terra 2 stages",
 	"cases": {
 		"square_40": {
 			"CT": "-4408175470733695518",
