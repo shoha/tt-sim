@@ -3067,6 +3067,51 @@ dirt) with the bound path map and `path_only` in the digest, all equal to main's
 `test_painter_wall_path.gd` checks the slot map bytes against the full pass through dabs, erasing,
 scatter, an appended surface, a reordered list, a path base, a new document and a resize.
 
+**The first dab of a new surface (card painter-path-first, 2026-11-22).** Named timers on the bench
+split the second surface's first frame (177 ms picked as the stroke starts, 142 ms picked a second
+before) into: the slot map's whole build, 105-111 ms; the ground layers' re-table, 13-26 ms (the new
+layer's four maps uploaded, 12.5-14.6 ms, unless the pick prepared them; `GroundBroadTint.mean_color`
+of a built surface, 8.8-11.8 ms: a read back and decompress of its albedo for the broad tint's
+table); and the skirt's `TerrainSkirt.edge_surface`, 9-20 ms and growing with the map's surface list
+(a walk over the edge per surface). Three changes, each giving the same values:
+
+- `PainterPathSlotMap.follow`: with fewer than two path slots painted the bind still binds no slot
+  map, but the planes take every update's spans, and on a map with no path painted they start at no
+  cost (every plane 0 and every byte NONE, whatever else is painted). The second surface's first dab
+  then costs its spans. A map opened with one path already painted still builds at the second
+  surface, as before.
+- `TerrainSkirt.edge_surface` sums every slot in one walk over the edge (1.7 ms).
+- `GroundLayerBinding.prepare` (a picked Paint tile, a biome, the Water tool, a Dress kit) also warms
+  a built surface's mean colour, one step after its uploads, so the retable reads it from the cache.
+
+`bench3.json` and `bench4.json` (`tools/render_jobs/local/painter-path-first/`: the same map, dirt,
+then cobblestone picked a second before, gravel picked as the stroke starts, dirt again), interleaved
+bench3 and bench4 per round, main 6aa6fddb and the branch, three runs each, lane held (game ms;
+`today_attrib/path_first/bench{3,4}_*ab*_frames.jsonl`; another card's headless run started
+during round 3, so its numbers are the least clean):
+
+| | main 1/2/3 | branch 1/2/3 |
+| --- | --- | --- |
+| first surface (dirt), first frame (bench3) | 49.5 / 53.0 / 53.8 | 39.9 / 39.4 / 42.4 |
+| second (cobble) picked as the stroke starts, first frame (bench3) | 180.7 / 176.5 / 189.7 | 44.0 / 48.3 / 42.9 |
+| second (cobble) picked a second before, first frame (bench4) | 152.4 / 156.5 / 145.3 | 10.1 / 14.9 / 14.2 |
+| third (gravel) picked a second before, first frame (bench3) | 26.9 / 26.9 / 30.0 | 10.7 / 13.3 / 11.7 |
+| third (gravel) picked as the stroke starts, first frame (bench4) | 26.9 / 31.0 / 26.8 | 12.5 / 13.3 / 10.8 |
+| one surface (dirt), pressed median / p95 (bench3) | 4.38 / 8.76, 4.34 / 8.46, 4.77 / 8.96 | 4.24 / 8.04, 4.47 / 8.50, 4.05 / 7.66 |
+| three surfaces (gravel), pressed median / p95 (bench3) | 4.44 / 5.58, 4.45 / 6.95, 5.01 / 7.80 | 4.16 / 5.42, 5.38 / 8.67, 4.67 / 7.34 |
+| held raise dry, median | 4.81 / 4.46 / 5.31 | 4.70 / 4.66 / 4.71 |
+| held raise over river, median | 5.40 / 5.31 / 6.24 | 5.63 / 5.42 / 5.40 |
+| river landing, frames over 33 ms (sum) | 2 (74.4) / 2 (72.1) / 2 (107.5) | 2 (72.2) / 2 (79.3) / 2 (72.3) |
+| wall place frame | 16.8 / 16.3 / 17.6 | 17.4 / 16.4 / 16.1 |
+
+A surface picked a moment before its first dab now costs a frame like any other. Picked in the
+stroke's own frame (the bench driver does this; a hand on the mouse cannot), the first frame still
+pays the new layer's upload and its mean colour (about 22 ms) and the pick's own tool switch, 40-48
+ms. Same bytes: the ten `ident.json` digests equal main's (`today_attrib/path_first/ident_*.txt`);
+`test_painter_path_first.gd` checks the followed slot map against the full pass from no path through
+one, two and three and back, the one-walk edge surface against the walk per slot, and a warmed built
+surface's tables, tints and layers against a cold one's.
+
 ## In-game authoring phase 4 (water): pinned performance pass (2026-09-27)
 
 The phase 4 pass: authored maps with water in play against the same maps without it, the

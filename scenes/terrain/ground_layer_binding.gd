@@ -73,6 +73,8 @@ var _tint_stale: bool = true
 ## Surfaces waiting to be bound ahead of their first use (prepare()), the first one being
 ## uploaded: `_prep_kinds` of its maps are in the arrays at layer `_prep_at`.
 var _prep_queue := PackedStringArray()
+## Built surfaces whose mean colour prepare() warms after the uploads.
+var _tint_queue := PackedStringArray()
 var _prep_kinds: int = 0
 var _prep_at: int = -1
 var _index: Dictionary = {}
@@ -185,18 +187,26 @@ func layers() -> PackedStringArray:
 ## is appended like a `reserve` one: nothing routes to it until the document uses the surface,
 ## so the ground draws exactly as before, and the next build() compacts it away if unused.
 ## Surfaces already bound, unavailable, or past the arrays' capacity step are left to the edit.
+##
+## A built surface's mean colour (GroundBroadTint.mean_color: a read back of its albedo, about
+## 10 ms at 1024) is warmed the same way, one a step once the uploads are done (card
+## painter-path-first): the first dab's retable reads it for the broad tint's table in its frame.
 func prepare(surfaces: PackedStringArray) -> void:
 	var bound := layers()
+	var library := PaletteLibrary.surfaces(palette_root)
 	for surface in surfaces:
-		if surface == "" or surface in bound or surface in _prep_queue:
+		if surface == "" or not GroundPalette.surface_available(surface, palette_root):
 			continue
-		if GroundPalette.surface_available(surface, palette_root):
+		if not (surface in bound or surface in _prep_queue):
 			_prep_queue.append(surface)
+		var built := String(library.get(surface, {}).get("role", "")) == "built"
+		if built and not surface in _tint_queue:
+			_tint_queue.append(surface)
 
 
-## True while prepare() has surfaces left to upload.
+## True while prepare() has surfaces left to upload or colours left to warm.
 func is_preparing() -> bool:
-	return not _prep_queue.is_empty()
+	return not _prep_queue.is_empty() or not _tint_queue.is_empty()
 
 
 ## Uploads one map of the first queued surface (see prepare()); binds the surface once its last
@@ -207,6 +217,11 @@ func prepare_step() -> bool:
 	while not _prep_queue.is_empty() and _prep_queue[0] in bound:
 		_prep_queue.remove_at(0)
 		_prep_kinds = 0
+	if _prep_queue.is_empty() and not _tint_queue.is_empty():
+		GroundBroadTint.mean_color(_tint_queue[0], palette_root)
+		_tint_queue.remove_at(0)
+		last_prep_usec = Time.get_ticks_usec() - started
+		return is_preparing()
 	if _prep_queue.is_empty() or material == null:
 		return false
 	if overflowed() or arrays.layers != bound or bound.size() >= arrays.capacity:

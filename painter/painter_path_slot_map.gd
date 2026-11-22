@@ -23,6 +23,11 @@ extends RefCounted
 ## list keeps the planes when no painted entry changes slot (a new surface appended: a new path's
 ## first dab), else it starts again from zero. It holds only while it saw every presence update
 ## (`_synced`); PainterGroundPaths.bind drops it (invalidate) whenever it binds without it.
+##
+## It is kept in step before it is needed too (follow(), card painter-path-first): with fewer than
+## two slots painted, a bind binds no slot map, but the planes still take each update's spans, and
+## on a map with no path painted they start at no cost (all 0). The second surface's first dab then
+## costs its spans like any other dab, where it built every plane whole in its own frame.
 
 ## The value of a byte where no path lies (PainterGroundPaths.NONE).
 const NONE := 255
@@ -121,6 +126,32 @@ func texture(
 	)
 
 
+## Keeps the planes in step through a bind that needs no slot map, `painted` (presence
+## .painted_slots) holding fewer than two slots, with the arguments texture() takes (card
+## painter-path-first): kept planes take the spans; with no slot painted at all (the base no
+## path) the planes start where they are, all 0 and every byte NONE whatever else is painted, at no
+## cost; else they are dropped. So a map whose first path is painted in this session holds its
+## planes when the second surface's first dab needs them, where that frame built them whole (about
+## 105 ms at 320 ft). True when the planes are in step after the call.
+func follow(
+	doc: MapDocument,
+	ids: PackedStringArray,
+	presence: PainterPathPresence,
+	spans: PackedInt32Array,
+	kept: bool,
+	painted: PackedInt32Array
+) -> bool:
+	if kept:
+		_apply(doc.surface_weights, spans)
+	elif painted.is_empty():
+		_start(doc, ids)
+	else:
+		invalidate()
+		return false
+	_synced = presence.updates
+	return true
+
+
 ## The slot of each of `doc`'s painted surface indices in `ids` (-1 for none).
 static func _slot_list(doc: MapDocument, ids: PackedStringArray) -> PackedInt32Array:
 	var out := PackedInt32Array()
@@ -199,7 +230,8 @@ func _grow(slots: int) -> void:
 
 ## Redoes the planes, the blur and the bytes over `spans` (row, first and end index-plane byte).
 func _apply(weights: PackedByteArray, spans: PackedInt32Array) -> void:
-	if spans.is_empty():
+	# No slot: no planes, and every byte stays NONE.
+	if spans.is_empty() or _slots == 0:
 		return
 	var n4 := _n * MapDocument.SURFACE_CHANNELS
 	_dirty.fill(0)
