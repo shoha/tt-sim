@@ -18,6 +18,8 @@ system's map and the rules the code keeps (moved from `AGENTS.md` Key Convention
 | `utils/map_rows_codec.gd` | `MapRowsCodec` | The binary form of the scatter and props rows (`scatter.bin`, `props.bin`) and of the mass anchors (`mass_anchors.bin`): `encode_rows()`, `decode_rows()`, `encode_offsets()`, `decode_offsets()`; reached through `MapDocumentIO.codec()` |
 | `utils/map_surfaces_io.gd` | `MapSurfacesIO` | The painted-surface entries (format 2 layout) read and write |
 | `utils/surface_entries.gd` | `SurfaceEntries` | The entry byte rules: `canonical()`, `read_sample()`, `write_sample()`, `used_slots()` |
+| `utils/terraform/terra_doc.gd` | `TerraDoc` | The terrain document (`MapDocument.terra`): the primitive list, its caps, `validate()`, `duplicate()`, `digest()` |
+| `utils/terraform/map_terrain_io.gd` | `MapTerrainIO` | The terrain section `terrain/prims.bin` (format 6): `encode()`, `decode()`, `parse()`, `serialize()`, `problem()` |
 | `resources/level_data.gd` | `LevelData` | `map_document` (`""` or `"map.ttmap"`) beside `map_path`; `has_map()` |
 | `scenes/states/playing/level_loader.gd` | `LevelPlayLoader` | `load_map_sources_async`, the play-time load shared by the host and the client download path |
 | `utils/glb_utils.gd` | `GlbUtils` | `load_map_async(..., scatter_filter)` |
@@ -162,7 +164,7 @@ malformed one with a warning (a bad record never loses the map).
 - Format number. `MapDocument.FORMAT` (4, was 2) while only `core` is named, so a build of the
   same row format opens the map and ignores the key (core ids are unchanged);
   `MapDocument.FORMAT_LIBRARIES` (5, was 3) as soon as another library is named. The reader
-  accepts `MIN_FORMAT` = 4 to `MAX_FORMAT` = 5; an older build refuses 5 instead of reading
+  accepts `MIN_FORMAT` = 4 to `MAX_FORMAT` (5, now 6: "Terrain section" below); an older build refuses 5 instead of reading
   prefixed ids as unknown plants and dropping them on its next save (the reasoning of the format
   2 bump). `MapLibraries.format_for` picks the number.
 - Reading. `MapSourceLoader.load_async` runs `MapLibraryGate.run` once the document is read:
@@ -176,6 +178,63 @@ malformed one with a warning (a bad record never loses the map).
   record counts as core only.
 - Multiplayer later: `LibraryRegistry.assets_used_by(doc)` is {library id: asset ids} of the
   rows the map holds, the list a host will send; `record_of` is what a peer compares.
+
+## Terrain section (format 6)
+
+Terraforming phase 1, card terraform-p1-document (2026-11-22; plan
+`docs/research/2026-11-22-terraform-audit/phase1_plan.md` section 3 in the suite root). The terrain
+document is `MapDocument.terra`, a `TerraDoc` (`utils/terraform/terra_doc.gd`): the ordered list of
+typed primitives the terraforming core derives the ground from ([terraform.md](terraform.md)), null
+when the map has none. Nothing in the game makes one yet; the session card attaches it. The field
+is typed `RefCounted` and `MapDocumentIO.terrain_io()` loads `MapTerrainIO` by path on first use
+(as `codec()` does for the rows), so the start-up script graph (`test_boot_graph.gd`, limit 349)
+compiles none of the terraform scripts; cast with `doc.terra as TerraDoc` where it is used.
+
+- **Primitive.** `{"id", "kind", "flags", "data": PackedFloat32Array}`. Ids are stable and never
+  reused (`next_id` only grows); kinds are TerraCore's stable ids (0 to 8 built in, 9 to 15 reserved,
+  16 up for new kinds). Flag bit 0 is `TerraDoc.MUTED` (kept, not derived); the other bits are
+  reserved and must be 0. List order is document order, the order compose applies. The float
+  layouts sit in the provisional `TerraDoc.LAYOUT` (header floats, item stride, minimum items,
+  positive and enum fields) until the kind registry (card terraform-p1-kinds) moves each into its
+  kind folder; `TerraDoc.validate(kind, data)` checks the count, finiteness, `|v| <= 1e5` and the
+  fields.
+- **Caps** (`MapDocument`): `MAX_TERRA_PRIMS` 4096, `MAX_TERRA_FLOATS_PER_PRIM` 262144 and
+  `MAX_TERRA_FLOATS` 4194304 (16 MB). `TerraDoc.add` returns -1 and `append` / `replace` false past a
+  cap, so a session cannot build a document the writer refuses for its size.
+- **Entry** `terrain/prims.bin` (`MapTerrainIO`, "TTPR" version 1, little-endian, cap about
+  16.1 MB): magic, u16 version, u8-length ASCII writer core version (informational), u32 primitive
+  count, u32 `next_id`, u16 kind count and per kind used (ascending) u16 id, u8-length ASCII name;
+  then per primitive u32 id, u16 kind, u16 flags, u32 float count and the float32 values. The bytes
+  are canonical (one document, one byte string).
+- **Format.** `FORMAT_TERRAIN` 6, `MAX_FORMAT` 6. `_manifest` writes 6 whenever `terra` is not null
+  (an empty list is still a section), with or without other libraries (the `libraries` record is
+  written as always); otherwise `MapLibraries.format_for` picks 4 or 5 and every entry is the same
+  bytes as before (`test_new_map_digest` pins a new map's). A build before this one refuses 6 rather
+  than dropping the section on its next save (the format 2 reasoning). The reader takes the section
+  only in format 6: a format 6 document without one loads with no terrain and a warning, and the
+  entry in a format 4 or 5 document is ignored with a warning.
+- **Reading untrusted bytes.** Every count is checked against its cap and every size against the
+  bytes left before a read; nothing is allocated from an unchecked size. A truncated section, one
+  over a cap, a malformed kind table or trailing bytes refuse the section (the map loads without
+  terrain, warning "terrain/prims.bin refused: <cause>"). A kind this version does not know (or
+  knows by another name), a version above 1 or a reserved flag set refuse it with a warning that
+  says "made by a newer version". A primitive that fails `validate` or repeats an id is dropped,
+  with one warning counting them and naming the first. `next_id` is raised above every id read.
+  A save after a refused section writes the map without terrain: the warning is the author's
+  notice.
+- **Writing.** `MapTerrainIO.problem` (`TerraDoc.problem`: caps, ids, flags, every primitive valid)
+  runs in `data_problem`, so the writer refuses with `ERR_INVALID_DATA` anything the reader would
+  drop; a written section reads back bit for bit.
+- **Snapshot.** `copy_document` takes `TerraDoc.duplicate()`: the list and each primitive's
+  dictionary copied deep, which gives each float array a copy-on-write copy, so a later edit (an
+  append, a replace, a mute, a write into an array) never reaches the snapshot; `encode()` checks
+  and writes the section on the worker.
+- **Digest.** `TerraDoc.digest(size, extent)` (and `digest_for(doc)` on `TerraCore.grid_for`) is
+  SHA-256, as 64 hex digits, over the canonical bytes, the derive grid (u32 samples per axis, then
+  `extent / (n - 1)` per axis as float64 bits) and `TerraCore.NATIVE_VERSION`. It keys the derived
+  cache (card terraform-p1-cache) and later peer agreement; one float, the order, a mute or the grid
+  moves it, and a reload does not. `MapFingerprint` key `terra`: "<primitives> <digest prefix>",
+  "" for none.
 
 ## Runtime
 
@@ -206,7 +265,10 @@ for bit over random cells, unsnapped rows come back snapped, edge rotations, sta
 bytes, offsets), `test_map_document_surfaces.gd` (entries, the fifth-surface rule, round trips,
 hostile input), `test_map_document_water.gd`, `test_map_document_crossings.gd`, `test_map_document_fire.gd`,
 `test_level_map_streaming.gd`; the `libraries` record, format 2 against 3 and the mismatch gate:
-the additions in `test_map_document_io.gd` and `test_map_libraries.gd`.
+the additions in `test_map_document_io.gd` and `test_map_libraries.gd`; the terrain section:
+`test_terra_doc.gd` (edits, caps, layouts, copy-on-write, digest) and `test_map_terrain_io.gd`
+(round trips bit for bit, the format choice, every truncation, caps, NaN, unknown kinds, newer
+versions, the snapshot, the fingerprint key).
 
 ## Open work
 
@@ -221,3 +283,5 @@ See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".
   core (step S4); the mismatch gate on open.
 - 2026-11-09: formats 4 and 5, rows as binary columns on the 2^-10 grid (perfaudit card
   mapformat); formats 1 to 3 are refused, the format 1 surface migration is gone.
+- 2026-11-22: format 6, the terrain section `terrain/prims.bin` (`TerraDoc`, `MapTerrainIO`;
+  terraform phase 1 card terraform-p1-document), written only by a map that has one.

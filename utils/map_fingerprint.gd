@@ -16,6 +16,8 @@ extends RefCounted
 ## Keys:
 ##   heights        the document's height samples: "<count> <sha prefix>".
 ##   fire           the document's fire mask: "<burning samples> <sha prefix>", "" for none.
+##   terra          the document's terrain: "<primitives> <TerraDoc.digest_for prefix>", "" for
+##                  none (the digest covers the primitives, the derive grid and the core version).
 ##   water          per body, by id: "<id> <kind> <depth> <level>".
 ##   falls          per fall (the falls mesh's curtain vertices grouped by the fall's height
 ##                  and lower level, which its UV2 carries): "<verts> <aabb>", sorted.
@@ -57,6 +59,7 @@ static func of(root: Node, doc: MapDocument) -> Dictionary:
 	var out := {
 		"heights": "",
 		"fire": "",
+		"terra": "",
 		"water": [],
 		"falls": [],
 		"falls_count": 0,
@@ -72,6 +75,7 @@ static func of(root: Node, doc: MapDocument) -> Dictionary:
 	if doc != null:
 		out.heights = _heights(doc)
 		out.fire = _fire(doc)
+		out.terra = _terra(doc)
 		out.water = _water(doc)
 		out.structures = _structures(null, doc)
 		out.settlements = _settlements(null, doc)
@@ -163,6 +167,15 @@ static func _fire(doc: MapDocument) -> String:
 	ctx.start(HashingContext.HASH_SHA256)
 	ctx.update(doc.fire_mask)
 	return "%d %s" % [burning, ctx.finish().hex_encode().substr(0, HASH_CHARS)]
+
+
+static func _terra(doc: MapDocument) -> String:
+	# A TerraDoc, untyped as MapDocument.terra is (kept out of the start-up script graph).
+	var terra: Variant = doc.terra
+	if terra == null:
+		return ""
+	var digest: String = terra.digest_for(doc)
+	return "%d %s" % [(terra.prims as Array).size(), digest.substr(0, HASH_CHARS)]
 
 
 static func _water(doc: MapDocument) -> Array:
