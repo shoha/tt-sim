@@ -45,6 +45,15 @@ const ROOTS: PackedStringArray = [
 	"res://procgen/gen/props.gd",
 	"res://procgen/gen/ornaments.gd",
 	"res://procgen/graph/recipes_ornaments.gd",
+	# The water conditioner's parts, which WaterEdit loads by path (WaterWarm.PATHS): left out of
+	# the web on purpose, so compiled here or by WaterWarm.warm() at the map's opening, never in a
+	# stroke's frame (card painter-edit-hitch3).
+	"res://utils/water_course_fit.gd",
+	"res://utils/water_conditioner.gd",
+	"res://utils/water_ports.gd",
+	"res://utils/water_hints.gd",
+	"res://utils/water_refit.gd",
+	"res://utils/water_pond_fit.gd",
 ]
 ## Frames to wait after the title is up before the worker starts, so its first frames are clean.
 const START_DELAY_FRAMES := 3

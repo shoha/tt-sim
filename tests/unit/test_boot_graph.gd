@@ -90,6 +90,33 @@ func test_the_precompile_roots_are_current() -> void:
 	assert_true(
 		seen.has("res://scenes/states/authoring/authoring_controller.gd"), "authoring is a root"
 	)
+	# The water conditioner's parts load by path (WaterWarm.PATHS); each is a root, so none is
+	# compiled in a stroke's frame (card painter-edit-hitch3).
+	for path in WaterWarm.PATHS:
+		assert_true(seen.has(path), "%s is a root" % path)
+
+
+## WaterWarm.warm() (a map's opening, card painter-edit-hitch3) leaves every lazily loaded part of
+## the conditioner compiled and in the cache, so the first stroke's plan loads none; a second call
+## finds them all and loads nothing.
+func test_water_warm_leaves_the_conditioner_compiled() -> void:
+	WaterWarm.warm()
+	for path in WaterWarm.PATHS:
+		assert_true(ResourceLoader.has_cached(path), "%s is cached after warm()" % path)
+	assert_eq(WaterWarm.warm(), 0, "a second warm() loads nothing")
+	assert_lt(WaterWarm.last_usec, 5000, "and costs next to nothing")
+
+
+## WaterWarm.PATHS names every script WaterEdit loads by path: a new *_PATH constant left out
+## would compile in a stroke's frame again.
+func test_water_warm_covers_every_lazy_path() -> void:
+	var source := FileAccess.get_file_as_string("res://utils/water_edit.gd")
+	var consts := RegEx.create_from_string('(?m)^const [A-Z_]+_PATH := "(res://[^"]+\\.gd)"')
+	var found := 0
+	for m in consts.search_all(source):
+		found += 1
+		assert_true(WaterWarm.PATHS.has(m.get_string(1)), "%s is warmed" % m.get_string(1))
+	assert_eq(found, WaterWarm.PATHS.size(), "every warmed path is one of WaterEdit's")
 
 
 ## A window close while the worker runs is held back (auto_accept_quit off), so the engine does not

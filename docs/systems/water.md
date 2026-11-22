@@ -985,6 +985,11 @@ falls (`WaterConditioner`: 5 cm lattice, water only lowered, dead band 0.25 m, r
 2 m), joins an end that stops near other water (`WaterPorts.end_decision`: join, inflow, fall
 into, outlet), and keeps the stroke as drawn when conditioning would cut deeper than 1.5 m. The
 result is the same WaterBody list: no format change, nothing recomputed on load or by peers.
+The conditioner's parts load by path (`WaterEdit.*_PATH`, kept out of the start-up script graph);
+`BootPrecompile.ROOTS` compiles them behind the title and `WaterWarm.warm()` loads what is left
+when a map opens for authoring (or for live water edits on the planning side), because their
+first compile inside the plan cost the first river's release frame about 53 ms (card
+painter-edit-hitch3; `test_boot_graph.gd` checks every path is warmed and a root).
 What it could not fix comes back as hint records (`WaterHints`: `{kind, pos, fixes, detail}`,
 `WaterEditor.last_hints`) and the Water tool toasts the first one worth saying through
 `BrushTool.refused` ("The river crosses a hill and was kept as drawn ... You can cut the ridge
