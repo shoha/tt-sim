@@ -37,6 +37,11 @@ const YARD_TAG := "/yard"
 ## How far past each facade line the street's corridor reaches, so a tree's trunk stands behind
 ## the houses and its crown does not hang over the street (a crown is 2 to 4 m wide).
 const STREET_CLEAR_EXTRA_M := 2.0
+## A stone wall's thickness at the foot (the stone_wall node's default; metres): its pad's width
+## on the terraforming core (TerraWallSync).
+const STONE_THICKNESS_M := 0.45
+## A fence's footprint across its line (the fence node's post width; metres).
+const FENCE_THICKNESS_M := 0.1
 
 ## The manner record kinds snow_tops_of keeps.
 const SNOW_TOP_KINDS: Array[String] = [
@@ -65,6 +70,17 @@ static func recipe_path(kind: Wall.Kind) -> String:
 		Wall.Kind.ROW:
 			return STREET_ROW_RECIPE
 	return STONE_RECIPE
+
+
+## The thickness of `wall` at its foot (metres): STONE_THICKNESS_M or FENCE_THICKNESS_M; 0 for a
+## row (a street has no footprint of its own).
+static func thickness_m(wall: Wall) -> float:
+	match wall.kind:
+		Wall.Kind.STONE:
+			return STONE_THICKNESS_M
+		Wall.Kind.FENCE:
+			return FENCE_THICKNESS_M
+	return 0.0
 
 
 ## The recipe `wall` is built from: its kind's committed recipe. Null when missing.

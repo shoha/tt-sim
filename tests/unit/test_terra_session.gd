@@ -98,8 +98,12 @@ func test_switch_on_without_a_section_makes_no_session() -> void:
 
 func test_the_switch_reads_the_project_setting() -> void:
 	TerraCore.switch_override = null
-	assert_false(ProjectSettings.get_setting(TerraCore.SWITCH_SETTING, false), "default off")
-	assert_false(TerraCore.enabled())
+	# The switch-on gate run (tests/gut_pre_run_terra_on.gd) sets the setting in memory and marks
+	# the run: there the switch reads on; in every other run the project's default is off.
+	var on_run := Engine.has_meta(&"gut_terra_on")
+	var setting := bool(ProjectSettings.get_setting(TerraCore.SWITCH_SETTING, false))
+	assert_eq(setting, on_run, "default off, or on for the switch-on run")
+	assert_eq(TerraCore.enabled(), on_run)
 	TerraCore.switch_override = true
 	assert_true(TerraCore.enabled())
 
