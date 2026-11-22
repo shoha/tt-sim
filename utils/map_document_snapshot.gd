@@ -15,13 +15,16 @@ extends RefCounted
 ## snapshot. Dictionaries are duplicated deep for the same reason (a shallow duplicate shares
 ## its packed values, appends included). The object lists (water bodies, crossings, walls,
 ## structures, settlements) are not copied: their rule checks and their small JSON entries run
-## at capture, on the calling thread, with the manifest (which reads the library registry).
+## at capture, on the calling thread, with the manifest (which reads the library registry). The
+## terrain document is copied (TerraDoc.duplicate: its list and dictionaries, each float array
+## copy-on-write), since its check and its entry are as heavy as the packed data's.
 ##
 ## encode() reads only the snapshot (its copy, its entries and the pond ids), so it runs on
 ## any thread: it checks the packed data against the reader's rules (heights, masks, biomes,
-## surfaces, water grids, rows), builds the heavy entries (rows JSON, PNGs, surfaces, anchors)
-## and applies the caps. Its entries are byte-identical to the one-call serialize() it split. The
-## rows are encoded binary (MapRowsCodec), which snaps them to MapDocumentIO.ROW_STEP.
+## surfaces, water grids, terrain, rows), builds the heavy entries (rows JSON, PNGs, surfaces,
+## anchors, terrain/prims.bin) and applies the caps. Its entries are byte-identical to the
+## one-call serialize() it split. The rows are encoded binary (MapRowsCodec), which snaps them
+## to MapDocumentIO.ROW_STEP.
 
 ## The private copy encode() reads; its object lists are empty.
 var document: MapDocument = null
@@ -83,6 +86,9 @@ static func copy_document(doc: MapDocument) -> MapDocument:
 	copy.water_flow_size = doc.water_flow_size
 	copy.water_flow_stamp = doc.water_flow_stamp
 	copy.fire_mask = doc.fire_mask.duplicate()
+	# A TerraDoc, untyped here so the start-up graph does not compile it (MapDocument.terra).
+	var terra: Variant = doc.terra
+	copy.terra = terra.duplicate() if terra != null else null
 	return copy
 
 
@@ -112,6 +118,8 @@ func encode() -> Dictionary:
 	if MapDocumentIO.has_fire(doc.fire_mask):
 		out[MapDocumentIO.FIRE_ENTRY] = MapDocumentIO._png(doc.fire_mask, doc, Image.FORMAT_L8)
 	MapAnchorsIO.serialize(doc, out)
+	if doc.terra != null:
+		MapDocumentIO.terrain_io().serialize(doc, out)
 	error = _caps_problem(out)
 	if error != "":
 		return {"entries": {}, "error": error}

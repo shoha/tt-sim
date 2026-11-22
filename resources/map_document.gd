@@ -78,9 +78,13 @@ extends RefCounted
 ## and drop on its next save, so an older build refuses the document instead. 4 and 5 are 2 and 3
 ## with the rows in binary (MapRowsCodec, topic mapformat): the reader accepts only MIN_FORMAT = 4
 ## up (MapDocumentIO.read refuses an older document with a warning), the old builds refuse 4.
+## 6 (FORMAT_TERRAIN) is written only when the document has a terrain section (terra), with
+## or without other libraries: a build that knows no terrain refuses it instead of dropping the
+## section on its next save. A document without one writes 4 or 5 as before.
 const FORMAT := 4
 const FORMAT_LIBRARIES := 5
-const MAX_FORMAT := 5
+const FORMAT_TERRAIN := 6
+const MAX_FORMAT := 6
 const MIN_FORMAT := 4
 ## Libraries a manifest may name (the registry serves at most this many).
 const MAX_LIBRARIES := 16
@@ -131,6 +135,14 @@ const MAX_WALLS := 64
 const MAX_STRUCTURES := 128
 ## Dressed streets (Settlement) per document.
 const MAX_SETTLEMENTS := 8
+## The terrain document (TerraDoc): primitives, floats in one primitive and floats in all
+## (16 MB). MapTerrainIO checks each before it reads or allocates. Its entry's cap is the
+## longest header and kind table, every primitive's 12-byte fixed part and the floats (about
+## 16.1 MB), so a section at every cap fits.
+const MAX_TERRA_PRIMS := 4096
+const MAX_TERRA_FLOATS_PER_PRIM := 262144
+const MAX_TERRA_FLOATS := 4194304
+const MAX_TERRA_SECTION_BYTES := 64 * 1024 + MAX_TERRA_PRIMS * 12 + MAX_TERRA_FLOATS * 4
 
 var palette_version: String = ""
 ## The content libraries this map used when it was saved: [{id, version, hash}], one per
@@ -205,6 +217,12 @@ var fire_mask: PackedByteArray = PackedByteArray()
 ## level does not depend on today's placement rules. Empty = none (an older level: each tuft takes
 ## its zone's hue where it stands).
 var mass_anchors: Dictionary[String, PackedFloat32Array] = {}
+## The terrain document (a TerraDoc, the primitive list the terraforming core derives the ground
+## from; docs/systems/terraform.md), saved as terrain/prims.bin in format 6; null when the map
+## has none. Nothing in the game makes one yet (phase 1). Typed RefCounted so the start-up
+## script graph (test_boot_graph.gd) does not compile the terraform scripts: cast it
+## (`doc.terra as TerraDoc`) where it is used.
+var terra: RefCounted = null
 ## Derived, never saved: the wet dressing field (WaterDressing.compute(), RGBA8 per sample:
 ## bed, shore, depth) of the current heights and water, kept here so scatter jobs and the
 ## ground read one copy. Empty when there is no wet sample. Whoever changes the water or the

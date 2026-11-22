@@ -33,6 +33,7 @@ extends RefCounted
 ##   fire.png               8-bit greyscale fire intensity on the sample grid, 0 = no fire;
 ##                          never written all zero, and an all-zero one reads as none
 ##   mass_anchors.bin       grass-mass anchors, (dx, dz) per scatter row   (MapAnchorsIO)
+##   terrain/prims.bin      the terrain primitive list, format 6 only      (MapTerrainIO)
 ## Unknown entries are ignored (_known_entries and _extract_entries only look at
 ## KNOWN_ENTRIES), so the surfaces, water, crossings, fire and anchors entries needed no
 ## format bump: an older build reads a document with water as if it had none, and one with
@@ -49,6 +50,11 @@ extends RefCounted
 ## format and the remedy (read() returns a null document), while a build older than this one
 ## refuses 4 and 5 the same way. No migration: the suite has no users to carry old maps (rule
 ## "Nothing is off limits").
+##
+## Format 6 (terraform phase 1, 2026-11-22) is written only by a document with a terrain section
+## (MapDocument.terra, `terrain/prims.bin`, MapTerrainIO), and is read only in format 6: a build
+## that knows no terrain refuses it rather than dropping the section on its next save, as for
+## format 2. A document without a section writes 4 or 5 with its entries unchanged.
 ##
 ## Documents arrive from a host peer, so everything read is untrusted input, validated in
 ## the style of PaletteLibrary.validate_palette(): caps are checked before anything is
@@ -90,6 +96,8 @@ const SURFACES_JSON_ENTRY := "surfaces.json"
 const SURFACES_INDEX_ENTRY := "surfaces_index.png"
 const SURFACES_WEIGHT_ENTRY := "surfaces_weight.png"
 const FIRE_ENTRY := "fire.png"
+## The terrain section (format 6), read and written by MapTerrainIO through terrain_io().
+const TERRAIN_ENTRY := "terrain/prims.bin"
 ## Every entry this format reads, in the order they are written and read.
 const KNOWN_ENTRIES: Array[String] = [
 	MANIFEST_ENTRY,
@@ -111,6 +119,7 @@ const KNOWN_ENTRIES: Array[String] = [
 	MapSettlementIO.ENTRY,
 	FIRE_ENTRY,
 	MapAnchorsIO.ENTRY,
+	TERRAIN_ENTRY,
 ]
 const TEMP_SUFFIX := ".tmp"
 ## The modification time stamped on every entry (Unix seconds; 0 would mean "now" to
@@ -149,6 +158,7 @@ const ENTRY_CAPS := {
 	MapSettlementIO.ENTRY: 1024 * 1024,
 	FIRE_ENTRY: 4 * 1024 * 1024,
 	MapAnchorsIO.ENTRY: 16 * 1024 * 1024,
+	TERRAIN_ENTRY: MapDocument.MAX_TERRA_SECTION_BYTES,
 }
 const MAX_TOTAL_BYTES := 64 * 1024 * 1024
 ## The archive file itself, checked before it is opened.
@@ -318,11 +328,15 @@ static func _write_zip(path: String, entries: Dictionary) -> Error:
 
 
 ## The manifest. `libraries` is recomputed from the document's ids (MapLibraries.record_for, the
-## versions as the registry serves them now) and the format is 3 when any is not core, else 2.
+## versions as the registry serves them now). The format is 6 when the document has a terrain
+## section, else 5 when any library is not core, else 4.
 static func _manifest(doc: MapDocument) -> Dictionary:
 	var libraries := MapLibraries.record_for(doc)
+	var format := MapLibraries.format_for(libraries)
+	if doc.terra != null:
+		format = MapDocument.FORMAT_TERRAIN
 	var manifest := {
-		"format": MapLibraries.format_for(libraries),
+		"format": format,
 		"palette_version": doc.palette_version,
 		"map_seed": doc.map_seed,
 		"size_cells": [doc.size_cells.x, doc.size_cells.y],
@@ -453,6 +467,10 @@ static func data_problem(doc: MapDocument, ponds: Dictionary) -> String:
 	var water := MapWaterIO.grids_problem(doc, ponds)
 	if water != "":
 		return water
+	if doc.terra != null:
+		var terrain: String = terrain_io().problem(doc)
+		if terrain != "":
+			return terrain
 	var total_rows := 0
 	for rows_by_asset in [doc.props, doc.scatter]:
 		var rows_problem := _rows_problem(rows_by_asset)
@@ -602,6 +620,8 @@ static func _parse_document(entries: Dictionary, warn_log: _WarningLog) -> MapDo
 		var fire := _parse_mask(blobs[FIRE_ENTRY], doc, Image.FORMAT_L8, FIRE_ENTRY, warn_log)
 		doc.fire_mask = fire if has_fire(fire) else PackedByteArray()
 	MapAnchorsIO.parse(blobs, doc, warn_log)
+	if meta["format"] >= MapDocument.FORMAT_TERRAIN or blobs.has(TERRAIN_ENTRY):
+		terrain_io().parse(blobs, doc, meta["format"], warn_log)
 	return doc
 
 
@@ -773,6 +793,12 @@ static func _rows_of(
 ## reached at start-up, the first map read or written is not. Call its statics on the result.
 static func codec() -> Variant:
 	return load("res://utils/map_rows_codec.gd")
+
+
+## MapTerrainIO (the terrain section), loaded on first use and named by path for the same reason
+## as codec(): only a map with terrain needs it. Call its statics on the result.
+static func terrain_io() -> Variant:
+	return load("res://utils/terraform/map_terrain_io.gd")
 
 
 ## True when the row at `start` is finite, within MAX_ROW_COMPONENT, and has a rotation
