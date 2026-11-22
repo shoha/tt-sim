@@ -12,8 +12,9 @@ render_mode blend_mix, depth_draw_opaque, cull_disabled, unshaded;
  * waterfall.gdshader's (WaterFallMesh): COLOR.g 0 curtain, 0.5 ring, 1 mist; a mist puff's four
  * vertices sit at its centre with UV2 the corner's offset in metres and COLOR.b its seed.
  *
- * Unshaded: every colour is the sheet's, so a cliff's shadow cannot grey the white water. The mist
- * steps in time, a few steps a second: nothing slides. Quality Low drops the mist.
+ * Unshaded: every colour is the sheet's, so a cliff's shadow cannot grey the white water. A puff
+ * rises, grows, sways and fades continuously over its cycle (it stepped until card
+ * painter-water-rings: a few large shapes jumping every half second). Quality Low drops the mist.
  *
  * The clock is the water's ONE clock (p_clock, integrated by PainterWater and handed to both
  * materials), not the engine's TIME: a render job that pins the water's clock pins the puffs too.
@@ -33,12 +34,14 @@ uniform vec3 p_sky = vec3(0.7, 0.85, 0.95);
 // The water's one clock in seconds (PainterWater.clock_t).
 uniform float p_clock = 0.0;
 
-// The mist: the rise (m) and the cycle (s) of a puff, its growth, the steps its rise is drawn in,
-// the soft fade against the scene (m), its three lobes (spread, growth of spread, radii, rim share).
+// The mist: the rise (m) and the cycle (s) of a puff, its growth, the steps its rise was drawn in
+// (ABL_MISTSTEP only), its sway (m, either side), the soft fade against the scene (m), its three
+// lobes (spread, growth of spread, radii, rim share).
 const float MIST_RISE_M = 0.5;
 const float MIST_CYCLE_S = 4.0;
 const float MIST_GROW = 1.3;
 const float MIST_STEPS = 8.0;
+const float MIST_SWAY_M = 0.12;
 const float MIST_SOFT_M = 0.25;
 const float MIST_LOBE_SPREAD = 0.3;
 const float MIST_LOBE_SPREAD_GROW = 0.08;
@@ -66,17 +69,23 @@ void vertex() {
 		// The curtain and the ring: the field surface draws the water, the pool's own white the foam.
 		VERTEX = vec3(0.0);
 	} else {
-		// Mist: a billboard that rises, grows and sways over its cycle, at the puff's phase; its
-		// rise and growth go in steps.
+		// Mist: a billboard that rises, grows and sways over its cycle, at the puff's phase, all
+		// three continuous. The rise and the growth went in MIST_STEPS steps of the phase (and the
+		// sway with them): with three to five puffs a fall, each step moved a whole puff at once,
+		// so a fall's mist changed in bulk every half second (card painter-water-rings;
+		// ABL_MISTSTEP puts the steps back). The sway is a slow sine of the cycle, a full swing
+		// out and back per rise, from the puff's own seed.
 		float cycle = fract(p_clock / MIST_CYCLE_S + COLOR.b);
-		float stepped = floor(cycle * MIST_STEPS) / MIST_STEPS;
-		mist_phase = stepped;
-		vec2 off = UV2 * mix(1.0, MIST_GROW, stepped);
-		// The sway takes a new offset when the puff's own rise steps (the same count of steps, at
-		// the puff's phase): on floor(p_clock * 2.0) every puff of every fall swayed in one frame,
-		// each half second (card painter-water-edges).
+#ifdef ABL_MISTSTEP
+		float phase = floor(cycle * MIST_STEPS) / MIST_STEPS;
 		float sway = sin(floor((p_clock / MIST_CYCLE_S + COLOR.b) * MIST_STEPS) * 0.5 + COLOR.b * TAU) * 0.12;
-		VERTEX.y += stepped * MIST_RISE_M;
+#else
+		float phase = cycle;
+		float sway = sin(cycle * TAU + COLOR.b * TAU) * MIST_SWAY_M;
+#endif
+		mist_phase = phase;
+		vec2 off = UV2 * mix(1.0, MIST_GROW, phase);
+		VERTEX.y += phase * MIST_RISE_M;
 		VERTEX += INV_VIEW_MATRIX[0].xyz * (off.x + sway) + INV_VIEW_MATRIX[1].xyz * off.y;
 	}
 }

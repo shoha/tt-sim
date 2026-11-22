@@ -1818,7 +1818,14 @@ The look (`painter_water.gdshader`, no screen texture):
   gradient (the slope is floored at 0.06; a steep bed, a fall lip, can still thin it, and the
   speckle the C2 prototype saw there did not show in the fall frames).
 - **Tokens.** Disturbance points (rings, wakes) are drawn as broken arc strokes, and a token or rock
-  standing in the water gets a foam wrap.
+  standing in the water gets a foam wrap. Tokens near each other share ONE set of arcs (card
+  painter-water-rings, look-pending): the arcs are contours of the smooth minimum of the tokens'
+  distances (`RING_MERGE_M` 0.12 m, a log-sum-exp), so two or three tokens under a metre apart get
+  a few arcs round the group, a soft peanut, where each drew three rings of its own that crossed
+  the others' in a tangle. A token alone draws as before. Chosen over a max of rings that fade
+  where another is stronger (the crossings stay, only dimmer), arcs thinned by the count nearby
+  (the count stays) and a radius cut at the midpoint (a straight seam on the bisector): the merge
+  is the only one that lowers the number of shapes. `ABL_RINGSTACK` puts each token's rings back.
 - **Light.** `light()` is a lit/shade selector like the ground's: cast shadows (a tree's, a cliff's)
   take the wash toward `p_shade_mul`, which is `SHADE_SHARE` (0.55) of the ground's own shade-to-lit
   ratio, so the water cools with the ground beside it.
@@ -1829,6 +1836,13 @@ The look (`painter_water.gdshader`, no screen texture):
 - **The wet band.** The painted ground darkens and cools in a brushed band along the water's
   edge (`painter_ground.gdshader`, `ground_at`, `WET_EDGE`), from the water weights texture the
   ground already binds.
+
+The fall's mist puffs rise, grow, sway and fade continuously over their 4 s cycle (card
+painter-water-rings, look-pending; `ABL_MISTSTEP` in `painter_waterfall.gdshader` keeps the old
+steps). The rise and growth were `floor(cycle * MIST_STEPS) / MIST_STEPS` (8 steps), and a fall's
+three to five puffs stepped together, so the mist changed in bulk just after each half second:
+at f1_o, mist-layer pixels changing per eighth of a second were 10183, 17, 0, 0, 12907, 0, ... on
+main (about 12000 at each half second, under 70 between) and 65 to 1973 at every step on the build.
 
 `painter_waterfall.gdshader` is the fall: unshaded, the same vertex contract as Classic's, chunky
 white streaks over the shallow and mid tones, with the sheet's foam. The white over the brink and at

@@ -866,7 +866,10 @@ differ, the bullets below are the second card's.
 - *A token's ring arcs* (`ABL_RINGSEAM`), found while looking at the wake: the arcs' gap noise
   was read on `atan(to_point.y, to_point.x)`, which wraps on the token's -x axis, so every arc
   crossing that line ended square on it. The noise is now read round a circle (the direction
-  times 1.7).
+  times 1.7). Since card painter-water-rings the arcs of nearby tokens are drawn once, on the
+  smooth minimum of their distances (`ABL_RINGSTACK` puts each token's own rings back; painter.md
+  Water "Tokens"), and the gap noise reads the weighted mean direction, unnormalised, so it stays
+  continuous through the saddle between two tokens.
 - *The pool floor's rim* (`ABL_POOLRULED`). The mark the first card's item 2 meant: on a straight
   pond shore a pale-teal band of one width under the waterline, with a ruled lower edge, a block
   with square corners where a swell of the lap ended it, holding still. `ABL_NOPOOLFLOOR` moved
