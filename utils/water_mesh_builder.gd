@@ -31,7 +31,9 @@ extends RefCounted
 ## falling from the upper level to the lower at CASCADE_SLOPE (for a small step over deep
 ## water, where there is no riffle to follow), over the channel (within the lower reach's
 ## half-width of either course) from CASCADE_BACK_M above the shared point to the riffle's
-## foot (cascades()). So shallow, the water shader draws it as white water, and the flow
+## foot (cascades()). A chute (WaterFalls.is_chute, the terraforming core's low step) falls over
+## WaterFalls.chute_run of the lower course's arc, smoothstepped as the derive's carve. So
+## shallow, the water shader draws it as white water, and the flow
 ## bake treats it as wet (WaterFlowBaker), so it runs downstream. Its cells replace the flat
 ## ones there, meet the flat surfaces at their levels and tuck their bank edge under the
 ## ground. No collision or zone: tokens stand on the riffle's ground. A free river end over a
@@ -335,7 +337,16 @@ static func _cascade(
 	var direction := WaterGeometry.end_direction(below, false)
 	var half := lower.half_widths[0]
 	var edge_reach := _edge_reach(doc)
-	var length := WaterCarve.riffle_length(upper.level_m, lower.level_m, lower.depth_m())
+	var drop := upper.level_m - lower.level_m
+	# A chute (the terraforming core's ramp, WaterFalls.is_chute): the surface follows the carve's
+	# level line, smoothstepped over WaterFalls.chute_run along the lower course's arc.
+	var chute := 0.0
+	if WaterFalls.is_chute(upper, lower):
+		chute = WaterFalls.chute_run(drop, _arc_on(below, Vector3(0.0, below.size() - 2, 1.0)))
+	var length := (
+		chute if chute > 0.0
+		else WaterCarve.riffle_length(upper.level_m, lower.level_m, lower.depth_m())
+	)
 	var reach := length + half + edge_reach + CASCADE_BACK_M + 1.0
 	# Only the course near the step can be nearest to its samples.
 	var near_above := _near(above, joint, reach + half)
@@ -346,18 +357,16 @@ static func _cascade(
 	)
 	var end := doc.world_to_sample(joint + Vector2(reach, reach)).ceil().clamp(Vector2.ZERO, last)
 	var heights := doc.heights
-	var drop := upper.level_m - lower.level_m
-	var run := maxf(drop / CASCADE_SLOPE, 0.5)
+	var run := chute if chute > 0.0 else maxf(drop / CASCADE_SLOPE, 0.5)
 	for z in range(int(first.y), int(end.y) + 1):
 		for x in range(int(first.x), int(end.x) + 1):
 			var p := doc.sample_to_world(Vector2(x, z))
 			var along := (p - joint).dot(direction)
 			if along < -CASCADE_BACK_M or along > maxf(length, run) + 0.5:
 				continue
-			var lateral := minf(
-				WaterGeometry.nearest_on_polyline(near_above, p).x,
-				WaterGeometry.nearest_on_polyline(near_below, p).x
-			)
+			var on_above := WaterGeometry.nearest_on_polyline(near_above, p)
+			var on_below := WaterGeometry.nearest_on_polyline(near_below, p)
+			var lateral := minf(on_above.x, on_below.x)
 			if lateral > half + edge_reach:
 				continue
 			var i := doc.sample_index(x, z)
@@ -366,8 +375,12 @@ static func _cascade(
 				continue
 			# The film over the riffle, thinning to the waterline across the banks, or at least
 			# the surface falling from the upper level to the lower over `run` (a small step
-			# over deep water; it meets the banks as a flat surface does).
+			# over deep water; it meets the banks as a flat surface does). A chute's falls over
+			# its arc down the lower course (a bend), smoothstepped as the carve's level line.
 			var ramp := lerpf(upper.level_m, lower.level_m, clampf(along / run, 0.0, 1.0))
+			if chute > 0.0 and along >= 0.0 and on_below.x <= on_above.x:
+				var arc := _arc_on(near_below, on_below)
+				ramp = lerpf(upper.level_m, lower.level_m, smoothstep(0.0, run, arc))
 			var film := clampf(ground + _edge_film(lateral - half), lower.level_m, upper.level_m)
 			var sheet := maxf(film if ground >= lower.level_m else lower.level_m, ramp)
 			if sheet <= lower.level_m + 0.005:
@@ -441,6 +454,18 @@ static func _inflow(
 		if mask[i] == pond.id and sheet <= lower + 0.005:
 			continue
 		_put_sheet(i, sheet, ground, out, buried)
+
+
+## The arc length along `points` from its first point to `nearest`
+## (WaterGeometry.nearest_on_polyline's Vector3(distance, segment, t)); 0 without a segment.
+static func _arc_on(points: PackedVector2Array, nearest: Vector3) -> float:
+	var seg := int(nearest.y)
+	if seg < 0 or seg + 1 >= points.size():
+		return 0.0
+	var arc := 0.0
+	for s in seg:
+		arc += points[s].distance_to(points[s + 1])
+	return arc + points[seg].distance_to(points[seg + 1]) * nearest.z
 
 
 ## The run of `course`'s points within `radius` of `at` (with one more point on each side),

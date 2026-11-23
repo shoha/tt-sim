@@ -1,18 +1,27 @@
 extends GutTest
-## A low fall of the terraforming core (card terraform-p2-river-polish round 3; terra_stages.h
-## POOL_OPEN_M and LIP_*, WaterFieldStroke.SOFT_FALL_*): the corpus tributary's 1.4 m step, which
-## the reaches rule gathers on an even 0.2 slope. Its banks come down beside the face instead of a
-## sheer wall across the bank reach, its face keeps the stream's width (the pool opens below it),
-## and the water field draws it as a soft fall while a tall fall keeps its white.
+## A low fall of the terraforming core is a chute (card terraform-p2-chutes; terra_stages.h
+## CHUTE_*, WaterFalls.chute_run): a step of FALL_MIN up to CHUTE_MAX_M, which the reaches rule
+## gathers on an even slope (the corpus tributary's 1.4 m step on a 0.2 slope, four back to back
+## on a 0.15 slope), is carved as a ramp of fast water with no fall record, its banks a grassy slope
+## (the face carve cut 74 to 83 degrees beside it). Tall falls keep their records; the bridge draws
+## a chute as a riffle over the same run the carve used, with broken white along it.
 
 const CELLS := Vector2i(40, 40)
+## The banks beside a chute stay under this (the probe measured 34 to 43 degrees).
+const BANK_MAX_DEG := 45.0
+## The bank is measured this far past the water's edge (metres).
+const BANK_FROM_M := 0.3
+const BANK_TO_M := 4.0
+## The last metres of a joined river's line are left out: its banks there are the receiver's.
+const JOIN_SKIP_M := 2.0
 
 var _doc: MapDocument
 var _derive: Object
-var _step := {}
 
 
 func before_all() -> void:
+	if not TerraCore.native_available():
+		return
 	var c := TerraCorpus.build(CELLS)
 	_doc = c.map_doc
 	_derive = TerraCache.derive_for(c.terra, _doc)
@@ -20,107 +29,284 @@ func before_all() -> void:
 	var water := TerraBridge.water_of(_derive, _doc)
 	_doc.water_bodies = water["bodies"]
 	_doc.pond_mask = water["pond_mask"]
+
+
+func test_the_corpus_tributary_has_a_chute_and_no_low_fall_record() -> void:
+	if _derive == null:
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var r: Dictionary = (_derive.call("water_records") as Dictionary)["rivers"][1]
+	var chutes := _chutes(r)
+	assert_gt(chutes.size(), 0, "the tributary's 1.4 m step is a chute")
+	assert_eq(int(r["falls"]), _tall_steps(r), "only tall steps are fall records")
+	assert_gt(int(r["falls"]), 0, "the tributary's fall off the hill is still a fall")
+	var falls: PackedFloat32Array = _derive.call("falls")
+	for k in range(0, falls.size(), 7):
+		assert_gte(falls[k + 4] - falls[k + 5], WaterFalls.CHUTE_MAX_M - 1e-4, "a record is tall")
+
+
+func test_a_chute_s_banks_stay_under_45_degrees() -> void:
+	if _derive == null:
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var r: Dictionary = (_derive.call("water_records") as Dictionary)["rivers"][1]
+	var worst := _steepest_bank(_derive, _doc, r)
+	gut.p("corpus chute bank: %.1f deg" % worst)
+	assert_gt(worst, 0.0, "the chute's banks were measured")
+	assert_lt(worst, BANK_MAX_DEG, "the banks beside the chute are a slope, not a wall")
+
+
+## The carve's level line ("chute") holds the level except down a chute, where it eases from the
+## upper level to the lower over WaterFalls.chute_run of arc from the step's shared point.
+func test_the_chute_line_ramps_over_the_shared_run() -> void:
+	if _derive == null:
+		pending(TerraCorpus.NO_LIBRARY)
+		return
 	var r: Dictionary = (_derive.call("water_records") as Dictionary)["rivers"][1]
 	var lv: PackedFloat32Array = r["level"]
+	var line: PackedFloat32Array = r["chute"]
+	var s := _arcs(r)
+	assert_eq(line.size(), lv.size(), "one chute value per point")
+	for c: Dictionary in _chutes(r):
+		var k: int = c.k
+		var s0 := (s[k - 1] + s[k]) * 0.5
+		var run := WaterFalls.chute_run(float(c.drop), float(c.room))
+		for j in range(k, lv.size()):
+			var x := s[j] - s0
+			if x >= run:
+				assert_almost_eq(line[j], lv[j], 1e-5, "past the run the line is the level")
+				break
+			var want := lv[k] + float(c.drop) * (1.0 - smoothstep(0.0, run, x))
+			assert_almost_eq(line[j], want, 1e-4, "on the ramp at %.2f m" % x)
+
+
+## A 0.15 slope steps in four chutes back to back (spike terraform-low-falls-probe): no fall
+## records, each chute's line continuous into the next (no jump past a riffle's), banks under 45
+## degrees, and every wet sample at one body's level.
+func test_back_to_back_chutes_on_a_slope() -> void:
+	if not TerraCore.native_available():
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var doc := MapDocument.create_flat(CELLS, "grass", "v", 3)
+	var terra := TerraDoc.new()
+	terra.add(TerraCore.PLANE, PackedFloat32Array([5.0, 0.15, 0.0]))
+	var line := PackedVector2Array([Vector2(26.0, 0.0), Vector2(-26.0, 0.0)])
+	terra.add(TerraCore.RIVER, TerraWaterTools.river_data(line, PackedFloat32Array([1.4]), 0.6))
+	var d := TerraCache.derive_for(terra, doc)
+	var r: Dictionary = (d.call("water_records") as Dictionary)["rivers"][0]
+	var chutes := _chutes(r)
+	gut.p("slope 0.15: %d chutes %s" % [chutes.size(), str(chutes)])
+	assert_gte(chutes.size(), 3, "the slope's steps are chutes")
+	assert_eq(int(r["falls"]), 0, "no fall records")
+	var lv: PackedFloat32Array = r["level"]
+	var ramp: PackedFloat32Array = r["chute"]
+	for k in range(1, ramp.size()):
+		assert_lte(ramp[k - 1] - ramp[k], 0.7 + 1e-4, "the line never steps more than a riffle")
+		assert_gte(ramp[k], lv[k] - 1e-6, "the line never stands under the level")
+	var worst := _steepest_bank(d, doc, r)
+	gut.p("slope 0.15 chute bank: %.1f deg" % worst)
+	assert_lt(worst, BANK_MAX_DEG, "the banks beside the chutes are a slope")
+	_assert_wet_at_levels(d)
+
+
+## An edit beside a chute, derived incrementally, gives the bits of a full derive of the result
+## (the update path compares the chute line, card terraform-p2-chutes).
+func test_update_equals_build_beside_a_chute() -> void:
+	if _derive == null:
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var r: Dictionary = (_derive.call("water_records") as Dictionary)["rivers"][1]
+	var chutes := _chutes(r)
+	if chutes.is_empty():
+		return
 	var pts: PackedFloat32Array = r["pts"]
-	for k in range(1, lv.size()):
-		var drop := lv[k - 1] - lv[k]
-		if drop >= WaterFalls.FALL_MIN_DROP_M and drop < WaterFieldStroke.SOFT_FALL_M:
-			var p0 := Vector2(pts[2 * k - 2], pts[2 * k - 1])
-			var p1 := Vector2(pts[2 * k], pts[2 * k + 1])
-			_step = {
-				"k": k,
-				"mid": (p0 + p1) * 0.5,
-				"t": (p1 - p0).normalized(),
-				"hw": float(r["hw"]),
-				"hws": r["hws"],
-			}
-			break
+	var k: int = chutes[0].k
+	var at := Vector2(pts[2 * k], pts[2 * k + 1])
+	var c := TerraCorpus.build(CELLS)
+	var live := c.make_derive()
+	live.call("derive_full")
+	# A low mound beside the chute's foot moves the ground the river reads there.
+	var bump := PackedFloat32Array([at.x + 4.0, at.y + 3.0, 0.8, 4.0, 1.0])
+	live.call("set_prim", 9001, TerraCore.HILL, bump)
+	live.call("derive")
+	var fresh := c.make_derive()
+	fresh.call("set_prim", 9001, TerraCore.HILL, bump)
+	fresh.call("derive_full")
+	assert_eq(live.call("digests"), fresh.call("digests"), "update equals build")
 
 
-func after_each() -> void:
-	TerraCore.switch_override = null
-
-
-func test_the_corpus_tributary_has_a_low_fall() -> void:
-	assert_false(_step.is_empty(), "the tributary keeps its 1.4 m step")
-
-
-func test_the_banks_beside_a_low_fall_are_no_wall() -> void:
-	if _step.is_empty():
+## The bridge draws a chute as a riffle: the profile's chute run is the carve's, no fall entry,
+## and the chute's white is broken lumps (energy varying along it), not one even value.
+func test_the_profile_draws_the_chute_with_broken_white() -> void:
+	if _derive == null:
+		pending(TerraCorpus.NO_LIBRARY)
 		return
-	var mid: Vector2 = _step.mid
-	var t: Vector2 = _step.t
-	var nrm := Vector2(-t.y, t.x)
-	var worst := 0.0
-	for off in [-4.5, -4.0, -3.5, 3.5, 4.0, 4.5]:
-		var above := _h(mid - t * 0.5 + nrm * off)
-		var below := _h(mid + t * 0.5 + nrm * off)
-		worst = maxf(worst, above - below)
-	# Before: the lower reach's bank cut a 1.1 m wall here, a metre of arc across the step.
-	assert_lt(worst, 0.5, "the bank beside the face falls %.2f m over a metre of arc" % worst)
-
-
-func test_the_face_keeps_the_stream_width() -> void:
-	if _step.is_empty():
-		return
-	var hws: PackedFloat32Array = _step.hws
-	var k: int = _step.k
-	assert_lt(hws[k], float(_step.hw) * 1.1, "the face's foot is the stream's width")
-	var widest := 0.0
-	for j in range(k, mini(k + 16, hws.size())):
-		widest = maxf(widest, hws[j])
-	assert_gt(widest, float(_step.hw) * 1.3, "the pool opens below the face")
-
-
-func test_the_core_s_low_falls_are_soft_and_its_tall_falls_unchanged() -> void:
-	var low := 0
-	var tall := 0
+	var found := 0
 	for chain in RiverProfile.strokes(_doc.water_bodies):
 		var typed: Array[WaterBody] = []
 		typed.assign(chain)
 		var profile := RiverProfile.for_doc(_doc, typed)
-		if profile.falls.is_empty():
+		for k in profile.chute_runs.size():
+			var run := profile.chute_runs[k]
+			if run <= 0.0:
+				continue
+			found += 1
+			for fall in profile.falls:
+				assert_ne(int(fall.step), k, "a chute is no fall")
+			var drop := profile.levels[k] - profile.levels[k + 1]
+			assert_lte(run, drop / WaterFalls.CHUTE_SLOPE + 1e-4, "the run is chute_run's")
+			var table := WaterFieldStroke.table(profile, typed)
+			var en: PackedFloat32Array = table.energy
+			var lo := INF
+			var hi := 0.0
+			var a := ceili((profile.bounds[k] + WaterFieldStroke.CHUTE_IN_M) / 0.05)
+			var b := floori((profile.bounds[k] + run) / 0.05)
+			for t in range(a, mini(b, en.size() - 1) + 1):
+				lo = minf(lo, en[t])
+				hi = maxf(hi, en[t])
+			gut.p("chute %d: run %.2f m, energy %.2f..%.2f" % [k, run, lo, hi])
+			assert_gt(hi, 0.85, "the chute has bold white")
+			assert_gt(hi - lo, 0.2, "the white is broken along the chute")
+	assert_gt(found, 0, "the corpus tributary has a chute")
+
+
+## The tall falls stay falls for the bridge (the hilltop crown fall and the tributary's off the
+## hill): every profile fall is CHUTE_MAX_M or more.
+func test_tall_falls_stay_falls() -> void:
+	if _derive == null:
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var tall := 0
+	for chain in RiverProfile.strokes(_doc.water_bodies):
+		var typed: Array[WaterBody] = []
+		typed.assign(chain)
+		for fall in RiverProfile.for_doc(_doc, typed).falls:
+			tall += 1
+			assert_gte(float(fall.drop), WaterFalls.CHUTE_MAX_M - 1e-4, "a fall is tall")
+	assert_gt(tall, 0, "the corpus keeps its tall fall")
+
+
+## The chutes of record `r`: {"k" (the step's lower point), "drop", "room" (arc from the step's
+## shared point to the next step's, or to the line's end)} each.
+func _chutes(r: Dictionary) -> Array[Dictionary]:
+	var lv: PackedFloat32Array = r["level"]
+	var s := _arcs(r)
+	var steps: Array[int] = []
+	for k in range(1, lv.size()):
+		if lv[k - 1] - lv[k] > 1e-6:
+			steps.append(k)
+	var out: Array[Dictionary] = []
+	for q in steps.size():
+		var k := steps[q]
+		var drop := lv[k - 1] - lv[k]
+		if drop < WaterFalls.FALL_MIN_DROP_M - 1e-4 or drop >= WaterFalls.CHUTE_MAX_M - 1e-4:
 			continue
-		var plain := WaterFieldStroke.table(profile, typed, false)
-		var soft := WaterFieldStroke.table(profile, typed, true)
-		for fall in profile.falls:
-			var a := _peak(plain.core, float(fall.lip), float(fall.foot))
-			var b := _peak(soft.core, float(fall.lip), float(fall.foot))
-			if float(fall.drop) < WaterFieldStroke.SOFT_FALL_M:
-				low += 1
-				assert_almost_eq(b, a * WaterFieldStroke.SOFT_FALL_WHITE, 1e-5)
-			else:
-				tall += 1
-				assert_eq(b, a, "a tall fall keeps its white")
-	assert_gt(low, 0)
-	assert_gt(tall, 0)
-
-
-func test_the_field_draws_soft_falls_only_with_the_core_on() -> void:
-	TerraCore.switch_override = false
-	var off := WaterField.build(_doc)
-	TerraCore.switch_override = true
-	var on := WaterField.build(_doc)
-	var lower := 0
-	for i in on.energy.size():
-		assert_true(on.energy[i] <= off.energy[i] + 1e-6)
-		if on.energy[i] < off.energy[i] - 0.05:
-			lower += 1
-	assert_gt(lower, 0, "the low fall's white is softer with the core on")
-
-
-func _peak(core: PackedFloat32Array, from: float, to: float) -> float:
-	var out := 0.0
-	var a := maxi(0, floori(from / WaterFieldStroke.TABLE_STEP))
-	var b := mini(core.size() - 1, ceili(to / WaterFieldStroke.TABLE_STEP))
-	for t in range(a, b + 1):
-		out = maxf(out, core[t])
+		var s0 := (s[k - 1] + s[k]) * 0.5
+		var end := s[-1]
+		if q + 1 < steps.size():
+			end = (s[steps[q + 1] - 1] + s[steps[q + 1]]) * 0.5
+		out.append({"k": k, "drop": drop, "room": end - s0})
 	return out
 
 
-func _h(p: Vector2) -> float:
-	var s := _doc.world_to_sample(p)
-	var x := clampi(roundi(s.x), 0, _doc.samples_x() - 1)
-	var z := clampi(roundi(s.y), 0, _doc.samples_z() - 1)
-	return _doc.heights[_doc.sample_index(x, z)]
+func _tall_steps(r: Dictionary) -> int:
+	var lv: PackedFloat32Array = r["level"]
+	var n := 0
+	for k in range(1, lv.size()):
+		n += 1 if lv[k - 1] - lv[k] >= WaterFalls.CHUTE_MAX_M - 1e-4 else 0
+	return n
+
+
+## The arc length of each point of record `r`'s line.
+func _arcs(r: Dictionary) -> PackedFloat64Array:
+	var pts: PackedFloat32Array = r["pts"]
+	var s := PackedFloat64Array([0.0])
+	for k in range(1, pts.size() / 2):
+		var d := Vector2(pts[2 * k] - pts[2 * k - 2], pts[2 * k + 1] - pts[2 * k - 1]).length()
+		s.append(s[-1] + d)
+	return s
+
+
+## The steepest ground (degrees, H2) BANK_FROM_M to BANK_TO_M past the water's edge on either side
+## of every point on a chute of record `r` (the derive `d` of document `doc`).
+func _steepest_bank(d: Object, doc: MapDocument, r: Dictionary) -> float:
+	var h2: PackedFloat32Array = (d.call("array_bytes", "H2") as PackedByteArray).to_float32_array()
+	var w := 2 * (doc.samples_x() - 1) + 1
+	var h := 2 * (doc.samples_z() - 1) + 1
+	var ext := doc.extent_m()
+	var step := Vector2(ext.x / (w - 1), ext.y / (h - 1))
+	var pts: PackedFloat32Array = r["pts"]
+	var s := _arcs(r)
+	var hw := float(r["hw"])
+	var joined := int(r["recv_river"]) >= 0 or int(r["recv_pond"]) >= 0
+	var worst := 0.0
+	for c: Dictionary in _chutes(r):
+		var k: int = c.k
+		var s0 := (s[k - 1] + s[k]) * 0.5
+		var run := WaterFalls.chute_run(float(c.drop), float(c.room))
+		for j in range(k, s.size() - 1):
+			# Near a joined end the banks are the receiver's (the corpus tributary's chute ends 1.5 m
+			# from the main river, whose bank 3.8 m off its line stands at 53 degrees).
+			if s[j] - s0 > run or (joined and s[-1] - s[j] < JOIN_SKIP_M):
+				break
+			var p := Vector2(pts[2 * j], pts[2 * j + 1])
+			var t := Vector2(pts[2 * j + 2], pts[2 * j + 3]) - p
+			var nrm := Vector2(-t.y, t.x).normalized()
+			var off := hw + BANK_FROM_M
+			while off <= hw + BANK_TO_M:
+				for side in [-1.0, 1.0]:
+					var q: Vector2 = p + nrm * off * side
+					var g := _gradient(h2, w, h, ext, step, q)
+					worst = maxf(worst, rad_to_deg(atan(g)))
+				off += 0.25
+	return worst
+
+
+## The gradient's magnitude of grid `f` (w x h over `ext`, centred) at world `p`: central
+## differences one grid step either side.
+func _gradient(
+	f: PackedFloat32Array, w: int, h: int, ext: Vector2, step: Vector2, p: Vector2
+) -> float:
+	var gx := (
+		(_bilinear(f, w, h, ext, step, p + Vector2(step.x, 0.0))
+		- _bilinear(f, w, h, ext, step, p - Vector2(step.x, 0.0))) / (2.0 * step.x)
+	)
+	var gz := (
+		(_bilinear(f, w, h, ext, step, p + Vector2(0.0, step.y))
+		- _bilinear(f, w, h, ext, step, p - Vector2(0.0, step.y))) / (2.0 * step.y)
+	)
+	return Vector2(gx, gz).length()
+
+
+func _bilinear(
+	f: PackedFloat32Array, w: int, h: int, ext: Vector2, step: Vector2, p: Vector2
+) -> float:
+	var g := ((p + ext * 0.5) / step).clamp(Vector2.ZERO, Vector2(w - 1.001, h - 1.001))
+	var i := floori(g.x)
+	var j := floori(g.y)
+	var fx := g.x - i
+	var fz := g.y - j
+	var a := lerpf(f[j * w + i], f[j * w + i + 1], fx)
+	var b := lerpf(f[(j + 1) * w + i], f[(j + 1) * w + i + 1], fx)
+	return lerpf(a, b, fz)
+
+
+## Every wet sample of derive `d` (WL over H2) stands at one body's level.
+func _assert_wet_at_levels(d: Object) -> void:
+	var records: Dictionary = d.call("water_records")
+	var levels := {}
+	for r: Dictionary in records["rivers"]:
+		for v in (r["level"] as PackedFloat32Array):
+			levels[v] = true
+	for p: Dictionary in records["ponds"]:
+		levels[float(p["level"])] = true
+	var wl: PackedFloat32Array = (d.call("array_bytes", "WL") as PackedByteArray).to_float32_array()
+	var h2: PackedFloat32Array = (d.call("array_bytes", "H2") as PackedByteArray).to_float32_array()
+	var wet := 0
+	var stray := 0
+	for i in wl.size():
+		if wl[i] > h2[i]:
+			wet += 1
+			stray += 0 if levels.has(wl[i]) else 1
+	assert_gt(wet, 100, "the river has water")
+	assert_eq(stray, 0, "every wet sample stands at one body's level")

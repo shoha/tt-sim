@@ -92,8 +92,8 @@ static func digests_of(derive: RefCounted) -> Dictionary:
 
 
 ## The "water" digest of TerraDerive.water_records() `records`: the first 8 bytes of SHA-256
-## over each river (id, receivers, half width, fall count, levels, line, the half widths per point
-## when the record has them: its pools) and pond (id, level).
+## over each river (id, receivers, half width, fall count, levels, line, the carve's level line
+## when the record has it: its chutes) and pond (id, level).
 static func water_digest(records: Dictionary) -> int:
 	var b := PackedByteArray()
 	for r: Dictionary in records.get("rivers", []):
@@ -102,7 +102,7 @@ static func water_digest(records: Dictionary) -> int:
 		_put_s64(b, int(r["recv_pond"]))
 		_put_s64(b, int(r["falls"]))
 		_put_f64(b, float(r["hw"]))
-		for key: String in ["level", "pts", "hws"]:
+		for key: String in ["level", "pts", "chute"]:
 			if not r.has(key):
 				continue
 			var a: PackedFloat32Array = r[key]

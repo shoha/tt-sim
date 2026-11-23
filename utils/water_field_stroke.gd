@@ -24,13 +24,18 @@ const FACE_TOP := 0.3
 const FACE_RAMP := 0.65
 const FOOT_DECAY_M := 0.4
 const FOOT_DECAY_PER_DROP := 0.2
-## A low fall of the terraforming core (table()'s `soft`: a step the reaches rule gathered on an
-## even slope, under the derive's POOL_TALL_M) is a lively soft one, not a sheet: its brink, face
-## and foot white are SOFT_FALL_WHITE of a tall fall's, so the face is glass with a few columns
-## over the foot's floor of white tongues. At full white a 1.4 m step read as a white sluice gate
-## of evenly spaced stripes, heavier than the tall fall above it (card terraform-p2-river-polish).
-const SOFT_FALL_M := 2.5
-const SOFT_FALL_WHITE := 0.55
+## Chute white (card terraform-p2-chutes): a chute (RiverProfile.chute_runs, the terraforming
+## core's ramp of fast water) is livelier than a riffle. Along its run the energy is a few bold soft
+## lumps (smooth value noise of the arc, CHUTE_LUMP_M a lump, sharpened) between CHUTE_WHITE_LO and
+## CHUTE_WHITE_HI, easing in over CHUTE_IN_M from the shared point and carried past the ramp's end
+## over CHUTE_CARRY_M: broken white standing in the rapid, not an even sheet or stripes. The
+## level's own slope gave it about RIFFLE_WHITE everywhere, which read calm (spike
+## terraform-low-falls-probe).
+const CHUTE_LUMP_M := 1.3
+const CHUTE_WHITE_LO := 0.35
+const CHUTE_WHITE_HI := 1.0
+const CHUTE_IN_M := 0.5
+const CHUTE_CARRY_M := 2.0
 ## The lip speed of a fall's water (WaterFallMesh.V0_BASE plus V0_PER_SPEED times the upper
 ## reach's speed) sets where the white of the face ends and the foot foam begins (the distance
 ## it would travel in the fall's time): the field keeps that split, though no arc is drawn.
@@ -59,12 +64,9 @@ static var foot_seams_cleared := true
 ## The stroke's level, white-water `energy` and brink-and-face `core` white every TABLE_STEP
 ## along its arc: {"level", "energy", "core"} (PackedFloat32Array each). The level is the
 ## profile's bank level (flat over a reach, eased over a riffle, stepping down a fall's face with
-## the carve); the energy is the fall's foot foam and the riffle white carried downstream, the
-## core the brink and the face. `soft` (the terraforming core's water) draws every fall under
-## SOFT_FALL_M as a soft one (SOFT_FALL_WHITE).
-static func table(
-	profile: RiverProfile, chain: Array[WaterBody], soft: bool = false
-) -> Dictionary:
+## the carve); the energy is the fall's foot foam, the riffle white carried downstream and the
+## chutes' lumps (_chute_white()), the core the brink and the face.
+static func table(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
 	var count := int(ceil(profile.total / TABLE_STEP)) + 1
 	var lev := PackedFloat32Array()
 	var en := PackedFloat32Array()
@@ -82,8 +84,6 @@ static func table(
 		var land := v0 * sqrt(2.0 * drop / G)
 		var decay := FOOT_DECAY_M + FOOT_DECAY_PER_DROP * drop
 		var strength := clampf(drop / 1.0, 0.6, 1.0)
-		if soft and drop < SOFT_FALL_M:
-			strength *= SOFT_FALL_WHITE
 		var face_m := maxf(float(fall.foot) - lip, 0.5)
 		for t in count:
 			var x := t * TABLE_STEP - lip
@@ -129,7 +129,47 @@ static func table(
 			continue
 		for c in mini(carry, count - 1 - from) + 1:
 			en[from + c] = maxf(en[from + c], e * (1.0 - float(c) / float(carry + 1)))
+	_chute_white(profile, chain[0].id, en)
 	return {"level": lev, "energy": en, "core": core, "foot": foot}
+
+
+## Writes the chutes' white into `en` (see CHUTE_*): over each chute's run from its shared point
+## the lumps, eased in over CHUTE_IN_M, then fading linearly over CHUTE_CARRY_M; the max with what
+## `en` holds. `seed` (the stroke's first body id) and the chute's index place the lumps.
+static func _chute_white(profile: RiverProfile, seed: int, en: PackedFloat32Array) -> void:
+	var count := en.size()
+	for k in profile.chute_runs.size():
+		var run := profile.chute_runs[k]
+		if run <= 0.0:
+			continue
+		var start := profile.bounds[k]
+		var first := maxi(0, floori(start / TABLE_STEP))
+		var stop := mini(count - 1, ceili((start + run + CHUTE_CARRY_M) / TABLE_STEP))
+		for t in range(first, stop + 1):
+			var x := t * TABLE_STEP - start
+			if x < 0.0:
+				continue
+			var lump := smoothstep(0.3, 0.7, _lump(x / CHUTE_LUMP_M, seed * 31 + k))
+			var e := lerpf(CHUTE_WHITE_LO, CHUTE_WHITE_HI, lump) * smoothstep(0.0, CHUTE_IN_M, x)
+			if x > run:
+				e *= 1.0 - (x - run) / CHUTE_CARRY_M
+			en[t] = maxf(en[t], e)
+
+
+## Smooth value noise in [0, 1) at `u` (lump cells of 1), integer hashed per `seed`, so every
+## platform writes the same white.
+static func _lump(u: float, seed: int) -> float:
+	var i := floori(u)
+	var f := u - i
+	return lerpf(_hash01(i, seed), _hash01(i + 1, seed), f * f * (3.0 - 2.0 * f))
+
+
+## An integer hash of (`i`, `seed`) in [0, 1), 32-bit arithmetic.
+static func _hash01(i: int, seed: int) -> float:
+	var h := (i * 374761393 + seed * 668265263) & 0xFFFFFFFF
+	h = ((h ^ (h >> 13)) * 1274126177) & 0xFFFFFFFF
+	h ^= h >> 16
+	return float(h & 0xFFFF) / 65536.0
 
 
 ## Writes `out`, the foot coordinate the field hands the shader, from `raw`, the coordinate as

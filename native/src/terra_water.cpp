@@ -390,55 +390,38 @@ void solve_river(River &r, const Grid &g, const float *H0, double recv_level) {
 	for (int i = 0; i < n; i++) {
 		r.level[i] = float(lv[i]);
 	}
+	// The steps in order (index k: from point k - 1 to k), each starting at its shared point (the
+	// segment's middle, where the bridge splits the reaches).
+	std::vector<int> steps;
 	for (int i = 1; i < n; i++) {
-		if (lv[i - 1] - lv[i] >= FALL_MIN - LEVEL_EPS) {
-			add_fall(i, lv[i - 1], lv[i]);
+		if (lv[i - 1] - lv[i] > LEVEL_EPS) {
+			steps.push_back(i);
 		}
 	}
-	// The pools (POOL_*): how far each point's water stands under its bed's freeboard line, eased
-	// in and out, nothing below a tall fall.
-	r.pool.assign(n, 0.0f);
-	double head = 0.0;
-	// The arc of the last fall's face (its upper point): the pool opens over POOL_OPEN_M past it.
-	double face_s = -1e30;
-	for (int k = 0; k < n; k++) {
-		if (k > 0 && lv[k - 1] - lv[k] > LEVEL_EPS) {
-			head = lv[k - 1] - lv[k];
-			if (head >= FALL_MIN - LEVEL_EPS) {
-				face_s = l.s[k - 1];
-			}
-		}
-		if (head >= POOL_TALL_M - LEVEL_EPS) {
-			continue;
-		}
-		double dig = g.bilinear(H0, l.x[k], l.z[k]) - RIVER_FREEBOARD - lv[k];
-		double p = smoothstep(POOL_DIG_LO, POOL_DIG_HI, dig) * (1.0 - smoothstep(POOL_DEEP_LO, POOL_DEEP_HI, dig));
-		p *= smoothstep(0.0, POOL_OPEN_M, l.s[k] - face_s);
-		r.pool[k] = float(p);
-	}
-	// The bank line beside each low fall (LIP_*): the upper level at the face, eased down to the
-	// lower over the run below it; the level everywhere else.
-	r.lip.assign(r.level.begin(), r.level.end());
-	for (int k = 1; k < n; k++) {
+	// A step of CHUTE_MAX_M or more is a fall record; a step of FALL_MIN up to it is a chute: the
+	// carve's level line eases down over chute_run of arc from the shared point (CHUTE_*), never past
+	// the next step's shared point, so it meets the next chute's start.
+	r.chute.assign(r.level.begin(), r.level.end());
+	for (int q = 0; q < int(steps.size()); q++) {
+		int k = steps[q];
 		double drop = lv[k - 1] - lv[k];
-		if (drop < FALL_MIN - LEVEL_EPS || drop >= POOL_TALL_M - LEVEL_EPS) {
+		if (drop >= CHUTE_MAX_M - LEVEL_EPS) {
+			add_fall(k, lv[k - 1], lv[k]);
 			continue;
 		}
-		double run = LIP_RUN_PER_M * drop;
-		for (int j = k; j < n && l.s[j] - l.s[k] < run; j++) {
-			double e = lv[k] + drop * (1.0 - smoothstep(0.0, run, l.s[j] - l.s[k]));
-			r.lip[j] = std::max(r.lip[j], float(e));
+		if (drop < FALL_MIN - LEVEL_EPS) {
+			continue;
+		}
+		double s0 = (l.s[k - 1] + l.s[k]) * 0.5;
+		double end = q + 1 < int(steps.size()) ? (l.s[steps[q + 1] - 1] + l.s[steps[q + 1]]) * 0.5 : l.s[n - 1];
+		double run = chute_run(drop, end - s0);
+		if (run <= 0.0) {
+			continue;
+		}
+		for (int j = k; j < n && l.s[j] - s0 < run; j++) {
+			r.chute[j] = float(lv[k] + drop * (1.0 - smoothstep(0.0, run, l.s[j] - s0)));
 		}
 	}
-}
-
-double river_hw_at(const River &r, int k, double bt) {
-	if (r.pool.empty()) {
-		return r.hw;
-	}
-	int k1 = std::min(k + 1, int(r.pool.size()) - 1);
-	double p = r.pool[k] + (double(r.pool[k1]) - r.pool[k]) * bt;
-	return r.hw + std::min(POOL_WIDEN * r.hw, POOL_WIDEN_MAX_M) * p;
 }
 
 double river_level_at(const River &r, double x, double z) {
@@ -518,14 +501,13 @@ void carve_rect(const Water &w, const Grid &g, const Rect &r, const float *H0, f
 				if (bk < 0 || d > rv.hw + BANK_REACH) {
 					continue;
 				}
-				// The bed eases across a step over its one segment; the water stands at the
-				// nearer point's reach, so WL holds one level per reach (the bridge's bodies).
-				double L = rv.level[bk] + (double(rv.level[bk + 1]) - rv.level[bk]) * bt;
+				// The bed follows the carve's level line (River::chute: down a chute's ramp, else
+				// across a step over its one segment); the water stands at the nearer point's
+				// reach, so WL holds one level per reach (the bridge's bodies).
+				double L = rv.chute[bk] + (double(rv.chute[bk + 1]) - rv.chute[bk]) * bt;
 				double Lw = bt < 0.5 ? rv.level[bk] : rv.level[bk + 1];
 				double s = rv.l.s[bk] + (rv.l.s[bk + 1] - rv.l.s[bk]) * bt;
-				// A pool (POOL_*) widens the water and eases its bank.
-				double hw = river_hw_at(rv, bk, bt);
-				double ease = rv.hw > 0.0 ? (hw - rv.hw) / std::min(POOL_WIDEN * rv.hw, POOL_WIDEN_MAX_M) : 0.0;
+				double hw = rv.hw;
 				double c, f = -1e30;
 				if (d < hw) {
 					double u = d / hw;
@@ -534,15 +516,8 @@ void carve_rect(const Water &w, const Grid &g, const Rect &r, const float *H0, f
 					// Round 3: a bank that eases out of the water and steepens with distance (a
 					// valley side, never a trench wall at the reach).
 					double x = d - hw;
-					double bs = (BANK_SLOPE + BANK_NOISE * bank_noise(rv.id, s)) * (1.0 - POOL_BANK_EASE * ease);
-					// Beside a low fall the bank rises from the water's edge to its lip line (LIP_*;
-					// exactly L wherever the line is the level).
-					double Lb = L;
-					if (!rv.lip.empty()) {
-						double B = rv.lip[bk] + (double(rv.lip[bk + 1]) - rv.lip[bk]) * bt;
-						Lb = L + (B - L) * smoothstep(0.0, LIP_SIDE_M, x);
-					}
-					c = Lb + x * bs + x * x * BANK_CURVE * (1.0 - POOL_CURVE_EASE * ease);
+					double bs = BANK_SLOPE + BANK_NOISE * bank_noise(rv.id, s);
+					c = L + x * bs + x * x * BANK_CURVE;
 					f = std::min(c, L + 0.08 - std::max(0.0, x - 0.25) * 0.7);
 				}
 				cut = std::min(cut, c);

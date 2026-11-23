@@ -61,6 +61,10 @@ var half_widths: PackedFloat32Array = PackedFloat32Array()
 ## (see the header); empty when none was drawn.
 var beyond: PackedVector2Array = PackedVector2Array()
 var beyond_up: PackedVector2Array = PackedVector2Array()
+## Rivers only: the terraforming core's water (TerraWaterBridge): a step of
+## WaterFalls.FALL_MIN_DROP_M up to CHUTE_MAX_M from this reach is a chute, not a fall
+## (WaterFalls.is_chute). Saved as "chutes" only when set.
+var chutes: bool = false
 
 
 static func river(
@@ -121,4 +125,5 @@ func copy() -> WaterBody:
 	body.half_widths = half_widths.duplicate()
 	body.beyond = beyond.duplicate()
 	body.beyond_up = beyond_up.duplicate()
+	body.chutes = chutes
 	return body

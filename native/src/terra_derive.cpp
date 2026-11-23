@@ -148,7 +148,7 @@ Dictionary TerraDerive::tile_collision(int64_t tile, int64_t stride) const {
 }
 
 String TerraDerive::version() const {
-	return "terra 9 pools";
+	return "terra 10 chutes";
 }
 
 Dictionary TerraDerive::grid() const {
@@ -391,8 +391,7 @@ void TerraDerive::solve_water(Pass &ps) {
 			solved++;
 		} else {
 			r.level = o->level;
-			r.pool = o->pool;
-			r.lip = o->lip;
+			r.chute = o->chute;
 			r.falls = o->falls;
 		}
 		if (!o || !same_shape) {
@@ -401,18 +400,15 @@ void TerraDerive::solve_water(Pass &ps) {
 			falls_changed = true;
 			continue;
 		}
-		// A moved level moves the receivers too; a moved pool (card terraform-p2-river-polish) only
-		// recarves its own reach of the bed.
+		// A moved level moves the receivers too; a moved chute line (card terraform-p2-chutes: it runs
+		// past the step that made it) only recarves its own reach of the bed.
 		int k0 = -1, k1 = -1;
 		bool level_moved = false;
 		for (int k = 0; k < r.l.n(); k++) {
 			bool lv = std::memcmp(&r.level[k], &o->level[k], sizeof(float)) != 0;
-			bool pl = k >= int(o->pool.size()) || k >= int(r.pool.size()) ||
-					std::memcmp(&r.pool[k], &o->pool[k], sizeof(float)) != 0;
-			// The lip line (LIP_*) runs past the step that moved it: compared per point as the pool.
-			pl = pl || k >= int(o->lip.size()) || k >= int(r.lip.size()) ||
-					std::memcmp(&r.lip[k], &o->lip[k], sizeof(float)) != 0;
-			if (lv || pl) {
+			bool ch = k >= int(o->chute.size()) || k >= int(r.chute.size()) ||
+					std::memcmp(&r.chute[k], &o->chute[k], sizeof(float)) != 0;
+			if (lv || ch) {
 				k0 = k0 < 0 ? k : k0;
 				k1 = k;
 				level_moved = level_moved || lv;
@@ -1186,12 +1182,12 @@ Dictionary TerraDerive::water_records() const {
 		}
 		d["pts"] = pts;
 		d["hw"] = r.hw;
-		// The water's half width per point (its pools widen it; river_hw_at).
-		PackedFloat32Array hws;
-		for (int k = 0; k < r.l.n(); k++) {
-			hws.push_back(float(terra::river_hw_at(r, k, 0.0)));
+		// The carve's level line per point (River::chute): the level, eased down each chute's ramp.
+		PackedFloat32Array chute;
+		for (float v : r.chute) {
+			chute.push_back(v);
 		}
-		d["hws"] = hws;
+		d["chute"] = chute;
 		d["recv_river"] = r.recv_river >= 0 ? water.rivers[r.recv_river].id : -1;
 		d["recv_pond"] = r.recv_pond >= 0 ? water.ponds[r.recv_pond].id : -1;
 		rivers.push_back(d);

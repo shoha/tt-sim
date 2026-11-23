@@ -89,7 +89,7 @@ func test_corpus_rivers_are_few_long_reaches() -> void:
 	assert_gt(trib_steps.size(), 0, "the tributary steps")
 	assert_gte(trib_steps[0], 4.5, "the tributary's fall off the hill stays one tall fall")
 	assert_lte(trib_steps.size(), 3, "below its fall the tributary has a step or two, not a ladder")
-	assert_eq(int(rivers[1]["falls"]), _count_falls(trib_steps), "every fall-sized step is a record")
+	assert_eq(int(rivers[1]["falls"]), _count_falls(trib_steps), "every tall step is a record")
 	gut.p("corpus: main %s, tributary %s" % [str(main), str(trib)])
 
 
@@ -114,8 +114,10 @@ func test_steep_flank_is_one_fall() -> void:
 	assert_lte(steps.size(), 3, "a fall and a riffle or two")
 
 
+## The steps that are fall records: CHUTE_MAX_M or more (a lower one is a chute, card
+## terraform-p2-chutes).
 static func _count_falls(steps: Array[float]) -> int:
 	var n := 0
 	for s in steps:
-		n += 1 if s >= FALL_MIN - 1e-4 else 0
+		n += 1 if s >= WaterFalls.CHUTE_MAX_M - 1e-4 else 0
 	return n

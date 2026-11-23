@@ -11,14 +11,16 @@ extends RefCounted
 ## and one level per point. Every run of equal levels is one WaterBody.river at that level.
 ## Consecutive reaches share the midpoint of the segment their levels step across, where the
 ## derive's water changes level (the carve's water takes the nearer point's reach), and where a
-## step of FALL_MIN or more puts its fall record; WaterGeometry's flush end cuts each reach there.
+## step of CHUTE_MAX_M or more puts its fall record; WaterGeometry's flush end cuts each reach
+## there. Every body is marked WaterBody.chutes: a step of FALL_MIN up to CHUTE_MAX_M is a chute
+## the derive carves as a ramp (card terraform-p2-chutes), drawn as a riffle (WaterFalls.is_chute).
 ## Within a reach the line keeps every LINE_STRIDE-th point (about 1 m; today's control lines are
-## 2 m apart), since WaterGeometry smooths and rasterises the control line itself. The
-## half-widths are the record's per point ("hws": a pool below a small fall is wider); the depth
-## class the nearest to the primitive's depth (ties deeper, so the carved bed is never deeper
-## than the class holds: WaterMeshBuilder.hold_depth). Points past the map edge become the
-## course into the skirt: the first reach's `beyond_up` and the last reach's `beyond`
-## (RiverExits.split_line's rule, the crossing points kept just inside the edge).
+## 2 m apart), since WaterGeometry smooths and rasterises the control line itself. Every point
+## has the record's half width; the depth class the nearest to the primitive's depth (ties
+## deeper, so the carved bed is never deeper than the class holds: WaterMeshBuilder.hold_depth).
+## Points past the map edge become the course into the skirt: the first reach's `beyond_up` and
+## the last reach's `beyond` (RiverExits.split_line's rule, the crossing points kept just inside
+## the edge).
 ##
 ## Ponds. A pond's record holds its level; its area is its primitive's outline, rounded as the
 ## derive rounds it (Chaikin, 3 passes, closed), rasterised to pond_mask at the document samples.
@@ -112,57 +114,31 @@ static func river_reaches(
 		levels.append(lv[last])
 	if levels.size() != inside.size():
 		return out
-	# One half width per inside point, as the levels: the record's pools widen it (card
-	# terraform-p2-river-polish; the carve's river_hw_at).
-	var hws := _inside_widths(r, hw, first, last, line.size())
 	var runs := level_runs(levels)
 	for k in runs.size():
 		var run: Vector2i = runs[k]
 		var pts := PackedVector2Array()
-		var widths := PackedFloat32Array()
 		if k > 0:
 			pts.append(_step_point(inside, run.x - 1, falls))
-			widths.append(hws[run.x])
 		for i in range(run.x, run.y + 1, LINE_STRIDE):
 			pts.append(inside[i])
-			widths.append(hws[i])
 		if (run.y - run.x) % LINE_STRIDE != 0:
 			pts.append(inside[run.y])
-			widths.append(hws[run.y])
 		if k < runs.size() - 1:
 			pts.append(_step_point(inside, run.y, falls))
-			widths.append(hws[run.y])
 		if pts.size() < 2:
 			continue
+		var widths := PackedFloat32Array()
+		widths.resize(pts.size())
+		widths.fill(hw)
 		var body := WaterBody.river(
 			first_id + out.size(), pts, widths, depth as WaterBody.Depth, levels[run.x]
 		)
+		body.chutes = true
 		out.append(body)
 	if not out.is_empty():
 		out[0].beyond_up = split.up
 		out[-1].beyond = split.down
-	return out
-
-
-## The half widths of a record's inside points (river_reaches: `first` to `last` of its `n` line
-## points, a crossing point added at each cut end taking its neighbour's), clamped as `hw` is;
-## `hw` for every point of a record without "hws".
-static func _inside_widths(
-	r: Dictionary, hw: float, first: int, last: int, n: int
-) -> PackedFloat32Array:
-	var all: PackedFloat32Array = r.get("hws", PackedFloat32Array())
-	if all.size() != n:
-		all = PackedFloat32Array()
-		all.resize(n)
-		all.fill(hw)
-	var out := PackedFloat32Array()
-	if first > 0:
-		out.append(all[first])
-	out.append_array(all.slice(first, last + 1))
-	if last < n - 1:
-		out.append(all[last])
-	for i in out.size():
-		out[i] = clampf(out[i], WaterBody.MIN_HALF_WIDTH_M, WaterBody.MAX_HALF_WIDTH_M)
 	return out
 
 
@@ -310,10 +286,11 @@ static func region(
 
 
 ## True when two bodies are the same water (kind, depth, level, line, widths, speed, courses past
-## the edge); ids are not compared.
+## the edge, chutes); ids are not compared.
 static func same(a: WaterBody, b: WaterBody) -> bool:
 	return (
 		a.kind == b.kind
+		and a.chutes == b.chutes
 		and a.depth == b.depth
 		and a.level_m == b.level_m
 		and a.speed == b.speed
