@@ -11,6 +11,11 @@ extends RefCounted
 ## The token's own parts never count as the cover (a large creature's body over its far legs):
 ## each overlay carries the body's bounding cylinder (body_bounds) and the shader ignores
 ## whatever lies within it on the way to the camera (docs/PERFORMANCE.md "self-occlusion fix").
+## Cover is told by what it is, not how high (ghost-feet, 2026-11-23): the ground and the ground
+## cover never hide a token (its feet in a hillside or in meadow grass draw no line), walls,
+## buildings, rocks, trunks, bushes, flowers and crowns do at any height. The ground and the
+## ground-cover foliage write GROUND_STENCIL where they are the nearest surface and the line pass
+## skips those pixels (the shader's header says how).
 ## Settings > Graphics > "Token ghost" (graphics/token_ghost_enabled, default on).
 ## The decision, captures and measurements: docs/PERFORMANCE.md "Token ghost" and
 ## D:/dev/plantgen/docs/ttsim_token_visibility.md.
@@ -40,6 +45,20 @@ enum Style { OUTLINE, DOUBLE, DRAWN }
 const DEFAULT_ENABLED := true
 const SHADER := preload("res://shaders/token_ghost.gdshader")
 const MASK_SHADER := preload("res://shaders/token_ghost_mark.gdshader")
+## The stencil value the ground and the ground cover write, in the Classic and the Painted look,
+## and the line pass skips. Shaders cannot read this constant; test_token_ghost checks that the
+## files below use it.
+const GROUND_STENCIL := 1
+## The shader files that write GROUND_STENCIL (the Classic ground outside its bake, the Classic
+## ground-cover foliage under FOLIAGE_GROUND_LEAN, the painted ground and its dabs, the painted
+## meadow grass marks) and the one that reads it.
+const GROUND_STENCIL_WRITERS: Array[String] = [
+	"res://shaders/authored_ground.gdshaderinc",
+	"res://shaders/wind_foliage_main.gdshaderinc",
+	"res://painter/shaders/painter_ground_body.gdshaderinc",
+	"res://painter/shaders/painter_grass_mark.gdshader",
+]
+const GROUND_STENCIL_READER := "res://shaders/token_ghost.gdshader"
 ## Meta on an overlay material we made, and on it the source (palette texture or material)
 ## its colours were read from, so a changed look rebuilds it.
 const GHOST_META := &"token_ghost"
@@ -74,14 +93,6 @@ const BUDGET_TOKENS := 16
 const BUDGET_PERIOD_S := 0.5
 ## Height above a token's base the budget aims at (the figure's chest), metres.
 const CHEST_HEIGHT_M := 0.9
-## The ground plane round a token (ground_of): meta on the BoardToken caching the fit, the ring
-## radii as fractions of the token's height (the inner ring at least GROUND_REACH_MIN_M), the
-## raycasts per ring, and how far the body moves before it is fitted again.
-const GROUND_META := &"token_ghost_ground"
-const GROUND_RINGS: Array[float] = [0.6, 1.2]
-const GROUND_REACH_MIN_M := 0.5
-const GROUND_DIRECTIONS := 8
-const GROUND_REFIT_M := 0.05
 ## Child names that are not the token's body.
 const SKIPPED_NAMES: Array[StringName] = [&"PlaceholderModel"]
 
@@ -163,103 +174,11 @@ static func dress(token: BoardToken) -> void:
 			token.rigid_body.tree_entered.connect(
 				_dress_entered.bind(token.get_instance_id()), CONNECT_ONE_SHOT | CONNECT_DEFERRED
 			)
-	var ground := ground_of(token, bounds) if on else Vector4.ZERO
 	for mi in meshes:
 		if on:
 			_dress_mesh(mi, token.is_highlighted, bounds, vivid)
-			overlay_of(mi).set_shader_parameter("ground_plane", ground)
 		else:
 			_strip_mesh(mi)
-
-
-## The ground round a token as a plane in world metres, Vector4(a, b, c, 1) for y = a x + b z + c
-## (Vector4.ZERO when unknown: off the tree, or no terrain under it). The shader counts a cover
-## that rises less than GROUND_BAND times the token's height above it as the ground the token
-## stands on, not as cover (a token on a slope sinks its uphill feet into the hillside, and the
-## grass on it is in front of them). Fitted from terrain raycasts in two rings round the body
-## (radii GROUND_RINGS times its height, at least GROUND_REACH_MIN_M), cached on the token while
-## its body stays within GROUND_REFIT_M of where it was fitted.
-static func ground_of(token: BoardToken, bounds: Dictionary) -> Vector4:
-	var body := token.rigid_body
-	if body == null or not body.is_inside_tree():
-		return Vector4.ZERO
-	var at := body.global_position
-	var cached: Dictionary = token.get_meta(GROUND_META, {})
-	if not cached.is_empty() and (cached.at as Vector3).distance_to(at) < GROUND_REFIT_M:
-		return cached.plane
-	var height: float = cached.get("height", 1.0)
-	if bounds.has("half_height"):
-		height = 2.0 * float(bounds.half_height) * body.global_basis.y.length()
-	var space := body.get_world_3d().direct_space_state
-	var samples := PackedVector3Array()
-	samples.append(DragPlaceController.raycast_terrain_down(space, at))
-	for ring in GROUND_RINGS:
-		var r := maxf(ring * height, GROUND_REACH_MIN_M * ring / GROUND_RINGS[0])
-		for i in GROUND_DIRECTIONS:
-			var a := TAU * i / GROUND_DIRECTIONS
-			samples.append(
-				DragPlaceController.raycast_terrain_down(space, at + Vector3(cos(a), 0, sin(a)) * r)
-			)
-	var plane := ground_plane(samples)
-	token.set_meta(GROUND_META, {"at": at, "plane": plane, "height": height})
-	return plane
-
-
-## The least-squares plane y = a x + b z + c through `points` (Vector3.INF entries skipped) as
-## Vector4(a, b, c, 1), or Vector4.ZERO with fewer than three usable points or none spread out.
-static func ground_plane(points: PackedVector3Array) -> Vector4:
-	var n := 0
-	var mean := Vector3.ZERO
-	for p in points:
-		if p != Vector3.INF:
-			mean += p
-			n += 1
-	if n < 3:
-		return Vector4.ZERO
-	mean /= n
-	var sxx := 0.0
-	var sxz := 0.0
-	var szz := 0.0
-	var sxy := 0.0
-	var szy := 0.0
-	for p in points:
-		if p == Vector3.INF:
-			continue
-		var d := p - mean
-		sxx += d.x * d.x
-		sxz += d.x * d.z
-		szz += d.z * d.z
-		sxy += d.x * d.y
-		szy += d.z * d.y
-	var det := sxx * szz - sxz * sxz
-	if absf(det) < 1e-9:
-		return Vector4.ZERO
-	var a := (sxy * szz - szy * sxz) / det
-	var b := (szy * sxx - sxy * sxz) / det
-	return Vector4(a, b, mean.y - a * mean.x - b * mean.z, 1.0)
-
-
-## Refits the ground plane of every dressed token whose body moved since its fit (a drag, a
-## move from the network), so the shader's ground follows it. Run every BUDGET_PERIOD_S by
-## VisualEffectsController; a token that did not move costs one distance check.
-static func refresh_ground(tree: SceneTree) -> void:
-	if not enabled or tree == null:
-		return
-	for node in tree.get_nodes_in_group(BoardToken.GROUP_NAME):
-		var token := node as BoardToken
-		var cached: Dictionary = token.get_meta(GROUND_META, {})
-		if (
-			cached.is_empty()
-			or token.rigid_body == null
-			or not token.rigid_body.is_inside_tree()
-			or (cached.at as Vector3).distance_to(token.rigid_body.global_position) < GROUND_REFIT_M
-		):
-			continue
-		var plane := ground_of(token, {})
-		for mi in meshes_of(token.rigid_body):
-			var ghost := overlay_of(mi)
-			if ghost != null:
-				ghost.set_shader_parameter("ground_plane", plane)
 
 
 ## The deferred second dressing of a token made off the tree (by instance id: the token may be

@@ -22,6 +22,14 @@
 #define LIGHT_FIELD_TUFT
 #include "res://shaders/ground_light_field.gdshaderinc"
 
+// The token ghost's ground mark (TokenGhost.GROUND_STENCIL, ghost-feet 2026-11-23): ground cover
+// (grass, sprigs, litter, low ferns) writes stencil 1 where it is the nearest surface, as the
+// authored ground does, and token_ghost.gdshader draws no line there. A cut-out fragment writes no
+// mark, so the wall or crown seen through the gap still hides the token.
+#ifdef FOLIAGE_GROUND_LEAN
+stencil_mode write, compare_always, 1;
+#endif
+
 // The tuft's zone texel, read once in vertex() at the MultiMesh instance origin
 // (MODEL_MATRIX[3].xz) and constant over the tuft, so a tuft draws in one zone's colour. A tuft
 // placed as part of a grass mass carries the offset to its mass anchor in INSTANCE_CUSTOM.yz
