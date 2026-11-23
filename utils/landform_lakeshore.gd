@@ -232,6 +232,24 @@ static func lakeshore(doc: MapDocument, seed_value: int, biome_id: String) -> Di
 		"open": [{"at": centre, "radius": radius * LAKE_OPEN_SHARE}],
 		"clearings": clearings,
 		"wood": wood,
+		# The shape for the primitives path (LandformPrims, switch on): read, never drawn again.
+		"form":
+		[
+			{
+				"type": "lake",
+				"at": centre,
+				"radius": radius,
+				"noise": shore_noise,
+				"warp": LAKE_WARP,
+				"rise": rise,
+				"run": run,
+				"carved": lake != null,
+				"islet": wants_islet,
+				"islet_at": islet_centre,
+				"islet_radius": islet_radius,
+				"islet_height": islet_height,
+			}
+		],
 	}
 
 

@@ -247,6 +247,35 @@ static func valley(doc: MapDocument, seed_value: int, biome_id: String, root: St
 			if wants_river or not wants_wash
 			else []
 		),
+		# The shape for the primitives path (LandformPrims, switch on): read, never drawn again.
+		"form":
+		[
+			{
+				"type": "trough",
+				"axis": axis,
+				"floor_half": floor_half,
+				"rim": rim,
+				"depth": depth,
+				"fall": fall,
+				"s0": s0,
+				"s1": s1,
+				"bluff": wants_bluff,
+				"bluff_side": turn * bluff_side,
+				"bluff_rim": bluff_rim,
+				"bluff_noise": bluff_noise,
+				"bluff_wobble": BLUFF_WOBBLE_M,
+			},
+			(
+				{
+					"type": "wash",
+					"line": course,
+					"width": floor_half * 2.0 * WASH_WIDTH_SHARE,
+					"surface": wash_surface(biome_id, root),
+				}
+				if not wants_river and wants_wash
+				else {}
+			),
+		],
 	}
 
 

@@ -246,6 +246,9 @@ static func grow(
 		if body.is_river():
 			ties.append({"line": body.points, "radius": LandformPlacement.widest(body)})
 	var report := PackedStringArray([String(shaped.get("report", ""))])
+	# The extras' shapes for the primitives path (LandformPrims), after the recipe's own.
+	var form: Array = shaped.get("form", [])
+	shaped["form"] = form
 	var wet := false
 	# Knolls before tarns: a tarn's level is read from its rim as it finally stands.
 	picks.sort_custom(func(a: String, b: String) -> bool: return _order(a) < _order(b))
@@ -262,6 +265,9 @@ static func grow(
 			KNOLL:
 				var height := KNOLL_HEIGHT_M * StartingLandform.size_scale(doc)
 				knoll(doc, at, radius, height, rng)
+				form.append(
+					{"type": "hill", "at": at, "radius": radius, "height": height, "feature": "knoll"}
+				)
 				var crown := {"at": at, "radius": radius * KNOLL_OPEN_SHARE}
 				clearings.append(crown)
 				LandformPlacement.paint_open(doc, surface, crown, rng)
@@ -272,10 +278,24 @@ static func grow(
 				LandformPlacement.paint_open(doc, surface, meadow, rng)
 				report.append("meadow at (%.1f, %.1f)" % [at.x, at.y])
 			TARN:
+				# The shore's noise as tarn() draws it, for the primitives path (a copy of the
+				# stream at this point; the stream itself moves on as before).
+				var shore_rng := RandomNumberGenerator.new()
+				shore_rng.seed = rng.seed
+				shore_rng.state = rng.state
 				var body := tarn(doc, at, radius, rng)
 				if body == null:
 					report.append("tarn: no room for the water")
 					continue
+				form.append(
+					{
+						"type": "tarn",
+						"at": at,
+						"radius": radius,
+						"noise": StartingLandform.warp_noise(shore_rng, radius),
+						"warp": TARN_WARP,
+					}
+				)
 				wet = true
 				var shore := {"at": at, "radius": radius * TARN_OPEN_SHARE}
 				clearings.append(shore)
