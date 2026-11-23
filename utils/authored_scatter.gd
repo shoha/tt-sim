@@ -100,9 +100,13 @@ var warm_pipelines: bool = true
 var live_applies: bool = true
 ## Skip unchanged assets and batch grow-in merges (the class comment); off to measure round 1.
 var lean_rebuild: bool = true
+## Test hook: the regeneration jobs in flight at most, in place of half the cores (MAX_JOBS at
+## most); 0 holds every job back, as a pool too busy to start one would. -1: the default.
+var dispatch_limit: int = -1
 ## Which finished jobs land each frame (coalesced, nearest first, within a budget).
 var landing: ScatterApply = ScatterApply.new()
-## Props (AuthoredProps) whose rocks regeneration grows no twin inside (RockKeep.blockers_of).
+## Props (AuthoredProps) whose rocks regeneration grows no twin inside (RockKeep.blockers_of),
+## read when a cell is requested (ScatterRegen "Blockers").
 var blocker_source: AuthoredScatter = null
 ## The grass-mass anchors of the rows (ScatterMass: saved (x, z) -> offset to the clump parent):
 ## merged from each applied job on the main thread, set from a level's anchors entry by
@@ -424,6 +428,8 @@ func attach_document(doc: MapDocument) -> void:
 	_regen.cliff_surfaces = PackedStringArray(
 		PaletteLibrary.surfaces_with_role("cliff", palette_root)
 	)
+	# Read at each request, never at dispatch (ScatterRegen "Blockers").
+	_regen.blocker_reader = func() -> PackedFloat32Array: return RockKeep.blockers_of(blocker_source)
 	_register_biomes()
 
 
@@ -607,9 +613,9 @@ func _warm_species() -> void:
 
 func _dispatch_jobs() -> void:
 	var limit := clampi(OS.get_processor_count() >> 1, 1, MAX_JOBS)
+	if dispatch_limit >= 0:
+		limit = dispatch_limit
 	var snapshot: MapDocument = null
-	var busy := _jobs.size() >= limit or not _regen.has_pending()
-	var blockers := PackedFloat32Array() if busy else RockKeep.blockers_of(blocker_source)
 	while _jobs.size() < limit and _regen.has_pending():
 		var job := _regen.take_job()
 		if job.is_empty():  # only cells the brush is still on, their lead jobs out
@@ -617,6 +623,8 @@ func _dispatch_jobs() -> void:
 		if snapshot == null:
 			# One copy serves every job dispatched this frame; they only read it.
 			snapshot = ScatterRegen.snapshot(_document)
+		# The blockers its cell's request read (ScatterRegen "Blockers"), not today's props.
+		var blockers: PackedFloat32Array = job.get("blockers", PackedFloat32Array())
 		var work: Dictionary = RockKeep.with_blockers(job.work, blockers)
 		var result := {}
 		var cancel := Semaphore.new()
