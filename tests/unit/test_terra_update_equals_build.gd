@@ -3,7 +3,8 @@ extends GutTest
 ## tile derives must hold exactly the bits of a fresh whole-map derive of the final document, for
 ## every derived array and record list (TerraDerive.digests()). Each edit kind is one step: the
 ## corpus added one primitive at a time, a held raise across both rivers, smooth, lower, an undone
-## hill, a moved wall, a held terrace, and a river landing derived on the worker thread.
+## hill, a moved wall, a held terrace, a held level (flatten, then a tier run), a fold of the sculpt
+## run into rasters, and a river landing derived on the worker thread.
 
 
 func _check_same(n: RefCounted, c: TerraCorpus, label: String) -> void:
@@ -78,6 +79,29 @@ func test_update_equals_build() -> void:
 		n.call("append_dabs", tier, dab)
 		n.call("derive")
 	_check_same(n, c, "held terrace")
+	# A held level stroke (kind 17): flatten dabs, then a tier run, one dab per derive.
+	var level := -1
+	for k in 16:
+		var edge := 0 if k < 8 else 1
+		var dab := c.capsule(12.0 + k * 0.4, 44.0 + k * 0.15, 0.4, 0.15, [2.5, 5.5, 0.05, edge])
+		if level < 0:
+			level = _edit(n, c, TerraCorpus.LEVEL, dab)
+		else:
+			c.append(level, dab)
+			n.call("append_dabs", level, dab)
+		n.call("derive")
+	_check_same(n, c, "held level")
+	# A fold: the sculpt run spliced into rasters in its place, the derive told as TerraSession does.
+	var run := c.sculpt_run()
+	var fold := c.fold_splice(run, n.call("consolidate", PackedInt32Array(run)))["edit"] as Dictionary
+	for i in range(fold["at"], c.terra.prims.size()):
+		n.call("remove_prim", int(c.terra.prims[i]["id"]))
+	assert_true(c.splice(fold), "the fold's splice")
+	for i in range(fold["at"], c.terra.prims.size()):
+		var p := c.terra.prims[i]
+		n.call("set_prim", p["id"], p["kind"], p["data"])
+	n.call("derive")
+	_check_same(n, c, "a fold")
 	# A river landing derived on the worker thread (the release path).
 	_edit(n, c, TerraCore.RIVER, c.line([2.0, 0.5], [55, 4, 50, 30, 44, 58]))
 	n.call("derive_async")

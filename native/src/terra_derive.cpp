@@ -143,7 +143,7 @@ Dictionary TerraDerive::tile_collision(int64_t tile, int64_t stride) const {
 }
 
 String TerraDerive::version() const {
-	return "terra 5 bridge";
+	return "terra 6 sculpt kinds";
 }
 
 Dictionary TerraDerive::grid() const {
@@ -1151,6 +1151,7 @@ void TerraDerive::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("derive_async"), &TerraDerive::derive_async);
 	ClassDB::bind_method(D_METHOD("is_busy"), &TerraDerive::is_busy);
 	ClassDB::bind_method(D_METHOD("take_result"), &TerraDerive::take_result);
+	ClassDB::bind_method(D_METHOD("consolidate", "ids"), &TerraDerive::consolidate);
 	ClassDB::bind_method(D_METHOD("tile_collision", "tile", "stride"), &TerraDerive::tile_collision);
 	ClassDB::bind_method(D_METHOD("tiles_x"), &TerraDerive::tiles_x);
 	ClassDB::bind_method(D_METHOD("tiles_y"), &TerraDerive::tiles_y);

@@ -88,7 +88,7 @@ public:
 	TerraDerive();
 	~TerraDerive();
 
-	/// "terra 5 bridge": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
+	/// "terra 6 sculpt kinds": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
 	String version() const;
 	/// Allocates a w x h sample grid over a map of `extent` metres, centred on the origin (sample
 	/// (0, 0) at -extent / 2), and forgets the document. TerraCore passes 2 (n - 1) + 1 per axis of
@@ -116,6 +116,13 @@ public:
 	bool is_busy() const;
 	/// The async derive's result once it has finished (joined), else an empty Dictionary.
 	Dictionary take_result();
+	/// Folds the run `ids` (consecutive compose primitives in document order: strokes, levels,
+	/// terraces) into sculpt rasters (kind 9): one per 64-sample tile the run's influence meets and
+	/// changed, each the floats of a sculpt primitive. Put in the run's place (one splice), they derive
+	/// as the run did. Reads the primitives as set (pending edits included), writes nothing; tiles run
+	/// on the pool. Empty when an async derive runs or `ids` is not such a run
+	/// (terra_consolidate.cpp).
+	Array consolidate(const PackedInt32Array &ids) const;
 	/// A tile's collision heights: the derived ground in metres over every `stride`-th sample of
 	/// [64 tx, 64 tx + 65) per axis (shared edges, clipped at the map), row-major;
 	/// {"w", "d", "heights", "min", "max", "step": Vector2 metres between the heights per axis}.

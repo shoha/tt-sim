@@ -25,11 +25,12 @@ loaded map behind a switch, off by default ("The session").
 | `native/src/terra_stages.h` | the stage functions' declarations and the water rules' constants (metres) |
 | `native/src/terra_pool.h` | the worker pool a stage splits its tiles over |
 | `native/src/terra_kinds.{h,cpp}` | the kind registry: `KindDef`, the self-registering `TERRA_KIND(...)`, `kind_def(id)` (see "Kinds") |
-| `native/src/kinds/terra_kind_<name>.cpp` | one kind each: plane, hill, ridge, stroke, terrace (compose stamps), paint (the paint stamp), path and wall (the line kinds' geometry, solve and rect) |
+| `native/src/kinds/terra_kind_<name>.cpp` | one kind each: plane, hill, ridge, stroke, terrace, level, sculpt (compose stamps), paint (the paint stamp), path and wall (the line kinds' geometry, solve and rect) |
 | `native/src/terra_compose.cpp` | stages 1, 1b and 5d: `stamp_rect` (a stamp stage's primitives applied by their kinds in document order), `smooth_rect` |
 | `native/src/terra_water.cpp` | stage 2 and 3: river and pond geometry, topology, solves, the carve; the two water kinds register here |
 | `native/src/terra_paths.cpp` | the line kinds' shared maths: `line_from`, `window_mean`, `grade`, `nearest_seg` |
 | `native/src/terra_fields.cpp` | stages 5 and 6: slope, capped distances, the look field, the ground rules |
+| `native/src/terra_consolidate.cpp` | `TerraDerive.consolidate(ids)`: a run of sculpt primitives folded into sculpt rasters (see "Sculpt kinds and folding") |
 | `native/src/terra_derive.{h,cpp}` | the GDCLASS `TerraDerive`: setup, primitives and their seeds, rules, the stage loop, the three solves and the rect bodies' dispatch, queries, digests |
 | `utils/terraform/terra_core.gd` | `TerraCore`: `native_available()`, `NATIVE_VERSION`, the built-in kind ids, `grid_for(doc)`, `make_derive(doc)`, `load_rules()`, `enabled()` (the switch: `tt_sim/terrain/core`, default off; `switch_override` for tests) |
 | `utils/terraform/terra_cache.gd` | `TerraCache`: the derived record (`terrain/derived.bin`, digests only): `make_record`, `prepare`, `derive_for`, `check`, `derive_and_check`, `encode` / `decode` |
@@ -62,7 +63,7 @@ is its height at the centre. Halos are in samples, constants in metres.
 ## Primitives
 
 A primitive is an id, a kind and a float list. Kind ids are stable and never reused: 0 to 8 are
-built in, 9 to 15 reserved (one for phase 2's consolidated sculpt raster), new kinds start at 16.
+built in, 9 is the folded sculpt raster, 10 to 15 reserved, new kinds start at 16.
 
 | Id | Kind | Floats |
 |---|---|---|
@@ -75,7 +76,9 @@ built in, 9 to 15 reserved (one for phase 2's consolidated sculpt raster), new k
 | 6 | path | width, then x, z per point |
 | 7 | wall | height, thickness, then x, z per point |
 | 8 | paint | per dab cx, cz, radius, surface id |
+| 9 | sculpt | x0, z0, sx, sz, nx, nz, layers, then nx * nz height deltas (and as many smoothing-weight deltas with 2 layers): a folded run (see "Sculpt kinds and folding") |
 | 16 | terrace | per dab cx, cz, radius, tier_m, softness (the riser's share of a tier, 0 to 1) |
+| 17 | level | per dab ax, az, bx, bz (one frame's capsule), radius, target_y, strength, edge (0 flatten, 1 tier, 2 tier cut) |
 
 Document order is the order compose applies. `append_dabs` grows a stroke, terrace or paint coat
 and dirties only the new dabs' bounds. The terrace is not additive: it pulls the height composed so
@@ -115,6 +118,38 @@ and the update equals build step are tests). A water kind is the exception: wate
 solve, so a new one (a spring, say) is an edit of `terra_water.cpp`. A new rule is one row in
 `ground_rules.json`; a new stage is a `StageDef` row and its body.
 
+## Sculpt kinds and folding
+
+Card terraform-p2-sculpt-kinds (2026-11-22) ported today's sculpt (`HeightBrush`, `HeightStroke`)
+onto primitives for card 6's tools:
+
+- **Raise, Lower, Smooth: stroke (3).** The falloff is HeightBrush's `(1 - t^2)^2`. A held frame's
+  capsule becomes point dabs at most radius / 4 apart (`StrokeKind.capsule_dabs`), sharing the
+  frame's exposure so they lay down the capsule's volume (`KindLayout.capsule_points`); raise and
+  lower carry `HeightBrush.raise_speed(radius)` x seconds metres. Smooth dabs add seconds of
+  exposure to SW; the smooth stage moves a sample by `1 - exp(-4 SW)` toward the mean of a box whose
+  variance grows with the exposure (HeightStroke's repeated per-dab smoothing is diffusion; the one
+  pass matches it to second order), box sums from an exact fixed-point summed-area table, half width
+  up to `SMOOTH_R` 24 samples.
+- **Flatten, Tier, Tier cut: level (17).** Capsule dabs (HeightStroke's distance to the segment):
+  flatten approaches `target_y` by `1 - exp(-4 w seconds)` per dab; a run of tier dabs at one target
+  is one completed tier stroke, `HeightBrush.tier_goal` ported to C++ (`LevelKind.flatten_dab`,
+  `tier_dab`).
+- **Against HeightStroke** (`test_terra_sculpt_kinds`, the same 60-frame stroke both ways, 200 ft
+  map, radius 3 m, 2 s): raise and lower within 3.0 mm, flatten 17.2 mm, tier and tier cut under
+  0.1 mm, smooth 150 mm at worst (1.3 cm mean; the card's bar was 5 cm, missed: one pass cannot
+  follow 60 passes where the blur is as wide as the feature; the exact port is open).
+- **Folding.** `TerraDerive.consolidate(ids)` (`terra_consolidate.cpp`) takes a run of consecutive
+  compose primitives (strokes, levels, terraces) and returns one sculpt raster per 64-sample tile the
+  run changed: compose from the same start without and with the run, the difference as heights and,
+  where the run smoothed, a second layer of smoothing weight. Put in the run's place by one splice,
+  the rasters derive within 2e-7 m of the run; the inverse splice restores every digest. Peers get
+  the rasters as data. A fold freezes the run's reading of the ground before it (a level or terrace
+  over a hill moved later); a folded smooth stroke's weight stays live. Tiles run on the pool;
+  nothing is written; empty while an async derive runs. At 320 ft, 4096 dabs: consolidate 6.9 ms, 124
+  rasters, full derive 28.4 ms folded (30.4 live). `TerraSculpt` (when to fold: KEEP_LIVE 8,
+  CONSOLIDATE_DABS 4096) is card 6's.
+
 ## The stage chain
 
 `derive()` runs the stages over what the pending edits dirtied; `derive_full()` over the whole map.
@@ -133,7 +168,7 @@ each read is an input or an earlier stage's write, and each array has one writer
 | # | Stage (`name`) | Shape | Reads | Writes | Halo (samples) |
 |---|---|---|---|---|---|
 | 1 | compose | rect | compose prims | Hraw, SW | 0 (each kind's bounds seed it) |
-| 1b | smooth | rect | Hraw, SW | H0 | `SMOOTH_R` 8 |
+| 1b | smooth | rect | Hraw, SW | H0 | `SMOOTH_R` 24 |
 | 2 | water_solve | graph | H0 at each body's read points, water prims | levels | exact read hit (`reads_hit`) |
 | 3 | carve | rect | H0, levels | H1, WL | 0; a moved level marks its arc bbox + `hw + CARVE_REACH_M` (5.5 m) as changed levels |
 | 3b | paths | line + rect | H1, WL, path prims | Hp, PM | 0; a moved profile seeds `hw + PATH_REACH_M` (1.7 m) |
@@ -428,8 +463,8 @@ terrain primitives yet") until its card lands, so those cards edit only their op
 
 ## Versions and the library
 
-`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 5 bridge` (the bridge's reads
-and the flat reaches), and the golden fixture's `version` follows it. The scatter library's string carries `terra`
+`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 6 sculpt kinds` (the level and
+sculpt kinds, `consolidate`, the smooth stage's exposure model), and the golden fixture's `version` follows it. The scatter library's string carries `terra`
 (`ttscatter 10 curves water chunk fields wfield2 terra`), so a stale DLL fails
 `test_scatter_native`. After pulling a change here, rebuild `native/` (AGENTS.md "Testing").
 Without the library every terra test is pending with "the native library is not built", which CI

@@ -6,11 +6,12 @@ extends RefCounted
 ## fails when the two disagree on an id, name, stage, shape, header or stride.
 ##
 ## A kind script declares NAME (stable, written in the map's kind table), ID (stable, never
-## reused: 0 to 8 built in, 9 to 15 reserved, 16 up new), STAGE (the native stage's name), SHAPE
-## ("stamp", "line" or "water"), HEADER, STRIDE and MIN_ITEMS (its float layout: the header, then
-## at least MIN_ITEMS whole items of STRIDE floats), LABEL and DEFAULTS for the tool, and static
-## validate(data) -> bool, bounds(data) -> Rect2 (the world box it can change; empty for the whole
-## map) and describe() -> String. Phase 2 adds each kind's tool to its folder.
+## reused: 0 to 8 built in, 9 the sculpt raster, 10 to 15 reserved, 16 up new), STAGE (the
+## native stage's name), SHAPE ("stamp", "line" or "water"), HEADER, STRIDE and MIN_ITEMS (its
+## float layout: the header, then at least MIN_ITEMS whole items of STRIDE floats), LABEL and
+## DEFAULTS for the tool, and static validate(data) -> bool, bounds(data) -> Rect2 (the world box
+## it can change; empty for the whole map) and describe() -> String. Phase 2 adds each kind's tool
+## to its folder.
 ##
 ## A new kind is its folder, its native kernel file and one line in KINDS. Every lookup goes by
 ## id, so the order of KINDS means nothing.
@@ -29,6 +30,8 @@ const KINDS := [
 	preload("res://utils/terraform/kinds/wall/wall_kind.gd"),
 	preload("res://utils/terraform/kinds/paint/paint_kind.gd"),
 	preload("res://utils/terraform/kinds/terrace/terrace_kind.gd"),
+	preload("res://utils/terraform/kinds/level/level_kind.gd"),
+	preload("res://utils/terraform/kinds/sculpt/sculpt_kind.gd"),
 ]
 
 

@@ -17,6 +17,8 @@ const CELLS := 40
 const NO_LIBRARY := "the native library is not built (AGENTS.md Testing): no current TerraDerive"
 ## The terrace kind's id (utils/terraform/kinds/terrace/).
 const TERRACE := 16
+## The level kind's id (utils/terraform/kinds/level/).
+const LEVEL := 17
 
 var map_doc: MapDocument
 ## The corpus's terrain document (also set as map_doc.terra).
@@ -74,6 +76,98 @@ static func build_terraced(cells := Vector2i(CELLS, CELLS)) -> TerraCorpus:
 	var c := build(cells)
 	c.add(TERRACE, c.dabs(terrace_dabs(8, 0)))
 	return c
+
+
+## The terraced corpus with the sculpt kinds (card terraform-p2-sculpt-kinds): a flatten stroke
+## over the west hill, a tier stroke and a tier cut on the north-west hill, a smooth stroke over
+## the plane's slope and a folded sculpt raster (a bump, made here so the case does not depend on
+## consolidate), so every registered kind is in a corpus.
+static func build_sculpted(cells := Vector2i(CELLS, CELLS)) -> TerraCorpus:
+	var c := build_terraced(cells)
+	var flat := PackedFloat32Array()
+	var tier := PackedFloat32Array()
+	var cut := PackedFloat32Array()
+	var smooth: Array = []
+	for k in 10:
+		flat.append_array(c.capsule(10.0 + k * 0.5, 14.0, 0.5, 0.0, [3.0, 4.5, 0.05, 0]))
+		tier.append_array(c.capsule(16.0 + k * 0.3, 44.0, 0.3, 0.0, [2.5, 6.0, 0.0, 1]))
+		cut.append_array(c.capsule(22.0, 41.0 + k * 0.3, 0.0, 0.3, [2.0, 4.0, 0.0, 2]))
+		smooth.append([40.0 + k * 0.4, 56.0, 3.0, 0.04, 2])
+	c.add(LEVEL, flat)
+	c.add(LEVEL, tier + cut)
+	c.add(TerraCore.STROKE, c.dabs(smooth))
+	c.add(TerraCore.SCULPT, c.bump_raster(c.at(8.0, 52.0), 24, 0.4))
+	return c
+
+
+## A level dab's floats: the capsule from layout point (x, z) to (x + dx, z + dz), placed, then
+## `rest` (radius, target_y, strength, edge) as given.
+func capsule(x: float, z: float, dx: float, dz: float, rest: Array) -> PackedFloat32Array:
+	var a := at(x, z)
+	var b := at(x + dx, z + dz)
+	return PackedFloat32Array([a.x, a.y, b.x, b.y] + rest)
+
+
+## A sculpt raster (kind 9) of `n` squared derive samples whose first sample is the one nearest
+## `corner`: a (1 - t^2)^2 bump of `height` metres, no smoothing layer.
+func bump_raster(corner: Vector2, n: int, height: float) -> PackedFloat32Array:
+	var gd := TerraCore.grid_for(map_doc)
+	var size: Vector2i = gd["size"]
+	var ext: Vector2 = gd["extent"]
+	var step := Vector2(ext.x / (size.x - 1), ext.y / (size.y - 1))
+	var i0 := roundi((corner.x + ext.x * 0.5) / step.x)
+	var j0 := roundi((corner.y + ext.y * 0.5) / step.y)
+	var out := PackedFloat32Array(
+		[-ext.x * 0.5 + i0 * step.x, -ext.y * 0.5 + j0 * step.y, step.x, step.y, n, n, 1]
+	)
+	var half := (n - 1) * 0.5
+	for j in n:
+		for i in n:
+			var t2 := (Vector2(i, j) - Vector2(half, half)).length_squared() / (half * half)
+			out.append(height * (1.0 - t2) * (1.0 - t2) if t2 < 1.0 else 0.0)
+	return out
+
+
+## The ids of the oldest run of compose primitives a fold takes: from the first stroke, level or
+## terrace, every compose primitive in a row (in document order, other stages skipped) that is one.
+func sculpt_run() -> Array[int]:
+	var foldable := [TerraCore.STROKE, TERRACE, LEVEL]
+	var run: Array[int] = []
+	for p in terra.prims:
+		var kind := int(p["kind"])
+		if TerraKinds.script_for(kind).STAGE != "compose":
+			continue
+		if kind in foldable:
+			run.append(int(p["id"]))
+		elif not run.is_empty():
+			break
+	return run
+
+
+## The splice that folds the run `ids` into `rasters` (TerraDerive.consolidate's floats) at the
+## run's place, new ids from next_id, and the splice that undoes it: {"edit", "inverse"}, each
+## {"remove", "insert", "at", "next_id"} for TerraDoc.splice.
+func fold_splice(ids: Array[int], rasters: Array) -> Dictionary:
+	var at := terra.index_of(ids[0])
+	var next := terra.next_id
+	var insert: Array = []
+	var made: Array = []
+	for k in rasters.size():
+		insert.append({"id": next + k, "kind": TerraCore.SCULPT, "flags": 0, "data": rasters[k]})
+		made.append(next + k)
+	var back: Array = []
+	for id in ids:
+		var p := terra.find(id)
+		back.append({"id": id, "kind": p["kind"], "flags": p.get("flags", 0), "data": p["data"]})
+	return {
+		"edit": {"remove": ids, "insert": insert, "at": at, "next_id": next + rasters.size()},
+		"inverse": {"remove": made, "insert": back, "at": at, "next_id": next},
+	}
+
+
+## Applies a fold_splice() side to the document; true when TerraDoc.splice took it.
+func splice(s: Dictionary) -> bool:
+	return terra.splice(s["remove"], s["insert"], s["at"], s["next_id"])
 
 
 ## `count` terrace dabs from dab `from` of the stroke across the east hill (layout metres).
