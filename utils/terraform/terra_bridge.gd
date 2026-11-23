@@ -30,6 +30,16 @@ extends RefCounted
 ## regrowth, as a carve lands; its record is last_water_record) or, without an editor, refreshes
 ## the map's dressing and AuthoredWater itself. A body list past a cap is refused (warned, the
 ## document's water left as it was), never truncated.
+##
+## Never blocking (card terraform-p2-river-release; at once a river release cost 81-108 ms of one
+## frame). With an authoring editor the landing is spread: the written rect goes to the height
+## queue within the frame budgets (HeightEditor.work(), drained by its step()), and the water
+## conversion (TerraWaterBridge.bodies and region, about 30 ms at 320 ft) runs on a worker over a
+## snapshot (_start_water), written and handed to land_external by step() once the task is done.
+## TerraEditor lands a gesture's ground only after both (its _ground_busy), so everything lands in
+## stage order; finish_water() lands a conversion at once (finish_work, the load), and a bridge
+## freed meanwhile parks its task with TerraSession's reaper. Without an editor (play, tests of
+## the bridge alone) the water is converted and landed at once, as before.
 
 ## Microseconds and samples of the last land(), by part (the held-stroke budget's timers): the
 ## native diff, the row writes, the queue, and the samples written.
@@ -53,6 +63,8 @@ var session: TerraSession = null
 var _editor: WeakRef = null
 ## TerraWaterBridge.signature of the water last written (or refused).
 var _water_sig := PackedByteArray()
+## The water conversion on its worker (_start_water), or {}: {"task", "result"}.
+var _water_job: Dictionary = {}
 
 
 ## Attaches the bridge to `p_session` (session.bridge is set) and, when given, the authoring
@@ -86,6 +98,7 @@ func swap_heights() -> bool:
 ## landing: the load, before AuthoredLoadPrep builds the water from it. False while the session
 ## is not ready or when the conversion is refused (a cap; the document's water is left).
 func swap_water() -> bool:
+	finish_water()
 	_write_water()
 	return session != null and session.is_ready() and last_water_error == ""
 
@@ -100,17 +113,41 @@ func held(edit: Dictionary) -> int:
 
 
 ## Writes what the landed derives changed into the document: the heights (heights_only) and,
-## unless `is_held`, the water when its signature moved (water_of), then lands it. Returns the
-## document rect of the heights written.
+## unless `is_held`, the water when its signature moved (water_of), then lands it: with an
+## authoring editor the conversion runs on a worker and lands from step() (see the header).
+## Returns the document rect of the heights written.
 func land(is_held: bool) -> Rect2i:
 	var rect := heights_only()
 	if rect.has_area():
 		_queue(rect, is_held)
 	if not is_held:
-		var water := _write_water()
-		if not water.is_empty():
-			_land_water(water)
+		if _editor_now() != null:
+			_start_water()
+		else:
+			var water := _write_water()
+			if not water.is_empty():
+				_land_water(water)
 	return rect
+
+
+## True while a water conversion runs on its worker (land(); step() or finish_water() lands it).
+func water_pending() -> bool:
+	return not _water_job.is_empty()
+
+
+## One frame (TerraEditor.step): lands the water conversion once its worker has finished. Never
+## waits.
+func step() -> void:
+	if _water_job.is_empty() or not WorkerThreadPool.is_task_completed(int(_water_job.task)):
+		return
+	_land_job()
+
+
+## Lands the water conversion in flight at once, waiting for its worker (TerraEditor.finish_work,
+## the next stage's land(), the load).
+func finish_water() -> void:
+	if not _water_job.is_empty():
+		_land_job()
 
 
 ## The heights half of land(): diffs the changed rect and writes the tight rect into
@@ -204,14 +241,22 @@ func _on_settled() -> void:
 	land(false)
 
 
-## Converts and writes the settled derive's water when its signature moved: {"region": the
-## document samples the water changed over, "before": the water model before (WaterEdit.model_of)}
-## or {} when nothing was written (unchanged, refused or not ready).
-func _write_water() -> Dictionary:
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and not _water_job.is_empty():
+		# Abandoned (the map closed): the session's reaper lets the task go once it completes.
+		TerraSession.park_task(int(_water_job.task))
+
+
+func _editor_now() -> Object:
+	return _editor.get_ref() if _editor != null else null
+
+
+## The settled derive's water records and falls, with their signature, when it moved since the
+## water last written ({} when unchanged or not ready); the signature is taken as written.
+func _moved_water() -> Dictionary:
 	var derive := session.settled_derive() if session != null else null
 	if derive == null:
 		return {}
-	var started := Time.get_ticks_usec()
 	var doc := session.doc
 	var records: Dictionary = derive.call("water_records")
 	var falls: PackedFloat32Array = derive.call("falls")
@@ -219,21 +264,88 @@ func _write_water() -> Dictionary:
 	if sig == _water_sig:
 		return {}
 	_water_sig = sig
+	return {"records": records, "falls": falls}
+
+
+## Converts and writes the settled derive's water when its signature moved, on this thread:
+## {"region": the document samples the water changed over, "before": the water model before
+## (WaterEdit.model_of)} or {} when nothing was written (unchanged, refused or not ready).
+func _write_water() -> Dictionary:
+	var started := Time.get_ticks_usec()
+	var moved := _moved_water()
+	if moved.is_empty():
+		return {}
+	var result := {}
+	TerraBridge._convert(moved.records, moved.falls, session.doc, result)
+	return _apply_water(result, Time.get_ticks_usec() - started)
+
+
+## land()'s water with an authoring editor: the conversion of _write_water() on a worker over a
+## snapshot (WaterMeshBuilder.snapshot, the terrain section copied), landed by step(). A conversion
+## still in flight lands first, so the water lands in stage order (TerraEditor holds the next stage
+## while one is pending, so this rarely waits).
+func _start_water() -> void:
+	finish_water()
+	var moved := _moved_water()
+	if moved.is_empty():
+		return
+	var doc := session.doc
+	var snap := WaterMeshBuilder.snapshot(doc)
+	snap.terra = (doc.terra as TerraDoc).duplicate() if doc.terra is TerraDoc else null
+	var result := {}
+	var run := TerraBridge._convert.bind(moved.records, moved.falls, snap, result)
+	_water_job = {
+		"task": WorkerThreadPool.add_task(run, false, "TerraBridge water"), "result": result
+	}
+
+
+## The conversion (pure, any thread): TerraWaterBridge.bodies of `records` and `falls` on `doc`'s
+## grid and section and the region it changes against `doc`'s water, into `out` ({"bodies",
+## "pond_mask", "region", "usec"} or {"error", "usec"}).
+static func _convert(
+	records: Dictionary, falls: PackedFloat32Array, doc: MapDocument, out: Dictionary
+) -> void:
+	var started := Time.get_ticks_usec()
 	var water := TerraWaterBridge.bodies(records, falls, doc)
-	if water.has("error"):
-		last_water_error = String(water["error"])
+	if not water.has("error"):
+		water["region"] = TerraWaterBridge.region(
+			doc, doc.water_bodies, doc.pond_mask, water["bodies"], water["pond_mask"]
+		)
+	out.merge(water)
+	out["usec"] = Time.get_ticks_usec() - started
+
+
+## Waits for the worker's conversion (done by now from step()), writes it and lands it.
+func _land_job() -> void:
+	var job := _water_job
+	_water_job = {}
+	WorkerThreadPool.wait_for_task_completion(int(job.task))
+	if session == null or not is_instance_valid(session):
+		return
+	var result: Dictionary = job.result
+	var water := _apply_water(result, int(result.get("usec", 0)))
+	if not water.is_empty():
+		_land_water(water)
+
+
+## Writes a conversion `result` (_convert) into the document; `usec` its cost so far. The
+## _write_water() return.
+func _apply_water(result: Dictionary, usec: int) -> Dictionary:
+	if result.has("error"):
+		last_water_error = String(result["error"])
 		push_warning("TerraBridge: the derived water is refused: %s" % last_water_error)
 		return {}
+	var started := Time.get_ticks_usec()
 	last_water_error = ""
-	var bodies: Array[WaterBody] = water["bodies"]
-	var mask: PackedByteArray = water["pond_mask"]
-	var region := TerraWaterBridge.region(doc, doc.water_bodies, doc.pond_mask, bodies, mask)
+	var doc := session.doc
+	var bodies: Array[WaterBody] = result["bodies"]
+	var mask: PackedByteArray = result["pond_mask"]
 	var before := WaterEdit.model_of(doc)
 	doc.water_bodies = bodies
 	doc.pond_mask = mask
 	water_landings += 1
-	last_water_usec = Time.get_ticks_usec() - started
-	return {"region": region, "before": before}
+	last_water_usec = usec + Time.get_ticks_usec() - started
+	return {"region": result["region"], "before": before}
 
 
 ## Lands water _write_water() wrote: the authoring editor's WaterEditor.land_external (its
@@ -269,7 +381,10 @@ func _queue(rect: Rect2i, is_held: bool) -> void:
 			heights.external_rect(rect)
 		else:
 			heights.queue_heights(rect)
-			heights.work(not is_held)
+			# Within the frame budgets; HeightEditor.step() drains the rest, and TerraEditor lands
+			# the gesture's ground only once it has (card terraform-p2-river-release: at once it was
+			# 40-59 ms of one frame).
+			heights.work()
 	else:
 		var terrain := _terrain()
 		if terrain != null:
