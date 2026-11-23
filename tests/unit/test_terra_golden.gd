@@ -20,6 +20,7 @@ const CASES := {
 	"terraced_40": Vector2i(40, 40),
 	"sculpted_40": Vector2i(40, 40),
 	"folded_40x48": Vector2i(40, 48),
+	"switchback_40": Vector2i(40, 40),
 }
 
 
@@ -31,6 +32,8 @@ func _digests(name: String, cells: Vector2i) -> Dictionary:
 		c = TerraCorpus.build_sculpted(cells)
 	else:
 		c = TerraCorpus.build(cells)
+	if name.begins_with("switchback_"):
+		c.add(TerraCore.PATH, c.line([2.0, 0], _switchback()))
 	if name.begins_with("folded_"):
 		var run := c.sculpt_run()
 		c.splice(c.fold_splice(run, c.make_derive().call("consolidate", PackedInt32Array(run)))["edit"])
@@ -41,6 +44,17 @@ func _digests(name: String, cells: Vector2i) -> Dictionary:
 	for k in d:
 		out[k] = str(d[k])
 	return out
+
+
+## A path that turns back on itself across the west hill's flank (layout units): its two stretches,
+## 3.5 apart, stand in each other's reach, so the case runs the path stage's switchback blend.
+func _switchback() -> Array:
+	var pts: Array = [6.0, 23.0, 18.0, 23.0]
+	for k in range(1, 8):
+		var a := -PI * 0.5 + PI * k / 8.0
+		pts.append_array([18.0 + cos(a) * 1.75, 24.75 + sin(a) * 1.75])
+	pts.append_array([18.0, 26.5, 6.0, 26.5])
+	return pts
 
 
 func test_version() -> void:
