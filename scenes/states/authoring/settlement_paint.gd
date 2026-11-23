@@ -11,6 +11,9 @@ extends RefCounted
 ## unlay() is the other direction: it takes back the strokes a record remembers (SettlementUnpaint)
 ## as one `surface` history entry of the same kind, so Clear and a re-dress remove exactly the
 ## dressing's paint, in the caller's group, and undo and peers need nothing new.
+##
+## With the terrain core active the paving is paint coats instead (TerraPaint.lay_coats, one
+## gesture in the caller's group), and unlay removes the coats equal to the record's strokes.
 
 
 ## Paints `strokes` (SettlementGround.plan's, in order) into `editor`'s document and records each
@@ -18,6 +21,9 @@ extends RefCounted
 ## ground, scatter and peers follow through AuthoringEditor.apply_surface_diff, the method the
 ## entry's redo calls.
 static func lay(editor: AuthoringEditor, strokes: Array[Dictionary]) -> int:
+	if editor.terra.active():
+		# The ground is the terrain core's (card terraform-p2-paint-path): the paving is coats.
+		return 1 if editor.terra.paint.lay_coats(strokes, "Pave") > 0 else 0
 	var recorded := 0
 	var run: SurfaceStroke = null
 	var surface := ""
@@ -35,6 +41,8 @@ static func lay(editor: AuthoringEditor, strokes: Array[Dictionary]) -> int:
 ## Takes back the paint of `strokes` (a record's `ground`) from `editor`'s document and records it
 ## as one history entry (inside the caller's group). Returns 1 when it changed anything, else 0.
 static func unlay(editor: AuthoringEditor, strokes: Array[Dictionary]) -> int:
+	if editor.terra.active():
+		return editor.terra.paint.unlay_coats(strokes, "Take back paving")
 	var diff := SettlementUnpaint.remove(editor.document, strokes)
 	if diff.is_empty():
 		return 0

@@ -38,8 +38,16 @@ const KNOWN_FLAGS := MUTED
 ## Largest primitive id (ids are u32 on disk, kept within a positive int32).
 const MAX_ID := 0x7FFFFFFF
 
+## Surface names a document may list (MapDocument.PAINT_SURFACE_LIMIT), and the longest name.
+const MAX_SURFACES := 64
+const MAX_SURFACE_NAME := 64
+
 ## The primitives in document order (see the header for the form).
 var prims: Array[Dictionary] = []
+## The surface table (card terraform-p2-paint-path): palette surface names, which paint coats and
+## paths name by index. Append only while editing (a surface keeps its index), at most
+## MAX_SURFACES; the bridge writes it as MapDocument.surface_ids, so an index is also the planes'.
+var surfaces := PackedStringArray()
 ## The id the next add() takes; always above every id in the list.
 var next_id := 1
 ## The derived record (see the header; TerraCache.make_record's form), or {}.
@@ -206,6 +214,7 @@ func float_count() -> int:
 func duplicate() -> TerraDoc:
 	var copy := TerraDoc.new()
 	copy.next_id = next_id
+	copy.surfaces = surfaces.duplicate()
 	copy.derived = derived.duplicate(true)
 	for p in prims:
 		# Deep: a shallow duplicate would share the packed array, appends included (probed on
@@ -223,6 +232,9 @@ func problem() -> String:
 		return "terrain: %d primitives, over %d" % [prims.size(), MapDocument.MAX_TERRA_PRIMS]
 	if next_id < 1 or next_id > MAX_ID + 1:
 		return "terrain: next_id %d is out of range" % next_id
+	var why := surfaces_problem(surfaces)
+	if why != "":
+		return "terrain: %s" % why
 	var seen := {}
 	var total := 0
 	for p in prims:
@@ -241,6 +253,25 @@ func problem() -> String:
 			return "terrain: primitive %d: %s" % [id, reason]
 	if total > MapDocument.MAX_TERRA_FLOATS:
 		return "terrain: %d floats, over %d" % [total, MapDocument.MAX_TERRA_FLOATS]
+	return ""
+
+
+## Why `names` cannot be a surface table, or "": at most MAX_SURFACES names, each 1 to
+## MAX_SURFACE_NAME printable ASCII characters, none repeated. Pure.
+static func surfaces_problem(names: PackedStringArray) -> String:
+	if names.size() > MAX_SURFACES:
+		return "%d surfaces, over %d" % [names.size(), MAX_SURFACES]
+	var seen := {}
+	for n in names:
+		var ascii := n.to_ascii_buffer()
+		if n.is_empty() or ascii.size() > MAX_SURFACE_NAME or ascii.get_string_from_ascii() != n:
+			return "a surface name is not 1 to %d ASCII characters" % MAX_SURFACE_NAME
+		for b in ascii:
+			if b < 32 or b > 126:
+				return "a surface name is not printable"
+		if seen.has(n):
+			return "surface '%s' is listed twice" % n
+		seen[n] = true
 	return ""
 
 

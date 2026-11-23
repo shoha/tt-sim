@@ -76,4 +76,36 @@ Dictionary TerraDerive::doc_heights_diff(const PackedFloat32Array &heights, int6
 	return out;
 }
 
+PackedByteArray TerraDerive::doc_surfaces(const Rect2i &rect) const {
+	const int dw = doc_samples(g.w), dh = doc_samples(g.h);
+	PackedByteArray out;
+	if (PI.empty()) {
+		return out;
+	}
+	int a0 = 0, b0 = 0, a1 = dw, b1 = dh;
+	if (rect.size.x > 0 && rect.size.y > 0) {
+		a0 = std::max(rect.position.x, 0);
+		b0 = std::max(rect.position.y, 0);
+		a1 = std::min(rect.position.x + rect.size.x, dw);
+		b1 = std::min(rect.position.y + rect.size.y, dh);
+	}
+	if (a1 <= a0 || b1 <= b0) {
+		return out;
+	}
+	const int64_t n = int64_t(a1 - a0) * (b1 - b0) * 4;
+	out.resize(n * 2);
+	uint8_t *o = out.ptrw();
+	for (int p = 0; p < 2; p++) {
+		const uint8_t *plane = p == 0 ? PI.data() : PW.data();
+		for (int b = b0; b < b1; b++) {
+			const uint8_t *row = plane + int64_t(2 * b) * g.w * 4;
+			for (int a = a0; a < a1; a++) {
+				std::memcpy(o, row + int64_t(2 * a) * 4, 4);
+				o += 4;
+			}
+		}
+	}
+	return out;
+}
+
 } // namespace godot

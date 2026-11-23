@@ -58,6 +58,9 @@ var last_water_error := ""
 ## "water_before", "water_after", the dressing, props, kept rocks, followers, "region",
 ## "landed"), for the gesture whose edit moved the water; {} before any.
 var last_water_record: Dictionary = {}
+## Landings that wrote paint bytes, and the microseconds of the last one's read and write.
+var paint_landings := 0
+var last_paint_usec := 0
 
 var session: TerraSession = null
 var _editor: WeakRef = null
@@ -65,6 +68,8 @@ var _editor: WeakRef = null
 var _water_sig := PackedByteArray()
 ## The water conversion on its worker (_start_water), or {}: {"task", "result"}.
 var _water_job: Dictionary = {}
+## True when the last surfaces_only() rewrote MapDocument.surface_ids.
+var _ids_moved := false
 
 
 ## Attaches the bridge to `p_session` (session.bridge is set) and, when given, the authoring
@@ -91,7 +96,23 @@ func swap_heights() -> bool:
 		return false
 	session.doc.heights = derive.call("doc_heights")
 	session.take_changed()
+	swap_surfaces(session.doc, derive)
+	session.take_paint_changed()
 	return true
+
+
+## Replaces `doc`'s painted surfaces with `derive`'s paint planes at the document samples and its
+## surface table (card terraform-p2-paint-path): surface_ids is the terrain document's table,
+## surface_weights the planes (empty while the table is). Only before the terrain is built.
+static func swap_surfaces(doc: MapDocument, derive: RefCounted) -> void:
+	var terra := doc.terra as TerraDoc
+	if terra == null:
+		return
+	doc.surface_ids = terra.surfaces.duplicate()
+	if terra.surfaces.is_empty():
+		doc.surface_weights = PackedByteArray()
+	else:
+		doc.surface_weights = derive.call("doc_surfaces", Rect2i())
 
 
 ## Writes the settled derive's water into the document (bodies and pond mask, water_of) with no
@@ -120,6 +141,9 @@ func land(is_held: bool) -> Rect2i:
 	var rect := heights_only()
 	if rect.has_area():
 		_queue(rect, is_held)
+	var painted := surfaces_only()
+	if painted.has_area() or _ids_moved:
+		_land_paint(painted, is_held)
 	if not is_held:
 		if _editor_now() != null:
 			_start_water()
@@ -193,6 +217,41 @@ func heights_only() -> Rect2i:
 	return rect
 
 
+## The paint half of land() (card terraform-p2-paint-path): the surface table into
+## MapDocument.surface_ids when it moved, then the paint planes over the document rect the landed
+## derives changed (TerraSession.take_paint_changed, halved), written row by row in place
+## (SurfaceStroke.write_block skips the rows already equal). Returns the document rect whose bytes
+## changed (empty when none); _ids_moved says whether the table did.
+func surfaces_only() -> Rect2i:
+	_ids_moved = false
+	var derive := session.settled_derive() if session != null else null
+	if derive == null or session.terra == null:
+		return Rect2i()
+	var doc := session.doc
+	var table := session.terra.surfaces
+	if doc.surface_ids != table:
+		doc.surface_ids = table.duplicate()
+		_ids_moved = true
+	var changed := TerraBridge.doc_rect(session.take_paint_changed())
+	if table.is_empty() and doc.surface_weights.is_empty():
+		return Rect2i()
+	if doc.surface_weights.size() != doc.sample_count() * MapDocument.SURFACE_BYTES:
+		# The first paint of the map: the whole planes (a new array, as SurfaceStroke.begin does).
+		doc.surface_weights = derive.call("doc_surfaces", Rect2i())
+		return Rect2i(0, 0, doc.samples_x(), doc.samples_z())
+	if not changed.has_area():
+		return Rect2i()
+	var started := Time.get_ticks_usec()
+	var bytes: PackedByteArray = derive.call("doc_surfaces", changed)
+	var before := SurfaceStroke.read_block(doc, doc.surface_weights, changed)
+	if bytes == before:
+		return Rect2i()
+	SurfaceStroke.write_block(doc, doc.surface_weights, changed, bytes)
+	last_paint_usec = Time.get_ticks_usec() - started
+	paint_landings += 1
+	return changed
+
+
 ## The document's water as `derive` solves it on `doc`'s grid (TerraWaterBridge.bodies):
 ## {"bodies", "pond_mask"}, or {"error"} past a cap.
 static func water_of(derive: RefCounted, doc: MapDocument) -> Dictionary:
@@ -228,6 +287,7 @@ static func seed_new_map(doc: MapDocument) -> bool:
 	doc.heights = derive.call("doc_heights")
 	terra.derived = TerraCache.make_record(terra, doc, derive)
 	doc.terra = terra
+	swap_surfaces(doc, derive)
 	var water := water_of(derive, doc)
 	if not water.has("error"):
 		doc.water_bodies = water["bodies"]
@@ -395,6 +455,19 @@ func _queue(rect: Rect2i, is_held: bool) -> void:
 				terrain.flush_collision()
 				terrain.settle_heights()
 	last_queue_usec = Time.get_ticks_usec() - started
+
+
+## Hands a paint landing on: the authoring editor's Paint tool (TerraPaint.land: the ground's weight
+## maps, and the scatter once released), else the map's AuthoredTerrain's weight maps.
+func _land_paint(rect: Rect2i, is_held: bool) -> void:
+	var editor: Object = _editor_now()
+	var terra: Object = editor.get("terra") if editor != null else null
+	if terra != null and terra.get("paint") != null:
+		terra.get("paint").call("land", rect, is_held)
+		return
+	var terrain := _terrain()
+	if terrain != null:
+		terrain.update_ground_region(rect.grow(1) if rect.has_area() else Rect2i())
 
 
 func _terrain() -> AuthoredTerrain:

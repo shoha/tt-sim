@@ -16,13 +16,10 @@ void stamp_rect(const std::vector<const Prim *> &prims, const std::vector<const 
 	for (int j = r.y0; j < r.y1; j++) {
 		int64_t o = int64_t(j) * g.w + r.x0;
 		size_t n = size_t(r.x1 - r.x0);
-		for (float *a : { out.H, out.SW, out.PW }) {
+		for (float *a : { out.H, out.SW }) {
 			if (a) {
 				std::memset(a + o, 0, n * sizeof(float));
 			}
-		}
-		if (out.PI) {
-			std::memset(out.PI + o, 0, n);
 		}
 	}
 	for (size_t k = 0; k < prims.size(); k++) {

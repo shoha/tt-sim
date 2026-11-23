@@ -146,7 +146,7 @@ inline constexpr ArrayDef ARRAYS[A_COUNT] = {
 	{ "DF", K_SAMPLES, 4 },
 	{ "HB", K_SAMPLES, 4 },
 	{ "CV", K_SAMPLES, 4 },
-	{ "PI", K_SAMPLES, 1 },
+	{ "PI", K_SAMPLES, 4 },
 	{ "PW", K_SAMPLES, 4 },
 	{ "CT", K_SAMPLES, 4 },
 };
@@ -165,7 +165,8 @@ inline constexpr StageDef STAGES[S_COUNT] = {
 	{ S_DISTANCES, "distance", SHAPE_RECT, bit(A_WM) | bit(A_PM) | bit(A_FM), bit(A_DW) | bit(A_DP) | bit(A_DF),
 			max_of(DIST_CAP_WATER, max_of(DIST_CAP_PATH, DIST_CAP_FOOT)), 0.0 },
 	{ S_LOOK, "look", SHAPE_RECT, bit(A_H2), bit(A_HB) | bit(A_CV), LOOK_WIDE, 0.0 },
-	{ S_PAINT, "paint", SHAPE_RECT, bit(A_PAINT_PRIMS), bit(A_PI) | bit(A_PW), 0, 0.0 },
+	{ S_PAINT, "paint", SHAPE_RECT, bit(A_PAINT_PRIMS) | bit(A_PATH_PRIMS) | bit(A_PM), bit(A_PI) | bit(A_PW), 0,
+			0.0 },
 	{ S_RULES, "rules", SHAPE_RECT,
 			bit(A_H2) | bit(A_WL) | bit(A_SL) | bit(A_DW) | bit(A_DP) | bit(A_DF) | bit(A_PW) | bit(A_PM) | bit(A_PI) |
 					bit(A_CV) | bit(A_RULE_TABLE),

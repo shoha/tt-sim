@@ -20,6 +20,21 @@ func _init() -> void:
 	brush_mode = PaintBrush
 	shortcut = KEY_K  # K for colour (C is the camera's reset)
 	contexts = AUTHORING | PLAY
+	# A hub (card terraform-p2-paint-path): Paint by hand, and the Path tool's drawn line.
+	tabs = [
+		{
+			"id": ID,
+			"label": "Paint",
+			"tool": ID,
+			"tip": "Paint: lay a surface by hand; linger to cover it fully",
+		},
+		{
+			"id": PathTool.ID,
+			"label": "Path",
+			"tool": PathTool.ID,
+			"tip": "Path: draw a path; it settles into the slope, with steps and fords",
+		},
+	]
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 
 

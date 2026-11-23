@@ -184,10 +184,26 @@ struct Rule {
 };
 
 struct FieldInputs {
-	const float *H2, *WL, *SL, *DW, *DP, *DF, *PW;
-	const uint8_t *PM, *PI;
+	const float *H2, *WL, *SL, *DW, *DP, *DF;
+	/// PI and PW are four entries a sample (the paint stage's planes): the rules read the first, the
+	/// strongest.
+	const uint8_t *PW, *PM, *PI;
 	const float *CV;
 };
+
+/// Stage 5d over a rect (card terraform-p2-paint-path): the paint coats and the paths' surfaces in
+/// document order into PI and PW, four (surface, weight) entries a sample, strongest first.
+/// `coats` beside `paths`: each item is a paint coat (`paths[k]` null) or a path's surface
+/// (`coats[k]` its primitive), with its influence rect in `bounds`.
+void paint_rect(const std::vector<const Prim *> &coats, const std::vector<const PathL *> &paths,
+		const std::vector<Rect> &bounds, const Grid &g, const Rect &r, uint8_t *PI, uint8_t *PW);
+/// One coat's kernel (SurfaceStroke.dab's rule) over `r`, already clipped to its bounds.
+void paint_coat(const Prim &p, const Grid &g, const Rect &r, uint8_t *PI, uint8_t *PW);
+/// A path's surface over `r` as one coat of its coverage (path_rect's edge).
+void path_coat(const PathL &p, int surface, const Grid &g, const Rect &r, uint8_t *PI, uint8_t *PW);
+/// The paint planes' entries at a sample after a coat of surface `mine` whose coverage ended at
+/// `v` (paint), or whose remaining fraction is `v` (`erase`), from the entries before it.
+void coat_entries(uint8_t *pi, uint8_t *pw, int mine, bool erase, double v);
 
 /// Stage 6 over a rect: the packed control map, 4 bytes per sample (base class,
 /// overlay class, blend, wetness), from the rule table over the fields; later rows paint over.
