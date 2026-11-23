@@ -1,5 +1,7 @@
 shader_type spatial;
 render_mode unshaded, depth_draw_never, cull_back, blend_mix, shadows_disabled;
+// Never over the ground or the ground cover (TokenGhost.GROUND_STENCIL; see the header).
+stencil_mode read, compare_not_equal, 1;
 
 /*
  * Token ghost (TokenGhost, Settings > Graphics > Token ghost)
@@ -23,8 +25,23 @@ render_mode unshaded, depth_draw_never, cull_back, blend_mix, shadows_disabled;
  *      the dark stroke and the rest the light one (the distance to the pushed surface's contour
  *      from f / (df/dpixel) of f = |N . V|, which is 2 d near a smooth surface's contour
  *      whatever its curvature, only splits the colours).
- * No stencil buffer is needed (spatial shaders here take none) and the line is where the depth
- * buffer says something else is in front, below.
+ * The line is where the depth buffer says something else is in front, below.
+ *
+ * What covers a token, by what it is, not how high (ghost-feet, 2026-11-23): the ground and the
+ * ground cover never hide a token; walls, buildings, rocks, trunks, bushes and crowns do, at any
+ * height. A token on a slope sinks its uphill or camera-side feet into the hillside, and meadow
+ * grass up to about 0.7 m covers a large token's lowest contour; both lie outside the bounding
+ * cylinder below, so by depth alone they outlined the feet as a pale patch. A height rule cannot
+ * part them from a close wall's low face (the camera looks down at only about 22 degrees). So the
+ * ground and the ground cover write stencil 1 in the opaque pass wherever they are the nearest
+ * surface (TokenGhost.GROUND_STENCIL_WRITERS: the Classic ground and ground-cover foliage, the
+ * painted ground, its dabs and its meadow grass marks), and this pass only draws where the stencil
+ * is not 1 (`stencil_mode` above). Every other surface leaves the stencil at 0: with the depth
+ * prepass only the nearest surface's colour pass passes the depth test, so a wall drawn in front
+ * of the ground leaves no mark whatever the draw order, and a cut-out fragment writes none
+ * (measured in a probe, Forward+, MSAA off and 4x). The painted plants (painter_plant: bushes,
+ * ferns, flowers and the grass cards below the grass marks' pitch) share one shader and count as
+ * cover.
  *
  * The occlusion test reads the depth buffer (hint_depth_texture, copied before the transparent
  * passes, so the mask pass's writes do not reach it) and compares it with the fragment's own

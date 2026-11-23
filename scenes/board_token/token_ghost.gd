@@ -11,6 +11,11 @@ extends RefCounted
 ## The token's own parts never count as the cover (a large creature's body over its far legs):
 ## each overlay carries the body's bounding cylinder (body_bounds) and the shader ignores
 ## whatever lies within it on the way to the camera (docs/PERFORMANCE.md "self-occlusion fix").
+## Cover is told by what it is, not how high (ghost-feet, 2026-11-23): the ground and the ground
+## cover never hide a token (its feet in a hillside or in meadow grass draw no line), walls,
+## buildings, rocks, trunks, bushes, flowers and crowns do at any height. The ground and the
+## ground-cover foliage write GROUND_STENCIL where they are the nearest surface and the line pass
+## skips those pixels (the shader's header says how).
 ## Settings > Graphics > "Token ghost" (graphics/token_ghost_enabled, default on).
 ## The decision, captures and measurements: docs/PERFORMANCE.md "Token ghost" and
 ## D:/dev/plantgen/docs/ttsim_token_visibility.md.
@@ -40,6 +45,20 @@ enum Style { OUTLINE, DOUBLE, DRAWN }
 const DEFAULT_ENABLED := true
 const SHADER := preload("res://shaders/token_ghost.gdshader")
 const MASK_SHADER := preload("res://shaders/token_ghost_mark.gdshader")
+## The stencil value the ground and the ground cover write, in the Classic and the Painted look,
+## and the line pass skips. Shaders cannot read this constant; test_token_ghost checks that the
+## files below use it.
+const GROUND_STENCIL := 1
+## The shader files that write GROUND_STENCIL (the Classic ground outside its bake, the Classic
+## ground-cover foliage under FOLIAGE_GROUND_LEAN, the painted ground and its dabs, the painted
+## meadow grass marks) and the one that reads it.
+const GROUND_STENCIL_WRITERS: Array[String] = [
+	"res://shaders/authored_ground.gdshaderinc",
+	"res://shaders/wind_foliage_main.gdshaderinc",
+	"res://painter/shaders/painter_ground_body.gdshaderinc",
+	"res://painter/shaders/painter_grass_mark.gdshader",
+]
+const GROUND_STENCIL_READER := "res://shaders/token_ghost.gdshader"
 ## Meta on an overlay material we made, and on it the source (palette texture or material)
 ## its colours were read from, so a changed look rebuilds it.
 const GHOST_META := &"token_ghost"

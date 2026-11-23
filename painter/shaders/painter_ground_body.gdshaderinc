@@ -40,6 +40,11 @@
 // fire_sim_map and fire_sim_rect are mirrored onto this material (FireLook.mirror_glow).
 #include "res://shaders/fire_glow.gdshaderinc"
 
+// The token ghost's ground mark (TokenGhost.GROUND_STENCIL, ghost-feet 2026-11-23): the painted
+// ground and its dabs write stencil 1 where they are the nearest surface, and token_ghost.gdshader
+// draws no line there, so a hillside in front of a token's feet never outlines them.
+stencil_mode write, compare_always, 1;
+
 // Per role two variants (cool dark, warm light) of the lit and the shade colour, LINEAR.
 uniform vec3 g_lit[18];
 uniform vec3 g_shd[18];
