@@ -1318,6 +1318,12 @@ if (fieldv && (shade_opt & 4) != 0) {
 	// stood here (the ramp flag of one sample, then a bank share and a fade by the distance to a
 	// mouth line) each drew their own border: a stepped ring, ticks, a neck with no lap.
 	shore_foam = max(lap, dashes) * ground_like * smoothstep(0.0, 0.01, column_raw + 0.004);
+	if (fieldv) {
+		// The thin sheet a bank sheds hides its wash under 0.22 m (the bank share, above): its own
+		// waterline is never seen, so it draws no lap either. Beside a chute that waterline lay out on
+		// the grass and the lap drew a white curl round a lobe of bank (card chute-foam).
+		shore_foam *= mix(1.0, smoothstep(0.05, 0.22, fa.x), clamp(v_f2.z, 0.0, 1.0));
+	}
 	}
 	// Riffles: dense short dashes along the flow on fast, shallow water.
 	// The field draws its riffles from its own energy: the baked flow map's swirls in a pool would draw
