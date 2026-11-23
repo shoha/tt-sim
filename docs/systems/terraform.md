@@ -370,6 +370,30 @@ rects go to the editor's height queue.
   interleaves (`test_a_redo_before_the_undo_lands_queues`: the undo lands on the digests before, then
   the redo). `has_work()` joins `AuthoringEditor.has_height_work`, so the live-edit sender and a peer's
   queue wait for landings; `finish_work()` (in `finish_height_work`) polls the session until they land.
+- **Never blocking** (card terraform-p2-noblock). No press, undo or redo waits for a derive while
+  `active()`: `TerraEditor.prepare_gesture()` replaces `finish_height_work` in `WallEditor._change` and
+  the Paint press (it still finishes the height work when the core is not active), and
+  `AuthoringController`'s and `PlayEvents`' undo and redo skip `WaterEditor.finish_work` (the water lands
+  with its gesture). A gesture opened while landings are pending first applies the queued undos and
+  redos to the document (it is built on the document as it stands; `sync_walls` opens it before
+  reading the walls), and every landing's edits go behind `TerraSession.cut()`: the session holds them
+  back until it has settled on the edits before, emitting `settled` once per stage with the derive
+  answering exactly for that stage (`stage()`, `settled_stage()`; splice, unmute and move read the
+  primitives they re-set when applied, so a held-back tell never sees later edits). The landings
+  queue (`_landings`), each lands on its own stage in order, its heights before being the ones the
+  landing ahead of it left, and each side's document digest is taken when its edits are applied.
+  Only `finish_work()` waits (`op_of`, a save, a peer's catch-up), counted in `waits`
+  (`test_terra_noblock`: two walls in one frame, and a wall, its undo and a second wall with the first
+  pad deriving, never wait and land on the digests a serial run lands on; final digests equal a fresh
+  build and a peer's, `MapFingerprint` too). A landing due while the water's worker still computes
+  (`WaterEditor.is_computing`: the wet dressing refresh the landing before started, 400+ ms at 200 ft,
+  which `HeightEditor.apply_ground` would wait for) waits for it instead: the session holds its next
+  stage (`TerraSession.pause` / `resume`, an edit meanwhile starts a held stage) and `step()` lands it on
+  the frame the worker is done. Bench (corpus 200 ft, windowed, two stone walls in consecutive frames, 3
+  runs): the second wall's frame 483 ms before, 30.6 ms after (max 31.1), 0 frames over 33; the first
+  wall's frame unchanged (16.1 / 15.5 ms medians). Still waiting: the bridge's `land_external` finishes
+  a water job before starting one, and the other editors' presses (structures, crossings, settlements,
+  fire, table move) still call `finish_height_work`.
 - **Peers.** `LiveEditCodec` kind `"terra"`: `args = [the side's edits (its edits, or for an undo its
   inverse), the ground record's side, TerraDoc.digest after it, its CHECKED digests]`, from
   `op_of` on `TerraEditor.redo_gesture` / `undo_gesture`. The host's digests ride in the op itself:
@@ -427,6 +451,7 @@ treats as a failure.
 | `test_terra_water_bridge.gd` | runs and depth classes; the corpus as one body per run of equal levels and one per pond (ids from 1, valid for the writer); the wet set of `WaterGeometry.levels` against WL > H2 at even samples (only shoreline samples differ: 80 of 4677 at 200 ft); `WaterFalls.falls` against the fall records (exact); a river past the edge keeps its drawn course; the river cap refused, not truncated; ids and mask equal after a reload and a late join (each re-derived); AuthoredWater, the flow and the Painted water field build |
 | `test_terra_editor.gd` | a scripted add / append / remove / splice gesture is one entry whose undo and redo return `TerraDoc.digest()` and every derived digest (and the bridged heights) to their before and after values; a redo pressed before the undo lands queues and lands after it; the inverse builder and the splice restore the encoded section exactly, and a refused splice changes nothing; switch off on a map with a section: every ground tool refuses naming the switch and the fingerprint is unchanged; without a section today's routes; switch on, each route refuses until its card |
 | `test_terra_live_edits.gd` | host and peer through bytes: after the gesture, a second gesture, both undos and a redo, equal documents, digests and `MapFingerprint`, and the peer's own check agrees; a `terra_check` op agrees, and a wrong digest is reported naming H2; malformed `terra` ops (unknown op, NaN, a short or unknown kind, a reserved flag, bad ids, next_id, digests, arity, direction) and a map without a section are refused |
+| `test_terra_noblock.gd` | two walls placed in one frame, and a wall, its undo and a second wall with the first pad deriving: no call waits (`TerraEditor.waits` 0, the derive still in flight on return, each call under 50 ms), each landing lands in order on the digests a serial run lands on, the final digests and heights equal a fresh build, and a peer following the entries through bytes matches every check, the digests and `MapFingerprint` |
 | `test_terra_stage_table.gd` | the table's order (each read an input or an earlier write, one writer per array); halo honesty: one H2 sample (then one FM sample) of a built map set outside the chain, every downstream stage re-run over the whole map, and each array changes only within the reach the table declares from it (the halos summed along the way), with the incremental derive giving the same bytes. A halo one sample short fails it (checked 2026-11-22 with the look row at 13) |
 
 `tests/unit/terra_corpus.gd` (`TerraCorpus`) is the spike's test scene placed on a map document's

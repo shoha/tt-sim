@@ -414,7 +414,9 @@ func _finish_for_history() -> bool:
 		return false
 	if _brush != null:
 		_brush.finish_gesture()
-	_edits.editor.water.finish_work()
+	# With the terrain core on the water lands with its gesture, queued: nothing waits.
+	if not _edits.editor.terra.active():
+		_edits.editor.water.finish_work()
 	return true
 
 

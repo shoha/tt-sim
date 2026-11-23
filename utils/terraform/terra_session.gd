@@ -19,10 +19,19 @@ extends Node
 ## starts derive_async(), the incremental derive on the derive's own thread. An edit that arrives
 ## while a derive runs (the attach task or an async derive) is queued, in order, and told to the
 ## derive when it lands, followed by the next derive_async(). A splice (undo's op: ids, order and
-## next_id put back exactly) re-sets the primitives from its insertion on, as unmute and move do.
-## The derive is never touched while it
-## runs: queries, digests and the record wait for is_ready() (the plan's ready(): a Node already
-## has a member of that name, its signal).
+## next_id put back exactly) re-sets the primitives from its insertion on, as unmute and move do;
+## the primitives it re-sets are read from the document when the edit is applied, so a queued
+## change tells the derive what that edit left, never what later edits did. The derive is never
+## touched while it runs: queries, digests and the record wait for is_ready() (the plan's
+## ready(): a Node already has a member of that name, its signal).
+##
+## Stages (card terraform-p2-noblock). cut() ends a stage while a derive is in flight: the edits
+## after it are held back until the session has settled on the ones before, so `settled` is
+## emitted once per stage, with is_ready() true and the derive answering exactly for the edits up
+## to that cut (the document itself is already ahead). TerraEditor cuts before each gesture, undo
+## and redo, so a gesture pressed while the one before still derives never waits for it: each
+## lands on its own settled derive, in order. stage() is the stage the newest edit was told in,
+## settled_stage() the one the derive answers for.
 ##
 ## Polling. _process runs only while a derive is in flight (set_process), and it never waits: a
 ## task or derive is landed only once it has completed (is_task_completed, is_busy).
@@ -72,6 +81,16 @@ var _record_current := false
 var _changed := Rect2i()
 ## True while apply_held() runs: a free derive is told and derived synchronously.
 var _held := false
+## Stages cut() held back, oldest first: [{"id", "changes": Array[Callable]}].
+var _stages: Array[Dictionary] = []
+## The stage the derive is in (settled_stage()), the newest stage id made, and the stage the
+## newest edit was told in (stage()).
+var _stage := 0
+var _stage_made := 0
+var _last_stage := 0
+## True while `settled` is being emitted, and while pause() holds the next stage.
+var _settling := false
+var _paused := false
 
 
 func _ready() -> void:
@@ -185,12 +204,12 @@ func apply(edit: Dictionary) -> int:
 			if p.is_empty():
 				return -1
 			terra.set_muted(id, false)
-			_tell(_resync_from.bind(id))
+			_tell(_reset.bind(_rows_from(terra.index_of(id))))
 		"move":
 			if p.is_empty():
 				return -1
 			terra.move(id, int(edit.get("to", 0)))
-			_tell(_resync_from.bind(-1))
+			_tell(_reset.bind(_rows_from(0)))
 		"splice":
 			var removed: Array = edit.get("remove", [])
 			var inserted: Array = edit.get("insert", [])
@@ -202,10 +221,14 @@ func apply(edit: Dictionary) -> int:
 			var at := int(edit.get("at", terra.prims.size()))
 			if not terra.splice(removed, inserted, at, int(edit.get("next_id", -1))):
 				return -1
-			var ids: Array[int] = []
+			# The derive has no insert: every primitive from the first inserted one's position on
+			# is re-set in document order (set_prim appends a new id at the end).
+			var from := terra.prims.size()
 			for q: Dictionary in inserted:
-				ids.append(int(q["id"]))
-			_tell(_splice_derive.bind(removed.duplicate(), ids))
+				var index := terra.index_of(int(q["id"]))
+				if index >= 0:
+					from = mini(from, index)
+			_tell(_splice_derive.bind(removed.duplicate(), _rows_from(from)))
 			id = 0
 		_:
 			return -1
@@ -241,6 +264,30 @@ func take_changed() -> Rect2i:
 	return out
 
 
+## Ends a stage (see the header): while a derive is in flight or a stage is held back, the edits
+## from now on are told to the derive only after the session has settled on the ones before.
+## Nothing while is_ready(): the next edit derives at once anyway.
+func cut() -> void:
+	if _derive == null or (not _in_flight() and _stages.is_empty()):
+		return
+	if not _stages.is_empty() and (_stages.back().changes as Array).is_empty():
+		return
+	_stage_made += 1
+	_stages.append({"id": _stage_made, "changes": [] as Array[Callable]})
+
+
+## The stage the newest edit was told in (see the header): its landing is due once
+## settled_stage() has reached it.
+func stage() -> int:
+	return _last_stage
+
+
+## The stage the derive answers for while is_ready() (inside `settled`, an earlier one than
+## stage() when a cut holds edits back).
+func settled_stage() -> int:
+	return _stage
+
+
 ## The TerraDerive when is_ready(), else null: read only, on the main thread (the bridge's
 ## strided reads), never kept past the frame.
 func settled_derive() -> RefCounted:
@@ -262,7 +309,8 @@ func poll() -> void:
 ## the header); MapDocumentSnapshot.capture() calls it through TerraDoc.before_save. True when
 ## terra.derived is the record of the derive this session holds.
 func capture_for_save() -> bool:
-	if not is_ready():
+	# Inside a stage's `settled` the derive is behind the document: not its record.
+	if not is_ready() or not _stages.is_empty():
 		return false
 	if not _record_current:
 		terra.derived = TerraCache.make_record(terra, doc, _derive)
@@ -303,6 +351,7 @@ func _poll() -> void:
 		_record_current = check.get("status") == TerraCache.MATCH and _queued.is_empty()
 		if _derive == null:
 			_queued.clear()
+			_stages.clear()
 		else:
 			var grid: Dictionary = _derive.call("grid")
 			_changed = Rect2i(0, 0, int(grid["w"]), int(grid["h"]))
@@ -319,12 +368,56 @@ func _poll() -> void:
 		_start()
 		return
 	set_process(false)
-	if _derive != null:
-		settled.emit()
+	if _derive == null:
+		return
+	_settling = true
+	settled.emit()
+	_settling = false
+	_next_stage()
 
 
-## Tells the derive one change now when it is free, else queues it for the landing.
+## Holds the next stage back after this settle (TerraEditor, while a landing of this stage waits
+## for a worker of its own): the derive keeps answering for this stage until resume().
+func pause() -> void:
+	_paused = true
+
+
+## Lets the stages held by pause() go on (at once, unless inside `settled`).
+func resume() -> void:
+	if not _paused:
+		return
+	_paused = false
+	if not _settling:
+		_next_stage()
+
+
+## Tells the next stage held back by a cut, now that the one before has settled (a listener may
+## have started a derive meanwhile; its own landing comes back to _poll()).
+func _next_stage() -> void:
+	while not _paused and not _stages.is_empty() and not _in_flight():
+		var next: Dictionary = _stages.pop_front()
+		_stage = int(next.id)
+		var changes: Array[Callable] = next.changes
+		if changes.is_empty():
+			continue
+		for change in changes:
+			change.call()
+		_start()
+
+
+## Tells the derive one change now when it is free, else queues it for the landing (or, after a
+## cut(), holds it in the newest stage).
 func _tell(change: Callable) -> void:
+	if _paused and _stages.is_empty():
+		# The settled stage is held (pause()): this edit starts the next one.
+		_stage_made += 1
+		_stages.append({"id": _stage_made, "changes": [] as Array[Callable]})
+	if not _stages.is_empty():
+		var held: Dictionary = _stages.back()
+		(held.changes as Array[Callable]).append(change)
+		_last_stage = int(held.id)
+		return
+	_last_stage = _stage
 	if _derive == null or _in_flight():
 		_queued.append(change)
 		return
@@ -356,34 +449,37 @@ func _set_prim(id: int, kind: int, data: PackedFloat32Array) -> void:
 		push_warning("TerraSession: the core refused primitive %d of kind %d" % [id, kind])
 
 
-## Tells the derive a splice: the removed ids go, then every primitive from the first inserted
-## one's position on (read when told, so a queued splice sees the document as it is then) is
-## re-set in document order, since set_prim appends a new id at the end.
-func _splice_derive(removed: Array, inserted: Array[int]) -> void:
+## Tells the derive a splice: the removed ids go, then `rows` (_rows_from() of the first inserted
+## one's position, read when the splice was applied) are re-set.
+func _splice_derive(removed: Array, rows: Array) -> void:
 	for id: Variant in removed:
 		_derive.call("remove_prim", int(id))
-	var from := terra.prims.size()
-	for id in inserted:
-		var at := terra.index_of(id)
-		if at >= 0:
-			from = mini(from, at)
-	if from < terra.prims.size():
-		_resync_from(int(terra.prims[from]["id"]))
+	_reset(rows)
 
 
-## Re-tells the derive the document's order from primitive `id` on (from the start for -1): the
-## derive has no move, and set_prim appends a new id at the end, so every primitive from there is
-## removed and set again in document order (muted ones left out).
-func _resync_from(id: int) -> void:
-	var from := 0 if id < 0 else terra.index_of(id)
-	if from < 0:
-		return
-	for i in range(from, terra.prims.size()):
-		_derive.call("remove_prim", terra.prims[i]["id"])
-	for i in range(from, terra.prims.size()):
-		var p := terra.prims[i]
-		if not TerraDoc.is_muted(p):
-			_set_prim(int(p["id"]), int(p["kind"]), p["data"])
+## The document's primitives from position `from` on as they stand now (a negative `from`: none):
+## [ids, rows of [id, kind, data] for the unmuted ones], for _reset(). Read when an edit is
+## applied, so a queued tell re-sets what that edit left.
+func _rows_from(from: int) -> Array:
+	var ids: Array[int] = []
+	var rows: Array[Array] = []
+	if from >= 0:
+		for i in range(from, terra.prims.size()):
+			var p := terra.prims[i]
+			ids.append(int(p["id"]))
+			if not TerraDoc.is_muted(p):
+				rows.append([int(p["id"]), int(p["kind"]), p["data"]])
+	return [ids, rows]
+
+
+## Re-tells the derive the document's order from a position on (`rows`, _rows_from()): the derive
+## has no move, and set_prim appends a new id at the end, so every primitive from there is removed
+## and set again in document order (muted ones left out).
+func _reset(rows: Array) -> void:
+	for id: int in rows[0]:
+		_derive.call("remove_prim", id)
+	for row: Array in rows[1]:
+		_set_prim(int(row[0]), int(row[1]), row[2])
 
 
 static func _park(entry: Dictionary) -> void:

@@ -98,6 +98,16 @@ func is_working() -> bool:
 	return not _job.is_empty() or _follow.is_valid()
 
 
+## True while an edit's or a refresh's worker is still computing (finish_work() would wait for it):
+## TerraEditor lands its next landing only once it is not (card terraform-p2-noblock).
+func is_computing() -> bool:
+	return (
+		not _job.is_empty()
+		and int(_job.task) >= 0
+		and not WorkerThreadPool.is_task_completed(int(_job.task))
+	)
+
+
 ## Carves a river along `points` (world XZ as Vector2(x, z), upstream first: the water flows
 ## toward the last point) with a half-width per point (`half_widths`, world metres; one
 ## value for all points works too), of depth class `depth_class` and flow `speed`: the line
