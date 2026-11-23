@@ -585,7 +585,9 @@ func _put_stroke(
 				)
 				_foot_raw[at] = foot_t[ti]
 				owner[at] = id
-				_stroke_energy[at] = maxf(_stroke_energy[at], 0.0 if undermined else e)
+				# No white on calm water (a film, a bank's spill: its wash is hidden, so the white stood
+				# on the bank beside a chute at 0.16..0.28, card chute-foam).
+				_stroke_energy[at] = maxf(_stroke_energy[at], 0.0 if calm[at] == 1 else e)
 			elif (
 				has_mask
 				and mask[at] != 0
