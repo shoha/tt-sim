@@ -411,6 +411,57 @@ func test_a_second_stroke_never_grows_a_twin_inside_a_kept_rock() -> void:
 	assert_eq(_mismatches(editor.scatter, _generated(blockers)), 0, "the rest follows the rules")
 
 
+## Determinism across peers (live-crater-scatter, 2026-11-22): a regeneration reads the props'
+## blockers as they stood when its cells were requested, never when a worker slot frees up. A
+## live crater's rim boulders land on the peer a few frames after its regeneration was
+## requested, on the host in the same frame, and which cells had a job out by then depended on
+## the pool's speed: under load the peer grew different plants. Here a rock is placed over a
+## drawn rock right after a request, once with every job out first and once with none out
+## (AuthoredScatter.dispatch_limit, the slow pool): both settle to the same rows.
+func test_a_regeneration_reads_the_blockers_of_its_request_whatever_the_dispatch() -> void:
+	var outcomes: Array[Dictionary] = []
+	for limit in [64, 0]:
+		before_each()
+		var editor := _editor()
+		var target := _first_rock(_cells_of(editor.scatter))
+		assert_false(target.is_empty(), "the band has a drawn rock")
+		if target.is_empty():
+			return
+		editor.scatter.dispatch_limit = limit
+		editor.scatter.request_region(PAINTED)
+		var rule := editor.rule_for_asset(String(target.asset_id))
+		var at: Vector3 = target.at
+		assert_false(editor.place_prop(rule, editor.to_world(at), Vector3.UP).is_empty())
+		editor.commit_prop_edit()
+		editor.scatter.dispatch_limit = -1
+		await _settle(editor)
+		outcomes.append(_cells_of(editor.scatter))
+	var first: Dictionary = outcomes[0]
+	var second: Dictionary = outcomes[1]
+	var bad := 0
+	var cells := {}
+	cells.merge(first)
+	cells.merge(second)
+	for cell in cells:
+		if not _same(first.get(cell, {}), second.get(cell, {})):
+			bad += 1
+	assert_eq(bad, 0, "the same rows whenever the jobs went out")
+
+
+## The first drawn rock of `by_cell` (cell -> rows): {"asset_id", "at" (map XYZ)}, or {}.
+func _first_rock(by_cell: Dictionary) -> Dictionary:
+	var cells := by_cell.keys()
+	cells.sort()
+	for cell in cells:
+		var asset_ids: Array = (by_cell[cell] as Dictionary).keys()
+		asset_ids.sort()
+		for asset_id in asset_ids:
+			var rows: PackedFloat32Array = by_cell[cell][asset_id]
+			if _rocks.has(asset_id) and rows.size() >= MapDocument.ROW_STRIDE:
+				return {"asset_id": asset_id, "at": Vector3(rows[0], rows[1], rows[2])}
+	return {}
+
+
 func test_kept_rocks_survive_a_save_round_trip() -> void:
 	var editor := _editor()
 	_tier(editor)

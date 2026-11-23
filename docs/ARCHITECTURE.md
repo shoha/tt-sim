@@ -1880,7 +1880,11 @@ brush scheduler, so both build identical nodes.
   read masks the brush was writing. Each job also carries the footprints of the rock props
   reaching into its window (`blocker_source`, `RockKeep.blockers`), inside which no rock,
   tree or shrub row is generated ("Rocks survive terrain changes" under Authoring Flow).
-  Latest wins per cell: every request bumps the cells' generations and a finished job is
+  The footprints are read when the cell is requested (`ScatterRegen.blocker_reader`), never
+  when its job is dispatched: placing a prop requests no regeneration, so a read at dispatch
+  made the rows depend on how many worker slots had freed up by then, and a live crater's peer,
+  which gets the rim boulders a few frames after its request, grew different plants from the
+  host under load (live-crater-scatter, 2026-11-22). Latest wins per cell: every request bumps the cells' generations and a finished job is
   applied only where nobody has requested since; a dropped job's species stay dirty for the
   next one. A stroke's live requests also get lead jobs (the non-ground species only, whose
   rows equal the full job's) shown provisionally while the brush is down; the full job still
