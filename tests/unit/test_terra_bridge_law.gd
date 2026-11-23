@@ -26,7 +26,9 @@ func _settle(s: TerraSession) -> bool:
 
 ## One raise dab (stroke kind 3) on the layout's line across both rivers, `k` of DABS.
 func _dab(c: TerraCorpus, k: int) -> PackedFloat32Array:
-	return c.dabs([[18.0 + k * 0.6, 20.0 + k * 0.25, 2.5, 0.08, 0]])
+	# Strong enough to lift a river's bed past its reach's dead band (0.5 m, card
+	# terraform-p2-reaches), so the release moves the water.
+	return c.dabs([[18.0 + k * 0.6, 20.0 + k * 0.25, 2.5, 0.25, 0]])
 
 
 func _law(doc: MapDocument, s: TerraSession) -> bool:
@@ -64,7 +66,7 @@ func test_a_held_raise_keeps_the_law_every_frame() -> void:
 	add_child(root)
 	assert_true(_law(doc, s), "after the load")
 	assert_true(_water_law(doc, s), "the water after the load")
-	assert_gt(doc.water_bodies.size(), 10, "the load wrote the derived water")
+	assert_gt(doc.water_bodies.size(), 5, "the load wrote the derived water")
 	var id := s.apply({"op": "add", "kind": TerraCore.STROKE, "data": _dab(c, 0)})
 	assert_gt(id, 0)
 	assert_true(await _settle(s), "the press lands")

@@ -143,7 +143,7 @@ Dictionary TerraDerive::tile_collision(int64_t tile, int64_t stride) const {
 }
 
 String TerraDerive::version() const {
-	return "terra 6 sculpt kinds";
+	return "terra 7 reaches";
 }
 
 Dictionary TerraDerive::grid() const {

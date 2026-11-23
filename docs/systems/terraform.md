@@ -372,14 +372,26 @@ build from them unchanged. The bridge law (`test_terra_bridge_law.gd`): after ev
   per landform (`test_landform_prims`): the report's features, stage, water and crossings match the
   switch-off recipe. `TerraBridge.seed_new_map` (one plane) remains for a document without a section
   after the build (the proving ground).
-- **Flat reaches.** River levels follow today's conditioner (`WaterConditioner.fit_levels`): the
-  running minimum on the 5 cm lattice (`LEVEL_QUANTUM_M`), a sharp drop of `FALL_MIN` (0.75 m)
-  within `FALL_RUN` (1.5 m) pinned as one fall step at most every `FALL_GAP` (6 m), the dead band
-  (`REACH_DEAD_BAND_M` 0.25 m) swept from the outlet up and reaches under `MIN_REACH_M` (2 m)
-  merged. Every step of 0.75 m or more is a fall record; the carve's water stands at the nearer
-  point's reach (the bed eases across the step), so WL holds one level per reach and a reach is
-  one flat `WaterBody` (card 2). The spike's sloped rapids may return in phase 3. The corpus: 18
-  reaches, 1 fall, no step under the dead band; every wet sample at a body's level.
+- **Flat reaches.** River levels start from today's conditioner (`WaterConditioner.fit_levels`),
+  scaled with the slope (card terraform-p2-reaches, `native/src/terra_stages.h`): the running
+  minimum on the 5 cm lattice (`LEVEL_QUANTUM_M`); a sharp drop of `FALL_MIN` (0.75 m) within
+  `FALL_RUN` (1.5 m) pinned as one fall step at most every `FALL_GAP` (6 m), running on down a
+  cliff while each further `FALL_CLIFF_RUN` (1 m) still drops at `FALL_CLIFF_SLOPE` (0.3) or more,
+  so a riser is one tall fall at its lip; the river split into sections at its fall-sized steps
+  (the pinned falls, the join); per section a dead band of its mean slope times `REACH_TARGET_M`
+  (8 m) within `REACH_DEAD_BAND_M` (0.5 m) and `REACH_DEAD_BAND_MAX_M` (0.7 m, so the sweep makes
+  riffles only) swept from the outlet up; reaches under `MIN_REACH_M` (6 m) merged into the
+  neighbour they differ from least, across any step but a section's bound, so where the slope
+  steepens two riffles become a small fall and two falls a taller one. Every step of 0.75 m or more
+  is a fall record; the carve's water stands at the nearer point's reach (the bed eases across the
+  step), so WL holds one level per reach and a reach is one flat `WaterBody` (card 2). The spike's
+  sloped rapids may return in phase 3. Measured (2026-11-22, before -> after): the corpus main river
+  12 reaches of about 5 m with 0.25 m riffles -> 6 of about 10 m with 0.5 m; its tributary 4.8 m
+  fall plus four 0.55 m riffles -> a 5.65 m fall and one 1.4 m fall; valley seed 7's river 6
+  reaches of 15 m -> 3 of 29 to 43 m; the hilltop crown fall unchanged (5.3 m, then one 0.5 m
+  riffle); a straight 40 m flank river off the hilltop crown 11 reaches (a fall and a ladder of
+  0.45 to 0.7 m riffles) -> one 5.8 m fall and a calm 36 m reach. On uniform slopes 0.02 / 0.05 /
+  0.1 / 0.15 / 0.3 over 52 m: 1 / 4 / 6 / 4 / 5 steps (`test_terra_reaches`).
 - **Cost** (headless, indicative, 320 ft corpus, 60 held raise dabs, 2026-11-22): `apply_held`'s
   derive 2.0 ms median (p95 2.2) dry, 2.2 (p95 5.2) across the main river; the bridge's diff
   0.01 ms and row writes 0.01 to 0.09 ms median (0.6 ms p95 over the river). Today's chunk work
@@ -481,8 +493,9 @@ terrain primitives yet") until its card lands, so those cards edit only their op
 
 ## Versions and the library
 
-`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 6 sculpt kinds` (the level and
-sculpt kinds, `consolidate`, the smooth stage's exposure model), and the golden fixture's `version` follows it. The scatter library's string carries `terra`
+`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 7 reaches` (the slope-scaled
+flat reaches; before it `terra 6 sculpt kinds`: the level and sculpt kinds, `consolidate`, the smooth
+stage's exposure model), and the golden fixture's `version` follows it. The scatter library's string carries `terra`
 (`ttscatter 10 curves water chunk fields wfield2 terra`), so a stale DLL fails
 `test_scatter_native`. After pulling a change here, rebuild `native/` (AGENTS.md "Testing").
 Without the library every terra test is pending with "the native library is not built", which CI

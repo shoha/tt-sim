@@ -12,6 +12,8 @@ extends GutTest
 
 ## The derive's fall threshold (terraform.md "Flat reaches").
 const FALL_MIN_M := 0.75
+## The derive's smallest riffle, the dead band's floor (native/src/terra_stages.h).
+const REACH_DEAD_BAND_M := 0.5
 ## Layout lines (metres on the corpus's 61 m drawing).
 const EAST_FLANK := [Vector2(46, 11), Vector2(40, 10.5), Vector2(34, 11), Vector2(29, 12)]
 const OVER_RISE := [Vector2(9, 41), Vector2(15, 40), Vector2(21, 40), Vector2(27, 40.5)]
@@ -164,17 +166,18 @@ func test_a_river_down_the_flank_joins_and_steps_by_the_rule() -> void:
 	var end := Vector2(r.pts[-2], r.pts[-1])
 	var at_join := _level_near(recv, end)
 	assert_almost_eq(lv[-1], at_join, 0.051, "its end at the receiver's level")
-	var steps := 0
+	var small := 0
 	var falls := 0
 	for i in lv.size() - 1:
 		var d := lv[i] - lv[i + 1]
 		assert_true(d >= -1e-5, "the water never climbs")
-		if d > 1e-4:
-			steps += 1
+		# The join's last step is the receiver's level, off the lattice; the rest are reach steps.
+		if d > 1e-4 and d < REACH_DEAD_BAND_M - 0.051 and i < lv.size() - 2:
+			small += 1
 		if d >= FALL_MIN_M - 1e-4:
 			falls += 1
 	assert_eq(int(r.falls), falls, "every step of FALL_MIN or more is a fall, smaller ones riffles")
-	assert_gt(steps, 0, "a sloped river steps")
+	assert_eq(small, 0, "no riffle under the dead band: a short flank is a reach or two")
 	var bodies := rig.doc.water_bodies.filter(func(b: WaterBody) -> bool: return b.is_river())
 	assert_gt(bodies.size(), 2, "its reaches are today's bodies")
 	var g: Dictionary = (entries[0].undo as Callable).get_bound_arguments()[0]
@@ -186,8 +189,8 @@ func test_a_river_down_the_flank_joins_and_steps_by_the_rule() -> void:
 	rig.history.redo()
 	assert_true(await TerraRig.settle(get_tree(), [rig]))
 	assert_eq(rig.digests(), after, "redo: the river again")
-	gut.p("flank river: %d points, %d steps, %d falls, end %.3f at join %.3f" % [
-		lv.size(), steps, falls, lv[-1], at_join])
+	gut.p("flank river: %d points, %d falls, end %.3f at join %.3f" % [
+		lv.size(), falls, lv[-1], at_join])
 
 
 ## The receiver record `r`'s level at its point nearest `p`.

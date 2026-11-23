@@ -13,20 +13,33 @@ namespace terra {
 constexpr double RIVER_DS = 0.25; // arc spacing of a river's level profile
 constexpr double RIVER_FREEBOARD = 0.15; // level under the drawn ground
 constexpr double FALL_MIN = 0.75; // a step of at least this between reaches is a fall record
-// Card terraform-p2-bridge: river levels are flat reaches, today's conditioner rule
-// (WaterConditioner.fit_levels: QUANTUM_M, DEAD_BAND_M, MIN_REACH_M), so every reach converts to
-// one flat WaterBody exactly. The level lattice; a step under the dead band drops onto the level
-// below it; a reach shorter than MIN_REACH_M merges into the neighbour it differs from least.
+// Card terraform-p2-bridge: river levels are flat reaches, so every reach converts to one flat
+// WaterBody exactly. The level lattice; a step under the dead band drops onto the level below it;
+// a reach shorter than MIN_REACH_M merges into the neighbour it differs from least.
+// Card terraform-p2-reaches: the dead band scales with the slope, so a long even slope reads as a
+// few long pools with lively riffles between rather than a ladder of 0.25 m steps. The river is
+// split into sections at its fall-sized steps (the pinned falls, the join); each section's dead
+// band is its mean slope times REACH_TARGET_M, within REACH_DEAD_BAND_M and REACH_DEAD_BAND_MAX_M
+// (under FALL_MIN, so the sweep makes riffles only; the band is also the deepest the sweep sets a
+// reach's water under its bed's freeboard line). A short reach then merges across any step but a
+// section's bound, so where the slope steepens two riffles become a small fall and two falls a
+// taller one. On a uniform slope s the steps are about max(0.5, min(0.7, 8 s)) m apart by s, at
+// least MIN_REACH_M (tests/unit/test_terra_reaches.gd).
 // The spike's sloped rapids (round 3) can return once the water field reads WL (phase 3).
 constexpr double LEVEL_QUANTUM_M = 0.05;
-constexpr double REACH_DEAD_BAND_M = 0.25;
-constexpr double MIN_REACH_M = 2.0;
+constexpr double REACH_DEAD_BAND_M = 0.5;
+constexpr double REACH_DEAD_BAND_MAX_M = 0.7;
+constexpr double REACH_TARGET_M = 8.0;
+constexpr double MIN_REACH_M = 6.0;
 // A fall is a drop of FALL_MIN within FALL_RUN of arc (a sharp step), pinned as one step before
 // the conditioner runs (which never touches a fall-sized step); after a fall the next one waits
 // FALL_GAP of arc, so a hillside gets one or two confident falls with riffles between, not a stair
-// of locks.
+// of locks. A pinned fall runs on down a cliff while each further FALL_CLIFF_RUN of arc still drops
+// at FALL_CLIFF_SLOPE or more (card terraform-p2-reaches), so a riser is one tall fall at its lip.
 constexpr double FALL_RUN = 1.5;
 constexpr double FALL_GAP = 6.0;
+constexpr double FALL_CLIFF_RUN = 1.0;
+constexpr double FALL_CLIFF_SLOPE = 0.3;
 // The bank: its slope at the water (plus noise) and how fast it steepens with distance (1/m), and
 // the smooth minimum's width where the cut meets the ground (m).
 constexpr double BANK_SLOPE = 0.28;
