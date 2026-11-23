@@ -843,8 +843,7 @@ func _restroke() -> void:
 				if nodes[k] != null and is_instance_valid(nodes[k]):
 					var mm: MultiMesh = (nodes[k] as MultiMeshInstance3D).multimesh
 					mm.instance_count = buf.size() / 16
-					if not buf.is_empty():
-						mm.buffer = buf
+					MultiMeshCpu.set_buffer(mm, buf)
 
 
 ## Rebuilds the nodes of `cell` in `store` (cells, or bush_cells when `bush`: smaller blocks, no
@@ -926,8 +925,9 @@ func _make_nodes(
 		mm.mesh = meshes[k]
 		var buf: PackedFloat32Array = bufs[mini(k, 2)]
 		mm.instance_count = buf.size() / 16
-		if not buf.is_empty():
-			mm.buffer = buf
+		# Readable on the CPU: the first avatar shade ray after a load walks every node
+		# (AvatarShadeCache), and a buffer-only MultiMesh answered it with a GPU readback.
+		MultiMeshCpu.set_buffer(mm, buf)
 		node.multimesh = mm
 		node.material_override = materials[k]
 		node.custom_aabb = box.grow(reach)

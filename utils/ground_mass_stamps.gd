@@ -34,11 +34,12 @@ static var _materials: Dictionary = {}
 ## sum zz, sum xz), from every anchored MultiMesh under `root`.
 ##
 ## The painted trees' nodes (PainterTrees.META) are skipped: their custom data is (tree row, first
-## unit, 0, 0) (PainterTreePack.add_instances), so no instance of theirs is ever anchored, and
-## their MultiMeshes hold a buffer only, so the first read of each one is a GPU readback (27 ms a
-## node in a window). A stroke that rebuilt a tree or bush cell paid it in the restamp after the
-## scatter settled: one 67-80 ms frame about a second after a path stroke's release on a reopened
-## map (card painter-path-release). The sums are the same.
+## unit, 0, 0) (PainterTreePack.add_instances), so no instance of theirs is ever anchored. Their
+## MultiMeshes held a buffer only, so the first read of each one was a GPU readback (27 ms a node
+## in a window), which the restamp after a path stroke paid: one 67-80 ms frame about a second
+## after the release on a reopened map (card painter-path-release). They keep a CPU copy now
+## (MultiMeshCpu, card painter-mm-readback), and the skip still saves walking them. The sums are
+## the same.
 static func collect(root: Node) -> Dictionary:
 	var sums := {}
 	if root == null:
