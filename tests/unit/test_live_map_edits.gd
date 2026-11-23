@@ -106,6 +106,8 @@ func _make_level() -> bool:
 	assert_true(e.water.paint_pond_begin(WaterBody.Depth.WAIST, Vector3(POND.x, 0, POND.y)))
 	e.stroke_dab(Vector3(POND.x, 0, POND.y), Vector3(POND.x + 3, 0, POND.y), 3.5, 0.1)
 	assert_true(e.end_stroke(), "the pond is painted")
+	# The bridge waits for the ground in flight (GroundPresses) unless it has landed.
+	e.finish_height_work()
 	var bridge := e.crossings.place(Crossing.Kind.PLANK, Vector3(9, 0, 0), Vector3(17, 0, 0))
 	assert_gt(bridge, 0, "a plank bridge spans the river")
 	var boulder := e.species_rule(FOREST, "boulder")

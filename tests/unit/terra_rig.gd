@@ -38,14 +38,18 @@ func session() -> TerraSession:
 
 
 ## True while anything of the map is still working: the editor's height work (the terrain's
-## landings included), the session's derive, the scatter's regeneration and grow-in.
+## landings included), the session's derive, the scatter's regeneration and grow-in, and the
+## structure builds in flight (a press that waited starts its build late; on 4 worker threads
+## it landed after the rest, card noblock3).
 func busy() -> bool:
 	var s := session()
 	var scatter := root.get_node_or_null(MapSourceLoader.SCATTER_NODE) as AuthoredScatter
 	var water := root.get_node_or_null(AuthoredWater.NODE_NAME) as AuthoredWater
+	var structures := AuthoredStructures.of_map(root)
 	return (
 		editor.has_height_work()
 		or editor.water.is_working()
+		or (structures != null and structures.pending_count() > 0)
 		or (water != null and water.is_refreshing())
 		or (s != null and not s.is_ready())
 		or (scatter != null and (scatter.is_regenerating() or scatter.is_growing()))

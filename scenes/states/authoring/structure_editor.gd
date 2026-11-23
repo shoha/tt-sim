@@ -10,6 +10,17 @@ extends RefCounted
 ## asks the scatter to regrow where a footprint changed. follow() and restore() make the nodes
 ## follow a sculpt or water edit of the ground under them. Frames: document (map XZ metres).
 ## Summary: docs/systems/structures.md.
+##
+## Every public edit is a press (GroundPresses, card noblock3): while ground work is in flight (a
+## river's derive or a water edit computing, a landing) it waits, whole, and runs on the first
+## frame after the work lands, so it reads the document and records its entry exactly as when the
+## work was finished first; each method is wrapped, not _change(), since each computes its list
+## from the document (two queued adds must not take one id). A build reads a snapshot of the
+## ground (StructureGeometry.ground_snapshot) that no landing writes.
+
+## What add() and duplicate() return for a press that waits for the ground: not an id yet, not
+## a refusal (as CrossingEditor.QUEUED).
+const QUEUED := 0
 
 ## An edit reaches structures whose footprint comes within this of its area (metres).
 const FOLLOW_REACH_M := 1.0
@@ -106,6 +117,8 @@ func structure_at(point: Vector3) -> int:
 ## Gives structure `structure_id` a new seed (the next one in the repeatable series) as one
 ## history entry: the same plan and recipe, drawn afresh. False when there is none.
 func reroll(structure_id: int) -> bool:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(reroll.bind(structure_id), true)
 	var doc := _editor().document
 	var old := doc.structure(structure_id)
 	if old == null:
@@ -128,6 +141,8 @@ static func next_seed(current: int) -> int:
 ## any other is added under a free id. Returns its id, or -1 when the document is full or the
 ## writer would refuse it (last_refusal).
 func add(structure: Structure) -> int:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(add.bind(structure.copy()), QUEUED)
 	var doc := _editor().document
 	last_refusal = &""
 	var existing := doc.structure(structure.id)
@@ -154,6 +169,8 @@ func add(structure: Structure) -> int:
 ## one history entry labelled `label`. False, with last_refusal set and nothing changed, when
 ## the document would hold too many, an id is taken or repeated, or the writer would refuse one.
 func lay_all(laid: Array[Structure], label: String) -> bool:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(lay_all.bind(_copies(laid), label), true)
 	var doc := _editor().document
 	last_refusal = &""
 	if laid.is_empty() or doc.structures.size() + laid.size() > MapDocument.MAX_STRUCTURES:
@@ -193,6 +210,9 @@ func preview(changed: Structure) -> bool:
 ## `before` (the list from before a preview) the entry undoes to that list. False, with
 ## last_refusal set, when the document has no such structure or the writer would refuse it.
 func edit(changed: Structure, label: String, before: Array[Structure] = []) -> bool:
+	if not _editor().presses.is_running():
+		var press := edit.bind(changed.copy(), label, before.duplicate())
+		return _editor().presses.run(press, true)
 	var doc := _editor().document
 	last_refusal = &""
 	if doc.structure(changed.id) == null:
@@ -213,6 +233,9 @@ func edit(changed: Structure, label: String, before: Array[Structure] = []) -> b
 func set_plan(
 	structure_id: int, plan: PackedVector2Array, label: String, before: Array[Structure] = []
 ) -> bool:
+	if not _editor().presses.is_running():
+		var press := set_plan.bind(structure_id, plan.duplicate(), label, before.duplicate())
+		return _editor().presses.run(press, true)
 	var old := _editor().document.structure(structure_id)
 	if old == null:
 		return false
@@ -224,6 +247,8 @@ func set_plan(
 ## Makes edge `edge` of structure `structure_id` its front (the door side): the point order is
 ## rotated, so the building is otherwise the same. False when there is no such edge.
 func set_front(structure_id: int, edge: int) -> bool:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(set_front.bind(structure_id, edge), true)
 	var old := _editor().document.structure(structure_id)
 	if old == null or edge <= 0 or edge >= old.footprint.size():
 		return false
@@ -233,6 +258,8 @@ func set_front(structure_id: int, edge: int) -> bool:
 ## Turns structure `structure_id` about its middle by `radians`, settling on the nearest legal
 ## ground if the turned plan would not stand where it is. False when there is nowhere legal.
 func turn(structure_id: int, radians: float) -> bool:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(turn.bind(structure_id, radians), true)
 	var doc := _editor().document
 	var old := doc.structure(structure_id)
 	if old == null:
@@ -249,6 +276,8 @@ func turn(structure_id: int, radians: float) -> bool:
 ## within the new recipe's sizes), seed and the parameters the new recipe also declares. False
 ## when no served library offers `ref` or the structure is gone.
 func swap_recipe(structure_id: int, ref: String) -> bool:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(swap_recipe.bind(structure_id, ref), true)
 	var doc := _editor().document
 	var old := doc.structure(structure_id)
 	var row := LibraryStructureStore.structure(ref)
@@ -269,6 +298,8 @@ func swap_recipe(structure_id: int, ref: String) -> bool:
 ## Steps parameter `param` of structure `structure_id` one notch (direction 1 or -1) within the
 ## recipe's range. False when the recipe does not declare it or it is already at its limit.
 func step_param(structure_id: int, param: String, direction: int) -> bool:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(step_param.bind(structure_id, param, direction), true)
 	var old := _editor().document.structure(structure_id)
 	var recipe := StructureRecipes.document(old.recipe) if old != null else null
 	if recipe == null:
@@ -286,6 +317,9 @@ func step_param(structure_id: int, param: String, direction: int) -> bool:
 ## params, so they save, undo, copy and sync like any parameter. False when nothing would change
 ## or the structure is gone.
 func set_ornaments(structure_id: int, kinds: Array, label: String, ivy: float = -1.0) -> bool:
+	if not _editor().presses.is_running():
+		var press := set_ornaments.bind(structure_id, kinds.duplicate(), label, ivy)
+		return _editor().presses.run(press, true)
 	var old := _editor().document.structure(structure_id)
 	if old == null:
 		return false
@@ -303,6 +337,8 @@ func set_ornaments(structure_id: int, kinds: Array, label: String, ivy: float = 
 ## style), as one history entry; its id, or -1 when there is nowhere within reach or the document
 ## is full.
 func duplicate(structure_id: int) -> int:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(duplicate.bind(structure_id), QUEUED)
 	var doc := _editor().document
 	var old := doc.structure(structure_id)
 	last_refusal = &""
@@ -320,6 +356,8 @@ func duplicate(structure_id: int) -> int:
 
 ## Removes structure `structure_id` as one history entry. False when there is none.
 func remove(structure_id: int) -> bool:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(remove.bind(structure_id), true)
 	var doc := _editor().document
 	var old := doc.structure(structure_id)
 	if old == null:
@@ -336,6 +374,8 @@ func remove(structure_id: int) -> bool:
 ## replaced by its ruin (StructureRuin.ruin_of: a ruin recipe on the same footprint), or removed
 ## when no ruin fits; a ruin or an unknown id is left as it is. False when nothing changed.
 func burn_down(ids: Array, label: String = "Burn down") -> bool:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(burn_down.bind(ids.duplicate(), label), true)
 	var doc := _editor().document
 	var after: Array[Structure] = []
 	var changed := false
@@ -417,6 +457,14 @@ static func _area_of(before: Array[Structure], after: Array[Structure]) -> Rect2
 	return area
 
 
+## Private copies of `structures` (a press that waits keeps them as they were when pressed).
+static func _copies(structures: Array[Structure]) -> Array[Structure]:
+	var out: Array[Structure] = []
+	for structure in structures:
+		out.append(structure.copy())
+	return out
+
+
 ## The document's structures as a new list of the same objects.
 func _current() -> Array[Structure]:
 	var out: Array[Structure] = []
@@ -431,7 +479,9 @@ func _change(label: String, after: Array[Structure], from: Array[Structure] = []
 	e.commit_prop_edit()
 	if e.is_stroking():
 		e.end_stroke()
-	e.finish_height_work()
+	# Inside a press: the ground has landed, the core on or off (a call outside one, from a test or
+	# the history, finishes what is left; with the core on nothing waits, as in CrossingEditor).
+	e.terra.prepare_gesture()
 	var before: Array[Structure] = from if not from.is_empty() else _current()
 	var area := _area_of(before, after)
 	apply_list(after, area)
