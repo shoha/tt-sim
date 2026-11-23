@@ -25,8 +25,9 @@ func after_each() -> void:
 	TokenAnimationLod.enabled = true
 
 
-## An AnimationPlayer playing a 4 s clip on a Node3D at `at` (under _root), registered.
-func _mixer(at: Vector3) -> AnimationPlayer:
+## An AnimationPlayer playing a 4 s clip (Target's x from `x0` to 4) on a Node3D at `at` (under
+## _root), registered.
+func _mixer(at: Vector3, x0: float = 0.0) -> AnimationPlayer:
 	var holder := Node3D.new()
 	_root.add_child(holder)
 	holder.position = at
@@ -37,7 +38,7 @@ func _mixer(at: Vector3) -> AnimationPlayer:
 	anim.length = 4.0
 	var track := anim.add_track(Animation.TYPE_VALUE)
 	anim.track_set_path(track, "Target:position:x")
-	anim.track_insert_key(track, 0.0, 0.0)
+	anim.track_insert_key(track, 0.0, x0)
 	anim.track_insert_key(track, 4.0, 4.0)
 	var library := AnimationLibrary.new()
 	library.add_animation(&"idle", anim)
@@ -83,11 +84,21 @@ func test_idle_tokens_are_staggered() -> void:
 	assert_between(first, 1, 7, "not all on one frame (%d)" % first)
 
 
-func test_an_off_screen_token_holds_its_pose() -> void:
+func test_an_off_screen_token_takes_one_step_then_holds_its_pose() -> void:
 	var player := _mixer(Vector3(500, 0, -500))
-	var start := player.current_animation_position
+	assert_eq(_run(60), 1, "the first step is never culled")
+	var held := player.current_animation_position
 	assert_eq(_run(60), 0)
-	assert_eq(player.current_animation_position, start)
+	assert_eq(player.current_animation_position, held)
+
+
+## Until a skeleton is posed the renderer skins it with identity matrices (the raw bind pose:
+## Venusaur's vines 3.9 m out of its mouth, token-feet-patch), so a mixer is posed the moment it
+## is registered, before any step and wherever it stands.
+func test_a_registered_mixer_is_posed_at_once() -> void:
+	var player := _mixer(Vector3(500, 0, -500), 2.0)
+	var target := player.get_parent().get_node("Target") as Node3D
+	assert_almost_eq(target.position.x, 2.0, 1.0e-4, "the clip's first frame, with no step")
 
 
 func test_a_touched_token_steps_every_frame() -> void:

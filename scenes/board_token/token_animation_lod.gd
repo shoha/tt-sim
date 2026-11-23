@@ -14,6 +14,13 @@ extends Node
 ## - at IDLE_HZ otherwise, staggered (each mixer starts at its own phase, so a crowd does not all
 ##   step on one frame) while the token's sphere of CULL_RADIUS_M is inside the camera frustum;
 ## - not at all off screen: the pose holds, and resumes from there when the token comes back.
+## A mixer is posed once the moment it is registered (an advance of 0 s) and takes its first real
+## step on its first due frame whether it is on screen or not: until a skeleton is posed the
+## renderer skins it with identity matrices, so the mesh draws its raw bind pose, and a pack model
+## whose bind pose differs from every clip showed it (token-feet-patch, 2026-11-23: Venusaur's
+## vines run 3.9 m out of its mouth in the bind pose, and its bind-pose legs sink into a slope
+## where the token ghost outlined them as a pale patch at its feet; a token placed or loaded off
+## screen kept that pose until it came into view, and for the frames before its first step).
 ## Time is conserved: a step carries the whole interval since the last, so a 30 Hz idle runs at
 ## its real speed, only sampled less often. The rates are constants (the board left them to the
 ## recommendation: 30 Hz on screen, paused off screen). The model's own AnimationPlayer (the
@@ -41,6 +48,7 @@ var _tokens: Array[BoardToken] = []
 var _since := PackedFloat32Array()
 var _full_until := PackedInt64Array()
 var _full := PackedByteArray()  # 1 while the entry runs at full rate
+var _stepped := PackedByteArray()  # 1 once the entry has taken a step (its first is never culled)
 var _phase := 0.0
 
 
@@ -60,7 +68,8 @@ static func for_viewport(viewport: Viewport) -> TokenAnimationLod:
 
 
 ## Takes over `mixer` (the token's AnimationTree) and `sources` (the players it reads, which
-## play nothing themselves); `token` decides its rate (null: idle rules only).
+## play nothing themselves); `token` decides its rate (null: idle rules only). The mixer is posed
+## at once, so the skeleton never reaches the renderer in its bind pose (see the header).
 func register(mixer: AnimationMixer, token: BoardToken, sources: Array = []) -> void:
 	if _mixers.has(mixer):
 		return
@@ -72,7 +81,10 @@ func register(mixer: AnimationMixer, token: BoardToken, sources: Array = []) -> 
 	_since.append(_phase / IDLE_HZ)
 	_full_until.append(0)
 	_full.append(0)
+	_stepped.append(0)
 	_set_manual(_mixers.size() - 1, enabled)
+	if enabled and mixer.is_inside_tree():
+		mixer.advance(0.0)
 
 
 ## Hands `mixer` back its own processing and forgets it.
@@ -87,6 +99,7 @@ func unregister(mixer: AnimationMixer) -> void:
 	_since.remove_at(i)
 	_full_until.remove_at(i)
 	_full.remove_at(i)
+	_stepped.remove_at(i)
 
 
 ## Full rate for `mixer` for FULL_HOLD_S from now (a state change), from the next frame.
@@ -157,7 +170,9 @@ func step(delta: float, camera: Camera3D) -> int:
 			continue
 		var full := _full_until[i] > now or _wants_full(_tokens[i])
 		_full[i] = 1 if full else 0
-		if not full and camera != null:
+		# A mixer's first step is never culled: an off-screen token takes its idle pose (its
+		# state machine travels to the idle clip a frame after it is made) and then holds it.
+		if not full and camera != null and _stepped[i] == 1:
 			if planes.is_empty():
 				planes = camera.get_frustum()
 			if not _on_screen(mixer, _tokens[i], planes):
@@ -165,6 +180,7 @@ func step(delta: float, camera: Camera3D) -> int:
 				continue
 		mixer.advance(since)
 		_since[i] = 0.0
+		_stepped[i] = 1
 		stepped += 1
 	return stepped
 
