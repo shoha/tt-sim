@@ -2,10 +2,13 @@ class_name MapTerrainIO
 extends RefCounted
 ## Reads and writes the terrain section of `map.ttmap` (MapDocument.terra, a TerraDoc; summary in
 ## docs/systems/map_document.md "Terrain section (format 6)"):
-##   terrain/prims.bin   the primitive list, "TTPR" version 1, little-endian:
+##   terrain/prims.bin   the primitive list, "TTPR" version 2, little-endian:
 ##     header   magic "TTPR", u16 version, u8 length + ASCII writer core version (informational,
 ##              TerraCore.NATIVE_VERSION), u32 primitive count, u32 next_id, u16 kind count,
-##              then per kind used (ascending id) u16 id, u8 length, ASCII name
+##              then per kind used (ascending id) u16 id, u8 length, ASCII name, then u8 surface
+##              count and per surface (TerraDoc.surfaces, in order) u8 length, ASCII name
+##              (version 2, card terraform-p2-paint-path; version 1 is refused: map data made
+##              before it is expendable)
 ##     per primitive, in document order (the order compose applies): u32 id, u16 kind, u16 flags,
 ##              u32 float count, then that many float32
 ## The bytes are canonical: one document encodes to one byte string (kinds ascending, nothing
@@ -36,7 +39,7 @@ const ENTRY := MapDocumentIO.TERRAIN_ENTRY
 ## The derived record's entry (TerraCache: digests of the derived arrays, keyed by the document).
 const DERIVED_ENTRY := MapDocumentIO.TERRAIN_DERIVED_ENTRY
 const MAGIC := "TTPR"
-const VERSION := 1
+const VERSION := 2
 ## Bytes of one primitive's fixed part (id, kind, flags, float count).
 const PRIM_HEADER_BYTES := 12
 ## Longest core version string and kind name the header may carry.
@@ -93,6 +96,9 @@ static func encode(terra: TerraDoc, with_next_id := true) -> PackedByteArray:
 	for kind: int in kind_ids:
 		_put_u16(out, kind)
 		_put_name(out, TerraKinds.name_of(kind))
+	out.append(terra.surfaces.size())
+	for surface in terra.surfaces:
+		_put_name(out, surface)
 	for p in terra.prims:
 		var data: PackedFloat32Array = p["data"]
 		_put_u32(out, int(p["id"]))
@@ -180,11 +186,21 @@ static func _decode(r: _Reader) -> TerraDoc:
 	var kinds := _kind_table(r, kind_count)
 	if kinds.is_empty() and kind_count > 0:
 		return null
+	var surfaces := PackedStringArray()
+	var surface_count := r.u8()
+	for k in surface_count:
+		surfaces.append(r.text())
+	if not r.ok:
+		return r.fail("truncated surface table")
+	var bad_table := TerraDoc.surfaces_problem(surfaces)
+	if bad_table != "":
+		return r.fail(bad_table)
 	if r.left() < count * PRIM_HEADER_BYTES:
 		return r.fail(
 			"truncated: %d primitives need at least %d bytes" % [count, count * PRIM_HEADER_BYTES]
 		)
 	var terra := TerraDoc.new()
+	terra.surfaces = surfaces
 	var seen := {}
 	var total := 0
 	var top := 0
@@ -282,6 +298,13 @@ class _Reader:
 			return PackedByteArray()
 		at += n
 		return bytes.slice(at - n, at)
+
+	func u8() -> int:
+		if not ok or left() < 1:
+			ok = false
+			return 0
+		at += 1
+		return bytes[at - 1]
 
 	func u16() -> int:
 		if not ok or left() < 2:

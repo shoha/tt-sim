@@ -65,6 +65,10 @@ const CROSSING_SEARCH_M := 6.0
 const CROSSING_TRIES := 8
 ## Paint dabs along a wash: spacing as a share of the half width.
 const WASH_STEP_SHARE := 0.5
+## A wash coat: its soft edge past the half width (StartingLandform.paint_line's), and the exposure
+## of each dab (SurfaceStroke seconds: about full cover inside half the radius).
+const WASH_SOFT_M := 1.0
+const WASH_SECONDS := 1.5
 ## The features a report names and the primitives must carry (report_features).
 const SHAPE_FEATURES: Array[String] = [
 	"bluff", "crown", "ledge", "second hill", "islet", "knoll", "tarn", "wash"
@@ -100,6 +104,7 @@ static func apply(
 	doc.heights = derive.call("doc_heights")
 	terra.derived = TerraCache.make_record(terra, doc, derive)
 	doc.terra = terra
+	TerraBridge.swap_surfaces(doc, derive)
 	var water := TerraBridge.water_of(derive, doc)
 	if not water.has("error"):
 		doc.water_bodies = water["bodies"]
@@ -402,25 +407,31 @@ static func _outline(
 	return out
 
 
-## A dry wash as paint dabs of its surface (the document's slot) along its line. False without
-## a surface.
-static func _wash(terra: TerraDoc, doc: MapDocument, hint: Dictionary) -> bool:
+## A dry wash as one paint coat of its surface (card terraform-p2-paint-path: the surface table's
+## index) along its line: capsule dabs out to the recipe's soft edge, exposed WASH_SECONDS so the
+## core reads as full cover. False without a surface or a free table entry.
+static func _wash(terra: TerraDoc, _doc: MapDocument, hint: Dictionary) -> bool:
 	var surface := String(hint.get("surface", ""))
 	var line: PackedVector2Array = hint.get("line", PackedVector2Array())
 	if surface == "" or line.size() < 2:
 		return false
-	var slot := doc.ensure_surface(surface)
-	if slot < 0:
-		return false
-	var radius := float(hint.width) * 0.5
-	var dabs := PackedFloat32Array()
+	var index := terra.surfaces.find(surface)
+	if index < 0:
+		if terra.surfaces.size() >= TerraDoc.MAX_SURFACES:
+			return false
+		terra.surfaces.append(surface)
+		index = terra.surfaces.size() - 1
+	var radius := float(hint.width) * 0.5 + WASH_SOFT_M
+	var dabs := PackedFloat32Array([index])
 	var total := 0.0
 	for k in line.size() - 1:
 		total += line[k].distance_to(line[k + 1])
 	var steps := maxi(1, ceili(total / maxf(radius * WASH_STEP_SHARE, 0.25)))
-	for n in steps + 1:
+	var last: Vector2 = StartingLandform.along(line, 0.0).point
+	for n in range(1, steps + 1):
 		var p: Vector2 = StartingLandform.along(line, total * n / steps).point
-		dabs.append_array([p.x, p.y, radius, float(slot)])
+		dabs.append_array([last.x, last.y, p.x, p.y, radius, WASH_SECONDS])
+		last = p
 	terra.add(TerraCore.PAINT, dabs)
 	return true
 

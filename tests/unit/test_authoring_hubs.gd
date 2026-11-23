@@ -98,7 +98,9 @@ func test_the_hubs_hold_the_tabs_the_owner_asked_for() -> void:
 	assert_eq(labels.call(PlaceTool.ID), ["Add", "Thin / Clear"])
 	assert_eq(labels.call(WaterTool.ID), ["River", "Pond", "Crossing"])
 	assert_eq(labels.call(BuildTool.ID), ["Walls", "Buildings", "Villages"])
-	for rail_id in [BiomeTool.ID, SculptTool.ID, PaintTool.ID, FireTool.ID]:
+	# The Path tool joined Paint as its tab (card terraform-p2-paint-path).
+	assert_eq(labels.call(PaintTool.ID), ["Paint", "Path"])
+	for rail_id in [BiomeTool.ID, SculptTool.ID, FireTool.ID]:
 		assert_true(ToolRegistry.find(rail_id).tabs.is_empty(), "%s has no tabs" % rail_id)
 
 

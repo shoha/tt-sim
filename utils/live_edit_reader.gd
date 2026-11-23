@@ -52,8 +52,11 @@ const ARITY := {
 const TERRA_KINDS := "res://utils/terraform/terra_kinds.gd"
 ## The terrain session edit ops a "terra" op may carry (TerraSession.apply).
 const TERRA_OPS: Array[String] = [
-	"add", "replace", "append", "remove", "mute", "unmute", "move", "splice"
+	"add", "replace", "append", "remove", "mute", "unmute", "move", "splice", "surfaces"
 ]
+## TerraDoc.MAX_SURFACES and MAX_SURFACE_NAME (by value).
+const TERRA_MAX_SURFACES := 64
+const TERRA_MAX_SURFACE_NAME := 64
 ## Most edits one "terra" op carries (a fold's splice inverse is one edit per primitive).
 const MAX_TERRA_EDITS := MapDocument.MAX_TERRA_PRIMS + 64
 ## TerraDoc.MAX_ID and TerraDoc.KNOWN_FLAGS (by value, as TERRA_KINDS is by path).
@@ -513,6 +516,8 @@ func _terra_edits(value: Variant) -> Array:
 				fresh["to"] = _terra_count(change.get("to"), MapDocument.MAX_TERRA_PRIMS)
 			"splice":
 				fresh.merge(_terra_splice(change, kinds))
+			"surfaces":
+				fresh["names"] = _terra_surfaces(change.get("names"))
 		if problem != "":
 			return []
 		floats += _terra_float_count(fresh)
@@ -614,6 +619,20 @@ func _terra_floats(value: Variant) -> PackedFloat32Array:
 			_fail("terrain floats that are not finite")
 			return PackedFloat32Array()
 	return floats.duplicate()
+
+
+## A copy of surface table `value` (TerraSession's "surfaces" op): at most TERRA_MAX_SURFACES
+## printable ASCII names of 1 to TERRA_MAX_SURFACE_NAME characters (the session checks repeats).
+func _terra_surfaces(value: Variant) -> PackedStringArray:
+	if not value is PackedStringArray or (value as PackedStringArray).size() > TERRA_MAX_SURFACES:
+		_fail("a terrain surface table is not a short list of names")
+		return PackedStringArray()
+	for n: String in value:
+		var ascii := n.to_ascii_buffer()
+		if n.is_empty() or ascii.size() > TERRA_MAX_SURFACE_NAME or ascii.get_string_from_ascii() != n:
+			_fail("a terrain surface name is not short ASCII")
+			return PackedStringArray()
+	return (value as PackedStringArray).duplicate()
 
 
 ## TerraDoc.digest's text (64 hex digits), or "" for none.

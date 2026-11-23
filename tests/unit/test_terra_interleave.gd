@@ -1,9 +1,11 @@
 extends GutTest
 ## The landing invariant under shuffled interleavings (card terraform-p2-sculpt round 3;
 ## docs/systems/terraform.md "The session"): whatever order river releases, Sculpt presses, held
-## frames, undos and redos come in, and however many frames pass between them, stepped or not, once
+## frames, undos and redos come in (card terraform-p2-paint-path: Paint presses, erase coats and
+## path releases too), and however many frames pass between them, stepped or not, once
 ## everything has landed the session's settled derive answers for its document (every digest equals
-## a fresh derive_full of it) and MapDocument.heights are that fresh derive's. Seeds 1 and 8 caught
+## a fresh derive_full of it) and MapDocument.heights and surface planes are that fresh derive's.
+## Seeds 1 and 8 caught
 ## the held add whose floats a later append grew in place (TerraSession.apply copies them now).
 
 const SEEDS := [1, 8, 11, 23, 37, 58, 3, 14]
@@ -75,12 +77,38 @@ func _check(rig: TerraRig, what: String) -> void:
 	assert_true(
 		fresh.call("doc_heights") == rig.doc.heights, "%s: heights = a fresh derive's" % what
 	)
+	var table := (rig.doc.terra as TerraDoc).surfaces
+	assert_eq(rig.doc.surface_ids, table, "%s: surface_ids = the table" % what)
+	if not table.is_empty():
+		assert_true(
+			fresh.call("doc_surfaces", Rect2i()) == rig.doc.surface_weights,
+			"%s: surface planes = a fresh derive's" % what
+		)
+
+
+## A held Paint stroke (card terraform-p2-paint-path) of `frames` frames from `a` to `b` (map XZ):
+## a coat of `surface`, or an erase coat for "".
+func _paint(rig: TerraRig, surface: String, a: Vector2, b: Vector2, frames: int) -> void:
+	var e := rig.editor
+	if not e.begin_surface_stroke(surface, surface == ""):
+		return
+	for k in frames:
+		var p := a.lerp(b, float(k) / frames)
+		var q := a.lerp(b, float(k + 1) / frames)
+		var from := e.to_world(Vector3(p.x, 0, p.y))
+		e.stroke_dab(from, e.to_world(Vector3(q.x, 0, q.y)), 2.5, 1.0 / 30.0)
+		e.flush()
+		e.step_height_work()
+		await get_tree().process_frame
+	e.end_stroke()
 
 
 ## One shuffled run of STEPS actions drawn from seed `s`, then the invariant.
 func _run(s: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = s
+	var extra := RandomNumberGenerator.new()
+	extra.seed = s * 31 + 7
 	var rig := await _rig()
 	assert_true(await TerraRig.settle(get_tree(), [rig]), "seed %d: the load settles" % s)
 	var rivers := 0
@@ -107,6 +135,23 @@ func _run(s: int) -> void:
 				if rig.history.can_redo():
 					rig.history.redo()
 					done.append("redo")
+		# Paint presses and path releases (card terraform-p2-paint-path) from their own stream, so
+		# the shuffles above stay the ones seeds 1 and 8 caught a bug with.
+		match extra.randi_range(0, 4):
+			0:
+				var a := Vector2(extra.randf_range(12, 40), extra.randf_range(10, 34))
+				var b := a + Vector2(extra.randf_range(-6, 6), extra.randf_range(-6, 6))
+				var surface: String = ["gravel", "cobblestone", ""][extra.randi_range(0, 2)]
+				var frames := extra.randi_range(1, 6)
+				await _paint(rig, surface, a, b, frames)
+				done.append("paint%d%s" % [frames, "e" if surface == "" else ""])
+			1:
+				var a := Vector2(extra.randf_range(12, 40), extra.randf_range(10, 34))
+				var line := PackedVector2Array(
+					[rig.corpus.at(a.x, a.y), rig.corpus.at(a.x + 8, a.y + extra.randf_range(-4, 4))]
+				)
+				rig.editor.terra.paint.add_path(line, 1.6, "dirt_road_packed")
+				done.append("path")
 		# Nothing, a frame or a few between gestures, stepped or not.
 		var gap := rng.randi_range(0, 3)
 		done.append("g%d" % gap)

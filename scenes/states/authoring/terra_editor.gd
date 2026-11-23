@@ -77,6 +77,8 @@ var waits := 0
 var sculpt: TerraSculpt = null
 ## The Water tool's ops (card terraform-p2-water): river, pond and erase gestures.
 var water_tools := TerraWaterTools.new()
+## The Paint tool's coats (card terraform-p2-paint-path); the bridge's paint landings go to it.
+var paint: TerraPaint = null
 
 var _owner: WeakRef = null
 ## The open gesture (begin_gesture), or {}: {"edits", "inverse", "restored": id -> true, "before":
@@ -103,6 +105,7 @@ static func create(editor: AuthoringEditor) -> TerraEditor:
 	terra._owner = weakref(editor)
 	terra.sculpt = TerraSculpt.create(editor, terra)
 	terra.water_tools = TerraWaterTools.new(terra)
+	terra.paint = TerraPaint.create(editor, terra)
 	var s := terra.session()
 	if s != null:
 		s.settled.connect(terra._on_settled)
@@ -216,19 +219,22 @@ func prepare_gesture() -> void:
 
 ## True while a dab stroke of a primitive tool is in progress (AuthoringEditor's routes).
 func is_stroking() -> bool:
-	return sculpt.is_stroking() or water_tools.is_stroking()
+	return sculpt.is_stroking() or water_tools.is_stroking() or paint.is_stroking()
 
 
 ## One frame's exposure of the stroke in progress (world points and radius).
 func dab(from: Vector3, to: Vector3, radius: float, seconds: float) -> void:
 	if water_tools.is_stroking():
 		water_tools.dab(from, to, radius)
+	elif paint.is_stroking():
+		paint.dab(from, to, radius, seconds)
 	else:
 		sculpt.dab(from, to, radius, seconds)
 
 
 ## Pushes this frame's held edits to the ground (TerraBridge.held).
 func flush() -> void:
+	paint.flush()
 	sculpt.flush()
 
 
@@ -236,12 +242,15 @@ func flush() -> void:
 func end_stroke() -> bool:
 	if water_tools.is_stroking():
 		return water_tools.end_stroke()
+	if paint.is_stroking():
+		return paint.end_stroke()
 	return sculpt.end_stroke()
 
 
 ## Abandons the stroke in progress.
 func cancel_stroke() -> void:
 	water_tools.cancel_stroke()
+	paint.cancel_stroke()
 	sculpt.cancel_stroke()
 
 
@@ -253,14 +262,17 @@ func begin_sculpt(op: int, target_y: float) -> bool:
 	return sculpt.begin(op, target_y)
 
 
-## Paint (card terraform-p2-paint-path): why `surface` cannot be painted now, or "".
-func paint_refusal(_surface: String) -> String:
-	return NOT_YET % "Paint"
+## Paint (card terraform-p2-paint-path, TerraPaint): why `surface` cannot be painted now, or ""
+## (a map lists at most 64 surfaces).
+func paint_refusal(surface: String) -> String:
+	return paint.refusal(surface)
 
 
-## Paint (card terraform-p2-paint-path): a coat of `surface`, or with `erase` an erase coat.
-func begin_paint(_surface: String, _erase: bool) -> bool:
-	return _not_yet("Paint")
+## Paint (card terraform-p2-paint-path): a coat of `surface`, or with `erase` an erase coat
+## (TerraPaint.begin). False with last_refusal set when refused.
+func begin_paint(surface: String, erase: bool) -> bool:
+	last_refusal = paint.refusal(surface) if not erase else ""
+	return paint.begin(surface, erase)
 
 
 ## River (card terraform-p2-water): the drawn line (world XZ, as WaterEditor.carve_river takes
@@ -607,6 +619,8 @@ static func inverse_of(terra: TerraDoc, change: Dictionary) -> Array[Dictionary]
 			back.sort()
 			for at: int in back:
 				out.append(_splice([], [_copy(terra.prims[at])], at, -1))
+		"surfaces":
+			out.append({"op": "surfaces", "names": terra.surfaces.duplicate()})
 	return out
 
 

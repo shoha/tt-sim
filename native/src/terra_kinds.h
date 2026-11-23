@@ -40,12 +40,12 @@ enum KindShape : int {
 };
 
 /// What a stamp writes over a rect: its stage's arrays (compose: H, the composed height, and SW, the
-/// smoothing weight; paint: PI, the coat's surface id, and PW, its weight). Whole-map arrays.
+/// smoothing weight; paint: PI and PW, four surface ids and four weights a sample). Whole-map arrays.
 struct StampOut {
 	float *H = nullptr;
 	float *SW = nullptr;
 	uint8_t *PI = nullptr;
-	float *PW = nullptr;
+	uint8_t *PW = nullptr;
 };
 
 struct KindDef {

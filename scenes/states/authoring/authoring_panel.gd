@@ -10,10 +10,10 @@ extends DrawerContainer
 ## (_build_pane), and a tool added since brings its own (ToolDescriptor.build_pane). Built in code;
 ## every interactive Control is named so the validation bridge can click it.
 ##
-## Hubs. The rail lists seven tools; three of them are hubs whose card has top tabs
-## (SegmentedTabs): Place (Add, Thin / Clear), Water (River, Pond, Crossing) and Build (Walls,
-## Buildings, Villages). A tab is a former rail tool: it shows that tool's own pane and picks its
-## brush, exactly as its rail item did, so every tool id, brush mode and pane is unchanged
+## Hubs. The rail lists seven tools; four of them are hubs whose card has top tabs
+## (SegmentedTabs): Place (Add, Thin / Clear), Paint (Paint, Path), Water (River, Pond, Crossing)
+## and Build (Walls, Buildings, Villages). A tab shows its tool's own pane and picks its brush,
+## exactly as a rail item does, so every tool id, brush mode and pane is unchanged
 ## (ToolDescriptor.hub and tabs). A rail press or the tool's key opens the hub's last tab, and the
 ## key pressed again steps to the next tab. Signals still carry tool ids (tool_selected(&"bridge"));
 ## the rail item that is tinted and pressed is the hub's.

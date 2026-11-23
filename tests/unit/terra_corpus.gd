@@ -60,9 +60,11 @@ static func build(cells := Vector2i(CELLS, CELLS), with_extras := true) -> Terra
 		ring.append(46.0 + cos(a) * 4.5 * (1.0 + 0.12 * sin(3.0 * a)))
 		ring.append(34.0 + sin(a) * 4.0)
 	c.add(TerraCore.POND, c.line([0.7], ring))
-	c.add(TerraCore.PATH, c.line([1.6], [4, 38, 12, 42, 19, 46, 26, 50]))
+	c.terra.surfaces = PackedStringArray(["dirt_road_packed", "gravel", "cobblestone"])
+	c.add(TerraCore.PATH, c.line([1.6, 0], [4, 38, 12, 42, 19, 46, 26, 50]))
 	c.add(TerraCore.WALL, c.line([1.2, 0.5], [22, 36, 40, 38]))
-	c.add(TerraCore.PAINT, c.dabs([[52, 44, 2.5, 6], [54, 46, 2.0, 6], [42, 29, 2.0, 8]]))
+	c.add(TerraCore.PAINT, c.coat(1, [[52, 44, 2.5, 0.5], [54, 46, 2.0, 0.5]]))
+	c.add(TerraCore.PAINT, c.coat(2, [[42, 29, 2.0, 1.0], [12, 42, 2.0, 1.0]]))
 	var stroke: Array = []
 	for k in 8:
 		stroke.append([38.0 + k * 0.6, 8.0, 2.5, 0.12, 0])
@@ -213,6 +215,16 @@ func dabs(list: Array) -> PackedFloat32Array:
 		out.append(p.y)
 		for v in d.slice(2):
 			out.append(float(v))
+	return out
+
+
+## A paint coat's floats (kind 8): `surface`, then per [x, z, radius, seconds] a point dab at the
+## layout point placed.
+func coat(surface: int, list: Array) -> PackedFloat32Array:
+	var out := PackedFloat32Array([surface])
+	for d: Array in list:
+		var p := at(d[0], d[1])
+		out.append_array([p.x, p.y, p.x, p.y, float(d[2]), float(d[3])])
 	return out
 
 

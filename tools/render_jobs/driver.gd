@@ -597,6 +597,15 @@ func _stroke(step: Dictionary) -> bool:
 			# The Paint tool through its tile (P3-6); Ctrl at the press erases paint.
 			c.call("_on_paint_selected", String(step.get("surface", "")))
 			_state.ctrl = bool(step.get("ctrl", false))
+		elif mode == "path":
+			# The Paint hub's Path tab (card terraform-p2-paint-path): the line is drawn along the
+			# points and lands on release, `width` metres wide (default 1.6), of `surface` (picked as
+			# its Paint tile is; absent: the Paint tab's pick). Ctrl at the press erases paths.
+			if step.has("surface"):
+				c.call("_on_paint_selected", String(step.surface))
+			c.call("_select_tool", PathTool.ID)
+			PathTool.of(brush).width = float(step.get("width", 1.6))
+			_state.ctrl = bool(step.get("ctrl", false))
 		elif mode == "water":
 			# The Water tool through its tiles (P4-4): a river is drawn along the points and
 			# carved on release, a pond painted; Ctrl at the press erases water.

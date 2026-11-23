@@ -32,11 +32,11 @@ class Pool;
 struct Pass;
 
 /// A read-only view of every derived array and record, for C++ stages built on a TerraDerive (the
-/// Painted stages): whole-map arrays of g.w * g.h samples, row-major (CT 4 bytes a sample).
+/// Painted stages): whole-map arrays of g.w * g.h samples, row-major (CT, PI and PW 4 bytes a sample).
 struct DerivedView {
 	const Grid &g;
-	const std::vector<float> &H2, &WL, &SL, &DW, &DP, &DF, &PW, &HB, &CV;
-	const std::vector<uint8_t> &PM, &FM, &WM, &PI, &CT;
+	const std::vector<float> &H2, &WL, &SL, &DW, &DP, &DF, &HB, &CV;
+	const std::vector<uint8_t> &PM, &FM, &WM, &PI, &PW, &CT;
 	const Water &water;
 	const std::vector<Wall> &walls;
 };
@@ -50,8 +50,8 @@ class TerraDerive : public RefCounted {
 	terra::Grid g;
 	std::vector<terra::Prim> prims;
 	std::vector<terra::Rule> rules;
-	std::vector<float> Hraw, SW, H0, H1, WL, Hp, H2, SL, DW, DP, DF, PW, HB, CV;
-	std::vector<uint8_t> PM, FM, WM, PI, CT;
+	std::vector<float> Hraw, SW, H0, H1, WL, Hp, H2, SL, DW, DP, DF, HB, CV;
+	std::vector<uint8_t> PM, FM, WM, PI, PW, CT;
 	terra::Water water;
 	std::vector<terra::PathL> paths;
 	std::vector<terra::Wall> walls;
@@ -77,6 +77,7 @@ class TerraDerive : public RefCounted {
 	void solve_water(terra::Pass &ps);
 	void solve_paths(terra::Pass &ps);
 	void solve_walls(terra::Pass &ps);
+	void paint_items(terra::Pass &ps);
 	void rect_body(int stage, const terra::Rect &r, const terra::Pass &ps);
 	int run_rect(const terra::StageDef &s, const terra::Dirty &region, terra::Pass &ps);
 	uint8_t *array_data(int a);
@@ -88,7 +89,7 @@ public:
 	TerraDerive();
 	~TerraDerive();
 
-	/// "terra 7 reaches": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
+	/// "terra 8 paint": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
 	String version() const;
 	/// Allocates a w x h sample grid over a map of `extent` metres, centred on the origin (sample
 	/// (0, 0) at -extent / 2), and forgets the document. TerraCore passes 2 (n - 1) + 1 per axis of
@@ -185,6 +186,10 @@ public:
 	/// differ (empty when equal), "values": H2 over that rect, row-major}; plus "error" when the
 	/// heights are not this grid's.
 	Dictionary doc_heights_diff(const PackedFloat32Array &heights, int64_t doc_w, const Rect2i &rect) const;
+	/// The paint planes at the document's samples over document rect `rect` (clipped; an empty
+	/// rect for the whole map) in SurfaceStroke.read_block's form: the rect's index rows (4 bytes a
+	/// sample), then its weight rows. Over the whole map that is MapDocument.surface_weights.
+	PackedByteArray doc_surfaces(const Rect2i &rect) const;
 
 	/// C++ only: every derived array and record, for stages built on this derive.
 	terra::DerivedView derived() const;

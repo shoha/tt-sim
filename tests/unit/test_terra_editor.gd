@@ -197,8 +197,11 @@ func test_switch_on_routes_refuse_until_their_cards_land() -> void:
 	assert_true(e.terra.is_stroking(), "the core's stroke")
 	assert_false(e.heights.is_sculpting(), "never today's stroke on a primitives map")
 	e.cancel_stroke()
-	assert_false(e.begin_surface_stroke("dirt", false))
-	assert_eq(e.terra.last_refusal, TerraEditor.NOT_YET % "Paint")
+	# Paint is on primitives (card terraform-p2-paint-path): its stroke is TerraPaint's coat.
+	assert_true(e.begin_surface_stroke("dirt", false))
+	assert_eq(e.terra.last_refusal, "")
+	assert_true(e.terra.paint.is_stroking(), "the core's coat")
+	e.cancel_stroke()
 	# Wall is on primitives (card terraform-p2-walls): its press goes on to WallEditor.
 	assert_true(e.terra.begin_wall_edit())
 	assert_eq(e.terra.last_refusal, "")

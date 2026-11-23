@@ -29,6 +29,11 @@ int KindDef::shape() const {
 }
 
 int KindDef::input() const {
+	// The paint stage also reads the path primitives (a path's surface is a coat), but its own
+	// kind's edits seed the paint primitives.
+	if (stage == S_PAINT) {
+		return A_PAINT_PRIMS;
+	}
 	for (int a = 0; a < A_COUNT; a++) {
 		if ((STAGES[stage].reads & bit(a)) && ARRAYS[a].kind == K_INPUT) {
 			return a;
