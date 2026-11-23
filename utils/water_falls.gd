@@ -39,6 +39,11 @@ const PLUNGE_DEPTH_MAX_M := 0.9
 ## How far past the face's own run (drop / FALL_FACE_SLOPE) is_fall() looks for the steep
 ## stretch, beyond the lip set-back's reach.
 const FACE_SEARCH_M := 1.0
+## Chutes (card terraform-p2-chutes): the terraforming core's water makes no fall of a step under
+## CHUTE_MAX_M; it carves it as a ramp of fast water at CHUTE_SLOPE (terra_stages.h CHUTE_*, the
+## same constants).
+const CHUTE_MAX_M := 2.5
+const CHUTE_SLOPE := 0.3
 
 
 ## The drop one fall aims for on `doc`: one tier, never under FALL_TARGET_MIN_M.
@@ -68,9 +73,27 @@ static func face_search(drop: float, half_width: float) -> float:
 
 
 ## True when reach `upper` stands FALL_MIN_DROP_M or more over reach `lower`: the drop
-## test alone, what the carve uses before the ground is carved.
+## test alone, what the carve uses before the ground is carved. The terraforming core's water
+## (WaterBody.chutes) has no fall under CHUTE_MAX_M: such a step is a chute (is_chute()).
 static func is_drop(upper: WaterBody, lower: WaterBody) -> bool:
-	return upper.level_m - lower.level_m >= FALL_MIN_DROP_M
+	var drop := upper.level_m - lower.level_m
+	return drop >= FALL_MIN_DROP_M and not (upper.chutes and drop < CHUTE_MAX_M)
+
+
+## True when the step from reach `upper` into reach `lower` is a chute (card terraform-p2-chutes):
+## the terraforming core's water stepping FALL_MIN_DROP_M up to CHUTE_MAX_M, which the derive
+## carves as a ramp of fast water (terra_stages.h CHUTE_*), drawn as a riffle over chute_run().
+static func is_chute(upper: WaterBody, lower: WaterBody) -> bool:
+	var drop := upper.level_m - lower.level_m
+	return upper.chutes and drop >= FALL_MIN_DROP_M and drop < CHUTE_MAX_M
+
+
+## A chute's run of arc for a step of `drop` with `room` metres of the lower reach below its
+## shared point: drop / CHUTE_SLOPE, never past `room`. The derive's carve (terra_stages.h
+## chute_run, the same function), RiverProfile's riffle easing and WaterMeshBuilder's sheet all
+## ramp over this one length, smoothstepped from the shared point.
+static func chute_run(drop: float, room: float) -> float:
+	return minf(drop / CHUTE_SLOPE, room)
 
 
 ## True when the step from reach `upper` into reach `lower` (joined end to end) is a fall on

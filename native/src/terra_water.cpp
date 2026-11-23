@@ -390,9 +390,36 @@ void solve_river(River &r, const Grid &g, const float *H0, double recv_level) {
 	for (int i = 0; i < n; i++) {
 		r.level[i] = float(lv[i]);
 	}
+	// The steps in order (index k: from point k - 1 to k), each starting at its shared point (the
+	// segment's middle, where the bridge splits the reaches).
+	std::vector<int> steps;
 	for (int i = 1; i < n; i++) {
-		if (lv[i - 1] - lv[i] >= FALL_MIN - LEVEL_EPS) {
-			add_fall(i, lv[i - 1], lv[i]);
+		if (lv[i - 1] - lv[i] > LEVEL_EPS) {
+			steps.push_back(i);
+		}
+	}
+	// A step of CHUTE_MAX_M or more is a fall record; a step of FALL_MIN up to it is a chute: the
+	// carve's level line eases down over chute_run of arc from the shared point (CHUTE_*), never past
+	// the next step's shared point, so it meets the next chute's start.
+	r.chute.assign(r.level.begin(), r.level.end());
+	for (int q = 0; q < int(steps.size()); q++) {
+		int k = steps[q];
+		double drop = lv[k - 1] - lv[k];
+		if (drop >= CHUTE_MAX_M - LEVEL_EPS) {
+			add_fall(k, lv[k - 1], lv[k]);
+			continue;
+		}
+		if (drop < FALL_MIN - LEVEL_EPS) {
+			continue;
+		}
+		double s0 = (l.s[k - 1] + l.s[k]) * 0.5;
+		double end = q + 1 < int(steps.size()) ? (l.s[steps[q + 1] - 1] + l.s[steps[q + 1]]) * 0.5 : l.s[n - 1];
+		double run = chute_run(drop, end - s0);
+		if (run <= 0.0) {
+			continue;
+		}
+		for (int j = k; j < n && l.s[j] - s0 < run; j++) {
+			r.chute[j] = float(lv[k] + drop * (1.0 - smoothstep(0.0, run, l.s[j] - s0)));
 		}
 	}
 }
@@ -474,19 +501,21 @@ void carve_rect(const Water &w, const Grid &g, const Rect &r, const float *H0, f
 				if (bk < 0 || d > rv.hw + BANK_REACH) {
 					continue;
 				}
-				// The bed eases across a step over its one segment; the water stands at the
-				// nearer point's reach, so WL holds one level per reach (the bridge's bodies).
-				double L = rv.level[bk] + (double(rv.level[bk + 1]) - rv.level[bk]) * bt;
+				// The bed follows the carve's level line (River::chute: down a chute's ramp, else
+				// across a step over its one segment); the water stands at the nearer point's
+				// reach, so WL holds one level per reach (the bridge's bodies).
+				double L = rv.chute[bk] + (double(rv.chute[bk + 1]) - rv.chute[bk]) * bt;
 				double Lw = bt < 0.5 ? rv.level[bk] : rv.level[bk + 1];
 				double s = rv.l.s[bk] + (rv.l.s[bk + 1] - rv.l.s[bk]) * bt;
+				double hw = rv.hw;
 				double c, f = -1e30;
-				if (d < rv.hw) {
-					double u = d / rv.hw;
+				if (d < hw) {
+					double u = d / hw;
 					c = L - rv.depth * (1.0 - u * u);
 				} else {
 					// Round 3: a bank that eases out of the water and steepens with distance (a
 					// valley side, never a trench wall at the reach).
-					double x = d - rv.hw;
+					double x = d - hw;
 					double bs = BANK_SLOPE + BANK_NOISE * bank_noise(rv.id, s);
 					c = L + x * bs + x * x * BANK_CURVE;
 					f = std::min(c, L + 0.08 - std::max(0.0, x - 0.25) * 0.7);
@@ -497,7 +526,7 @@ void carve_rect(const Water &w, const Grid &g, const Rect &r, const float *H0, f
 					ctrl_c = c;
 					ctrl_l = Lw;
 					ctrl = true;
-					ctrl_zone = d < rv.hw;
+					ctrl_zone = d < hw;
 				}
 			}
 			for (int pi : near_ponds) {

@@ -487,7 +487,8 @@ func _chain_may_meet(chain: Array[WaterBody], rect_m: Rect2) -> bool:
 
 
 ## WaterFieldStroke.table of `profile`, kept from the last update while its inputs (the profile's
-## shape and the reaches' speeds) are unchanged: an edit elsewhere never redoes a stroke's table.
+## shape with its chutes, the reaches' speeds and the first reach's id, which places the chutes'
+## white) are unchanged: an edit elsewhere never redoes a stroke's table.
 func _table_of(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
 	var speeds := PackedFloat32Array()
 	for body in chain:
@@ -501,6 +502,7 @@ func _table_of(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
 		profile.taper,
 		profile.run_off,
 		speeds,
+		profile.chute_runs,
 	]
 	var id := chain[0].id
 	var kept: Variant = _tables.get(id)

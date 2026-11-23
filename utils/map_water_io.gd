@@ -11,7 +11,8 @@ extends RefCounted
 ##                            optional "beyond" / "beyond_up": [[x, z], ...], the course
 ##                            drawn past the map edge after the last point / before the
 ##                            first (phase 6, WaterBody; 1..MAX_BEYOND_POINTS points, each
-##                            within the ground skirt's reach of the map)
+##                            within the ground skirt's reach of the map), optional
+##                            "chutes": true (the terraforming core's water, WaterBody.chutes)
 ##                    pond:  {"id", "kind": "pond", "depth", "level_m"}
 ##                    depth is "ankle", "waist" or "deep"; flow (only with a flow map):
 ##                    {"frame": "map_xz", "size": [nx, nz], "stamp": hex}, the stamp of the
@@ -245,6 +246,8 @@ static func body_json(body: WaterBody) -> Dictionary:
 			var course: PackedVector2Array = body.get(key)
 			if not course.is_empty():
 				out[key] = Array(course).map(func(p: Vector2) -> Array: return [p.x, p.y])
+		if body.chutes:
+			out["chutes"] = true
 	return out
 
 
@@ -337,6 +340,7 @@ static func _body_from(value: Variant) -> Variant:
 	for key in BEYOND_KEYS:
 		if value.has(key):
 			body.set(key, _course_from(value.get(key)))
+	body.chutes = value.get("chutes", false) == true
 	return body
 
 

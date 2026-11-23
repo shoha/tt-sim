@@ -11,13 +11,16 @@ extends RefCounted
 ## and one level per point. Every run of equal levels is one WaterBody.river at that level.
 ## Consecutive reaches share the midpoint of the segment their levels step across, where the
 ## derive's water changes level (the carve's water takes the nearer point's reach), and where a
-## step of FALL_MIN or more puts its fall record; WaterGeometry's flush end cuts each reach there.
+## step of CHUTE_MAX_M or more puts its fall record; WaterGeometry's flush end cuts each reach
+## there. Every body is marked WaterBody.chutes: a step of FALL_MIN up to CHUTE_MAX_M is a chute
+## the derive carves as a ramp (card terraform-p2-chutes), drawn as a riffle (WaterFalls.is_chute).
 ## Within a reach the line keeps every LINE_STRIDE-th point (about 1 m; today's control lines are
-## 2 m apart), since WaterGeometry smooths and rasterises the control line itself. The half-width
-## is the record's; the depth class the nearest to the primitive's depth (ties deeper, so the
-## carved bed is never deeper than the class holds: WaterMeshBuilder.hold_depth). Points past the
-## map edge become the course into the skirt: the first reach's `beyond_up` and the last reach's
-## `beyond` (RiverExits.split_line's rule, the crossing points kept just inside the edge).
+## 2 m apart), since WaterGeometry smooths and rasterises the control line itself. Every point
+## has the record's half width; the depth class the nearest to the primitive's depth (ties
+## deeper, so the carved bed is never deeper than the class holds: WaterMeshBuilder.hold_depth).
+## Points past the map edge become the course into the skirt: the first reach's `beyond_up` and
+## the last reach's `beyond` (RiverExits.split_line's rule, the crossing points kept just inside
+## the edge).
 ##
 ## Ponds. A pond's record holds its level; its area is its primitive's outline, rounded as the
 ## derive rounds it (Chaikin, 3 passes, closed), rasterised to pond_mask at the document samples.
@@ -131,6 +134,7 @@ static func river_reaches(
 		var body := WaterBody.river(
 			first_id + out.size(), pts, widths, depth as WaterBody.Depth, levels[run.x]
 		)
+		body.chutes = true
 		out.append(body)
 	if not out.is_empty():
 		out[0].beyond_up = split.up
@@ -282,10 +286,11 @@ static func region(
 
 
 ## True when two bodies are the same water (kind, depth, level, line, widths, speed, courses past
-## the edge); ids are not compared.
+## the edge, chutes); ids are not compared.
 static func same(a: WaterBody, b: WaterBody) -> bool:
 	return (
 		a.kind == b.kind
+		and a.chutes == b.chutes
 		and a.depth == b.depth
 		and a.level_m == b.level_m
 		and a.speed == b.speed
