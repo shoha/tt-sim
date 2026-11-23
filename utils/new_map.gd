@@ -111,7 +111,10 @@ static func is_big(width_ft: int, depth_ft: int = 0) -> bool:
 ## lacks) it is BARE_SURFACE and unpainted. With a `landform` other than
 ## StartingLandform.FLAT the recipe shapes the document first (heights, carved water, a
 ## crossing, from the seed) and the glade is centred on its stage. The thin cover and the edge
-## band are then greened (LandformPlacement.paint_sparse). The scatter rows are left empty:
+## band are then greened (LandformPlacement.paint_sparse). With `prims` (the terraforming
+## switch on: LandformPrims' script, any landform, Flat included) the recipe's shape becomes a
+## terrain section and the heights and water are its derive's (LandformPrims.apply), before the
+## cover is painted. The scatter rows are left empty:
 ## they are generated from the masks once the map is shown. A size size_error() refuses gives
 ## null, with the error pushed.
 static func create(
@@ -120,7 +123,8 @@ static func create(
 	seed_value: int,
 	root: String = PaletteLibrary.DEFAULT_ROOT,
 	landform: String = StartingLandform.FLAT,
-	depth_ft: int = 0
+	depth_ft: int = 0,
+	prims: GDScript = null
 ) -> MapDocument:
 	var refusal := size_error(size_ft, depth_ft)
 	if refusal != "":
@@ -139,9 +143,15 @@ static func create(
 	var glade := {}
 	var clearings: Array = []
 	var wood := {}
-	if landform != StartingLandform.FLAT:
-		var shaped := StartingLandform.apply(doc, landform, seed_value, biome_id, root)
-		stage = shaped.stage
+	if prims != null or landform != StartingLandform.FLAT:
+		# Switch on, `prims` is LandformPrims (NewMapBuild loads it by path): the same recipe,
+		# then its shape as terrain primitives, derived before the cover is painted.
+		var shaped: Dictionary = (
+			prims.call("apply", landform, doc, seed_value, biome_id, root)
+			if prims != null
+			else StartingLandform.apply(doc, landform, seed_value, biome_id, root)
+		)
+		stage = shaped.get("stage", Vector2.ZERO)
 		glade = shaped.get("glade", {})
 		clearings = shaped.get("clearings", [])
 		wood = shaped.get("wood", {})
@@ -176,7 +186,8 @@ static func planned_surfaces(
 
 ## create() from the new-map spec NewMapDialog emits and AuthoringController opens:
 ## {"size_ft" (the width), "depth_ft", "biome_id", "seed", "landform"}, each optional
-## (DEFAULT_SIZE_FT, the width, BARE_BIOME, a fresh random_seed(), StartingLandform.FLAT).
+## (DEFAULT_SIZE_FT, the width, BARE_BIOME, a fresh random_seed(), StartingLandform.FLAT), and
+## "prims" (create()'s `prims`; NewMapBuild sets it with the switch on).
 static func from_spec(spec: Dictionary, root: String = PaletteLibrary.DEFAULT_ROOT) -> MapDocument:
 	# The biome designer's map (ProvingGround): "proving_ground" is the palette biome id.
 	if String(spec.get("proving_ground", "")) != "":
@@ -190,7 +201,8 @@ static func from_spec(spec: Dictionary, root: String = PaletteLibrary.DEFAULT_RO
 		int(spec.get("seed", random_seed())),
 		root,
 		String(spec.get("landform", StartingLandform.FLAT)),
-		int(spec.get("depth_ft", 0))
+		int(spec.get("depth_ft", 0)),
+		spec.get("prims") as GDScript
 	)
 
 

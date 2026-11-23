@@ -141,7 +141,18 @@ static func terraces(doc: MapDocument, seed_value: int, biome_id: String) -> Dic
 	else:
 		report.append("dry")
 	report.append("stage (%.1f, %.1f)" % [stage.x, stage.y])
-	return {"stage": stage, "report": "; ".join(report)}
+	# The shape for the primitives path (LandformPrims, switch on): read, never drawn again.
+	var form: Array = [
+		{
+			"type": "plateaus",
+			"plateaus": plateaus,
+			"dir": dir,
+			"tier": tier,
+			"noise": noise,
+			"wobble": WOBBLE_M,
+		}
+	]
+	return {"stage": stage, "report": "; ".join(report), "form": form}
 
 
 ## The river's line down the terraces, `river_v` across the heading of `frame`, reaching far

@@ -36,6 +36,7 @@ loaded map behind a switch, off by default ("The session").
 | `utils/terraform/terra_cache.gd` | `TerraCache`: the derived record (`terrain/derived.bin`, digests only): `make_record`, `prepare`, `derive_for`, `check`, `derive_and_check`, `encode` / `decode` |
 | `utils/terraform/terra_session.gd` | `TerraSession`, a Node: the core attached to a loaded map (see "The session") |
 | `utils/terraform/terra_bridge.gd` | `TerraBridge`: the session's derived ground and water written into `MapDocument.heights`, `water_bodies` and `pond_mask` (see "The bridge"); `seed_new_map` |
+| `utils/terraform/landform_prims.gd` | `LandformPrims`: a new map's starting landform as primitives (switch on; "The bridge", "New maps") |
 | `utils/terraform/terra_water_bridge.gd` | `TerraWaterBridge`: `water_records()` and `falls()` as `WaterBody` reaches and ponds and the pond mask; the signature, the changed region |
 | `scenes/states/authoring/terra_editor.gd` | `TerraEditor` (`AuthoringEditor.terra`): gestures as history entries, the inverse builder, the shared landing, the tool routes and the peers' apply (see "The editor") |
 | `native/src/terra_bridge.cpp` | `TerraDerive.doc_heights()` and `doc_heights_diff()`: H2 at the document's samples, whole or as the tight differing rect |
@@ -345,15 +346,32 @@ build from them unchanged. The bridge law (`test_terra_bridge_law.gd`): after ev
   regrowth), filling `record` (`TerraBridge.last_water_record`) instead of the history; without
   an editor the bridge refreshes the dressing and AuthoredWater itself. Measured on the corpus at
   200 ft: 80 of 4677 derive-wet samples differ from today's wet set, all on the shoreline; the
-  fall's lip, top and bottom equal the record's. A switch-on new map now has no water until card
-  terraform-p2-landforms (`seed_new_map` writes the plane's, none).
+  fall's lip, top and bottom equal the record's. A switch-on new map's water is its landform's
+  rivers and ponds as primitives (see "New maps").
 - **HeightEditor hooks** for later cards: `begin_external` / `external_rect` / `end_external` (a
   stroke whose heights another writer puts in; returns the ground record instead of recording)
   and `apply_ground(rect, before, record, redo, spread)` (`apply_diff` without the heights diff).
-- **New maps** (`NewMapBuild`, switch on): `TerraBridge.seed_new_map` gives the document one plane
-  at its centre height, derives it in full, swaps in the derived heights and makes the record, so
-  the load's check matches. Until card terraform-p2-landforms the landform's relief is not carried
-  over (its other features stay as the recipe made them).
+- **New maps** (`NewMapBuild`, switch on; card terraform-p2-landforms): the starting landform is
+  made of primitives. `LandformPrims.apply(kind, doc, seed, biome)` (`utils/terraform/landform_prims.gd`,
+  called by `NewMap.create` through the spec's `prims`, the script loaded by path) runs the recipe
+  first (`StartingLandform.apply`: every seeded draw, chance and painted surface is the switch-off
+  map's), then reads its shape from the recipe's `form` hints and its carved rivers, and adds: a
+  plane; Valley a negative ridge on the bent axis (profile 2, its value at the floor's edge the
+  floor's mean depth), flatten level dabs along the floor toward its fall, a bluff as one tier-cut
+  run along the bank (a narrow bench under the face where the recipe had the cosine slope), a dry
+  wash as paint; Hilltop hills (profile 2.3 for the cosine bump), the crown as one tier run (a disc
+  and 12 lobes on its warped outline), the ledge as tier dabs along its arc; Terraces per plateau,
+  lowest first, one tier run of capsule spines filling its rounded box (step edge wobbled by the
+  recipe's noise); Lakeshore the plane raised by the rise with a negative hill about the lake, the
+  lake a pond on the warped shore that goes round an islet hill by a slit; Gorge tier-cut dabs along
+  the axis toward the floor's falling height; LandformGrowth's knolls as hills and tarns as ponds;
+  each river run as one river (its widest width, its depth class; an end inside the map reaches 1 m
+  on so it joins a lake or the river it meets). One synchronous derive_full, the heights and water
+  swapped in, the record made, then the recipe's crossings placed again on the derived water
+  (`place_crossing`, or an arch's `span_crossing` on its anchors). Checked at seeds 1234, 7 and 99
+  per landform (`test_landform_prims`): the report's features, stage, water and crossings match the
+  switch-off recipe. `TerraBridge.seed_new_map` (one plane) remains for a document without a section
+  after the build (the proving ground).
 - **Flat reaches.** River levels follow today's conditioner (`WaterConditioner.fit_levels`): the
   running minimum on the 5 cm lattice (`LEVEL_QUANTUM_M`), a sharp drop of `FALL_MIN` (0.75 m)
   within `FALL_RUN` (1.5 m) pinned as one fall step at most every `FALL_GAP` (6 m), the dead band
