@@ -292,8 +292,47 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 	if wants_second:
 		keepout.append({"at": second_centre, "radius": second_radius})
 		open.append({"at": second_centre, "radius": second_radius * open_share})
+	# The shape for the primitives path (LandformPrims, switch on): read, never drawn again.
+	var form: Array = [{"type": "hill", "at": centre, "radius": radius, "height": height}]
+	if wants_second:
+		form.append(
+			{
+				"type": "hill",
+				"at": second_centre,
+				"radius": second_radius,
+				"height": second_height,
+				"feature": "second hill",
+			}
+		)
+	if wants_crown:
+		form.append(
+			{
+				"type": "crown",
+				"at": centre,
+				"radius": crown_radius,
+				"target": target,
+				"noise": crown_noise,
+				"warp": CROWN_WARP,
+			}
+		)
+	if wants_ledge:
+		form.append(
+			{
+				"type": "ledge",
+				"at": centre,
+				"line_r": ledge_r,
+				"arc": ledge_arc,
+				"target": ledge_target,
+				"facing": StartingLandform.NEAR,
+			}
+		)
 	return {
-		"stage": stage, "report": "; ".join(report), "keepout": keepout, "open": open, "wood": wood
+		"stage": stage,
+		"report": "; ".join(report),
+		"keepout": keepout,
+		"open": open,
+		"wood": wood,
+		"form": form,
 	}
 
 

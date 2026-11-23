@@ -19,6 +19,7 @@ extends RefCounted
 ## The terraforming core's scripts, by path (MapSourceLoader.TERRA_CORE and TERRA_BRIDGE).
 const TERRA_CORE := "res://utils/terraform/terra_core.gd"
 const TERRA_BRIDGE := "res://utils/terraform/terra_bridge.gd"
+const LANDFORM_PRIMS := "res://utils/terraform/landform_prims.gd"
 
 var _task: int = -1
 var _out: Dictionary = {}
@@ -38,6 +39,9 @@ static func start(
 	PaletteLibrary.get_palette(root)
 	var out := build._out
 	var bridge := NewMapBuild._terra_bridge()
+	if bridge != null:
+		# The landform on primitives (card terraform-p2-landforms), loaded here, not on the worker.
+		seeded["prims"] = load(LANDFORM_PRIMS)
 	if not threaded:
 		out["doc"] = NewMapBuild._build(seeded, root, bridge)
 		return build
@@ -49,11 +53,12 @@ static func start(
 	return build
 
 
-## The recipe, then (switch on) the terrain section TerraBridge.seed_new_map gives it, its whole
-## height array swapped for the derive's before any terrain is built.
+## The recipe (switch on: on primitives, LandformPrims, its heights and water the derive's
+## before any terrain is built), then, for a document still without a terrain section (the
+## biome designer's proving ground), the one plane TerraBridge.seed_new_map gives it.
 static func _build(spec: Dictionary, root: String, bridge: GDScript) -> MapDocument:
 	var doc := NewMap.from_spec(spec, root)
-	if bridge != null:
+	if bridge != null and doc != null and doc.terra == null:
 		bridge.call("seed_new_map", doc)
 	return doc
 

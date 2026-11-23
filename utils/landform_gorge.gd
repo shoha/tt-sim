@@ -197,10 +197,27 @@ static func gorge(doc: MapDocument, seed_value: int, biome_id: String, root: Str
 			report.append("dry wash of %s: %d samples" % [surface, painted])
 	var stage := gorge_stage(centreline, stage_at, rim_half, half)
 	report.append("stage (%.1f, %.1f)" % [stage.x, stage.y])
+	# The shape for the primitives path (LandformPrims, switch on): read, never drawn again.
+	var form: Array = [
+		{
+			"type": "cut",
+			"axis": axis,
+			"rim_half": rim_half,
+			"floor_half": floor_half,
+			"depth": depth,
+			"fall": fall,
+			"s0": s0,
+			"s1": s1,
+		}
+	]
+	if not wants_stream:
+		var surface := LandformRecipes.wash_surface(biome_id, root)
+		form.append({"type": "wash", "line": course, "width": floor_half * 2.0, "surface": surface})
 	return {
 		"stage": stage,
 		"report": "; ".join(report),
 		"keepout": [{"line": centreline, "radius": rim_half}],
+		"form": form,
 	}
 
 

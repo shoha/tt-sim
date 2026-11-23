@@ -655,6 +655,10 @@ a ford's build 1.8 ms in game: `PERFORMANCE.md` "Swap and ford build (2026-10-05
 - Palette boulders can stand in the water beside a bridge deck (their centres keep 0.95 m
   from the footprint, a large boulder's body can still touch the rail); judged acceptable.
 
+With the terraforming switch on (`tt_sim/terrain/core`; card terraform-p2-landforms, 2026-11-22) a new
+map's landform is the same recipe's draw made of terrain primitives (`LandformPrims`,
+`systems/terraform.md` "New maps"), so an author edits its hills, cuts and water like their own.
+
 Landform follow-ups (phase 5, P5-4 to P5-7, 2026-10-05; none blocking; `systems/landforms.md`).
 P5-7 closed four: the ledge arc (90-130, the stream's window clears the bench), the lake
 stones' `no_water` (`straightest_wet`), the side-corner lake (placed inside the home frame,
