@@ -358,7 +358,12 @@ func apply_ground(
 	begin_snap(before, false)
 	queue_heights(rect)
 	var prop_rows: Dictionary = record.get("props_after" if redo else "props_before", {})
-	after_work(_land_diff.bind(rect, prop_rows, record.get("kept", {}), redo))
+	var kept: Dictionary = record.get("kept", {})
+	if record.get("water_landed", false):
+		# The core's water landing (WaterEditor.land_external) dressed this ground already.
+		after_work(_land_dry.bind(rect, prop_rows, kept, redo))
+	else:
+		after_work(_land_diff.bind(rect, prop_rows, kept, redo))
 	if not spread:
 		work(true)
 
@@ -373,6 +378,17 @@ func _land_diff(rect: Rect2i, prop_rows: Dictionary, kept: Dictionary, redo: boo
 	if is_instance_valid(e.terrain):
 		e.terrain.settle_heights()
 	e.water.refresh(regenerate.bind(rect))
+
+
+## _land_diff() without the wet dressing refresh: apply_ground() after the core's water landing.
+func _land_dry(rect: Rect2i, prop_rows: Dictionary, kept: Dictionary, redo: bool) -> void:
+	var e := _editor()
+	for cell in prop_rows:
+		e.set_prop_cell(cell, prop_rows[cell], false)
+	e.rock_keeper.swap(kept, redo)
+	if is_instance_valid(e.terrain):
+		e.terrain.settle_heights()
+	regenerate(rect)
 
 
 ## Starts snapping rows onto ground that stood at heights `before` (a stroke's start, or the

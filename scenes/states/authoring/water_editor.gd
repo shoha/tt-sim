@@ -861,7 +861,8 @@ func _finish(
 		"walls": e.walls.follow(MaskBrush.sample_rect_to_world(doc, region)),
 		"structures": e.structures.follow(MaskBrush.sample_rect_to_world(doc, region)),
 	}
-	var started_props := e.heights.props_started()
+	# Only a carve snapped (an erase or an external landing began no snap: the rows are another's).
+	var started_props := e.heights.props_started() if stroke != null else {}
 	for cell in started_props:
 		record.props_before[cell] = (started_props[cell] as Dictionary).duplicate(true)
 	var keep := WaterWetRocks.rule(e, job.result.owners)

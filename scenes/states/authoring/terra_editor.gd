@@ -70,6 +70,8 @@ var last_check: Dictionary = {}
 var landings := 0
 ## Times finish_work() had to wait for a derive (tests: a press, undo or redo never does).
 var waits := 0
+## The Water tool's ops (card terraform-p2-water): river, pond and erase gestures.
+var water_tools := TerraWaterTools.new()
 
 var _owner: WeakRef = null
 ## The open gesture (begin_gesture), or {}: {"edits", "inverse", "restored": id -> true, "before":
@@ -83,16 +85,21 @@ var _landings: Array[Dictionary] = []
 ## gesture].
 var _waiting: Array[Array] = []
 var _warned := false
+## TerraBridge.water_landings when the last landing ran: a landing that moved it gives its gesture
+## the bridge's water record (the gesture's water side, `g.water`; _land()).
+var _water_seen := 0
 
 
 static func create(editor: AuthoringEditor) -> TerraEditor:
 	var terra := TerraEditor.new()
 	terra._owner = weakref(editor)
+	terra.water_tools = TerraWaterTools.new(terra)
 	var s := terra.session()
 	if s != null:
 		s.settled.connect(terra._on_settled)
 		if s.bridge != null:
 			s.bridge.call("set_editor", editor)
+			terra._water_seen = int(s.bridge.get("water_landings"))
 	return terra
 
 
@@ -200,12 +207,13 @@ func prepare_gesture() -> void:
 
 ## True while a dab stroke of a primitive tool is in progress (AuthoringEditor's routes).
 func is_stroking() -> bool:
-	return false
+	return water_tools.is_stroking()
 
 
 ## One frame's exposure of the stroke in progress (world points and radius).
-func dab(_from: Vector3, _to: Vector3, _radius: float, _seconds: float) -> void:
-	pass
+func dab(from: Vector3, to: Vector3, radius: float, _seconds: float) -> void:
+	if water_tools.is_stroking():
+		water_tools.dab(from, to, radius)
 
 
 ## Pushes this frame's held edits to the ground (TerraBridge.held).
@@ -215,12 +223,14 @@ func flush() -> void:
 
 ## Ends the stroke in progress and records its gesture. True when it changed anything.
 func end_stroke() -> bool:
+	if water_tools.is_stroking():
+		return water_tools.end_stroke()
 	return false
 
 
 ## Abandons the stroke in progress.
 func cancel_stroke() -> void:
-	pass
+	water_tools.cancel_stroke()
 
 
 ## Sculpt (card terraform-p2-sculpt): a stroke of HeightBrush operation `op` toward world height
@@ -239,23 +249,31 @@ func begin_paint(_surface: String, _erase: bool) -> bool:
 	return _not_yet("Paint")
 
 
-## River (card terraform-p2-water): the drawn line (document XZ, as WaterEditor.carve_river takes
-## it) carved as one river primitive. Its id, or -1.
+## River (card terraform-p2-water): the drawn line (world XZ, as WaterEditor.carve_river takes
+## it) as one river primitive (TerraWaterTools.add_river; a primitive river has no speed). Its
+## id, or -1 with last_refusal set when refused ("" for a line too short to carve).
 func river(
-	_line: PackedVector2Array, _widths: PackedFloat32Array, _depth: int, _speed: float
+	line: PackedVector2Array, widths: PackedFloat32Array, depth: int, _speed: float
 ) -> int:
-	_not_yet("River")
-	return -1
+	var id := water_tools.add_river(line, widths, depth)
+	last_refusal = water_tools.last_refusal
+	return id
 
 
-## Pond (card terraform-p2-water): a pond stroke of depth class `depth` pressed at `hit`.
-func begin_pond(_depth: int, _hit: Vector3) -> bool:
-	return _not_yet("Pond")
+## Pond (card terraform-p2-water): a pond stroke of depth class `depth` pressed at `hit`
+## (TerraWaterTools.begin_pond; inside a pond it extends it).
+func begin_pond(depth: int, hit: Vector3) -> bool:
+	var ok := water_tools.begin_pond(depth, hit)
+	last_refusal = water_tools.last_refusal
+	return ok
 
 
-## Water erase (card terraform-p2-water).
+## Water erase (card terraform-p2-water): the rivers a stroke touches go whole with their
+## tributaries, the ponds it covers shrink (TerraWaterTools.begin_erase).
 func begin_water_erase() -> bool:
-	return _not_yet("Water erase")
+	var ok := water_tools.begin_erase()
+	last_refusal = water_tools.last_refusal
+	return ok
 
 
 ## Wall (card terraform-p2-walls): a Wall press may go on. Its WallEditor edit and the wall sync's
@@ -411,12 +429,26 @@ func record_gesture(label: String, edits: Array, inverse: Array, ground: Diction
 
 ## Undo of gesture `g` (the history entry's undo): its inverse through apply_edits().
 func undo_gesture(g: Dictionary) -> void:
-	apply_edits(g.inverse, g.ground, false, false, {}, g)
+	apply_edits(g.inverse, ground_of(g), false, false, {}, g)
 
 
 ## Redo of gesture `g` (the history entry's redo): its edits through apply_edits().
 func redo_gesture(g: Dictionary) -> void:
-	apply_edits(g.edits, g.ground, true, false, {}, g)
+	apply_edits(g.edits, ground_of(g), true, false, {}, g)
+
+
+## The ground record gesture `g`'s undo and redo land: its own, with the props rows, kept rocks
+## and followers of its water side (`g.water`, the bridge's record of the do's water landing, once
+## landed: the wet rocks it dropped come back on undo) where its own has none.
+static func ground_of(g: Dictionary) -> Dictionary:
+	var water: Dictionary = g.get("water", {})
+	if not bool(water.get("landed", false)):
+		return g.ground
+	var out: Dictionary = (g.ground as Dictionary).duplicate()
+	for key in ["props_before", "props_after", "kept", "crossings", "walls", "structures"]:
+		if not out.has(key) and water.has(key):
+			out[key] = water[key]
+	return out
 
 
 ## Applies one side of a gesture (`edits`, and the ground record `ground` for side `redo`) and
@@ -618,10 +650,11 @@ func _land_due() -> void:
 	while not _landings.is_empty():
 		if s == null or not s.is_ready() or int(_landings[0].stage) > s.settled_stage():
 			return
-		if _editor().water.is_computing():
-			# HeightEditor.apply_ground would wait for the water's worker (a wet dressing refresh
-			# takes 400+ ms at 200 ft): the session holds its next stage, and step() lands this
-			# one on the frame the worker is done.
+		if _editor().water.is_working():
+			# HeightEditor.apply_ground would finish the water's work at once: wait for its worker
+			# (a wet dressing refresh takes 400+ ms at 200 ft) and for the bridge's water landing
+			# to spread its three frames (card terraform-p2-water: landed at once it made an 80 to
+			# 100 ms frame). The session holds its next stage, and step() lands this one after.
 			s.pause()
 			return
 		_land(_landings.pop_front())
@@ -650,9 +683,21 @@ func _land(l: Dictionary) -> void:
 			var whole := Rect2i(0, 0, doc.samples_x(), doc.samples_z())
 			var diff: Dictionary = derive.call("doc_heights_diff", before, doc.samples_x(), whole)
 			rect = diff.get("rect", Rect2i())
-		if l.land and (rect.has_area() or not (l.ground as Dictionary).is_empty()):
-			e.heights.apply_ground(rect, before, l.ground, l.redo, l.spread)
 		var g: Dictionary = l.gesture
+		var bridge: Object = s.bridge
+		var water_moved := bridge != null and int(bridge.get("water_landings")) != _water_seen
+		if bridge != null:
+			_water_seen = int(bridge.get("water_landings"))
+		if water_moved and l.redo and not g.is_empty() and not g.has("water"):
+			# The bridge landed this stage's water before this landing (it connects first).
+			g["water"] = bridge.get("last_water_record")
+		var ground: Dictionary = l.ground
+		if water_moved:
+			# The bridge's water landing dressed this ground already: no second dressing refresh.
+			ground = ground.duplicate()
+			ground["water_landed"] = true
+		if l.land and (rect.has_area() or not ground.is_empty()):
+			e.heights.apply_ground(rect, before, ground, l.redo, l.spread)
 		if not g.is_empty():
 			var side := "digests_after" if l.redo else "digests_before"
 			g[side] = checked_digests(s)
