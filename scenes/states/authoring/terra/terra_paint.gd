@@ -32,6 +32,8 @@ const FULL_REASON := (
 
 ## Microseconds of the last frame's edit (the held derive and the bridge's writes included).
 var last_frame_usec := 0
+## Microseconds of the last landing's ground weight-map update (land()).
+var last_land_usec := 0
 ## Landings handed to land() (tests).
 var landings := 0
 
@@ -318,7 +320,9 @@ func land(rect: Rect2i, is_held: bool) -> void:
 	if e == null:
 		return
 	if is_instance_valid(e.terrain):
+		var started := Time.get_ticks_usec()
 		e.terrain.update_ground_region(rect.grow(1) if rect.has_area() else Rect2i())
+		last_land_usec = Time.get_ticks_usec() - started
 		e.ground_updates += 1
 	if not rect.has_area():
 		return
