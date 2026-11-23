@@ -22,7 +22,7 @@ const CLASS_NAME := "TerraDerive"
 ## The project setting that turns the core on for loaded maps (default false).
 const SWITCH_SETTING := "tt_sim/terrain/core"
 ## What TerraDerive.version() must return; a library built from older sources fails the tests.
-const NATIVE_VERSION := "terra 5 bridge"
+const NATIVE_VERSION := "terra 6 sculpt kinds"
 ## The ground rule table (rows of [field, lo, hi, soft] terms, later rows over earlier ones).
 const RULES_PATH := "res://utils/terraform/rules/ground_rules.json"
 ## Rule term fields by name, in the order of the native Field enum (terra_stages.h).
@@ -41,7 +41,8 @@ const FIELDS := {
 
 ## The built-in kinds' ids, for code that names one. Each kind's script in the registry
 ## (TerraKinds, utils/terraform/kinds/) is its source and holds its float layout; test_terra_kinds
-## checks that each of these equals its script's ID. 9 to 15 are reserved; new kinds start at 16.
+## checks that each of these equals its script's ID. 9 is the folded sculpt raster (SCULPT), 10 to
+## 15 are reserved; new kinds start at 16.
 const PLANE := 0
 const HILL := 1
 const RIDGE := 2
@@ -51,6 +52,7 @@ const POND := 5
 const PATH := 6
 const WALL := 7
 const PAINT := 8
+const SCULPT := 9
 
 ## The tests' override of the switch: null reads SWITCH_SETTING, true or false forces it.
 static var switch_override: Variant = null

@@ -32,7 +32,8 @@ func test_the_registry_is_sound() -> void:
 		assert_false(names.has(k.NAME), "name %s registered once" % k.NAME)
 		ids[k.ID] = true
 		names[k.NAME] = true
-		assert_true(k.ID <= 8 or k.ID >= 16, "%s: 9 to 15 are reserved" % k.NAME)
+		# 9 is the folded sculpt raster (card terraform-p2-sculpt-kinds); 10 to 15 stay reserved.
+		assert_true(k.ID <= 9 or k.ID >= 16, "%s: 10 to 15 are reserved" % k.NAME)
 		assert_true(k.SHAPE in ["stamp", "line", "water"], "%s: a shape" % k.NAME)
 		assert_ne(String(k.LABEL), "", "%s: a label" % k.NAME)
 		assert_ne(k.describe(), "", "%s: a description" % k.NAME)
@@ -47,6 +48,7 @@ func test_the_registry_is_sound() -> void:
 		TerraCore.PATH: "path",
 		TerraCore.WALL: "wall",
 		TerraCore.PAINT: "paint",
+		TerraCore.SCULPT: "sculpt",
 	}
 	for id: int in built_in:
 		assert_eq(TerraKinds.name_of(id), built_in[id], "TerraCore's id %d" % id)
@@ -101,7 +103,7 @@ func test_lookups_never_depend_on_registration_order() -> void:
 
 func test_each_kind_accepts_the_corpus() -> void:
 	var seen := {}
-	for c: TerraCorpus in [TerraCorpus.build(), TerraCorpus.build_terraced()]:
+	for c: TerraCorpus in [TerraCorpus.build(), TerraCorpus.build_sculpted()]:
 		for p in c.terra.prims:
 			var kind := int(p["kind"])
 			seen[kind] = true
@@ -140,6 +142,12 @@ func test_each_kind_rejects_a_bad_layout() -> void:
 		[TerraCore.WALL, [1.2, 0.0, 0, 0, 4, 0], "thickness"],
 		[TerraCore.PAINT, [0, 0, 2.0, 256], "surface"],
 		[TerraCore.PAINT, [0, 0, 2.0, -1], "surface below 0"],
+		[TerraCorpus.LEVEL, [0, 0, 1, 0, 2.5, 1.0, 0.1, 3], "edge"],
+		[TerraCorpus.LEVEL, [0, 0, 1, 0, 2.5, 1.0, -0.1, 0], "strength below 0"],
+		[TerraCorpus.LEVEL, [0, 0, 1, 0, 0.0, 1.0, 0.1, 0], "radius"],
+		[TerraCore.SCULPT, [0, 0, 0.125, 0.125, 1, 1, 3, 0.1, 0.1, 0.1], "layers"],
+		[TerraCore.SCULPT, [0, 0, 0.0, 0.125, 1, 1, 1, 0.1], "step"],
+		[TerraCore.SCULPT, [0, 0, 0.125, 0.125, 2, 1, 1, 0.1], "a raster short of its size"],
 	]
 	for r: Array in ranges:
 		var data := PackedFloat32Array(r[1])
@@ -153,7 +161,7 @@ func test_bounds_agree_with_the_native_kernels() -> void:
 	if n == null:
 		pending(TerraCorpus.NO_LIBRARY)
 		return
-	for p in TerraCorpus.build_terraced().terra.prims:
+	for p in TerraCorpus.build_sculpted().terra.prims:
 		var k := TerraKinds.script_for(int(p["kind"]))
 		var mine: Rect2 = k.bounds(p["data"])
 		var theirs: Rect2 = n.call("kind_bounds", p["kind"], p["data"])
