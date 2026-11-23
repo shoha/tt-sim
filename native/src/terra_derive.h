@@ -88,7 +88,7 @@ public:
 	TerraDerive();
 	~TerraDerive();
 
-	/// "terra 6 sculpt kinds": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
+	/// "terra 7 reaches": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
 	String version() const;
 	/// Allocates a w x h sample grid over a map of `extent` metres, centred on the origin (sample
 	/// (0, 0) at -extent / 2), and forgets the document. TerraCore passes 2 (n - 1) + 1 per axis of

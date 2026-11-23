@@ -3,6 +3,7 @@
 // receiving body's level) and the carve (one composed bed: every body's cut, the lowest wins, and a
 // bank fill so a level is always held; the controlling body's level is the water surface, one
 // level per reach).
+#include <algorithm>
 #include <cmath>
 #include <set>
 #include <utility>
@@ -196,28 +197,57 @@ static double level_lattice(double x) {
 	return std::floor(x / LEVEL_QUANTUM_M + 1e-6) * LEVEL_QUANTUM_M;
 }
 
-/// The dead band swept from the outlet upstream (WaterConditioner._sweep): a level within the
-/// dead band above the final level below it drops onto it, unless that would make a fall of the
-/// step above out of a smaller one.
-static void sweep_levels(std::vector<double> &lv) {
-	const double dead = REACH_DEAD_BAND_M - LEVEL_EPS, fall = FALL_MIN - LEVEL_EPS;
+/// The sections of a level profile (card terraform-p2-reaches): `cut[i]` marks a fall-sized step
+/// from point i to i + 1 (a pinned fall, a sharp drop of the running minimum, the join), which
+/// bounds a section; `dead[i]` is the dead band of point i's section, its mean slope (the levels'
+/// drop over its arc, the bounding steps left out) times REACH_TARGET_M within the band's limits.
+static void section_bands(const std::vector<double> &lv, const std::vector<double> &s, std::vector<double> &dead,
+		std::vector<char> &cut) {
+	const int n = int(lv.size());
+	dead.assign(n, REACH_DEAD_BAND_M);
+	cut.assign(n, 0);
+	int a = 0;
+	for (int i = 0; i < n; i++) {
+		bool bound = i + 1 < n && lv[i] - lv[i + 1] >= FALL_MIN - LEVEL_EPS;
+		if (!bound && i + 1 < n) {
+			continue;
+		}
+		cut[i] = bound ? 1 : 0;
+		double arc = s[i] - s[a];
+		double slope = arc > 0.0 ? (lv[a] - lv[i]) / arc : 0.0;
+		double band = std::clamp(slope * REACH_TARGET_M, REACH_DEAD_BAND_M, REACH_DEAD_BAND_MAX_M);
+		for (int q = a; q <= i; q++) {
+			dead[q] = band;
+		}
+		a = i + 1;
+	}
+}
+
+/// The dead band swept from the outlet upstream (WaterConditioner._sweep): a level within its
+/// section's dead band above the final level below it drops onto it, never across a section's
+/// bound, and not so as to make a fall of the step above out of a smaller one (the band is under
+/// FALL_MIN, so the sweep makes riffles only).
+static void sweep_levels(std::vector<double> &lv, const std::vector<double> &dead, const std::vector<char> &cut) {
+	const double fall = FALL_MIN - LEVEL_EPS;
 	for (int i = int(lv.size()) - 2; i >= 0; i--) {
 		double gap = lv[i] - lv[i + 1];
-		if (gap > LEVEL_EPS && gap < dead) {
-			double above = i > 0 ? lv[i - 1] - lv[i] : 0.0;
-			if (i > 0 && above < fall && above + gap >= fall) {
-				continue;
-			}
-			lv[i] = lv[i + 1];
+		if (cut[i] || gap <= LEVEL_EPS || gap >= dead[i] - LEVEL_EPS) {
+			continue;
 		}
+		double above = i > 0 ? lv[i - 1] - lv[i] : 0.0;
+		if (i > 0 && above < fall && above + gap >= fall) {
+			continue;
+		}
+		lv[i] = lv[i + 1];
 	}
 }
 
 /// Every reach shorter than MIN_REACH_M merged into the neighbour it differs from least, the
-/// upper dropping onto the lower, never across a fall-sized step or so as to make one, then the
-/// dead band swept again (WaterConditioner._merge_short, without cuts).
-static void merge_short_reaches(std::vector<double> &lv, const std::vector<double> &len) {
-	const double fall = FALL_MIN - LEVEL_EPS;
+/// upper dropping onto the lower, never across a section's bound, then the dead band swept again
+/// (WaterConditioner._merge_short, without cuts). A merge may make a fall out of riffles or a
+/// taller fall out of two, so where the slope steepens the steps group into fewer, taller ones.
+static void merge_short_reaches(std::vector<double> &lv, const std::vector<double> &len,
+		const std::vector<double> &dead, const std::vector<char> &cut) {
 	const int n = int(lv.size());
 	std::set<int> stuck;
 	for (;;) {
@@ -251,15 +281,8 @@ static void merge_short_reaches(std::vector<double> &lv, const std::vector<doubl
 				continue;
 			}
 			double step = std::abs(lv[spans[pick].first] - lv[spans[nb].first]);
-			if (step >= fall) {
+			if (cut[spans[std::min(pick, nb)].second]) {
 				continue;
-			}
-			int top = spans[std::min(pick, nb)].first;
-			if (top > 0) {
-				double above = lv[top - 1] - lv[top];
-				if (above < fall && above + step >= fall) {
-					continue;
-				}
 			}
 			if (step < best_step) {
 				best = nb;
@@ -275,7 +298,7 @@ static void merge_short_reaches(std::vector<double> &lv, const std::vector<doubl
 		for (int i = upper.first; i <= upper.second; i++) {
 			lv[i] = to;
 		}
-		sweep_levels(lv);
+		sweep_levels(lv, dead, cut);
 		stuck.clear();
 	}
 }
@@ -314,16 +337,19 @@ void solve_river(River &r, const Grid &g, const float *H0, double recv_level) {
 		f.width = r.hw * 2.0;
 		r.falls.push_back(f);
 	};
-	// Flat reaches (card terraform-p2-bridge), WaterConditioner.fit_levels' rule over the points:
-	// the running minimum on the lattice (m, above), then the dead band swept from the outlet up,
-	// then short reaches merged. Every step is then 0, a riffle or a fall, and water is only ever
-	// lowered, never raised over its banks.
+	// Flat reaches (card terraform-p2-bridge, from WaterConditioner.fit_levels' rule; card
+	// terraform-p2-reaches scaled it with the slope): the running minimum on the lattice (m, above),
+	// the falls pinned, then per section the dead band swept from the outlet up, then short reaches
+	// merged. Every step is then 0, a riffle or a fall, and water is only ever lowered, never raised
+	// over its banks.
 	std::vector<double> lv(m);
 	if (join) {
 		lv[n - 1] = recv_level;
 	}
 	// The falls first (FALL_RUN, FALL_GAP): a sharp drop's points take the level at its foot, so
-	// the whole drop is one step, which the conditioner below never moves.
+	// the whole drop is one step, which the conditioner below never moves. A fall runs on down the
+	// cliff while each further FALL_CLIFF_RUN of arc still drops at FALL_CLIFF_SLOPE or more, so a
+	// riser is one tall fall at its lip, not a stair of small ones down its face.
 	double last_fall_s = -1e30;
 	for (int k = 1; k < n;) {
 		if (lv[k] < lv[k - 1]) {
@@ -332,6 +358,16 @@ void solve_river(River &r, const Grid &g, const float *H0, double recv_level) {
 				j++;
 			}
 			if (lv[k - 1] - lv[j] >= FALL_MIN - LEVEL_EPS && l.s[k] - last_fall_s >= FALL_GAP) {
+				for (;;) {
+					int q = j;
+					while (q + 1 < n && l.s[q + 1] - l.s[j] <= FALL_CLIFF_RUN) {
+						q++;
+					}
+					if (q == j || lv[j] - lv[q] < FALL_CLIFF_SLOPE * (l.s[q] - l.s[j]) - LEVEL_EPS) {
+						break;
+					}
+					j = q;
+				}
 				for (int q = k; q < j; q++) {
 					lv[q] = lv[j];
 				}
@@ -346,8 +382,11 @@ void solve_river(River &r, const Grid &g, const float *H0, double recv_level) {
 	for (int i = 0; i < n; i++) {
 		len[i] = (l.s[std::min(i + 1, n - 1)] - l.s[std::max(i - 1, 0)]) * 0.5;
 	}
-	sweep_levels(lv);
-	merge_short_reaches(lv, len);
+	std::vector<double> dead;
+	std::vector<char> cut;
+	section_bands(lv, l.s, dead, cut);
+	sweep_levels(lv, dead, cut);
+	merge_short_reaches(lv, len, dead, cut);
 	for (int i = 0; i < n; i++) {
 		r.level[i] = float(lv[i]);
 	}

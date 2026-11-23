@@ -195,7 +195,7 @@ func test_ids_are_stable_across_a_reload_and_a_late_join() -> void:
 	doc.terra = TerraCorpus.build(CELLS).terra
 	var root := await MapSourceLoader.new(get_tree()).build_async("", doc)
 	var host: Array[WaterBody] = doc.water_bodies
-	assert_gt(host.size(), 10, "the load wrote the derived water")
+	assert_gt(host.size(), 5, "the load wrote the derived water")
 	add_child(root)
 	await _built(root, doc)
 	root.free()
