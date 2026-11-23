@@ -575,25 +575,25 @@ func mark_edited() -> void:
 	session.mark_edited()
 
 
-## Undoes the newest edit, with undo's tick (StrokeSound) when there was one.
+## Undoes the newest edit, with undo's tick (StrokeSound) when there was one. Behind a press waiting
+## for the ground (GroundPresses.defer) it waits too, so it undoes that press.
 func undo() -> void:
-	_finish_brush_gesture()
-	var undone := history.undo()
-	if undone != "":
-		StrokeSound.play_history(false)
-		UIManager.show_toast("Undid %s" % undone, UIManager.TOAST_INFO, 1.6)
-		mark_edited()
-		_bounds_stale = true
-		_refresh_tools()
+	if not (editor and editor.presses.defer(undo)):
+		_step_history(false)
 
 
-## Redoes the newest undone edit, with redo's tick when there was one.
+## Redoes the newest undone edit, with redo's tick when there was one (waiting as undo()).
 func redo() -> void:
+	if not (editor and editor.presses.defer(redo)):
+		_step_history(true)
+
+
+func _step_history(is_redo: bool) -> void:
 	_finish_brush_gesture()
-	var redone := history.redo()
-	if redone != "":
-		StrokeSound.play_history(true)
-		UIManager.show_toast("Redid %s" % redone, UIManager.TOAST_INFO, 1.6)
+	var done := history.redo() if is_redo else history.undo()
+	if done != "":
+		StrokeSound.play_history(is_redo)
+		UIManager.show_toast(("Redid %s" if is_redo else "Undid %s") % done, UIManager.TOAST_INFO, 1.6)
 		mark_edited()
 		_bounds_stale = true
 		_refresh_tools()
@@ -897,8 +897,8 @@ func can_autosave() -> bool:
 ## regeneration land first, so what is saved is what is shown.
 func prepare_save_async() -> void:
 	if editor:
-		# A sculpt stroke's kept rocks and its regeneration request come with its height work.
-		editor.finish_height_work()
+		# Kept rocks and regrowth come with the height work (core on: over frames, GroundPresses).
+		await editor.presses.settle_async(get_tree())
 	while is_instance_valid(scatter) and scatter.is_regenerating():
 		await get_tree().process_frame
 	# Every token is saved standing on the ground as it is now (TokenGrounding).
