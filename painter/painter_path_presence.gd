@@ -118,6 +118,16 @@ func painted_slots(doc: MapDocument, ids: PackedStringArray) -> PackedInt32Array
 	return out
 
 
+## Whether the counts are of `doc` (its last update() was of that document).
+func holds(doc: MapDocument) -> bool:
+	return _doc_id == doc.get_instance_id() and _sx == doc.samples_x() and _sz == doc.samples_z()
+
+
+## The weights the counts are of (its own copy; read only).
+func last_weights() -> PackedByteArray:
+	return _copy
+
+
 func _reset(doc: MapDocument, sx: int, sz: int, size: int) -> void:
 	_doc_id = doc.get_instance_id()
 	_sx = sx

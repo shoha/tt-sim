@@ -3078,8 +3078,8 @@ table); and the skirt's `TerrainSkirt.edge_surface`, 9-20 ms and growing with th
 - `PainterPathSlotMap.follow`: with fewer than two path slots painted the bind still binds no slot
   map, but the planes take every update's spans, and on a map with no path painted they start at no
   cost (every plane 0 and every byte NONE, whatever else is painted). The second surface's first dab
-  then costs its spans. A map opened with one path already painted still builds at the second
-  surface, as before.
+  then costs its spans. A map opened with one path already painted builds its planes on a worker
+  (card painter-path-open, below).
 - `TerrainSkirt.edge_surface` sums every slot in one walk over the edge (1.7 ms).
 - `GroundLayerBinding.prepare` (a picked Paint tile, a biome, the Water tool, a Dress kit) also warms
   a built surface's mean colour, one step after its uploads, so the retable reads it from the cache.
@@ -3111,6 +3111,28 @@ ms. Same bytes: the ten `ident.json` digests equal main's (`today_attrib/path_fi
 `test_painter_path_first.gd` checks the followed slot map against the full pass from no path through
 one, two and three and back, the one-walk edge surface against the walk per slot, and a warmed built
 surface's tables, tints and layers against a cold one's.
+
+A map opened with a path (card painter-path-open, 2026-11-22). Nothing followed the loaded path, so
+the second surface's first dab built the planes whole in its frame: 107 ms headless on the 320 ft
+bench level (391 x 391 samples, dirt and cobble): the weight planes (`PainterGroundPaths._planes`)
+42.7, the horizontal blur pass 26.4, the vertical 16.9, the slot pick 18.0, the zero spans 3.6, the
+rest under 1. Now `follow()` starts that build on a low-priority WorkerThreadPool task over a snapshot
+(`build_async`); a frame poll collects it and the next bind's `keeps()` adopts it, with the rows any
+update changed since applied, so the planes are the presence's own, bit for bit. The main thread never
+waits: a bind that needs the planes before the task lands builds them itself as before, and a task let
+go (a map closed, another surface list) is reaped once it completes. Bench (`local/painter-path-open/`:
+the level saved with one dirt road, opened with `dress`, cobblestone picked a second ahead and painted,
+then gravel; main 601cf135 | branch, interleaved, lane held, game ms; `today_attrib/path_open/`):
+
+| | main 1/2/3 | branch 1/2/3 |
+| --- | --- | --- |
+| second surface, first dab frame | 133.8 / 141.9 / 127.6 | 13.7 / 13.4 / 11.5 |
+| second surface stroke, worst frame (wall ms) | 138.9 / 146.3 / 131.4 | 73.0 / 73.0 / 71.8 |
+| open to ready (ms) | 2577 / 2515 / 2587 | 3081 / 2522 / 2531 |
+| load window (to ready + 3 s), worst frame | 778.8 / 826.6 / 788.9 | 763.9 / 754.3 / 779.5 |
+| pressed cpu median, cobble / gravel | 5.2/5.3, 4.9/5.1, 5.0/5.0 | 5.0/5.0, 4.8/5.3, 4.8/4.7 |
+
+The 67-73 ms frame left in the second stroke is its release frame, on both sides alike.
 
 ## In-game authoring phase 4 (water): pinned performance pass (2026-09-27)
 

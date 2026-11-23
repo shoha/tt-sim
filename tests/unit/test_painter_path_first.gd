@@ -114,18 +114,122 @@ func test_the_second_surfaces_first_dab_takes_kept_planes() -> void:
 	assert_eq(slot_map.whole_builds, 0)
 
 
-func test_a_map_opened_with_one_path_builds_at_the_second() -> void:
+func test_a_map_opened_with_one_path_builds_on_a_worker() -> void:
 	var doc := _doc()
 	_meadow(doc)
 	_dab(doc, DIRT, 255)
 	var presence := PainterPathPresence.new()
+	var slot_map := presence.slot_map
 	assert_false(_bind_equal(presence, doc, "opened with a road"))
-	assert_eq(presence.slot_map.starts, 0, "planes with paint under them are not started")
+	assert_eq(slot_map.starts, 0, "planes with paint under them are not built in the bind")
+	assert_eq(slot_map.async_starts, 1, "but on a worker")
+	assert_true(slot_map.building())
+	assert_true(slot_map.finish(), "landed")
 	_dab(doc, COBBLE, 255)
 	assert_true(_bind_equal(presence, doc, "the second surface"))
-	assert_eq(presence.slot_map.starts, 1, "started from zero there, as before")
+	assert_eq(slot_map.async_lands, 1, "the second surface's first dab took the worker's planes")
+	assert_eq(slot_map.starts, 1, "built once, by the worker")
 	_dab(doc, COBBLE, 90)
 	_bind_equal(presence, doc, "kept after")
+	assert_eq(slot_map.starts, 1)
+
+
+## The kept planes of `slot_map` against a slot map built from zero on `doc` now.
+func _assert_planes_fresh(slot_map: PainterPathSlotMap, doc: MapDocument, label: String) -> void:
+	var fresh := PainterPathSlotMap.new()
+	fresh._rebuild(doc, PainterGroundPaths.slots(doc))
+	assert_true(slot_map._valid, label + ": planes kept")
+	assert_eq(slot_map._slot_of, fresh._slot_of, label + ": slots")
+	assert_eq(slot_map._plane, fresh._plane, label + ": weight planes")
+	assert_eq(slot_map._tmp, fresh._tmp, label + ": horizontal pass")
+	assert_eq(slot_map._blur, fresh._blur, label + ": blurred planes")
+	assert_eq(slot_map._bytes, fresh._bytes, label + ": slot bytes")
+
+
+func test_the_loaded_maps_planes_equal_fresh_ones_after_edits_during_the_build() -> void:
+	for round in 6:
+		var doc := _doc()
+		_meadow(doc)
+		for k in 4:
+			_dab(doc, DIRT, _rng.randi_range(1, 255))
+		var presence := PainterPathPresence.new()
+		var slot_map := presence.slot_map
+		_bind_equal(presence, doc, "opened %d" % round)
+		# Dabs of the one path while the worker runs (or after it landed): the same build is kept,
+		# and the rows they changed are applied when it is adopted.
+		for k in round:
+			_dab(doc, DIRT, 0 if k == 2 else _rng.randi_range(1, 255))
+			assert_false(_bind_equal(presence, doc, "dirt %d.%d" % [round, k]), "one path")
+		assert_eq(slot_map.async_starts, 1, "one build for the whole session")
+		slot_map.finish()
+		_dab(doc, COBBLE if round % 2 == 0 else FLAG, 220)
+		assert_true(_bind_equal(presence, doc, "second surface %d" % round))
+		assert_eq(slot_map.async_lands, 1, "adopted")
+		_assert_planes_fresh(slot_map, doc, "round %d" % round)
+
+
+func test_another_surface_list_starts_the_build_again() -> void:
+	# Index 1 the road, then the cobble appended as index 2 (a surface list only grows).
+	var doc := _doc()
+	doc.surface_ids = PackedStringArray([IDS[MEADOW], IDS[DIRT]])
+	_meadow(doc)
+	_dab(doc, 1, 255)
+	var presence := PainterPathPresence.new()
+	var slot_map := presence.slot_map
+	_bind_equal(presence, doc, "opened")
+	# A list change while the build runs: a build for the new list, the old one let go (or, when
+	# it landed first, adopted and kept as any kept planes are).
+	doc.surface_ids = PackedStringArray([IDS[MEADOW], IDS[DIRT], IDS[COBBLE]])
+	_dab(doc, 1, 100)
+	_bind_equal(presence, doc, "the list grew while the build ran")
+	assert_lte(slot_map.async_starts, 2)
+	slot_map.finish()
+	# A list grown again after the build landed (painted nowhere yet): kept, then adopted.
+	doc.surface_ids = PackedStringArray([IDS[MEADOW], IDS[DIRT], IDS[COBBLE], IDS[FLAG]])
+	_dab(doc, 3, 200)
+	assert_true(_bind_equal(presence, doc, "second"))
+	assert_eq(slot_map.async_lands, 1, "adopted")
+	_assert_planes_fresh(slot_map, doc, "after the list grew")
+
+
+## A document large enough that its build takes a while on a worker.
+func _large_doc() -> MapDocument:
+	var doc := MapDocument.create_flat(Vector2i(64, 64), "grass_meadow", "test", 3)
+	doc.surface_ids = PackedStringArray(IDS)
+	var weights := PackedByteArray()
+	weights.resize(doc.sample_count() * MapDocument.SURFACE_BYTES)
+	var n4 := doc.sample_count() * MapDocument.SURFACE_CHANNELS
+	for i in doc.sample_count():
+		weights[i * 4] = MEADOW
+		weights[n4 + i * 4] = 200
+		weights[i * 4 + 1] = DIRT
+		weights[n4 + i * 4 + 1] = (i * 37) % 256
+	doc.surface_weights = weights
+	return doc
+
+
+func test_a_load_closed_mid_build_lets_the_task_go() -> void:
+	var doc := _large_doc()
+	var presence := PainterPathPresence.new()
+	PainterGroundPaths.bind([ShaderMaterial.new()], doc, true, presence)
+	assert_true(presence.slot_map.building(), "a build started")
+	var running: bool = presence.slot_map._task >= 0
+	var before := PainterPathSlotMap.abandoned_count()
+	var t0 := Time.get_ticks_usec()
+	presence.slot_map.cancel()
+	assert_false(presence.slot_map.building(), "let go")
+	PainterGroundPaths.bind([ShaderMaterial.new()], doc, true, presence)
+	# The map closed: the slot map and its presence freed with the build in flight.
+	presence = null
+	var closed_ms := (Time.get_ticks_usec() - t0) / 1000.0
+	gut.p("in flight %s, let go and freed in %.2f ms" % [running, closed_ms])
+	assert_lt(closed_ms, 20.0, "closing never waits for the build")
+	assert_gte(PainterPathSlotMap.abandoned_count(), before, "the tasks wait to be reaped")
+	for frame in 600:
+		if PainterPathSlotMap.abandoned_count() == 0:
+			break
+		await get_tree().process_frame
+	assert_eq(PainterPathSlotMap.abandoned_count(), 0, "every task let go was reaped")
 
 
 func test_a_path_base_and_a_new_document_follow_too() -> void:
