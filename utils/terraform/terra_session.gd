@@ -79,6 +79,8 @@ var _queued: Array[Callable] = []
 var _record_current := false
 ## The union of the H2 rects the landed derives changed since take_changed() (derive samples).
 var _changed := Rect2i()
+## The same union for the paint planes (take_paint_changed()).
+var _paint_changed := Rect2i()
 ## True while apply_held() runs: a free derive is told and derived synchronously.
 var _held := false
 ## Stages cut() held back, oldest first: [{"id", "changes": Array[Callable]}].
@@ -159,7 +161,9 @@ func digests() -> Dictionary:
 ## flags; replace and append id and data; remove, mute and unmute id; move id and to (a document
 ## position); splice remove (ids), insert ([{id, kind, flags, data}]), at (a position after the
 ## removal) and optionally next_id (TerraDoc.splice: ids, order and next_id restored exactly, for
-## undo, folding and the wall sync). Returns the primitive's id (add: the new one; splice: 0), or
+## undo, folding and the wall sync); surfaces names (a PackedStringArray: the whole surface table,
+## TerraDoc.surfaces, nothing derived). Returns the primitive's id (add: the new one; splice and
+## surfaces: 0), or
 ## -1 when refused (no such primitive, a cap, or data its kind refuses), with nothing changed.
 func apply(edit: Dictionary) -> int:
 	if terra == null:
@@ -232,6 +236,13 @@ func apply(edit: Dictionary) -> int:
 					from = mini(from, index)
 			_tell(_splice_derive.bind(removed.duplicate(), _rows_from(from)))
 			id = 0
+		"surfaces":
+			# The surface table (card terraform-p2-paint-path): names only, so nothing is derived.
+			var names: Variant = edit.get("names")
+			if not names is PackedStringArray or TerraDoc.surfaces_problem(names) != "":
+				return -1
+			terra.surfaces = (names as PackedStringArray).duplicate()
+			id = 0
 		_:
 			return -1
 	_record_current = false
@@ -263,6 +274,13 @@ func apply_held(edit: Dictionary) -> int:
 func take_changed() -> Rect2i:
 	var out := _changed
 	_changed = Rect2i()
+	return out
+
+
+## As take_changed(), for the paint planes (PI, PW; card terraform-p2-paint-path).
+func take_paint_changed() -> Rect2i:
+	var out := _paint_changed
+	_paint_changed = Rect2i()
 	return out
 
 
@@ -357,6 +375,7 @@ func _poll() -> void:
 		else:
 			var grid: Dictionary = _derive.call("grid")
 			_changed = Rect2i(0, 0, int(grid["w"]), int(grid["h"]))
+			_paint_changed = _changed
 	elif _running:
 		if _derive.call("is_busy"):
 			return
@@ -436,6 +455,9 @@ func _note(result: Dictionary) -> void:
 	var r: Rect2i = result.get("h2_rect", Rect2i())
 	if r.has_area():
 		_changed = r if not _changed.has_area() else _changed.merge(r)
+	var p: Rect2i = result.get("paint_rect", Rect2i())
+	if p.has_area():
+		_paint_changed = p if not _paint_changed.has_area() else _paint_changed.merge(p)
 
 
 func _start() -> void:

@@ -25,9 +25,10 @@ func _small() -> TerraDoc:
 
 
 ## Section bytes from parts: `prims` is [[id, kind, flags, floats(Array), float count or -1]],
-## `kinds` [[id, name]]; `count` -1 is prims.size().
+## `kinds` [[id, name]]; `count` -1 is prims.size(). Version 2: an empty surface table after the
+## kinds (card terraform-p2-paint-path).
 func _section(
-	prims: Array, kinds: Array, version := 1, next_id := 100, count := -1
+	prims: Array, kinds: Array, version := MapTerrainIO.VERSION, next_id := 100, count := -1
 ) -> PackedByteArray:
 	var out := "TTPR".to_ascii_buffer()
 	out.append_array(_u16(version))
@@ -40,6 +41,7 @@ func _section(
 		out.append_array(_u16(k[0]))
 		out.append(String(k[1]).length())
 		out.append_array(String(k[1]).to_ascii_buffer())
+	out.append(0)
 	for p: Array in prims:
 		var data := PackedFloat32Array(p[3])
 		out.append_array(_u32(p[0]))
@@ -206,7 +208,7 @@ func test_every_truncation_is_refused() -> void:
 
 func test_caps_are_checked_before_any_read() -> void:
 	var kinds := [[0, "plane"], [3, "stroke"]]
-	var over_count := _section([], kinds, 1, 100, MapDocument.MAX_TERRA_PRIMS + 1)
+	var over_count := _section([], kinds, MapTerrainIO.VERSION, 100, MapDocument.MAX_TERRA_PRIMS + 1)
 	assert_true(_warned(_read(over_count), "primitives, over"))
 	# A primitive that claims 4 G floats with none behind it: refused for the cap, not read.
 	var huge := _section([[1, 3, 0, [], 0xFFFFFFFF]], kinds)
@@ -246,7 +248,7 @@ func test_a_bad_primitive_is_dropped_with_one_counted_warning() -> void:
 		[3, 0, 0, [1.0, 0.0, 0.0]],
 		[5, 0, 1, [INF, 0.0, 0.0]],
 	]
-	var read := _read(_section(prims, kinds, 1, 6))
+	var read := _read(_section(prims, kinds, MapTerrainIO.VERSION, 6))
 	var t: TerraDoc = read["terra"]
 	assert_not_null(t)
 	assert_eq(t.prims.map(func(p: Dictionary) -> int: return p["id"]), [1, 3])
@@ -271,9 +273,11 @@ func test_an_unknown_kind_refuses_the_whole_section() -> void:
 
 func test_newer_versions_and_reserved_flags_are_refused() -> void:
 	var kinds := [[0, "plane"]]
-	var v2 := _read(_section([[1, 0, 0, [1.0, 0.0, 0.0]]], kinds, 2))
-	assert_null(v2["terra"])
-	assert_true(_warned(v2, MapTerrainIO.NEWER))
+	var newer := _read(_section([[1, 0, 0, [1.0, 0.0, 0.0]]], kinds, MapTerrainIO.VERSION + 1))
+	assert_null(newer["terra"])
+	assert_true(_warned(newer, MapTerrainIO.NEWER))
+	var v1 := _read(_section([[1, 0, 0, [1.0, 0.0, 0.0]]], kinds, 1))
+	assert_null(v1["terra"], "version 1 (before the surface table) is refused")
 	var flag := _read(_section([[1, 0, 4, [1.0, 0.0, 0.0]]], kinds))
 	assert_null(flag["terra"])
 	assert_true(_warned(flag, "reserved flags"))
@@ -283,9 +287,9 @@ func test_newer_versions_and_reserved_flags_are_refused() -> void:
 
 
 func test_next_id_is_kept_above_every_id() -> void:
-	var read := _read(_section([[7, 0, 0, [1.0, 0.0, 0.0]]], [[0, "plane"]], 1, 3))
+	var read := _read(_section([[7, 0, 0, [1.0, 0.0, 0.0]]], [[0, "plane"]], MapTerrainIO.VERSION, 3))
 	assert_eq((read["terra"] as TerraDoc).next_id, 8)
-	assert_null(_read(_section([], [], 1, 0))["terra"], "next_id 0")
+	assert_null(_read(_section([], [], MapTerrainIO.VERSION, 0))["terra"], "next_id 0")
 
 
 func test_the_writer_refuses_what_the_reader_would_drop() -> void:

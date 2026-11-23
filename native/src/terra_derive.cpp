@@ -28,6 +28,11 @@ struct Pass {
 	std::vector<const KindDef *> stage_k[S_COUNT];
 	std::vector<Rect> stage_r[S_COUNT];
 	std::vector<const Prim *> river_p, pond_p;
+	// The paint stage's items in document order (paint_items): a coat (paint_l null) or a path's
+	// surface (paint_l its solved line), with their influence rects.
+	std::vector<const Prim *> paint_p;
+	std::vector<const PathL *> paint_l;
+	std::vector<Rect> paint_r;
 	bool falls_changed = false, walls_changed = false;
 	int solved = 0;
 };
@@ -143,7 +148,7 @@ Dictionary TerraDerive::tile_collision(int64_t tile, int64_t stride) const {
 }
 
 String TerraDerive::version() const {
-	return "terra 6 sculpt kinds";
+	return "terra 8 paint";
 }
 
 Dictionary TerraDerive::grid() const {
@@ -156,7 +161,7 @@ Dictionary TerraDerive::grid() const {
 }
 
 terra::DerivedView TerraDerive::derived() const {
-	return terra::DerivedView{ g, H2, WL, SL, DW, DP, DF, PW, HB, CV, PM, FM, WM, PI, CT, water, walls };
+	return terra::DerivedView{ g, H2, WL, SL, DW, DP, DF, HB, CV, PM, FM, WM, PI, PW, CT, water, walls };
 }
 
 void TerraDerive::set_threads(int64_t n) {
@@ -170,13 +175,15 @@ void TerraDerive::setup(int64_t w, int64_t h, const Vector2 &extent) {
 	h = std::clamp<int64_t>(h, 2, 4096);
 	g.init(int(w), int(h), double(extent.x), double(extent.y));
 	size_t n = size_t(g.w) * size_t(g.h);
-	for (std::vector<float> *a : { &Hraw, &SW, &H0, &H1, &WL, &Hp, &H2, &SL, &DW, &DP, &DF, &PW, &HB, &CV }) {
+	for (std::vector<float> *a : { &Hraw, &SW, &H0, &H1, &WL, &Hp, &H2, &SL, &DW, &DP, &DF, &HB, &CV }) {
 		a->assign(n, 0.0f);
 	}
-	for (std::vector<uint8_t> *a : { &PM, &FM, &WM, &PI }) {
+	for (std::vector<uint8_t> *a : { &PM, &FM, &WM }) {
 		a->assign(n, 0);
 	}
-	CT.assign(n * 4, 0);
+	for (std::vector<uint8_t> *a : { &PI, &PW, &CT }) {
+		a->assign(n * 4, 0);
+	}
 	prims.clear();
 	water = Water();
 	paths.clear();
@@ -251,8 +258,12 @@ void TerraDerive::append_dabs(int64_t id, const PackedFloat32Array &data) {
 	Prim part;
 	part.id = int(id);
 	part.type = prims[i].type;
-	part.d.assign(data.ptr(), data.ptr() + data.size());
-	prims[i].d.insert(prims[i].d.end(), part.d.begin(), part.d.end());
+	// The new dabs behind the primitive's header (a paint coat's surface), so its kind reads them.
+	const KindDef *k = kind_def(part.type);
+	size_t header = k ? std::min(size_t(std::max(k->header, 0)), prims[i].d.size()) : 0;
+	part.d.assign(prims[i].d.begin(), prims[i].d.begin() + header);
+	part.d.insert(part.d.end(), data.ptr(), data.ptr() + data.size());
+	prims[i].d.insert(prims[i].d.end(), data.ptr(), data.ptr() + data.size());
 	seed(part, influence(part));
 }
 
@@ -449,7 +460,7 @@ void TerraDerive::solve_paths(Pass &ps) {
 	paths.clear();
 	for (const Prim *pp : ps.stage_p[S_PATHS]) {
 		const Prim &p = *pp;
-		if (p.d.size() >= 5) {
+		if (p.d.size() >= 6) {
 			PathL pl;
 			path_geometry(pl, p, g);
 			if (pl.l.n() >= 2) {
@@ -472,6 +483,38 @@ void TerraDerive::solve_paths(Pass &ps) {
 		}
 		if (same) {
 			line_change(g, p.l, p.prof, o->prof, p.hw + reach, own);
+		}
+	}
+}
+
+// The paint stage's items: the coats and the solved paths with a surface, merged in document order
+// (both lists point into `prims`, which is in document order).
+void TerraDerive::paint_items(Pass &ps) {
+	const std::vector<const Prim *> &coats = ps.stage_p[S_PAINT];
+	const std::vector<Rect> &coat_r = ps.stage_r[S_PAINT];
+	std::vector<const Prim *> path_p;
+	std::vector<const PathL *> path_l;
+	for (const Prim *pp : ps.stage_p[S_PATHS]) {
+		for (const PathL &l : paths) {
+			if (l.id == pp->id && pp->d.size() >= 2) {
+				path_p.push_back(pp);
+				path_l.push_back(&l);
+				break;
+			}
+		}
+	}
+	size_t a = 0, b = 0;
+	while (a < coats.size() || b < path_p.size()) {
+		if (b >= path_p.size() || (a < coats.size() && coats[a] < path_p[b])) {
+			ps.paint_p.push_back(coats[a]);
+			ps.paint_l.push_back(nullptr);
+			ps.paint_r.push_back(coat_r[a]);
+			a++;
+		} else {
+			ps.paint_p.push_back(path_p[b]);
+			ps.paint_l.push_back(path_l[b]);
+			ps.paint_r.push_back(path_l[b]->rect);
+			b++;
 		}
 	}
 }
@@ -559,7 +602,7 @@ uint8_t *TerraDerive::array_data(int a) {
 		case A_PI:
 			return PI.data();
 		case A_PW:
-			return reinterpret_cast<uint8_t *>(PW.data());
+			return PW.data();
 		case A_CT:
 			return CT.data();
 		default:
@@ -599,13 +642,9 @@ void TerraDerive::rect_body(int stage, const Rect &r, const Pass &ps) {
 		case S_LOOK:
 			look_rect(g, r, H2.data(), HB.data(), CV.data());
 			break;
-		case S_PAINT: {
-			StampOut out;
-			out.PI = PI.data();
-			out.PW = PW.data();
-			stamp_rect(ps.stage_p[S_PAINT], ps.stage_k[S_PAINT], ps.stage_r[S_PAINT], g, r, out);
+		case S_PAINT:
+			paint_rect(ps.paint_p, ps.paint_l, ps.paint_r, g, r, PI.data(), PW.data());
 			break;
-		}
 		case S_RULES: {
 			FieldInputs in{ H2.data(), WL.data(), SL.data(), DW.data(), DP.data(), DF.data(), PW.data(), PM.data(),
 				PI.data(), CV.data() };
@@ -693,6 +732,9 @@ Dictionary TerraDerive::derive() {
 			case S_FOOTPRINTS:
 				solve_walls(ps);
 				break;
+			case S_PAINT:
+				paint_items(ps);
+				break;
 			default:
 				break;
 		}
@@ -766,6 +808,14 @@ Dictionary TerraDerive::derive() {
 			u = u.unite(c);
 		}
 		out["h2_rect"] = u.empty() ? Rect2i() : Rect2i(u.x0, u.y0, u.x1 - u.x0, u.y1 - u.y0);
+		// The bridge's paint region: every tile's changed PI or PW sub-rect.
+		Rect pu;
+		for (int a : { int(A_PI), int(A_PW) }) {
+			for (const Rect &c : ps.changed[a].t) {
+				pu = pu.unite(c);
+			}
+		}
+		out["paint_rect"] = pu.empty() ? Rect2i() : Rect2i(pu.x0, pu.y0, pu.x1 - pu.x0, pu.y1 - pu.y0);
 	}
 	usec["total"] = us_since(t_all);
 	out["usec"] = usec;
@@ -1022,7 +1072,10 @@ void TerraDerive::debug_set_sample(const String &name, int64_t i, int64_t j, dou
 		return;
 	}
 	int64_t o = j * g.w + i;
-	if (ARRAYS[a].bytes == 4) {
+	if (a == A_PI || a == A_PW) {
+		// Four entries a sample: the first (the strongest), which the rules read.
+		array_data(a)[o * 4] = uint8_t(std::clamp(value, 0.0, 255.0));
+	} else if (ARRAYS[a].bytes == 4) {
 		reinterpret_cast<float *>(array_data(a))[o] = float(value);
 	} else {
 		array_data(a)[o] = uint8_t(std::clamp(value, 0.0, 255.0));
@@ -1089,10 +1142,10 @@ Dictionary TerraDerive::digests() const {
 
 int64_t TerraDerive::memory_bytes() const {
 	int64_t n = 0;
-	for (const std::vector<float> *a : { &Hraw, &SW, &H0, &H1, &WL, &Hp, &H2, &SL, &DW, &DP, &DF, &PW, &HB, &CV }) {
+	for (const std::vector<float> *a : { &Hraw, &SW, &H0, &H1, &WL, &Hp, &H2, &SL, &DW, &DP, &DF, &HB, &CV }) {
 		n += int64_t(a->capacity()) * 4;
 	}
-	for (const std::vector<uint8_t> *a : { &PM, &FM, &WM, &PI, &CT }) {
+	for (const std::vector<uint8_t> *a : { &PM, &FM, &WM, &PI, &PW, &CT }) {
 		n += int64_t(a->capacity());
 	}
 	for (const Prim &p : prims) {
@@ -1175,6 +1228,7 @@ void TerraDerive::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("debug_kinds_in_order", "order"), &TerraDerive::debug_kinds_in_order);
 	ClassDB::bind_method(D_METHOD("doc_heights"), &TerraDerive::doc_heights);
 	ClassDB::bind_method(D_METHOD("doc_heights_diff", "heights", "doc_w", "rect"), &TerraDerive::doc_heights_diff);
+	ClassDB::bind_method(D_METHOD("doc_surfaces", "rect"), &TerraDerive::doc_surfaces);
 	ClassDB::bind_method(
 			D_METHOD("debug_set_sample", "name", "i", "j", "value", "dirty_all"), &TerraDerive::debug_set_sample);
 }

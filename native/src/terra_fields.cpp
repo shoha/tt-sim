@@ -163,7 +163,7 @@ void rules_rect(const std::vector<Rule> &rules, const Grid &g, const Rect &r, co
 			int64_t o = int64_t(j) * g.w + i;
 			double depth = std::max(0.0, double(in.WL[o]) - in.H2[o]);
 			double wet = depth > 0.0 ? 1.0 : det_exp(-double(in.DW[o]) / 1.2);
-			double f[F_COUNT] = { depth, in.SL[o], in.DW[o], in.DP[o], in.DF[o], wet, in.PW[o], in.H2[o],
+			double f[F_COUNT] = { depth, in.SL[o], in.DW[o], in.DP[o], in.DF[o], wet, in.PW[o * 4] / 255.0, in.H2[o],
 				in.PM[o] / 255.0, in.CV[o] };
 			double acc[NC] = {};
 			double rem = 1.0;
@@ -182,7 +182,7 @@ void rules_rect(const std::vector<Rule> &rules, const Grid &g, const Rect &r, co
 				if (w <= 0.0) {
 					continue;
 				}
-				int cls = rule.cls < 0 ? in.PI[o] : rule.cls;
+				int cls = rule.cls < 0 ? in.PI[o * 4] : rule.cls;
 				acc[std::clamp(cls, 0, NC - 1)] += w * rem;
 				rem *= 1.0 - w;
 			}
