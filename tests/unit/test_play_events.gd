@@ -454,8 +454,9 @@ func test_a_preset_stays_armed_after_it_fires_until_no_bridge_is_left() -> void:
 	var editor := _controller.live_edits.editor
 	var river := PackedVector2Array([Vector2(8, -20), Vector2(9, 0), Vector2(10, 20)])
 	assert_gt(editor.water.carve_river(river, PackedFloat32Array([1.4]), WaterBody.Depth.WAIST), 0)
-	# The live editor computes water off the main thread: land it before laying the bridges.
-	editor.water.finish_work()
+	# The live editor computes water off the main thread: land it before laying the bridges (else
+	# they wait for it, GroundPresses, and place() returns QUEUED).
+	editor.finish_height_work()
 	for z: float in [0.0, 8.0]:
 		var at := 9.0 + z / 20.0
 		var id := editor.crossings.place(

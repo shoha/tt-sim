@@ -386,11 +386,12 @@ func put_away() -> void:
 	refresh()
 
 
-## Undoes the GM's newest live edit (a gesture in progress is finished first, a water edit
-## still computing lands first), with a toast naming it ("Raise undone"). Returns its label,
-## or "".
+## Undoes the GM's newest live edit (a gesture in progress is finished first; behind a water
+## edit still computing or landing it waits for it over frames, GroundPresses.defer, card
+## noblock3), with a toast naming it ("Raise undone"). Returns its label, or "" (also when it
+## waits).
 func undo() -> String:
-	if not _finish_for_history():
+	if not _finish_for_history(undo):
 		return ""
 	var label := _edits.history.undo()
 	if label != "":
@@ -401,7 +402,7 @@ func undo() -> String:
 ## Redoes the GM's newest undone live edit, with a toast naming it ("Raise redone"). Returns
 ## its label, or "".
 func redo() -> String:
-	if not _finish_for_history():
+	if not _finish_for_history(redo):
 		return ""
 	var label := _edits.history.redo()
 	if label != "":
@@ -409,11 +410,15 @@ func redo() -> String:
 	return label
 
 
-func _finish_for_history() -> bool:
+## The gesture in progress finished; false when there is no table or `again` (undo or redo)
+## waits behind the ground work and the presses in flight (LiveEdits' frame loop runs it).
+func _finish_for_history(again: Callable) -> bool:
 	if _edits == null or not is_instance_valid(_edits):
 		return false
 	if _brush != null:
 		_brush.finish_gesture()
+	if _edits.editor.presses.defer(func() -> void: again.call()):
+		return false
 	# With the terrain core on the water lands with its gesture, queued: nothing waits.
 	if not _edits.editor.terra.active():
 		_edits.editor.water.finish_work()
