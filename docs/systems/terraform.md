@@ -76,7 +76,7 @@ built in, 9 is the folded sculpt raster, 10 to 15 reserved, new kinds start at 1
 | 5 | pond | depth, then the outline's x, z per point |
 | 6 | path | width, surface (a `TerraDoc.surfaces` index, 255 none), then x, z per point |
 | 7 | wall | height, thickness, then x, z per point |
-| 8 | paint | surface (a `TerraDoc.surfaces` index, 255 erase), then per dab ax, az, bx, bz, radius, seconds: one Paint stroke, `SurfaceStroke.dab`'s rule (four entries a sample, newest wins, a fifth drops the weakest; PI and PW are 4 bytes a sample, equal to `surface_weights` at the document samples). Paths enter the paint stage as coats in document order (the stage reads PM and the path primitives) |
+| 8 | paint | surface (a `TerraDoc.surfaces` index, 255 erase), then per dab ax, az, bx, bz, radius, seconds: one Paint stroke, `SurfaceStroke.dab`'s rule (four entries a sample, newest wins, a fifth drops the weakest; PI and PW are 4 bytes a sample, equal to `surface_weights` at the document samples). Paths enter the paint stage as coats in document order (the stage reads PM and the path primitives). The coat a held stroke appends to is cached per 64-sample tile (`CoatCache`: the entries under the coat and its per-sample coverage after the dabs seen), so a held frame applies only its new dabs; every edit but an append to that coat drops the cache, and the bytes equal a full replay (`test_terra_paint`) |
 | 9 | sculpt | x0, z0, sx, sz, nx, nz, layers, then nx * nz height deltas (and as many smoothing-weight deltas with 2 layers): a folded run (see "Sculpt kinds and folding") |
 | 16 | terrace | per dab cx, cz, radius, tier_m, softness (the riser's share of a tier, 0 to 1) |
 | 17 | level | per dab ax, az, bx, bz (one frame's capsule), radius, target_y, strength, edge (0 flatten, 1 tier, 2 tier cut) |
@@ -536,6 +536,7 @@ Sculpt tile while `active()`; one stroke is one `TerraEditor` gesture and one hi
 
 ## Versions and the library
 
+<<<<<<< HEAD
 `TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 10 chutes` (card terraform-p2-chutes, from
 spike terraform-low-falls-probe, approach C): a step of 0.75 m up to CHUTE_MAX_M (2.5 m) is a chute, not a fall.
 The carve's level line (`River::chute`, the record's `chute`, hashed by the water digest) eases it down as a
@@ -547,8 +548,9 @@ same run (`WaterFalls.chute_run`: RiverProfile's level easing, WaterMeshBuilder'
 arc), with broken white along it (WaterFieldStroke CHUTE_*: a few bold soft lumps of energy 0.35-1.0). Banks
 beside a chute stand at 35-38 degrees where the face carve cut 74-83. Steps of 2.5 m or more are falls as before.
 55 of 105 golden digests moved (H1, H2, Hp, WL, SL, CT, CV, DW, HB, WM and falls of every case). It replaced
-`terra 9 pools` (card terraform-p2-river-polish: pools below low falls, `hws` per point, and round 3's lip line
-and soft-fall white, all removed with the chutes). Before it, `terra 8 paint` (card terraform-p2-paint-path:
+`terra 9 paint cache` on main (card terraform-p2-paint-cache: the held coat's per-tile cache, no byte moved) and
+the branch-only `terra 9 pools` (card terraform-p2-river-polish: pools below low falls, `hws` per point, and
+round 3's lip line and soft-fall white, all removed with the chutes). Before them, `terra 8 paint` (card terraform-p2-paint-path:
 four-entry paint planes, coats with SurfaceStroke's rule, paths as coats, `doc_surfaces`; regenerated after
 merging `terra 7 reaches`, 15 of 105 golden digests moved against it (PI, PW and CT of every case; heights and water
 unchanged); before it `terra 7 reaches`, the

@@ -5,6 +5,7 @@
 #pragma once
 
 #include <algorithm>
+#include <memory>
 
 #include "terra_core.h"
 #include "terra_stage_table.h"
@@ -215,12 +216,43 @@ struct FieldInputs {
 	const float *CV;
 };
 
+/// The held coat's cache (card terraform-p2-paint-cache). A Paint stroke appends its dabs each frame
+/// (TerraDerive::append_dabs), and a coat's bytes at a sample are a function of the entries before
+/// the coat there and of the coat's dabs in order, so the stage keeps, per 64-sample tile the
+/// derive has visited, the entries before the coat and the coat's per-sample state (coverage, last
+/// value, hit) after its first `n` dabs; a held frame applies only the dabs past `n` and writes
+/// coat_entries from the state, the same arithmetic in the same order as a full replay, so the bytes
+/// equal a fresh derive's. TerraDerive drops it on every edit but an append to this coat (an
+/// earlier item, a path, an undo, a sculpt append, a new grid).
+struct CoatCache {
+	struct Block {
+		int n = 0; // the coat's dabs applied
+		std::vector<uint8_t> bpi, bpw; // the entries before the coat, 4 a sample over the tile
+		std::vector<float> val;
+		std::vector<double> last;
+		std::vector<uint8_t> hit;
+	};
+	int id = -1; // the coat's primitive id; -1: no cache
+	int index = -1; // the coat's place among the paint items when the blocks were built
+	std::vector<std::unique_ptr<Block>> blocks; // per tile, null until a derive reads the tile
+
+	void clear() {
+		id = -1;
+		index = -1;
+		blocks.clear();
+	}
+	int64_t memory_bytes() const;
+};
+
 /// Stage 5d over a rect (card terraform-p2-paint-path): the paint coats and the paths' surfaces in
 /// document order into PI and PW, four (surface, weight) entries a sample, strongest first.
 /// `coats` beside `paths`: each item is a paint coat (`paths[k]` null) or a path's surface
-/// (`coats[k]` its primitive), with its influence rect in `bounds`.
+/// (`coats[k]` its primitive), with its influence rect in `bounds`. With `cache` set (its blocks
+/// sized to the grid's tiles before the stage runs; each rect inside one tile, as the tile loop
+/// gives it) the coat `cache->id` comes from the cache.
 void paint_rect(const std::vector<const Prim *> &coats, const std::vector<const PathL *> &paths,
-		const std::vector<Rect> &bounds, const Grid &g, const Rect &r, uint8_t *PI, uint8_t *PW);
+		const std::vector<Rect> &bounds, const Grid &g, const Rect &r, uint8_t *PI, uint8_t *PW,
+		CoatCache *cache = nullptr);
 /// One coat's kernel (SurfaceStroke.dab's rule) over `r`, already clipped to its bounds.
 void paint_coat(const Prim &p, const Grid &g, const Rect &r, uint8_t *PI, uint8_t *PW);
 /// A path's surface over `r` as one coat of its coverage (path_rect's edge).

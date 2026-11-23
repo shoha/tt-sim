@@ -229,7 +229,11 @@ func test_six_keys_cost_well_under_a_millisecond() -> void:
 		CrossingCache.keys_of(_doc)
 	var per_refresh_ms := (Time.get_ticks_usec() - started) / 1000.0 / runs
 	gut.p("six crossings' keys: %.3f ms per refresh" % per_refresh_ms)
-	assert_lt(per_refresh_ms, 5.0, "a loose bound for a loaded test machine")
+	assert_lt(
+		per_refresh_ms,
+		TimingBudget.limit(5.0),
+		"a loose bound for a loaded test machine (%s)" % TimingBudget.describe(5.0)
+	)
 
 
 # --- AuthoredCrossings.refresh with the cache ----------------------------------------------

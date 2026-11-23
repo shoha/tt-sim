@@ -32,6 +32,8 @@ constexpr int STAGE_PAINT = S_PAINT;
 // The two water kinds' ids: the water stage tells them apart (river and pond solve differently).
 constexpr int KIND_RIVER = 4;
 constexpr int KIND_POND = 5;
+// The paint coat: the paint stage caches the coat a held stroke appends to (CoatCache).
+constexpr int KIND_PAINT = 8;
 
 enum KindShape : int {
 	KIND_STAMP = 0, // per sample, in document order (a rect stage)

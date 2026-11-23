@@ -3,7 +3,8 @@ extends GutTest
 ## "Tools"): the same strokes as SurfaceStroke runs and as paint coats (kind 8) give the same
 ## surface_weights bytes at the document samples, five surfaces (the fifth drops the weakest) and
 ## erase coats included; a path's surface is a coat in document order; the table rides in
-## prims.bin v2; the Paint tool through the editor is one history entry with exact undo and redo.
+## prims.bin v2; the Paint tool through the editor is one history entry with exact undo and redo; a
+## held coat served from the paint stage's cache equals a fresh derive at every frame.
 
 const PaintKind := preload("res://utils/terraform/kinds/paint/paint_kind.gd")
 const PathKind := preload("res://utils/terraform/kinds/path/path_kind.gd")
@@ -89,6 +90,54 @@ func test_a_path_paints_its_surface_in_document_order() -> void:
 	c.terra.prims.insert(0, {"id": over, "kind": TerraCore.PAINT, "flags": 0, "data": coat})
 	assert_eq(_surface_at(c, Vector2(0, 4.5)), Vector2i(0, 255), "the later path wins over the coat")
 	assert_eq(_surface_at(c, Vector2(-4, 4.25)).x, 0, "the path's surface along its line")
+
+
+## The held coat's cache (card terraform-p2-paint-cache): a coat held for many frames, a few dabs a
+## frame on a loop that comes back over itself, over a path and an earlier coat (the entries under
+## it come from the cache's blocks), equals a fresh full derive at every frame; then an erase coat
+## held the same way, and its undo.
+func test_a_held_coat_equals_a_fresh_derive_every_frame() -> void:
+	if not TerraCore.native_available():
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var c := TerraCorpus.build(Vector2i(TerraCorpus.CELLS, TerraCorpus.CELLS), false)
+	c.terra.surfaces = PackedStringArray(["dirt", "gravel", "sand"])
+	c.add(TerraCore.PATH, PathKind.make(1.6, 0, PackedVector2Array([Vector2(-8, 4), Vector2(8, 5)])))
+	var under := PackedFloat32Array([2])
+	under.append_array(PaintKind.dab(Vector2(-2, 2), Vector2(3, 6), 2.5, 0.5))
+	c.add(TerraCore.PAINT, under)
+	var live := TerraCache.derive_for(c.terra, c.map_doc)
+	var bad: Array[String] = []
+	for surface: int in [1, PaintKind.ERASE_SURFACE]:
+		var id := c.add(TerraCore.PAINT, PackedFloat32Array([surface]))
+		live.call("set_prim", id, TerraCore.PAINT, PackedFloat32Array([surface]))
+		live.call("derive")
+		var bytes_before: int = live.call("memory_bytes")
+		var last := Vector2(4, 3)
+		for f in 24:
+			var dabs := PackedFloat32Array()
+			for k in 3:
+				var t := float(f * 3 + k + 1) * 0.12
+				var p := Vector2(4 * cos(t), 3 + 3 * sin(t))
+				dabs.append_array(PaintKind.dab(last, p, 2.0, 1.0 / 30.0))
+				last = p
+			c.terra.append(id, dabs)
+			live.call("append_dabs", id, dabs)
+			live.call("derive")
+			var fresh := TerraCache.derive_for(c.terra, c.map_doc)
+			for a in ["PI", "PW", "CT"]:
+				if live.call("array_bytes", a) != fresh.call("array_bytes", a):
+					bad.append("coat %d frame %d: %s" % [surface, f, a])
+		assert_gt(live.call("memory_bytes"), bytes_before, "the held coat's blocks were built")
+		if surface == PaintKind.ERASE_SURFACE:
+			c.terra.remove(id)
+			live.call("remove_prim", id)
+			live.call("derive")
+			var undone := TerraCache.derive_for(c.terra, c.map_doc)
+			for a in ["PI", "PW", "CT"]:
+				if live.call("array_bytes", a) != undone.call("array_bytes", a):
+					bad.append("undo: %s" % a)
+	assert_eq(bad, [] as Array[String], "every frame equals a fresh derive")
 
 
 ## The strongest entry at document point `p` of `c`'s derive: (surface, weight).

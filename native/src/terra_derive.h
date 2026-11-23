@@ -59,6 +59,8 @@ class TerraDerive : public RefCounted {
 	terra::Dirty seeds[terra::A_COUNT];
 	bool seed_rules = false;
 	std::set<int> changed_ids;
+	// The held paint coat's cache: kept while only append_dabs on that coat edits the document.
+	terra::CoatCache coat_cache;
 	std::unique_ptr<terra::Pool> pool;
 	int threads = 8;
 	// A derive on a worker thread (a stroke's release); the caller must not touch this object

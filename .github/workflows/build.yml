@@ -114,10 +114,18 @@ jobs:
       skip_macos: ${{ needs.plan.outputs.skip_macos }}
     secrets: inherit
 
+  # Two legs on two runners, each running half the test scripts (gut_shards --part, dealt by the
+  # weights in tests/gut_times.json): one 4-core runner took 540 to 800 s for the whole suite on
+  # 2 shards, close to the runner's 900 s hang limit on a slow machine (ci-headroom, 2026-11-23).
+  # Leg 1 also checks the Linux parity, leg 2 lints; signing waits for both.
   test:
-    name: Run tests and lint
+    name: Run tests and lint (${{ matrix.part }}/2)
     needs: native
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2]
     container:
       image: barichello/godot-ci:4.7.2
     steps:
@@ -185,7 +193,7 @@ jobs:
         run: godot --headless --import
 
       - name: Save import cache
-        if: steps.import-cache.outputs.state != 'exact'
+        if: steps.import-cache.outputs.state != 'exact' && matrix.part == 1
         uses: actions/cache/save@v4
         with:
           path: .godot/imported
@@ -194,22 +202,25 @@ jobs:
       # Linux's parity: the release library here, the debug one in the full run below
       # (test_scatter_native), which must not show it pending.
       - name: Native parity, release library
+        if: matrix.part == 1
         shell: bash
         run: PARITY_TARGETS=template_release bash .github/native/parity.sh godot
 
       # Sharded (tools/gut_shards.gd), 2 shards on the 4-core runner: 5.75 min against 7.8-11.3
       # serial. 4 shards were 4.4 min but failed three wall-time budget tests under the load.
-      - name: Run unit tests
+      # --part runs this leg's half of a 4-shard deal; --slowest lists where the time went.
+      - name: Run unit tests (part ${{ matrix.part }} of 2)
         shell: bash
         run: |
           echo "runner: nproc=$(nproc), $(grep -E 'MemTotal|MemAvailable' /proc/meminfo | tr -s ' ' | tr '\n' ' ')"
-          godot --headless --path . --script res://tools/gut_shards.gd -- -n=2
+          godot --headless --path . --script res://tools/gut_shards.gd -- -n=2 --part=${{ matrix.part }}/2 --slowest=20
           if grep -qr 'the native library is not built' ~/.local/share/godot/app_userdata/TTSim/gut_shards/; then
             echo "::error::the native library did not load"
             exit 1
           fi
 
       - name: Lint GDScript
+        if: matrix.part == 2
         run: gdlint autoloads/ scenes/ utils/ resources/ tests/unit/
 
   # Beside the tests, not after them: signing is what waits for the tests and parity.
