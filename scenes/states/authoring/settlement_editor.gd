@@ -506,6 +506,8 @@ func _override(settlement_id: int, label: String, change: Callable) -> bool:
 ## Removes settlement `settlement_id` (and with it every furnishing and the paint its Dress laid,
 ## SettlementUnpaint) as one history entry; ground painted by hand stays.
 func clear(settlement_id: int) -> bool:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(clear.bind(settlement_id), true)
 	var e := _editor()
 	var doc := e.document
 	var held := doc.settlement(settlement_id)
@@ -660,6 +662,12 @@ func _replace(
 	replaces: bool = false,
 	drops: PackedInt32Array = PackedInt32Array()
 ) -> int:
+	if not _editor().presses.is_running():
+		# Every settlement edit lands here: it plans on the ground (bridges, paving), so while the
+		# core's work is in flight it waits for it (GroundPresses; card terraform-p2-noblock2) and
+		# the record's id returns meanwhile.
+		var bound := _replace.bind(held, changed, label, roles, paved, replaces, drops)
+		return _editor().presses.run(bound, changed.id)
 	var e := _editor()
 	var doc := e.document
 	if MapSettlementIO.settlement_problem(changed) != "":
@@ -771,7 +779,9 @@ func _settle() -> void:
 	e.commit_prop_edit()
 	if e.is_stroking():
 		e.end_stroke()
-	e.finish_height_work()
+	# Inside a press (AuthoringEditor.press, card terraform-p2-noblock2): with the core on the
+	# ground has landed, and the press's own paint derives on behind it; off, finish as before.
+	e.terra.prepare_gesture()
 
 
 func _current() -> Array[Settlement]:

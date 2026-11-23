@@ -322,6 +322,13 @@ func _leave_table(choice: Choice) -> bool:
 	var level: LevelData = _controller.active_level_data
 	if key == "" or level == null:
 		return true
+	var edits: Variant = _controller.live_edits
+	if is_instance_valid(edits) and edits.sends and not edits.editor.is_stroking():
+		# The editor's work lands over frames first, so changes()' send_now() finishes nothing
+		# on the main thread (card terraform-p2-noblock2).
+		await edits.editor.presses.settle_async(get_tree())
+		if level != _controller.active_level_data:
+			return false
 	match choice:
 		Choice.SAVE:
 			if not await _save_into_map():
@@ -513,7 +520,9 @@ func _settled_document() -> MapDocument:
 	if not is_instance_valid(edits) or not edits.sends:
 		return null
 	var editor: RefCounted = edits.editor
-	editor.finish_height_work()
+	# With the core on the work lands over frames, never a main-thread wait (card
+	# terraform-p2-noblock2; GroundPresses.settle_async).
+	await editor.presses.settle_async(get_tree())
 	while is_instance_valid(editor.scatter) and editor.scatter.is_regenerating():
 		await get_tree().process_frame
 	if not is_instance_valid(edits) or level != _controller.active_level_data:

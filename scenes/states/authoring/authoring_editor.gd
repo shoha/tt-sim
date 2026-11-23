@@ -79,6 +79,8 @@ var fire: FireEditor = null
 var fire_field: FireField = null
 ## The terrain document's edits (the terraforming core's routes; see the header), made by create().
 var terra: TerraEditor = null
+## The presses that wait for the core's work to land (GroundPresses; card terraform-p2-noblock2).
+var presses: GroundPresses = null
 
 var _stroke: MaskStroke = null
 var _stroke_label: String = ""
@@ -122,6 +124,7 @@ static func create(
 	editor.settlements = SettlementEditor.create(editor)
 	editor.fire = FireEditor.create(editor)
 	editor.terra = TerraEditor.create(editor)
+	editor.presses = GroundPresses.create(editor)
 	editor._rng.randomize()
 	return editor
 
@@ -300,7 +303,9 @@ func begin_fire_stroke(target: float, erase: bool) -> bool:
 	commit_prop_edit()
 	if is_stroking():
 		end_stroke()
-	finish_height_work()
+	# The fire mask and the burnt biome need no landed ground; the ash coat queues behind the
+	# derives as a gesture (card terraform-p2-noblock2): nothing waits while the core is on.
+	terra.prepare_gesture()
 	return fire.begin(target, erase)
 
 
@@ -605,24 +610,28 @@ func tier_target(point: Vector3, radius: float, down: bool) -> Dictionary:
 ## True while height work from a sculpt stroke, its undo, a water edit or a live edit is still
 ## being spread over frames (HeightEditor.has_work).
 func has_height_work() -> bool:
-	return terra.has_work() or heights.has_work()
+	return terra.has_work() or heights.has_work() or presses.is_waiting()
 
 
 ## One frame's share of the height work, at most once per frame whoever calls (tick(), and
-## AuthoringController every frame; HeightEditor.step), after a terrain landing that is ready.
+## AuthoringController every frame; HeightEditor.step), after a terrain landing that is ready; then
+## the presses that waited for it, on a frame after its last share (GroundPresses.drain).
 func step_height_work() -> void:
+	var had_work := terra.has_work() or heights.has_work()
 	terra.step()
 	heights.step()
 	PathLay.frame(self)
+	presses.drain(had_work)
 
 
 ## Does every piece of height work still waiting at once (TerraEditor.finish_work, which waits for
-## the core's derives, then HeightEditor.finish_work).
+## the core's derives, then HeightEditor.finish_work), then the presses that waited for it.
 func finish_height_work() -> void:
 	if path_lay != null:
 		_end_surface_stroke()
 	terra.finish_work()
 	heights.finish_work()
+	presses.finish()
 
 
 # ============================================================================

@@ -2,7 +2,8 @@ extends GutTest
 ## The landing invariant under shuffled interleavings (card terraform-p2-sculpt round 3;
 ## docs/systems/terraform.md "The session"): whatever order river releases, Sculpt presses, held
 ## frames, undos and redos come in (card terraform-p2-paint-path: Paint presses, erase coats and
-## path releases too), and however many frames pass between them, stepped or not, once
+## path releases too; card terraform-p2-noblock2: crossing presses and a save's settle), and
+## however many frames pass between them, stepped or not, once
 ## everything has landed the session's settled derive answers for its document (every digest equals
 ## a fresh derive_full of it) and MapDocument.heights and surface planes are that fresh derive's.
 ## Seeds 1 and 8 caught
@@ -152,6 +153,22 @@ func _run(s: int) -> void:
 				)
 				rig.editor.terra.paint.add_path(line, 1.6, "dirt_road_packed")
 				done.append("path")
+			2:
+				# A crossing over the first river (card terraform-p2-noblock2): queued while the
+				# ground is in flight (AuthoringEditor.press), placed or refused once it lands.
+				var p := rig.corpus.at(40, 8)
+				var q := rig.corpus.at(40, 13)
+				rig.editor.crossings.place(
+					Crossing.Kind.PLANK, rig.editor.to_world(Vector3(p.x, 0, p.y)),
+					rig.editor.to_world(Vector3(q.x, 0, q.y))
+				)
+				done.append("crossing")
+			3:
+				# A save's settle (card terraform-p2-noblock2): the work lands over frames, no wait.
+				var waits := rig.editor.terra.waits
+				await rig.editor.presses.settle_async(get_tree())
+				assert_eq(rig.editor.terra.waits, waits, "seed %d: the save's settle never waits" % s)
+				done.append("save")
 		# Nothing, a frame or a few between gestures, stepped or not.
 		var gap := rng.randi_range(0, 3)
 		done.append("g%d" % gap)

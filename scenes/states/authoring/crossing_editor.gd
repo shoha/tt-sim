@@ -37,6 +37,9 @@ signal followed(moved: int, removed: int)
 ## or one of these.
 const REFUSED_FULL := &"full"
 const REFUSED_INVALID := &"invalid"
+## What place() and add() return for a press that waits for the ground (AuthoringEditor.press,
+## card terraform-p2-noblock2): not an id yet, not a refusal.
+const QUEUED := 0
 ## follow() keeps a crossing as it is when a new snap moves no anchor more than this and no
 ## level more than FOLLOW_LEVEL_M (metres, map frame): the snap is only as exact as its
 ## waterline search, and an edit beside a crossing should not nudge it.
@@ -97,8 +100,11 @@ func plan(kind: Crossing.Kind, from: Vector3, to: Vector3, width: float = -1.0) 
 	return placed.crossing
 
 
-## plan() and add(): the new crossing's id, or -1 (last_refusal says why).
+## plan() and add(): the new crossing's id, or -1 (last_refusal says why). While the core's work
+## is in flight the whole press waits for it (AuthoringEditor.press) and QUEUED returns.
 func place(kind: Crossing.Kind, from: Vector3, to: Vector3, width: float = -1.0) -> int:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(place.bind(kind, from, to, width), QUEUED)
 	var crossing := plan(kind, from, to, width)
 	if crossing == null:
 		return -1
@@ -109,6 +115,8 @@ func place(kind: Crossing.Kind, from: Vector3, to: Vector3, width: float = -1.0)
 ## Returns its id, or -1 when the document is full or the writer would refuse it
 ## (MapCrossingIO.crossing_problem; last_refusal REFUSED_INVALID).
 func add(crossing: Crossing) -> int:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(add.bind(crossing.copy()), QUEUED)
 	var doc := _editor().document
 	last_refusal = &""
 	var crossing_id := doc.next_crossing_id()
@@ -130,6 +138,8 @@ func add(crossing: Crossing) -> int:
 ## tool's re-anchoring after a sculpt or water edit. False when there is no such crossing or
 ## the replacement is invalid.
 func replace(crossing_id: int, crossing: Crossing) -> bool:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(replace.bind(crossing_id, crossing.copy()), true)
 	var doc := _editor().document
 	var old := doc.crossing(crossing_id)
 	if old == null:
@@ -148,6 +158,8 @@ func replace(crossing_id: int, crossing: Crossing) -> bool:
 
 ## Removes crossing `crossing_id` as one history entry. False when there is none.
 func remove(crossing_id: int) -> bool:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(remove.bind(crossing_id), true)
 	var doc := _editor().document
 	var old := doc.crossing(crossing_id)
 	if old == null:
@@ -166,6 +178,8 @@ func remove(crossing_id: int) -> bool:
 ## crossing past MapDocument.MAX_CROSSINGS or one the writer would refuse is left out. Returns
 ## the ids the added crossings got, in order (a left-out one is missing).
 func swap(label: String, gone: PackedInt32Array, added: Array[Crossing]) -> PackedInt32Array:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(swap.bind(label, gone, added), PackedInt32Array())
 	var doc := _editor().document
 	var before := _current()
 	var after: Array[Crossing] = []
@@ -339,7 +353,8 @@ func _change(label: String, after: Array[Crossing], touched: Array[Crossing]) ->
 	e.commit_prop_edit()
 	if e.is_stroking():
 		e.end_stroke()
-	e.finish_height_work()
+	# Inside a press (AuthoringEditor.press): with the core on the ground has landed; off, finish.
+	e.terra.prepare_gesture()
 	var before := _current()
 	var area := _area_of(touched)
 	apply_list(after, area)
