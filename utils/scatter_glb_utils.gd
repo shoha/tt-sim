@@ -362,10 +362,9 @@ static func _scatter_render_layer() -> int:
 ## that stalled the frame (27 to 35 ms a call, measured in a window, RTX 3080) and the first
 ## get_instance_transform() or set_instance_transform() another (13 ms): the contact field's
 ## rebuild after an edit (PainterOcclusion) and AuthoredScatter.move_rows() under a sculpt
-## stroke paid them. One per-instance write BEFORE the buffer makes the RenderingServer keep
-## its CPU copy (allocated, not read back, while no buffer is set), and the buffer assignment
-## then fills that copy too: the same reads take about 0.01 ms and return the same floats. The
-## cost is one more copy of the buffer in RAM for each settled node.
+## stroke paid them. MultiMeshCpu.set_buffer keeps the RenderingServer's CPU copy (one
+## per-instance write before the buffer): the same reads take about 0.01 ms and return the same
+## floats, for one more copy of the buffer in RAM for each settled node.
 static func multimesh_from_chunk(
 	mesh: Mesh, built: Dictionary, anchors: Dictionary = {}
 ) -> MultiMesh:
@@ -376,6 +375,8 @@ static func multimesh_from_chunk(
 	multimesh.use_custom_data = built.custom
 	multimesh.mesh = mesh
 	multimesh.instance_count = (built.order as PackedInt32Array).size()
+	# MultiMeshCpu.set_buffer's two lines, inline: this script is on the start-up graph
+	# (test_boot_graph), the painted trees' builder is not.
 	if multimesh.instance_count > 0:
 		multimesh.set_instance_transform(0, Transform3D.IDENTITY)
 		multimesh.buffer = built.buffer
