@@ -24,6 +24,7 @@ extends RefCounted
 const PaintKind := preload("res://utils/terraform/kinds/paint/paint_kind.gd")
 const PathKind := preload("res://utils/terraform/kinds/path/path_kind.gd")
 const PATH_LABEL := "Path"
+const ERASE_PATH_LABEL := "Erase path"
 ## Why a new surface cannot be painted when the table is full.
 const FULL_REASON := (
 	"This map already uses 64 paint surfaces: paint with one of them" + " (or start a new map)."
@@ -184,6 +185,53 @@ func add_path(line: PackedVector2Array, width: float, surface: String) -> int:
 	var id := terra.edit({"op": "add", "kind": TerraCore.PATH, "data": data, "flags": 0})
 	terra.end_gesture(PATH_LABEL)
 	return id
+
+
+## The Path tool's Ctrl release: every path primitive whose line comes within its own half width
+## plus `half_width` (map metres) of `line` (map XZ) is removed, in one gesture "Erase path" whose
+## landing takes back its grading and its surface. The number removed (0: none touched, nothing
+## recorded).
+func erase_paths(line: PackedVector2Array, half_width: float) -> int:
+	var terra := _terra()
+	var s := terra.session()
+	if s == null or s.terra == null or line.size() < 2:
+		return 0
+	var ids := touched_paths(s.terra, line, half_width)
+	if ids.is_empty():
+		return 0
+	terra.begin_gesture()
+	for id in ids:
+		terra.edit({"op": "remove", "id": id})
+	terra.end_gesture(ERASE_PATH_LABEL)
+	return ids.size()
+
+
+## The path primitive ids (document order) whose line comes within their half width plus
+## `half_width` of `line` (map XZ). Pure.
+static func touched_paths(
+	terra: TerraDoc, line: PackedVector2Array, half_width: float
+) -> Array[int]:
+	var out: Array[int] = []
+	for p: Dictionary in terra.prims:
+		if int(p.kind) != TerraCore.PATH:
+			continue
+		var data: PackedFloat32Array = p.data
+		var reach := data[0] * 0.5 + half_width
+		if _near(data.slice(PathKind.HEADER), line, reach):
+			out.append(int(p.id))
+	return out
+
+
+## True when polyline `flat` (x, z pairs) comes within `reach` of polyline `line`.
+static func _near(flat: PackedFloat32Array, line: PackedVector2Array, reach: float) -> bool:
+	for i in range(0, flat.size() - 3, 2):
+		var p := Vector2(flat[i], flat[i + 1])
+		var q := Vector2(flat[i + 2], flat[i + 3])
+		for k in line.size() - 1:
+			var near := Geometry2D.get_closest_points_between_segments(p, q, line[k], line[k + 1])
+			if near[0].distance_to(near[1]) <= reach:
+				return true
+	return false
 
 
 ## A settlement's paving (SettlementPaint.lay while active): `strokes` (SettlementGround.plan's:

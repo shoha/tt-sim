@@ -112,3 +112,62 @@ func test_the_path_release_is_one_entry_with_exact_undo() -> void:
 	assert_true(await TerraRig.settle(get_tree(), [rig]), "the undo settles")
 	assert_eq((rig.doc.terra as TerraDoc).digest_for(rig.doc), digest_before, "undo: the digest")
 	assert_true(rig.doc.heights == heights_before, "undo: the heights")
+
+
+## The Path tab is a tab of the Paint hub, its width steps clamp, and its chip names the surface.
+func test_the_path_tool_is_the_paint_hubs_tab() -> void:
+	var tool := ToolRegistry.find(PathTool.ID)
+	assert_not_null(tool, "the Path tool is registered")
+	assert_eq(tool.hub, PaintTool.ID, "under the Paint hub")
+	assert_false(tool.on_rail, "with no rail item")
+	assert_false(ToolRegistry.tab_for(PaintTool.ID, PathTool.ID).is_empty(), "Paint has its tab")
+	assert_eq(PathBrush.stepped_width(1.6, 2), 2.0, "Shift+wheel widens")
+	assert_eq(PathBrush.stepped_width(1.0, -10), PathBrush.MIN_WIDTH, "and clamps")
+	assert_eq(PathBrush.label_for(""), "Path")
+	var pane := PathToolPane.new()
+	pane.show_surface("")
+	assert_eq(pane.surface_text(), PathToolPane.NO_SURFACE_TEXT, "no surface: says where to pick")
+	pane.free()
+
+
+## The Path brush's release on the core: a drawn line (world XZ) is one path; a Ctrl line across it
+## erases it as one entry; undo brings it back with the digest, redo takes it away again.
+func test_the_path_brush_lays_and_erases_paths() -> void:
+	if not TerraCore.native_available():
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	TerraCore.switch_override = true
+	var rig := await TerraRig.build(self)
+	_rigs.append(rig)
+	assert_true(await TerraRig.settle(get_tree(), [rig]), "the load settles")
+	var e := rig.editor
+	var a := e.to_world(Vector3(rig.corpus.at(12, 20).x, 0.0, rig.corpus.at(12, 20).y))
+	var b := e.to_world(Vector3(rig.corpus.at(22, 26).x, 0.0, rig.corpus.at(22, 26).y))
+	var line := PackedVector2Array([Vector2(a.x, a.z), Vector2(b.x, b.z)])
+	var terra := rig.doc.terra as TerraDoc
+	var corpus_paths := _paths(terra)
+	assert_true(PathBrush.lay(e, line, 1.6, "gravel", false), "the release lays a path")
+	assert_true(await TerraRig.settle(get_tree(), [rig]), "settles")
+	assert_eq(_paths(terra), corpus_paths + 1, "one path primitive more")
+	var laid := terra.digest_for(rig.doc)
+	var mid := (line[0] + line[1]) * 0.5
+	var across := PackedVector2Array([mid + Vector2(-3, 3), mid + Vector2(3, -3)])
+	assert_true(PathBrush.lay(e, across, 1.0, "gravel", true), "a Ctrl line erases it")
+	assert_true(await TerraRig.settle(get_tree(), [rig]), "settles")
+	assert_eq(_paths(terra), corpus_paths, "the path is gone, the corpus's stays")
+	assert_false(PathBrush.lay(e, across, 1.0, "gravel", true), "nothing left to erase")
+	rig.history.undo()
+	assert_true(await TerraRig.settle(get_tree(), [rig]), "the undo settles")
+	assert_eq(_paths(terra), corpus_paths + 1, "undo: the path is back")
+	assert_eq(terra.digest_for(rig.doc), laid, "undo: the digest")
+	rig.history.redo()
+	assert_true(await TerraRig.settle(get_tree(), [rig]), "the redo settles")
+	assert_eq(_paths(terra), corpus_paths, "redo: erased again")
+
+
+func _paths(terra: TerraDoc) -> int:
+	var n := 0
+	for p: Dictionary in terra.prims:
+		if int(p.kind) == TerraCore.PATH:
+			n += 1
+	return n

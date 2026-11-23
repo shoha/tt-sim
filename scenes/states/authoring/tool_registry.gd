@@ -10,9 +10,9 @@ extends RefCounted
 ##
 ## The rail lists seven tools (rail_tools: Biome, Place, Sculpt, Paint, Water, Build, Fire); the
 ## rest are tabs of one of them and keep their descriptors, brush modes and panes. A rail tool with
-## `tabs` is a hub: Place (Add, Thin / Clear), Water (River, Pond, Crossing) and Build (Walls,
-## Buildings, Villages). A tab's tool says `hub` (hub_of maps a tool id to its rail id), so the
-## controller, saves, tests and the F1 help keep every id.
+## `tabs` is a hub: Place (Add, Thin / Clear), Paint (Paint, Path), Water (River, Pond, Crossing)
+## and Build (Walls, Buildings, Villages). A tab's tool says `hub` (hub_of maps a tool id to its
+## rail id), so the controller, saves, tests and the F1 help keep every id.
 ##
 ## Contexts: a descriptor says whether it exists in authoring, in play, or in both
 ## (ToolDescriptor.AUTHORING, PLAY), and every list query takes the context it is for. Play
@@ -26,7 +26,8 @@ extends RefCounted
 ## "group" key): what the tool works on. Land is what grows on the ground (Biome, and Place with
 ## its Thin / Clear mode), Shape is the ground itself (Sculpt, Paint), Make is what is added to it
 ## (Water with its crossings, Build with its walls, buildings and villages, Fire). A tool that is
-## a tab of a hub (Thin / Clear, Bridge, Wall, Structure, Village) has no rail item and so no run.
+## a tab of a hub (Thin / Clear, Path, Bridge, Wall, Structure, Village) has no rail item and so no
+## run.
 const GROUPS := {
 	&"biome": &"land",
 	&"place": &"land",
@@ -124,6 +125,7 @@ static func _make() -> Array[ToolDescriptor]:
 		ThinTool.new(),
 		SculptTool.new(),
 		PaintTool.new(),
+		PathTool.new(),
 		WaterTool.new(),
 		BridgeTool.new(),
 		BuildTool.new(),
