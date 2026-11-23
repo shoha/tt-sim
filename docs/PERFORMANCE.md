@@ -3145,6 +3145,52 @@ lane held, windowed, vsync off; `today_attrib/path_release/`): second-surface st
 75.3/73.6/71.5 | 21.6/19.5/18.9, frames over 33 ms 1/1/1 | 0/0/0; first surface on a fresh map,
 release frame 19.8/19.3/20.0 | 21.2/19.0/19.0, worst 26.9-27.6 on both; pressed medians 4.1-4.7 on both.
 
+### Never read a MultiMesh back on the main thread (card painter-mm-readback, 2026-11-22)
+
+**The rule.** A MultiMesh given only a buffer (`multimesh.buffer = ...`) keeps its instances on the
+GPU alone, so the first later main-thread read of it (`buffer`, `get_instance_transform`,
+`get_instance_custom_data`) is a GPU readback that stalls the frame. Code that builds a MultiMesh
+other code reads assigns its buffer through `MultiMeshCpu.set_buffer` (one per-instance write before
+the buffer: the RenderingServer then keeps a CPU copy that the buffer fills, and the reads cost
+about 0.01 ms and return the same floats), or a reader keeps the rows its builder assembled; nothing
+on the main thread reads a buffer-only MultiMesh. Built per instance (`set_instance_transform`) a
+MultiMesh keeps its CPU copy anyway. The headless dummy renderer keeps no per-instance data, so a
+test of a per-instance read needs a window (`test_scatter_multimesh_cpu.gd`,
+`test_painter_trees_cpu.gd`).
+
+**The audit.** Every shipping reader, with when it runs and its cold cost on the bench map (320 ft
+hilltop forest, 983 painted-tree nodes, 1783 scatter nodes; windowed; `local/painter-mm-readback/`
+`mmprobe.gd scan` times the first read of each MultiMesh):
+- `AvatarShadeCache.build` (and the uncached walk `AvatarShade.canopy_hit`, used only by probes):
+  the first avatar shade ray after a map load (and every ray while the scatter grows). It reads
+  every visible MultiMesh whose mesh is at least 1.25 m tall, the painted trees' nodes included
+  (their meshes carry a 45 m `custom_aabb`; none of their instances counts as a crown, but each is
+  read to find that out). Cold 11.5-19 ms in one frame, all of it the painted nodes (PainterTrees
+  set a buffer only). Fixed: PainterTrees' `_make_nodes` and `_restroke` assign through
+  `MultiMeshCpu.set_buffer`. 0.3 MB more RAM for that map (5322 instances).
+- `GroundMassStamps.collect`: each ground look restamp. Skips the painted nodes (card
+  painter-path-release); the scatter nodes keep a CPU copy (`multimesh_from_chunk`, or built per
+  instance). Cold 0.1 ms. Left.
+- `PainterOcclusion._add_solids`: each contact-field rebuild after an edit. Reads scatter nodes only
+  (CPU copy since card painter-terrain-edge). Cold 0.0 ms. Left.
+- `PainterGlbMap._add_tree_rows`: a GLB map's first paint. GLB chunk nodes are built per instance
+  (`ScatterGlbUtils.build_multimesh`), so they keep a CPU copy. Not timed (no GLB map on the bench).
+- Buffer-only MultiMeshes no shipping reader was seen reading on the bench: the fire field's flame
+  chunks (`FireLook.fill_chunk`) and smoke billows (`FireFieldSmoke.place`). `collect` would read
+  the flame chunks (custom data) in a restamp during a fire; unmeasured, left.
+
+No path stroke on the bench rebuilt a painted cell, so no stroke paid a readback on main either.
+Bench (main 80f2c3b0 | branch, interleaved, lane held, windowed 1920x1080, vsync off, 3 runs;
+`today_attrib/mm_readback/`): the first avatar token placed after a play load, its frame's process
+time 23.4/23.7/25.0 | 11.5/11.2/11.3 ms, worst frame 31.8/35.5/35.0 | 70.7/19.9/20.3 (branch run 1's
+70.7 is draw-side, its process time 11.5), frames over 33 ms 0/1/1 | 1/0/0; token moves after it
+(cache warm) worst 13.2-14.8 | 13.1-13.9; the cobble and gravel strokes worst 19.1-27.2 | 18.7-22.7, none
+over 33 ms on either side; the play load's frames over 33 ms 7/8/7 | 7/7/8 (their sum 1.15-1.23 |
+1.13-1.24 s); the authoring load's 28/26/26 | 28/31/29 (sum 2.89-2.97 | 2.99-3.20 s, the first map
+of each run, within its run-to-run spread). The readers' outputs are byte-equal across main and
+branch in every run: MD5 of every painted node's buffer and of each instance's transform and custom
+data, of the shade cache's crowns and of the mass sums.
+
 ## In-game authoring phase 4 (water): pinned performance pass (2026-09-27)
 
 The phase 4 pass: authored maps with water in play against the same maps without it, the
