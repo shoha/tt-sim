@@ -32,6 +32,13 @@ static var _materials: Dictionary = {}
 
 ## Per mass anchor the moments of its tufts' world XZ positions (count, sum x, sum z, sum xx,
 ## sum zz, sum xz), from every anchored MultiMesh under `root`.
+##
+## The painted trees' nodes (PainterTrees.META) are skipped: their custom data is (tree row, first
+## unit, 0, 0) (PainterTreePack.add_instances), so no instance of theirs is ever anchored, and
+## their MultiMeshes hold a buffer only, so the first read of each one is a GPU readback (27 ms a
+## node in a window). A stroke that rebuilt a tree or bush cell paid it in the restamp after the
+## scatter settled: one 67-80 ms frame about a second after a path stroke's release on a reopened
+## map (card painter-path-release). The sums are the same.
 static func collect(root: Node) -> Dictionary:
 	var sums := {}
 	if root == null:
@@ -40,6 +47,8 @@ static func collect(root: Node) -> Dictionary:
 		var mmi := node as MultiMeshInstance3D
 		var mm := mmi.multimesh
 		if mm == null or mm.mesh == null or not mm.use_custom_data:
+			continue
+		if mmi.has_meta(PainterTrees.META):
 			continue
 		var xf := mmi.global_transform
 		for i in mm.instance_count:

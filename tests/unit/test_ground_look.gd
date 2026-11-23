@@ -257,6 +257,44 @@ func test_a_loaded_levels_first_dab_redraws_its_masses_into_the_kept_stamps() ->
 	assert_eq(shade.get_meta("masses"), 1, "with the mass drawn into it")
 
 
+## The painted trees' nodes are skipped by the mass collect (their first read was a GPU readback,
+## 27 ms a node, card painter-path-release), and the sums are the same as reading them: a tree's
+## instances (PainterTreePack.add_instances) are never anchored.
+func test_the_mass_collect_skips_painted_trees_with_the_same_sums() -> void:
+	var level := Node3D.new()
+	add_child_autofree(level)
+	level.add_child(_anchored_grass(Vector2(1.0, 1.0), 8))
+	level.add_child(_anchored_grass(Vector2(-3.0, 2.0), 7))
+	var buf := PackedFloat32Array()
+	for k in 3:
+		var xf := Transform3D(Basis(), Vector3(2.0 * k, 0.5, -1.0 * k))
+		PainterTreePack.add_instances(buf, xf, 5 + k, 10, 4)
+	assert_gt(buf.size(), 0, "tree instances made")
+	for i in buf.size() / 16:
+		assert_eq(buf[i * 16 + 15], 0.0, "a tree instance's custom .a (the anchor flag) is 0")
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.mesh = BoxMesh.new()
+	mm.instance_count = buf.size() / 16
+	mm.buffer = buf
+	var tree := MultiMeshInstance3D.new()
+	tree.multimesh = mm
+	level.add_child(tree)
+	# Headless MultiMeshes read back placeholder values, so the grass alone is the reference: a real
+	# renderer reads the tree node's own floats, whose anchor flag is 0 (above).
+	level.remove_child(tree)
+	var grass_only := GroundMassStamps.collect(level)
+	level.add_child(tree)
+	tree.set_meta(PainterTrees.META, true)
+	assert_eq(GroundMassStamps.collect(level), grass_only, "the tree node skipped: the grass's sums")
+	var anchored := _anchored_grass(Vector2(4.0, 4.0), 8)
+	anchored.set_meta(PainterTrees.META, true)
+	level.add_child(anchored)
+	assert_eq(GroundMassStamps.collect(level), grass_only, "a node marked a tree is never read")
+	tree.free()
+
+
 ## A grass rule with `keep_colour` (a rosette) is never bound to the zone tuft colour; the other
 ## grass rules of the biome are.
 func test_a_keep_colour_grass_rule_is_not_bound_to_the_tuft_colour() -> void:
