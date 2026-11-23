@@ -473,11 +473,44 @@ terrain primitives yet") until its card lands, so those cards edit only their op
 
 | Tool | Route | `TerraEditor` op | Card | State |
 |---|---|---|---|---|
-| Sculpt | `AuthoringEditor.begin_height_stroke`, `height_dab`, `stroke_dab`, `flush`, `end_stroke`, `cancel_stroke` | `begin_sculpt`, `dab`, `flush`, `end_stroke`, `cancel_stroke` | terraform-p2-sculpt (6) | refuses |
+| Sculpt | `AuthoringEditor.begin_height_stroke`, `height_dab`, `stroke_dab`, `flush`, `end_stroke`, `cancel_stroke` | `begin_sculpt`, `dab`, `flush`, `end_stroke`, `cancel_stroke`, forwarded to `TerraSculpt` (`scenes/states/authoring/terra/terra_sculpt.gd`; see "Sculpt on primitives" below) | terraform-p2-sculpt (6) | on primitives |
 | River | `TerraEditor.carve_river` (WaterBrush.carve) | `river` | terraform-p2-water (7) | refuses |
 | Pond, Water erase | `TerraEditor.paint_pond_begin`, `erase_water_begin` (WaterBrush.begin), then the stroke routes | `begin_pond`, `begin_water_erase` | terraform-p2-water (7) | refuses |
 | Paint | `AuthoringEditor.begin_surface_stroke`, `surface_refusal`, the stroke routes | `begin_paint`, `paint_refusal` | terraform-p2-paint-path (8) | refuses |
 | Wall | `TerraEditor.begin_wall_edit` (WallBrush.press), then `WallEditor._change` (place, extend, reroll, remove, street split) calls `TerraEditor.sync_walls` | `begin_wall`, `sync_walls`: `TerraWallSync.sync(doc)` (`utils/terraform/terra_wall_sync.gd`, pure) is one `splice` making the wall primitives (kind 7) mirror `doc.walls` in list order, stone and fence only (thickness `WallGeometry.thickness_m`: 0.45 and 0.1 m; a closed wall repeats its first point; a street row adds none; a wall primitive with no wall behind it is dropped); it keeps the matching run at the front and rebuilds the rest under new ids in place. The list change and the sync's gesture are one `AuthoringHistory` group (joining a street split's open group); its ground record `{"walls": {"area"}}` refreshes the walls on the landed pad on do, undo and redo. Undo, redo and a live walls op run `apply_list` alone: the group's terra part carries the pads. `test_terra_walls`: level across the footprint 0.0000 m (bar 2 cm; the slope there 0.33 m), the river opens 19 of 45 line points, undo returns every digest, a peer matches | terraform-p2-walls (9) | on primitives |
+
+### Sculpt on primitives
+
+Card terraform-p2-sculpt (phase 2 card 6, 2026-11-22). `TerraSculpt` (`TerraEditor.sculpt`) runs every
+Sculpt tile while `active()`; one stroke is one `TerraEditor` gesture and one history entry.
+
+- **Tiles.** Raise / Lower (Ctrl) / Smooth (Shift, any tile): one stroke primitive (kind 3, modes 0, 1,
+  2), each frame's capsule as point dabs (`StrokeKind.capsule_dabs`). Flatten, Tier, Tier cut (Ctrl):
+  one level primitive (kind 17), a capsule dab per frame toward the press's target (`LevelKind`). With
+  the core on (`SculptTool.tiles()`: two rows of three) the pane adds **Terrace** (kind 16;
+  `utils/terraform/kinds/terrace/terrace_tool.gd`, the tool half of the kind's folder: treads half a map
+  tier high, dabs every radius / 4 along the path travelled, since a terrace dab pulls fully at its
+  centre) and **Soften** (`TerraSoften`, the erase: each frame the strokes, levels and terraces under
+  the ring keep `exp(-3 x seconds x falloff)` of their dabs' strength, a hill under it of its height; a
+  dab or hill under 5 % of its strength at the press goes, a tier or terrace dab, which has no strength,
+  once half softened; an emptied primitive is removed; one replace or remove per touched primitive,
+  `TerraEditor.compact` merging a primitive's replaces). Terrace and Soften refuse on a map without a
+  terrain section (`SculptTool.TERRA_ONLY`). Cursor tints: Terrace between Raise and Smooth (golden green), Soften between Flatten and Lower (mauve).
+- **Frames.** The first frame with dabs `add`s the primitive, each later one `append`s, through
+  `TerraEditor.edit(change, true)` (`TerraBridge.held`: derived at once when the session is free)
+  inside `HeightEditor`'s external stroke, whose record (props before and after, kept rocks, crossings,
+  walls and structures re-anchored) is the gesture's ground side; `end_gesture(label, record, false)`.
+  A cancel takes the edits back as an undo (`TerraEditor.abandon_gesture`, `apply_edits`), recording
+  nothing.
+- **Never blocking.** `HeightEditor.begin_external(false)` does the edit before's main-thread leftovers
+  and refuses, starting nothing, while the water's or the rock keeper's worker still runs (their
+  landing reads the snap's start); the stroke keeps its dabs and puts them in on the first frame it can
+  (the ground catches up). Only a release before that waits (`TerraSculpt.waits`).
+- **Folding.** At a stroke's end, when the session is idle, `TerraSculpt.fold_run` takes the oldest
+  maximal run of consecutive compose primitives (other stages skipped) that are unmuted strokes, levels
+  or terraces, older than the newest `KEEP_LIVE` 8 of them; past `CONSOLIDATE_DABS` 4096 dabs
+  `consolidate` folds it and `fold_edit`'s splice goes into the stroke's gesture, so its undo restores
+  the run. A new map's landform levels fold as part of such a run.
 
 ## Versions and the library
 

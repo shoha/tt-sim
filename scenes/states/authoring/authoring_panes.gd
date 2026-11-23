@@ -268,8 +268,10 @@ static func sculpt(panel: AuthoringPanel, tool: ToolDescriptor) -> Control:
 	field.name = "SculptField"
 	field.caption = "Brush"
 	field.tiles.tile_min_size = AuthoringPanel.SCULPT_TILE_SIZE
-	field.tiles.columns = AuthoringPanel.SCULPT_TILES.size()
-	for tile in AuthoringPanel.SCULPT_TILES:
+	# With the terrain core on, Terrace and Soften join (two rows of three).
+	var tiles := SculptTool.tiles()
+	field.tiles.columns = tiles.size() if tiles.size() <= 4 else 3
+	for tile in tiles:
 		field.tiles.add_tile(
 			AuthoringPanel.sculpt_tile_id(int(tile.op)),
 			String(tile.label),

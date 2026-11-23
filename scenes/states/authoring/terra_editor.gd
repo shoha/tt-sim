@@ -70,6 +70,8 @@ var last_check: Dictionary = {}
 var landings := 0
 ## Times finish_work() had to wait for a derive (tests: a press, undo or redo never does).
 var waits := 0
+## The Sculpt tool's strokes (card terraform-p2-sculpt): the sculpt ops below forward to it.
+var sculpt: TerraSculpt = null
 
 var _owner: WeakRef = null
 ## The open gesture (begin_gesture), or {}: {"edits", "inverse", "restored": id -> true, "before":
@@ -88,6 +90,7 @@ var _warned := false
 static func create(editor: AuthoringEditor) -> TerraEditor:
 	var terra := TerraEditor.new()
 	terra._owner = weakref(editor)
+	terra.sculpt = TerraSculpt.create(editor, terra)
 	var s := terra.session()
 	if s != null:
 		s.settled.connect(terra._on_settled)
@@ -200,33 +203,35 @@ func prepare_gesture() -> void:
 
 ## True while a dab stroke of a primitive tool is in progress (AuthoringEditor's routes).
 func is_stroking() -> bool:
-	return false
+	return sculpt.is_stroking()
 
 
 ## One frame's exposure of the stroke in progress (world points and radius).
-func dab(_from: Vector3, _to: Vector3, _radius: float, _seconds: float) -> void:
-	pass
+func dab(from: Vector3, to: Vector3, radius: float, seconds: float) -> void:
+	sculpt.dab(from, to, radius, seconds)
 
 
 ## Pushes this frame's held edits to the ground (TerraBridge.held).
 func flush() -> void:
-	pass
+	sculpt.flush()
 
 
 ## Ends the stroke in progress and records its gesture. True when it changed anything.
 func end_stroke() -> bool:
-	return false
+	return sculpt.end_stroke()
 
 
 ## Abandons the stroke in progress.
 func cancel_stroke() -> void:
-	pass
+	sculpt.cancel_stroke()
 
 
-## Sculpt (card terraform-p2-sculpt): a stroke of HeightBrush operation `op` toward world height
-## `target_y`. False with last_refusal set when refused.
-func begin_sculpt(_op: int, _target_y: float) -> bool:
-	return _not_yet("Sculpt")
+## Sculpt (card terraform-p2-sculpt, TerraSculpt): a stroke of Sculpt op `op` (HeightBrush's, or
+## TerraSculpt.TERRACE / SOFTEN) toward world height `target_y`. False with last_refusal set when
+## refused.
+func begin_sculpt(op: int, target_y: float) -> bool:
+	last_refusal = ""
+	return sculpt.begin(op, target_y)
 
 
 ## Paint (card terraform-p2-paint-path): why `surface` cannot be painted now, or "".
@@ -320,6 +325,14 @@ func begin_gesture() -> void:
 ## True between begin_gesture() and end_gesture().
 func is_open() -> bool:
 	return not _open.is_empty()
+
+
+## Closes the open gesture without recording it (a cancelled stroke) and returns the edits that
+## take it back (its inverse, newest first; [] when none), for apply_edits() as an undo.
+func abandon_gesture() -> Array:
+	var inverse: Array = _open.get("inverse", [])
+	_open = {}
+	return inverse
 
 
 ## Applies one session edit now (TerraSession.apply, or with `held` TerraBridge.held: derived at
@@ -542,7 +555,9 @@ static func inverse_of(terra: TerraDoc, change: Dictionary) -> Array[Dictionary]
 
 
 ## `edits` with each append folded into the edit before it when that edit adds, replaces or
-## appends the same primitive (the document and the derive end the same: update equals build).
+## appends the same primitive, and each replace taking the place of the add or replace of the same
+## primitive before it when only replaces and appends of other primitives lie between (Soften's
+## frames; the document and the derive end the same: update equals build).
 static func compact(edits: Array) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for change: Dictionary in edits:
@@ -552,8 +567,27 @@ static func compact(edits: Array) -> Array[Dictionary]:
 		if change.get("op") == "append" and same and grows:
 			last.data = (last.data as PackedFloat32Array) + (change.data as PackedFloat32Array)
 			continue
+		if change.get("op") == "replace":
+			var k := _replaced(out, int(change.get("id", -1)))
+			if k >= 0:
+				out[k].data = (change.data as PackedFloat32Array).duplicate()
+				continue
 		out.append(_copy(change))
 	return out
+
+
+## The index in `out` of the add or replace of primitive `id` a later replace takes the place of
+## (compact()), or -1: searching back, only replaces and appends of other primitives may lie
+## between.
+static func _replaced(out: Array[Dictionary], id: int) -> int:
+	for k in range(out.size() - 1, -1, -1):
+		var op := String(out[k].get("op", ""))
+		var mine := int(out[k].get("id", -2)) == id
+		if mine and op in ["add", "replace"]:
+			return k
+		if mine or not op in ["replace", "append"]:
+			return -1
+	return -1
 
 
 static func _splice(remove: Array, insert: Array, at: int, next_id: int) -> Dictionary:

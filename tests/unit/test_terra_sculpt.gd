@@ -1,0 +1,277 @@
+extends GutTest
+## The Sculpt tool on terrain primitives (card terraform-p2-sculpt; docs/systems/terraform.md
+## "Tools"): with the core on, every tile and modifier (Raise, Lower, Smooth, Flatten, Tier, Tier
+## cut, Terrace, Soften) through AuthoringEditor's stroke routes is one history entry whose undo
+## returns the document, every derived digest and the bridged heights, and whose redo returns the
+## stroke's; the ground record carries the followers; a session past CONSOLIDATE_DABS folds its
+## oldest run inside the stroke's entry, the map's terrain section read back derives to the same
+## digests and the fold's undo restores the run; a peer fed the ops as bytes matches; the pure
+## parts (fold_run, Soften, the terrace dabs, compact of Soften's replaces) hold their rules.
+
+const TerraceTool := preload("res://utils/terraform/kinds/terrace/terrace_tool.gd")
+
+var _rigs: Array[TerraRig] = []
+
+
+func after_each() -> void:
+	TerraCore.switch_override = null
+	for rig in _rigs:
+		if is_instance_valid(rig.root):
+			rig.root.free()
+	_rigs.clear()
+
+
+func _rig() -> TerraRig:
+	TerraCore.switch_override = true
+	var rig := await TerraRig.build(self)
+	_rigs.append(rig)
+	return rig
+
+
+## One stroke of op `op` through the editor's routes, as SculptBrush makes it: the press's target,
+## `frames` frames of 1/30 s along `path` (map XZ), then the release. True when recorded.
+func _stroke(rig: TerraRig, op: int, path: Array, frames := 12, radius := 3.0) -> bool:
+	var e := rig.editor
+	var at := func(k: int) -> Vector3:
+		var t := float(k) / float(frames)
+		var a: Vector2 = path[0]
+		var b: Vector2 = path[path.size() - 1]
+		var p := a.lerp(b, t)
+		var w := e.to_world(Vector3(p.x, 0.0, p.y))
+		return Vector3(w.x, e.ground_height_at(w), w.z)
+	var press: Vector3 = at.call(0)
+	var target := 0.0
+	if op == HeightBrush.FLATTEN:
+		target = press.y
+	elif HeightBrush.is_tier(op):
+		target = e.tier_target(press, radius, op == HeightBrush.TIER_CUT).y
+	if not e.begin_height_stroke(op, target):
+		return false
+	for k in frames:
+		e.stroke_dab(at.call(k), at.call(k + 1), radius, 1.0 / 30.0)
+		e.flush()
+	return e.end_stroke()
+
+
+func test_every_tile_and_modifier_is_one_entry_with_exact_undo() -> void:
+	if not TerraCore.native_available():
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var rig := await _rig()
+	assert_true(rig.editor.terra.active(), "the core is active")
+	assert_true(await TerraRig.settle(get_tree(), [rig]), "the load settles")
+	var path := [Vector2(14.0, 18.0), Vector2(26.0, 22.0)]
+	var ops := [
+		HeightBrush.RAISE,
+		SculptBrush.sculpt_op(HeightBrush.RAISE, true, false),
+		SculptBrush.sculpt_op(HeightBrush.TIER, false, true),
+		HeightBrush.FLATTEN,
+		HeightBrush.TIER,
+		SculptBrush.sculpt_op(HeightBrush.TIER, true, false),
+		TerraSculpt.TERRACE,
+		TerraSculpt.SOFTEN,
+	]
+	assert_eq(ops[1], HeightBrush.LOWER, "Ctrl lowers")
+	assert_eq(ops[2], HeightBrush.SMOOTH, "Shift smooths any tile")
+	assert_eq(ops[5], HeightBrush.TIER_CUT, "Ctrl cuts a tier")
+	for op: int in ops:
+		var what: String = TerraSculpt.LABELS[op]
+		var count := rig.history.undo_count()
+		var before := rig.digests()
+		var heights := rig.doc.heights.duplicate()
+		assert_true(_stroke(rig, op, path), what + ": recorded")
+		assert_eq(rig.history.undo_count(), count + 1, what + ": one entry")
+		assert_false(rig.editor.is_stroking(), what + ": the stroke ended")
+		assert_true(await TerraRig.settle(get_tree(), [rig]), what + ": lands")
+		var after := rig.digests()
+		assert_ne(after.doc, before.doc, what + ": the document changed")
+		assert_ne(after.arrays.H2, before.arrays.H2, what + ": and the ground")
+		rig.history.undo()
+		assert_true(await TerraRig.settle(get_tree(), [rig]), what + ": the undo lands")
+		assert_eq(rig.digests(), before, what + ": undo returns every digest")
+		assert_eq(rig.doc.heights, heights, what + ": and the heights")
+		rig.history.redo()
+		assert_true(await TerraRig.settle(get_tree(), [rig]), what + ": the redo lands")
+		assert_eq(rig.digests(), after, what + ": redo returns the stroke's")
+	assert_eq(rig.editor.terra.waits, 0, "no press, undo or redo waited for a derive")
+	var fresh := TerraCache.derive_for(rig.doc.terra, rig.doc)
+	assert_eq(rig.doc.heights, fresh.call("doc_heights"), "the heights equal a build")
+
+
+func test_the_ground_record_carries_the_followers_and_a_cancel_takes_the_stroke_back() -> void:
+	if not TerraCore.native_available():
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var rig := await _rig()
+	assert_true(await TerraRig.settle(get_tree(), [rig]))
+	var entries: Array[Dictionary] = []
+	rig.history.recorded.connect(func(entry: Dictionary) -> void: entries.append(entry))
+	assert_true(_stroke(rig, HeightBrush.RAISE, [Vector2(10.0, 10.0), Vector2(16.0, 12.0)]))
+	var g: Dictionary = (entries.back().redo as Callable).get_bound_arguments()[0]
+	for key in ["props_before", "props_after", "kept", "crossings", "walls", "structures"]:
+		assert_true((g.ground as Dictionary).has(key), "the ground record has " + key)
+	assert_true(await TerraRig.settle(get_tree(), [rig]))
+	var before := rig.digests()
+	var count := rig.history.undo_count()
+	var e := rig.editor
+	var w := e.to_world(Vector3(18.0, 0.0, 18.0))
+	assert_true(e.begin_height_stroke(HeightBrush.RAISE, 0.0))
+	for k in 6:
+		e.stroke_dab(w, w + Vector3(0.3, 0.0, 0.0), 3.0, 1.0 / 30.0)
+		e.flush()
+	assert_ne(rig.digests().doc, before.doc, "the held stroke changed the document")
+	e.cancel_stroke()
+	assert_false(e.is_stroking())
+	assert_true(await TerraRig.settle(get_tree(), [rig]))
+	assert_eq(rig.history.undo_count(), count, "a cancelled stroke records nothing")
+	assert_eq(rig.digests(), before, "and is taken back exactly")
+
+
+func test_a_long_session_folds_its_oldest_run_and_reloads_equal() -> void:
+	if not TerraCore.native_available():
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var rig := await _rig()
+	assert_true(await TerraRig.settle(get_tree(), [rig]))
+	var sculpt := rig.editor.terra.sculpt
+	var t := rig.doc.terra as TerraDoc
+	var dabs := 0
+	var strokes := 0
+	# Strokes of about 220 dabs (28 m at radius 0.5: a point every 0.125 m) until a fold.
+	while sculpt.folds == 0 and strokes < 40:
+		var z := 6.0 + float(strokes % 8) * 3.0
+		var count_before := _dabs(t)
+		assert_true(_stroke(rig, HeightBrush.RAISE, [Vector2(4.0, z), Vector2(32.0, z)], 30, 0.5))
+		dabs += _dabs(t) - count_before
+		strokes += 1
+		assert_true(await TerraRig.settle(get_tree(), [rig]))
+	assert_eq(sculpt.folds, 1, "a fold fired")
+	gut.p(
+		(
+			"fold after %d strokes, %d dabs drawn: %s"
+			% [strokes, dabs, str(sculpt.last_fold)]
+		)
+	)
+	assert_gt(int(sculpt.last_fold.dabs), TerraSculpt.CONSOLIDATE_DABS, "past the dab limit")
+	var rasters := 0
+	for p in t.prims:
+		rasters += 1 if int(p["kind"]) == TerraCore.SCULPT else 0
+	assert_eq(rasters, int(sculpt.last_fold.rasters), "the rasters are in the document")
+	var folded := rig.digests()
+	var read: Dictionary = MapTerrainIO.decode(MapTerrainIO.encode(t))
+	assert_not_null(read.terra, "the terrain section reads back")
+	var reloaded := TerraCache.derive_for(read.terra, rig.doc)
+	assert_eq(TerraCache.digests_of(reloaded), folded.arrays, "the reloaded map derives the same")
+	rig.history.undo()
+	assert_true(await TerraRig.settle(get_tree(), [rig]))
+	var kinds: Array[int] = []
+	for p in t.prims:
+		kinds.append(int(p["kind"]))
+	assert_false(TerraCore.SCULPT in kinds, "the fold's undo puts the run back")
+
+
+## Every dab of the document's foldable primitives.
+func _dabs(t: TerraDoc) -> int:
+	var ids: Array[int] = []
+	for p in t.prims:
+		if TerraSculpt.FOLDABLE.has(int(p["kind"])):
+			ids.append(int(p["id"]))
+	return TerraSculpt.dab_count(t, ids)
+
+
+func test_a_peer_matches_the_sculpt_strokes_through_bytes() -> void:
+	if not TerraCore.native_available():
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	TerraCore.switch_override = true
+	var host := await TerraRig.build(self)
+	var peer := await TerraRig.build(self)
+	_rigs.append_array([host, peer])
+	assert_true(await TerraRig.settle(get_tree(), [host, peer]))
+	var entries: Array[Dictionary] = []
+	host.history.recorded.connect(func(entry: Dictionary) -> void: entries.append(entry))
+	var queue := LiveEditCodec.Queue.new(peer.editor)
+	var path := [Vector2(12.0, 14.0), Vector2(22.0, 20.0)]
+	for op: int in [HeightBrush.RAISE, HeightBrush.TIER, TerraSculpt.SOFTEN]:
+		assert_true(_stroke(host, op, path))
+		assert_true(await TerraRig.settle(get_tree(), [host]))
+		for o in LiveEditCodec.ops_of(entries.back(), host.editor, false):
+			assert_eq(queue.push(LiveEditCodec.encode(o)), "", "the peer reads it")
+		assert_true(await TerraRig.settle(get_tree(), [host, peer], queue))
+		var what: String = TerraSculpt.LABELS[op]
+		assert_eq(peer.digests(), host.digests(), what + ": every digest")
+		assert_true(bool(peer.editor.terra.last_check.get("ok", false)), what + ": the check")
+		var drift := MapFingerprint.diff(
+			MapFingerprint.of(host.root, host.doc), MapFingerprint.of(peer.root, peer.doc)
+		)
+		assert_eq(drift, [] as Array[String], what + ": the fingerprints")
+
+
+func test_fold_run_keeps_the_newest_live_and_folds_only_past_the_limit() -> void:
+	var t := TerraDoc.new()
+	t.add(TerraCore.PLANE, PackedFloat32Array([0.0, 0.0, 0.0]), 0)
+	var dab := PackedFloat32Array([1.0, 1.0, 2.0, 0.1, 0.0])
+	var big := PackedFloat32Array()
+	for i in 300:
+		big.append_array(dab)
+	var ids: Array[int] = []
+	for i in 22:
+		ids.append(t.add(TerraCore.STROKE, big, 0))
+	# 22 strokes of 300 dabs: the newest 8 stay live, the 14 before hold 4200 > 4096.
+	assert_eq(TerraSculpt.fold_run(t), ids.slice(0, 14), "the oldest 14 fold")
+	assert_eq(TerraSculpt.fold_run(t, 9), [] as Array[int], "13 x 300 = 3900 is not past the limit")
+	var hill := t.add(TerraCore.HILL, PackedFloat32Array([0.0, 0.0, 1.0, 5.0, 2.0]), 0)
+	t.move(hill, t.index_of(ids[2]))
+	assert_eq(TerraSculpt.fold_run(t), [] as Array[int], "a hill breaks the run: 600 and 3600")
+	assert_eq(TerraSculpt.fold_run(t, 8, 3000), ids.slice(2, 14), "the first run past the limit")
+
+
+func test_soften_scales_drops_and_removes() -> void:
+	var stroke := PackedFloat32Array([0.0, 0.0, 2.0, 0.2, 0.0, 10.0, 0.0, 2.0, 0.2, 0.0])
+	var out := TerraSoften.frame(
+		TerraCore.STROKE, stroke, PackedFloat32Array(), Vector2.ZERO, Vector2.ZERO, 3.0, 0.1
+	)
+	assert_eq((out.data as PackedFloat32Array).size(), 10, "both dabs kept")
+	assert_almost_eq(out.data[3], 0.2 * exp(-TerraSoften.RATE * 0.1), 1e-6, "the centre scales")
+	assert_almost_eq(out.data[8], 0.2, 1e-6, "a dab outside the ring keeps its strength")
+	var long := TerraSoften.frame(
+		TerraCore.STROKE, stroke, out.factors, Vector2.ZERO, Vector2.ZERO, 3.0, 2.0
+	)
+	assert_eq((long.data as PackedFloat32Array).size(), 5, "the softened dab goes under 5 %")
+	var hill := PackedFloat32Array([0.0, 0.0, 4.0, 6.0, 2.0])
+	var h := TerraSoften.frame(
+		TerraCore.HILL, hill, PackedFloat32Array(), Vector2.ZERO, Vector2.ZERO, 3.0, 0.1
+	)
+	assert_lt(float(h.data[2]), 4.0, "a hill's height scales")
+	var gone := TerraSoften.frame(
+		TerraCore.HILL, hill, h.factors, Vector2.ZERO, Vector2.ZERO, 3.0, 5.0
+	)
+	assert_eq((gone.data as PackedFloat32Array).size(), 0, "and the hill goes")
+	assert_true(
+		TerraSoften.frame(
+			TerraCore.STROKE, stroke, PackedFloat32Array(), Vector2(50, 50), Vector2(50, 50), 3.0, 1.0
+		).is_empty(),
+		"a ring that misses changes nothing"
+	)
+
+
+func test_terrace_dabs_follow_the_path_and_compact_merges_softens() -> void:
+	var first := TerraceTool.frame_dabs(Vector2.ZERO, Vector2.ZERO, 4.0, 0.5, Vector2.INF)
+	assert_eq((first.data as PackedFloat32Array).size(), 5, "a press is one dab")
+	var still := TerraceTool.frame_dabs(Vector2.ZERO, Vector2.ZERO, 4.0, 0.5, first.last)
+	assert_eq((still.data as PackedFloat32Array).size(), 0, "a still brush adds nothing")
+	var moved := TerraceTool.frame_dabs(Vector2.ZERO, Vector2(4.0, 0.0), 4.0, 0.5, first.last)
+	assert_eq((moved.data as PackedFloat32Array).size(), 20, "4 m at 1 m apart: four dabs")
+	var a := PackedFloat32Array([1.0])
+	var b := PackedFloat32Array([2.0])
+	var edits := [
+		{"op": "replace", "id": 3, "data": a},
+		{"op": "replace", "id": 4, "data": a},
+		{"op": "replace", "id": 3, "data": b},
+		{"op": "remove", "id": 4},
+		{"op": "replace", "id": 3, "data": a},
+	]
+	var c := TerraEditor.compact(edits)
+	assert_eq(c.size(), 4, "the second replace of 3 merged into the first")
+	assert_eq(c[0].data, b)
+	assert_eq(c[3].data, a, "a replace past a remove stays its own")

@@ -191,9 +191,12 @@ func test_switch_on_routes_refuse_until_their_cards_land() -> void:
 	var rig := await _rig(true)
 	var e := rig.editor
 	assert_eq(e.terra.refusal(), "")
-	assert_false(e.begin_height_stroke(HeightBrush.RAISE))
-	assert_eq(e.terra.last_refusal, TerraEditor.NOT_YET % "Sculpt")
+	# Sculpt is on primitives (card terraform-p2-sculpt): its stroke is TerraSculpt's.
+	assert_true(e.begin_height_stroke(HeightBrush.RAISE))
+	assert_eq(e.terra.last_refusal, "")
+	assert_true(e.terra.is_stroking(), "the core's stroke")
 	assert_false(e.heights.is_sculpting(), "never today's stroke on a primitives map")
+	e.cancel_stroke()
 	assert_false(e.begin_surface_stroke("dirt", false))
 	assert_eq(e.terra.last_refusal, TerraEditor.NOT_YET % "Paint")
 	# Wall is on primitives (card terraform-p2-walls): its press goes on to WallEditor.
