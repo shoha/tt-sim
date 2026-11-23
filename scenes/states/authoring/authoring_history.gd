@@ -65,6 +65,21 @@ func begin_group() -> void:
 	_group = []
 
 
+## Closes the open group without recording it and returns its entries so far, for reopen_group()
+## on a later frame (a press spread over frames, GroundPresses.then: between its frames no group is
+## open, so nothing else can join it). [] when none is open.
+func take_group() -> Array:
+	var parts: Array = _group if _group != null else []
+	_group = null
+	return parts
+
+
+## Opens a group holding `parts` (take_group()'s), which the next end_group() records with what
+## joins it meanwhile.
+func reopen_group(parts: Array) -> void:
+	_group = parts
+
+
 ## True while a group is open (begin_group without its end_group): an edit that finds one open
 ## joins it instead of opening its own, so two edits can make one entry (a plaza moved between
 ## villages).

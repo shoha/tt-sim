@@ -10,7 +10,10 @@ terraforming core off (today's game) and on. Cards noblock2 to noblock4; the mod
   a river carved on the Water tool's path, on its worker; `raise`: the end of a 20-frame held
   Raise) and in the same frame one press: none, structure, crossing, settlement, fire, put out,
   save, table (the table move's settle and `TableMover.document_of`, in authoring), undo, redo
-  (undo and redo in one frame). The map is put back between trials.
+  (undo and redo in one frame), paint and pond (a Paint or pond stroke begun, dabbed once and
+  ended in the frame; card noblock6). The map is put back between trials. A row's `waits` counts
+  its frames by the height work that held them (`work_codes`: snap, coll, terr, rock, water,
+  land, terra), `work_ms` the terrain and collision time spent.
 - `noblock_probe.gd`: the probe (its header lists the actions and the row's fields).
 
 Run it as a render job, windowed, holding the lane, after `docs/PERFORMANCE.md`'s quiet check:

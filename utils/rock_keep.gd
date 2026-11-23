@@ -159,6 +159,10 @@ static func removed_keys(
 	var out := {}
 	if cells.is_empty():
 		return out
+	# Each biome's generation before and after runs as one item of a group task (card noblock6:
+	# about 0.4 s on one worker after a river on the 320 ft hilltop, the most of the wait a press
+	# made after it had); the keys are then joined in the order the serial loop joined them.
+	var jobs: Array[Dictionary] = []
 	for biome_id in species_by_biome:
 		var species: Array[Dictionary] = []
 		species.assign(species_by_biome[biome_id])
@@ -180,8 +184,33 @@ static func removed_keys(
 				depth = maxf(depth, reach[s])
 		var step := after.sample_step()
 		var window := _cells_rect(cells).grow(depth + 2.0 * maxf(step.x, step.y))
-		var was := _generate(before, biome_id, species, cells_by_species, window, built, cliff)
-		var now := _generate(after, biome_id, species, cells_by_species, window, built, cliff)
+		jobs.append(
+			{
+				"biome": biome_id,
+				"species": species,
+				"cells": cells_by_species,
+				"window": window,
+			}
+		)
+	# Item 2k is job k's generation on `before`, 2k + 1 on `after`; each fills its own dictionary.
+	var sides: Array[Dictionary] = []
+	for i in jobs.size() * 2:
+		sides.append({})
+	var side := func(i: int) -> void:
+		var job: Dictionary = jobs[i >> 1]
+		var species: Array[Dictionary] = job.species
+		var doc := before if i % 2 == 0 else after
+		sides[i].merge(
+			_generate(doc, job.biome, species, job.cells, job.window, built, cliff)
+		)
+	if not sides.is_empty():
+		var group := WorkerThreadPool.add_group_task(
+			side, sides.size(), -1, false, "Rocks kept: generation before and after"
+		)
+		WorkerThreadPool.wait_for_group_task_completion(group)
+	for k in jobs.size():
+		var was: Dictionary = sides[2 * k]
+		var now: Dictionary = sides[2 * k + 1]
 		for asset_id in was:
 			var gone := _keys_of(was[asset_id])
 			if now.has(asset_id):

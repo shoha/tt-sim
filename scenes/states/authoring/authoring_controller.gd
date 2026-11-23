@@ -463,7 +463,7 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	scatter.attach_document(document)
 	FoliageDensityController.apply(root)
 	_view_fit.fit(root, document)
-	editor = AuthoringEditor.create(document, root, history)
+	editor = AuthoringEditor.create(document, root, history, "", true)
 	editor.edited.connect(mark_edited)
 	editor.edited.connect(func() -> void: _bounds_stale = true)
 	editor.edited.connect(_refresh_tools)

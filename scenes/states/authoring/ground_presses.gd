@@ -25,12 +25,24 @@ extends RefCounted
 ## the fire's release (its history entry, burnt biome and ash) is a press of its own.
 ## An undo or a redo waits behind the waiting presses (defer()) and, with the core off, behind
 ## the work itself, as the water edit's history entry is only recorded when it lands.
+##
+## Spread presses (card noblock6). With `spread` on (the game: AuthoringController), a heavy press
+## may hand the rest of its work to then(): those steps run one a frame from the next frame (drain),
+## before anything else. Meanwhile they count as work in flight: a press made now waits behind them,
+## an undo or a redo too, a stroke's begin runs them first (finish_steps), and finish() runs them at
+## once, so the map and the history are those of the press done in one frame. A Dress spends its
+## plan, its paint and its record in three frames instead of one (SettlementEditor._replace).
 
 ## settle_async() lets the work land over at most this many frames before finishing it.
 const SETTLE_MAX_FRAMES := 1200
 
 ## How many presses have waited so far (tests, the bench).
 var queued_count := 0
+## Whether a press may spread its work over frames (then()); off in tests that read a press's
+## result in the same frame.
+var spread := false
+## The steps of a spread press still to run, oldest first.
+var _steps: Array[Callable] = []
 
 var _owner: WeakRef = null
 ## The waiting presses, oldest first.
@@ -57,11 +69,31 @@ func run(press: Callable, queued: Variant = null) -> Variant:
 	# split into buildings, a play event's fire): it runs at once, in its place in the group.
 	if _depth > 0 or e == null or (e.history != null and e.history.is_grouping()):
 		return _call(press)
-	if not _waiting.is_empty() or _ground_work(e):
+	if not _waiting.is_empty() or not _steps.is_empty() or _ground_work(e):
 		_waiting.append(press)
 		queued_count += 1
 		return queued
 	return _call(press)
+
+
+## True when the press running now may hand steps to then(): spreading is on and it is a press of
+## its own (not one inside another's, nor inside a caller's history group).
+func can_spread() -> bool:
+	var e := _editor()
+	return spread and _depth == 1 and e != null and not e.history.is_grouping()
+
+
+## Inside a running press (can_spread()): `step` runs on a later frame, after the steps handed over
+## before it, one a frame (see the header).
+func then(step: Callable) -> void:
+	_steps.append(step)
+
+
+## Runs the steps of a spread press still waiting, now (a stroke begins: it must not take a frame's
+## turn between them). Nothing while a press runs.
+func finish_steps() -> void:
+	while not _steps.is_empty() and _depth == 0:
+		_call(_steps.pop_front())
 
 
 ## Queues `press` (an undo or a redo) behind the presses waiting now, so it acts on them, and with
@@ -73,7 +105,7 @@ func defer(press: Callable) -> bool:
 	if _depth > 0 or e == null:
 		return false
 	var behind_work := not e.terra.active() and _ground_work(e) and not e.is_stroking()
-	if _waiting.is_empty() and not behind_work:
+	if _waiting.is_empty() and _steps.is_empty() and not behind_work:
 		return false
 	_waiting.append(press)
 	queued_count += 1
@@ -103,9 +135,9 @@ func is_running() -> bool:
 	return _depth > 0
 
 
-## True while a press waits for the ground.
+## True while a press waits for the ground, or a spread press has steps left.
 func is_waiting() -> bool:
-	return not _waiting.is_empty()
+	return not _waiting.is_empty() or not _steps.is_empty()
 
 
 ## One frame (AuthoringEditor.step_height_work, after the work's own share): runs the waiting
@@ -115,9 +147,15 @@ func is_waiting() -> bool:
 func drain(had_work: bool) -> void:
 	var e := _editor()
 	# A held stroke keeps them too: a press ends the stroke in progress (CrossingEditor._change).
-	if had_work or e == null or e.is_stroking():
+	if e == null or e.is_stroking() or _depth > 0:
 		return
-	while not _waiting.is_empty() and _depth == 0 and not _ground_work(e):
+	# A spread press's next step takes this frame (it began after the ground had landed).
+	if not _steps.is_empty():
+		_call(_steps.pop_front())
+		return
+	if had_work:
+		return
+	while not _waiting.is_empty() and _steps.is_empty() and _depth == 0 and not _ground_work(e):
 		_call(_waiting.pop_front())
 
 
@@ -125,15 +163,19 @@ func drain(had_work: bool) -> void:
 ## a save in a test, op_of, a peer's catch-up). Nothing while a press runs.
 func finish() -> void:
 	var e := _editor()
+	finish_steps()
 	while e != null and not _waiting.is_empty() and _depth == 0:
 		_call(_waiting.pop_front())
+		# (A press drained here runs whole: its steps too.)
+		finish_steps()
 		e.terra.finish_work()
 		e.heights.finish_work()
 
 
-## Forgets the waiting presses (the map goes away).
+## Forgets the waiting presses and steps (the map goes away).
 func clear() -> void:
 	_waiting.clear()
+	_steps.clear()
 
 
 static func _ground_work(e: AuthoringEditor) -> bool:
