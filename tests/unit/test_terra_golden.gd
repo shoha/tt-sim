@@ -10,21 +10,30 @@ extends GutTest
 
 const FIXTURE := "res://tests/fixtures/terra_corpus_digests.json"
 ## The cases: name -> map size in cells (x, z). A "terraced_" case is the corpus with the terrace
-## stroke (TerraCorpus.build_terraced), the registry's proof kind; the built-in cases never move
-## when a kind is added.
+## stroke (TerraCorpus.build_terraced), the registry's proof kind; a "sculpted_" case adds the
+## level and sculpt kinds and a smooth stroke (build_sculpted), and a "folded_" case is that one
+## with its strokes, levels and terraces folded by TerraDerive.consolidate; the built-in cases
+## never move when a kind is added.
 const CASES := {
 	"square_40": Vector2i(40, 40),
 	"wide_40x48": Vector2i(40, 48),
 	"terraced_40": Vector2i(40, 40),
+	"sculpted_40": Vector2i(40, 40),
+	"folded_40x48": Vector2i(40, 48),
 }
 
 
 func _digests(name: String, cells: Vector2i) -> Dictionary:
-	var c := (
-		TerraCorpus.build_terraced(cells)
-		if name.begins_with("terraced_")
-		else TerraCorpus.build(cells)
-	)
+	var c: TerraCorpus
+	if name.begins_with("terraced_"):
+		c = TerraCorpus.build_terraced(cells)
+	elif name.begins_with("sculpted_") or name.begins_with("folded_"):
+		c = TerraCorpus.build_sculpted(cells)
+	else:
+		c = TerraCorpus.build(cells)
+	if name.begins_with("folded_"):
+		var run := c.sculpt_run()
+		c.splice(c.fold_splice(run, c.make_derive().call("consolidate", PackedInt32Array(run)))["edit"])
 	var n := c.make_derive()
 	n.call("derive_full")
 	var d: Dictionary = n.call("digests")

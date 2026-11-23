@@ -78,6 +78,24 @@ static func dab_bounds(data: PackedFloat32Array, stride: int) -> Rect2:
 	return Rect2(lo, hi - lo)
 
 
+## The point dabs standing in for one frame's brush capsule from `from` to `to` of `radius` (what
+## HeightStroke.dab sweeps): [[centre: Vector2, share: float], ...], ceil(length / `spacing`) points
+## (at least one), at the sub-segments' middles, sharing the frame's exposure so that together they
+## lay down the capsule's volume: a (1 - t^2)^2 disc holds pi r^2 / 3, the capsule that plus
+## length x 16 r / 15, so each point takes (1 + 16 length / (5 pi r)) / n (a press, from == to, is
+## one point at share 1). Within 3 mm of HeightStroke's raise in test_terra_sculpt_kinds (1.0 cm
+## with share 1). The stroke kind's dabs are points (its layout is the golden corpus's); the level
+## kind's are capsules.
+static func capsule_points(from: Vector2, to: Vector2, radius: float, spacing: float) -> Array:
+	var length := from.distance_to(to)
+	var n := maxi(1, ceili(length / maxf(spacing, 1e-3)))
+	var share := (1.0 + 16.0 * length / (5.0 * PI * radius)) / n
+	var out: Array = []
+	for k in n:
+		out.append([from.lerp(to, (k + 0.5) / n), share])
+	return out
+
+
 ## The box of the (x, z) points after `skip` header floats, grown by `grow` metres.
 static func line_bounds(data: PackedFloat32Array, skip: int, grow: float) -> Rect2:
 	var lo := Vector2(1e30, 1e30)

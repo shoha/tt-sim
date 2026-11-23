@@ -140,8 +140,11 @@ struct KindDef;
 struct StampOut;
 void stamp_rect(const std::vector<const Prim *> &prims, const std::vector<const KindDef *> &kinds,
 		const std::vector<Rect> &bounds, const Grid &g, const Rect &r, const StampOut &out);
+/// HeightBrush SMOOTH's approach rate (per second of exposure at full weight).
+constexpr double SMOOTH_RATE = 4.0;
 /// Smooths Hraw into H0 over a rect: each sample moves toward its (2 SMOOTH_R + 1) squared box mean
-/// by its weight SW (clamped to 1); a sample of weight 0 copies Hraw.
+/// by 1 - exp(-SMOOTH_RATE * SW), SW being the smooth dabs' summed exposure (seconds at full
+/// weight), as HeightBrush's approach; a sample of weight 0 copies Hraw.
 void smooth_rect(const Grid &g, const Rect &r, const float *Hraw, const float *SW, float *H0);
 
 /// Slope in degrees over a rect (reach SLOPE_R).

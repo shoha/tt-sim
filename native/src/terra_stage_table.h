@@ -98,7 +98,7 @@ constexpr uint32_t bit(int a) {
 }
 
 // Stage parameters in samples: each body's reach, which its row below makes its halo.
-constexpr int SMOOTH_R = 8;
+constexpr int SMOOTH_R = 24; // the widest smoothing box (3 m at an eighth of a metre)
 constexpr int SLOPE_R = 1; // central differences
 constexpr int DIST_CAP_WATER = 48; // the distance caps (6 m and 3 m at an eighth of a metre)
 constexpr int DIST_CAP_PATH = 24;

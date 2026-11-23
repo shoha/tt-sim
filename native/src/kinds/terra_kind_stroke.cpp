@@ -1,6 +1,10 @@
 // The sculpt stroke (built-in kind 3; utils/terraform/kinds/stroke/): dabs [cx, cz, radius,
-// strength, mode] (mode 0 raise, 1 lower, 2 smooth). Raise and lower add (1 - d^2 / r^2)^2 *
-// strength to the composed height; smooth adds it to the weight the smooth stage reads instead.
+// strength, mode] (mode 0 raise, 1 lower, 2 smooth). The falloff is HeightBrush's, (1 - d^2 / r^2)^2.
+// Raise and lower add falloff * strength (metres) to the composed height; smooth adds falloff *
+// strength (seconds of exposure) to the weight the smooth stage reads, which approaches the local
+// mean by 1 - exp(-SMOOTH_RATE * weight) as HeightBrush SMOOTH does (smooth_rect). The gain
+// (HeightBrush.raise_speed) and the split of a frame's capsule into point dabs are the kind
+// script's (StrokeKind.capsule_dabs), so the kernel stays linear and appended dabs stay local.
 #include "terra_kinds.h"
 
 namespace terra {

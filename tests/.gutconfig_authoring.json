@@ -213,6 +213,8 @@
 		"res://tests/unit/test_terra_editor.gd",
 		"res://tests/unit/test_terra_golden.gd",
 		"res://tests/unit/test_terra_kinds.gd",
+		"res://tests/unit/test_terra_consolidate.gd",
+		"res://tests/unit/test_terra_sculpt_kinds.gd",
 		"res://tests/unit/test_terra_live_edits.gd",
 		"res://tests/unit/test_terra_noblock.gd",
 		"res://tests/unit/test_terra_session.gd",
