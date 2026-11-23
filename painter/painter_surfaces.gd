@@ -212,6 +212,7 @@ func release() -> void:
 	_marks.release()
 	_unwatch_zone_build()
 	_zones.cancel()
+	_path_presence.slot_map.cancel()
 	_unbind()
 	if _ground != null:
 		FireLook.unmirror_glow(_ground)
