@@ -4,6 +4,7 @@
 // are declared in terra_stage_table.h, nowhere else.
 #pragma once
 
+#include <algorithm>
 #include <memory>
 
 #include "terra_core.h"
@@ -48,6 +49,26 @@ constexpr double BANK_SLOPE = 0.28;
 constexpr double BANK_NOISE = 0.22;
 constexpr double BANK_CURVE = 0.16;
 constexpr double BANK_SOFT = 0.45;
+// Chutes (card terraform-p2-chutes, from spike terraform-low-falls-probe): a step of FALL_MIN up to
+// CHUTE_MAX_M is no fall. The reaches rule gathers riffles on an even slope into such steps (1.4 m
+// below the corpus tributary's last riffles on a 0.2 slope), and carved as a face over one 0.25 m
+// segment the step cut a sheer wall across the bank reach (74 to 83 degrees: brown pits beside a
+// white sluice). Rounds 1 to 3 of card terraform-p2-river-polish widened the water into a pool and
+// eased the banks down a lip line beside the face; a face was still a box. Now the carve's level
+// line (River::chute) eases each such step down as a ramp of fast water from the shared point of the
+// two reaches (the segment's middle) over chute_run(drop, room) of arc, smoothstepped: the step is a
+// short sloped run of white water with grassy banks (37 to 43 degrees). It makes no fall record; the
+// bridge draws it as a riffle (WaterFalls.is_drop is false for the derive's water under CHUTE_MAX_M;
+// WaterMeshBuilder's riffle sheet and RiverProfile's riffle easing run over the same chute_run). A
+// step of CHUTE_MAX_M or more is a fall, unchanged (round 3's POOL_TALL_M gating).
+constexpr double CHUTE_MAX_M = 2.5;
+constexpr double CHUTE_SLOPE = 0.3;
+/// A chute's run of arc for a step of `drop`: drop / CHUTE_SLOPE, never past `room` (the arc to the
+/// next step's shared point, or to the river's end), so chutes back to back meet end to start.
+/// WaterFalls.chute_run is the same function.
+inline double chute_run(double drop, double room) {
+	return std::min(drop / CHUTE_SLOPE, room);
+}
 constexpr double POND_REACH = 6.0;
 constexpr double POND_FREEBOARD = 0.1;
 
@@ -66,6 +87,7 @@ struct River {
 	Line l; // the line downstream (flipped when drawn uphill)
 	double hw = 1.0, depth = 0.5;
 	std::vector<float> level; // per point of l
+	std::vector<float> chute; // per point of l: the carve's level line (the level, eased down each chute)
 	std::vector<Fall> falls;
 	int recv_river = -1, recv_pond = -1; // the body its end flows into (indices)
 	Rect rect; // samples it can change
@@ -94,7 +116,8 @@ void water_geometry(Water &w, const std::vector<const Prim *> &rivers, const std
 void water_topology(Water &w, const Grid &g, const float *H0);
 void solve_pond(Pond &p, const Grid &g, const float *H0);
 /// Levels as flat reaches monotone downstream (the conditioner's rule, above), steps of FALL_MIN
-/// or more as fall records, a join at the receiver's level (recv_level, or NAN for a free end).
+/// up to CHUTE_MAX_M as chutes, taller ones as fall records, a join at the receiver's level
+/// (recv_level, or NAN for a free end).
 void solve_river(River &r, const Grid &g, const float *H0, double recv_level);
 /// The level of a river at the arc point nearest (x, z).
 double river_level_at(const River &r, double x, double z);

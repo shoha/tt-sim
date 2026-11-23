@@ -59,11 +59,12 @@ func test_river_levels_are_flat_reaches() -> void:
 			var step := lv[k - 1] - lv[k]
 			if step > 1e-6:
 				reaches += 1
-			if step >= 0.75 - 1e-4:
+			# A step under CHUTE_MAX_M is a chute, not a fall (card terraform-p2-chutes).
+			if step >= WaterFalls.CHUTE_MAX_M - 1e-4:
 				fall_steps += 1
 			elif step > 1e-6 and step < 0.25 - 1e-4 and k <= last:
 				small += 1
-		assert_eq(fall_steps, _falls_up_to(rivers, r), "every fall-sized step is a fall record")
+		assert_eq(fall_steps, _falls_up_to(rivers, r), "every tall step is a fall record")
 	assert_eq(off_lattice, 0, "levels on the lattice")
 	assert_lt(small, 3, "steps under the dead band are rare (%d)" % small)
 	gut.p("flat reaches: %d reaches, %d falls, %d small steps" % [reaches, fall_steps, small])

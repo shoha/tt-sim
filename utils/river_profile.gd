@@ -13,8 +13,10 @@ extends RefCounted
 ## the carved face's foot and the end of the plunge pool, as arcs), not a rule the carve
 ## re-derives at each sample. Each flat reach stands at its own level over a bed at level -
 ## depth; toward the next reach the bed rises over a pool tail to a crest (a riffle's below it,
-## WaterCarve.step_shape); below a fall's lip the bed follows WaterCarve.fall_shape down the face
-## into the plunge pool; a tapered end lifts the bed and narrows the channel to a rounded head.
+## WaterCarve.step_shape; a chute of the terraforming core's water has no crest and eases level
+## and bed down over WaterFalls.chute_run, chute_runs); below a fall's lip the bed follows
+## WaterCarve.fall_shape down the face into the plunge pool; a tapered
+## end lifts the bed and narrows the channel to a rounded head.
 ##
 ## The sill. Where the water over the bed is a fall's crest (WaterCarve.fall_crest_depth() deep,
 ## up to twice that), from the top of the pool tail above a lip, over the lip and down the face
@@ -65,6 +67,10 @@ var depth := 0.0
 var total := 0.0
 ## One byte per shared point: 1 where the step is a fall (WaterFalls.fall_flags).
 var flags := PackedByteArray()
+## One entry per shared point: the run of arc of a chute (WaterFalls.is_chute, chute_run: the
+## terraforming core's step of up to CHUTE_MAX_M), over which the riffle eases instead of
+## WaterCarve.step_shape's length, as the derive carved it; 0 for any other step.
+var chute_runs := PackedFloat32Array()
 ## One entry per fall: {"step" (shared point index), "lip", "foot", "plunge" (arc lengths: the
 ## lip, the carved face's foot, WaterCarve.fall_foot(), and the end of the plunge pool,
 ## WaterFalls.plunge_length() past it), "upper", "lower" (levels), "drop"}.
@@ -101,6 +107,16 @@ static func build(
 	profile.flags = WaterFalls.fall_flags(bodies) if fall_flags.is_empty() else fall_flags
 	for body in bodies:
 		profile.ids.append(body.id)
+	profile.chute_runs.resize(profile.bounds.size())
+	for k in mini(profile.bounds.size(), bodies.size() - 1):
+		if WaterFalls.is_chute(bodies[k], bodies[k + 1]):
+			var room := (
+				(profile.bounds[k + 1] if k + 1 < profile.bounds.size() else profile.total)
+				- profile.bounds[k]
+			)
+			profile.chute_runs[k] = WaterFalls.chute_run(
+				profile.levels[k] - profile.levels[k + 1], room
+			)
 	for k in profile.bounds.size():
 		if k >= profile.flags.size() or profile.flags[k] == 0:
 			continue
@@ -218,7 +234,8 @@ func at(s: float) -> Vector4:
 		bed = shaped.y
 		gorge = WaterCarve.fall_gorge(x, levels[k - 1] - level, depth)
 		share = 1.0
-	if k < n - 1:
+	# A chute's carve has no crest: its bed runs flat at the upper reach's depth to the ramp.
+	if k < n - 1 and _chute_run(k) <= 0.0:
 		var full := k < flags.size() and flags[k] != 0
 		var next := WaterCarve.step_shape(level, levels[k + 1], depth, full)
 		var rising := smoothstep(bounds[k] - next.y, bounds[k], s)
@@ -228,10 +245,16 @@ func at(s: float) -> Vector4:
 			share = maxf(share, rising)
 	if k > 0 and not fall_above:
 		var upper := levels[k - 1]
-		var step := WaterCarve.step_shape(upper, level, depth)
-		var t := smoothstep(bounds[k - 1], bounds[k - 1] + step.z, s)
-		bed = maxf(bed, lerpf(step.x, level - depth, t))
-		bank = lerpf(upper, level, t)
+		var chute := _chute_run(k - 1)
+		if chute > 0.0:
+			# A chute: the derive's ramp (the carve's level line, the bed a depth under it).
+			bank = lerpf(upper, level, smoothstep(bounds[k - 1], bounds[k - 1] + chute, s))
+			bed = maxf(bed, bank - depth)
+		else:
+			var step := WaterCarve.step_shape(upper, level, depth)
+			var t := smoothstep(bounds[k - 1], bounds[k - 1] + step.z, s)
+			bed = maxf(bed, lerpf(step.x, level - depth, t))
+			bank = lerpf(upper, level, t)
 	# A tapered end lifts the bed toward the level over its pool tail. A plunge pool (the only
 	# bed under the flat bed) is carried past that lift and fades with the depth it leaves, so
 	# the taper's max never fills it in.
@@ -270,9 +293,16 @@ func level_at(s: float) -> float:
 		bank = WaterCarve.fall_shape(s - bounds[k - 1], levels[k - 1], levels[k], depth).x
 	elif k > 0:
 		var upper := levels[k - 1]
-		var step := WaterCarve.step_shape(upper, levels[k], depth)
-		bank = lerpf(upper, levels[k], smoothstep(bounds[k - 1], bounds[k - 1] + step.z, s))
+		var run := _chute_run(k - 1)
+		if run <= 0.0:
+			run = WaterCarve.step_shape(upper, levels[k], depth).z
+		bank = lerpf(upper, levels[k], smoothstep(bounds[k - 1], bounds[k - 1] + run, s))
 	return Vector4(bank, 0.0, 0.0, 0.0).x
+
+
+## The chute run of shared point `k` (chute_runs), 0 when the step there is no chute.
+func _chute_run(k: int) -> float:
+	return chute_runs[k] if k < chute_runs.size() else 0.0
 
 
 ## The half-width `half_width` (the course's at `s`) narrowed toward a tapered end to a rounded

@@ -233,6 +233,7 @@
 		"res://tests/unit/test_terra_water_tools.gd",
 		"res://tests/unit/test_terra_water_laws.gd",
 		"res://tests/unit/test_terra_reaches.gd",
+		"res://tests/unit/test_terra_low_falls.gd",
 		"res://tests/unit/test_terrain_collision.gd",
 		"res://tests/unit/test_terrain_events.gd",
 		"res://tests/unit/test_terrain_fields_native.gd",

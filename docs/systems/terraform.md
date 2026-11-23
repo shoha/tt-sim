@@ -536,8 +536,23 @@ Sculpt tile while `active()`; one stroke is one `TerraEditor` gesture and one hi
 
 ## Versions and the library
 
-`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 9 paint cache` (card terraform-p2-paint-cache:
-the held coat's per-tile cache, no byte moved; before it `terra 8 paint`, card terraform-p2-paint-path:
+<<<<<<< HEAD
+`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 10 chutes` (card terraform-p2-chutes, from
+spike terraform-low-falls-probe, approach C): a step of 0.75 m up to CHUTE_MAX_M (2.5 m) is a chute, not a fall.
+The carve's level line (`River::chute`, the record's `chute`, hashed by the water digest) eases it down as a
+smoothstep ramp from the step's shared point (the segment's middle, where the bridge splits the reaches) over
+`chute_run(drop, room)` = min(drop / 0.3, arc to the next step's shared point or the line's end), so chutes back
+to back meet end to start; no fall record, no pool, no lip line. The bridge marks its bodies `WaterBody.chutes`
+(saved as "chutes": true), so `WaterFalls.is_drop` is false for such a step and it is drawn as a riffle over the
+same run (`WaterFalls.chute_run`: RiverProfile's level easing, WaterMeshBuilder's sheet along the lower course's
+arc), with broken white along it (WaterFieldStroke CHUTE_*: a few bold soft lumps of energy 0.3 up to a peak of
+0.64-0.8, carried 1 m past the run; each chute draws its own lump length, 0.8-1.4 m, and peak from a hash of the
+stroke and its index, so chutes back to back do not repeat). Banks
+beside a chute stand at 35-38 degrees where the face carve cut 74-83. Steps of 2.5 m or more are falls as before.
+55 of 105 golden digests moved (H1, H2, Hp, WL, SL, CT, CV, DW, HB, WM and falls of every case). It replaced
+`terra 9 paint cache` on main (card terraform-p2-paint-cache: the held coat's per-tile cache, no byte moved) and
+the branch-only `terra 9 pools` (card terraform-p2-river-polish: pools below low falls, `hws` per point, and
+round 3's lip line and soft-fall white, all removed with the chutes). Before them, `terra 8 paint` (card terraform-p2-paint-path:
 four-entry paint planes, coats with SurfaceStroke's rule, paths as coats, `doc_surfaces`; regenerated after
 merging `terra 7 reaches`, 15 of 105 golden digests moved against it (PI, PW and CT of every case; heights and water
 unchanged); before it `terra 7 reaches`, the
