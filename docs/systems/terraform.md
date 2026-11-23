@@ -461,8 +461,24 @@ rects go to the editor's height queue.
   the frame the worker is done. Bench (corpus 200 ft, windowed, two stone walls in consecutive frames, 3
   runs): the second wall's frame 483 ms before, 30.6 ms after (max 31.1), 0 frames over 33; the first
   wall's frame unchanged (16.1 / 15.5 ms medians). Still waiting: the bridge's `land_external` finishes
-  a water job before starting one, and the other editors' presses (structures, crossings, settlements,
-  fire, table move) still call `finish_height_work`.
+  a water job before starting one.
+- **The other tools' presses** (cards terraform-p2-noblock2, noblock3). `GroundPresses`
+  (`AuthoringEditor.presses`) queues a press made while ground work is in flight and runs it on the
+  first frame after the work lands (and no stroke is held), exactly `finish_height_work()` then the
+  press, the switch on or off: every public edit of `StructureEditor`, the crossing and settlement
+  presses, and a fire's release (its entry, burnt biome and ash; the fire mask itself needs nothing
+  landed). Off, the work is a river or pond computing on the Water tool's worker and landing over
+  frames (whose history entry is recorded only when it lands), a sculpt's spread ground and its rock
+  keeping. An undo or redo waits behind waiting presses (`defer`), and with the switch off behind the
+  work itself (authoring and `PlayEvents`). A press inside an open history group (a street split, a
+  play event's fire) runs at once in its place. Saves and the table move settle over frames
+  (`settle_async`). A structure build reads `StructureGeometry.ground_snapshot`, whose heights and
+  pond mask are duplicated: a packed array assigned in GDScript is the same array, and
+  `TerraBridge.land` writes `doc.heights` in place (the out-of-bounds read in `WaterGeometry.ground_at`
+  that kept structures waiting). Tests: `test_terra_noblock_presses` (on), `test_noblock_presses_off`
+  (off, plus the snapshot race). Still waiting while off: the Wall tool's edits and a street split
+  (`WallEditor._change` through `prepare_gesture`), a water edit pressed while the previous one computes
+  (`WaterEditor` 480, 920), and a peer's late-join catch-up (`LiveEditCodec.Queue.drain`, deliberate).
 - **Peers.** `LiveEditCodec` kind `"terra"`: `args = [the side's edits (its edits, or for an undo its
   inverse), the ground record's side, TerraDoc.digest after it, its CHECKED digests]`, from
   `op_of` on `TerraEditor.redo_gesture` / `undo_gesture`. The host's digests ride in the op itself:

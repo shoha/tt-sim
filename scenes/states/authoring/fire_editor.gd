@@ -96,13 +96,23 @@ func end() -> bool:
 	var diff := stroke.finish()
 	if diff.is_empty():
 		return false
+	# The fire is on the map already; its entry, burnt biome and ash read and record after any
+	# ground work in flight lands (GroundPresses, card noblock3), as when it was finished first.
+	editor.presses.run(_record.bind(diff, _erase, _dabs.duplicate()), true)
+	return true
+
+
+## The release's press: the entry of the fire laid or put out (`diff`) and, laying, its burnt
+## biome and ash over `dabs` (see the header).
+func _record(diff: Dictionary, erase: bool, dabs: Array) -> bool:
+	var editor := _editor()
 	var part := {
-		"label": PUT_OUT_LABEL if _erase else LAY_LABEL,
+		"label": PUT_OUT_LABEL if erase else LAY_LABEL,
 		"undo": editor.apply_mask_diff.bind(diff, false),
 		"redo": editor.apply_mask_diff.bind(diff, true),
 		"bytes": int(diff.bytes),
 	}
-	if _erase:
+	if erase:
 		editor.history.record(part)
 		editor.edited.emit()
 		return true
@@ -110,8 +120,8 @@ func end() -> bool:
 	editor.history.record(part)
 	var root := editor.palette_root
 	var plan := FireSweep.plan_for(PaletteLibrary.biomes(root), PaletteLibrary.surfaces(root))
-	_burn_forest(String(plan.biome))
-	_lay_ash(String(plan.surface))
+	_burn_forest(String(plan.biome), dabs)
+	_lay_ash(String(plan.surface), dabs)
 	editor.history.end_group(LAY_LABEL)
 	editor.edited.emit()
 	return true
@@ -126,8 +136,8 @@ func cancel() -> void:
 	_editor().refresh_fire(rect)
 
 
-## Part 2: the burnt biome over the stroke's dabs, only on forest (see the header).
-func _burn_forest(burnt: String) -> void:
+## Part 2: the burnt biome over the stroke's `dabs`, only on forest (see the header).
+func _burn_forest(burnt: String, dabs: Array) -> void:
 	var editor := _editor()
 	var doc := editor.document
 	if burnt == "" or doc.biome_slots.size() != doc.sample_count():
@@ -140,7 +150,7 @@ func _burn_forest(burnt: String) -> void:
 		return
 	stroke.only_slots = allowed
 	var scale := editor.map_scale()
-	for d: Array in _dabs:
+	for d: Array in dabs:
 		var radius: float = d[2] * BURN_REACH / scale
 		stroke.dab(editor.to_map_xz(d[0]), editor.to_map_xz(d[1]), radius, d[3])
 	var diff := stroke.finish()
@@ -161,14 +171,14 @@ func _burn_forest(burnt: String) -> void:
 	)
 
 
-## Part 3: ash over the stroke's dabs at ASH_REACH, through the editor's Paint stroke.
-func _lay_ash(surface: String) -> void:
+## Part 3: ash over the stroke's `dabs` at ASH_REACH, through the editor's Paint stroke.
+func _lay_ash(surface: String, dabs: Array) -> void:
 	var editor := _editor()
 	if surface == "" or editor.surface_refusal(surface) != "":
 		return
 	if not editor.begin_surface_stroke(surface, false):
 		return
-	for d: Array in _dabs:
+	for d: Array in dabs:
 		editor.stroke_dab(d[0], d[1], float(d[2]) * ASH_REACH, d[3])
 	editor.end_stroke()
 

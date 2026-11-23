@@ -303,9 +303,9 @@ func begin_fire_stroke(target: float, erase: bool) -> bool:
 	commit_prop_edit()
 	if is_stroking():
 		end_stroke()
-	# The fire mask and the burnt biome need no landed ground; the ash coat queues behind the
-	# derives as a gesture (card terraform-p2-noblock2): nothing waits while the core is on.
-	terra.prepare_gesture()
+	# The fire mask needs no landed ground, and the release's entry, burnt biome and ash are a
+	# press of their own (FireEditor.end, GroundPresses): nothing waits, the core on or off (cards
+	# terraform-p2-noblock2, noblock3).
 	return fire.begin(target, erase)
 
 

@@ -85,18 +85,21 @@ static var manner_records := false
 ## The ground a structure asks about is WallGeometry.Ground (the document's heights at a map point).
 
 
-## A document that holds only the ground of `doc` (size, spacing and the height array, which is
-## shared copy-on-write), its water and its structures' footprints, safe to read on a worker while
-## the real document is edited.
+## A document that holds only the ground of `doc` (size, spacing and a copy of the height array),
+## its water and its structures' footprints, safe to read on a worker while the real document is
+## edited. The arrays are duplicated: a packed array assigned in GDScript is the same array, not a
+## copy-on-write one (measured, card noblock3), and a landing writes the document's heights in place
+## (TerraBridge.land: a structure build read them mid-write, an out-of-bounds read in
+## WaterGeometry.ground_at).
 static func ground_snapshot(doc: MapDocument) -> MapDocument:
 	var ground := MapDocument.new()
 	ground.size_cells = doc.size_cells
 	ground.cell_size_m = doc.cell_size_m
 	ground.sample_spacing_m = doc.sample_spacing_m
-	ground.heights = doc.heights
+	ground.heights = doc.heights.duplicate()
 	# What a yard keeps clear of (StructureDressing): water, and the other structures' footprints.
 	# Private copies, so the worker never reads what the main thread edits.
-	ground.pond_mask = doc.pond_mask
+	ground.pond_mask = doc.pond_mask.duplicate()
 	for body in doc.water_bodies:
 		ground.water_bodies.append(body.copy())
 	for structure in doc.structures:

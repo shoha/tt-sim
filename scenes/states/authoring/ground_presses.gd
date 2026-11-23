@@ -16,10 +16,15 @@ extends RefCounted
 ## leaves the same map either way (test_terra_noblock_presses), and no main-thread call waits.
 ##
 ## A press made inside a running one (a village's Dress laying its bridges through
-## CrossingEditor.swap) runs at once, inside it. With the core off everything runs at once and the
-## press's own body finishes the height work first, as before. A held stroke (Fire, Sculpt, Paint)
-## cannot wait: it starts at once and may overtake a waiting press; its own edits need nothing
-## landed (the fire mask, the burnt biome) or queue behind the derive as gestures (TerraEditor).
+## CrossingEditor.swap) runs at once, inside it. With the core off (today's game, card noblock3) the
+## same holds: a river or pond edit computing on its worker and landing over frames (WaterEditor),
+## a sculpt stroke's spread ground and its rock keeping are the work a press waits behind, and
+## finish_height_work() inside the drained press finds nothing left to do. A held stroke (Fire,
+## Sculpt, Paint) cannot wait: it starts at once and may overtake a waiting press; its own edits
+## need nothing landed (the fire mask) or queue behind the derive as gestures (TerraEditor), and
+## the fire's release (its history entry, burnt biome and ash) is a press of its own.
+## An undo or a redo waits behind the waiting presses (defer()) and, with the core off, behind
+## the work itself, as the water edit's history entry is only recorded when it lands.
 
 ## settle_async() lets the work land over at most this many frames before finishing it.
 const SETTLE_MAX_FRAMES := 1200
@@ -48,7 +53,9 @@ func _editor() -> AuthoringEditor:
 ## waits), queues it and returns `queued` (see the header).
 func run(press: Callable, queued: Variant = null) -> Variant:
 	var e := _editor()
-	if _depth > 0 or e == null or not e.terra.active():
+	# Inside an open history group the press is one part of a gesture already under way (a street
+	# split into buildings, a play event's fire): it runs at once, in its place in the group.
+	if _depth > 0 or e == null or (e.history != null and e.history.is_grouping()):
 		return _call(press)
 	if not _waiting.is_empty() or _ground_work(e):
 		_waiting.append(press)
@@ -57,32 +64,37 @@ func run(press: Callable, queued: Variant = null) -> Variant:
 	return _call(press)
 
 
-## Queues `press` (an undo or a redo) behind the presses waiting now, so it acts on them: true
-## when it was queued, false when none waits or a press runs (the caller runs it at once).
+## Queues `press` (an undo or a redo) behind the presses waiting now, so it acts on them, and with
+## the core off behind the work in flight (a water edit records its entry when it lands): true
+## when it was queued, false when nothing is ahead of it, a press runs or a stroke is held (the
+## caller runs it at once).
 func defer(press: Callable) -> bool:
-	if _waiting.is_empty() or _depth > 0:
+	var e := _editor()
+	if _depth > 0 or e == null:
+		return false
+	var behind_work := not e.terra.active() and _ground_work(e) and not e.is_stroking()
+	if _waiting.is_empty() and not behind_work:
 		return false
 	_waiting.append(press)
 	queued_count += 1
 	return true
 
 
-## A save's settle and the table move's: with the core on, the height work and the presses waiting
-## for it land over frames (stepped here as the frame loop does; at most SETTLE_MAX_FRAMES, then the
-## rest at once) instead of a main-thread wait, leaving the map finish_height_work() would; with it
-## off, finish_height_work() as before.
+## A save's settle and the table move's: the height work and the presses waiting for it land over
+## frames (stepped here as the frame loop does; at most SETTLE_MAX_FRAMES, then the rest at once)
+## instead of a main-thread wait, leaving the map finish_height_work() would, the core on or off.
 func settle_async(tree: SceneTree) -> void:
 	var e := _editor()
 	if e == null:
 		return
-	if e.terra.active():
-		var frames := 0
-		while e.has_height_work() and frames < SETTLE_MAX_FRAMES:
-			e.step_height_work()
-			frames += 1
-			await tree.process_frame
-			if _editor() == null:
-				return
+	var frames := 0
+	while e.has_height_work() and frames < SETTLE_MAX_FRAMES:
+		e.step_height_work()
+		frames += 1
+		await tree.process_frame
+		e = _editor()
+		if e == null:
+			return
 	e.finish_height_work()
 
 
@@ -102,7 +114,8 @@ func is_waiting() -> bool:
 ## share.
 func drain(had_work: bool) -> void:
 	var e := _editor()
-	if had_work or e == null:
+	# A held stroke keeps them too: a press ends the stroke in progress (CrossingEditor._change).
+	if had_work or e == null or e.is_stroking():
 		return
 	while not _waiting.is_empty() and _depth == 0 and not _ground_work(e):
 		_call(_waiting.pop_front())

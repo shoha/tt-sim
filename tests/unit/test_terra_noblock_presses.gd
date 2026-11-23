@@ -5,7 +5,8 @@ extends GutTest
 ## river's derive and landing are still in flight, return without finishing any work (the editor
 ## still has height work, TerraEditor.waits unchanged), and once everything lands the map equals
 ## the one where the work was finished first and the press made after (GroundPresses queues the
-## presses that read the ground; the rest need nothing landed). A save's settle
+## presses that read the ground, structures too since card noblock3; the rest need nothing
+## landed). The switch-off twin is test_noblock_presses_off. A save's settle
 ## (GroundPresses.settle_async) lets the work land over frames: a save taken
 ## mid-derive writes the same document as one taken after finish_height_work().
 
@@ -84,7 +85,7 @@ func _press(rig: TerraRig, kind: String) -> void:
 			var lot := e.structures.lot("core:cottage", plan, 100)
 			assert_not_null(lot, "a cottage lot")
 			if lot != null:
-				assert_true(e.structures.add(lot) >= 0, "the cottage is placed")
+				assert_true(e.structures.add(lot) >= 0, "the cottage is placed (or queued)")
 		"crossing":
 			assert_true(
 				e.crossings.place(Crossing.Kind.PLANK, _world(rig, 40, 8), _world(rig, 40, 13)) >= 0,
@@ -134,18 +135,10 @@ func _check_press(kind: String) -> void:
 	assert_eq(drift, [] as Array[String], "the fingerprints")
 
 
-## Not yet: a structure press still finishes the work first (StructureEditor._change). Run without
-## the wait, its build worker read MapDocument.heights while the landing wrote them (an
-## out-of-bounds read in WaterGeometry.ground_at), so it stays blocking until the build reads a
-## snapshot.
-func test_structure_press_still_finishes_first() -> void:
-	if not TerraCore.native_available():
-		pending(TerraCorpus.NO_LIBRARY)
-		return
-	var rig := await _rig()
-	assert_gt(_river(rig, OVER_RISE), 0, "a river released")
-	_press(rig, "structure")
-	assert_false(rig.editor.has_height_work(), "the structure press landed the work first")
+## A structure press waits too (card noblock3): it runs once the ground lands, and its build reads
+## a snapshot of the ground no landing writes (StructureGeometry.ground_snapshot).
+func test_structure_press_waits_for_nothing() -> void:
+	await _check_press("structure")
 
 
 func test_crossing_press_waits_for_nothing() -> void:

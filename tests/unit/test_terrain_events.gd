@@ -69,6 +69,8 @@ func _make_level() -> bool:
 		PackedVector2Array(RIVER), PackedFloat32Array([1.4]), WaterBody.Depth.WAIST
 	)
 	assert_gt(river, 0, "the river is carved")
+	# The bridge waits for the carve's spread ground (GroundPresses) unless it has landed.
+	e.finish_height_work()
 	assert_gt(e.crossings.place(Crossing.Kind.PLANK, Vector3(5, 0, 0), Vector3(13, 0, 0)), 0)
 	e.finish_height_work()
 	var growing := func() -> bool: return e.scatter.is_regenerating() or e.scatter.is_growing()
