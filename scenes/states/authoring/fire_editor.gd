@@ -36,6 +36,9 @@ const BURN_REACH := 1.0
 ## under 0.035).
 const FOREST_TREES_PER_M2 := 0.04
 
+## The last release's press by part (microseconds: plan, burn, ash, record), for measurement
+## (the press bench, tools/bench/).
+var last_parts := {}
 ## The fire stroke in progress, or null.
 var _stroke: MaskStroke = null
 var _erase: bool = false
@@ -112,18 +115,28 @@ func _record(diff: Dictionary, erase: bool, dabs: Array) -> bool:
 		"redo": editor.apply_mask_diff.bind(diff, true),
 		"bytes": int(diff.bytes),
 	}
+	var started := Time.get_ticks_usec()
+	last_parts = {}
 	if erase:
 		editor.history.record(part)
 		editor.edited.emit()
+		last_parts["record"] = Time.get_ticks_usec() - started
 		return true
 	editor.history.begin_group()
 	editor.history.record(part)
 	var root := editor.palette_root
 	var plan := FireSweep.plan_for(PaletteLibrary.biomes(root), PaletteLibrary.surfaces(root))
+	var t := Time.get_ticks_usec()
+	last_parts["plan"] = t - started
 	_burn_forest(String(plan.biome), dabs)
+	last_parts["burn"] = Time.get_ticks_usec() - t
+	t = Time.get_ticks_usec()
 	_lay_ash(String(plan.surface), dabs)
+	last_parts["ash"] = Time.get_ticks_usec() - t
+	t = Time.get_ticks_usec()
 	editor.history.end_group(LAY_LABEL)
 	editor.edited.emit()
+	last_parts["record"] = Time.get_ticks_usec() - t
 	return true
 
 

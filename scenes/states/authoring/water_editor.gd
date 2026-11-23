@@ -27,12 +27,19 @@ extends RefCounted
 ## texture, rocks, the scatter regeneration and the history entry). While an edit is
 ## computing or landing (is_working()), AuthoringEditor.has_height_work() is true, so a save
 ## or an autosave waits, and finish_work() (from AuthoringEditor.finish_height_work(), which
-## every other edit and undo call first) lands it at once.
+## every other edit and undo call first) lands it at once. A river carved or a re-fit pressed
+## while the previous edit still computes is a press (GroundPresses, card noblock4): it waits and
+## starts on the first frame after that edit has landed, instead of finishing it on the main
+## thread. A pond or erase stroke still finishes it at its press (a held stroke cannot wait).
 
 ## A conditioned pond edit, or a river stroke, landed: what its plan said (WaterHints records,
 ## possibly none). The compute runs on a worker, so the tool listens and says it once it is true.
 signal pond_hints_landed(hints: Array)
 signal river_hints_landed(hints: Array)
+
+## What carve_river() returns for a river that waits for the edit before it: not an id yet, not
+## a refusal (as StructureEditor.QUEUED).
+const QUEUED := 0
 
 ## Why the last carve_river() or paint_pond_begin() made nothing (last_refusal), for the tool.
 const REFUSED_NO_CARVE := &"no_carve"
@@ -117,7 +124,8 @@ func is_computing() -> bool:
 ## river's ends there keep them as their course into the ground skirt (RiverExits.split_line,
 ## attach; WaterBody.beyond). Returns the id of the first (upstream) reach,
 ## or -1 when nothing was made (the map cannot be carved, the line is too short or lies in
-## water, or the document is full). With use_worker the carve lands on a later frame.
+## water, or the document is full). With use_worker the carve lands on a later frame. QUEUED
+## while it waits for the edit before it (see the header).
 func carve_river(
 	points: PackedVector2Array,
 	half_widths: PackedFloat32Array,
@@ -125,6 +133,9 @@ func carve_river(
 	speed: float = WaterBody.DEFAULT_SPEED
 ) -> int:
 	var e := _editor()
+	if not e.presses.is_running():
+		var press := carve_river.bind(points.duplicate(), half_widths.duplicate(), depth_class, speed)
+		return e.presses.run(press, QUEUED)
 	_prepare()
 	last_refusal = &""
 	last_hints = []
@@ -183,6 +194,8 @@ func carve_river(
 ## stored map only through this. False when the map cannot be carved or has no rivers.
 func refit_water() -> bool:
 	var e := _editor()
+	if not e.presses.is_running():
+		return e.presses.run(refit_water, true)
 	_prepare()
 	last_refusal = &""
 	last_hints = []
