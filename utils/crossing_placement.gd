@@ -33,7 +33,9 @@ extends RefCounted
 ## within reach on a side (or runs off the map), a ford crosses deep water (any body under
 ## the wet run whose depth class is not wadeable, WaterBody.is_wadeable(); checked before
 ## the fall), comes within FALL_CLEAR_M of a waterfall (its face or its foam ring,
-## fall_near(); bridges cross calm water, P4c-5), or the span exceeds Crossing.MAX_SPAN_M. A
+## fall_near(); bridges cross calm water, P4c-5) or lies over a chute's run (the terraforming
+## core's ramp of 0.75 up to 2.5 m, refused as a fall: owner, 2026-11-23, GAP-C1), or the span
+## exceeds Crossing.MAX_SPAN_M. A
 ## line across a fall's face alone is refused as a fall, not as no water:
 ## WaterGeometry.level_at has no cut at a reach's end, so within the half-width and bank of
 ## the lip the dry face still reads the upper pool's level (fall_near() is what catches it).
@@ -78,6 +80,8 @@ const STONE_FREEBOARD_M := 0.15
 const FORD_DEPTH_M := 0.15
 ## A crossing keeps at least this far from a waterfall's face and foam ring (fall_near()).
 const FALL_CLEAR_M := 1.0
+## A chute's course is sampled this finely along its run (chute_under()).
+const CHUTE_STEP_M := 0.25
 
 
 ## The crossing of kind `kind` a line drawn from `from` to `to` (map XZ) makes over `doc`'s
@@ -215,7 +219,7 @@ static func levels_for(
 static func fall_near(doc: MapDocument, a: Vector2, b: Vector2, width: float) -> bool:
 	var falls := WaterFalls.falls(doc)
 	if falls.is_empty():
-		return false
+		return chute_under(doc, a, b, width)
 	var half := width * 0.5
 	var columns := doc.samples_x()
 	for fall in falls:
@@ -234,6 +238,30 @@ static func fall_near(doc: MapDocument, a: Vector2, b: Vector2, width: float) ->
 			var p := doc.sample_to_world(Vector2(i % columns, floori(float(i) / columns)))
 			if _strip_distance(a, b, half, p) <= FALL_CLEAR_M:
 				return true
+	return chute_under(doc, a, b, width)
+
+
+## True when the strip from `a` to `b` (map XZ) `width` wide covers the course of a chute of
+## `doc` anywhere along its run (RiverProfile.chute_runs from the step's shared point, sampled
+## every CHUTE_STEP_M): a chute has no fall record, but a crossing over one is refused as a fall
+## (GAP-C1). Only strokes whose bodies are marked WaterBody.chutes are profiled. Pure.
+static func chute_under(doc: MapDocument, a: Vector2, b: Vector2, width: float) -> bool:
+	var half := width * 0.5
+	for chain in RiverProfile.strokes(doc.water_bodies):
+		var typed: Array[WaterBody] = []
+		typed.assign(chain)
+		if not typed.any(func(body: WaterBody) -> bool: return body.chutes):
+			continue
+		var profile := RiverProfile.for_doc(doc, typed)
+		for k in profile.chute_runs.size():
+			var run := profile.chute_runs[k]
+			if run <= 0.0:
+				continue
+			var steps := ceili(run / CHUTE_STEP_M)
+			for j in steps + 1:
+				var s := profile.bounds[k] + run * float(j) / float(steps)
+				if _strip_distance(a, b, half, profile.point_at(s)) <= 0.0:
+					return true
 	return false
 
 

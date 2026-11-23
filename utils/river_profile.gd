@@ -541,6 +541,15 @@ func _end_depth(tail: float, s: float) -> float:
 	return maxf(depth * smoothstep(0.0, tail, s), film)
 
 
+## The course's point (map XZ) at arc `s`, clamped to the course.
+func point_at(s: float) -> Vector2:
+	if points.size() < 2:
+		return points[0] if points.size() == 1 else Vector2.ZERO
+	var at := _locate(s)
+	var k := int(at.x)
+	return points[k].lerp(points[k + 1], at.y)
+
+
 ## Where arc `s` falls on the course: Vector2(segment, t along it 0..1).
 func _locate(s: float) -> Vector2:
 	var k := 0

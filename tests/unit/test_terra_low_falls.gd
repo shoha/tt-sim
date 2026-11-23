@@ -171,6 +171,81 @@ func test_the_profile_draws_the_chute_with_broken_white() -> void:
 	assert_gt(found, 0, "the corpus tributary has a chute")
 
 
+## The chute's white stays on the water (card chute-foam): the calm sheet a bank sheds beside the
+## corpus chute (spill past the channel, its wash hidden under a few centimetres) holds no white,
+## while the channel keeps its white.
+func test_the_chute_white_stays_inside_the_water() -> void:
+	if _derive == null:
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var f := WaterField.build(_doc)
+	var calm := 0
+	var white_on_calm := 0
+	var channel_hi := 0.0
+	for i in f.energy.size():
+		if not f.depth[i] > 0.0:
+			continue
+		if f.calm[i] == 1:
+			calm += 1
+			if f.energy[i] > 0.0:
+				white_on_calm += 1
+		else:
+			channel_hi = maxf(channel_hi, f.energy[i])
+	gut.p("calm %d, with white %d; channel white %.2f" % [calm, white_on_calm, channel_hi])
+	assert_gt(calm, 0, "the corpus has bank spill beside its rivers")
+	assert_eq(white_on_calm, 0, "no white on the bank's calm sheet")
+	assert_gt(channel_hi, 0.5, "the channel keeps its white")
+
+
+## A crossing of any kind over a chute's run is refused as a fall (owner, 2026-11-23, GAP-C1), and a
+## plank just past the run is placed. The 0.15 slope's last chute.
+func test_a_crossing_over_a_chute_is_refused() -> void:
+	if not TerraCore.native_available():
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var doc := MapDocument.create_flat(CELLS, "grass", "v", 3)
+	var terra := TerraDoc.new()
+	terra.add(TerraCore.PLANE, PackedFloat32Array([5.0, 0.15, 0.0]))
+	var line := PackedVector2Array([Vector2(26.0, 0.0), Vector2(-26.0, 0.0)])
+	terra.add(TerraCore.RIVER, TerraWaterTools.river_data(line, PackedFloat32Array([1.4]), 0.6))
+	var d := TerraCache.derive_for(terra, doc)
+	doc.heights = d.call("doc_heights")
+	var water := TerraBridge.water_of(d, doc)
+	doc.water_bodies = water["bodies"]
+	doc.pond_mask = water["pond_mask"]
+	var chains := RiverProfile.strokes(doc.water_bodies)
+	assert_eq(chains.size(), 1, "one stroke")
+	var typed: Array[WaterBody] = []
+	typed.assign(chains[0])
+	var profile := RiverProfile.for_doc(doc, typed)
+	var last := -1
+	for k in profile.chute_runs.size():
+		if profile.chute_runs[k] > 0.0:
+			last = k
+	assert_gt(last, -1, "the slope has a chute")
+	if last < 0:
+		return
+	var s0 := profile.bounds[last]
+	var run := profile.chute_runs[last]
+	for kind in [Crossing.Kind.PLANK, Crossing.Kind.STONES, Crossing.Kind.ARCH, Crossing.Kind.FORD]:
+		for share in [0.1, 0.5, 0.9]:
+			var placed := _across(doc, profile, s0 + run * share, kind)
+			assert_null(placed.crossing, "kind %d at %.1f of the chute is refused" % [kind, share])
+	var mid := _across(doc, profile, s0 + run * 0.5, Crossing.Kind.PLANK)
+	assert_eq(mid.refusal, CrossingPlacement.REFUSED_FALL, "refused as a fall")
+	var past := _across(doc, profile, s0 + run + 1.5, Crossing.Kind.PLANK)
+	gut.p("chute run %.2f m; past the run: %s" % [run, str(past.refusal)])
+	assert_not_null(past.crossing, "a plank 1.5 m past the chute's run is placed")
+
+
+## CrossingPlacement.place of `kind` on a line 3 m either side of `profile`'s course at arc `s`.
+func _across(doc: MapDocument, profile: RiverProfile, s: float, kind: Crossing.Kind) -> Dictionary:
+	var p := profile.point_at(s)
+	var dir := (profile.point_at(s + 0.2) - profile.point_at(s - 0.2)).normalized()
+	var side := Vector2(-dir.y, dir.x) * 3.0
+	return CrossingPlacement.place(doc, p - side, p + side, kind)
+
+
 ## Chutes back to back do not repeat: each of a stroke's chutes draws its own lump length and white
 ## peak, inside the CHUTE_*_VARY ranges, the same on every call.
 func test_back_to_back_chutes_vary_their_white() -> void:
