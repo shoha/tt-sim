@@ -353,7 +353,7 @@ func begin_surface_stroke(surface: String, erase: bool) -> bool:
 		end_stroke()
 	if not _terra_allows() or not can_paint():
 		return false
-	finish_height_work()
+	terra.prepare_gesture()
 	if terra.active():
 		return terra.begin_paint(surface, erase)
 	_surface = SurfaceStroke.begin(document, surface, erase)

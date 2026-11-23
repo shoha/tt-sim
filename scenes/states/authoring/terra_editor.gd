@@ -25,6 +25,14 @@ extends RefCounted
 ## gesture's ground record over it. An apply that arrives while a landing is pending waits for it
 ## and runs on that landing: a redo pressed before its undo lands queues, it never interleaves.
 ##
+## Never blocking (card terraform-p2-noblock). Nothing a press, an undo or a redo calls waits for a
+## derive: prepare_gesture() finishes nothing while active(), a gesture opened while landings are
+## pending first applies the queued undos and redos to the document (it is built on the document
+## as it stands), and each landing's edits go behind a TerraSession.cut(), so the landings queue
+## (_landings) and each lands on its own settled stage, in order, its heights before being the
+## ones the landing before it left. Only finish_work() waits (op_of, a save, a peer's catch-up),
+## and counts it (waits).
+##
 ## Routes. AuthoringEditor asks refusal() before every ground tool's press and routes here while
 ## active(). Each tool's op below refuses with NOT_YET until its card puts the tool on primitives
 ## (Sculpt: begin_sculpt; Paint: paint_refusal, begin_paint; Water: river, begin_pond,
@@ -60,14 +68,17 @@ var last_refusal := ""
 var last_check: Dictionary = {}
 ## Landings so far (tests).
 var landings := 0
+## Times finish_work() had to wait for a derive (tests: a press, undo or redo never does).
+var waits := 0
 
 var _owner: WeakRef = null
 ## The open gesture (begin_gesture), or {}: {"edits", "inverse", "restored": id -> true, "before":
 ## heights, "digest_before", "digests_before"}.
 var _open: Dictionary = {}
-## The landing waiting for the session to settle, or {}: {"before", "ground", "redo", "spread",
-## "check", "gesture", "land"}.
-var _landing: Dictionary = {}
+## The landings waiting for their stage to settle, oldest first: {"before" (heights, or null: the
+## ones the landing before it leaves), "ground", "redo", "spread", "check", "gesture", "land",
+## "stage" (TerraSession.stage() of its newest edit)}.
+var _landings: Array[Dictionary] = []
 ## Applies that arrived while a landing was pending, in order: [edits, ground, redo, spread, check,
 ## gesture].
 var _waiting: Array[Array] = []
@@ -171,6 +182,17 @@ func begin_wall_edit() -> bool:
 	return begin_wall() if active() else true
 
 
+## Before a ground tool's edit begins (WallEditor's edits, the Paint press; the sculpt, river and
+## pond presses once their cards land): today's editors edit the ground as it has landed, so the
+## height work is finished first (AuthoringEditor.finish_height_work); while active() nothing
+## waits, since the derives and landings in flight stay queued and this gesture's edits derive and
+## land after them, in order (see the header).
+func prepare_gesture() -> void:
+	var e := _editor()
+	if e != null and not active():
+		e.finish_height_work()
+
+
 # ============================================================================
 # Tool routes (each tool's card fills its op)
 # ============================================================================
@@ -251,10 +273,12 @@ func begin_wall() -> bool:
 func sync_walls(label: String, area: Rect2) -> Dictionary:
 	if not active():
 		return {}
+	# Opened first: an undo still queued reaches the document before the sync reads it.
+	begin_gesture()
 	var change := TerraWallSync.sync(_editor().document)
 	if change.is_empty():
+		_open = {}
 		return {}
-	begin_gesture()
 	if edit(change) < 0:
 		_open = {}
 		push_warning("TerraEditor: the session refused the wall sync")
@@ -272,15 +296,22 @@ func _not_yet(tool: String) -> bool:
 # ============================================================================
 
 
-## Opens a gesture: edit() collects its edits until end_gesture().
+## Opens a gesture: edit() collects its edits until end_gesture(). Never waits: undos and redos
+## still queued are applied first (the gesture is built on the document as it stands), and its
+## edits go behind a cut, so it lands after everything pending (see the header).
 func begin_gesture() -> void:
 	var e := _editor()
 	var s := session()
+	while not _waiting.is_empty():
+		var next: Array = _waiting.pop_front()
+		_apply_now(next[0], next[1], next[2], next[3], next[4], next[5])
+	if s != null:
+		s.cut()
 	_open = {
 		"edits": [],
 		"inverse": [],
 		"restored": {},
-		"before": e.document.heights.duplicate(),
+		"before": null if not _landings.is_empty() else e.document.heights.duplicate(),
 		"digest_before": (e.document.terra as TerraDoc).digest_for(e.document),
 		"digests_before": checked_digests(s) if s != null and s.is_ready() else {},
 	}
@@ -342,6 +373,7 @@ func end_gesture(label: String, ground := {}, land := true) -> Dictionary:
 			"check": {},
 			"gesture": g,
 			"land": land,
+			"doc_digest": g.doc_digest,
 		}
 	)
 	return g
@@ -417,37 +449,39 @@ func apply_check(check: Dictionary) -> void:
 
 ## True while a landing is pending or an apply waits for one (AuthoringEditor.has_height_work).
 func has_work() -> bool:
-	return not _landing.is_empty() or not _waiting.is_empty()
+	return not _landings.is_empty() or not _waiting.is_empty()
 
 
-## One frame: lands a pending landing whose session is ready (the session's own settled normally
-## does it first).
+## One frame: lands the pending landings whose stage the session has settled (its own settled
+## normally does it first).
 func step() -> void:
-	var s := session()
-	if not _landing.is_empty() and s != null and s.is_ready():
-		_land()
+	_land_due()
 
 
 ## Lands everything pending now, waiting for the session's derives (they run on their own thread;
-## at most FINISH_TIMEOUT_USEC): op_of() and a peer's catch-up need the side whole.
+## at most FINISH_TIMEOUT_USEC): op_of() and a peer's catch-up need the side whole. The one call
+## here that waits (waits counts each wait); a press, undo or redo never calls it while active().
 func finish_work() -> void:
 	var s := session()
 	if s == null:
-		_landing = {}
+		_landings.clear()
 		_waiting.clear()
 		return
 	var deadline := Time.get_ticks_usec() + FINISH_TIMEOUT_USEC
+	var waited := false
 	while has_work():
 		s.poll()
-		if not _landing.is_empty() and s.is_ready():
-			_land()
+		_land_due()
 		if not has_work():
 			return
 		if Time.get_ticks_usec() > deadline:
 			push_warning("TerraEditor: a derive did not land in time; its landing is dropped")
-			_landing = {}
+			_landings.clear()
 			_waiting.clear()
 			return
+		if not waited:
+			waited = true
+			waits += 1
 		OS.delay_usec(200)
 
 
@@ -541,7 +575,9 @@ func _apply_now(
 ) -> bool:
 	var e := _editor()
 	var s := session()
-	var before := e.document.heights.duplicate()
+	# Behind a landing still pending, its heights before are the ones that landing leaves.
+	var before: Variant = null if not _landings.is_empty() else e.document.heights.duplicate()
+	s.cut()
 	var ok := true
 	for change: Dictionary in edits:
 		if s.apply(change) < 0:
@@ -556,35 +592,60 @@ func _apply_now(
 		"check": check,
 		"gesture": g,
 		"land": true,
+		"doc_digest": (e.document.terra as TerraDoc).digest_for(e.document),
 	}
 	_arm(landing)
 	return ok
 
 
-## Waits for the session to settle with `landing`, or lands it now when it already has.
+## Queues `landing` for its stage (the session's stage() now, its edits told), landing it at once
+## when nothing is ahead of it and the session has settled there.
 func _arm(landing: Dictionary) -> void:
-	_landing = landing
 	var s := session()
-	if s != null and s.is_ready():
-		_land()
+	landing["stage"] = s.stage() if s != null else 0
+	_landings.append(landing)
+	_land_due()
 
 
 func _on_settled() -> void:
-	if not _landing.is_empty():
-		_land()
+	_land_due()
 
 
-## Lands the pending landing (see the header), then starts the next waiting apply.
-func _land() -> void:
-	var l := _landing
-	_landing = {}
+## Lands, oldest first, every pending landing whose stage the session has settled (each sees the
+## derive of exactly its own edits and those before), then starts a waiting apply once none is left.
+func _land_due() -> void:
+	var s := session()
+	while not _landings.is_empty():
+		if s == null or not s.is_ready() or int(_landings[0].stage) > s.settled_stage():
+			return
+		if _editor().water.is_computing():
+			# HeightEditor.apply_ground would wait for the water's worker (a wet dressing refresh
+			# takes 400+ ms at 200 ft): the session holds its next stage, and step() lands this
+			# one on the frame the worker is done.
+			s.pause()
+			return
+		_land(_landings.pop_front())
+		s.resume()
+		# The next one's heights before are the ones this landing left (an open gesture's too).
+		var next := _landings[0] if not _landings.is_empty() else _open
+		if not next.is_empty() and next.before == null:
+			next.before = _editor().document.heights.duplicate()
+	if not _waiting.is_empty():
+		var next: Array = _waiting.pop_front()
+		_apply_now(next[0], next[1], next[2], next[3], next[4], next[5])
+
+
+## Lands `l` (see the header).
+func _land(l: Dictionary) -> void:
 	var e := _editor()
 	var s := session()
 	var derive := s.settled_derive() if s != null else null
 	if e != null and derive != null:
 		var doc := e.document
 		var rect := Rect2i()
-		var before: PackedFloat32Array = l.before
+		var before: PackedFloat32Array = (
+			l.before if l.before is PackedFloat32Array else doc.heights
+		)
 		if before.size() == doc.heights.size():
 			var whole := Rect2i(0, 0, doc.samples_x(), doc.samples_z())
 			var diff: Dictionary = derive.call("doc_heights_diff", before, doc.samples_x(), whole)
@@ -595,22 +656,20 @@ func _land() -> void:
 		if not g.is_empty():
 			var side := "digests_after" if l.redo else "digests_before"
 			g[side] = checked_digests(s)
-			g["doc_digest" if l.redo else "digest_before"] = (doc.terra as TerraDoc).digest_for(doc)
+			# The document as this side's edits left it (it may be ahead by now).
+			g["doc_digest" if l.redo else "digest_before"] = l.doc_digest
 		if not (l.check as Dictionary).is_empty():
-			_compare(l.check, s)
+			_compare(l.check, String(l.doc_digest), s)
 	landings += 1
 	landed.emit(bool(l.redo))
-	if not _waiting.is_empty():
-		var next: Array = _waiting.pop_front()
-		_apply_now(next[0], next[1], next[2], next[3], next[4], next[5])
 
 
-## A peer's check of its landed side against the host's (see the header).
-func _compare(check: Dictionary, s: TerraSession) -> void:
-	var e := _editor()
+## A peer's check of its landed side (`doc_digest` the document as its edits left it) against
+## the host's (see the header).
+func _compare(check: Dictionary, doc_digest: String, s: TerraSession) -> void:
 	var arrays: Array[String] = []
 	var want := String(check.get("doc_digest", ""))
-	if want != "" and (e.document.terra as TerraDoc).digest_for(e.document) != want:
+	if want != "" and doc_digest != want:
 		arrays.append("document")
 	var mine := checked_digests(s)
 	var theirs: Dictionary = check.get("digests", {})

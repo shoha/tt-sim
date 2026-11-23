@@ -354,7 +354,8 @@ func _change(label: String, after: Array[Wall], touched: Array[Wall]) -> void:
 	e.commit_prop_edit()
 	if e.is_stroking():
 		e.end_stroke()
-	e.finish_height_work()
+	# With the core on nothing waits: this edit's pads land after the ones still deriving.
+	e.terra.prepare_gesture()
 	var before := _current()
 	var area := _area_of(touched)
 	# A street split already holds a group open: the pads join it.

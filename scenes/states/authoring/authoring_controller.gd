@@ -606,8 +606,9 @@ func _finish_brush_gesture() -> void:
 		brush.finish_gesture()
 	elif editor:
 		editor.commit_prop_edit()
-	if editor:
+	if editor and not editor.terra.active():
 		# A water edit still computing lands first, so undo takes it back (not the one before).
+		# With the core on the water lands with its gesture, queued: nothing waits.
 		editor.water.finish_work()
 
 
