@@ -49,21 +49,145 @@ void solve_path(PathL &p, const Grid &g, const float *H1) {
 	}
 }
 
+// Switchbacks (card terraform-p2-path-seam): where a path bends back on itself, a sample can lie in
+// reach of two or more of its stretches at different grades. Each stretch is a local minimum of the
+// distance from the sample along the line (the segments' distances in line order, capped at
+// reach + PATH_ARM_PROM; a segment out of the block's list and both ends of the line read as the
+// cap). A minimum counts by its prominence (how far the line climbs, on its lower side, before it
+// comes nearer again), smoothed in over PATH_ARM_PROM, so a stretch fades in where the line's
+// distance first dips rather than popping in. With one stretch in reach the nearest-stretch rule
+// stands byte for byte; with more, their targets blend by distance from each tread's edge (path_bank:
+// each tread stays flat, the ground between is one soft bank), held over the ground by the union of
+// their shoulder influences.
+constexpr double PATH_ARM_PROM = 0.5;
+constexpr double PATH_BANK_FADE = 0.4;
+constexpr double PATH_BANK_EPS = 1e-3;
+
+/// A stretch in reach: its distance, its profile's height there, its prominence weight g and its
+/// influence a (g times the shoulder's hold).
+struct PathArm {
+	double d, target, g, a;
+};
+
+/// The stretches of `p` in reach of (x, z) with a non-zero influence, from `ext` (the segments
+/// within reach + PATH_ARM_PROM of the sample's block, in line order). dk and tk are scratch.
+static void path_arms(const PathL &p, const std::vector<int> &ext, double x, double z, std::vector<double> &dk,
+		std::vector<double> &tk, std::vector<PathArm> &arms) {
+	arms.clear();
+	const double reach = p.hw + PATH_SHOULDER, cap = reach + PATH_ARM_PROM;
+	int n = int(ext.size());
+	dk.resize(n);
+	tk.resize(n);
+	for (int q = 0; q < n; q++) {
+		double t;
+		dk[q] = std::min(std::sqrt(seg_d2(p.l, ext[q], x, z, t)), cap);
+		tk[q] = t;
+	}
+	// The capped distance one step from q in direction s (+1 or -1): the cap past a gap or an end.
+	auto next = [&](int q, int s) -> double {
+		int r = q + s;
+		if (r < 0 || r >= n || ext[r] != ext[q] + s) {
+			return cap;
+		}
+		return dk[r];
+	};
+	for (int q = 0; q < n; q++) {
+		double v = dk[q];
+		if (v >= reach || next(q, -1) <= v) {
+			continue;
+		}
+		// The plateau's far end, then whether the line climbs after it.
+		int e = q;
+		while (e + 1 < n && ext[e + 1] == ext[e] + 1 && dk[e + 1] == v) {
+			e++;
+		}
+		if (next(e, 1) <= v) {
+			continue;
+		}
+		double side[2];
+		for (int s = 0; s < 2; s++) {
+			int dir = s == 0 ? -1 : 1, r = s == 0 ? q : e;
+			double top = v;
+			while (true) {
+				int m = r + dir;
+				if (m < 0 || m >= n || ext[m] != ext[r] + dir) {
+					top = cap;
+					break;
+				}
+				if (dk[m] < v) {
+					break;
+				}
+				top = std::max(top, dk[m]);
+				r = m;
+			}
+			side[s] = top;
+		}
+		double g = smoothstep(0.0, PATH_ARM_PROM, std::min(side[0], side[1]) - v);
+		double a = g * (1.0 - smoothstep(p.hw, reach, v));
+		if (a > 0.0) {
+			int k = ext[q];
+			double target = p.prof[k] + (double(p.prof[k + 1]) - p.prof[k]) * tk[q];
+			arms.push_back(PathArm{ v, target, g, a });
+		}
+	}
+}
+
+/// The height over ground h where two or more stretches of `p` are in reach: each stretch's share is
+/// its inverse distance from its tread's edge (faded out over the last PATH_BANK_FADE of its reach),
+/// normalised and eased by a smoothstep; each stretch's own result is its tread eased onto the ground
+/// by its shoulder, and the shares blend those. Between two treads the bank runs from one tread's
+/// edge to the other's, flat at both, and where the gap is wider than two shoulders the ground
+/// shows between them.
+static double path_bank(const PathL &p, const std::vector<PathArm> &arms, double h) {
+	const double reach = p.hw + PATH_SHOULDER;
+	double ws[8];
+	int n = int(std::min<size_t>(arms.size(), 8));
+	double sw = 0.0;
+	for (int q = 0; q < n; q++) {
+		const PathArm &arm = arms[q];
+		double fade = arm.g * (1.0 - smoothstep(reach - PATH_BANK_FADE, reach, arm.d));
+		ws[q] = fade / (std::max(arm.d - p.hw, 0.0) + PATH_BANK_EPS);
+		sw += ws[q];
+	}
+	double se = 0.0, sh = 0.0;
+	for (int q = 0; q < n; q++) {
+		double f = smoothstep(0.0, 1.0, ws[q] / sw);
+		double b = smoothstep(p.hw, reach, arms[q].d);
+		se += f;
+		sh += f * (arms[q].target * (1.0 - b) + h * b);
+	}
+	return sh / se;
+}
+
 void path_rect(const std::vector<PathL> &paths, const Grid &g, const Rect &r, const float *H1, const float *WL,
 		float *Hp, uint8_t *PM) {
 	double bx0, bz0, bx1, bz1;
 	rect_world_box(g, r, bx0, bz0, bx1, bz1);
-	std::vector<std::vector<int>> segs(paths.size());
+	std::vector<std::vector<int>> segs(paths.size()), wide(paths.size());
 	for (size_t i = 0; i < paths.size(); i++) {
 		if (!paths[i].prof.empty() && !paths[i].rect.inter(r).empty()) {
 			segments_near(paths[i].l, paths[i].hw + PATH_SHOULDER, bx0, bz0, bx1, bz1, segs[i]);
+			segments_near(paths[i].l, paths[i].hw + PATH_SHOULDER + PATH_ARM_PROM, bx0, bz0, bx1, bz1, wide[i]);
 		}
 	}
-	std::vector<std::vector<int>> cand(paths.size());
-	std::vector<double> tmp;
+	std::vector<std::vector<int>> cand(paths.size()), ext(paths.size());
+	std::vector<double> tmp, dk, tk;
+	std::vector<PathArm> arms;
 	for_blocks(g, r, [&](const Rect &blk, double cx, double cz, double bh) {
 	for (size_t pi = 0; pi < paths.size(); pi++) {
-		block_candidates(paths[pi].l, segs[pi], cx, cz, bh, paths[pi].hw + PATH_SHOULDER, cand[pi], tmp);
+		const PathL &p = paths[pi];
+		block_candidates(p.l, segs[pi], cx, cz, bh, p.hw + PATH_SHOULDER, cand[pi], tmp);
+		ext[pi].clear();
+		if (cand[pi].empty()) {
+			continue;
+		}
+		double lim = p.hw + PATH_SHOULDER + PATH_ARM_PROM + bh + 1e-6;
+		for (int k : wide[pi]) {
+			double t;
+			if (seg_d2(p.l, k, cx, cz, t) <= lim * lim) {
+				ext[pi].push_back(k);
+			}
+		}
 	}
 	for (int j = blk.y0; j < blk.y1; j++) {
 		for (int i = blk.x0; i < blk.x1; i++) {
@@ -81,10 +205,15 @@ void path_rect(const std::vector<PathL> &paths, const Grid &g, const Rect &r, co
 				if (k < 0 || d >= p.hw + PATH_SHOULDER) {
 					continue;
 				}
-				double target = p.prof[k] + (double(p.prof[k + 1]) - p.prof[k]) * t;
 				if (!wet) {
-					double b = smoothstep(p.hw, p.hw + PATH_SHOULDER, d);
-					h = target * (1.0 - b) + h * b;
+					path_arms(p, ext[pi], g.wx(i), g.wz(j), dk, tk, arms);
+					if (arms.size() <= 1) {
+						double target = p.prof[k] + (double(p.prof[k + 1]) - p.prof[k]) * t;
+						double b = smoothstep(p.hw, p.hw + PATH_SHOULDER, d);
+						h = target * (1.0 - b) + h * b;
+					} else {
+						h = path_bank(p, arms, h);
+					}
 				}
 				cov = std::max(cov, 1.0 - smoothstep(p.hw - 0.15, p.hw + 0.15, d));
 			}

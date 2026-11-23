@@ -536,8 +536,16 @@ Sculpt tile while `active()`; one stroke is one `TerraEditor` gesture and one hi
 
 ## Versions and the library
 
-<<<<<<< HEAD
-`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 10 chutes` (card terraform-p2-chutes, from
+`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 11 path seams` (card terraform-p2-path-seam):
+where a path bends back on itself, a sample in reach of two of its stretches no longer takes its height from the
+nearest one alone (a ragged seam with a 0.4-0.8 m jump where the two shoulders met). Each stretch is a local
+minimum of the distance along the line, counted by its prominence; with two or more in reach their targets blend
+by inverse squared distance from each tread's edge, held over the ground by the union of their shoulders, so each
+tread stays flat and the ground between is one soft bank (`path_arms`, terra_kind_path.cpp). A sample with one
+stretch in reach keeps the old bytes: none of the 105 golden digests moved (the corpus path never comes back
+within reach of itself), `test_terra_path` pins a straight path's Hp, H2 and PM digests, and a new golden case,
+`switchback_40` (the corpus with a hairpin path on the west hill's flank, 21 digests), carries the blend
+through the three-platform parity run. Before it `terra 10 chutes` (card terraform-p2-chutes, from
 spike terraform-low-falls-probe, approach C): a step of 0.75 m up to CHUTE_MAX_M (2.5 m) is a chute, not a fall.
 The carve's level line (`River::chute`, the record's `chute`, hashed by the water digest) eases it down as a
 smoothstep ramp from the step's shared point (the segment's middle, where the bridge splits the reaches) over
@@ -571,7 +579,7 @@ treats as a failure.
 | `test_terra_kinds.gd` | the two registries agree; ids and names unique, none in 9 to 15; registration order never changes the table; each kind accepts the corpus (and the terraced corpus) and refuses a short, long, too-few-items, NaN, Inf or out-of-range layout and its own field ranges; GDScript and native bounds agree; `set_prim` and the map reader refuse an unknown id |
 | `test_terra_determinism.gd` | two runs of one instance, serial against 1 and 8 workers, two instances deriving at once |
 | `test_terra_water_laws.gd` | no level climbs downstream, the tributary joins and falls, the wall opens at the river, the pond holds water |
-| `test_terra_golden.gd` | `version()`, and the corpus on a 40 x 40 and a 40 x 48 cell map, plus the terraced corpus on 40 x 40, against `tests/fixtures/terra_corpus_digests.json` |
+| `test_terra_golden.gd` | `version()`, and the corpus on a 40 x 40 and a 40 x 48 cell map, plus the terraced corpus on 40 x 40 and the corpus with a switchback path on 40 x 40, against `tests/fixtures/terra_corpus_digests.json` |
 | `test_terra_cache.gd` | the derived record: with a matching key a fresh derive gives the recorded digests through the map document (the record reads back bit for bit, under 512 bytes); the snapshot's copy; a stale record is not written; each key change (grid, core version, a mute, a moved float) misses quietly while an add and its undo keep the key; one H2 sample set outside the chain gives `mismatch` naming only H2 with one warning; every truncation, a trailing byte, the entry cap, bad magic, a newer version, too many digests, names out of order or malformed are refused while the terrain still loads; a map without terrain is unaffected |
 | `test_terra_session.gd` | the session through `MapSourceLoader`: switch off makes no session and no `TerraDerive` and the fingerprint equals the stripped map's (but `terra`); switch on without a section makes none; the setting's default; switch on, the digests equal a fresh `derive_full`, the save writes the record, and a reload through `load_async` matches it with equal digests; every edit op (one queued during the attach, some back to back) lands equal to a fresh derive; closing mid-attach and mid-`derive_async` parks and later lets go; a refused section is kept and saved back untouched in format 6 |
 | `test_terra_bridge.gd` | `doc_rect`; `doc_heights` is H2 at the even samples and `doc_heights_diff` the tight rect (bits, clipping, another grid refused); a load with the switch on swaps in the derived ground and the collision equals `height_at` at 200 random samples; a new map with the switch on has a one-plane section, derived heights and a matching record, with it off none |
