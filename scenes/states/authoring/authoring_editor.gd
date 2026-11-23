@@ -101,8 +101,14 @@ var _held_plants := Rect2i()
 var _ground_later := false
 
 
+## `spread_presses`: the caller's frame loop steps the editor (AuthoringController), so a heavy
+## press may spread over frames (GroundPresses.spread, card noblock6).
 static func create(
-	doc: MapDocument, root: Node3D, hist: AuthoringHistory, root_path: String = ""
+	doc: MapDocument,
+	root: Node3D,
+	hist: AuthoringHistory,
+	root_path: String = "",
+	spread_presses: bool = false
 ) -> AuthoringEditor:
 	var editor := AuthoringEditor.new()
 	editor.document = doc
@@ -130,6 +136,7 @@ static func create(
 	editor.fire = FireEditor.create(editor)
 	editor.terra = TerraEditor.create(editor)
 	editor.presses = GroundPresses.create(editor)
+	editor.presses.spread = spread_presses
 	editor._rng.randomize()
 	return editor
 
