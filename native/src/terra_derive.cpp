@@ -33,6 +33,7 @@ struct Pass {
 	std::vector<const Prim *> paint_p;
 	std::vector<const PathL *> paint_l;
 	std::vector<Rect> paint_r;
+	CoatCache *cache = nullptr; // the held coat's, when it serves this derive (paint_items)
 	bool falls_changed = false, walls_changed = false;
 	int solved = 0;
 };
@@ -148,7 +149,7 @@ Dictionary TerraDerive::tile_collision(int64_t tile, int64_t stride) const {
 }
 
 String TerraDerive::version() const {
-	return "terra 8 paint";
+	return "terra 9 paint cache";
 }
 
 Dictionary TerraDerive::grid() const {
@@ -192,6 +193,7 @@ void TerraDerive::setup(int64_t w, int64_t h, const Vector2 &extent) {
 		d.init(g);
 	}
 	changed_ids.clear();
+	coat_cache.clear();
 	if (!pool) {
 		pool.reset(new Pool(threads));
 	}
@@ -234,6 +236,8 @@ bool TerraDerive::set_prim(int64_t id, int64_t type, const PackedFloat32Array &d
 	if (type < 0 || type > 0xFFFF || !kind_def(int(type))) {
 		return false;
 	}
+	// Any set (a new item, a release's replace, an undo's restore) can change what lies under the held coat.
+	coat_cache.clear();
 	Prim np;
 	np.id = int(id);
 	np.type = int(type);
@@ -255,6 +259,16 @@ void TerraDerive::append_dabs(int64_t id, const PackedFloat32Array &data) {
 	if (i < 0) {
 		return;
 	}
+	// The held coat keeps its cache (only its new dabs are applied); an append to anything else (a
+	// sculpt stroke moves the ground a path's surface follows) drops it, and a new coat starts one.
+	if (prims[i].type == KIND_PAINT) {
+		if (coat_cache.id != int(id)) {
+			coat_cache.clear();
+			coat_cache.id = int(id);
+		}
+	} else {
+		coat_cache.clear();
+	}
 	Prim part;
 	part.id = int(id);
 	part.type = prims[i].type;
@@ -272,6 +286,7 @@ void TerraDerive::remove_prim(int64_t id) {
 	if (i < 0) {
 		return;
 	}
+	coat_cache.clear();
 	seed(prims[i], influence(prims[i]));
 	prims.erase(prims.begin() + i);
 }
@@ -306,6 +321,7 @@ void TerraDerive::set_rules(const Array &rows) {
 }
 
 void TerraDerive::seed_all() {
+	coat_cache.clear();
 	for (int a = 0; a < A_COUNT; a++) {
 		if (ARRAYS[a].kind == K_INPUT) {
 			seeds[a].add(g.all(), g);
@@ -517,6 +533,30 @@ void TerraDerive::paint_items(Pass &ps) {
 			b++;
 		}
 	}
+	// The held coat's cache serves this derive when its coat is still a paint item; its blocks are
+	// rebuilt when the coat's place among the items moved (an edit would have dropped them already;
+	// this is the backstop) or on a whole-map derive.
+	if (coat_cache.id >= 0) {
+		int c = -1;
+		for (size_t k = 0; k < ps.paint_p.size(); k++) {
+			if (!ps.paint_l[k] && ps.paint_p[k]->id == coat_cache.id) {
+				c = int(k);
+				break;
+			}
+		}
+		if (c < 0) {
+			coat_cache.clear();
+			return;
+		}
+		if (c != coat_cache.index || int(coat_cache.blocks.size()) != g.ntiles() || ps.full) {
+			int id = coat_cache.id;
+			coat_cache.clear();
+			coat_cache.id = id;
+			coat_cache.index = c;
+			coat_cache.blocks.resize(g.ntiles());
+		}
+		ps.cache = &coat_cache;
+	}
 }
 
 // Stage 4's line solve: rebuilds the walls, re-solves each pad whose read points the change in Hp
@@ -643,7 +683,7 @@ void TerraDerive::rect_body(int stage, const Rect &r, const Pass &ps) {
 			look_rect(g, r, H2.data(), HB.data(), CV.data());
 			break;
 		case S_PAINT:
-			paint_rect(ps.paint_p, ps.paint_l, ps.paint_r, g, r, PI.data(), PW.data());
+			paint_rect(ps.paint_p, ps.paint_l, ps.paint_r, g, r, PI.data(), PW.data(), ps.cache);
 			break;
 		case S_RULES: {
 			FieldInputs in{ H2.data(), WL.data(), SL.data(), DW.data(), DP.data(), DF.data(), PW.data(), PM.data(),
@@ -1071,6 +1111,7 @@ void TerraDerive::debug_set_sample(const String &name, int64_t i, int64_t j, dou
 	if (a < 0 || ARRAYS[a].kind != K_SAMPLES || a == A_CT || i < 0 || j < 0 || i >= g.w || j >= g.h) {
 		return;
 	}
+	coat_cache.clear();
 	int64_t o = j * g.w + i;
 	if (a == A_PI || a == A_PW) {
 		// Four entries a sample: the first (the strongest), which the rules read.
@@ -1151,7 +1192,7 @@ int64_t TerraDerive::memory_bytes() const {
 	for (const Prim &p : prims) {
 		n += int64_t(p.d.capacity()) * 4 + int64_t(sizeof(Prim));
 	}
-	return n;
+	return n + coat_cache.memory_bytes();
 }
 
 Dictionary TerraDerive::water_records() const {

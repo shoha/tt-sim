@@ -1,6 +1,6 @@
 {
 	"comment": "Golden digests of TerraDerive over tests/unit/terra_corpus.gd (test_terra_golden.gd). Every platform must derive exactly these; regenerate only when the derive changes on purpose.",
-	"version": "terra 8 paint",
+	"version": "terra 9 paint cache",
 	"cases": {
 		"folded_40x48": {
 			"CT": "1521099255743541635",
