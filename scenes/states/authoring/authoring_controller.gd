@@ -464,6 +464,9 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	FoliageDensityController.apply(root)
 	_view_fit.fit(root, document)
 	editor = AuthoringEditor.create(document, root, history)
+	# The frame loop steps the editor (_process): a heavy press may spread over frames (card
+	# noblock6; GroundPresses.then).
+	editor.presses.spread = true
 	editor.edited.connect(mark_edited)
 	editor.edited.connect(func() -> void: _bounds_stale = true)
 	editor.edited.connect(_refresh_tools)

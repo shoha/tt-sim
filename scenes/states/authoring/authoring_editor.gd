@@ -152,6 +152,8 @@ func prepare_biome(biome_id: String) -> void:
 ## Starts a stroke (MaskBrush.PAINT with `biome_id`, THIN or CLEAR). False when there is
 ## nothing it could change.
 func begin_stroke(mode: int, biome_id: String = "") -> bool:
+	# A spread press's steps first (GroundPresses.finish_steps): a stroke must not fall between them.
+	presses.finish_steps()
 	commit_prop_edit()
 	if is_stroking():
 		end_stroke()
@@ -305,6 +307,7 @@ func apply_mask_diff(diff: Dictionary, redo: bool) -> void:
 ## Starts a Fire stroke (FireEditor): laying fire toward `target` (0..1 of the mask's 255), or
 ## with `erase` putting it out. False when the map's ground is not the document's.
 func begin_fire_stroke(target: float, erase: bool) -> bool:
+	presses.finish_steps()
 	commit_prop_edit()
 	if is_stroking():
 		end_stroke()
@@ -368,6 +371,7 @@ func surface_refusal(surface: String) -> String:
 ## painted surface back to the automatic ground. False when the map cannot be painted, there
 ## is no paint to erase, or every slot holds paint (surface_refusal() says which).
 func begin_surface_stroke(surface: String, erase: bool) -> bool:
+	presses.finish_steps()
 	commit_prop_edit()
 	if is_stroking():
 		end_stroke()
@@ -548,6 +552,7 @@ func can_sculpt() -> bool:
 ## goal of FLATTEN and TIER (the height under the press, or a tier height; see
 ## ground_height_at and HeightBrush.tier_height). False when the map cannot be sculpted.
 func begin_height_stroke(op: int, target_y: float = 0.0) -> bool:
+	presses.finish_steps()
 	commit_prop_edit()
 	if is_stroking():
 		end_stroke()
@@ -913,6 +918,7 @@ func _edit_prop(handle: Dictionary, row: PackedFloat32Array, label: String) -> D
 func _begin_prop_edit(cell: Vector2i, label: String) -> void:
 	if not _prop_edit.is_empty() and _prop_edit.cell == cell:
 		return
+	presses.finish_steps()
 	commit_prop_edit()
 	_prop_edit = {"cell": cell, "before": _cell_rows(cell), "label": label}
 	_prop_edit_age = 0.0

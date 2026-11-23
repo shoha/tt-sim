@@ -694,6 +694,8 @@ func _replace(
 	var strokes: Array[Dictionary] = []
 	# An edit made inside a group of its own caller's (move_plaza between villages) joins it.
 	var owns_group := not e.history.is_grouping()
+	# (Asked before the group below opens: a press inside a caller's group runs whole.)
+	var spreading := owns_group and not e.terra.active() and e.presses.can_spread()
 	if laying:
 		_settle()
 		if owns_group:
@@ -752,12 +754,51 @@ func _replace(
 		if bridge_group:
 			e.history.end_group(label)
 		return changed.id
-	var painting := Time.get_ticks_usec()
-	last_ground["entries"] = SettlementPaint.lay(e, strokes)
-	var t := Time.get_ticks_usec()
-	last_ground["paint_ms"] = (t - painting) / 1000.0
 	last_ground["bridge_plan_ms"] = bridge_plan_ms
 	last_ground["strokes"] = strokes.size()
+	var record := _record.bind(changed, label, after, bridge_plan, owns_group)
+	if spreading:
+		# Card noblock6: the paint on the next frame, the record on the one after (GroundPresses
+		# .then), each in this group, closed between them; the same map and history as at once.
+		var parts := e.history.take_group()
+		e.presses.then(_paint_later.bind(parts, strokes, record))
+		return changed.id
+	_paint(strokes)
+	record.call()
+	return changed.id
+
+
+## Lays the planned paving (SettlementPaint.lay) and times it.
+func _paint(strokes: Array[Dictionary]) -> void:
+	var painting := Time.get_ticks_usec()
+	last_ground["entries"] = SettlementPaint.lay(_editor(), strokes)
+	last_ground["paint_ms"] = (Time.get_ticks_usec() - painting) / 1000.0
+
+
+## A spread Dress's second frame: the paving into the reopened group, then the record next frame.
+func _paint_later(parts: Array, strokes: Array[Dictionary], record: Callable) -> void:
+	var e := _editor()
+	e.history.reopen_group(parts)
+	_paint(strokes)
+	var painted := e.history.take_group()
+	e.presses.then(
+		func() -> void:
+			e.history.reopen_group(painted)
+			record.call()
+	)
+
+
+## The end of a laying _replace: the bridges, the record (_change), the held ground released for
+## the next frame and the history group closed.
+func _record(
+	changed: Settlement,
+	label: String,
+	after: Array[Settlement],
+	bridge_plan: Dictionary,
+	owns_group: bool
+) -> void:
+	var e := _editor()
+	var t := Time.get_ticks_usec()
 	if not bridge_plan.is_empty():
 		_lay_bridges(changed, bridge_plan)
 	last_ground["bridge_lay_ms"] = (Time.get_ticks_usec() - t) / 1000.0
@@ -772,7 +813,6 @@ func _replace(
 	last_ground["release_ms"] = (Time.get_ticks_usec() - t) / 1000.0
 	if owns_group:
 		e.history.end_group(label)
-	return changed.id
 
 
 ## The strokes that pave `settlement`'s `roles` with its kit's ground: SettlementGround.plan's

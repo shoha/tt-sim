@@ -23,6 +23,8 @@
    {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "table"},
    {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "undo"},
    {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "redo"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "paint"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "pond"},
    {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "none"},
    {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "structure"},
    {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "crossing"},
@@ -33,6 +35,8 @@
    {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "table"},
    {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "undo"},
    {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "redo"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "paint"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "pond"},
    {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "report"},
    {"op": "title"}
   ]},

@@ -10,7 +10,8 @@ extends RefCounted
 ##                       on; points the level at the bench's test folder for the save press.
 ##   trial {after, press}  in one frame: the release (`river`: a river carved on the tool's path,
 ##                       `raise`: the end of a 20-frame held Raise), then the press (`none`,
-##                       structure, crossing, settlement, fire, putout, save, table, undo, redo).
+##                       structure, crossing, settlement, fire, putout, save, table, undo, redo,
+##                       paint, pond: a stroke begun, dabbed once and ended in the frame).
 ##                       Then frames until the map is idle; one row to ROWS. The map is put back
 ##                       (the trial's entries undone) before the next trial, outside the window.
 ##   report              the rows of every run so far, grouped by core, release and press.
@@ -43,6 +44,8 @@ const LOTS := [
 const FIRE := Vector2(0.30, 0.45)
 const STANDING_FIRE := Vector2(0.36, 0.52)
 const RAISE := [Vector2(0.62, 0.68), Vector2(0.68, 0.72)]
+const PAINT_AT := Vector2(0.45, 0.35)
+const POND_AT := Vector2(0.72, 0.40)
 
 
 static func run(base: Node, step: Dictionary) -> String:
@@ -112,6 +115,28 @@ static func busy(ctrl: AuthoringController) -> bool:
 		or (session != null and not session.is_ready())
 		or (is_instance_valid(e.scatter) and e.scatter.is_regenerating())
 	)
+
+
+## Which of the editor's height work holds a frame (card noblock6: what a press after a river waits
+## behind): "+"-joined codes, "" when none.
+static func work_codes(e: AuthoringEditor) -> String:
+	var h := e.heights
+	var codes: Array[String] = []
+	if not (h.get("_snap_windows") as Dictionary).is_empty():
+		codes.append("snap")
+	if bool(h.get("_collision_dirty")):
+		codes.append("coll")
+	if is_instance_valid(e.terrain) and e.terrain.has_height_work():
+		codes.append("terr")
+	if e.rock_keeper.is_running():
+		codes.append("rock")
+	if e.water.is_working():
+		codes.append("water")
+	if (h.get("_landing") as Callable).is_valid():
+		codes.append("land")
+	if e.terra.has_work():
+		codes.append("terra")
+	return "+".join(codes)
 
 
 static func world(e: AuthoringEditor, f: Vector2) -> Vector3:
@@ -322,6 +347,9 @@ class Bench:
 	## The river release's call (main thread), ms.
 	var release_ms := -1.0
 	var waiting := false
+	## Frames by the height work that held them (work_codes), and the terrain and collision time.
+	var waits := {}
+	var work_us := 0
 	var meta: Dictionary = {}
 	## Why the press made nothing, or "".
 	var note := ""
@@ -343,6 +371,11 @@ class Bench:
 		if phase == 2:
 			frames.append((now_us - last_us) / 1000.0)
 			procs.append((tail_us - last_us) / 1000.0)
+			var codes: String = probe.work_codes(e)
+			waits[codes] = int(waits.get(codes, 0)) + 1
+			# (This node processes first: the previous frame's work.)
+			if int(e.heights.get("_worked_frame")) == Engine.get_process_frames() - 1:
+				work_us += e.heights.last_terrain_usec + e.heights.last_collision_usec
 		last_us = now_us
 		match phase:
 			0:
@@ -438,6 +471,24 @@ class Bench:
 						await e.presses.settle_async(tree)
 						TableMover.document_of(e)
 				)
+			# Card noblock6: a Paint stroke and a pond stroke (begin, one dab, end in the frame).
+			"paint":
+				var built := PaletteLibrary.surfaces_with_role("built", e.palette_root)
+				var p: Vector3 = probe.world(e, PAINT_AT)
+				if built.is_empty() or not e.begin_surface_stroke(built[0], false):
+					note = "paint refused"
+				else:
+					e.stroke_dab(p, p, 2.0, 0.5)
+					e.flush()
+					e.end_stroke()
+			"pond":
+				var q: Vector3 = probe.world(e, POND_AT)
+				if not e.terra.paint_pond_begin(WaterBody.Depth.WAIST, q):
+					note = "pond refused: %s" % e.water.last_refusal
+				else:
+					e.stroke_dab(q, q, 3.0, 0.5)
+					e.flush()
+					e.end_stroke()
 			"undo":
 				ctrl.undo()
 			"redo":
@@ -484,6 +535,8 @@ class Bench:
 			"idle_frames": frames.size(),
 			"slow": slow,
 			"note": note,
+			"waits": waits,
+			"work_ms": snappedf(work_us / 1000.0, 0.1),
 		}
 		var fire_parts: Variant = ctrl.editor.fire.get("last_parts")
 		if row.press in ["fire", "putout"] and fire_parts is Dictionary:
