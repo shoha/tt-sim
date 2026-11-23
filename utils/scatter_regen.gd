@@ -56,6 +56,14 @@ extends RefCounted
 ## of every cell waiting out the longest ripple from wherever the brush is now. A request that is
 ## not live (an undo, a cancelled stroke's revert, a sculpt) notes its rectangle's centre only
 ## where no stroke has noted one.
+##
+## Blockers (live-crater-scatter, 2026-11-22). The footprints of the map's rock props, inside which
+## no rock, tree or shrub grows (RockKeep.blockers), are read through `blocker_reader` when a cell
+## is requested and travel with its job, never read when a worker slot frees up. A prop edit
+## requests no regeneration, so a read at dispatch made the rows depend on the pool's speed: a
+## live crater's host placed its rim boulders in the frame of its request, its peer a few frames
+## later, and under load the two grew different plants. Read at the request, the rows depend
+## only on the order of requests and prop edits, which every peer replays the same.
 
 ## Cells per job. One: one cell per job lets the pool run a dab's cells in parallel instead
 ## of in series (a painted cell under a dab takes 250 to 800 ms on a worker, its relation halo
@@ -88,7 +96,12 @@ var built_surfaces: PackedStringArray = PackedStringArray()
 var cliff_surfaces: PackedStringArray = PackedStringArray()
 ## The rectangle (world XZ) of the latest live request: where the brush is, or last was.
 var focus: Rect2 = Rect2()
+## Returns the blockers (RockKeep.blockers' flat triples) every request reads for its cells (see
+## "Blockers"); none when invalid. Called on the main thread.
+var blocker_reader: Callable = Callable()
 
+## cell -> the blockers its latest request read (see "Blockers").
+var _blockers: Dictionary = {}
 ## biome id -> {"species": Array[Dictionary], "reach": PackedFloat32Array,
 ## "assets": Array[PackedStringArray] per species, "groups": Array[PackedInt32Array]
 ## (species sharing an asset with each species, itself included)}.
@@ -274,6 +287,10 @@ func request_region(
 				touched[cell] = true
 	var cells: Array[Vector2i] = []
 	cells.assign(touched.keys())
+	if blocker_reader.is_valid() and not cells.is_empty():
+		var blockers: PackedFloat32Array = blocker_reader.call()
+		for cell in cells:
+			_blockers[cell] = blockers
 	if live:
 		focus = rect
 		var size := ScatterChunker.CHUNK_SIZE_WORLD_UNITS
@@ -310,7 +327,8 @@ func pending_count() -> int:
 ## The next job, or {} when nothing waits: up to `max_cells` of the oldest pending cells,
 ## {"cells": Array[Vector2i], "generations": {cell: int}, "regenerated": {cell:
 ## PackedStringArray asset ids whose rows the job replaces}, "work": {biome id:
-## {"species", "cells_by_species", "window"}}}. The work part is plain data for run(). A
+## {"species", "cells_by_species", "window"}}, "blockers": what the latest requests of its cells
+## read (see "Blockers")}. The work part is plain data for run(). A
 ## live cell due a lead job (see the header) at `now_msec` (default: now) gets one first: the
 ## same form for that one cell with "lead": true, its lead species only, the cell left pending;
 ## with whole_leads every dirty species, "whole": true, and the cell taken off pending. With
@@ -477,10 +495,17 @@ func _job(cells: Array[Vector2i], lead: bool) -> Dictionary:
 		"cells": cells, "generations": generations, "regenerated": regenerated, "work": work
 	}
 	var centres := {}
+	var blockers := PackedFloat32Array()
+	var seen: Array[PackedFloat32Array] = []
 	for cell in cells:
 		if _centres.has(cell):
 			centres[cell] = _centres[cell]
+		var read: PackedFloat32Array = _blockers.get(cell, PackedFloat32Array())
+		if not read.is_empty() and not read in seen:
+			seen.append(read)
+			blockers.append_array(read)
 	job["centres"] = centres
+	job["blockers"] = blockers
 	if lead:
 		job["lead"] = true
 		if whole_leads:
