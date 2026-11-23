@@ -2,8 +2,9 @@ class_name SculptBrush
 extends BrushMode
 
 ## The Sculpt tool's mode (SculptTool): an LMB drag runs the picked tile's operation
-## (sculpt_op(): Raise, Smooth, Flatten, Tier) on the document's heights
-## (AuthoringEditor.begin_height_stroke). Ctrl at the press lowers (Raise) or cuts a tier down
+## (sculpt_op(): Raise, Smooth, Flatten, Tier, and with the terrain core Terrace and Soften) on the
+## document's heights (AuthoringEditor.begin_height_stroke; on a primitives map TerraSculpt). Ctrl
+## at the press lowers (Raise) or cuts a tier down
 ## (Tier); Shift at the press smooths whichever tile is picked. Flatten holds the ground height
 ## under the press; Tier builds toward the tier AuthoringEditor.tier_target() picks at the
 ## press.
@@ -49,6 +50,8 @@ static func sculpt_op(tile_op: int, ctrl: bool, shift: bool) -> int:
 			return HeightBrush.TIER_CUT if ctrl else HeightBrush.TIER
 		HeightBrush.FLATTEN:
 			return HeightBrush.FLATTEN
+		TerraSculpt.TERRACE, TerraSculpt.SOFTEN:
+			return tile_op
 	return HeightBrush.SMOOTH
 
 
@@ -85,6 +88,10 @@ func press(brush: BrushTool) -> bool:
 		var tier := editor.tier_target(brush.hit, brush.get_radius(), op == HeightBrush.TIER_CUT)
 		target_y = tier.y
 		_stroke_level = tier.level
+	elif op >= TerraSculpt.TERRACE and not editor.terra.active():
+		# Terrace and Soften shape terrain primitives only (TerraSculpt).
+		brush.refused.emit(SculptTool.TERRA_ONLY % TerraSculpt.LABELS[op])
+		return false
 	if not editor.begin_height_stroke(op, target_y):
 		# The terrain core's refusal (the switch off on a primitives map, or not yet routed).
 		if editor.terra.last_refusal != "":
@@ -111,6 +118,12 @@ func cursor_tint(brush: BrushTool) -> Color:
 			return LOWER_TINT
 		HeightBrush.FLATTEN:
 			return BrushCursor.PLACE_TINT
+		TerraSculpt.TERRACE:
+			# Between raise and smooth: a pale golden green, as fields.
+			return RAISE_TINT.lerp(SMOOTH_TINT, 0.5)
+		TerraSculpt.SOFTEN:
+			# Between flatten's ember and lower's blue: a soft mauve, an eraser's.
+			return BrushCursor.PLACE_TINT.lerp(LOWER_TINT, 0.5)
 	return SMOOTH_TINT
 
 
