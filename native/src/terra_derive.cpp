@@ -392,6 +392,7 @@ void TerraDerive::solve_water(Pass &ps) {
 		} else {
 			r.level = o->level;
 			r.pool = o->pool;
+			r.lip = o->lip;
 			r.falls = o->falls;
 		}
 		if (!o || !same_shape) {
@@ -408,6 +409,9 @@ void TerraDerive::solve_water(Pass &ps) {
 			bool lv = std::memcmp(&r.level[k], &o->level[k], sizeof(float)) != 0;
 			bool pl = k >= int(o->pool.size()) || k >= int(r.pool.size()) ||
 					std::memcmp(&r.pool[k], &o->pool[k], sizeof(float)) != 0;
+			// The lip line (LIP_*) runs past the step that moved it: compared per point as the pool.
+			pl = pl || k >= int(o->lip.size()) || k >= int(r.lip.size()) ||
+					std::memcmp(&r.lip[k], &o->lip[k], sizeof(float)) != 0;
 			if (lv || pl) {
 				k0 = k0 < 0 ? k : k0;
 				k1 = k;

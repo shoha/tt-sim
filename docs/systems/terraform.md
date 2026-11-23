@@ -540,7 +540,12 @@ Sculpt tile while `active()`; one stroke is one `TerraEditor` gesture and one hi
 reach whose water stands 0.35-1.1 m or more under its bed's freeboard line opens into a pool, its half width up
 to 0.9 x wider (at most 1.2 m) and its bank eased, fading back for slots deeper than 1.6-2.4 m and never below a
 fall of 2.5 m or more; the record's per-point `hws` carries the widths to the bridge's bodies and the water
-digest; 50 of 105 golden digests moved, the water-touched arrays of every case. Before it, `terra 8 paint` (card terraform-p2-paint-path:
+digest; 50 of 105 golden digests moved, the water-touched arrays of every case. Round 3, same version: the
+pool opens over POOL_OPEN_M (1.5 m) below a fall's face, so a low fall keeps its stream's width, and beside a
+fall of 0.75-2.5 m the bank follows a lip line (`River::lip`) that holds the upper level at the face and eases to
+the lower one over 2.2 m of arc per metre of drop, rising from the water's edge over LIP_SIDE_M (2 m): no sheer
+wall across the bank reach at the lip; the same 50 digests moved again. With the core on, WaterField draws those
+falls soft (WaterFieldStroke.SOFT_FALL_WHITE of the white). Before it, `terra 8 paint` (card terraform-p2-paint-path:
 four-entry paint planes, coats with SurfaceStroke's rule, paths as coats, `doc_surfaces`; regenerated after
 merging `terra 7 reaches`, 15 of 105 golden digests moved against it (PI, PW and CT of every case; heights and water
 unchanged); before it `terra 7 reaches`, the

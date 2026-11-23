@@ -24,6 +24,13 @@ const FACE_TOP := 0.3
 const FACE_RAMP := 0.65
 const FOOT_DECAY_M := 0.4
 const FOOT_DECAY_PER_DROP := 0.2
+## A low fall of the terraforming core (table()'s `soft`: a step the reaches rule gathered on an
+## even slope, under the derive's POOL_TALL_M) is a lively soft one, not a sheet: its brink, face
+## and foot white are SOFT_FALL_WHITE of a tall fall's, so the face is glass with a few columns
+## over the foot's floor of white tongues. At full white a 1.4 m step read as a white sluice gate
+## of evenly spaced stripes, heavier than the tall fall above it (card terraform-p2-river-polish).
+const SOFT_FALL_M := 2.5
+const SOFT_FALL_WHITE := 0.55
 ## The lip speed of a fall's water (WaterFallMesh.V0_BASE plus V0_PER_SPEED times the upper
 ## reach's speed) sets where the white of the face ends and the foot foam begins (the distance
 ## it would travel in the fall's time): the field keeps that split, though no arc is drawn.
@@ -53,8 +60,11 @@ static var foot_seams_cleared := true
 ## along its arc: {"level", "energy", "core"} (PackedFloat32Array each). The level is the
 ## profile's bank level (flat over a reach, eased over a riffle, stepping down a fall's face with
 ## the carve); the energy is the fall's foot foam and the riffle white carried downstream, the
-## core the brink and the face.
-static func table(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
+## core the brink and the face. `soft` (the terraforming core's water) draws every fall under
+## SOFT_FALL_M as a soft one (SOFT_FALL_WHITE).
+static func table(
+	profile: RiverProfile, chain: Array[WaterBody], soft: bool = false
+) -> Dictionary:
 	var count := int(ceil(profile.total / TABLE_STEP)) + 1
 	var lev := PackedFloat32Array()
 	var en := PackedFloat32Array()
@@ -72,6 +82,8 @@ static func table(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
 		var land := v0 * sqrt(2.0 * drop / G)
 		var decay := FOOT_DECAY_M + FOOT_DECAY_PER_DROP * drop
 		var strength := clampf(drop / 1.0, 0.6, 1.0)
+		if soft and drop < SOFT_FALL_M:
+			strength *= SOFT_FALL_WHITE
 		var face_m := maxf(float(fall.foot) - lip, 0.5)
 		for t in count:
 			var x := t * TABLE_STEP - lip

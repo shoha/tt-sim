@@ -399,16 +399,36 @@ void solve_river(River &r, const Grid &g, const float *H0, double recv_level) {
 	// in and out, nothing below a tall fall.
 	r.pool.assign(n, 0.0f);
 	double head = 0.0;
+	// The arc of the last fall's face (its upper point): the pool opens over POOL_OPEN_M past it.
+	double face_s = -1e30;
 	for (int k = 0; k < n; k++) {
 		if (k > 0 && lv[k - 1] - lv[k] > LEVEL_EPS) {
 			head = lv[k - 1] - lv[k];
+			if (head >= FALL_MIN - LEVEL_EPS) {
+				face_s = l.s[k - 1];
+			}
 		}
 		if (head >= POOL_TALL_M - LEVEL_EPS) {
 			continue;
 		}
 		double dig = g.bilinear(H0, l.x[k], l.z[k]) - RIVER_FREEBOARD - lv[k];
 		double p = smoothstep(POOL_DIG_LO, POOL_DIG_HI, dig) * (1.0 - smoothstep(POOL_DEEP_LO, POOL_DEEP_HI, dig));
+		p *= smoothstep(0.0, POOL_OPEN_M, l.s[k] - face_s);
 		r.pool[k] = float(p);
+	}
+	// The bank line beside each low fall (LIP_*): the upper level at the face, eased down to the
+	// lower over the run below it; the level everywhere else.
+	r.lip.assign(r.level.begin(), r.level.end());
+	for (int k = 1; k < n; k++) {
+		double drop = lv[k - 1] - lv[k];
+		if (drop < FALL_MIN - LEVEL_EPS || drop >= POOL_TALL_M - LEVEL_EPS) {
+			continue;
+		}
+		double run = LIP_RUN_PER_M * drop;
+		for (int j = k; j < n && l.s[j] - l.s[k] < run; j++) {
+			double e = lv[k] + drop * (1.0 - smoothstep(0.0, run, l.s[j] - l.s[k]));
+			r.lip[j] = std::max(r.lip[j], float(e));
+		}
 	}
 }
 
@@ -515,7 +535,14 @@ void carve_rect(const Water &w, const Grid &g, const Rect &r, const float *H0, f
 					// valley side, never a trench wall at the reach).
 					double x = d - hw;
 					double bs = (BANK_SLOPE + BANK_NOISE * bank_noise(rv.id, s)) * (1.0 - POOL_BANK_EASE * ease);
-					c = L + x * bs + x * x * BANK_CURVE * (1.0 - POOL_CURVE_EASE * ease);
+					// Beside a low fall the bank rises from the water's edge to its lip line (LIP_*;
+					// exactly L wherever the line is the level).
+					double Lb = L;
+					if (!rv.lip.empty()) {
+						double B = rv.lip[bk] + (double(rv.lip[bk + 1]) - rv.lip[bk]) * bt;
+						Lb = L + (B - L) * smoothstep(0.0, LIP_SIDE_M, x);
+					}
+					c = Lb + x * bs + x * x * BANK_CURVE * (1.0 - POOL_CURVE_EASE * ease);
 					f = std::min(c, L + 0.08 - std::max(0.0, x - 0.25) * 0.7);
 				}
 				cut = std::min(cut, c);

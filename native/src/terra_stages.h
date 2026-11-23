@@ -64,6 +64,20 @@ constexpr double POOL_WIDEN = 0.9;
 constexpr double POOL_WIDEN_MAX_M = 1.2;
 constexpr double POOL_BANK_EASE = 0.4;
 constexpr double POOL_CURVE_EASE = 0.5;
+// Round 3 (the 1.4 m step read as a broad white sluice between two brown pits): the carve stepped a
+// reach's level over one 0.25 m segment, so beside the channel the lower reach's bank cut a sheer
+// wall across the whole bank reach at the lip (51 to 77 degrees, 8 m wide: the brown pits, cliff
+// rock facing the camera), and the pool widened the water right up to the face (a face twice the
+// stream's width). Below a fall under POOL_TALL_M the pool now opens over POOL_OPEN_M of arc past
+// the face, and the banks beside it come down from the upper level over LIP_RUN_PER_M of arc per
+// metre of drop (River::lip), rising to that line from the water's edge over LIP_SIDE_M: a low fall
+// keeps its stream's width and sits in a grassy slope, not a notch. Tall falls are unchanged.
+constexpr double POOL_OPEN_M = 1.5;
+// The face line itself keeps the upper bank (it meets the reach above), so the drop beside the
+// face's foot is a narrow steep margin LIP_SIDE_M wide that fades down the run (a few rocks); a wider
+// side (3 or 4 m) spread it into larger earth discs, or cut into the upper bank at the face line.
+constexpr double LIP_RUN_PER_M = 2.2;
+constexpr double LIP_SIDE_M = 2.0;
 constexpr double POND_REACH = 6.0;
 constexpr double POND_FREEBOARD = 0.1;
 
@@ -83,6 +97,7 @@ struct River {
 	double hw = 1.0, depth = 0.5;
 	std::vector<float> level; // per point of l
 	std::vector<float> pool; // per point of l, in [0, 1]: how far the reach there opens into a pool
+	std::vector<float> lip; // per point of l: the bank line beside a low fall (LIP_*), else the level
 	std::vector<Fall> falls;
 	int recv_river = -1, recv_pond = -1; // the body its end flows into (indices)
 	Rect rect; // samples it can change

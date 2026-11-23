@@ -427,6 +427,8 @@ func _write_strokes(
 ) -> void:
 	var rect_m := Rect2(origin + Vector2(rect.position) * step, Vector2(rect.size) * step).grow(1.0)
 	var chains := RiverProfile.strokes(doc.water_bodies)
+	# The terraforming core's water (its bodies are the derive's): its low falls are soft ones.
+	var soft := doc.terra != null and TerraCore.enabled()
 	_foot_rects.clear()
 	if _tables.size() > chains.size():
 		# Strokes that are gone (or whose first reach changed) leave their tables behind.
@@ -461,7 +463,7 @@ func _write_strokes(
 			ends.append(
 				{"body": typed[0].id, "pos": profile.points[-1], "level": profile.at(profile.total).x}
 			)
-		var table := _table_of(profile, typed)
+		var table := _table_of(profile, typed, soft)
 		_put_stroke(doc, typed[0].id, profile, table, lost, field, pond_level)
 
 
@@ -487,8 +489,9 @@ func _chain_may_meet(chain: Array[WaterBody], rect_m: Rect2) -> bool:
 
 
 ## WaterFieldStroke.table of `profile`, kept from the last update while its inputs (the profile's
-## shape and the reaches' speeds) are unchanged: an edit elsewhere never redoes a stroke's table.
-func _table_of(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
+## shape, the reaches' speeds and `soft`) are unchanged: an edit elsewhere never redoes a stroke's
+## table. `soft`: the water is the terraforming core's (its low falls are soft ones).
+func _table_of(profile: RiverProfile, chain: Array[WaterBody], soft: bool) -> Dictionary:
 	var speeds := PackedFloat32Array()
 	for body in chain:
 		speeds.append(body.speed)
@@ -501,12 +504,13 @@ func _table_of(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
 		profile.taper,
 		profile.run_off,
 		speeds,
+		soft,
 	]
 	var id := chain[0].id
 	var kept: Variant = _tables.get(id)
 	if kept != null and kept.key == key:
 		return kept.table
-	var table := WaterFieldStroke.table(profile, chain)
+	var table := WaterFieldStroke.table(profile, chain, soft)
 	_tables[id] = {"key": key, "table": table}
 	return table
 
