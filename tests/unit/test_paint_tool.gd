@@ -159,6 +159,80 @@ func test_erase_without_paint_does_nothing() -> void:
 	assert_null(SurfaceStroke.begin(_doc, "", false), "paint needs a surface")
 
 
+# --- Editor: the switch-off Path release spread over frames (PathLay) -------------------
+
+
+## The release's dabs along a bent line across the map (world XZ).
+func _lay_dabs() -> PackedFloat32Array:
+	var line := PackedVector2Array([Vector2(-8, -7), Vector2(-1, 0), Vector2(7, 6)])
+	var points := StrokePath.resample(line, PathBrush.MAX_LAY_DABS + 1, PathBrush.LAY_SPACING)
+	return PathLay.dabs_of(
+		points, 1.0 + PathBrush.SOFT_EDGE_M, PathBrush.LAY_SECONDS, PathBrush.LAY_SPACING
+	)
+
+
+func test_a_path_laid_over_frames_equals_the_path_laid_at_once() -> void:
+	var editor := _editor()
+	var empty := _snapshot()
+	var dabs := _lay_dabs()
+	assert_gt(dabs.size() / 6, 20, "a line of many dabs")
+	# At once: every dab in one frame, then the end (the release before PathLay).
+	assert_true(editor.begin_surface_stroke("gravel", false))
+	var whole := PathLay.create(editor, dabs)
+	whole.drain()
+	editor.flush()
+	assert_true(editor.end_stroke())
+	var at_once := _snapshot()
+	assert_ne(at_once, empty, "the path painted")
+	_history.undo()
+	assert_eq(_snapshot(), empty, "undo: as before")
+	# Spread: one dab a frame (budget 0), the ground flushed each frame, then the end.
+	var updates := editor.ground_updates
+	assert_true(editor.begin_surface_stroke("gravel", false))
+	editor.path_lay = PathLay.create(editor, dabs)
+	var frames := 0
+	while editor.path_lay.remaining() > 0:
+		editor.path_lay.step(0)
+		frames += 1
+	assert_true(editor.is_stroking(), "the stroke stays open while the lay runs")
+	editor.path_lay = null
+	assert_true(editor.end_stroke())
+	assert_eq(frames, dabs.size() / 6, "one dab a frame")
+	assert_gt(editor.ground_updates - updates, frames - 1, "the ground followed every frame")
+	assert_eq(_snapshot(), at_once, "spread over frames: the same bytes and slots")
+	assert_eq(_history.undo_count(), 1, "one entry")
+	_history.undo()
+	assert_eq(_snapshot(), empty, "and its undo is exact")
+
+
+func test_a_path_still_laying_lands_whole_before_the_next_stroke() -> void:
+	var editor := _editor()
+	var dabs := _lay_dabs()
+	assert_true(editor.begin_surface_stroke("gravel", false))
+	PathLay.create(editor, dabs).drain()
+	editor.end_stroke()
+	var at_once := _snapshot()
+	_history.undo()
+	# The release lays a frame's share; a press before the rest lands drains it and ends it first.
+	assert_true(editor.begin_surface_stroke("gravel", false))
+	editor.path_lay = PathLay.create(editor, dabs)
+	editor.path_lay.step(0)
+	assert_gt(editor.path_lay.remaining(), 0, "dabs left after the first frame")
+	assert_true(editor.begin_surface_stroke("moss", false), "a new press")
+	assert_null(editor.path_lay, "the lay is done")
+	assert_eq(_history.undo_count(), 1, "the path is its own entry")
+	editor.cancel_stroke()
+	assert_eq(_snapshot(), at_once, "the path landed whole")
+	# A cancel while laying keeps the path (it was released), as an undo's drain does.
+	_history.undo()
+	assert_true(editor.begin_surface_stroke("gravel", false))
+	editor.path_lay = PathLay.create(editor, dabs)
+	editor.path_lay.step(0)
+	editor.cancel_stroke()
+	assert_null(editor.path_lay)
+	assert_eq(_snapshot(), at_once, "a cancel lands it whole")
+
+
 # --- Editor: undo, redo, cancel ---------------------------------------------------------
 
 

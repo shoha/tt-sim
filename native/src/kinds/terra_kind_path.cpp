@@ -14,7 +14,8 @@ constexpr double PATH_SHOULDER = 1.2;
 constexpr double PATH_STAIR_AT = 0.3;
 constexpr double PATH_STAIR_BLEND = 0.3;
 constexpr double PATH_RISE = 0.45;
-constexpr double PATH_RISER = 0.45;
+// A riser's run along the path (metres): two to three document samples, so it reads as one soft step.
+constexpr double PATH_RISER_M = 0.6;
 
 void path_geometry(PathL &p, const Prim &prim, const Grid &g) {
 	p.id = prim.id;
@@ -38,12 +39,38 @@ void solve_path(PathL &p, const Grid &g, const float *H1) {
 	std::vector<double> gs = window_mean(v, 8);
 	std::vector<double> pr = grade(gs, PATH_SLOPE * 0.25);
 	p.prof.resize(n);
-	// Round 3: where the graded bench would cut or fill past PATH_STAIR_AT the path steps, as a few
-	// soft ledges (PATH_RISE tall, the riser the upper PATH_RISER share of each), blended in over
-	// PATH_STAIR_BLEND so a stair starts without a seam.
+	// Where the graded bench would cut or fill past PATH_STAIR_AT the path steps, blended in over
+	// PATH_STAIR_BLEND so a stair starts without a seam. The treads are the ground's nearest
+	// PATH_RISE level (never more than half a rise above or below it), and each riser is one soft
+	// smoothstep PATH_RISER_M long across the path, centred where the ground crosses half way between
+	// two levels (card terraform-p2-path-polish: a riser that was a share of its tread was a few
+	// centimetres long on a steep stretch, and the grid drew it as a sawtoothed notch).
+	std::vector<double> arc(n, 0.0);
+	for (int k = 1; k < n; k++) {
+		arc[k] = arc[k - 1] + std::hypot(p.l.x[k] - p.l.x[k - 1], p.l.z[k] - p.l.z[k - 1]);
+	}
+	std::vector<double> at;
+	std::vector<double> by;
+	double level = n > 0 ? std::round(gs[0] / PATH_RISE) : 0.0;
+	double base = level;
+	for (int k = 1; k < n; k++) {
+		double next = std::round(gs[k] / PATH_RISE);
+		while (next != level) {
+			double step = next > level ? 1.0 : -1.0;
+			double mid = (level + 0.5 * step) * PATH_RISE;
+			double span = gs[k] - gs[k - 1];
+			double u = std::abs(span) > 1e-12 ? std::clamp((mid - gs[k - 1]) / span, 0.0, 1.0) : 0.5;
+			at.push_back(arc[k - 1] + (arc[k] - arc[k - 1]) * u);
+			by.push_back(step);
+			level += step;
+		}
+	}
 	for (int k = 0; k < n; k++) {
-		double t = gs[k] / PATH_RISE, fl = std::floor(t);
-		double ledges = PATH_RISE * (fl + smoothstep(1.0 - PATH_RISER, 1.0, t - fl));
+		double ledges = base;
+		for (size_t c = 0; c < at.size(); c++) {
+			ledges += by[c] * smoothstep(at[c] - 0.5 * PATH_RISER_M, at[c] + 0.5 * PATH_RISER_M, arc[k]);
+		}
+		ledges *= PATH_RISE;
 		double w = smoothstep(PATH_STAIR_AT, PATH_STAIR_AT + PATH_STAIR_BLEND, std::abs(pr[k] - gs[k]));
 		p.prof[k] = float(pr[k] + (ledges - pr[k]) * w);
 	}

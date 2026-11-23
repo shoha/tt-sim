@@ -148,7 +148,7 @@ Dictionary TerraDerive::tile_collision(int64_t tile, int64_t stride) const {
 }
 
 String TerraDerive::version() const {
-	return "terra 8 paint";
+	return "terra 9 path";
 }
 
 Dictionary TerraDerive::grid() const {

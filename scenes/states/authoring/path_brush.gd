@@ -83,17 +83,13 @@ static func lay(
 		return editor.terra.paint.add_path(map_line, map_width, surface) >= 0
 	if not editor.begin_surface_stroke(surface, erase):
 		return false
-	var radius := width * 0.5 + SOFT_EDGE_M
 	var points := StrokePath.resample(line, MAX_LAY_DABS + 1, LAY_SPACING)
-	for i in points.size() - 1:
-		var length := points[i].distance_to(points[i + 1])
-		if length <= 0.0:
-			continue
-		var from := Vector3(points[i].x, 0.0, points[i].y)
-		var to := Vector3(points[i + 1].x, 0.0, points[i + 1].y)
-		editor.stroke_dab(from, to, radius, LAY_SECONDS * length / LAY_SPACING)
-	editor.flush()
-	return editor.end_stroke()
+	var dabs := PathLay.dabs_of(points, width * 0.5 + SOFT_EDGE_M, LAY_SECONDS, LAY_SPACING)
+	# Spread over frames (PathLay): this frame lays what fits its budget, the editor's frames the
+	# rest, and the stroke ends with the last dab.
+	editor.path_lay = PathLay.create(editor, dabs)
+	PathLay.frame(editor)
+	return true
 
 
 ## Begins the line (the release lays it); refused while there is no surface to paint.
