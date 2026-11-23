@@ -3134,6 +3134,17 @@ then gravel; main 601cf135 | branch, interleaved, lane held, game ms; `today_att
 
 The 67-73 ms frame left in the second stroke is its release frame, on both sides alike.
 
+**That frame (card painter-path-release, 2026-11-22)** was not the release: the release frame
+itself is 19-24 ms (`SurfaceStroke.finish` 8-10 ms, `edited` 4 ms, the scatter request 1.3). It came
+180-200 frames later, in `GroundLookBake._restamp` once the scatter settled: `GroundMassStamps.collect`
+took 69-79 ms, 54-64 ms of it the first read of two `PainterBush` MultiMeshes the stroke had rebuilt
+(a GPU readback, about 27 ms a node: PainterTrees sets a buffer only). The painted trees' custom data
+is never anchored (.a 0), so `collect` now skips their nodes: the same sums, and every restamp is
+9.8-10.9 ms (13-14 before). Bench `local/painter-path-release/` (main 597767de | branch, interleaved,
+lane held, windowed, vsync off; `today_attrib/path_release/`): second-surface stroke worst frame
+75.3/73.6/71.5 | 21.6/19.5/18.9, frames over 33 ms 1/1/1 | 0/0/0; first surface on a fresh map,
+release frame 19.8/19.3/20.0 | 21.2/19.0/19.0, worst 26.9-27.6 on both; pressed medians 4.1-4.7 on both.
+
 ## In-game authoring phase 4 (water): pinned performance pass (2026-09-27)
 
 The phase 4 pass: authored maps with water in play against the same maps without it, the
