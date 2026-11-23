@@ -142,6 +142,7 @@ func _process(delta: float) -> void:
 	if _ghost_budget_s >= TokenGhost.BUDGET_PERIOD_S:
 		_ghost_budget_s = 0.0
 		TokenGhost.apply_budget(_game_map.get_tree(), _game_map.camera_node)
+		TokenGhost.refresh_ground(_game_map.get_tree())
 
 
 func _load_foliage_antialiasing_setting() -> void:

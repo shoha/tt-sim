@@ -67,6 +67,22 @@ uniform float min_gap : hint_range(0.0, 2.0) = 0.5;
 // `min_gap`; a token without bounds keeps `min_gap`.
 uniform float bound_gap : hint_range(0.0, 2.0) = 0.15;
 uniform float gap_ramp : hint_range(0.01, 4.0) = 0.5;
+// The ground the token stands on is not cover (ghost-feet, 2026-11-23). A token on a slope sinks
+// its uphill or camera-side feet and belly into the hillside, and the hillside in front (and the
+// grass on it) lies outside the bounding cylinder, so it read as cover and outlined the buried
+// parts. TokenGhost fits the ground round the token as a plane (`ground_plane`, world metres:
+// y = x * a + z * b + c, w 1; w 0 = unknown, then the cylinder's floor stands in, level). A cover
+// point (the depth buffer's surface in front of the fragment) less than `ground_band` times the
+// body's height above that plane counts as the ground; above it the cover counts in full, faded
+// in over the band's top `ground_fade` part. A crown, or a wall's face higher than the band, still
+// ghosts; a cover lower than the band (grass round a large token, a pebble before a small one)
+// does not. And the token's own feet never ghost: a fragment less than `feet_band` times the
+// height above that ground draws no line (the grass of a meadow, up to about 0.7 m, hides the
+// lowest contour of a large token whatever the cover band). 0 = off, as before.
+uniform float ground_band : hint_range(0.0, 1.0) = 0.45;
+uniform float feet_band : hint_range(0.0, 1.0) = 0.25;
+uniform float ground_fade : hint_range(0.01, 1.0) = 0.5;
+uniform vec4 ground_plane = vec4(0.0);
 
 // The eye view's range fade (EyeCanopy.ghost_weight): w the map scale, 0 when the view is not
 // the eye's (CanopyFade publishes it with the eye position). A ghost further than
@@ -146,15 +162,36 @@ void fragment() {
 	float scene_dist = -(scene.z / scene.w);
 	float own_dist = -VERTEX.z;
 	// The stretch of this fragment's view ray inside the token's own bounds, as view depth.
-	float body_scale = length((MODEL_MATRIX * vec4(bound_up, 0.0)).xyz);
+	vec3 up_world = (MODEL_MATRIX * vec4(bound_up, 0.0)).xyz;
+	float body_scale = length(up_world);
 	vec3 world_pos = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec3 to_camera = normalize((INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz);
 	vec3 centre = (MODEL_MATRIX * vec4(bound_center, 1.0)).xyz;
+	float half_height = bound_extent.y * body_scale;
 	float own_stretch = chord_out(
-		world_pos - centre, to_camera, bound_extent.x * body_scale, bound_extent.y * body_scale)
+		world_pos - centre, to_camera, bound_extent.x * body_scale, half_height)
 		* abs(VIEW.z);
 	float gap_floor = bound_extent.x > 0.0 ? bound_gap : min_gap;
 	float hidden = smoothstep(gap_floor, gap_floor + gap_ramp, own_dist - scene_dist - own_stretch);
+	if (bound_extent.x > 0.0 && hidden > 0.01) {
+		// The cover point's and the fragment's heights above the ground under each, against the
+		// ground and feet bands (the cylinder's floor, level, when the ground is unknown).
+		vec3 cover = (INV_VIEW_MATRIX * vec4(scene.xyz / scene.w, 1.0)).xyz;
+		float floor_y = centre.y - (up_world.y / max(body_scale, 1e-6)) * half_height;
+		bool known = ground_plane.w > 0.5;
+		float cover_ground = known ? dot(vec3(cover.x, cover.z, 1.0), ground_plane.xyz) : floor_y;
+		float own_ground =
+			known ? dot(vec3(world_pos.x, world_pos.z, 1.0), ground_plane.xyz) : floor_y;
+		float height = 2.0 * half_height;
+		if (ground_band > 0.0) {
+			float band = ground_band * height;
+			hidden *= smoothstep(band * (1.0 - ground_fade), band, cover.y - cover_ground);
+		}
+		if (feet_band > 0.0) {
+			float band = feet_band * height;
+			hidden *= smoothstep(band * (1.0 - ground_fade), band, world_pos.y - own_ground);
+		}
+	}
 	if (canopy_eye.w > 0.0 && PROJECTION_MATRIX[3][3] < 0.5) {
 		hidden *= 1.0 - smoothstep(GHOST_START * canopy_eye.w, GHOST_END * canopy_eye.w, length(VERTEX));
 	}
