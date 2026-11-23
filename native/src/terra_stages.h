@@ -46,6 +46,24 @@ constexpr double BANK_SLOPE = 0.28;
 constexpr double BANK_NOISE = 0.22;
 constexpr double BANK_CURVE = 0.16;
 constexpr double BANK_SOFT = 0.45;
+// Pools (card terraform-p2-river-polish): a reach gathered into a small fall sits deeper in its bed
+// than the ground at its head (1.4 m below a riffle-made fall on a 0.2 slope), which a channel of
+// its drawn width cut through with the plain bank reads as a pit. Where the water stands more than
+// POOL_DIG_LO under its bed's freeboard line the reach opens into a pool: by POOL_DIG_HI it is
+// POOL_WIDEN of its half width wider (at most POOL_WIDEN_MAX_M) and its bank eases (POOL_BANK_EASE
+// of the slope, POOL_CURVE_EASE of the steepening), so the step reads as a fall into one wide
+// luminous pool in a soft bowl. Slots deeper than POOL_DEEP_LO fade back to the plain bank by
+// POOL_DEEP_HI (the eased bank must still climb out within BANK_REACH), and a reach below a fall of
+// POOL_TALL_M or more keeps its notch: tall falls keep their look.
+constexpr double POOL_DIG_LO = 0.35;
+constexpr double POOL_DIG_HI = 1.1;
+constexpr double POOL_DEEP_LO = 1.6;
+constexpr double POOL_DEEP_HI = 2.4;
+constexpr double POOL_TALL_M = 2.5;
+constexpr double POOL_WIDEN = 0.9;
+constexpr double POOL_WIDEN_MAX_M = 1.2;
+constexpr double POOL_BANK_EASE = 0.4;
+constexpr double POOL_CURVE_EASE = 0.5;
 constexpr double POND_REACH = 6.0;
 constexpr double POND_FREEBOARD = 0.1;
 
@@ -64,6 +82,7 @@ struct River {
 	Line l; // the line downstream (flipped when drawn uphill)
 	double hw = 1.0, depth = 0.5;
 	std::vector<float> level; // per point of l
+	std::vector<float> pool; // per point of l, in [0, 1]: how far the reach there opens into a pool
 	std::vector<Fall> falls;
 	int recv_river = -1, recv_pond = -1; // the body its end flows into (indices)
 	Rect rect; // samples it can change
@@ -96,6 +115,8 @@ void solve_pond(Pond &p, const Grid &g, const float *H0);
 void solve_river(River &r, const Grid &g, const float *H0, double recv_level);
 /// The level of a river at the arc point nearest (x, z).
 double river_level_at(const River &r, double x, double z);
+// A river's water half width at point k plus bt of the way to k + 1 (its pool widening).
+double river_hw_at(const River &r, int k, double bt);
 /// Stage 3 carve over a rect: H1 = H0 cut by every body's channel or basin, banks
 /// filled to hold the level; WL = the controlling body's level where wet or on ground above it,
 /// else H1 - 1.

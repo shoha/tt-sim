@@ -536,7 +536,11 @@ Sculpt tile while `active()`; one stroke is one `TerraEditor` gesture and one hi
 
 ## Versions and the library
 
-`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 8 paint` (card terraform-p2-paint-path:
+`TerraDerive.version()` is `TerraCore.NATIVE_VERSION`, now `terra 9 pools` (card terraform-p2-river-polish: a
+reach whose water stands 0.35-1.1 m or more under its bed's freeboard line opens into a pool, its half width up
+to 0.9 x wider (at most 1.2 m) and its bank eased, fading back for slots deeper than 1.6-2.4 m and never below a
+fall of 2.5 m or more; the record's per-point `hws` carries the widths to the bridge's bodies and the water
+digest; 50 of 105 golden digests moved, the water-touched arrays of every case. Before it, `terra 8 paint` (card terraform-p2-paint-path:
 four-entry paint planes, coats with SurfaceStroke's rule, paths as coats, `doc_surfaces`; regenerated after
 merging `terra 7 reaches`, 15 of 105 golden digests moved against it (PI, PW and CT of every case; heights and water
 unchanged); before it `terra 7 reaches`, the

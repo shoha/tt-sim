@@ -148,7 +148,7 @@ Dictionary TerraDerive::tile_collision(int64_t tile, int64_t stride) const {
 }
 
 String TerraDerive::version() const {
-	return "terra 8 paint";
+	return "terra 9 pools";
 }
 
 Dictionary TerraDerive::grid() const {
@@ -391,6 +391,7 @@ void TerraDerive::solve_water(Pass &ps) {
 			solved++;
 		} else {
 			r.level = o->level;
+			r.pool = o->pool;
 			r.falls = o->falls;
 		}
 		if (!o || !same_shape) {
@@ -399,15 +400,22 @@ void TerraDerive::solve_water(Pass &ps) {
 			falls_changed = true;
 			continue;
 		}
+		// A moved level moves the receivers too; a moved pool (card terraform-p2-river-polish) only
+		// recarves its own reach of the bed.
 		int k0 = -1, k1 = -1;
+		bool level_moved = false;
 		for (int k = 0; k < r.l.n(); k++) {
-			if (std::memcmp(&r.level[k], &o->level[k], sizeof(float)) != 0) {
+			bool lv = std::memcmp(&r.level[k], &o->level[k], sizeof(float)) != 0;
+			bool pl = k >= int(o->pool.size()) || k >= int(r.pool.size()) ||
+					std::memcmp(&r.pool[k], &o->pool[k], sizeof(float)) != 0;
+			if (lv || pl) {
 				k0 = k0 < 0 ? k : k0;
 				k1 = k;
+				level_moved = level_moved || lv;
 			}
 		}
 		if (k0 >= 0) {
-			river_moved[ri] = 1;
+			river_moved[ri] = level_moved ? 1 : river_moved[ri];
 			double x0 = 1e30, z0 = 1e30, x1 = -1e30, z1 = -1e30;
 			for (int k = std::max(0, k0 - 1); k <= std::min(r.l.n() - 1, k1 + 1); k++) {
 				x0 = std::min(x0, r.l.x[k]);
@@ -1174,6 +1182,12 @@ Dictionary TerraDerive::water_records() const {
 		}
 		d["pts"] = pts;
 		d["hw"] = r.hw;
+		// The water's half width per point (its pools widen it; river_hw_at).
+		PackedFloat32Array hws;
+		for (int k = 0; k < r.l.n(); k++) {
+			hws.push_back(float(terra::river_hw_at(r, k, 0.0)));
+		}
+		d["hws"] = hws;
 		d["recv_river"] = r.recv_river >= 0 ? water.rivers[r.recv_river].id : -1;
 		d["recv_pond"] = r.recv_pond >= 0 ? water.ponds[r.recv_pond].id : -1;
 		rivers.push_back(d);
