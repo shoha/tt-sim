@@ -27,6 +27,10 @@ extends BrushMode
 ## the ground there (the skirt has no collision), it meets the level of the last ground the
 ## line touched (hit_past_edge()), and the carve keeps those points as the river's course into
 ## the skirt (WaterEditor.carve_river).
+## With the terrain core active (TerraEditor.active()), the release goes to
+## TerraWaterTools.add_river (one river primitive) through TerraEditor.carve_river, and the pond
+## and erase dabs, through AuthoringEditor's stroke routes, into TerraWaterTools' scratch capsule
+## list, traced on release (PondOutline); the previews are the same.
 
 enum Shape { RIVER, POND }
 
@@ -242,7 +246,9 @@ func refusal() -> String:
 ## landed.
 func track(editor: AuthoringEditor, hit: Vector3, half_width: float) -> void:
 	gesture.track(hit, half_width)
-	if not held.is_empty() and (editor == null or not editor.water.is_working()):
+	# On terrain primitives the river derives and lands through TerraEditor first (terra.has_work).
+	var working := editor != null and (editor.water.is_working() or editor.terra.has_work())
+	if not held.is_empty() and not working:
 		held = PackedVector2Array()
 
 
