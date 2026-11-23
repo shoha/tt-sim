@@ -36,6 +36,30 @@ const TILES: Array[Dictionary] = [
 		"tooltip": "Build a rock-faced level one tier up; hold Ctrl as you press to cut one down",
 	},
 ]
+## The tile Soften (TerraSculpt.SOFTEN), one of the terrain core's (tiles()).
+const SOFTEN_TILE := {
+	"label": "Soften",
+	"icon": "eraser",
+	"tooltip": "Soften or take away what was sculpted, and lower hills, under the brush",
+}
+## Why Terrace or Soften refused a press: a map whose ground is not terrain primitives.
+const TERRA_ONLY := "%s needs a map made with the terrain core"
+
+const TerraceTool := preload("res://utils/terraform/kinds/terrace/terrace_tool.gd")
+
+
+## The pane's tiles: TILES, then with the terrain core on (TerraCore.enabled()) Terrace and Soften,
+## which shape terrain primitives only (TerraSculpt).
+static func tiles() -> Array[Dictionary]:
+	return all_tiles() if TerraCore.enabled() else TILES.duplicate()
+
+
+## Every Sculpt tile, the core's included (tile ids and lookups).
+static func all_tiles() -> Array[Dictionary]:
+	var out: Array[Dictionary] = TILES.duplicate()
+	out.append(TerraceTool.TILE.merged({"op": TerraSculpt.TERRACE}))
+	out.append(SOFTEN_TILE.merged({"op": TerraSculpt.SOFTEN}))
+	return out
 
 
 func _init() -> void:

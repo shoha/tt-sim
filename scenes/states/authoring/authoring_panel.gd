@@ -546,7 +546,7 @@ func set_paint_available(available: bool) -> void:
 ## The tile id of a Sculpt tile's operation ("sculpt_raise", ...; also its node name), or
 ## &"" for an operation without a tile.
 static func sculpt_tile_id(op: int) -> StringName:
-	for tile in SCULPT_TILES:
+	for tile in SculptTool.all_tiles():
 		if int(tile.op) == op:
 			return StringName("sculpt_" + String(tile.label).to_lower())
 	return &""
@@ -554,7 +554,7 @@ static func sculpt_tile_id(op: int) -> StringName:
 
 ## The Sculpt operation of a tile id, or -1.
 static func sculpt_tile_op(id: StringName) -> int:
-	for tile in SCULPT_TILES:
+	for tile in SculptTool.all_tiles():
 		if sculpt_tile_id(int(tile.op)) == id:
 			return int(tile.op)
 	return -1

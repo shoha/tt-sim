@@ -343,6 +343,10 @@ func _process(delta: float) -> void:
 				"smooth": HeightBrush.SMOOTH,
 				"flatten": HeightBrush.FLATTEN,
 				"tier": HeightBrush.TIER,
+				"lower": HeightBrush.LOWER,
+				"tier_cut": HeightBrush.TIER_CUT,
+				"terrace": TerraSculpt.TERRACE,
+				"soften": TerraSculpt.SOFTEN,
 			}
 			c.call("_on_sculpt_selected", int(tiles.get(String(step.get("tile", "tier")), 0)))
 			if step.has("radius"):
@@ -581,6 +585,10 @@ func _stroke(step: Dictionary) -> bool:
 				"smooth": HeightBrush.SMOOTH,
 				"flatten": HeightBrush.FLATTEN,
 				"tier": HeightBrush.TIER,
+				"lower": HeightBrush.LOWER,
+				"tier_cut": HeightBrush.TIER_CUT,
+				"terrace": TerraSculpt.TERRACE,
+				"soften": TerraSculpt.SOFTEN,
 			}
 			c.call("_on_sculpt_selected", int(tiles.get(String(step.get("tile", "raise")), 0)))
 			_state.ctrl = bool(step.get("ctrl", false))

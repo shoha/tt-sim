@@ -228,11 +228,24 @@ func _ground_record(start: PackedFloat32Array, changed: Rect2i) -> Dictionary:
 ## and the terrain treats the stroke as held. external_rect() takes each frame's changed rect,
 ## end_external() finishes and returns the ground record instead of recording it (the caller's
 ## gesture entry holds it). False when the map cannot be sculpted or a stroke is in progress.
-func begin_external() -> bool:
+## Without `wait` (the core's Sculpt press, card terraform-p2-sculpt) it never waits for a worker:
+## the main-thread leftovers of the edit before are done at once, and while the water's worker or
+## the rock keeper's still runs (their landing reads this snap's start) it returns false and starts
+## nothing, for the caller to try again on a later frame.
+func begin_external(wait := true) -> bool:
 	var e := _editor()
 	if not e.can_sculpt() or _stroke != null or _external:
 		return false
-	finish_work()
+	if wait:
+		finish_work()
+	else:
+		if e.water.is_working() or e.rock_keeper.is_running():
+			return false
+		work(true)
+		finish_keep(false)
+		# The landing just run may have started the water's worker again.
+		if e.water.is_working() or e.rock_keeper.is_running():
+			return false
 	_external = true
 	_external_before = e.document.heights.duplicate()
 	_external_rect = Rect2i()
