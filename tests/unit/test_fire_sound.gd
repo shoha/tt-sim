@@ -266,7 +266,11 @@ func test_pick_costs_little_for_a_wide_fire() -> void:
 		FireSound.pick(clusters, Vector3(0.0, 30.0, 0.0), Vector3.DOWN, 14.0)
 	var each_us := (Time.get_ticks_usec() - start) / 20.0
 	gut.p("FireSound.pick over 300 clusters: %.0f us" % each_us)
-	assert_lt(each_us, 20000.0, "a placement update is not a frame's worth of work")
+	assert_lt(
+		each_us,
+		TimingBudget.limit(20000.0),
+		"a placement update is not a frame's worth of work (%s)" % TimingBudget.describe(20000.0)
+	)
 
 
 # --- the field's players ------------------------------------------------------------------------

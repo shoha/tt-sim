@@ -77,6 +77,46 @@ func test_order_reverses_or_rotates_a_shard_and_defaults_to_alphabetical() -> vo
 	assert_eq(Shards.parse_args(PackedStringArray(), 4).order, Shards.ORDER_ALPHABETICAL)
 
 
+func test_a_part_runs_every_kth_shard_of_one_deal() -> void:
+	var opts := Shards.parse_args(PackedStringArray(["-n=2", "--part=2/2", "--slowest=5"]), 4)
+	assert_eq([opts.part, opts.parts, opts.slowest], [2, 2, 5])
+	for bad in ["--part=3/2", "--part=0/2", "--part=x", "--part=1/0"]:
+		var plain := Shards.parse_args(PackedStringArray([bad]), 4)
+		assert_eq([plain.part, plain.parts], [1, 1], bad + " runs everything")
+	var times := {"a": 8.0, "b": 7.0, "c": 6.0, "d": 5.0, "e": 1.0, "f": 1.0}
+	var dealt := Shards.partition(PackedStringArray(times.keys()), times, 4)
+	var seen := PackedStringArray()
+	var weights := []
+	for part in [1, 2]:
+		var weight := 0.0
+		for shard: Dictionary in Shards.part_of(dealt, part, 2):
+			seen.append_array(shard.scripts)
+			weight += shard.weight
+		weights.append(weight)
+	seen.sort()
+	assert_eq(seen, PackedStringArray(["a", "b", "c", "d", "e", "f"]), "the parts cover the deal once")
+	# Shards 8, 7, 7 and 6: part 1 takes the first and third, part 2 the second and fourth.
+	assert_eq(weights, [15.0, 13.0], "and weigh about the same")
+	assert_eq(Shards.part_of(dealt, 1, 1), dealt, "one part is everything")
+
+
+func test_slowest_lists_the_heaviest_scripts_first() -> void:
+	var lines := Shards.slowest({"a": 1.0, "b": 30.5, "c": 2.25}, 2)
+	assert_eq(lines.size(), 3, "a heading and two scripts")
+	assert_true(lines[1].ends_with("b") and lines[1].contains("30.5"), lines[1])
+	assert_true(lines[2].ends_with("c"), lines[2])
+	assert_eq(Shards.slowest({"a": 1.0}, 0), PackedStringArray(), "off by default")
+
+
+func test_timing_budget_scales_by_a_factor_of_at_least_one() -> void:
+	var factor := TimingBudget.factor()
+	assert_between(factor, 1.0, TimingBudget.MAX_FACTOR)
+	assert_almost_eq(TimingBudget.limit(10.0), 10.0 * factor, 1e-6)
+	assert_gt(TimingBudget.calibration_ms(), 0.0)
+	assert_eq(TimingBudget.calibration_ms(), TimingBudget.calibration_ms(), "measured once")
+	gut.p("TimingBudget %s" % TimingBudget.describe(10.0))
+
+
 func test_committed_table_keeps_the_slow_scripts_and_weighs_the_rest_by_their_mean() -> void:
 	var table := Shards.committed_table({"slow": 12.345, "edge": 1.0, "a": 0.2, "b": 0.4, "*": 9.0})
 	assert_eq(table, {"slow": 12.3, "edge": 1.0, "*": 0.3})

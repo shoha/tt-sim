@@ -232,11 +232,17 @@ jobs:
   # signing, release or Steam. Runs the whole test suite with the Linux library (the Linux
   # parity), checks its glibc against the export template, exports the three presets and lists
   # where Godot put each library.
+  # Two legs like build.yml's test job, each running half the test scripts; leg 1 also checks the
+  # parity and exports.
   branch-check:
-    name: Branch check (tests and exports, nothing published)
+    name: Branch check (tests and exports, nothing published) (${{ matrix.part }}/2)
     if: github.event_name == 'push' && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/')
     needs: [linux, windows, macos]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2]
     container:
       image: barichello/godot-ci:4.7.2
     env:
@@ -298,28 +304,30 @@ jobs:
         run: godot --headless --import
 
       - name: Save import cache
-        if: steps.import-cache.outputs.state != 'exact'
+        if: steps.import-cache.outputs.state != 'exact' && matrix.part == 1
         uses: actions/cache/save@v4
         with:
           path: .godot/imported
           key: ${{ steps.import-cache.outputs.key }}
 
       - name: Parity on Linux, release library
+        if: matrix.part == 1
         shell: bash
         run: PARITY_TARGETS=template_release bash .github/native/parity.sh godot
 
-      # The same sharded run as build.yml's test job (2 shards, 5.75 min on branch ci/gut-shards).
-      - name: Run unit tests with the library
+      # The same sharded run as build.yml's test job (this leg's half of a 4-shard deal).
+      - name: Run unit tests with the library (part ${{ matrix.part }} of 2)
         shell: bash
         run: |
           echo "runner: nproc=$(nproc), $(grep -E 'MemTotal|MemAvailable' /proc/meminfo | tr -s ' ' | tr '\n' ' ')"
-          godot --headless --path . --script res://tools/gut_shards.gd -- -n=2
+          godot --headless --path . --script res://tools/gut_shards.gd -- -n=2 --part=${{ matrix.part }}/2 --slowest=20
           if grep -qr 'the native library is not built' ~/.local/share/godot/app_userdata/TTSim/gut_shards/; then
             echo "::error::the native library did not load"
             exit 1
           fi
 
       - name: Export the three presets
+        if: matrix.part == 1
         shell: bash
         run: |
           mkdir -p ~/.local/share/godot/export_templates build/windows build/macos build/linux
@@ -331,6 +339,7 @@ jobs:
           godot --headless --export-pack "Linux" build/pack.zip
 
       - name: List the exported files
+        if: matrix.part == 1
         shell: bash
         run: |
           for os in windows linux; do

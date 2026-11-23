@@ -553,8 +553,10 @@ func test_costs() -> void:
 		"COST ms: course fit %.2f (%d points), plan_river %.2f -> %.2f, tree solve (31 bodies) %.2f"
 		% [course_ms, line[0].size(), base_ms, cond_ms, tree_ms]
 	)
-	assert_lt(course_ms, 50.0, "a course fit stays far under the edit budget")
-	assert_lt(cond_ms - base_ms, 50.0, "so does the conditioned plan")
+	var limit := TimingBudget.limit(50.0)
+	var scaled := TimingBudget.describe(50.0)
+	assert_lt(course_ms, limit, "a course fit stays far under the edit budget (%s)" % scaled)
+	assert_lt(cond_ms - base_ms, limit, "so does the conditioned plan (%s)" % scaled)
 
 
 # --- the fuzzer ---------------------------------------------------------------------

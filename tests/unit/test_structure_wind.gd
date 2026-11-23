@@ -149,4 +149,4 @@ func test_cost_of_ten_mills_and_thirty_vanes_per_frame() -> void:
 	var mill_us := float(t1 - t0) / frames
 	var vane_us := float(t2 - t1) / frames
 	gut.p("10 mills %.1f us/frame, 30 vanes %.1f us/frame" % [mill_us, vane_us])
-	assert_lt(mill_us + vane_us, 500.0)
+	assert_lt(mill_us + vane_us, TimingBudget.limit(500.0), TimingBudget.describe(500.0))

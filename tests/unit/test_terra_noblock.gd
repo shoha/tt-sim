@@ -65,7 +65,12 @@ func _watch(rig: TerraRig) -> Array:
 func _no_wait(rig: TerraRig, what: String, ms: float) -> void:
 	assert_eq(rig.editor.terra.waits, 0, what + ": nothing waited for a derive")
 	assert_false(rig.session().is_ready(), what + ": the derive is still in flight")
-	assert_lt(ms, CALL_BOUND_MS, what + ": the call took %.2f ms" % ms)
+	# waits == 0 above proves no wait; the time bound scales with a slower machine (a CI runner).
+	assert_lt(
+		ms,
+		TimingBudget.limit(CALL_BOUND_MS),
+		what + ": the call took %.2f ms (%s)" % [ms, TimingBudget.describe(CALL_BOUND_MS)]
+	)
 
 
 ## The settled digests and heights of `rig` equal a fresh build of its document.
