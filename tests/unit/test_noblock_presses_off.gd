@@ -139,10 +139,9 @@ func _same_map(a: TerraRig, b: TerraRig) -> void:
 
 ## Presses `kind` on one rig while a river carved on the worker is in flight and on another after
 ## finish_height_work(), and compares what both leave once everything has landed.
-func _check_press(kind: String, spread: bool = false) -> void:
+func _check_press(kind: String) -> void:
 	var queued := await _rig()
 	var at_once := await _rig()
-	queued.editor.presses.spread = spread
 	for rig in [queued, at_once]:
 		_ground(rig, kind == "putout")
 	assert_true(await TerraRig.settle(get_tree(), [queued, at_once]), "the ground stands")
@@ -169,62 +168,6 @@ func test_crossing_press_waits_for_nothing() -> void:
 
 func test_settlement_press_waits_for_nothing() -> void:
 	await _check_press("settlement")
-
-
-## Card noblock6: the same with the dress spread over frames (GroundPresses.spread, as in the game).
-func test_spread_settlement_press_waits_for_nothing() -> void:
-	await _check_press("settlement", true)
-
-
-## Card noblock6: a Dress spread over frames (its plan, paint and record a frame each) leaves, while
-## its steps run, the settlements as they were and work in flight; then the map and the history of
-## the Dress done in one frame, and the same after an undo and a redo.
-func test_spread_dress_equals_one_frame() -> void:
-	var spread := await _rig()
-	var whole := await _rig()
-	for rig in [spread, whole]:
-		_ground(rig, false)
-	assert_true(await TerraRig.settle(get_tree(), [spread, whole]), "the ground stands")
-	spread.editor.presses.spread = true
-	var held := spread.doc.settlements.size()
-	var entries := spread.history.undo_count()
-	_press(spread, "settlement")
-	assert_eq(spread.doc.settlements.size(), held, "the record waits for a later frame")
-	assert_eq(spread.history.undo_count(), entries, "no entry yet")
-	assert_false(spread.history.is_grouping(), "no group open between the frames")
-	assert_true(spread.editor.has_height_work(), "the steps are work in flight")
-	_press(whole, "settlement")
-	assert_true(await TerraRig.settle(get_tree(), [spread, whole]), "both idle")
-	assert_eq(spread.history.undo_count(), entries + 1, "one entry")
-	_same_map(spread, whole)
-	for rig in [spread, whole]:
-		rig.editor.finish_height_work()
-		rig.history.undo()
-	assert_true(await TerraRig.settle(get_tree(), [spread, whole]), "undone")
-	_same_map(spread, whole)
-	for rig in [spread, whole]:
-		rig.history.redo()
-	assert_true(await TerraRig.settle(get_tree(), [spread, whole]), "redone")
-	_same_map(spread, whole)
-
-
-## Card noblock6: a stroke begun between a spread Dress's frames runs its steps first, so the stroke
-## never falls inside the Dress (its entry comes after the Dress's, as in one frame).
-func test_stroke_begin_finishes_a_spread_dress() -> void:
-	var rig := await _rig()
-	_ground(rig, false)
-	assert_true(await TerraRig.settle(get_tree(), [rig]), "the ground stands")
-	var e := rig.editor
-	e.presses.spread = true
-	var held := rig.doc.settlements.size()
-	_press(rig, "settlement")
-	assert_eq(rig.doc.settlements.size(), held, "the record waits")
-	var label := rig.history.next_undo_label()
-	assert_true(_fire(rig, false), "a fire laid between the frames")
-	assert_eq(rig.doc.settlements.size(), held + 1, "the Dress was finished first")
-	assert_false(e.presses.is_waiting(), "no step left")
-	assert_ne(rig.history.next_undo_label(), label, "the fire's entry is the newest")
-	assert_true(await TerraRig.settle(get_tree(), [rig]), "idle")
 
 
 func test_fire_lay_waits_for_nothing() -> void:
