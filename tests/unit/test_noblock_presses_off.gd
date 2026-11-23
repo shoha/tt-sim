@@ -5,12 +5,14 @@ extends GutTest
 ## computing or landing (WaterEditor.use_worker), return without landing it (the water edit is
 ## still working), and once everything lands the map equals the one where the work was finished
 ## first and the press made after: the heights, the history, MapFingerprint and the saved bytes.
+## Card noblock4 adds the Wall tool's edits, a street split and a river pressed behind a river.
 ## An undo behind the work takes the river back, and a save's settle mid-compute writes the bytes
 ## of a settled save. A structure build reads a snapshot of the ground that a landing writing the
 ## document's heights in place leaves alone (the race that kept structures waiting).
 
 const EAST_FLANK := [Vector2(46, 11), Vector2(40, 10.5), Vector2(34, 11), Vector2(29, 12)]
 const OVER_RISE := [Vector2(9, 41), Vector2(15, 40), Vector2(21, 40), Vector2(27, 40.5)]
+const WEST_RUN := [Vector2(4, 30), Vector2(6, 22), Vector2(5, 14), Vector2(6, 6)]
 const SAVE_A := "user://_noblock3_save_a.ttmap"
 const SAVE_B := "user://_noblock3_save_b.ttmap"
 
@@ -105,6 +107,20 @@ func _press(rig: TerraRig, kind: String) -> void:
 			assert_true(_fire(rig, false), "fire laid")
 		"putout":
 			assert_true(_fire(rig, true), "fire put out")
+		# Card noblock4: the Wall tool's edits, a street split and a river pressed behind a river.
+		"wall":
+			assert_true(
+				e.walls.place(Wall.Kind.STONE, _world(rig, 12, 4), _world(rig, 20, 4)) >= 0,
+				"the wall is placed (or queued)"
+			)
+		"split":
+			var row := -1
+			for wall in e.document.walls:
+				if wall.is_row():
+					row = wall.id
+			assert_true(e.walls.split_street(row) >= 0, "the street is split (or queued)")
+		"river":
+			assert_true(_river(rig, WEST_RUN, true) >= 0, "the second river (or queued)")
 
 
 func _same_map(a: TerraRig, b: TerraRig) -> void:
@@ -160,6 +176,18 @@ func test_fire_lay_waits_for_nothing() -> void:
 
 func test_fire_put_out_waits_for_nothing() -> void:
 	await _check_press("putout")
+
+
+func test_wall_press_waits_for_nothing() -> void:
+	await _check_press("wall")
+
+
+func test_street_split_waits_for_nothing() -> void:
+	await _check_press("split")
+
+
+func test_river_behind_a_river_waits_for_nothing() -> void:
+	await _check_press("river")
 
 
 ## An undo pressed while the river computes waits for it (GroundPresses.defer) and takes it back,
