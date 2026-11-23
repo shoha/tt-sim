@@ -97,6 +97,25 @@ func test_the_shader_declares_the_uniforms_the_ghost_sets() -> void:
 		)
 
 
+func test_the_ground_and_the_ground_cover_mark_the_pixels_the_line_skips() -> void:
+	# The stencil contract is source text in three files (shaders cannot read the constant). The
+	# ground marks outside its off-screen bake, the foliage only in its ground-cover variant.
+	var mark := "stencil_mode write, compare_always, %d;" % TokenGhost.GROUND_STENCIL
+	var guards := {
+		"res://shaders/authored_ground.gdshaderinc": "#ifndef GROUND_BAKE_OUT",
+		"res://shaders/wind_foliage_main.gdshaderinc": "#ifdef FOLIAGE_GROUND_LEAN",
+	}
+	for path in TokenGhost.GROUND_STENCIL_WRITERS:
+		var code := FileAccess.get_file_as_string(path)
+		assert_eq(code.count(mark), 1, "%s writes the mark once" % path)
+		if guards.has(path):
+			var guarded := RegEx.create_from_string(String(guards[path]) + "\\s+" + mark)
+			assert_not_null(guarded.search(code), "%s marks under %s" % [path, guards[path]])
+	var read := "stencil_mode read, compare_not_equal, %d;" % TokenGhost.GROUND_STENCIL
+	assert_true(TokenGhost.SHADER.code.contains(read), "the line pass skips the marked pixels")
+	assert_false(TokenGhost.MASK_SHADER.code.contains("stencil_mode"), "the mask pass ignores it")
+
+
 # --- dressing ----------------------------------------------------------------------------
 
 

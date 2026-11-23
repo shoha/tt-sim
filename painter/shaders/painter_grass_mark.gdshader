@@ -60,6 +60,10 @@ render_mode cull_disabled, specular_disabled, ambient_light_disabled, world_vert
 #include "res://shaders/wind_foliage_grow.gdshaderinc"
 #include "res://painter/shaders/painter_selector.gdshaderinc"
 
+// The token ghost's ground mark (TokenGhost.GROUND_STENCIL, ghost-feet 2026-11-23): meadow grass
+// never hides a token, so token_ghost.gdshader draws no line where a tuft is the nearest surface.
+stencil_mode write, compare_always, 1;
+
 // The sun's direction (FoliageLight.publish_sun) is the foliage_sun global the selector's snow law
 // declares (painter_snow_law.gdshaderinc; the wind include declares it only for its painted light).
 // 1 on the hand-placed props' layer (PainterPlantTone.mark_placed): never thinned.

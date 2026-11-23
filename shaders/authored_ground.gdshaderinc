@@ -286,6 +286,14 @@
 #undef GROUND_CLIPMAP
 #endif
 
+// The token ghost's ground mark (TokenGhost.GROUND_STENCIL, ghost-feet 2026-11-23): the ground
+// writes stencil 1 where it is the nearest surface, and token_ghost.gdshader draws no line there,
+// so a hillside in front of a token's feet never outlines them. Not in the bake, which draws
+// off screen.
+#ifndef GROUND_BAKE_OUT
+stencil_mode write, compare_always, 1;
+#endif
+
 // The map's surfaces, one layer each, the base at layer 0 (see LAYERS).
 uniform sampler2DArray layer_albedo_array : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2DArray layer_normal_array : filter_linear_mipmap_anisotropic, repeat_enable;
