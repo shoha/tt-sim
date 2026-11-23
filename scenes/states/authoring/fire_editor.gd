@@ -128,10 +128,14 @@ func _record(diff: Dictionary, erase: bool, dabs: Array) -> bool:
 	var plan := FireSweep.plan_for(PaletteLibrary.biomes(root), PaletteLibrary.surfaces(root))
 	var t := Time.get_ticks_usec()
 	last_parts["plan"] = t - started
+	# The burnt biome's and the ash's ground updates are one, over both areas, drawn on the next
+	# frame (AuthoringEditor.release_ground; card noblock5): each was a whole update in this frame.
+	editor.hold_ground()
 	_burn_forest(String(plan.biome), dabs)
 	last_parts["burn"] = Time.get_ticks_usec() - t
 	t = Time.get_ticks_usec()
 	_lay_ash(String(plan.surface), dabs)
+	editor.release_ground(true)
 	last_parts["ash"] = Time.get_ticks_usec() - t
 	t = Time.get_ticks_usec()
 	editor.history.end_group(LAY_LABEL)
@@ -169,7 +173,9 @@ func _burn_forest(burnt: String, dabs: Array) -> void:
 	var diff := stroke.finish()
 	if diff.is_empty():
 		return
+	var applying := Time.get_ticks_usec()
 	editor.apply_mask_diff(diff, true)
+	last_parts["burn_apply"] = Time.get_ticks_usec() - applying
 	(
 		editor
 		. history
@@ -193,7 +199,9 @@ func _lay_ash(surface: String, dabs: Array) -> void:
 		return
 	for d: Array in dabs:
 		editor.stroke_dab(d[0], d[1], float(d[2]) * ASH_REACH, d[3])
+	var ending := Time.get_ticks_usec()
 	editor.end_stroke()
+	last_parts["ash_end"] = Time.get_ticks_usec() - ending
 
 
 ## One byte per slot value (index 0 = no biome, s = biome_ids[s - 1]): 1 where the slot's

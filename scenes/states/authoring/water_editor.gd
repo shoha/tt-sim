@@ -514,6 +514,9 @@ static func snapshot_of(doc: MapDocument) -> MapDocument:
 ## and "usec". Touches no Node; safe on any thread.
 static func compute(snapshot: MapDocument, spec: Dictionary, out: Dictionary) -> void:
 	var started := Time.get_ticks_usec()
+	# Microseconds by part ("parts": a river's goals, lower and rest, and every edit's dressing and
+	# owners), for measurement (the press bench, card noblock5).
+	var parts := {}
 	match String(spec.kind):
 		"river":
 			var bodies: Array[WaterBody] = spec.bodies
@@ -523,10 +526,15 @@ static func compute(snapshot: MapDocument, spec: Dictionary, out: Dictionary) ->
 			var before := PackedFloat32Array() if rest.is_empty() else snapshot.heights.duplicate()
 			var goals := WaterCarve.river_goals(snapshot, bodies, snapshot.heights)
 			out["goals"] = goals
+			parts["goals"] = Time.get_ticks_usec() - started
+			var t := Time.get_ticks_usec()
 			lower(snapshot, goals)
 			snapshot.water_bodies = WaterEdit.with_bodies(snapshot, bodies)
+			parts["lower"] = Time.get_ticks_usec() - t
 			if not rest.is_empty():
+				t = Time.get_ticks_usec()
 				_compute_rest(snapshot, spec, before, out)
+				parts["rest"] = Time.get_ticks_usec() - t
 		"pond":
 			var id: int = spec.id
 			var conditioned := bool(spec.get("condition", false))
@@ -580,9 +588,14 @@ static func compute(snapshot: MapDocument, spec: Dictionary, out: Dictionary) ->
 			)
 			snapshot.water_bodies = bodies
 			snapshot.heights = fit.heights
+	var at := Time.get_ticks_usec()
 	out["dressing"] = WaterDressing.refresh(snapshot)
+	parts["dressing"] = Time.get_ticks_usec() - at
+	at = Time.get_ticks_usec()
 	if String(spec.kind) != "dressing":
 		out["owners"] = WaterMeshBuilder.sample_owners(snapshot)
+	parts["owners"] = Time.get_ticks_usec() - at
+	out["parts"] = parts
 	out["usec"] = Time.get_ticks_usec() - started
 
 
@@ -718,6 +731,7 @@ func _start(spec: Dictionary, before: Dictionary) -> void:
 		"result": result,
 		"before": before,
 		"dressing_before": doc.water_dressing,
+		"started": Time.get_ticks_usec(),
 	}
 	if use_worker:
 		job.task = WorkerThreadPool.add_task(
@@ -748,6 +762,8 @@ func _land() -> void:
 	var spec: Dictionary = job.spec
 	var result: Dictionary = job.result
 	timings["compute"] = int(result.get("usec", 0))
+	timings["compute_parts"] = result.get("parts", {})
+	timings["landed_after"] = Time.get_ticks_usec() - int(job.get("started", 0))
 	if String(spec.kind) == "dressing":
 		_land_dressing(spec, result)
 		return

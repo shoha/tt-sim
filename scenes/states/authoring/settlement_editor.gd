@@ -683,9 +683,11 @@ func _replace(
 	# A plan that lays the road lays the bridges too (planned on the settled document).
 	last_bridges = {}
 	var bridge_plan: Dictionary = {}
+	var bridge_planning := Time.get_ticks_usec()
 	if lays_bridges and roles.has("road"):
 		_settle()
 		bridge_plan = _plan_bridges(held, changed)
+	var bridge_plan_ms := (Time.get_ticks_usec() - bridge_planning) / 1000.0
 	var bridging := _bridging(bridge_plan)
 	var dropping := not dropped.is_empty()
 	var laying := lays_ground and (not roles.is_empty() or dropping) and e.can_paint()
@@ -697,7 +699,7 @@ func _replace(
 		if owns_group:
 			e.history.begin_group()
 		# The take-back and the new paving cover one street: one ground and scatter update for
-		# both (released after the lay below).
+		# both (released at the end, below, for the next frame).
 		e.hold_ground()
 		if replaces and held != null and not held.ground.is_empty():
 			var unpaving := Time.get_ticks_usec()
@@ -752,12 +754,22 @@ func _replace(
 		return changed.id
 	var painting := Time.get_ticks_usec()
 	last_ground["entries"] = SettlementPaint.lay(e, strokes)
-	e.release_ground()
-	last_ground["paint_ms"] = (Time.get_ticks_usec() - painting) / 1000.0
+	var t := Time.get_ticks_usec()
+	last_ground["paint_ms"] = (t - painting) / 1000.0
+	last_ground["bridge_plan_ms"] = bridge_plan_ms
 	last_ground["strokes"] = strokes.size()
 	if not bridge_plan.is_empty():
 		_lay_bridges(changed, bridge_plan)
+	last_ground["bridge_lay_ms"] = (Time.get_ticks_usec() - t) / 1000.0
+	t = Time.get_ticks_usec()
 	_change(label, after, [])
+	last_ground["change_ms"] = (Time.get_ticks_usec() - t) / 1000.0
+	# The paving's ground update (with the bridges' approaches) is drawn on the next frame, once
+	# (card noblock5: 13 to 45 ms of the dress's frame on the 320 ft hilltop). After _change, whose
+	# settle (the core off) would draw it at once.
+	t = Time.get_ticks_usec()
+	e.release_ground(true)
+	last_ground["release_ms"] = (Time.get_ticks_usec() - t) / 1000.0
 	if owns_group:
 		e.history.end_group(label)
 	return changed.id

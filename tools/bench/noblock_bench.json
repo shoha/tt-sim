@@ -11,6 +11,7 @@
    {"op": "no_autosave"},
    {"op": "vsync_off"},
    {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "ground"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "warm"},
    {"op": "settle", "frames": 10, "timeout": 30},
    {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "none"},
    {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "structure"},

@@ -60,6 +60,14 @@ static func run(base: Node, step: Dictionary) -> String:
 	match String(step.get("action", "")):
 		"ground":
 			return _ground(ctrl)
+		"warm":
+			# What opening the tools pays before their first press (ToolDescriptor.prepare): the
+			# Structure and Village tools' warm-up (decor GLBs, masonry, shaders; StructureWarmup),
+			# the Fire tool's burnt biome and ash, the Bridge tool's materials.
+			StructureTool.warm(ctrl)
+			FireTool.warm(ctrl.editor)
+			ctrl.warm_crossings()
+			return "warm: tools prepared"
 		"trial":
 			var bench := Bench.new()
 			bench.name = BENCH
@@ -78,6 +86,13 @@ static func blocker(base: Node, _step: Dictionary) -> String:
 	var ctrl: AuthoringController = base.get("_authoring_controller")
 	if ctrl != null and ctrl.editor != null and busy(ctrl):
 		return "the map is busy"
+	var structures := (
+		AuthoredStructures.of_map(ctrl.editor.map_root)
+		if ctrl != null and ctrl.editor != null
+		else null
+	)
+	if structures != null and structures.get_node_or_null(StructureWarmup.NODE_NAME) != null:
+		return "the structure warm-up runs"
 	return ""
 
 
@@ -269,6 +284,18 @@ static func cleanup() -> String:
 	return "removed %d files of %s, folder gone %s" % [removed, LEVEL, gone]
 
 
+## The last node to process in a frame: marks where the frame's process part ends.
+class Tail:
+	extends Node
+	var on_tail: Callable
+
+	func _ready() -> void:
+		process_priority = 1000
+
+	func _process(_delta: float) -> void:
+		on_tail.call()
+
+
 ## One trial over frames (see the header).
 class Bench:
 	extends Node
@@ -287,7 +314,13 @@ class Bench:
 	var done := [false]
 	## Whole frames (this node's first-in-frame process to the next), from the press frame on.
 	var frames := PackedFloat64Array()
+	## Of each frame, the process part (first-in-frame to last-in-frame process; the rest is the
+	## draw, the physics and the idle callbacks), for the row's `slow` frames.
+	var procs := PackedFloat64Array()
 	var last_us := 0
+	var tail_us := 0
+	## The river release's call (main thread), ms.
+	var release_ms := -1.0
 	var waiting := false
 	var meta: Dictionary = {}
 	## Why the press made nothing, or "".
@@ -297,6 +330,9 @@ class Bench:
 		process_priority = -1000
 		base_entries = ctrl.history.undo_count()
 		meta = get_tree().root.get_meta(META, {})
+		var tail := Tail.new()
+		tail.on_tail = func() -> void: tail_us = Time.get_ticks_usec()
+		add_child(tail)
 
 	func _process(_delta: float) -> void:
 		var e := ctrl.editor
@@ -306,6 +342,7 @@ class Bench:
 		var now_us := Time.get_ticks_usec()
 		if phase == 2:
 			frames.append((now_us - last_us) / 1000.0)
+			procs.append((tail_us - last_us) / 1000.0)
 		last_us = now_us
 		match phase:
 			0:
@@ -327,9 +364,11 @@ class Bench:
 					if fs.is_empty():
 						_finish("no river line")
 						return
+					var carving := Time.get_ticks_usec()
 					var river := e.terra.carve_river(
 						probe.line(e, fs), PackedFloat32Array([1.2]), WaterBody.Depth.WAIST
 					)
+					release_ms = (Time.get_ticks_usec() - carving) / 1000.0
 					if river < 0:
 						_finish("river refused: %s %s" % [e.terra.last_refusal, e.water.last_refusal])
 						return
@@ -421,11 +460,15 @@ class Bench:
 		var worst := 0.0
 		var over_n := 0
 		var over_ms := 0.0
-		for ms in frames:
+		# [frame index from the press, whole ms, process ms] of each frame over SLOW_MS.
+		var slow := []
+		for i in frames.size():
+			var ms := frames[i]
 			worst = maxf(worst, ms)
 			if ms > SLOW_MS:
 				over_n += 1
 				over_ms += ms
+				slow.append([i, snappedf(ms, 0.1), snappedf(procs[i], 0.1)])
 		var row := {
 			"arm": String(step.get("arm", "")),
 			"core": ctrl.editor.terra.active(),
@@ -439,11 +482,34 @@ class Bench:
 			"over33_n": over_n,
 			"over33_ms": snappedf(over_ms, 0.1),
 			"idle_frames": frames.size(),
+			"slow": slow,
 			"note": note,
 		}
 		var fire_parts: Variant = ctrl.editor.fire.get("last_parts")
 		if row.press in ["fire", "putout"] and fire_parts is Dictionary:
 			row["fire_us"] = fire_parts
+			row["ash_end_us"] = ctrl.editor.get("last_end_usec")
+		# What one `edited` costs the controller's listeners (each tool's refresh), timed once here.
+		var listening := Time.get_ticks_usec()
+		ctrl.editor.edited.emit()
+		row["edited_ms"] = snappedf((Time.get_ticks_usec() - listening) / 1000.0, 0.1)
+		if row.after == "river" and row.press == "none":
+			# The river's own path (the core off: the Water tool's release call, its worker's
+			# compute by part, and its landing frames' main-thread parts; WaterEditor.timings).
+			row["release_ms"] = snappedf(release_ms, 0.1)
+			var idle := 0.0
+			for ms in frames:
+				idle += ms
+			row["idle_ms"] = snappedf(idle, 0.1)
+			row["water_us"] = ctrl.editor.water.timings.duplicate(true)
+		if row.press == "settlement":
+			# The dress by part (SettlementEditor.last_ground's *_ms fields).
+			var parts := {}
+			var ground: Dictionary = ctrl.editor.settlements.last_ground
+			for key: String in ground:
+				if key.ends_with("_ms"):
+					parts[key] = snappedf(float(ground[key]), 0.1)
+			row["settlement_ms"] = parts
 		var file := FileAccess.open(
 			ROWS, FileAccess.READ_WRITE if FileAccess.file_exists(ROWS) else FileAccess.WRITE
 		)

@@ -190,6 +190,40 @@ func test_river_behind_a_river_waits_for_nothing() -> void:
 	await _check_press("river")
 
 
+## Card noblock5: a fire's release (its burnt biome and ash) and a village's dress draw no ground
+## in their frame; the next frame draws it once over both areas (AuthoringEditor.release_ground),
+## and that ground equals one drawn whole from the document afterwards.
+func test_fire_and_dress_draw_their_ground_next_frame() -> void:
+	var rig := await _rig()
+	_ground(rig, false)
+	assert_true(await TerraRig.settle(get_tree(), [rig]), "the ground stands")
+	var e := rig.editor
+	for kind in ["fire", "settlement"]:
+		var updates := e.ground_updates
+		_press(rig, kind)
+		assert_eq(e.ground_updates, updates, "%s: no ground drawn in the press's frame" % kind)
+		assert_true(e.has_height_work(), "%s: the ground waits for the next frame" % kind)
+		assert_true(await TerraRig.settle(get_tree(), [rig]), "idle")
+		assert_eq(e.ground_updates, updates + 1, "%s: one update over both areas" % kind)
+		var drawn := _ground_bytes(rig)
+		var grid := Rect2i(0, 0, rig.doc.samples_x(), rig.doc.samples_z())
+		e.terrain.update_ground_region(grid)
+		assert_eq(_ground_bytes(rig), drawn, "%s: the ground equals one drawn whole" % kind)
+
+
+## The ground's index maps, tints and layers as uploaded (GroundLayerBinding).
+func _ground_bytes(rig: TerraRig) -> Array:
+	var terrain: AuthoredTerrain = rig.editor.terrain
+	var binding := terrain.layer_binding()
+	var out: Array = [binding.layers(), binding.biome_tints, binding.paint_tints]
+	for uniform in GroundLayerBinding.INDEX_MAPS:
+		var image := binding.index_image(uniform)
+		out.append(image.get_data() if image != null else PackedByteArray())
+	if binding.tint_mirror != null:
+		out.append(binding.tint_mirror.get_data())
+	return out
+
+
 ## An undo pressed while the river computes waits for it (GroundPresses.defer) and takes it back,
 ## as an undo after finish_height_work() does.
 func test_undo_behind_the_work_takes_the_river_back() -> void:
