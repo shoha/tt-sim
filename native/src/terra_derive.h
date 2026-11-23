@@ -59,6 +59,8 @@ class TerraDerive : public RefCounted {
 	terra::Dirty seeds[terra::A_COUNT];
 	bool seed_rules = false;
 	std::set<int> changed_ids;
+	// The held paint coat's cache: kept while only append_dabs on that coat edits the document.
+	terra::CoatCache coat_cache;
 	std::unique_ptr<terra::Pool> pool;
 	int threads = 8;
 	// A derive on a worker thread (a stroke's release); the caller must not touch this object
@@ -89,7 +91,7 @@ public:
 	TerraDerive();
 	~TerraDerive();
 
-	/// "terra 8 paint": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
+	/// "terra 9 paint cache": TerraCore.NATIVE_VERSION must equal it (a stale library fails its tests).
 	String version() const;
 	/// Allocates a w x h sample grid over a map of `extent` metres, centred on the origin (sample
 	/// (0, 0) at -extent / 2), and forgets the document. TerraCore passes 2 (n - 1) + 1 per axis of
