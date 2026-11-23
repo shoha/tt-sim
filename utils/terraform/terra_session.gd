@@ -482,6 +482,12 @@ func _reset(rows: Array) -> void:
 		_set_prim(int(row[0]), int(row[1]), row[2])
 
 
+## Hands a worker task whose owner is going away to the reaper (TerraBridge's water conversion):
+## it is waited on once it completes, never before.
+static func park_task(task: int) -> void:
+	_park({"task": task})
+
+
 static func _park(entry: Dictionary) -> void:
 	_parked.append(entry)
 	_reap()
