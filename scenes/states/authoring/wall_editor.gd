@@ -16,7 +16,15 @@ extends RefCounted
 ## A wall follows the ground it stands on without an anchor: AuthoredWalls rebuilds the walls
 ## whose ground changed (WallGeometry.key_of), and follow() asks for that after a sculpt or
 ## water edit; the record puts the refresh in the undo too.
+##
+## Every edit (place, add, reroll, split_street, remove) is a press (GroundPresses, card noblock4):
+## while a water edit or a sculpt's spread ground is still landing, it waits and runs on the first
+## frame after, exactly as finishing that work first and pressing then would, so no Wall press
+## waits on the main thread, the core on or off.
 
+## What place() and add() return for a press that waits for the ground: not an id yet, not a
+## refusal (as StructureEditor.QUEUED).
+const QUEUED := 0
 ## Why the last plan() or add() made nothing (last_refusal).
 const REFUSED_SHORT := &"short"
 const REFUSED_FULL := &"full"
@@ -152,10 +160,13 @@ func plan(
 	return wall
 
 
-## plan() and add(): the wall's id, or -1 (last_refusal says why).
+## plan() and add(): the wall's id, -1 (last_refusal says why), or QUEUED.
 func place(
 	kind: Wall.Kind, from: Vector3, to: Vector3, height: float = -1.0, variation: Dictionary = {}
 ) -> int:
+	if not _editor().presses.is_running():
+		var press := place.bind(kind, from, to, height, variation.duplicate())
+		return _editor().presses.run(press, QUEUED)
 	var wall := plan(kind, from, to, height, variation)
 	if wall == null:
 		return -1
@@ -164,8 +175,10 @@ func place(
 
 ## Lays `wall` (map frame) as one history entry: a wall whose id the document holds replaces
 ## it (an extension), any other is added under a free id. Returns its id, or -1 when the
-## document is full or the writer would refuse it (last_refusal).
+## document is full or the writer would refuse it (last_refusal), or QUEUED.
 func add(wall: Wall) -> int:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(add.bind(wall.copy()), QUEUED)
 	var doc := _editor().document
 	last_refusal = &""
 	var existing := doc.wall(wall.id)
@@ -194,6 +207,8 @@ func add(wall: Wall) -> int:
 ## Gives row `wall_id` a new seed (the same street, its buildings varied again) as one history
 ## entry. False when there is no such row.
 func reroll(wall_id: int) -> bool:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(reroll.bind(wall_id), true)
 	var doc := _editor().document
 	var old := doc.wall(wall_id)
 	if old == null or not old.is_row():
@@ -217,7 +232,10 @@ static func next_seed(current: int) -> int:
 ## both back). Returns how many buildings it made, or -1 with last_refusal set (REFUSED_INVALID:
 ## no such street; REFUSED_NOTHING: it has no building the library can stand in for; REFUSED_FULL:
 ## the document cannot hold them). `last_split_skipped` counts lots that made no valid record.
+## QUEUED while it waits for the ground (the whole split runs then, as one press).
 func split_street(wall_id: int) -> int:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(split_street.bind(wall_id), QUEUED)
 	var e := _editor()
 	var doc := e.document
 	last_refusal = &""
@@ -254,6 +272,8 @@ func split_street(wall_id: int) -> int:
 
 ## Removes wall `wall_id` as one history entry. False when there is none.
 func remove(wall_id: int) -> bool:
+	if not _editor().presses.is_running():
+		return _editor().presses.run(remove.bind(wall_id), true)
 	var doc := _editor().document
 	var old := doc.wall(wall_id)
 	if old == null:

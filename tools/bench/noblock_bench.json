@@ -1,0 +1,41 @@
+{
+ "out_dir": "render_jobs/noblock_bench",
+ "timeout_s": 1500,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "expand", "values": ["false", "true"], "template": [
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "switch", "core": "{value}"},
+   {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 320, "seed": 1234, "landform": "hilltop"},
+   {"op": "wait_ready", "settle": 1.0},
+   {"op": "no_autosave"},
+   {"op": "vsync_off"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "ground"},
+   {"op": "settle", "frames": 10, "timeout": 30},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "none"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "structure"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "crossing"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "settlement"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "fire"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "putout"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "save"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "table"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "undo"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "river", "press": "redo"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "none"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "structure"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "crossing"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "settlement"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "fire"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "putout"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "save"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "table"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "undo"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "trial", "after": "raise", "press": "redo"},
+   {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "report"},
+   {"op": "title"}
+  ]},
+  {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "cleanup"},
+  {"op": "call", "script": "res://tools/bench/noblock_probe.gd", "action": "switch", "core": false}
+ ]
+}
