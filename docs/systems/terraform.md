@@ -280,7 +280,11 @@ phase 1; phase 2's first card writes its derived heights into `MapDocument` (the
   changes `doc.terra` at once and tells the derive the same change (`set_prim`, checked;
   `append_dabs`; `remove_prim`; a muted primitive is left out, since the derive has no flags; unmute
   and move re-set the primitives from that position, since the derive has no move), then starts
-  `derive_async()`. An edit while a derive runs is queued and told on the landing. Returns the
+  `derive_async()`. An edit while a derive runs is queued and told on the landing; a told add, replace
+  or re-set carries a copy of its floats, since `TerraDoc.append` grows the document's array in place
+  (shared by reference): before card terraform-p2-sculpt round 3 a held add whose primitive a later
+  frame appended to told those floats twice, and the settled derive no longer answered for its
+  document (`test_terra_interleave`: shuffled releases, presses, undos and redos). Returns the
   primitive's id, or -1 with nothing changed.
 - **Queries.** `is_ready()` (the plan's `ready()`; a Node already has a `ready` signal) is true when a
   derive has landed, none runs and no edit waits; `height_at`, `water_at` (NAN until then) and
@@ -491,10 +495,15 @@ Sculpt tile while `active()`; one stroke is one `TerraEditor` gesture and one hi
   `utils/terraform/kinds/terrace/terrace_tool.gd`, the tool half of the kind's folder: treads half a map
   tier high, dabs every radius / 4 along the path travelled, since a terrace dab pulls fully at its
   centre) and **Soften** (`TerraSoften`, the erase: each frame the strokes, levels and terraces under
-  the ring keep `exp(-3 x seconds x falloff)` of their dabs' strength, a hill under it of its height; a
-  dab or hill under 5 % of its strength at the press goes, a tier or terrace dab, which has no strength,
-  once half softened; an emptied primitive is removed; one replace or remove per touched primitive,
-  `TerraEditor.compact` merging a primitive's replaces). Terrace and Soften refuse on a map without a
+  the ring keep `exp(-3 x seconds x falloff)` of their dabs' strength, a hill wholly inside the ring of
+  its height; a dab or hill under 5 % of its strength at the press goes, a tier or terrace dab, which
+  has no strength, once half softened; an emptied primitive is removed; one replace or remove per
+  touched primitive, `TerraEditor.compact` merging a primitive's replaces). Soften is local: a
+  primitive whose footprint reaches past the ring (a landform hill, ridge, river, pond, path, wall, a
+  folded raster) is never scaled or removed; where the ring lies over one (`TerraSoften.smooths`) the
+  gesture lays a smooth stroke (kind 3, mode 2) along the ring instead (round 3: one drag had removed a
+  whole hill and moved water far outside the brush; `test_soften_changes_only_the_ground_under_its_ring`:
+  no such primitive changes, the ground moves only within the ring plus 1.5 m). Terrace and Soften refuse on a map without a
   terrain section (`SculptTool.TERRA_ONLY`). Cursor tints: Terrace between Raise and Smooth (golden green), Soften between Flatten and Lower (mauve).
 - **Frames.** The first frame with dabs `add`s the primitive, each later one `append`s, through
   `TerraEditor.edit(change, true)` (`TerraBridge.held`: derived at once when the session is free)

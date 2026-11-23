@@ -11,8 +11,9 @@ extends RefCounted
 ## dabs adds the primitive, every later frame appends that frame's: a raise frame's capsule as
 ## point dabs at most radius / 4 apart (StrokeKind.capsule_dabs), a level frame's as one capsule
 ## dab (LevelKind), a terrace's along the path travelled (TerraceTool.frame_dabs). Soften (the
-## erase, TerraSoften) edits what is there instead: one replace, or a remove, per primitive the
-## ring touches.
+## erase, TerraSoften) edits what is there instead: one replace, or a remove, per sculpt primitive
+## the ring touches, and over a landform, water or path it must not edit a smooth stroke along the
+## ring (only the ground under the ring changes).
 ##
 ## Ground. Every frame goes through TerraEditor.edit(change, true) (TerraBridge.held: derived at
 ## once when the session is free, the heights written in place) inside HeightEditor's external
@@ -187,14 +188,21 @@ func _kind() -> int:
 	return TerraCore.STROKE
 
 
-## One Soften frame (map frame): a replace or remove per primitive the ring touches.
+## One Soften frame (map frame): a replace or remove per sculpt primitive the ring touches, and,
+## where the ring lies over ground Soften must not edit (TerraSoften.smooths: a landform hill, a
+## river, a path ...), this frame's capsule of smooth dabs on the gesture's own smooth stroke.
 func _soften(a: Vector2, b: Vector2, r: float, seconds: float) -> void:
 	var terra := _terra()
 	var doc := terra.session().terra
 	var ring := Rect2(a.min(b), (a - b).abs()).grow(r)
 	var edits: Array[Dictionary] = []
+	var smooth := false
 	for p in doc.prims:
 		var kind := int(p["kind"])
+		if int(p["id"]) == _id:
+			# The smooth stroke this gesture lays is never softened by it.
+			continue
+		smooth = smooth or TerraSoften.smooths(p, ring, a, b, r)
 		if not kind in TerraSoften.KINDS or TerraDoc.is_muted(p):
 			continue
 		var data: PackedFloat32Array = p["data"]
@@ -215,6 +223,13 @@ func _soften(a: Vector2, b: Vector2, r: float, seconds: float) -> void:
 			edits.append({"op": "replace", "id": id, "data": left})
 	for change in edits:
 		terra.edit(change, true)
+	if not smooth:
+		return
+	var dabs := StrokeKind.capsule_dabs(a, b, r, seconds, StrokeKind.SMOOTH)
+	if _id < 0:
+		_id = terra.edit({"op": "add", "kind": TerraCore.STROKE, "data": dabs, "flags": 0}, true)
+	else:
+		terra.edit({"op": "append", "id": _id, "data": dabs}, true)
 
 
 ## Ends the stroke and records its gesture (with a fold when one is due). True when it changed

@@ -5,11 +5,19 @@ extends RefCounted
 ## phase2_plan.md section 3): it edits what is there, never adds and never punches. Each held
 ## frame, the dabs of strokes, levels and terraces under the ring keep 1 - k of their strength,
 ## k = 1 - exp(-RATE x seconds x falloff) (the falloff HeightBrush's (1 - t^2)^2 of the dab's
-## distance to the frame's capsule over the brush radius), and a hill under it keeps 1 - k of its
-## height (the falloff over the hill's own radius from its centre). A dab, or a hill, whose share
-## of its strength at the press falls under DROP goes; a tier or terrace dab, which has no strength
-## to scale, goes once it is half softened (TIER_DROP); a primitive left with no dab is removed.
-## Pure: TerraSculpt applies the result as one replace or remove per touched primitive.
+## distance to the frame's capsule over the brush radius), and a hill that lies wholly inside the
+## ring keeps 1 - k of its height (the falloff over the hill's own radius from its centre). A dab,
+## or such a hill, whose share of its strength at the press falls under DROP goes; a tier or
+## terrace dab, which has no strength to scale, goes once it is half softened (TIER_DROP); a
+## primitive left with no dab is removed. Pure: TerraSculpt applies the result as one replace or
+## remove per touched primitive.
+##
+## Local only (round 3: one drag removed a whole landform hill, and a cliff and a waterfall
+## appeared outside the brush). A primitive whose footprint reaches beyond the ring (a landform
+## hill, ridge, plane, river, pond, path, wall, a folded sculpt raster) is never scaled or removed:
+## smooths() says where the ring lies over one, and TerraSculpt lays a smooth stroke (kind 3, mode
+## 2) along the frame's capsule there instead, so the ground under the ring softens and nothing
+## outside it moves.
 
 ## Rate of the softening (per second at the ring's centre): a one-second hold keeps 5 %.
 const RATE := 3.0
@@ -37,6 +45,8 @@ static func frame(
 	seconds: float
 ) -> Dictionary:
 	if kind == TerraCore.HILL:
+		if not hill_inside(data, from, to, radius):
+			return {}
 		return _hill(data, factors, from, to, seconds)
 	var stride := 8 if kind == LEVEL else 5
 	var n := data.size() / stride
@@ -68,6 +78,32 @@ static func frame(
 	if not touched:
 		return {}
 	return {"data": out, "factors": left}
+
+
+## True when the hill `data` lies wholly inside the capsule from `a` to `b` of `radius`: its
+## centre's distance to the segment plus its own radius within the ring.
+static func hill_inside(data: PackedFloat32Array, a: Vector2, b: Vector2, radius: float) -> bool:
+	return _to_segment(Vector2(data[0], data[1]), a, b) + data[3] <= radius
+
+
+## True when the ring (the capsule from `from` to `to` of `radius`, bounding rect `ring`) lies over
+## the unmuted primitive `p` whose footprint Soften must not edit (see the header): any kind but
+## the plane and paint (no relief to soften) outside KINDS, and a hill not wholly inside the ring.
+## TerraSculpt smooths there.
+static func smooths(
+	p: Dictionary, ring: Rect2, from: Vector2, to: Vector2, radius: float
+) -> bool:
+	var kind := int(p["kind"])
+	if TerraDoc.is_muted(p) or kind == TerraCore.PLANE or kind == TerraCore.PAINT:
+		return false
+	var data: PackedFloat32Array = p["data"]
+	if kind == TerraCore.HILL:
+		if hill_inside(data, from, to, radius):
+			return false
+	elif kind in KINDS:
+		return false
+	var reach: Rect2 = TerraKinds.script_for(kind).bounds(data)
+	return reach.intersects(ring, true)
 
 
 ## HeightBrush's falloff of the distance t (in radii): (1 - t^2)^2 inside, 0 outside.

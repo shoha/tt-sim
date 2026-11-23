@@ -9,6 +9,9 @@ extends GutTest
 ## parts (fold_run, Soften, the terrace dabs, compact of Soften's replaces) hold their rules.
 
 const TerraceTool := preload("res://utils/terraform/kinds/terrace/terrace_tool.gd")
+const StrokeKind := preload("res://utils/terraform/kinds/stroke/stroke_kind.gd")
+## How far past a Soften ring the ground may move (metres): the smooth stage's own reach.
+const SOFTEN_HALO_M := 1.5
 
 var _rigs: Array[TerraRig] = []
 
@@ -238,11 +241,26 @@ func test_soften_scales_drops_and_removes() -> void:
 		TerraCore.STROKE, stroke, out.factors, Vector2.ZERO, Vector2.ZERO, 3.0, 2.0
 	)
 	assert_eq((long.data as PackedFloat32Array).size(), 5, "the softened dab goes under 5 %")
-	var hill := PackedFloat32Array([0.0, 0.0, 4.0, 6.0, 2.0])
+	var wide := PackedFloat32Array([0.0, 0.0, 4.0, 6.0, 2.0])
+	assert_true(
+		TerraSoften.frame(
+			TerraCore.HILL, wide, PackedFloat32Array(), Vector2.ZERO, Vector2.ZERO, 3.0, 5.0
+		).is_empty(),
+		"a hill reaching past the ring is never scaled"
+	)
+	var on_wide := TerraSoften.smooths(
+		{"id": 1, "kind": TerraCore.HILL, "flags": 0, "data": wide},
+		Rect2(-3, -3, 6, 6),
+		Vector2.ZERO,
+		Vector2.ZERO,
+		3.0
+	)
+	assert_true(on_wide, "so the ring smooths over it")
+	var hill := PackedFloat32Array([0.0, 0.0, 4.0, 2.5, 2.0])
 	var h := TerraSoften.frame(
 		TerraCore.HILL, hill, PackedFloat32Array(), Vector2.ZERO, Vector2.ZERO, 3.0, 0.1
 	)
-	assert_lt(float(h.data[2]), 4.0, "a hill's height scales")
+	assert_lt(float(h.data[2]), 4.0, "a hill wholly inside the ring scales")
 	var gone := TerraSoften.frame(
 		TerraCore.HILL, hill, h.factors, Vector2.ZERO, Vector2.ZERO, 3.0, 5.0
 	)
@@ -253,6 +271,55 @@ func test_soften_scales_drops_and_removes() -> void:
 		).is_empty(),
 		"a ring that misses changes nothing"
 	)
+
+
+## Round 3's Soften defect: one drag over a mound removed a whole landform hill, and a cliff and a
+## waterfall appeared well outside the brush. A Soften drag across the corpus's east hill (radius
+## about 6.6 m, far wider than the 2 m ring) keeps every non-sculpt primitive as it was, lays one
+## smooth stroke instead, and changes the ground only within the ring plus the smooth's halo.
+func test_soften_changes_only_the_ground_under_its_ring() -> void:
+	if not TerraCore.native_available():
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var rig := await _rig()
+	assert_true(await TerraRig.settle(get_tree(), [rig]), "the load settles")
+	var e := rig.editor
+	var centre := rig.corpus.at(47.0, 18.0)
+	var ends := [Vector2(centre.x - 1.5, centre.y), Vector2(centre.x + 1.5, centre.y)]
+	var path := []
+	for w: Vector2 in ends:
+		path.append(e.to_map_xz(Vector3(w.x, 0.0, w.y)))
+	var radius := 2.0
+	var kept := func() -> Array:
+		var out := []
+		for p in (rig.doc.terra as TerraDoc).prims:
+			if not int(p["kind"]) in [TerraCore.STROKE, TerraSoften.TERRACE, TerraSoften.LEVEL]:
+				out.append([int(p["id"]), int(p["kind"]), p["data"]])
+		return out
+	var prims_before: Array = kept.call()
+	var count := (rig.doc.terra as TerraDoc).prims.size()
+	var before := rig.doc.heights.duplicate()
+	assert_true(_stroke(rig, TerraSculpt.SOFTEN, path, 12, radius), "the drag is recorded")
+	assert_true(await TerraRig.settle(get_tree(), [rig]), "it lands")
+	assert_eq(kept.call(), prims_before, "no landform, water or path primitive changed or went")
+	var prims := (rig.doc.terra as TerraDoc).prims
+	assert_eq(prims.size(), count + 1, "one primitive more")
+	assert_eq(int(prims.back()["kind"]), TerraCore.STROKE, "the smooth stroke")
+	var data: PackedFloat32Array = prims.back()["data"]
+	assert_eq(int(data[4]), StrokeKind.SMOOTH, "in smooth mode")
+	var changed := 0
+	var farthest := 0.0
+	var nx := rig.doc.samples_x()
+	for k in before.size():
+		if absf(rig.doc.heights[k] - before[k]) <= 1e-5:
+			continue
+		changed += 1
+		var w := rig.doc.sample_to_world(Vector2(k % nx, k / nx))
+		var q := Geometry2D.get_closest_point_to_segment(w, ends[0], ends[1])
+		farthest = maxf(farthest, w.distance_to(q))
+	assert_gt(changed, 0, "the ground under the ring softened")
+	assert_lt(farthest, radius + SOFTEN_HALO_M, "nothing outside the ring and its halo moved")
+	gut.p("Soften: %d samples changed, the farthest %.2f m from the path" % [changed, farthest])
 
 
 func test_terrace_dabs_follow_the_path_and_compact_merges_softens() -> void:
@@ -275,3 +342,93 @@ func test_terrace_dabs_follow_the_path_and_compact_merges_softens() -> void:
 	assert_eq(c.size(), 4, "the second replace of 3 merged into the first")
 	assert_eq(c[0].data, b)
 	assert_eq(c[3].data, a, "a replace past a remove stays its own")
+
+
+## A held Raise of `frames` frames along `path` (map XZ) right after whatever is in flight: each
+## frame dabs, flushes, steps the height work and waits a process frame, as a hand's press does.
+func _held_raise(rig: TerraRig, path: Array, frames: int) -> bool:
+	var e := rig.editor
+	if not e.begin_height_stroke(HeightBrush.RAISE, 0.0):
+		return false
+	for k in frames:
+		var a: Vector2 = (path[0] as Vector2).lerp(path[1], float(k) / frames)
+		var b: Vector2 = (path[0] as Vector2).lerp(path[1], float(k + 1) / frames)
+		e.stroke_dab(e.to_world(Vector3(a.x, 0, a.y)), e.to_world(Vector3(b.x, 0, b.y)), 3.0, 1.0 / 30.0)
+		e.flush()
+		e.step_height_work()
+		await get_tree().process_frame
+	return e.end_stroke()
+
+
+## Card terraform-p2-river-release's spread landing meets a sculpt press: a Raise pressed in the
+## frame after a river release lands after the river, in stage order, with no wait (TerraEditor and
+## TerraSculpt), and leaves the document, the settled digests and the fingerprint of the same river
+## and stroke landed at once.
+func test_sculpt_after_a_river_release_lands_in_order_as_at_once() -> void:
+	if not TerraCore.native_available():
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var spread := await _rig()
+	var at_once := await _rig()
+	assert_true(await TerraRig.settle(get_tree(), [spread, at_once]), "the loads settle")
+	var stages: Array[int] = []
+	spread.editor.terra.landed.connect(
+		func(_redo: bool) -> void: stages.append(spread.session().settled_stage())
+	)
+	var waits := spread.editor.terra.waits
+	var flank := [Vector2(46, 11), Vector2(40, 10.5), Vector2(34, 11), Vector2(29, 12)]
+	var path := [Vector2(14.0, 18.0), Vector2(26.0, 22.0)]
+	for rig in [spread, at_once]:
+		var line := PackedVector2Array()
+		for p: Vector2 in flank:
+			line.append(rig.corpus.at(p.x, p.y))
+		assert_gt(rig.editor.terra.carve_river(line, PackedFloat32Array([1.4]), 1), 0, "released")
+	# Pressed in the release's frame, so the river still derives while the stroke's add is held
+	# behind its cut and its appends grow the document's array (the round 3 defect: the held add
+	# then told those floats twice).
+	assert_true(spread.session().attaching() or not spread.session().is_ready(), "river in flight")
+	assert_true(await _held_raise(spread, path, 24), "the stroke pressed after the release")
+	at_once.editor.finish_height_work()
+	assert_true(await _held_raise(at_once, path, 24), "the at-once stroke")
+	at_once.editor.finish_height_work()
+	for i in TerraRig.MAX_FRAMES:
+		if not spread.busy() and stages.size() == 2:
+			break
+		spread.editor.step_height_work()
+		await get_tree().process_frame
+	assert_eq(spread.editor.terra.waits, waits, "no landing waited")
+	assert_eq(spread.editor.terra.sculpt.waits, 0, "the stroke never waited to begin")
+	assert_eq(stages.size(), 2, "the river and the stroke landed")
+	if stages.size() == 2:
+		assert_lt(stages[0], stages[1], "in stage order")
+	assert_true(await TerraRig.settle(get_tree(), [spread, at_once]), "both idle")
+	var sizes := func(rig: TerraRig) -> Array:
+		var out := []
+		for p in (rig.doc.terra as TerraDoc).prims:
+			out.append([int(p["kind"]), (p["data"] as PackedFloat32Array).size()])
+		return out
+	assert_eq(sizes.call(spread), sizes.call(at_once), "the same primitives")
+	assert_eq(
+		(spread.doc.terra as TerraDoc).digest_for(spread.doc),
+		(at_once.doc.terra as TerraDoc).digest_for(at_once.doc),
+		"the terrain section"
+	)
+	var da: Dictionary = spread.digests().arrays
+	var db: Dictionary = at_once.digests().arrays
+	for name in db:
+		assert_eq(da.get(name), db[name], "settled %s" % name)
+	var fresh_a := TerraCache.derive_for(spread.doc.terra, spread.doc)
+	var fresh_b := TerraCache.derive_for(at_once.doc.terra, at_once.doc)
+	assert_true(
+		fresh_a.call("doc_heights") == spread.doc.heights, "spread heights = a fresh derive's"
+	)
+	assert_true(
+		fresh_b.call("doc_heights") == at_once.doc.heights, "at-once heights = a fresh derive's"
+	)
+	assert_true(spread.doc.heights == at_once.doc.heights, "heights")
+	assert_eq(spread.doc.water_bodies.size(), at_once.doc.water_bodies.size(), "water bodies")
+	assert_true(spread.doc.pond_mask == at_once.doc.pond_mask, "pond mask")
+	var drift := MapFingerprint.diff(
+		MapFingerprint.of(spread.root, spread.doc), MapFingerprint.of(at_once.root, at_once.doc)
+	)
+	assert_eq(drift, [] as Array[String], "the fingerprints")

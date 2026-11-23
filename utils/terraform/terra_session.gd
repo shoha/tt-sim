@@ -176,14 +176,16 @@ func apply(edit: Dictionary) -> int:
 			if id < 0:
 				return -1
 			if not TerraDoc.is_muted(terra.find(id)):
-				_tell(_set_prim.bind(id, kind, data))
+				# A copy: the document holds `data` itself, and a later append grows it in place
+				# (a tell held by a stage or a derive in flight would send those floats twice).
+				_tell(_set_prim.bind(id, kind, data.duplicate()))
 		"replace":
 			if p.is_empty() or TerraKinds.problem(int(p["kind"]), data) != "":
 				return -1
 			if not terra.replace(id, data):
 				return -1
 			if not TerraDoc.is_muted(p):
-				_tell(_set_prim.bind(id, int(p["kind"]), data))
+				_tell(_set_prim.bind(id, int(p["kind"]), data.duplicate()))
 		"append":
 			var whole: PackedFloat32Array = p.get("data", PackedFloat32Array()) + data
 			if p.is_empty() or TerraKinds.problem(int(p["kind"]), whole) != "":
@@ -459,7 +461,8 @@ func _splice_derive(removed: Array, rows: Array) -> void:
 
 ## The document's primitives from position `from` on as they stand now (a negative `from`: none):
 ## [ids, rows of [id, kind, data] for the unmuted ones], for _reset(). Read when an edit is
-## applied, so a queued tell re-sets what that edit left.
+## applied, so a queued tell re-sets what that edit left (the floats copied: a later append grows
+## the document's array in place).
 func _rows_from(from: int) -> Array:
 	var ids: Array[int] = []
 	var rows: Array[Array] = []
@@ -468,7 +471,8 @@ func _rows_from(from: int) -> Array:
 			var p := terra.prims[i]
 			ids.append(int(p["id"]))
 			if not TerraDoc.is_muted(p):
-				rows.append([int(p["id"]), int(p["kind"]), p["data"]])
+				var data: PackedFloat32Array = p["data"]
+				rows.append([int(p["id"]), int(p["kind"]), data.duplicate()])
 	return [ids, rows]
 
 

@@ -217,6 +217,7 @@
 		"res://tests/unit/test_terra_consolidate.gd",
 		"res://tests/unit/test_terra_sculpt_kinds.gd",
 		"res://tests/unit/test_terra_sculpt.gd",
+		"res://tests/unit/test_terra_interleave.gd",
 		"res://tests/unit/test_landform_prims.gd",
 		"res://tests/unit/test_terra_live_edits.gd",
 		"res://tests/unit/test_terra_noblock.gd",
