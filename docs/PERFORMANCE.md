@@ -8562,3 +8562,50 @@ the 960x540 row against the 1920x1080 row splits the fixed from the per-pixel co
 deltas say which setting a weak GPU needs. A drift outside 0.95 to 1.05 means something else used the
 GPU during the run. The window must fit the screen at 1920x1080: on a smaller screen the tables'
 `world (w, h)` shows the size that was really drawn.
+
+## Terrain core in authoring (card terraform-p2-parity, 2026-11-23)
+
+The phase 2 bar bench with the switch `tt_sim/terrain/core` off (today's tools) against on (the tools on
+primitives), main dc0c9783 ("terra 11 path seams"), before the flip. Windowed 1920x1080, vsync off, lane
+held, after the quiet check (no other Godot or Blender process at 07:38). One process, six arms interleaved
+off 1, on 1, on 2, off 2, off 3, on 3, each a new 320 ft temperate forest hilltop (seed 1234) driven through
+the real tools (job `bench.json` and probe `bench.gd`, copied to
+`D:/dev/tabletop/docs/research/2026-11-09-prototypes/compare/terraform_p2_parity/job/`). Frame = the main
+thread from post_draw to the next pre_draw (the bars' "game ms"); held = the frames with the brush pressed;
+core = `TerraBridge.last_held_usec` (the held edit and its synchronous derive), bridge = its diff, row writes
+and queue. Per row the three runs, off then on.
+
+| Row | Off (runs 1 / 2 / 3) | On (runs 1 / 2 / 3) | On against off |
+|---|---|---|---|
+| Held raise dry, frame median / p95 | 5.59 / 14.5, 5.82 / 15.6, 4.38 / 10.3 | 6.51 / 14.7, 6.03 / 14.7, 5.45 / 11.1 | worse: +0.2 to +1.1 ms median, p95 equal within 0.8 |
+| Held raise dry, held frames over 16.7 ms | 0, 4, 0 | 5, 5, 2 | worse |
+| Held raise over a river, frame median / p95 | 6.13 / 13.7, 5.90 / 14.7, 5.23 / 10.9 | 6.89 / 13.7, 6.89 / 13.6, 6.02 / 11.9 | worse: +0.8 to +1.0 median, p95 equal |
+| Held core, median / p95 (dry; over a river) | | 1.69 / 2.21, 1.73 / 2.12, 1.37 / 1.70; 1.75 / 2.44, 1.84 / 2.39, 1.45 / 2.05 | design 6 met: under 2 ms median, 3 p95 |
+| Held bridge (diff, writes, queue), median | | dry 2.18, 2.00, 1.77; river 1.96, 1.94, 1.79 | core plus bridge 3.1 to 3.9 ms: the plan's 2 ms for both is missed |
+| First river release, worst frame (over 33: n) | 32.5 (0), 34.0 (1), 27.8 (0) | 39.6 (1), 36.5 (2), 30.9 (0) | worse by 3 to 7 ms; the release frame itself better (23.2-23.9 against 27.8-31.5) |
+| Second river release, worst (n, summed) | 43.9 (2, 85), 55.7 (2, 93), 38.7 (2, 74) | 41.3 (2, 82), 49.5 (2, 86), 38.5 (1, 39) | same or better |
+| Ground landed after a release (session ready) | | 22.9 to 28.0 ms | design 6 met (under 0.25 s) |
+| Held paint, frame median / p95 | 5.38 / 13.4, 4.96 / 11.4, 4.12 / 7.9 | 7.52 / 14.6, 5.40 / 12.8, 5.19 / 13.0 | worse: +0.4 to +2.1 median, p95 +1.4 to +5.1; on's worst held frame 72-99 ms (off 20-69) |
+| Held paint, core median | | 0.54, 0.47, 0.44 | the paint cache holds |
+| Path release frame (worst after) | 25.8 (32.2), 22.4 (22.9), 23.7 (24.0) | 11.3 (32.7), 10.9 (29.1), 10.0 (25.3) | release frame better; worst equal |
+| Wall placed across the second river, worst (over 33: n, summed) | 155.4 (1, 155), 17.5 (0), 17.5 (0) | 128.1 (4, 489), 151.1 (4, 537), 116.0 (4, 429) | worse: the pad's landing over the river costs four frames of 34-151 ms |
+
+Warm load at 200 ft (a new temperate forest valley, seed 1234, saved per arm, then played from the title five
+times per arm interleaved, `load.json`; `perf.gd play`, root to loaded map): off 1,106 / 911 / 1,097 / 915 ms
+(the first, cold, 3,229 ms, left out), on 974 / 903 / 979 / 944 / 1,110 ms. Both under today's 1.27 s bar; on
+is no slower (median 974 against 1,006). The session's `derive_and_check` overlaps the chunk build.
+
+The press bench (`tools/bench/noblock_bench.json`, three runs, each off then on; min-max over the runs).
+After a river release, every press's call is 0-4 ms in both arms; the press's result comes 0.30-0.35 s later
+on (save 0.59-0.60) against 0.67-0.88 s off (save 1.06-1.07), and the worst frame is 21-61 ms on against
+35-167 off (structure 34-35 against 158-167, settlement 43-44 against 113-120; undo and redo run at once on,
+2.5-4.2 ms). After a 20-frame held raise nothing queues: on's worst frames are 10-28 ms for none, structure,
+crossing, put out, table, undo and redo (off 3.5-46), settlement 48-55 (off 82-86), fire 45-46 (off 44-47),
+save 52-53 (off 52-55). On is better after a river and within a few ms (all under 33) after a raise.
+
+**Verdict.** Not yet no worse than off on every row: the held raise (about +0.8 ms median and two to five
+frames over 16.7 ms a stroke against zero to four), the held paint (+0.4 to +2.1 ms median, worst frames
+72-99 ms) and the wall placed across a river (four frames over 33 ms, about 0.5 s summed, against one or
+none) are worse; the releases of rivers and paths are equal or better, the warm load equal, and the core's own
+parts meet design.md 6. The bridge's held work (about 2 ms a frame, mostly the GDScript row writes and the
+chunk queue) is the largest single cost to cut.
