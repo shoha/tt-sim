@@ -31,7 +31,10 @@ extends RefCounted
 ## as it stands), and each landing's edits go behind a TerraSession.cut(), so the landings queue
 ## (_landings) and each lands on its own settled stage, in order, its heights before being the
 ## ones the landing before it left. Only finish_work() waits (op_of, a save, a peer's catch-up),
-## and counts it (waits).
+## and counts it (waits). The ground work is spread too (card terraform-p2-river-release): every
+## landing's apply_ground drains over frames, and a landing lands only once the ground work before
+## it has (_ground_busy: the bridge's water worker, the water landing, the height queue), so
+## `spread` no longer changes a landing; finish_work() does that ground work at once.
 ##
 ## Routes. AuthoringEditor asks refusal() before every ground tool's press and routes here while
 ## active(). Each tool's op below refuses with NOT_YET until its card puts the tool on primitives
@@ -90,6 +93,9 @@ var _warned := false
 ## TerraBridge.water_landings when the last landing ran: a landing that moved it gives its gesture
 ## the bridge's water record (the gesture's water side, `g.water`; _land()).
 var _water_seen := 0
+## The process frame _ground_busy() last found ground work in: a landing waits for a later one, so
+## the ground's last share (the water landing's third frame, say) and the landing never share one.
+var _busy_frame := -1
 
 
 static func create(editor: AuthoringEditor) -> TerraEditor:
@@ -495,14 +501,21 @@ func apply_check(check: Dictionary) -> void:
 	apply_edits([], {}, true, true, check)
 
 
-## True while a landing is pending or an apply waits for one (AuthoringEditor.has_height_work).
+## True while a landing is pending, an apply waits for one or the bridge's water conversion runs
+## (AuthoringEditor.has_height_work).
 func has_work() -> bool:
-	return not _landings.is_empty() or not _waiting.is_empty()
+	if not _landings.is_empty() or not _waiting.is_empty():
+		return true
+	var s := session()
+	return s != null and s.bridge != null and bool(s.bridge.call("water_pending"))
 
 
 ## One frame: lands the pending landings whose stage the session has settled (its own settled
 ## normally does it first).
 func step() -> void:
+	var s := session()
+	if s != null and s.bridge != null:
+		s.bridge.call("step")
 	_land_due()
 
 
@@ -519,6 +532,8 @@ func finish_work() -> void:
 	var waited := false
 	while has_work():
 		s.poll()
+		# At once: the ground work finished below need not leave its frame first.
+		_busy_frame = -1
 		_land_due()
 		if not has_work():
 			return
@@ -527,6 +542,12 @@ func finish_work() -> void:
 			_landings.clear()
 			_waiting.clear()
 			return
+		if _ground_busy():
+			# The ground work of the landings before (not a derive): done at once, here only.
+			if s.bridge != null:
+				s.bridge.call("finish_water")
+			_editor().heights.finish_work()
+			continue
 		if not waited:
 			waited = true
 			waits += 1
@@ -687,11 +708,10 @@ func _land_due() -> void:
 	while not _landings.is_empty():
 		if s == null or not s.is_ready() or int(_landings[0].stage) > s.settled_stage():
 			return
-		if _editor().water.is_working():
-			# HeightEditor.apply_ground would finish the water's work at once: wait for its worker
-			# (a wet dressing refresh takes 400+ ms at 200 ft) and for the bridge's water landing
-			# to spread its three frames (card terraform-p2-water: landed at once it made an 80 to
-			# 100 ms frame). The session holds its next stage, and step() lands this one after.
+		if _ground_busy() or Engine.get_process_frames() == _busy_frame:
+			# HeightEditor.apply_ground would finish the ground's work at once: wait for it, and
+			# land on a frame after its last share (the session holds its next stage, and step()
+			# lands this one then).
 			s.pause()
 			return
 		_land(_landings.pop_front())
@@ -703,6 +723,22 @@ func _land_due() -> void:
 	if not _waiting.is_empty():
 		var next: Array = _waiting.pop_front()
 		_apply_now(next[0], next[1], next[2], next[3], next[4], next[5])
+
+
+## True while the ground work of what landed before is still spread over frames: the bridge's water
+## conversion on its worker (TerraBridge.water_pending), the water landing (WaterEditor.is_working:
+## a wet dressing refresh takes 400+ ms at 200 ft, and land_external spreads its three frames) or
+## the height queue (HeightEditor.has_work: the bridge's rect and the landing before's ground,
+## within the frame budgets; an external stroke's own queue does not hold a landing). Card
+## terraform-p2-river-release: landed at once, a river release made an 81 to 108 ms frame.
+func _ground_busy() -> bool:
+	var e := _editor()
+	var s := session()
+	var busy := s != null and s.bridge != null and bool(s.bridge.call("water_pending"))
+	busy = busy or e.water.is_working() or (e.heights.has_work() and not e.heights.is_external())
+	if busy:
+		_busy_frame = Engine.get_process_frames()
+	return busy
 
 
 ## Lands `l` (see the header).
@@ -734,7 +770,8 @@ func _land(l: Dictionary) -> void:
 			ground = ground.duplicate()
 			ground["water_landed"] = true
 		if l.land and (rect.has_area() or not ground.is_empty()):
-			e.heights.apply_ground(rect, before, ground, l.redo, l.spread)
+			# Always spread over frames (step() drains it; the next landing waits, _ground_busy).
+			e.heights.apply_ground(rect, before, ground, l.redo, true)
 		if not g.is_empty():
 			var side := "digests_after" if l.redo else "digests_before"
 			g[side] = checked_digests(s)
