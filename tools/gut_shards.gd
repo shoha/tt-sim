@@ -19,6 +19,10 @@ extends SceneTree
 ## (alphabetical) order unless `--order=reverse|rotated` asks for a hostile one. One script never
 ## splits, so the longest script bounds the wall time.
 ##
+## `--part=<i>/<k>` deals the scripts onto shards times k shards and runs only part i's share of
+## them (every k-th shard from the i-th), so k machines each run 1/k of one deal: CI's two test
+## legs. `--slowest=<count>` prints that many of the run's slowest scripts after the totals.
+##
 ## When every shard has exited, the runner prints one line per shard, each failing test with
 ## its first message, and the totals, then exits 1 when a shard failed, crashed or hung. A
 ## shard still running after HANG_S is killed and counts as failed. Killing the runner itself
@@ -70,7 +74,12 @@ func _initialize() -> void:
 	var times := _read_json(TIMES_FILE)
 	if times.is_empty():
 		times = _read_json(COMMITTED_TIMES)
-	var shards := partition(scripts, times, int(opts.shards))
+	var parts := int(opts.parts)
+	var dealt := partition(scripts, times, int(opts.shards) * parts)
+	var shards := part_of(dealt, int(opts.part), parts)
+	if parts > 1:
+		var share := [opts.part, parts, shards.size(), dealt.size()]
+		print("gut_shards: part %d of %d, %d of %d shards" % share)
 	for shard: Dictionary in shards:
 		shard.scripts = ordered(shard.scripts, str(opts.order))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
@@ -99,9 +108,40 @@ func _initialize() -> void:
 	for shard: Dictionary in shards:
 		measured.merge(shard.get("result", {}).get("times", {}), true)
 	_write_json(TIMES_FILE, times.merged(measured, true))
-	if opts.write_times and ok:
+	for line in slowest(measured, int(opts.slowest)):
+		print(line)
+	# A part's run measured only its share, so it never rewrites the whole table.
+	if opts.write_times and ok and parts == 1:
 		_write_json(COMMITTED_TIMES, committed_table(measured))
 	quit(0 if ok else 1)
+
+
+## The shards of part `part` (1-based) of `parts`: every parts-th shard of `shards` from the
+## part's own index, so each part gets one of the heaviest shards' first picks. All of them when
+## `parts` is 1 or `part` is out of range.
+static func part_of(shards: Array, part: int, parts: int) -> Array:
+	if parts <= 1 or part < 1 or part > parts:
+		return shards
+	var out := []
+	for i in range(part - 1, shards.size(), parts):
+		out.append(shards[i])
+	return out
+
+
+## The `count` slowest scripts of `times` (path to seconds), one line each, under a heading; empty
+## when `count` is 0.
+static func slowest(times: Dictionary, count: int) -> PackedStringArray:
+	var out := PackedStringArray()
+	if count <= 0:
+		return out
+	var items := []
+	for path in times:
+		items.append([float(times[path]), str(path)])
+	items.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+	out.append("slowest %d scripts:" % mini(count, items.size()))
+	for item in items.slice(0, count):
+		out.append("%8.1f s  %s" % [item[0], item[1]])
+	return out
 
 
 ## `scripts` (a shard's, alphabetical) in the run order `order` names: ORDER_ALPHABETICAL as is,
@@ -125,17 +165,30 @@ static func ordered(scripts: PackedStringArray, order: String) -> PackedStringAr
 
 ## The options after `--`: `-n=<shards>` (default half of `processors`, at most
 ## MAX_DEFAULT_SHARDS), `-gconfig=<path>` (a relative path is under res://), `--order=<name>` (see
-## ordered) and `--write-times`.
+## ordered), `--part=<i>/<k>` (see part_of; a malformed one runs everything), `--slowest=<count>`
+## and `--write-times`.
 static func parse_args(args: PackedStringArray, processors: int) -> Dictionary:
 	var opts := {
 		"shards": clampi(int(processors / 2.0), 1, MAX_DEFAULT_SHARDS),
 		"config": DEFAULT_CONFIG,
 		"write_times": false,
 		"order": ORDER_ALPHABETICAL,
+		"part": 1,
+		"parts": 1,
+		"slowest": 0,
 	}
 	for arg in args:
 		if arg.begins_with("-n="):
 			opts.shards = maxi(1, int(arg.substr(3)))
+		elif arg.begins_with("--part="):
+			var fraction := arg.substr(7).split("/")
+			var part := int(fraction[0]) if fraction.size() == 2 else 0
+			var parts := int(fraction[1]) if fraction.size() == 2 else 0
+			if parts >= 1 and part >= 1 and part <= parts:
+				opts.part = part
+				opts.parts = parts
+		elif arg.begins_with("--slowest="):
+			opts.slowest = maxi(0, int(arg.substr(10)))
 		elif arg.begins_with("--order="):
 			opts.order = arg.substr(8)
 		elif arg.begins_with("-gconfig="):
@@ -341,6 +394,9 @@ func _report(shards: Array, wall_s: float) -> bool:
 				int(shard.exit),
 			]
 		)
+		var factor := timing_factor(str(shard.log))
+		if not factor.is_empty():
+			line += ", timing factor " + factor
 		if killed:
 			line += ", killed after %d s" % int(HANG_S)
 		var crash := crashed(int(shard.exit), killed, result)
@@ -401,6 +457,18 @@ static func tail_lines(text: String, count: int) -> PackedStringArray:
 		if not line.strip_edges().is_empty():
 			lines.append(line.trim_suffix("\r"))
 	return lines.slice(maxi(0, lines.size() - count))
+
+
+## The factor a shard's TimingBudget measured (tests/unit/timing_budget.gd prints one
+## "TimingBudget: calibration ..., factor <x>" line per process), as printed; empty when the log
+## has none (no timed test ran in that shard).
+static func timing_factor(log_path: String) -> String:
+	if not FileAccess.file_exists(log_path):
+		return ""
+	for line in FileAccess.get_file_as_string(log_path).split("\n"):
+		if line.begins_with("TimingBudget:") and ", factor " in line:
+			return line.get_slice(", factor ", 1).strip_edges()
+	return ""
 
 
 ## The "Ignoring script ..." lines of a shard's GUT log (a script that failed to parse); empty when

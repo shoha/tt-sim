@@ -104,7 +104,11 @@ func test_water_warm_leaves_the_conditioner_compiled() -> void:
 	for path in WaterWarm.PATHS:
 		assert_true(ResourceLoader.has_cached(path), "%s is cached after warm()" % path)
 	assert_eq(WaterWarm.warm(), 0, "a second warm() loads nothing")
-	assert_lt(WaterWarm.last_usec, 5000, "and costs next to nothing")
+	assert_lt(
+		float(WaterWarm.last_usec),
+		TimingBudget.limit(5000.0),
+		"and costs next to nothing (%s)" % TimingBudget.describe(5000.0)
+	)
 
 
 ## WaterWarm.PATHS names every script WaterEdit loads by path: a new *_PATH constant left out

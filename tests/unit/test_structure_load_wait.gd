@@ -65,7 +65,11 @@ func test_a_staged_load_of_128_structures_finishes_with_nothing_pending() -> voi
 	assert_eq(seen["done"], 128)
 	assert_eq(seen["total"], 128)
 	assert_lte(int(seen["frames"]), 130, "at least one structure a frame, so 128 frames at most")
-	assert_lt(float(seen["worst"]), FRAME_LIMIT_MS, "no frame holds the whole install")
+	assert_lt(
+		float(seen["worst"]),
+		TimingBudget.limit(FRAME_LIMIT_MS),
+		"no frame holds the whole install (%s)" % TimingBudget.describe(FRAME_LIMIT_MS)
+	)
 	gut.p(
 		"staged create %.0f ms main, %d frames, worst gap %.1f ms"
 		% [create_ms, seen["frames"], seen["worst"]]
