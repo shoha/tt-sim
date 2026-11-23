@@ -7,6 +7,15 @@ const PathKind := preload("res://utils/terraform/kinds/path/path_kind.gd")
 ## The kind's grade (terra_kind_path.cpp PATH_SLOPE) and the slack of a resampled, smoothed profile.
 const MAX_SLOPE := 0.18
 const SLACK := 0.03
+## The switchback's half spacing: its two stretches lie at z -1.75 and 1.75.
+const HAIRPIN_ARM := 1.75
+## SHA-256 (first 16 hex digits) of a straight path's arrays on a 0.3 slope, from the
+## nearest-stretch rule before the switchback blend (terra 10).
+const STRAIGHT_DIGESTS := {
+	"Hp": "21eec805de9238b7",
+	"H2": "21eec805de9238b7",
+	"PM": "c89e62a4394dc817",
+}
 
 var _rigs: Array[TerraRig] = []
 
@@ -163,6 +172,108 @@ func test_the_path_brush_lays_and_erases_paths() -> void:
 	rig.history.redo()
 	assert_true(await TerraRig.settle(get_tree(), [rig]), "the redo settles")
 	assert_eq(_paths(terra), corpus_paths, "redo: erased again")
+
+
+## A switchback (card terraform-p2-path-seam): one path 2 m wide runs across a plane rising 0.3
+## along z, turns through a tight hairpin and comes back 3.5 m further up, so its two stretches
+## stand about a metre apart in height with a 1.5 m gap between their treads. Points are document
+## XZ.
+func _hairpin() -> TerraDoc:
+	var t := TerraDoc.new()
+	t.surfaces = PackedStringArray(["dirt_road_packed"])
+	t.add(TerraCore.PLANE, PackedFloat32Array([2.0, 0.0, 0.3]))
+	t.add(TerraCore.PATH, PathKind.make(2.0, 0, _hairpin_line()))
+	return t
+
+
+func _hairpin_line() -> PackedVector2Array:
+	var line := PackedVector2Array([Vector2(-10, -HAIRPIN_ARM), Vector2(9, -HAIRPIN_ARM)])
+	for k in range(1, 8):
+		var a := -PI * 0.5 + PI * k / 8.0
+		line.append(Vector2(9, 0) + Vector2(cos(a), sin(a)) * HAIRPIN_ARM)
+	line.append_array([Vector2(9, HAIRPIN_ARM), Vector2(-10, HAIRPIN_ARM)])
+	return line
+
+
+## Each stretch of the switchback keeps a flat tread across, and the ground between them is one
+## soft bank: no step between neighbouring samples steeper than twice the mean slope from tread
+## edge to tread edge (the nearest-stretch rule left a 0.34 m jump at the midline).
+func test_a_switchback_is_one_soft_bank_between_flat_treads() -> void:
+	if not TerraCore.native_available():
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var c := TerraCorpus.build(Vector2i(TerraCorpus.CELLS, TerraCorpus.CELLS), false)
+	var derive := TerraCache.derive_for(_hairpin(), c.map_doc)
+	var step := float((derive.call("grid") as Dictionary).step.y)
+	var h := func(x: float, z: float) -> float: return float(derive.call("height_at", x, z))
+	for x: float in [-6.0, -3.0, 0.0, 3.0]:
+		for arm: float in [-HAIRPIN_ARM, HAIRPIN_ARM]:
+			var lo := INF
+			var hi := -INF
+			for k in 9:
+				var v: float = h.call(x, arm - 0.8 + 0.2 * k)
+				lo = minf(lo, v)
+				hi = maxf(hi, v)
+			assert_lte(hi - lo, 0.02, "the tread at x %.0f, z %.2f is flat across" % [x, arm])
+		var low: float = h.call(x, -HAIRPIN_ARM + 1.0)
+		var high: float = h.call(x, HAIRPIN_ARM - 1.0)
+		var gap := 2.0 * HAIRPIN_ARM - 2.0
+		var worst := 0.0
+		var row := PackedStringArray()
+		var z := -HAIRPIN_ARM + 1.0
+		while z < HAIRPIN_ARM - 1.0 - 1e-4:
+			var a: float = h.call(x, z)
+			var b: float = h.call(x, z + step)
+			worst = maxf(worst, absf(b - a))
+			row.append("%.2f" % a)
+			z += step
+		gut.p("x %.0f: treads %.3f / %.3f, worst step %.3f; %s" % [x, low, high, worst, " ".join(row)])
+		assert_gt(high - low, 0.6, "the stretches stand apart at x %.0f" % x)
+		var bound := 2.0 * (high - low) / gap * step
+		assert_lte(worst, bound, "no seam between the stretches at x %.0f" % x)
+
+
+## Moving the switchback's turn and moving it back, on a live derive, equals a fresh derive.
+func test_a_switchback_update_equals_a_build() -> void:
+	if not TerraCore.native_available():
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var c := TerraCorpus.build(Vector2i(TerraCorpus.CELLS, TerraCorpus.CELLS), false)
+	var t := _hairpin()
+	var line := _hairpin_line()
+	var live := TerraCache.derive_for(t, c.map_doc)
+	var id := int((t.prims.back() as Dictionary).id)
+	var bad: Array[String] = []
+	for shift: float in [1.5, 0.0]:
+		var moved := PackedVector2Array()
+		for p in line:
+			moved.append(p + Vector2(0, shift if p.x > 0 else 0.0))
+		var data := PathKind.make(2.0, 0, moved)
+		t.replace(id, data)
+		live.call("set_prim", id, TerraCore.PATH, data)
+		live.call("derive")
+		var fresh := TerraCache.derive_for(t, c.map_doc)
+		for a in ["Hp", "H2", "PM"]:
+			if live.call("array_bytes", a) != fresh.call("array_bytes", a):
+				bad.append("shift %.1f: %s" % [shift, a])
+	assert_eq(bad, [] as Array[String], "the update equals a fresh derive")
+
+
+## A straight path's bytes are those of the nearest-stretch rule (digests taken before the
+## switchback blend): a path with one stretch in reach is untouched by it.
+func test_a_straight_path_is_unchanged() -> void:
+	if not TerraCore.native_available():
+		pending(TerraCorpus.NO_LIBRARY)
+		return
+	var c := TerraCorpus.build(Vector2i(TerraCorpus.CELLS, TerraCorpus.CELLS), false)
+	var derive := _slope(c, 0.3)
+	for a: String in STRAIGHT_DIGESTS:
+		var ctx := HashingContext.new()
+		ctx.start(HashingContext.HASH_SHA256)
+		ctx.update(derive.call("array_bytes", a))
+		var hex := ctx.finish().hex_encode().left(16)
+		gut.p("%s %s" % [a, hex])
+		assert_eq(hex, STRAIGHT_DIGESTS[a], "%s is unchanged" % a)
 
 
 func _paths(terra: TerraDoc) -> int:
