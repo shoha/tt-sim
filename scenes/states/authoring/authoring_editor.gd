@@ -59,6 +59,9 @@ var last_flush_usec: int = 0
 var last_dab_usec: int = 0
 ## How many ground weight-map updates paint diffs made (tests count what a hold saved).
 var ground_updates: int = 0
+## The switch-off Path release still laying its dabs over frames (PathLay), or null. Its surface
+## stroke is open meanwhile; ending that stroke drains the rest first.
+var path_lay: PathLay = null
 ## Rocks survive terrain changes: the rocks a sculpt stroke keeps (made by create()).
 var rock_keeper: RockKeeper = null
 ## The height (P3), water (P4-3) and crossing (P4b-1) edits, made by create().
@@ -264,6 +267,10 @@ func cancel_stroke() -> void:
 		heights.cancel_stroke()
 		return
 	if _surface != null:
+		if path_lay != null:
+			# A released path is never taken back by a cancel: it lands whole.
+			_end_surface_stroke()
+			return
 		var reverted := _surface.revert()
 		_surface = null
 		_refresh_ground(reverted)
@@ -365,6 +372,10 @@ func begin_surface_stroke(surface: String, erase: bool) -> bool:
 
 
 func _end_surface_stroke() -> bool:
+	if path_lay != null:
+		var lay := path_lay
+		path_lay = null
+		lay.drain()
 	var stroke := _surface
 	_surface = null
 	_refresh_ground(stroke.take_pending())
@@ -602,11 +613,14 @@ func has_height_work() -> bool:
 func step_height_work() -> void:
 	terra.step()
 	heights.step()
+	PathLay.frame(self)
 
 
 ## Does every piece of height work still waiting at once (TerraEditor.finish_work, which waits for
 ## the core's derives, then HeightEditor.finish_work).
 func finish_height_work() -> void:
+	if path_lay != null:
+		_end_surface_stroke()
 	terra.finish_work()
 	heights.finish_work()
 

@@ -61,6 +61,9 @@ var last_water_record: Dictionary = {}
 ## Landings that wrote paint bytes, and the microseconds of the last one's read and write.
 var paint_landings := 0
 var last_paint_usec := 0
+## Microseconds of the last held frame's session edit (TerraSession.apply_held: the synchronous
+## derive when the session was free).
+var last_held_usec := 0
 
 var session: TerraSession = null
 var _editor: WeakRef = null
@@ -127,7 +130,9 @@ func swap_water() -> bool:
 ## A held frame of a gesture: the edit through TerraSession.apply_held and, when it derived at
 ## once, land(true). Returns the edit's id, or -1 when refused.
 func held(edit: Dictionary) -> int:
+	var started := Time.get_ticks_usec()
 	var id := session.apply_held(edit)
+	last_held_usec = Time.get_ticks_usec() - started
 	if id >= 0 and session.is_ready():
 		land(true)
 	return id
