@@ -81,7 +81,8 @@ godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/gut_shards.g
 ```
 
 The third line is the sharded GUT runner (`tools/gut_shards.gd`), the gate's test run in place of
-the serial one (user, 2026-10-22): about 81 s at 8 shards against about 600 s serial. It prints
+the serial one (user, 2026-10-22): about 81 s at 8 shards against about 600 s serial then, about
+225 s at 8 shards for 6397 tests on 2026-11-23 (1657 s summed). It prints
 one line per shard, each failing test and the totals, exits 1 on any failure, crash or a shard
 past 900 s, and keeps each shard's log under `user://gut_shards/` (a failed shard's log is also
 copied to `failed_shard_<n>.log`, which the next run does not delete; a crashed shard, an exit code
@@ -89,6 +90,26 @@ other than 0 or 1, also prints its last 40 log lines, where the last GUT test st
 engine's backtrace are). If you stop it early its
 shards keep running: run the process check and stop them by id. The serial command (Godot CLI
 below) is for running one ordered process, for example when debugging an order-dependent failure.
+
+How shards stay balanced and timing tests stay honest (ci-headroom, 2026-11-23):
+
+- Scripts are dealt longest first onto the lightest shard, weighed by this machine's last run
+  (`user://gut_shards/times.json`) or, on CI, the committed `tests/gut_times.json`. Refresh that
+  table with `--write-times` on a quiet 8-shard run when a heavy script lands or the CI legs drift
+  apart by more than about 15% (a script missing from it weighs 0.15 s and can stack on one shard).
+- CI runs the suite as two legs on two runners (`--part=1/2` and `--part=2/2`, each `-n=2`: half of
+  one 4-shard deal), since the whole suite on one 4-core runner took 540 to 800 s against the 900 s
+  hang limit. `--slowest=<n>` prints the n slowest scripts. To reproduce one CI leg locally, run
+  `-n=2 --part=1/2` with `threading/worker_pool/max_threads=4`; a full `-n=2` run on 4 threads is
+  twice a leg's work and is not a CI equivalent.
+- A test that asserts a wall-clock budget states the limit tuned on this machine under the 8-shard
+  gate and asserts against `TimingBudget.limit(base)` (`tests/unit/timing_budget.gd`): the base
+  times how much slower a fixed workload runs in this process (best of 7, clamped to 1..4), so the
+  limit grows with a slow runner but still fails at the same multiple of the usual time. Keep each
+  base tight enough to catch a 2x regression, print the measured time with `gut.p`, and prefer the
+  best or median of a few runs over one. A bound that proves a call never waits for a held pool
+  (`HOLD_MS` against `BOUND_MS`) does not scale: its margin is the hold. Each shard line shows the
+  shard's timing factor.
 
 Two runs must never share a user folder (2026-10-30): a worktree on the shared `TTSim` folder
 shares `user://gut_shards/` and the rest of the `TTSim` user data, so overlapping runs overwrite

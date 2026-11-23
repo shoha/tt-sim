@@ -286,7 +286,11 @@ func test_full_build_time_is_bounded() -> void:
 	var f := WaterField.build(_read())
 	var ms := (Time.get_ticks_usec() - t0) / 1000.0
 	gut.p("full build %.0f ms (%s)" % [ms, str(f.timings)])
-	assert_lt(ms, FULL_BUDGET_MS, "a full build stays under the generous bound")
+	assert_lt(
+		ms,
+		TimingBudget.limit(FULL_BUDGET_MS),
+		"a full build stays under the generous bound (%s)" % TimingBudget.describe(FULL_BUDGET_MS)
+	)
 
 
 ## `doc` edited by `edit.call(doc)`, a field built before the edit updated over `rect_of.call` and
@@ -305,7 +309,12 @@ func _check_edit(label: String, edit: Callable, bodies: Array[int]) -> void:
 	var changed := field.update(doc, rect)
 	var ms := (Time.get_ticks_usec() - t0) / 1000.0
 	assert_true(changed.has_area(), "%s: the update reports a changed rect" % label)
-	assert_lt(ms, UPDATE_BUDGET_MS, "%s: the update stays under the generous bound" % label)
+	assert_lt(
+		ms,
+		TimingBudget.limit(UPDATE_BUDGET_MS),
+		"%s: the update stays under the generous bound (%s)"
+		% [label, TimingBudget.describe(UPDATE_BUDGET_MS)]
+	)
 	gut.p("%s: update %.1f ms of rect %s (%s)" % [label, ms, str(rect), str(field.timings)])
 	assert_eq(_difference(field, WaterField.build(doc)), "", "%s: update equals a full build" % label)
 

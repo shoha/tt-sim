@@ -284,7 +284,7 @@ func test_compile_makes_one_palette_biome_per_season() -> void:
 		["mini__meadow_summer_s1/Tree_oak_v0", "mini__meadow_summer_s1/Tree_oak_v1"]
 	)
 	assert_eq(biome["species"][1]["assets"].size(), 1, "the filter picked one rock group")
-	assert_true(float(result["msec"]) < 500.0)
+	assert_lt(float(result["msec"]), TimingBudget.limit(500.0), TimingBudget.describe(500.0))
 	model.set_field("stones", "slope_min_deg", 20)
 	DesignerResponseEdits.set_curve(model, "stones", "slope", [[0, 0.5], [60, 1.0]])
 	var second := model.compile()

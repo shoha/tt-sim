@@ -223,7 +223,11 @@ func test_a_load_closed_mid_build_lets_the_task_go() -> void:
 	presence = null
 	var closed_ms := (Time.get_ticks_usec() - t0) / 1000.0
 	gut.p("in flight %s, let go and freed in %.2f ms" % [running, closed_ms])
-	assert_lt(closed_ms, 20.0, "closing never waits for the build")
+	assert_lt(
+		closed_ms,
+		TimingBudget.limit(20.0),
+		"closing never waits for the build (%s)" % TimingBudget.describe(20.0)
+	)
 	assert_gte(PainterPathSlotMap.abandoned_count(), before, "the tasks wait to be reaped")
 	for frame in 600:
 		if PainterPathSlotMap.abandoned_count() == 0:

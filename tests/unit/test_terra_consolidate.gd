@@ -141,5 +141,10 @@ func test_a_4096_dab_fold_at_320_ft_derives_in_full_under_60_ms() -> void:
 	)
 	assert_eq(run.size(), 9, "the corpus stroke and the eight")
 	assert_lt(gap, 1e-4, "the fold derives as the strokes did")
-	# The bar is 60 ms on a quiet machine; the gate runs eight shards at once, so allow for load.
-	assert_lt(best, 180.0, "a full derive with 4096 dabs folded (bar 60 ms when quiet)")
+	# The bar is 60 ms on a quiet machine; the gate runs eight shards at once, so allow for load,
+	# and a slower machine (a CI runner) scales the limit by its measured factor.
+	assert_lt(
+		best,
+		TimingBudget.limit(180.0),
+		"a full derive with 4096 dabs folded (bar 60 ms when quiet; %s)" % TimingBudget.describe(180.0)
+	)

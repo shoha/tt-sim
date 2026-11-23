@@ -539,9 +539,15 @@ func test_live_ops_reach_a_peer_identical_to_the_host_and_a_reload() -> void:
 			# 7.5 ms limit failed a run on 2026-11-02). The typical working frame is: all at once,
 			# this raise spent 17 ms on chunks and 15 on snapping in one frame, a median far
 			# past three times the budget, while one slow frame leaves the median where it was.
-			var budgets := "%s: a typical frame of each part near its budget" % label
-			assert_lt(settled.terrain_median_usec, HeightEditor.TERRAIN_BUDGET_USEC * 3, budgets)
-			assert_lt(settled.snap_median_usec, HeightEditor.SNAP_BUDGET_USEC * 3, budgets)
+			# On a slower machine (a CI runner) both limits scale by its measured factor.
+			var terrain_limit := TimingBudget.limit(HeightEditor.TERRAIN_BUDGET_USEC * 3)
+			var snap_limit := TimingBudget.limit(HeightEditor.SNAP_BUDGET_USEC * 3)
+			var budgets := (
+				"%s: a typical frame of each part near its budget (factor %.2f)"
+				% [label, TimingBudget.factor()]
+			)
+			assert_lt(settled.terrain_median_usec, terrain_limit, budgets)
+			assert_lt(settled.snap_median_usec, snap_limit, budgets)
 			for line in settled.trace:
 				print("P-LIVE-FRAMES %s %s" % [label, line])
 		var reload := await _reloaded(host)
