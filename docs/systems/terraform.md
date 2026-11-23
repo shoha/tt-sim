@@ -545,7 +545,9 @@ smoothstep ramp from the step's shared point (the segment's middle, where the br
 to back meet end to start; no fall record, no pool, no lip line. The bridge marks its bodies `WaterBody.chutes`
 (saved as "chutes": true), so `WaterFalls.is_drop` is false for such a step and it is drawn as a riffle over the
 same run (`WaterFalls.chute_run`: RiverProfile's level easing, WaterMeshBuilder's sheet along the lower course's
-arc), with broken white along it (WaterFieldStroke CHUTE_*: a few bold soft lumps of energy 0.35-1.0). Banks
+arc), with broken white along it (WaterFieldStroke CHUTE_*: a few bold soft lumps of energy 0.3 up to a peak of
+0.64-0.8, carried 1 m past the run; each chute draws its own lump length, 0.8-1.4 m, and peak from a hash of the
+stroke and its index, so chutes back to back do not repeat). Banks
 beside a chute stand at 35-38 degrees where the face carve cut 74-83. Steps of 2.5 m or more are falls as before.
 55 of 105 golden digests moved (H1, H2, Hp, WL, SL, CT, CV, DW, HB, WM and falls of every case). It replaced
 `terra 9 paint cache` on main (card terraform-p2-paint-cache: the held coat's per-tile cache, no byte moved) and

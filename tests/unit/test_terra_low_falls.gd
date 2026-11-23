@@ -165,9 +165,27 @@ func test_the_profile_draws_the_chute_with_broken_white() -> void:
 				lo = minf(lo, en[t])
 				hi = maxf(hi, en[t])
 			gut.p("chute %d: run %.2f m, energy %.2f..%.2f" % [k, run, lo, hi])
-			assert_gt(hi, 0.85, "the chute has bold white")
+			assert_gt(hi, 0.55, "the chute has bold white")
+			assert_lte(hi, WaterFieldStroke.CHUTE_WHITE_HI + 1e-4, "never an opaque sheet")
 			assert_gt(hi - lo, 0.2, "the white is broken along the chute")
 	assert_gt(found, 0, "the corpus tributary has a chute")
+
+
+## Chutes back to back do not repeat: each of a stroke's chutes draws its own lump length and white
+## peak, inside the CHUTE_*_VARY ranges, the same on every call.
+func test_back_to_back_chutes_vary_their_white() -> void:
+	var lumps := {}
+	for seed in [1, 7, 40]:
+		for k in 4:
+			var s := WaterFieldStroke.chute_shape(seed, k)
+			assert_eq(s, WaterFieldStroke.chute_shape(seed, k), "a chute's shape is seeded")
+			var lump_lo := WaterFieldStroke.CHUTE_LUMP_M * WaterFieldStroke.CHUTE_LUMP_VARY.x
+			var lump_hi := WaterFieldStroke.CHUTE_LUMP_M * WaterFieldStroke.CHUTE_LUMP_VARY.y
+			assert_between(s.x, lump_lo - 1e-4, lump_hi + 1e-4, "the lump length is in range")
+			var peak_lo := WaterFieldStroke.CHUTE_WHITE_HI * WaterFieldStroke.CHUTE_PEAK_VARY.x
+			assert_between(s.y, peak_lo - 1e-4, WaterFieldStroke.CHUTE_WHITE_HI + 1e-4, "peak in range")
+			lumps[snappedf(s.x, 0.01)] = true
+	assert_gt(lumps.size(), 8, "twelve chutes draw mostly different lump lengths")
 
 
 ## The tall falls stay falls for the bridge (the hilltop crown fall and the tributary's off the

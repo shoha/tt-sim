@@ -30,12 +30,20 @@ const FOOT_DECAY_PER_DROP := 0.2
 ## CHUTE_WHITE_HI, easing in over CHUTE_IN_M from the shared point and carried past the ramp's end
 ## over CHUTE_CARRY_M: broken white standing in the rapid, not an even sheet or stripes. The
 ## level's own slope gave it about RIFFLE_WHITE everywhere, which read calm (spike
-## terraform-low-falls-probe).
-const CHUTE_LUMP_M := 1.3
-const CHUTE_WHITE_LO := 0.35
-const CHUTE_WHITE_HI := 1.0
+## terraform-low-falls-probe). Each chute draws its own lump length (CHUTE_LUMP_M times
+## CHUTE_LUMP_VARY) and peak (CHUTE_WHITE_HI times CHUTE_PEAK_VARY) from a hash of the stroke and
+## its index, so chutes back to back do not repeat. Round 2 lowered the peak from 1.0 and the carry
+## from 2 m: at full white the lumps merged into one opaque oval running into the join.
+const CHUTE_LUMP_M := 1.1
+const CHUTE_LUMP_VARY := Vector2(0.75, 1.3)
+## The lumps' soft edge: the noise is eased from x to y (round 1's 0.3..0.7 put most of each lump
+## at its peak, so the lumps read as solid sheets).
+const CHUTE_LUMP_EDGE := Vector2(0.25, 0.9)
+const CHUTE_WHITE_LO := 0.3
+const CHUTE_WHITE_HI := 0.8
+const CHUTE_PEAK_VARY := Vector2(0.8, 1.0)
 const CHUTE_IN_M := 0.5
-const CHUTE_CARRY_M := 2.0
+const CHUTE_CARRY_M := 1.0
 ## The lip speed of a fall's water (WaterFallMesh.V0_BASE plus V0_PER_SPEED times the upper
 ## reach's speed) sets where the white of the face ends and the foot foam begins (the distance
 ## it would travel in the fall's time): the field keeps that split, though no arc is drawn.
@@ -135,13 +143,18 @@ static func table(profile: RiverProfile, chain: Array[WaterBody]) -> Dictionary:
 
 ## Writes the chutes' white into `en` (see CHUTE_*): over each chute's run from its shared point
 ## the lumps, eased in over CHUTE_IN_M, then fading linearly over CHUTE_CARRY_M; the max with what
-## `en` holds. `seed` (the stroke's first body id) and the chute's index place the lumps.
+## `en` holds. `seed` (the stroke's first body id) and the chute's index place the lumps and draw
+## the chute's lump length and peak.
 static func _chute_white(profile: RiverProfile, seed: int, en: PackedFloat32Array) -> void:
 	var count := en.size()
 	for k in profile.chute_runs.size():
 		var run := profile.chute_runs[k]
 		if run <= 0.0:
 			continue
+		var cell := seed * 31 + k
+		var shape := chute_shape(seed, k)
+		var lump_m := shape.x
+		var peak := shape.y
 		var start := profile.bounds[k]
 		var first := maxi(0, floori(start / TABLE_STEP))
 		var stop := mini(count - 1, ceili((start + run + CHUTE_CARRY_M) / TABLE_STEP))
@@ -149,11 +162,21 @@ static func _chute_white(profile: RiverProfile, seed: int, en: PackedFloat32Arra
 			var x := t * TABLE_STEP - start
 			if x < 0.0:
 				continue
-			var lump := smoothstep(0.3, 0.7, _lump(x / CHUTE_LUMP_M, seed * 31 + k))
-			var e := lerpf(CHUTE_WHITE_LO, CHUTE_WHITE_HI, lump) * smoothstep(0.0, CHUTE_IN_M, x)
+			var lump := smoothstep(CHUTE_LUMP_EDGE.x, CHUTE_LUMP_EDGE.y, _lump(x / lump_m, cell))
+			var e := lerpf(CHUTE_WHITE_LO, peak, lump) * smoothstep(0.0, CHUTE_IN_M, x)
 			if x > run:
 				e *= 1.0 - (x - run) / CHUTE_CARRY_M
 			en[t] = maxf(en[t], e)
+
+
+## Chute `k` of the stroke `seed`: its lump length in metres (x) and its white peak (y), drawn
+## from a hash in CHUTE_LUMP_VARY and CHUTE_PEAK_VARY of CHUTE_LUMP_M and CHUTE_WHITE_HI.
+static func chute_shape(seed: int, k: int) -> Vector2:
+	var cell := seed * 31 + k
+	return Vector2(
+		CHUTE_LUMP_M * lerpf(CHUTE_LUMP_VARY.x, CHUTE_LUMP_VARY.y, _hash01(-1, cell)),
+		CHUTE_WHITE_HI * lerpf(CHUTE_PEAK_VARY.x, CHUTE_PEAK_VARY.y, _hash01(-2, cell))
+	)
 
 
 ## Smooth value noise in [0, 1) at `u` (lump cells of 1), integer hashed per `seed`, so every
