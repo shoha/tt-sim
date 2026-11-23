@@ -345,7 +345,25 @@ func finish() -> Dictionary:
 		return {}
 	var trimmed := doc.surface_ids.duplicate()
 	doc.surface_ids = trimmed
-	doc.trim_unused_surfaces()
+	# Only trailing slots without paint are dropped, so when the last slot has paint none is: look
+	# for it in this stroke's own area, then anywhere (stopping at the first), before the walk that
+	# finds every slot (it read the whole map for a slot painted only late in it: 20 to 27 ms of a
+	# fire's ash on the 320 ft hilltop; card noblock5).
+	var last := doc.surface_ids.size() - 1
+	var grid := Rect2i(0, 0, doc.samples_x(), doc.samples_z())
+	if (
+		last < 0
+		or not doc.has_surface_entries()
+		or not (
+			SurfaceEntries.slot_used_in(
+				doc.surface_weights, doc.sample_count(), grid.size.x, changed.intersection(grid), last
+			)
+			or SurfaceEntries.slot_used_in(
+				doc.surface_weights, doc.sample_count(), grid.size.x, grid, last
+			)
+		)
+	):
+		doc.trim_unused_surfaces()
 	return {
 		"blocks": blocks,
 		"ids_before": _ids_before.duplicate(),

@@ -63,6 +63,24 @@ static func write_sample(
 	return changed
 
 
+## True when some entry of slot `slot` carries weight in the samples of `rect` (a grid
+## `samples_x` wide of `count` samples): a stroke's own area, read before the whole map
+## (SurfaceStroke.finish; card noblock5). Walks entries as used_slots() does.
+static func slot_used_in(
+	planes: PackedByteArray, count: int, samples_x: int, rect: Rect2i, slot: int
+) -> bool:
+	var weight_base := count * CHANNELS
+	for z in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			var at := (z * samples_x + x) * CHANNELS
+			for e in ENTRIES:
+				if planes[weight_base + at + e] == 0:
+					break
+				if planes[at + e] == slot:
+					return true
+	return false
+
+
 ## One byte per slot 0..`used` - 1: 1 when some entry of that slot carries weight. Walks
 ## each sample's entries up to its first unused one (canonical entries are high to low).
 static func used_slots(planes: PackedByteArray, count: int, used: int) -> PackedByteArray:
