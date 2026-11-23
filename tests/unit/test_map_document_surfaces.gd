@@ -202,6 +202,26 @@ func test_trim_unused_surfaces_drops_trailing_slots() -> void:
 	assert_true(doc.surface_weights.is_empty(), "the entries go with the last slot")
 
 
+## SurfaceStroke.finish asks slot_used_in before trimming (card noblock5): over the whole grid it
+## says what used_surface_slots says, slot by slot.
+func test_slot_used_in_agrees_with_used_slots() -> void:
+	var doc := _painted_doc(4)
+	doc.ensure_surface("flagstone")
+	var count := doc.sample_count()
+	var sx := doc.samples_x()
+	var grid := Rect2i(0, 0, sx, doc.samples_z())
+	var used := doc.used_surface_slots()
+	for slot in doc.surface_ids.size():
+		assert_eq(
+			SurfaceEntries.slot_used_in(doc.surface_weights, count, sx, grid, slot),
+			used[slot] == 1,
+			"slot %d" % slot
+		)
+	assert_false(
+		SurfaceEntries.slot_used_in(doc.surface_weights, count, sx, Rect2i(), 0), "no area, no paint"
+	)
+
+
 # --- round trips --------------------------------------------------------------------
 
 

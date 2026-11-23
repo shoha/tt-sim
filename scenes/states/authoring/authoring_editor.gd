@@ -81,6 +81,9 @@ var fire_field: FireField = null
 var terra: TerraEditor = null
 ## The presses that wait for the core's work to land (GroundPresses; card terraform-p2-noblock2).
 var presses: GroundPresses = null
+## The last Paint stroke's end by part (microseconds: ground, finish, regenerate, record,
+## edited), for measurement (the press bench, card noblock5).
+var last_end_usec := {}
 
 var _stroke: MaskStroke = null
 var _stroke_label: String = ""
@@ -94,6 +97,8 @@ var _rng := RandomNumberGenerator.new()
 var _ground_holds: int = 0
 var _held_ground := Rect2i()
 var _held_plants := Rect2i()
+## release_ground(true): the held updates wait for the next frame (_release_later).
+var _ground_later := false
 
 
 static func create(
@@ -321,7 +326,10 @@ func _refresh(sample_rect: Rect2i, live: bool = false) -> void:
 	if not sample_rect.has_area():
 		return
 	var started := Time.get_ticks_usec()
-	if is_instance_valid(terrain):
+	if is_instance_valid(terrain) and _ground_holds > 0:
+		# Inside hold_ground(): the ground's update joins the held one (the scatter goes now).
+		_held_ground = MaskBrush.merge_rect(_held_ground, sample_rect)
+	elif is_instance_valid(terrain):
 		terrain.update_ground_region(sample_rect.grow(1))
 	var world := MaskBrush.sample_rect_to_world(document, sample_rect)
 	if is_instance_valid(scatter):
@@ -383,8 +391,11 @@ func _end_surface_stroke() -> bool:
 		lay.drain()
 	var stroke := _surface
 	_surface = null
+	var t0 := Time.get_ticks_usec()
 	_refresh_ground(stroke.take_pending())
+	var t1 := Time.get_ticks_usec()
 	var diff := stroke.finish()
+	last_end_usec = {"ground": t1 - t0, "finish": Time.get_ticks_usec() - t1}
 	if diff.is_empty():
 		# Nothing painted; a slot the stroke claimed is given back (the list changed).
 		_refresh_ground(Rect2i(0, 0, 1, 1))
@@ -393,9 +404,13 @@ func _end_surface_stroke() -> bool:
 	# last), so only the slot list finish() may have trimmed is left: re-plan the tables over no
 	# samples (a drawn tint that changed still rebuilds the broad map whole). Refreshing the whole
 	# stroke's rectangle again cost 8-9 ms of GDScript tint at a 320 ft release (authcollide).
-	if is_instance_valid(terrain):
+	if is_instance_valid(terrain) and _ground_holds == 0:
+		# (Inside hold_ground() the held update re-plans them.)
 		terrain.update_ground_region(Rect2i())
+	t0 = Time.get_ticks_usec()
 	_regenerate_paint(diff)
+	t1 = Time.get_ticks_usec()
+	last_end_usec["regenerate"] = t1 - t0
 	(
 		history
 		. record(
@@ -407,7 +422,10 @@ func _end_surface_stroke() -> bool:
 			}
 		)
 	)
+	t0 = Time.get_ticks_usec()
+	last_end_usec["record"] = t0 - t1
 	edited.emit()
+	last_end_usec["edited"] = Time.get_ticks_usec() - t0
 	return true
 
 
@@ -434,10 +452,21 @@ func hold_ground() -> void:
 
 
 ## Ends a hold_ground(); the last one makes the held updates. Returns the rectangle of samples it
-## refreshed (empty when nothing was held).
-func release_ground() -> Rect2i:
+## refreshed (empty when nothing was held). With `later` the last one leaves them for the start of
+## the next frame (or finish_height_work, whichever comes first), so a press that has spent its
+## frame on the document (a fire's burnt biome and ash, a village's paving) draws them in the next
+## one (card noblock5): the document, the history and the scatter requests are the same, and the
+## ground is drawn from the document as it is then, as one update over the union.
+func release_ground(later: bool = false) -> Rect2i:
 	_ground_holds = maxi(_ground_holds - 1, 0)
 	if _ground_holds > 0:
+		return Rect2i()
+	if later and (_held_ground.has_area() or _held_plants.has_area()):
+		_ground_later = true
+		# (Still connected when finish_height_work drew the last one before its frame came.)
+		var frame := (Engine.get_main_loop() as SceneTree).process_frame
+		if not frame.is_connected(_release_later):
+			frame.connect(_release_later, CONNECT_ONE_SHOT)
 		return Rect2i()
 	var ground := _held_ground
 	var plants := _held_plants
@@ -448,9 +477,23 @@ func release_ground() -> Rect2i:
 	return ground
 
 
-## The ground's weight maps for the samples of `sample_rect` (no scatter: see the header).
+## The held updates release_ground(true) left (nothing when a hold opened since: its release makes
+## them).
+func _release_later() -> void:
+	if not _ground_later:
+		return
+	_ground_later = false
+	if _ground_holds == 0:
+		release_ground()
+
+
+## The ground's weight maps for the samples of `sample_rect` (no scatter: see the header). Inside
+## hold_ground() the area joins the held update instead.
 func _refresh_ground(sample_rect: Rect2i) -> void:
 	if not sample_rect.has_area() or not is_instance_valid(terrain):
+		return
+	if _ground_holds > 0:
+		_held_ground = MaskBrush.merge_rect(_held_ground, sample_rect)
 		return
 	var started := Time.get_ticks_usec()
 	terrain.update_ground_region(sample_rect.grow(1))
@@ -608,9 +651,10 @@ func tier_target(point: Vector3, radius: float, down: bool) -> Dictionary:
 
 
 ## True while height work from a sculpt stroke, its undo, a water edit or a live edit is still
-## being spread over frames (HeightEditor.has_work).
+## being spread over frames (HeightEditor.has_work), or a ground update waits for the next frame
+## (release_ground).
 func has_height_work() -> bool:
-	return terra.has_work() or heights.has_work() or presses.is_waiting()
+	return terra.has_work() or heights.has_work() or presses.is_waiting() or _ground_later
 
 
 ## One frame's share of the height work, at most once per frame whoever calls (tick(), and
@@ -632,6 +676,7 @@ func finish_height_work() -> void:
 	terra.finish_work()
 	heights.finish_work()
 	presses.finish()
+	_release_later()
 
 
 # ============================================================================
